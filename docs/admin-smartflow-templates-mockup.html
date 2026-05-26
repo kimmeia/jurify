@@ -3,22 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JuridFlow — SmartFlow Modelos (admin → clientes)</title>
+<title>JuridFlow — SmartFlow Modelos (pegada do cliente)</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; background: #f6f7fb; }
-  .font-display { font-family: 'Poppins', 'Inter', sans-serif; }
   .tabular-nums { font-variant-numeric: tabular-nums; }
-  .seg.active { background:#4f46e5; color:#fff; }
-  .switch { width:38px;height:22px;border-radius:9999px;background:#cbd5e1;position:relative;transition:.2s;cursor:pointer; }
-  .switch.on { background:#10b981; }
-  .switch::after { content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:9999px;background:#fff;transition:.2s; }
-  .switch.on::after { left:18px; }
-  .node { border:1px solid #e2e8f0;border-radius:12px;background:#fff;padding:10px 12px;font-size:12px;box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .switch { width:34px;height:20px;border-radius:9999px;background:#cbd5e1;position:relative;transition:.2s;cursor:pointer;flex:none; }
+  .switch.on { background:#7c3aed; }
+  .switch::after { content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:9999px;background:#fff;transition:.2s; }
+  .switch.on::after { left:16px; }
+  .seg.active { background:#4f46e5;color:#fff; }
+  .node { border:1px solid #e2e8f0;border-radius:12px;background:#fff;padding:8px 12px;font-size:12px;box-shadow:0 1px 2px rgba(0,0,0,.04); }
   ::-webkit-scrollbar { width:8px;height:8px; } ::-webkit-scrollbar-thumb { background:#cbd5e1;border-radius:9999px; }
 </style>
 </head>
@@ -26,199 +25,190 @@
 
 <div class="bg-slate-900 text-white py-3 px-6 text-sm flex items-center justify-between gap-4 sticky top-0 z-40">
   <div class="flex items-center gap-2 min-w-0">
-    <i data-lucide="workflow" class="w-4 h-4 text-indigo-300 shrink-0"></i>
-    <span class="font-semibold truncate">SmartFlow · Modelos (admin cria → clientes clonam)</span>
+    <i data-lucide="zap" class="w-4 h-4 text-indigo-300 shrink-0"></i>
+    <span class="font-semibold truncate">SmartFlow · Modelos — mesma pegada do SmartFlow do cliente</span>
   </div>
   <div class="flex items-center gap-1 bg-slate-800 rounded-lg p-1 text-xs">
-    <button onclick="ir('admin-lista')" data-seg="admin-lista" class="seg active px-2.5 py-1 rounded-md">Admin · Modelos</button>
-    <button onclick="ir('admin-editor')" data-seg="admin-editor" class="seg px-2.5 py-1 rounded-md text-slate-300">Admin · Editor</button>
-    <button onclick="ir('cliente-galeria')" data-seg="cliente-galeria" class="seg px-2.5 py-1 rounded-md text-slate-300">Cliente · Galeria</button>
+    <button onclick="ir('admin')" data-seg="admin" class="seg active px-2.5 py-1 rounded-md">Admin · Modelos</button>
+    <button onclick="ir('editor')" data-seg="editor" class="seg px-2.5 py-1 rounded-md text-slate-300">Admin · Editor</button>
+    <button onclick="ir('cliente')" data-seg="cliente" class="seg px-2.5 py-1 rounded-md text-slate-300">Cliente · Galeria</button>
   </div>
 </div>
 
-<div class="max-w-[1100px] mx-auto p-6">
+<div class="max-w-7xl mx-auto p-6">
 
-  <!-- ════════ ADMIN · LISTA DE MODELOS ════════ -->
-  <section data-screen="admin-lista" class="space-y-5">
-    <div class="flex items-end justify-between gap-3 flex-wrap">
-      <div><h1 class="text-2xl font-semibold tracking-tight font-display">SmartFlow — Modelos</h1><p class="text-slate-500 mt-1 text-sm">Fluxos que você cria e pode publicar como modelo para os escritórios clientes clonarem.</p></div>
-      <button class="h-9 px-3 rounded-lg bg-indigo-600 text-white text-sm font-medium flex items-center gap-1.5"><i data-lucide="plus" class="w-4 h-4"></i> Novo modelo</button>
+  <!-- ════════ ADMIN · MODELOS ════════ -->
+  <section data-screen="admin" class="space-y-5">
+    <!-- HERO (igual ao SmartFlowHero) -->
+    <div class="relative overflow-hidden rounded-2xl p-5 border" style="background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.08) 50%,rgba(236,72,153,.06));border-color:rgba(139,92,246,.18)">
+      <div class="flex items-center gap-3 mb-4 flex-wrap">
+        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 flex items-center justify-center shadow-md"><i data-lucide="zap" class="h-5 w-5 text-white"></i></div>
+        <div class="flex-1 min-w-0">
+          <h1 class="text-2xl font-bold tracking-tight">SmartFlow — Modelos</h1>
+          <p class="text-sm text-slate-500 flex items-center gap-1.5 mt-0.5"><i data-lucide="sparkles" class="h-3 w-3 text-violet-500"></i> Fluxos que você publica para os escritórios clonarem</p>
+        </div>
+        <button class="bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 text-white text-sm font-medium h-9 px-3 rounded-lg shadow-md inline-flex items-center gap-1.5"><i data-lucide="plus" class="h-4 w-4"></i> Novo modelo</button>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div class="bg-white rounded-xl border border-slate-200/60 px-3 py-2.5 flex items-center gap-2.5"><div class="w-9 h-9 rounded-lg flex items-center justify-center bg-violet-100 text-violet-700"><i data-lucide="layout-grid" class="h-4 w-4"></i></div><div class="leading-tight"><p class="text-base font-bold leading-none tabular-nums text-violet-700">8</p><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wide mt-1">Modelos</p></div></div>
+        <div class="bg-white rounded-xl border border-slate-200/60 px-3 py-2.5 flex items-center gap-2.5"><div class="w-9 h-9 rounded-lg flex items-center justify-center bg-emerald-100 text-emerald-700"><i data-lucide="check-circle-2" class="h-4 w-4"></i></div><div class="leading-tight"><p class="text-base font-bold leading-none tabular-nums text-emerald-700">5</p><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wide mt-1">Publicados</p></div></div>
+        <div class="bg-white rounded-xl border border-slate-200/60 px-3 py-2.5 flex items-center gap-2.5"><div class="w-9 h-9 rounded-lg flex items-center justify-center bg-amber-100 text-amber-700"><i data-lucide="file-edit" class="h-4 w-4"></i></div><div class="leading-tight"><p class="text-base font-bold leading-none tabular-nums text-amber-700">3</p><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wide mt-1">Rascunhos</p></div></div>
+        <div class="bg-white rounded-xl border border-slate-200/60 px-3 py-2.5 flex items-center gap-2.5"><div class="w-9 h-9 rounded-lg flex items-center justify-center bg-fuchsia-100 text-fuchsia-700"><i data-lucide="copy" class="h-4 w-4"></i></div><div class="leading-tight"><p class="text-base font-bold leading-none tabular-nums text-fuchsia-700">214</p><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wide mt-1">Clones</p></div></div>
+      </div>
     </div>
-    <div class="grid gap-4 sm:grid-cols-4">
-      <div class="rounded-xl p-4 border border-indigo-100 bg-indigo-50/60"><p class="text-[10px] uppercase tracking-wider font-semibold text-indigo-700">Modelos</p><p class="text-2xl font-bold text-indigo-600 tabular-nums mt-1">8</p></div>
-      <div class="rounded-xl p-4 border border-emerald-100 bg-emerald-50/60"><p class="text-[10px] uppercase tracking-wider font-semibold text-emerald-700">Publicados</p><p class="text-2xl font-bold text-emerald-600 tabular-nums mt-1">5</p></div>
-      <div class="rounded-xl p-4 border border-slate-200 bg-slate-50/60"><p class="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Rascunhos</p><p class="text-2xl font-bold text-slate-600 tabular-nums mt-1">3</p></div>
-      <div class="rounded-xl p-4 border border-violet-100 bg-violet-50/60"><p class="text-[10px] uppercase tracking-wider font-semibold text-violet-700">Clones (clientes)</p><p class="text-2xl font-bold text-violet-600 tabular-nums mt-1">214</p></div>
+
+    <!-- busca + filtro (igual cliente) -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <div class="relative flex-1 min-w-[200px] max-w-xs"><i data-lucide="search" class="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"></i><input placeholder="Buscar modelo..." class="h-9 pl-8 text-xs w-full rounded-lg border border-slate-200 bg-white"></div>
+      <select class="h-9 w-44 text-xs rounded-lg border border-slate-200 bg-white px-2"><option>Todas as categorias</option><option>💬 Mensagem</option><option>💰 Asaas</option><option>📅 Cal.com</option><option>👥 CRM</option></select>
     </div>
-    <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
-      <table class="w-full text-sm">
-        <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100 bg-slate-50/50">
-          <th class="px-5 py-3 font-medium">Modelo</th><th class="py-3 font-medium">Categoria</th><th class="py-3 font-medium">Gatilho</th><th class="py-3 font-medium">Passos</th><th class="py-3 font-medium">Clones</th><th class="py-3 font-medium">Disponível p/ clientes</th><th class="py-3 pr-5 font-medium text-right">Ações</th>
-        </tr></thead>
-        <tbody class="divide-y divide-slate-50">
-          <tr class="hover:bg-slate-50/50">
-            <td class="px-5 py-3"><div class="flex items-center gap-2.5"><span class="h-8 w-8 rounded-lg bg-emerald-500/10 grid place-items-center"><i data-lucide="bell-ring" class="w-4 h-4 text-emerald-600"></i></span><div><p class="font-medium text-slate-800">Cobrança automática D+3</p><p class="text-xs text-slate-400">Lembra o cliente 3 dias após vencimento</p></div></div></td>
-            <td><span class="text-xs text-slate-600">Cobrança</span></td>
-            <td><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">pagamento_vencido</span></td>
-            <td class="tabular-nums text-slate-600">5</td>
-            <td class="tabular-nums text-slate-600">112</td>
-            <td><div class="flex items-center gap-2"><div class="switch on" onclick="this.classList.toggle('on')"></div><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Publicado</span></div></td>
-            <td class="pr-5 text-right space-x-2"><button onclick="ir('admin-editor')" class="text-xs text-indigo-600 hover:underline">Editar</button><button class="text-xs text-slate-400 hover:text-slate-600">Duplicar</button></td>
-          </tr>
-          <tr class="hover:bg-slate-50/50">
-            <td class="px-5 py-3"><div class="flex items-center gap-2.5"><span class="h-8 w-8 rounded-lg bg-blue-500/10 grid place-items-center"><i data-lucide="calendar-check" class="w-4 h-4 text-blue-600"></i></span><div><p class="font-medium text-slate-800">Confirmação de agendamento</p><p class="text-xs text-slate-400">WhatsApp ao criar agendamento + lembrete</p></div></div></td>
-            <td><span class="text-xs text-slate-600">Agendamento</span></td>
-            <td><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">agendamento_criado</span></td>
-            <td class="tabular-nums text-slate-600">4</td>
-            <td class="tabular-nums text-slate-600">68</td>
-            <td><div class="flex items-center gap-2"><div class="switch on" onclick="this.classList.toggle('on')"></div><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Publicado</span></div></td>
-            <td class="pr-5 text-right space-x-2"><button onclick="ir('admin-editor')" class="text-xs text-indigo-600 hover:underline">Editar</button><button class="text-xs text-slate-400 hover:text-slate-600">Duplicar</button></td>
-          </tr>
-          <tr class="hover:bg-slate-50/50">
-            <td class="px-5 py-3"><div class="flex items-center gap-2.5"><span class="h-8 w-8 rounded-lg bg-violet-500/10 grid place-items-center"><i data-lucide="bot" class="w-4 h-4 text-violet-600"></i></span><div><p class="font-medium text-slate-800">Atendente IA — triagem inicial</p><p class="text-xs text-slate-400">Classifica intenção e responde FAQ</p></div></div></td>
-            <td><span class="text-xs text-slate-600">Atendimento</span></td>
-            <td><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">whatsapp_mensagem</span></td>
-            <td class="tabular-nums text-slate-600">7</td>
-            <td class="tabular-nums text-slate-600">34</td>
-            <td><div class="flex items-center gap-2"><div class="switch" onclick="this.classList.toggle('on')"></div><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">Rascunho</span></div></td>
-            <td class="pr-5 text-right space-x-2"><button onclick="ir('admin-editor')" class="text-xs text-indigo-600 hover:underline">Editar</button><button class="text-xs text-slate-400 hover:text-slate-600">Duplicar</button></td>
-          </tr>
-        </tbody>
-      </table>
+
+    <!-- grid de cards (CenarioCard + toggle "disponível p/ clientes") -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <!-- card publicado -->
+      <div class="relative rounded-xl border border-l-4 border-l-orange-500 bg-white p-4 transition-all hover:shadow-md">
+        <div class="flex items-start gap-2.5 mb-2 pr-2">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm bg-gradient-to-br from-orange-500 to-amber-600"><i data-lucide="bell-ring" class="h-5 w-5"></i></div>
+          <div class="min-w-0 flex-1"><p class="text-sm font-bold truncate">Cobrança automática D+3</p><p class="text-[10px] text-slate-400 truncate">Pagamento vencido · Cobrança</p></div>
+        </div>
+        <p class="text-xs text-slate-500 line-clamp-2 mb-3 leading-snug">Lembra o cliente automaticamente 3 dias após o vencimento da cobrança.</p>
+        <div class="flex flex-wrap gap-1 mb-3">
+          <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">5 passos</span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">≥ 3 dias de atraso</span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded bg-fuchsia-100 text-fuchsia-700">112 clones</span>
+        </div>
+        <div class="flex items-center justify-between gap-2 border-t pt-2.5">
+          <div class="flex items-center gap-1.5"><div class="switch on" onclick="this.classList.toggle('on')"></div><span class="text-[10px] text-slate-500">Disponível p/ clientes</span></div>
+          <div class="flex gap-1"><button onclick="ir('editor')" class="text-[11px] h-7 px-2 rounded-md border border-slate-200 hover:bg-slate-50">Editar</button></div>
+        </div>
+      </div>
+      <!-- card publicado 2 -->
+      <div class="relative rounded-xl border border-l-4 border-l-blue-500 bg-white p-4 transition-all hover:shadow-md">
+        <div class="flex items-start gap-2.5 mb-2 pr-2">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm bg-gradient-to-br from-blue-500 to-cyan-500"><i data-lucide="calendar-check" class="h-5 w-5"></i></div>
+          <div class="min-w-0 flex-1"><p class="text-sm font-bold truncate">Confirmação de agendamento</p><p class="text-[10px] text-slate-400 truncate">Agendamento criado · Agenda</p></div>
+        </div>
+        <p class="text-xs text-slate-500 line-clamp-2 mb-3 leading-snug">Envia WhatsApp ao criar agendamento e um lembrete antes do horário.</p>
+        <div class="flex flex-wrap gap-1 mb-3"><span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">4 passos</span><span class="text-[9px] px-1.5 py-0.5 rounded bg-fuchsia-100 text-fuchsia-700">68 clones</span></div>
+        <div class="flex items-center justify-between gap-2 border-t pt-2.5">
+          <div class="flex items-center gap-1.5"><div class="switch on" onclick="this.classList.toggle('on')"></div><span class="text-[10px] text-slate-500">Disponível p/ clientes</span></div>
+          <button onclick="ir('editor')" class="text-[11px] h-7 px-2 rounded-md border border-slate-200 hover:bg-slate-50">Editar</button>
+        </div>
+      </div>
+      <!-- card rascunho (não publicado) -->
+      <div class="relative rounded-xl border border-l-4 border-l-violet-500 bg-white p-4 transition-all hover:shadow-md opacity-90">
+        <div class="flex items-start gap-2.5 mb-2 pr-2">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm bg-gradient-to-br from-violet-500 to-indigo-500"><i data-lucide="bot" class="h-5 w-5"></i></div>
+          <div class="min-w-0 flex-1"><p class="text-sm font-bold truncate">Atendente IA — triagem</p><p class="text-[10px] text-slate-400 truncate">WhatsApp · Atendimento</p></div>
+        </div>
+        <p class="text-xs text-slate-500 line-clamp-2 mb-3 leading-snug">Classifica a intenção da primeira mensagem e responde dúvidas comuns.</p>
+        <div class="flex flex-wrap gap-1 mb-3"><span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">7 passos</span><span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">Rascunho</span></div>
+        <div class="flex items-center justify-between gap-2 border-t pt-2.5">
+          <div class="flex items-center gap-1.5"><div class="switch" onclick="this.classList.toggle('on')"></div><span class="text-[10px] text-slate-500">Disponível p/ clientes</span></div>
+          <button onclick="ir('editor')" class="text-[11px] h-7 px-2 rounded-md border border-slate-200 hover:bg-slate-50">Editar</button>
+        </div>
+      </div>
+      <!-- card "novo modelo" -->
+      <button class="rounded-xl border border-dashed border-slate-300 bg-white/50 p-4 grid place-items-center text-slate-400 hover:bg-white hover:border-violet-300 min-h-[180px]"><span class="text-xs flex flex-col items-center gap-2"><i data-lucide="plus" class="h-6 w-6"></i> Novo modelo</span></button>
     </div>
-    <p class="text-[11px] text-slate-400 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i> Modelos são blueprints da plataforma — não disparam sozinhos. O cliente que clonar passa a ter um fluxo próprio, editável e independente.</p>
+    <p class="text-[11px] text-slate-400 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i> O toggle "Disponível p/ clientes" publica o modelo na galeria do SmartFlow de cada escritório. Modelos não disparam sozinhos — quem clona ganha um fluxo próprio.</p>
   </section>
 
-  <!-- ════════ ADMIN · EDITOR (Publicação) ════════ -->
-  <section data-screen="admin-editor" class="hidden space-y-4">
-    <button onclick="ir('admin-lista')" class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800"><i data-lucide="arrow-left" class="h-3.5 w-3.5"></i> Voltar para modelos</button>
-    <div class="flex items-center justify-between gap-3 flex-wrap">
-      <div class="flex items-center gap-3"><span class="h-10 w-10 rounded-xl bg-emerald-500/10 grid place-items-center"><i data-lucide="bell-ring" class="w-5 h-5 text-emerald-600"></i></span><div><h1 class="text-lg font-bold font-display">Cobrança automática D+3</h1><p class="text-xs text-slate-400">Modelo · gatilho: pagamento_vencido</p></div></div>
-      <div class="flex items-center gap-2"><button class="h-9 px-3 rounded-lg border border-slate-200 text-sm text-slate-600">Testar</button><button class="h-9 px-4 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
+  <!-- ════════ ADMIN · EDITOR ════════ -->
+  <section data-screen="editor" class="hidden space-y-4">
+    <button onclick="ir('admin')" class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800"><i data-lucide="arrow-left" class="h-3.5 w-3.5"></i> Voltar para modelos</button>
+    <div class="relative overflow-hidden rounded-2xl p-5 border" style="background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.08) 50%,rgba(236,72,153,.06));border-color:rgba(139,92,246,.18)">
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center shadow-md"><i data-lucide="bell-ring" class="h-5 w-5 text-white"></i></div>
+        <div class="flex-1 min-w-0"><h1 class="text-xl font-bold tracking-tight">Cobrança automática D+3</h1><p class="text-sm text-slate-500 mt-0.5">Modelo · gatilho: pagamento vencido</p></div>
+        <button class="h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-600">Testar</button>
+        <button class="bg-gradient-to-br from-violet-600 to-indigo-600 text-white text-sm font-medium h-9 px-4 rounded-lg shadow-md">Salvar</button>
+      </div>
     </div>
     <div class="grid gap-4 lg:grid-cols-3">
-      <!-- canvas (reusa editor existente) -->
       <div class="lg:col-span-2 rounded-2xl bg-[linear-gradient(0deg,#f1f5f9_1px,transparent_1px),linear-gradient(90deg,#f1f5f9_1px,transparent_1px)] bg-[length:20px_20px] border border-slate-200 p-6 min-h-[320px]">
         <div class="flex flex-col items-center gap-3">
           <div class="node border-indigo-200 bg-indigo-50"><i data-lucide="zap" class="w-3 h-3 inline mr-1 text-indigo-500"></i> Gatilho: pagamento vencido</div>
           <i data-lucide="chevron-down" class="w-4 h-4 text-slate-300"></i>
           <div class="node">⏳ Esperar 3 dias</div>
           <i data-lucide="chevron-down" class="w-4 h-4 text-slate-300"></i>
-          <div class="node border-emerald-200">💬 WhatsApp: enviar <span class="px-1 rounded bg-amber-100 text-amber-700 font-mono text-[10px]">{{config.msgCobranca}}</span></div>
-          <i data-lucide="chevron-down" class="w-4 h-4 text-slate-300"></i>
-          <div class="node">🏷️ Mover card Kanban → "Inadimplente"</div>
+          <div class="node border-emerald-200">💬 WhatsApp: <span class="px-1 rounded bg-amber-100 text-amber-700 font-mono text-[10px]">{{config.msgCobranca}}</span></div>
         </div>
-        <p class="text-center text-[11px] text-slate-400 mt-4">Mesmo canvas do SmartFlow atual — placeholders <span class="font-mono">{{config.*}}</span> viram parâmetros do modelo.</p>
+        <p class="text-center text-[11px] text-slate-400 mt-4">Mesmo canvas do SmartFlow do cliente — placeholders <span class="font-mono">{{config.*}}</span> viram parâmetros do modelo.</p>
       </div>
-      <!-- painel publicação -->
       <div class="rounded-2xl bg-white border border-slate-200 p-5 space-y-4 h-fit">
-        <div class="flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-slate-800 flex items-center gap-1.5"><i data-lucide="share-2" class="w-4 h-4 text-slate-400"></i> Publicação</h3>
-        </div>
-        <div class="flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5">
-          <div><p class="text-sm font-medium text-emerald-900">Disponível para clientes</p><p class="text-[11px] text-emerald-700">Aparece na galeria pra clonar</p></div>
+        <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5"><i data-lucide="share-2" class="w-4 h-4 text-violet-500"></i> Publicação</h3>
+        <div class="flex items-center justify-between rounded-lg bg-violet-50 border border-violet-200 px-3 py-2.5">
+          <div><p class="text-sm font-medium text-violet-900">Disponível para clientes</p><p class="text-[11px] text-violet-700">Aparece na galeria pra clonar</p></div>
           <div class="switch on" onclick="this.classList.toggle('on')"></div>
         </div>
-        <div><label class="text-xs font-medium text-slate-600">Categoria</label><select class="w-full h-9 mt-1 rounded-lg border border-slate-200 px-3 text-sm"><option>Cobrança</option><option>Atendimento</option><option>Agendamento</option><option>Processos</option></select></div>
-        <div><label class="text-xs font-medium text-slate-600">Descrição pública</label><textarea class="w-full h-16 mt-1 rounded-lg border border-slate-200 p-2 text-sm">Lembra o cliente automaticamente 3 dias após o vencimento da cobrança.</textarea></div>
+        <div><label class="text-xs font-medium text-slate-600">Categoria</label><select class="w-full h-9 mt-1 rounded-lg border border-slate-200 px-3 text-sm"><option>Cobrança</option><option>Atendimento</option><option>Agendamento</option></select></div>
+        <div><label class="text-xs font-medium text-slate-600">Descrição pública</label><textarea class="w-full h-16 mt-1 rounded-lg border border-slate-200 p-2 text-sm">Lembra o cliente 3 dias após o vencimento.</textarea></div>
         <div>
-          <div class="flex items-center justify-between mb-1.5"><label class="text-xs font-medium text-slate-600">Parâmetros do modelo</label><button class="text-[11px] text-indigo-600 hover:underline">+ Adicionar</button></div>
-          <p class="text-[11px] text-slate-400 mb-2">O cliente preenche estes ao clonar (substituem <span class="font-mono">{{config.*}}</span>).</p>
+          <div class="flex items-center justify-between mb-1.5"><label class="text-xs font-medium text-slate-600">Parâmetros do modelo</label><button class="text-[11px] text-violet-600 hover:underline">+ Adicionar</button></div>
+          <p class="text-[11px] text-slate-400 mb-2">O cliente preenche ao clonar (substituem <span class="font-mono">{{config.*}}</span>).</p>
           <div class="space-y-2">
-            <div class="rounded-lg border border-slate-200 p-2.5 text-xs"><div class="flex items-center justify-between"><span class="font-mono text-slate-700">canalWhatsapp</span><span class="text-[10px] px-1.5 rounded bg-blue-100 text-blue-700">canal</span></div><p class="text-slate-400 mt-0.5">Canal de WhatsApp para enviar</p></div>
-            <div class="rounded-lg border border-slate-200 p-2.5 text-xs"><div class="flex items-center justify-between"><span class="font-mono text-slate-700">msgCobranca</span><span class="text-[10px] px-1.5 rounded bg-violet-100 text-violet-700">texto</span></div><p class="text-slate-400 mt-0.5">Texto da mensagem de cobrança</p></div>
-            <div class="rounded-lg border border-slate-200 p-2.5 text-xs"><div class="flex items-center justify-between"><span class="font-mono text-slate-700">colunaKanban</span><span class="text-[10px] px-1.5 rounded bg-amber-100 text-amber-700">kanban</span></div><p class="text-slate-400 mt-0.5">Coluna para mover o card</p></div>
+            <div class="rounded-lg border border-slate-200 p-2.5 text-xs"><div class="flex items-center justify-between"><span class="font-mono text-slate-700">canalWhatsapp</span><span class="text-[10px] px-1.5 rounded bg-blue-100 text-blue-700">canal</span></div></div>
+            <div class="rounded-lg border border-slate-200 p-2.5 text-xs"><div class="flex items-center justify-between"><span class="font-mono text-slate-700">msgCobranca</span><span class="text-[10px] px-1.5 rounded bg-violet-100 text-violet-700">texto</span></div></div>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ════════ CLIENTE · GALERIA ════════ -->
-  <section data-screen="cliente-galeria" class="hidden space-y-5">
-    <div><h1 class="text-2xl font-semibold tracking-tight font-display">SmartFlow</h1><p class="text-slate-500 mt-1 text-sm">Crie automações ou comece por um modelo pronto do JuridFlow.</p></div>
-    <div class="bg-slate-50/80 border border-slate-200 rounded-xl p-1.5 inline-flex gap-1">
-      <button class="text-xs px-3 py-1.5 rounded-lg text-slate-500 inline-flex items-center gap-1.5"><i data-lucide="workflow" class="w-3.5 h-3.5"></i> Meus fluxos (3)</button>
-      <button class="text-xs px-3 py-1.5 rounded-lg bg-white shadow-sm font-medium text-slate-800 inline-flex items-center gap-1.5"><i data-lucide="layout-grid" class="w-3.5 h-3.5"></i> Galeria de modelos</button>
-    </div>
-    <div class="flex gap-2 flex-wrap">
-      <span class="text-[11px] px-2.5 py-1 rounded-full bg-indigo-600 text-white font-medium">Todos</span>
-      <span class="text-[11px] px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">Cobrança</span>
-      <span class="text-[11px] px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">Atendimento</span>
-      <span class="text-[11px] px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">Agendamento</span>
-    </div>
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <div class="rounded-2xl bg-white border border-slate-200 p-5 flex flex-col">
-        <div class="flex items-center justify-between mb-3"><span class="h-10 w-10 rounded-xl bg-emerald-500/10 grid place-items-center"><i data-lucide="bell-ring" class="w-5 h-5 text-emerald-600"></i></span><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Cobrança</span></div>
-        <h4 class="font-semibold text-slate-800">Cobrança automática D+3</h4>
-        <p class="text-xs text-slate-500 mt-1 flex-1">Lembra o cliente automaticamente 3 dias após o vencimento da cobrança.</p>
-        <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100"><span class="text-[11px] text-slate-400">5 passos · 112 usos</span><button onclick="abrirClone()" class="text-xs font-medium text-white bg-indigo-600 px-2.5 py-1 rounded-lg inline-flex items-center gap-1"><i data-lucide="copy" class="w-3.5 h-3.5"></i> Clonar</button></div>
+  <!-- ════════ CLIENTE · GALERIA (modal, como já existe) ════════ -->
+  <section data-screen="cliente" class="hidden">
+    <p class="text-xs text-slate-400 mb-3">Visão do cliente: ao clicar em "Novo cenário" no SmartFlow dele, abre a galeria já existente — agora populada pelos seus modelos publicados.</p>
+    <div class="rounded-2xl bg-white border border-slate-200 shadow-sm max-w-2xl mx-auto overflow-hidden">
+      <div class="px-6 pt-5 pb-3 border-b border-slate-100">
+        <h3 class="text-base font-bold flex items-center gap-2"><i data-lucide="sparkles" class="w-5 h-5 text-violet-500"></i> Começar um cenário</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Escolha um modelo pronto do JuridFlow ou crie do zero.</p>
       </div>
-      <div class="rounded-2xl bg-white border border-slate-200 p-5 flex flex-col">
-        <div class="flex items-center justify-between mb-3"><span class="h-10 w-10 rounded-xl bg-blue-500/10 grid place-items-center"><i data-lucide="calendar-check" class="w-5 h-5 text-blue-600"></i></span><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Agendamento</span></div>
-        <h4 class="font-semibold text-slate-800">Confirmação de agendamento</h4>
-        <p class="text-xs text-slate-500 mt-1 flex-1">Envia WhatsApp ao criar agendamento e um lembrete antes do horário.</p>
-        <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100"><span class="text-[11px] text-slate-400">4 passos · 68 usos</span><button onclick="abrirClone()" class="text-xs font-medium text-white bg-indigo-600 px-2.5 py-1 rounded-lg inline-flex items-center gap-1"><i data-lucide="copy" class="w-3.5 h-3.5"></i> Clonar</button></div>
+      <div class="p-5">
+        <div id="galeria-passo1" class="grid sm:grid-cols-2 gap-3">
+          <div onclick="personalizar()" class="rounded-xl border border-slate-200 p-4 hover:border-violet-300 hover:shadow-sm cursor-pointer">
+            <div class="flex items-start gap-2.5"><div class="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 grid place-items-center text-white shrink-0"><i data-lucide="bell-ring" class="w-5 h-5"></i></div><div><div class="flex items-center gap-1.5"><p class="text-sm font-bold">Cobrança automática D+3</p><span class="text-[9px] px-1.5 rounded-full bg-emerald-100 text-emerald-700 font-bold">POPULAR</span></div><p class="text-xs text-slate-500 mt-0.5 line-clamp-2">Lembra o cliente 3 dias após o vencimento.</p></div></div>
+          </div>
+          <div onclick="personalizar()" class="rounded-xl border border-slate-200 p-4 hover:border-violet-300 hover:shadow-sm cursor-pointer">
+            <div class="flex items-start gap-2.5"><div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 grid place-items-center text-white shrink-0"><i data-lucide="calendar-check" class="w-5 h-5"></i></div><div><p class="text-sm font-bold">Confirmação de agendamento</p><p class="text-xs text-slate-500 mt-0.5 line-clamp-2">WhatsApp ao criar + lembrete antes do horário.</p></div></div>
+          </div>
+          <div onclick="personalizar()" class="rounded-xl border border-slate-200 p-4 hover:border-violet-300 hover:shadow-sm cursor-pointer">
+            <div class="flex items-start gap-2.5"><div class="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 grid place-items-center text-white shrink-0"><i data-lucide="bot" class="w-5 h-5"></i></div><div><p class="text-sm font-bold">Atendente IA — triagem</p><p class="text-xs text-slate-500 mt-0.5 line-clamp-2">Classifica intenção e responde dúvidas comuns.</p></div></div>
+          </div>
+          <div class="rounded-xl border border-dashed border-slate-300 p-4 grid place-items-center text-slate-400 hover:bg-slate-50 cursor-pointer"><span class="text-xs flex items-center gap-1.5"><i data-lucide="plus" class="w-4 h-4"></i> Criar do zero</span></div>
+        </div>
+
+        <!-- passo 2: personalizar (wizard) -->
+        <div id="galeria-passo2" class="hidden">
+          <button onclick="voltarGaleria()" class="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 mb-3"><i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Voltar aos modelos</button>
+          <div class="flex items-center gap-2.5 mb-4"><div class="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 grid place-items-center text-white"><i data-lucide="bell-ring" class="w-5 h-5"></i></div><div><p class="text-sm font-bold">Cobrança automática D+3</p><p class="text-xs text-slate-400">Ajuste os campos com os dados do seu escritório</p></div></div>
+          <div class="space-y-3">
+            <div><label class="text-xs font-medium text-slate-600">Nome do cenário</label><input value="Cobrança automática D+3" class="w-full h-9 mt-1 rounded-lg border border-slate-200 px-3 text-sm"></div>
+            <div><label class="text-xs text-slate-600 flex items-center gap-1.5"><span class="text-[10px] px-1.5 rounded bg-blue-100 text-blue-700">canal</span> Canal de WhatsApp</label><select class="w-full h-9 mt-1 rounded-lg border border-slate-200 px-3 text-sm"><option>WhatsApp Principal · +55 85 9xxxx</option></select></div>
+            <div><label class="text-xs text-slate-600 flex items-center gap-1.5"><span class="text-[10px] px-1.5 rounded bg-violet-100 text-violet-700">texto</span> Mensagem de cobrança</label><textarea class="w-full h-16 mt-1 rounded-lg border border-slate-200 p-2 text-sm">Olá {{cliente.nome}}, identificamos uma cobrança em aberto.</textarea></div>
+            <div class="rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-[11px] text-amber-800 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i> Requer Asaas conectado e um canal de WhatsApp ativo.</div>
+          </div>
+        </div>
       </div>
-      <div class="rounded-2xl bg-white border border-slate-200 p-5 flex flex-col">
-        <div class="flex items-center justify-between mb-3"><span class="h-10 w-10 rounded-xl bg-violet-500/10 grid place-items-center"><i data-lucide="bot" class="w-5 h-5 text-violet-600"></i></span><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Atendimento</span></div>
-        <h4 class="font-semibold text-slate-800">Atendente IA — triagem</h4>
-        <p class="text-xs text-slate-500 mt-1 flex-1">Classifica a intenção da primeira mensagem e responde dúvidas comuns.</p>
-        <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100"><span class="text-[11px] text-slate-400">7 passos · 34 usos</span><button onclick="abrirClone()" class="text-xs font-medium text-white bg-indigo-600 px-2.5 py-1 rounded-lg inline-flex items-center gap-1"><i data-lucide="copy" class="w-3.5 h-3.5"></i> Clonar</button></div>
+      <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2">
+        <button class="h-9 px-4 rounded-lg border border-slate-200 text-sm text-slate-600">Cancelar</button>
+        <button class="h-9 px-4 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 text-white text-sm font-medium inline-flex items-center gap-1.5"><i data-lucide="zap" class="w-4 h-4"></i> Criar cenário</button>
       </div>
     </div>
   </section>
 
 </div>
 
-<!-- ════════ MODAL: WIZARD DE CLONE ════════ -->
-<div id="cloneModal" class="hidden fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-    <div class="px-6 pt-5 pb-3 border-b border-slate-100 flex items-start gap-3">
-      <span class="h-10 w-10 rounded-xl bg-emerald-500/10 grid place-items-center shrink-0"><i data-lucide="copy" class="w-5 h-5 text-emerald-600"></i></span>
-      <div class="flex-1"><h3 class="text-base font-semibold text-slate-900">Clonar "Cobrança automática D+3"</h3><p class="text-xs text-slate-400 mt-0.5">Preencha os parâmetros com os dados do seu escritório. Você poderá editar tudo depois.</p></div>
-      <button onclick="fecharClone()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
-    </div>
-    <div class="p-6 space-y-4">
-      <div><label class="text-xs font-medium text-slate-600">Nome do seu fluxo</label><input value="Cobrança automática D+3" class="w-full h-9 mt-1 rounded-lg border border-slate-200 px-3 text-sm"></div>
-      <div class="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-3">
-        <p class="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i> Parâmetros do modelo</p>
-        <div>
-          <label class="text-xs text-slate-600 flex items-center gap-1.5"><span class="text-[10px] px-1.5 rounded bg-blue-100 text-blue-700">canal</span> Canal de WhatsApp</label>
-          <select class="w-full h-9 mt-1 rounded-lg border border-slate-200 px-3 text-sm bg-white"><option>WhatsApp Principal · +55 85 9xxxx</option><option>WhatsApp Comercial</option></select>
-        </div>
-        <div>
-          <label class="text-xs text-slate-600 flex items-center gap-1.5"><span class="text-[10px] px-1.5 rounded bg-violet-100 text-violet-700">texto</span> Texto da mensagem de cobrança</label>
-          <textarea class="w-full h-16 mt-1 rounded-lg border border-slate-200 p-2 text-sm bg-white">Olá {{cliente.nome}}, identificamos uma cobrança em aberto. Podemos ajudar?</textarea>
-        </div>
-        <div>
-          <label class="text-xs text-slate-600 flex items-center gap-1.5"><span class="text-[10px] px-1.5 rounded bg-amber-100 text-amber-700">kanban</span> Coluna do Kanban</label>
-          <select class="w-full h-9 mt-1 rounded-lg border border-slate-200 px-3 text-sm bg-white"><option>Inadimplentes</option><option>Em cobrança</option><option>A negociar</option></select>
-        </div>
-      </div>
-      <div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 flex items-start gap-2"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i> Recursos detectados que você precisa ter configurados: <strong>Asaas conectado</strong> e <strong>canal WhatsApp ativo</strong>.</div>
-    </div>
-    <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2">
-      <button onclick="fecharClone()" class="h-9 px-4 rounded-lg border border-slate-200 text-sm text-slate-600">Cancelar</button>
-      <button onclick="fecharClone()" class="h-9 px-4 rounded-lg bg-indigo-600 text-white text-sm font-medium inline-flex items-center gap-1.5"><i data-lucide="copy" class="w-4 h-4"></i> Clonar e editar</button>
-    </div>
-  </div>
-</div>
-
 <script>
   lucide.createIcons();
   function ir(n){
     document.querySelectorAll('[data-screen]').forEach(s => s.classList.toggle('hidden', s.getAttribute('data-screen') !== n));
-    document.querySelectorAll('[data-seg]').forEach(b => {
-      const map = { 'admin-lista':'admin-lista','admin-editor':'admin-editor','cliente-galeria':'cliente-galeria' };
-      const on = b.getAttribute('data-seg') === n;
-      b.classList.toggle('active', on); b.classList.toggle('text-slate-300', !on);
-    });
+    document.querySelectorAll('[data-seg]').forEach(b => { const on=b.getAttribute('data-seg')===n; b.classList.toggle('active',on); b.classList.toggle('text-slate-300',!on); });
+    if (n==='cliente') voltarGaleria();
     window.scrollTo({top:0,behavior:'smooth'});
   }
-  function abrirClone(){ document.getElementById('cloneModal').classList.remove('hidden'); }
-  function fecharClone(){ document.getElementById('cloneModal').classList.add('hidden'); }
-  document.getElementById('cloneModal').addEventListener('click', e => { if (e.target.id === 'cloneModal') fecharClone(); });
+  function personalizar(){ document.getElementById('galeria-passo1').classList.add('hidden'); document.getElementById('galeria-passo2').classList.remove('hidden'); }
+  function voltarGaleria(){ document.getElementById('galeria-passo1').classList.remove('hidden'); document.getElementById('galeria-passo2').classList.add('hidden'); }
 </script>
 </body>
 </html>
