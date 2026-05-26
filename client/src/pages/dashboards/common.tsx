@@ -31,6 +31,10 @@ export function formatPercent(v: number | null, casas = 1): string {
 
 export function formatDataCurta(d: string | Date): string {
   const dt = typeof d === "string" ? new Date(`${d}T00:00:00`) : d;
+  // Intl.DateTimeFormat.format() lança RangeError em data inválida — um
+  // periodo vazio (ex: sentinel ZERO do dashboard sem permissão) derruba
+  // o painel inteiro. Devolve fallback em vez de propagar o throw.
+  if (!dt || Number.isNaN(dt.getTime())) return "—";
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(dt);
 }
 

@@ -39,7 +39,9 @@ export default function DashboardFinanceiro() {
   });
 
   if (isLoading) return <SkeletonPainel />;
-  if (!data) {
+  // Servidor devolve o sentinel ZERO (periodo com datas vazias) quando o
+  // usuário não tem `dashboard.verTodos` — é o sinal de "sem permissão".
+  if (!data || !data.periodo?.dataInicio) {
     return (
       <Card>
         <CardContent className="pt-6">
