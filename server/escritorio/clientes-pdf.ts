@@ -99,6 +99,16 @@ export async function gerarClientesPDF(
       const right = doc.page.width - doc.page.margins.right;
       const usable = right - left;
 
+      // Trunca pra UMA linha medindo com a fonte/tamanho atuais — evita que o
+      // pdfkit quebre nomes longos em 2 linhas (causava sobreposição entre rows
+      // e páginas em branco por auto-paginação). Definir font/fontSize ANTES.
+      const fit = (str: string, maxW: number): string => {
+        let s = str ?? "";
+        if (doc.widthOfString(s) <= maxW) return s;
+        while (s.length > 0 && doc.widthOfString(s + "…") > maxW) s = s.slice(0, -1);
+        return s + "…";
+      };
+
       // Totais do recorte
       const totalPend = clientes.reduce((s, c) => s + (c.pendente || 0), 0);
       const totalVenc = clientes.reduce((s, c) => s + (c.vencido || 0), 0);
@@ -179,14 +189,14 @@ export async function gerarClientesPDF(
 
       // ─── Tabela ───────────────────────────────────────────────────────────
       const cols = {
-        nome: { x: left, w: usable * 0.25 },
-        doc: { x: left + usable * 0.25, w: usable * 0.14 },
-        contato: { x: left + usable * 0.39, w: usable * 0.15 },
-        cobr: { x: left + usable * 0.54, w: usable * 0.07 },
-        pend: { x: left + usable * 0.61, w: usable * 0.1 },
-        venc: { x: left + usable * 0.71, w: usable * 0.1 },
-        pago: { x: left + usable * 0.81, w: usable * 0.1 },
-        atraso: { x: left + usable * 0.91, w: usable * 0.09 },
+        nome: { x: left, w: usable * 0.26 },
+        doc: { x: left + usable * 0.26, w: usable * 0.13 },
+        contato: { x: left + usable * 0.39, w: usable * 0.14 },
+        cobr: { x: left + usable * 0.53, w: usable * 0.06 },
+        pend: { x: left + usable * 0.59, w: usable * 0.105 },
+        venc: { x: left + usable * 0.695, w: usable * 0.105 },
+        pago: { x: left + usable * 0.80, w: usable * 0.105 },
+        atraso: { x: left + usable * 0.905, w: usable * 0.095 },
       };
       const ROW_H = 15;
       const bottomLimit = doc.page.height - doc.page.margins.bottom - 24;
@@ -216,22 +226,10 @@ export async function gerarClientesPDF(
           doc.rect(left, y - 2, usable, ROW_H).fill(COLORS.zebra);
         }
         doc.font("Helvetica").fontSize(8).fillColor(COLORS.dark);
-        doc.text(c.contatoNome || "—", cols.nome.x, y, {
-          width: cols.nome.w - 4,
-          ellipsis: true,
-          lineBreak: false,
-        });
+        doc.text(fit(c.contatoNome || "—", cols.nome.w - 6), cols.nome.x, y, { lineBreak: false });
         doc.fontSize(7.5).fillColor(COLORS.muted);
-        doc.text(formatCpfCnpj(c.cpfCnpj), cols.doc.x, y, {
-          width: cols.doc.w - 4,
-          ellipsis: true,
-          lineBreak: false,
-        });
-        doc.text(contatoDisplay(c.contatoTelefone, c.contatoEmail), cols.contato.x, y, {
-          width: cols.contato.w - 4,
-          ellipsis: true,
-          lineBreak: false,
-        });
+        doc.text(fit(formatCpfCnpj(c.cpfCnpj), cols.doc.w - 6), cols.doc.x, y, { lineBreak: false });
+        doc.text(fit(contatoDisplay(c.contatoTelefone, c.contatoEmail), cols.contato.w - 6), cols.contato.x, y, { lineBreak: false });
         doc.fontSize(8).fillColor(COLORS.dark);
         doc.text(String(c.totalCobrancas), cols.cobr.x, y, {
           width: cols.cobr.w,
@@ -239,19 +237,19 @@ export async function gerarClientesPDF(
           lineBreak: false,
         });
         doc.fillColor(c.pendente > 0 ? COLORS.amber : COLORS.border);
-        doc.text(c.pendente > 0 ? formatBRL(c.pendente) : "—", cols.pend.x, y, {
+        doc.text(c.pendente > 0 ? fit(formatBRL(c.pendente), cols.pend.w) : "—", cols.pend.x, y, {
           width: cols.pend.w,
           align: "right",
           lineBreak: false,
         });
         doc.fillColor(c.vencido > 0 ? COLORS.red : COLORS.border);
-        doc.text(c.vencido > 0 ? formatBRL(c.vencido) : "—", cols.venc.x, y, {
+        doc.text(c.vencido > 0 ? fit(formatBRL(c.vencido), cols.venc.w) : "—", cols.venc.x, y, {
           width: cols.venc.w,
           align: "right",
           lineBreak: false,
         });
         doc.fillColor(c.pago > 0 ? COLORS.green : COLORS.border);
-        doc.text(c.pago > 0 ? formatBRL(c.pago) : "—", cols.pago.x, y, {
+        doc.text(c.pago > 0 ? fit(formatBRL(c.pago), cols.pago.w) : "—", cols.pago.x, y, {
           width: cols.pago.w,
           align: "right",
           lineBreak: false,
@@ -323,7 +321,12 @@ export async function gerarClientesPDF(
       const range = doc.bufferedPageRange();
       for (let i = 0; i < range.count; i++) {
         doc.switchToPage(range.start + i);
-        const fy = doc.page.height - doc.page.margins.bottom + 8;
+        // Escrever na área de margem inferior dispararia auto-paginação do
+        // pdfkit (y > maxY). Zerar a margem inferior durante o carimbo evita
+        // criar páginas em branco no fim do documento.
+        const oldBottom = doc.page.margins.bottom;
+        doc.page.margins.bottom = 0;
+        const fy = doc.page.height - 26;
         doc.fontSize(7.5).font("Helvetica").fillColor(COLORS.muted);
         doc.text("Gerado por JuridFlow · Dados sincronizados do Asaas", left, fy, {
           width: usable * 0.7,
@@ -335,6 +338,7 @@ export async function gerarClientesPDF(
           align: "right",
           lineBreak: false,
         });
+        doc.page.margins.bottom = oldBottom;
       }
 
       doc.end();
