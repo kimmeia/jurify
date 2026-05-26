@@ -18,7 +18,7 @@
  */
 
 import { z } from "zod";
-import { and, desc, eq, or } from "drizzle-orm";
+import { and, desc, eq, gte, or } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
@@ -197,8 +197,12 @@ export const customer360Router = router({
           .limit(5);
 
         // ─── Próximos compromissos ────────────────────────────────────────
+        // DESTE contato e FUTUROS. Antes a query buscava os 5 mais antigos do
+        // escritório inteiro (sem filtrar por contato) e só depois descartava os
+        // passados client-side — o resultado não era do cliente e, se os 5 mais
+        // antigos já tinham passado, vinha vazio (era o caso do painel zerado).
         const agora = new Date();
-        const proximosCompromissos = await db
+        const compromissosDoCliente = await db
           .select({
             id: agendamentos.id,
             titulo: agendamentos.titulo,
@@ -211,6 +215,8 @@ export const customer360Router = router({
           .where(
             and(
               eq(agendamentos.escritorioId, escritorioId),
+              eq(agendamentos.contatoId, input.contatoId),
+              gte(agendamentos.dataInicio, agora),
               or(
                 eq(agendamentos.status, "pendente"),
                 eq(agendamentos.status, "em_andamento"),
@@ -219,11 +225,6 @@ export const customer360Router = router({
           )
           .orderBy(agendamentos.dataInicio)
           .limit(5);
-
-        // Filtra só os que são do cliente (por enquanto filtra client-side)
-        const compromissosDoCliente = proximosCompromissos.filter(
-          (a) => (a.dataInicio as Date) >= agora,
-        );
 
         // ─── Anotações recentes ───────────────────────────────────────────
         const anotacoesRecentes = await db

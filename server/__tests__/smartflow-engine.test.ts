@@ -1212,37 +1212,42 @@ describe("SmartFlow Engine", () => {
     const con = ["ver_horarios"];
     it("JSON válido com ação habilitada", () => {
       expect(interpretarSaidaAtendente('{"resposta":"Vou agendar!","acao":"agendar"}', fer, con))
-        .toEqual({ resposta: "Vou agendar!", acao: "agendar", consulta: null });
+        .toEqual({ resposta: "Vou agendar!", acao: "agendar", consulta: null, quando: null });
     });
     it("consulta habilitada é reconhecida", () => {
       expect(interpretarSaidaAtendente('{"resposta":"deixa eu ver","consulta":"ver_horarios"}', fer, con))
-        .toEqual({ resposta: "deixa eu ver", acao: null, consulta: "ver_horarios" });
+        .toEqual({ resposta: "deixa eu ver", acao: null, consulta: "ver_horarios", quando: null });
     });
     it("ação/consulta fora da lista são ignoradas", () => {
       expect(interpretarSaidaAtendente('{"resposta":"oi","acao":"deletar","consulta":"hackear"}', fer, con))
-        .toEqual({ resposta: "oi", acao: null, consulta: null });
+        .toEqual({ resposta: "oi", acao: null, consulta: null, quando: null });
     });
     it("tolera cercas markdown ```json", () => {
       expect(interpretarSaidaAtendente('```json\n{"resposta":"oi","acao":"transferir"}\n```', fer, con))
-        .toEqual({ resposta: "oi", acao: "transferir", consulta: null });
+        .toEqual({ resposta: "oi", acao: "transferir", consulta: null, quando: null });
     });
     it("texto não-JSON vira resposta (fallback)", () => {
       expect(interpretarSaidaAtendente("Olá, tudo bem?", fer, con))
-        .toEqual({ resposta: "Olá, tudo bem?", acao: null, consulta: null });
+        .toEqual({ resposta: "Olá, tudo bem?", acao: null, consulta: null, quando: null });
     });
     it("frase ANTES do JSON: extrai o objeto e a consulta (bug do JSON vazado pro cliente)", () => {
       const raw = 'Claro! Vou verificar os horários disponíveis para você. Um momento, por favor.\n\n{"resposta":"Claro! Vou verificar os horários.","acao":null,"consulta":"ver_horarios"}';
       expect(interpretarSaidaAtendente(raw, fer, con))
-        .toEqual({ resposta: "Claro! Vou verificar os horários.", acao: null, consulta: "ver_horarios" });
+        .toEqual({ resposta: "Claro! Vou verificar os horários.", acao: null, consulta: "ver_horarios", quando: null });
     });
     it("cerca markdown com frase antes do bloco json", () => {
       const raw = 'Deixa eu ver os horários:\n```json\n{"resposta":"um momento","consulta":"ver_horarios"}\n```';
       expect(interpretarSaidaAtendente(raw, fer, con))
-        .toEqual({ resposta: "um momento", acao: null, consulta: "ver_horarios" });
+        .toEqual({ resposta: "um momento", acao: null, consulta: "ver_horarios", quando: null });
     });
     it("não vira falso-positivo: chaves soltas em texto comum continuam fallback", () => {
       expect(interpretarSaidaAtendente("Oi {nome}, tudo bem?", fer, con))
-        .toEqual({ resposta: "Oi {nome}, tudo bem?", acao: null, consulta: null });
+        .toEqual({ resposta: "Oi {nome}, tudo bem?", acao: null, consulta: null, quando: null });
+    });
+    it("extrai `quando` (ISO do horário escolhido) junto com a ação agendar", () => {
+      const raw = '{"resposta":"Agendado!","acao":"agendar","quando":"2026-05-27T14:00:00-03:00"}';
+      expect(interpretarSaidaAtendente(raw, fer, con))
+        .toEqual({ resposta: "Agendado!", acao: "agendar", consulta: null, quando: "2026-05-27T14:00:00-03:00" });
     });
   });
 
@@ -1253,7 +1258,7 @@ describe("SmartFlow Engine", () => {
       const chamarLLM = vi.fn().mockResolvedValue('{"resposta":"oi","acao":null}');
       const executarConsulta = vi.fn();
       const r = await orquestrarAtendente({ ...base, chamarLLM, executarConsulta });
-      expect(r).toEqual({ resposta: "oi", acao: null });
+      expect(r).toEqual({ resposta: "oi", acao: null, quando: null });
       expect(executarConsulta).not.toHaveBeenCalled();
       expect(chamarLLM).toHaveBeenCalledTimes(1);
     });
@@ -1268,7 +1273,14 @@ describe("SmartFlow Engine", () => {
       expect(chamarLLM).toHaveBeenCalledTimes(2);
       // 2ª chamada recebeu o resultado da consulta no contexto extra
       expect(chamarLLM.mock.calls[1][0]).toContain("ter 14h, qui 16h");
-      expect(r).toEqual({ resposta: "tenho ter 14h e qui 16h, qual prefere?", acao: null });
+      expect(r).toEqual({ resposta: "tenho ter 14h e qui 16h, qual prefere?", acao: null, quando: null });
+    });
+
+    it("propaga `quando` (ISO escolhido) quando o agente dispara agendar", async () => {
+      const chamarLLM = vi.fn().mockResolvedValue('{"resposta":"Agendado para qui 16h!","acao":"agendar","quando":"2026-05-28T16:00:00-03:00"}');
+      const executarConsulta = vi.fn();
+      const r = await orquestrarAtendente({ ...base, chamarLLM, executarConsulta });
+      expect(r).toEqual({ resposta: "Agendado para qui 16h!", acao: "agendar", quando: "2026-05-28T16:00:00-03:00" });
     });
 
     it("respeita maxRodadas (não consulta infinito)", async () => {
@@ -1336,6 +1348,17 @@ describe("SmartFlow Engine", () => {
       expect(r.respostas).toContain("AGENDOU");
       expect(r.respostas).not.toContain("TRANSFERIU");
       expect(r.contexto.aguardandoMensagem).toBeFalsy();
+    });
+
+    it("ação agendar com `quando` → grava agendamentoQuando (pro bloco de Agendamento usar a data)", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Agendado!", acao: "agendar", quando: "2026-05-27T14:00:00-03:00" });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const passos: Passo[] = [
+        noAtendente(["agendar"], { agendar: "a" }),
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "a", config: { template: "OK" } },
+      ];
+      const r = await executarCenario(passos, { ...ctxBase, mensagem: "pode ser 27 as 14" }, exec);
+      expect(r.contexto.agendamentoQuando).toBe("2026-05-27T14:00:00-03:00");
     });
 
     it("ação NÃO habilitada é ignorada → continua conversando", async () => {
@@ -2041,6 +2064,38 @@ describe("SmartFlow Engine", () => {
   });
 
   describe("agenda_criar", () => {
+    it("usa o horário escolhido pelo cliente (agendamentoQuando) como data — não 'agora'", async () => {
+      // Regressão: o horário que o cliente escolheu no Atendente IA não chegava
+      // ao bloco de Agendamento, que então marcava em new Date() (agora). Agora
+      // o Atendente IA grava `agendamentoQuando` (ISO) e o agenda_criar usa.
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(38);
+      const exec = criarMockExecutores({ criarAgendamentoInterno });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "agenda_criar", config: { responsavelId: 9, duracaoMinutos: 60 } },
+      ];
+      const r = await executarCenario(
+        passos,
+        { nomeCliente: "Rafael", contatoId: 3224, agendamentoQuando: "2026-05-27T14:00:00-03:00" },
+        exec,
+      );
+      expect(r.sucesso).toBe(true);
+      expect(criarAgendamentoInterno).toHaveBeenCalledWith(
+        expect.objectContaining({ dataInicio: "2026-05-27T17:00:00.000Z", dataFim: "2026-05-27T18:00:00.000Z" }),
+      );
+    });
+
+    it("cfg.dataInicio (override do usuário) tem prioridade sobre agendamentoQuando", async () => {
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(1);
+      const exec = criarMockExecutores({ criarAgendamentoInterno });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "agenda_criar", config: { responsavelId: 9, dataInicio: "2026-06-01T10:00:00-03:00", duracaoMinutos: 30 } },
+      ];
+      await executarCenario(passos, { agendamentoQuando: "2026-05-27T14:00:00-03:00" }, exec);
+      expect(criarAgendamentoInterno).toHaveBeenCalledWith(
+        expect.objectContaining({ dataInicio: "2026-06-01T13:00:00.000Z" }),
+      );
+    });
+
     it("cria compromisso na agenda interna com título interpolado e vincula o contato", async () => {
       const criarAgendamentoInterno = vi.fn().mockResolvedValue(555);
       const exec = criarMockExecutores({ criarAgendamentoInterno });
