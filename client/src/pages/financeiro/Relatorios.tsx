@@ -40,7 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatBRL } from "./helpers";
+import { formatBRL, baixarBlob, base64ToBlob } from "./helpers";
 
 function inicioDoMesIso(): string {
   const d = new Date();
@@ -66,29 +66,6 @@ function presetParaRange(preset: "1m" | "3m" | "6m" | "12m"): {
     inicio: inicio.toISOString().slice(0, 10),
     fim: fim.toISOString().slice(0, 10),
   };
-}
-
-function baixarBlob(content: string | Blob, filename: string, mimeType: string) {
-  const blob =
-    typeof content === "string" ? new Blob([content], { type: mimeType }) : content;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-    a.remove();
-  }, 0);
-}
-
-/** Converte base64 → Blob no navegador (sem libs externas). */
-function base64ToBlob(base64: string, mimeType: string): Blob {
-  const bin = atob(base64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new Blob([bytes], { type: mimeType });
 }
 
 export function RelatoriosTab() {
