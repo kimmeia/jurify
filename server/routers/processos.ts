@@ -41,6 +41,7 @@ import {
   obterResultadoMotorProprio,
 } from "../processos/motor-proprio-runner";
 import { consultarTjce } from "../processos/adapters/pje-tjce";
+import { getConfigTribunal } from "../processos/tribunais-pdpj";
 import { resolverDedupMovimentacao } from "../processos/cron-monitoramento";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
 
@@ -866,7 +867,11 @@ export const processosRouter = router({
 
       let resultado;
       try {
-        resultado = await consultarTjce(input.cnj, storageState);
+        resultado = await consultarTjce(
+          input.cnj,
+          storageState,
+          getConfigTribunal(tribunal.codigoTribunal) ?? undefined,
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         log.error({ cnj: input.cnj, err: msg }, "[consultarCNJSincrono] scraper crashed");
@@ -1447,9 +1452,10 @@ export const processosRouter = router({
         `Histórico monitoramento ${mon.searchKey}`,
       );
 
+      const cfgTribunal = getConfigTribunal(mon.tribunal);
       let resultado;
-      if (mon.tribunal === "tjce") {
-        resultado = await consultarTjce(mon.searchKey, sessao);
+      if (cfgTribunal) {
+        resultado = await consultarTjce(mon.searchKey, sessao, cfgTribunal);
       } else {
         return {
           encontrado: false,
