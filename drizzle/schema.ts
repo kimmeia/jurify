@@ -1957,6 +1957,12 @@ export const smartflowCenarios = mysqlTable("smartflow_cenarios", {
   config: text("configSF"),
   /** Configuração específica do gatilho (JSON — canais, dias de atraso, etc.) */
   configGatilho: text("configGatilhoSF"),
+  /**
+   * Posições x/y dos nós no editor visual (JSON). Keyed por `clienteId` do
+   * passo e por "__gatilho__" pro nó de gatilho. Puramente visual — o engine
+   * ignora. Null em cenários nunca salvos pelo editor com layout persistido.
+   */
+  layout: text("layoutSF"),
   criadoPor: int("criadoPorSF"),
   createdAt: timestamp("createdAtSF").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtSF").defaultNow().onUpdateNow().notNull(),
