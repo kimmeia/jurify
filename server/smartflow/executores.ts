@@ -528,7 +528,8 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         "Conduza a conversa de forma humana e natural, seguindo o roteiro.",
         `CONSULTAS (buscam um dado e voltam pra você continuar):\n${lista(DESC_CONSULTA, consultas)}`,
         `AÇÕES (encerram seu turno e seguem o fluxo):\n${lista(DESC_ACAO, ferramentas)}`,
-        "Use uma consulta quando precisar de um dado (ex: horários) ANTES de oferecer/agir. Só dispare uma ação quando for o momento certo; senão, mantenha tudo em null e continue conversando.",
+        "Use uma consulta quando precisar de um dado (ex: horários) ANTES de oferecer/agir.",
+        "REGRA DAS AÇÕES (siga à risca): o padrão é acao=null — continue conversando. Só preencha `acao` quando a CONDIÇÃO daquela ação (descrita acima) estiver claramente satisfeita pela ÚLTIMA mensagem do cliente. NUNCA dispare uma ação na saudação, na 1ª troca, nem só porque ela está habilitada. Ex.: não use \"agendar\" enquanto o cliente não tiver escolhido/confirmado um horário; uma pergunta como \"você é advogado?\" ou \"tenho uma dúvida\" se responde conversando (acao=null), não agendando. Na dúvida, acao=null.",
         'Responda SEMPRE em JSON puro (sem markdown): {"resposta": "<mensagem pro cliente>", "acao": "<ação ou null>", "consulta": "<consulta ou null>"}',
       ].filter(Boolean).join("\n\n");
 
