@@ -106,6 +106,7 @@ import { EditorPaleta } from "./smartflow/editor-paleta";
 import { EditorTestarDialog } from "./smartflow/editor-testar-dialog";
 import { EditorCanvasToolbar, calcularAutoLayout } from "./smartflow/editor-canvas-toolbar";
 import { variaveisPublicadasPorPasso } from "./smartflow/editor-painel-saida";
+import { ConfigWhatsappTemplateBuilder } from "./smartflow/config-whatsapp-template";
 import { PainelVariaveis } from "./smartflow/editor-painel-variaveis";
 import { validarPasso, ValidacaoPassoPanel } from "./smartflow/editor-validacao-passo";
 import { VariaveisFluxoContext } from "@/hooks/useSmartFlowVariaveis";
@@ -840,6 +841,10 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
         ? truncar(String(config.novoHorario), 30)
         : "usa {horarioEscolhido}";
     case "whatsapp_enviar":
+      if (config.modo === "template") {
+        const nome = String(config.templateNome || "").trim();
+        return nome ? `📋 template: ${truncar(nome, 32)}` : "📋 template (escolha um)";
+      }
       return typeof config.template === "string" ? truncar(config.template, 50) : "";
     case "condicional": {
       const cs = Array.isArray(config.condicoes) ? (config.condicoes as any[]) : [];
@@ -3393,9 +3398,12 @@ function CampoCondicaoCombobox({
 }
 
 /**
- * Campos do nó "Enviar mensagem WhatsApp" — texto livre com autocomplete
- * de variáveis. Compat com formato legado `{nome}` e `{intencao}` (engine
- * resolve via aliases em interpolar.ts).
+ * Campos do nó "Enviar mensagem WhatsApp". Dois modos:
+ *   • "texto"    — mensagem livre com autocomplete de variáveis (padrão).
+ *   • "template" — template aprovado (HSM) da Meta, montado pelo
+ *                  ConfigWhatsappTemplateBuilder. Necessário pra falar fora
+ *                  da janela de 24h (cobrança, lembrete, follow-up).
+ * Compat com formato legado `{nome}`/`{intencao}` (engine resolve via aliases).
  */
 function ConfigWhatsappEnviarFields({
   cfg,
@@ -3405,35 +3413,60 @@ function ConfigWhatsappEnviarFields({
   onChange: (patch: Record<string, unknown>) => void;
 }) {
   const variaveis = useSmartFlowVariaveis();
+  const modo = cfg.modo === "template" ? "template" : "texto";
   const insertNoCfg = (path: string) => {
     const atual = String(cfg.template || "");
     onChange({ template: atual + (atual ? " " : "") + `{{${path}}}` });
   };
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <Label className="text-xs">Template da mensagem</Label>
-        <VariableTrigger
-          inputId="cfg-whatsapp-template"
-          variaveis={variaveis}
-          onInsert={insertNoCfg}
-        />
+    <div className="space-y-3">
+      {/* Seletor de modo */}
+      <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted">
+        <button
+          type="button"
+          onClick={() => onChange({ modo: "texto" })}
+          className={`text-[11px] font-medium rounded-md py-1.5 transition-colors ${
+            modo === "texto" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          💬 Texto livre
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange({ modo: "template" })}
+          className={`text-[11px] font-medium rounded-md py-1.5 transition-colors ${
+            modo === "template" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          📋 Template aprovado
+        </button>
       </div>
-      <VariableInput
-        id="cfg-whatsapp-template"
-        as="textarea"
-        rows={4}
-        highlight
-        preview
-        value={String(cfg.template || "")}
-        onChange={(v) => onChange({ template: v })}
-        variaveis={variaveis}
-        placeholder="Olá {{nomeCliente}}, vi sua mensagem sobre {{intencao}}."
-      />
-      <p className="text-[10px] text-muted-foreground mt-1">
-        Use <code>{"{{"}</code> pra inserir variável dinâmica. Aliases legado
-        (<code>{"{nome}"}</code>, <code>{"{intencao}"}</code>, <code>{"{horario}"}</code>) continuam funcionando.
-      </p>
+
+      {modo === "texto" ? (
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <Label className="text-xs">Mensagem</Label>
+            <VariableTrigger inputId="cfg-whatsapp-template" variaveis={variaveis} onInsert={insertNoCfg} />
+          </div>
+          <VariableInput
+            id="cfg-whatsapp-template"
+            as="textarea"
+            rows={4}
+            highlight
+            preview
+            value={String(cfg.template || "")}
+            onChange={(v) => onChange({ template: v })}
+            variaveis={variaveis}
+            placeholder="Olá {{nomeCliente}}, vi sua mensagem sobre {{intencao}}."
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Use <code>{"{{"}</code> pra inserir variável dinâmica. Funciona dentro da janela de 24h
+            (cliente te respondeu há pouco). Pra falar fora dela, use template.
+          </p>
+        </div>
+      ) : (
+        <ConfigWhatsappTemplateBuilder cfg={cfg} onChange={onChange} />
+      )}
     </div>
   );
 }

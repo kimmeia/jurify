@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SmartFlow — novo visual do canvas (preview)</title>
+<style>
+  :root{ font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:#f8fafc; color:#0f172a; }
+
+  /* Topbar */
+  .topbar{ background:#fff; border-bottom:1px solid #e2e8f0; padding:10px 24px; display:flex; align-items:center; gap:16px; }
+  .topbar h1{ font-size:16px; margin:0; }
+  .topbar p{ font-size:11.5px; color:#64748b; margin:3px 0 0; max-width:760px; }
+  .spacer{ flex:1; }
+  .btn{ font-size:11px; font-weight:600; border-radius:8px; padding:7px 12px; border:1px solid #cbd5e1; background:#fff; color:#475569; cursor:default; white-space:nowrap; }
+  .btn.primary{ background:#7c3aed; color:#fff; border-color:#7c3aed; font-weight:700; }
+
+  .hint{ font-size:12px; color:#475569; padding:8px 24px; background:#faf5ff; border-bottom:1px solid #ede9fe; }
+  .hint b{ color:#6d28d9; }
+
+  /* Canvas */
+  .scroll{ overflow:auto; padding:18px; }
+  .canvas{
+    position:relative; width:1240px; height:440px; border-radius:14px;
+    background:
+      radial-gradient(#cbd5e1 1.1px, transparent 1.1px) 0 0 / 16px 16px,
+      linear-gradient(135deg, rgba(241,245,249,.5), #fff 50%, rgba(237,233,254,.35));
+    background-blend-mode:normal;
+    border:1px solid #e2e8f0;
+  }
+  svg.edges{ position:absolute; inset:0; width:100%; height:100%; z-index:1; pointer-events:none; }
+
+  /* Nodes */
+  .node{ position:absolute; z-index:2; background:#fff; border:2px solid #cbd5e1; border-radius:12px;
+         box-shadow:0 2px 6px rgba(15,23,42,.12); overflow:visible; cursor:pointer; }
+  .node .inner{ border-radius:10px; overflow:hidden; }
+  .hdr{ display:flex; align-items:center; gap:6px; padding:6px 10px; color:#fff;
+        font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; }
+  .hdr .status{ margin-left:auto; width:8px; height:8px; border-radius:50%; background:#34d399; box-shadow:0 0 0 2px rgba(255,255,255,.55); }
+  .body{ padding:6px 10px; font-size:10.5px; color:#475569; border-top:1px solid #f1f5f9; }
+  .chips{ padding:5px 8px; background:#f8fafc; border-top:1px solid #f1f5f9; display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+  .chips .lbl{ font-size:8.5px; font-weight:700; letter-spacing:.6px; color:#94a3b8; text-transform:uppercase; }
+  .chip{ font-size:9px; font-family:ui-monospace, Menlo, Consolas, monospace; font-weight:600; padding:1px 5px;
+         border-radius:4px; background:#ede9fe; color:#6d28d9; }
+  .rows{ border-top:1px solid #f1f5f9; background:#fafbfc; padding:3px 0; }
+  .row{ display:flex; align-items:center; padding:4px 10px; font-size:10.5px; color:#334155; position:relative; }
+  .row span.t{ flex:1; }
+
+  /* gatilho */
+  .gatilho{ border-color:rgba(245,158,11,.6); box-shadow:0 0 0 2px rgba(245,158,11,.18), 0 2px 6px rgba(15,23,42,.12); }
+  .ghdr{ display:flex; align-items:center; gap:6px; padding:6px 10px; font-size:10.5px; font-weight:700; letter-spacing:.6px;
+         text-transform:uppercase; color:#78350f; background:linear-gradient(to right,#fef3c7,#ffedd5); }
+  .gop{ padding:6px 10px; font-size:12.5px; font-weight:600; border-top:1px solid #f1f5f9; }
+
+  /* selected */
+  .node.selected{ border-color:#a78bfa; box-shadow:0 0 0 2px #fff, 0 0 0 4px #a78bfa, 0 6px 16px rgba(124,58,237,.18); }
+  .tag{ position:absolute; top:-11px; left:8px; background:#7c3aed; color:#fff; font-size:9px; font-weight:700;
+        padding:2px 8px; border-radius:8px; }
+
+  /* handle dots */
+  .dot{ width:11px; height:11px; border-radius:50%; border:2px solid #fff; flex:none; }
+  .dot.sky{ background:#0ea5e9; } .dot.green{ background:#22c55e; } .dot.amber{ background:#f59e0b; } .dot.muted{ background:#94a3b8; }
+  .sdot{ position:absolute; right:-6px; top:50%; transform:translateY(-50%); }
+  .tdot{ position:absolute; left:-6px; top:50%; transform:translateY(-50%); }
+  .row .dot{ margin-left:8px; transform:translateX(8px); }
+
+  /* edges */
+  .edge .hit{ stroke:transparent; stroke-width:20; fill:none; cursor:pointer; pointer-events:stroke; }
+  .edge .vis{ fill:none; stroke-width:2.4; transition:stroke-width .12s ease; }
+  .edge .xbtn{ opacity:0; transition:opacity .12s ease; cursor:pointer; pointer-events:none; }
+  .edge:hover .vis{ stroke-width:3.6; filter:drop-shadow(0 1px 2px rgba(15,23,42,.35)); }
+  .edge:hover .xbtn{ opacity:1; pointer-events:all; }
+  .edge.bright .vis{ stroke-width:3; }
+  .edge.dim{ opacity:.18; }
+  .xbtn circle{ fill:#fff; stroke:#ef4444; stroke-width:1.5; }
+  .xbtn text{ fill:#ef4444; font-size:12px; font-weight:700; text-anchor:middle; dominant-baseline:central; }
+
+  /* legend */
+  .legend{ display:flex; flex-wrap:wrap; align-items:center; gap:18px; padding:10px 24px; border-top:1px solid #e2e8f0; background:#fff; font-size:11px; color:#475569; }
+  .legend b{ color:#334155; }
+  .legend .it{ display:flex; align-items:center; gap:7px; }
+  .legend .ln{ width:26px; height:0; border-top-width:3px; border-top-style:solid; position:relative; }
+  .legend .ln::after{ content:""; position:absolute; right:-2px; top:-4px; border-left:7px solid currentColor; border-top:4px solid transparent; border-bottom:4px solid transparent; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div>
+      <h1>SmartFlow — novo visual do canvas</h1>
+      <p>Linhas sólidas com seta, coloridas por tipo de saída. Ao selecionar um bloco, as conexões dele acendem e as outras apagam. Auto-organizar virou botão manual.</p>
+    </div>
+    <div class="spacer"></div>
+    <span class="btn">⤢ Auto-organizar</span>
+    <span class="btn primary">Salvar</span>
+  </div>
+
+  <div class="hint">
+    Interativo: <b>clique num bloco</b> pra ver as conexões dele realçarem (as outras apagam) · <b>passe o mouse numa linha</b> pra ela engrossar e aparecer o × de remover (clique no × pra tirar a conexão) · clique no fundo pra desmarcar.
+  </div>
+
+  <div class="scroll">
+    <div class="canvas" id="canvas">
+      <svg class="edges" id="edges">
+        <defs>
+          <marker id="aAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+          <marker id="aSky" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0ea5e9"/></marker>
+          <marker id="aGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#22c55e"/></marker>
+        </defs>
+      </svg>
+
+      <!-- Gatilho -->
+      <div class="node gatilho" id="n_gatilho" style="left:40px; top:172px; width:200px;">
+        <div class="ghdr">⚡ Mensagem</div>
+        <div class="gop">Mensagem recebida</div>
+        <div class="body">WhatsApp · “oi / olá”</div>
+        <span class="dot amber sdot" data-src="gatilho:__single__"></span>
+      </div>
+
+      <!-- Atendente IA -->
+      <div class="node" id="n_atendente" style="left:330px; top:150px; width:232px;">
+        <div class="inner">
+          <div class="hdr" style="background:linear-gradient(to right,#0ea5e9,#2563eb);">🤖 Atendente IA<span class="status"></span></div>
+          <div class="body">Agente: “Sofia” · 2 ações</div>
+          <div class="chips"><span class="lbl">dá</span><span class="chip">{{acaoAtendente}}</span></div>
+          <div class="rows">
+            <div class="row"><span class="t">🗓 quer agendar →</span><span class="dot sky" data-src="atendente:agendar"></span></div>
+            <div class="row"><span class="t">🙋 falar com humano →</span><span class="dot sky" data-src="atendente:transferir"></span></div>
+          </div>
+        </div>
+        <span class="dot muted tdot" data-tgt="atendente"></span>
+        <span class="tag">● selecionado</span>
+      </div>
+
+      <!-- Agendamento -->
+      <div class="node" id="n_agenda" style="left:690px; top:96px; width:212px;">
+        <div class="inner">
+          <div class="hdr" style="background:linear-gradient(to right,#f97316,#f59e0b);">🗓 Agendamento<span class="status"></span></div>
+          <div class="body">Cria compromisso na agenda</div>
+          <div class="chips"><span class="lbl">dá</span><span class="chip">{{agendamentoId}}</span></div>
+        </div>
+        <span class="dot muted tdot" data-tgt="agenda"></span>
+        <span class="dot green sdot" data-src="agenda:default"></span>
+      </div>
+
+      <!-- Transferir -->
+      <div class="node" id="n_transferir" style="left:690px; top:300px; width:212px;">
+        <div class="inner">
+          <div class="hdr" style="background:linear-gradient(to right,#f59e0b,#f97316);">🙋 Transferir<span class="status"></span></div>
+          <div class="body">Passa pra um atendente humano</div>
+        </div>
+        <span class="dot muted tdot" data-tgt="transferir"></span>
+        <span class="dot green sdot" data-src="transferir:default"></span>
+      </div>
+
+      <!-- Enviar WhatsApp -->
+      <div class="node" id="n_enviar" style="left:980px; top:96px; width:220px;">
+        <div class="inner">
+          <div class="hdr" style="background:linear-gradient(to right,#14b8a6,#0891b2);">💬 Enviar WhatsApp<span class="status"></span></div>
+          <div class="body">Confirmação do agendamento</div>
+        </div>
+        <span class="dot muted tdot" data-tgt="enviar"></span>
+        <span class="dot green sdot" data-src="enviar:default"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>Cores das linhas:</b>
+    <span class="it"><span class="ln" style="color:#22c55e; border-top-color:#22c55e;"></span> fluxo normal / condição</span>
+    <span class="it"><span class="ln" style="color:#f59e0b; border-top-color:#f59e0b;"></span> gatilho · fallback · tempo esgotado · loop</span>
+    <span class="it"><span class="ln" style="color:#3b82f6; border-top-color:#3b82f6;"></span> depois do loop</span>
+    <span class="it"><span class="ln" style="color:#0ea5e9; border-top-color:#0ea5e9;"></span> ações do Atendente IA</span>
+  </div>
+
+<script>
+  const EDGES = [
+    { id:"e1", source:"gatilho",    sh:null,          target:"atendente"  },
+    { id:"e2", source:"atendente",  sh:"agendar",     target:"agenda"     },
+    { id:"e3", source:"atendente",  sh:"transferir",  target:"transferir" },
+    { id:"e4", source:"agenda",     sh:"default",     target:"enviar"     },
+  ];
+
+  // Mesma lógica de corDaEdge() do editor.
+  function corDaEdge(sh){
+    if(!sh) return "#f59e0b";
+    if(sh.startsWith("cond_")) return "#22c55e";
+    if(sh === "default") return "#22c55e";
+    if(sh === "depois") return "#3b82f6";
+    if(sh === "fallback" || sh === "timeout" || sh === "corpo") return "#f59e0b";
+    return "#0ea5e9";
+  }
+  const MARKER = { "#f59e0b":"aAmber", "#0ea5e9":"aSky", "#22c55e":"aGreen", "#3b82f6":"aGreen" };
+
+  const canvas = document.getElementById("canvas");
+  const svg = document.getElementById("edges");
+  const SVGNS = "http://www.w3.org/2000/svg";
+  let selected = "atendente"; // começa com o Atendente selecionado pra mostrar o realce
+
+  function center(el){
+    const c = canvas.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    return { x: r.left - c.left + r.width/2, y: r.top - c.top + r.height/2 };
+  }
+  // Caminho ortogonal arredondado (mesma ideia do getSmoothStepPath).
+  function pathFor(sx, sy, tx, ty){
+    const r = 12;
+    if(Math.abs(sy - ty) < 2) return { d:`M${sx},${sy} L${tx},${ty}`, mx:(sx+tx)/2, my:sy };
+    const midX = (sx + tx) / 2, dir = ty > sy ? 1 : -1;
+    const d = `M${sx},${sy} H${midX-r} Q${midX},${sy} ${midX},${sy+r*dir} V${ty-r*dir} Q${midX},${ty} ${midX+r},${ty} H${tx}`;
+    return { d, mx: midX, my: (sy + ty) / 2 };
+  }
+
+  function draw(){
+    // limpa arestas (mantém defs)
+    [...svg.querySelectorAll("g.edge")].forEach(g => g.remove());
+    for(const e of EDGES){
+      const srcEl = canvas.querySelector(`[data-src="${e.source}:${e.sh || "__single__"}"]`);
+      const tgtEl = canvas.querySelector(`[data-tgt="${e.target}"]`);
+      if(!srcEl || !tgtEl) continue;
+      const s = center(srcEl), t = center(tgtEl);
+      const { d, mx, my } = pathFor(s.x, s.y, t.x - 7, t.y);
+      const cor = corDaEdge(e.sh);
+
+      const g = document.createElementNS(SVGNS, "g");
+      g.setAttribute("class", "edge");
+      g.dataset.source = e.source; g.dataset.target = e.target;
+
+      const hit = document.createElementNS(SVGNS, "path");
+      hit.setAttribute("class", "hit"); hit.setAttribute("d", d);
+
+      const vis = document.createElementNS(SVGNS, "path");
+      vis.setAttribute("class", "vis"); vis.setAttribute("d", d);
+      vis.setAttribute("stroke", cor);
+      vis.setAttribute("marker-end", `url(#${MARKER[cor]})`);
+
+      const xb = document.createElementNS(SVGNS, "g");
+      xb.setAttribute("class", "xbtn");
+      xb.setAttribute("transform", `translate(${mx},${my})`);
+      const circ = document.createElementNS(SVGNS, "circle"); circ.setAttribute("r", "9");
+      const tx = document.createElementNS(SVGNS, "text"); tx.textContent = "×";
+      xb.appendChild(circ); xb.appendChild(tx);
+      xb.addEventListener("click", (ev) => { ev.stopPropagation(); g.remove(); });
+
+      g.appendChild(hit); g.appendChild(vis); g.appendChild(xb);
+      svg.appendChild(g);
+    }
+    applyState();
+  }
+
+  function applyState(){
+    document.querySelectorAll(".node").forEach(n => {
+      n.classList.toggle("selected", n.id === "n_" + selected);
+      n.querySelector(".tag") && (n.querySelector(".tag").style.display = (n.id === "n_" + selected) ? "block" : "none");
+    });
+    svg.querySelectorAll("g.edge").forEach(g => {
+      g.classList.remove("bright", "dim");
+      if(!selected) return;
+      const toca = g.dataset.source === selected || g.dataset.target === selected;
+      g.classList.add(toca ? "bright" : "dim");
+    });
+  }
+
+  document.querySelectorAll(".node").forEach(n => {
+    n.addEventListener("click", (ev) => { ev.stopPropagation(); selected = n.id.replace("n_", ""); applyState(); });
+  });
+  canvas.addEventListener("click", () => { selected = null; applyState(); });
+
+  window.addEventListener("load", draw);
+  window.addEventListener("resize", draw);
+</script>
+</body>
+</html>

@@ -130,6 +130,16 @@ export function validarPasso(
           mensagem: `Sem canal nem telefone no contexto — o envio não tem destino. Use um passo "Buscar contato" antes pra resolver o telefone.`,
         });
       }
+      if (config.modo === "template") {
+        const nome = String(config.templateNome || "").trim();
+        if (!nome) {
+          itens.push({ severidade: "erro", mensagem: "Escolha (ou informe) um template aprovado." });
+        }
+        // Template exige o telefone do contato — o aviso de canal/telefone
+        // acima já cobre. Reforça que QR não envia template.
+        itens.push({ severidade: "aviso", mensagem: "Template só vai pelo WhatsApp oficial (API Meta) e precisa estar aprovado na Meta." });
+        break;
+      }
       const template = String(config.template || "").trim();
       if (!template) {
         itens.push({ severidade: "aviso", mensagem: "Template vazio — vai usar `{{respostaIA}}` se houver, senão envia mensagem em branco." });

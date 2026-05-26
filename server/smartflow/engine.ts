@@ -340,6 +340,15 @@ export interface SmartflowExecutores {
   /** Envia mensagem WhatsApp */
   enviarWhatsApp: (telefone: string, mensagem: string) => Promise<boolean>;
   /**
+   * Envia um template (HSM) WhatsApp aprovado da Meta pelo canal oficial
+   * (Cloud API). Opcional: ambientes/mocks sem Cloud API não implementam —
+   * o handler do passo reporta erro claro nesse caso.
+   */
+  enviarWhatsAppTemplate?: (
+    telefone: string,
+    template: { nome: string; idioma?: string; componentes?: any[] },
+  ) => Promise<boolean>;
+  /**
    * Retorna a lista formatada de cobranças em aberto do cliente (PENDING /
    * OVERDUE), com link de pagamento quando disponível. Usada pra expandir
    * a variável `{cobrancasAbertas}` nos templates de mensagem. Retorna
@@ -1161,11 +1170,106 @@ async function handleCalcomRemarcar(
   }
 }
 
+/**
+ * Monta o array `components` que a Cloud API espera, interpolando as
+ * variáveis do fluxo nos valores configurados. Só inclui as PARTES VARIÁVEIS
+ * (mídia do header, parâmetros do corpo, botões dinâmicos) — texto/botão
+ * estáticos do template já vivem aprovados na Meta e não vão no payload.
+ */
+function montarComponentesTemplate(cfg: any, ip: (s?: string) => string): any[] {
+  const comps: any[] = [];
+  const h = cfg.templateHeader;
+  if (h && typeof h === "object") {
+    const fmt = String(h.formato || "").toUpperCase();
+    const valor = ip(h.valor).trim();
+    if (valor) {
+      if (fmt === "IMAGE") comps.push({ type: "header", parameters: [{ type: "image", image: { link: valor } }] });
+      else if (fmt === "VIDEO") comps.push({ type: "header", parameters: [{ type: "video", video: { link: valor } }] });
+      else if (fmt === "DOCUMENT") {
+        const doc: any = { link: valor };
+        const fn = ip(h.nomeArquivo).trim();
+        if (fn) doc.filename = fn;
+        comps.push({ type: "header", parameters: [{ type: "document", document: doc }] });
+      } else if (fmt === "TEXT") {
+        comps.push({ type: "header", parameters: [{ type: "text", text: ip(h.valor) }] });
+      }
+    }
+  }
+  const corpo = Array.isArray(cfg.templateCorpo) ? cfg.templateCorpo : [];
+  if (corpo.length > 0) {
+    comps.push({ type: "body", parameters: corpo.map((v: string) => ({ type: "text", text: ip(v) })) });
+  }
+  const botoes = Array.isArray(cfg.templateBotoes) ? cfg.templateBotoes : [];
+  for (const b of botoes) {
+    const idx = Number(b?.index);
+    const tipo = String(b?.tipo || "").toUpperCase();
+    const valor = ip(b?.valor).trim();
+    if (!Number.isFinite(idx) || !valor) continue;
+    if (tipo === "URL") comps.push({ type: "button", sub_type: "url", index: String(idx), parameters: [{ type: "text", text: valor }] });
+    else if (tipo === "COPY_CODE") comps.push({ type: "button", sub_type: "copy_code", index: String(idx), parameters: [{ type: "coupon_code", coupon_code: valor }] });
+    else if (tipo === "QUICK_REPLY") comps.push({ type: "button", sub_type: "quick_reply", index: String(idx), parameters: [{ type: "payload", payload: valor }] });
+  }
+  return comps;
+}
+
+/**
+ * Envia um template (HSM) aprovado da Meta. Diferente do texto livre, o
+ * template é disparado DIRETO pela Cloud API (não volta como `resposta`
+ * pelo canal — texto e template são chamadas distintas na API), então
+ * registramos só em `mensagensEnviadas` pra não duplicar.
+ */
+async function enviarTemplateWhatsApp(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as any;
+  const nome = String(cfg.templateNome || "").trim();
+  const idioma = String(cfg.templateIdioma || "pt_BR").trim() || "pt_BR";
+  const telefone = typeof ctx.telefoneCliente === "string" ? ctx.telefoneCliente.trim() : "";
+  if (!telefone) {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: "Template precisa do telefone do contato — use um passo 'Buscar contato' antes ou um gatilho que traga o telefone.",
+    };
+  }
+  if (!exec.enviarWhatsAppTemplate) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Envio de template indisponível neste ambiente." };
+  }
+  const { interpolarVariaveis } = await import("./interpolar");
+  const ip = (s?: string) => interpolarVariaveis(String(s ?? ""), ctx as any);
+  const componentes = montarComponentesTemplate(cfg, ip);
+  try {
+    const ok = await exec.enviarWhatsAppTemplate(telefone, { nome, idioma, componentes });
+    if (!ok) {
+      return {
+        sucesso: false,
+        contexto: ctx,
+        mensagemErro: "Falha ao enviar template — confira se há canal WhatsApp oficial (API) conectado e se o template está aprovado na Meta.",
+      };
+    }
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `WhatsApp template: ${err?.message || String(err)}` };
+  }
+  const enviadas = ctx.mensagensEnviadas || [];
+  return {
+    sucesso: true,
+    contexto: { ...ctx, mensagensEnviadas: [...enviadas, `[template: ${nome}]`] },
+  };
+}
+
 async function handleWhatsAppEnviar(
   passo: Passo,
   ctx: SmartflowContexto,
   exec: SmartflowExecutores,
 ): Promise<PassoResultado> {
+  // Modo "template" (HSM aprovado da Meta) — caminho próprio: dispara direto
+  // pela Cloud API oficial, sem passar pela lógica de texto/canalId abaixo.
+  if ((passo.config as any).modo === "template" && String((passo.config as any).templateNome || "").trim()) {
+    return await enviarTemplateWhatsApp(passo, ctx, exec);
+  }
+
   const template = passo.config.template || ctx.respostaIA || "";
   if (!template) {
     return { sucesso: false, contexto: ctx, mensagemErro: "Sem mensagem para enviar" };
