@@ -14,7 +14,7 @@
 
 import { getDb } from "../db";
 import { canaisIntegrados } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 import { isLidJid } from "../../shared/whatsapp-types";
 
@@ -76,6 +76,76 @@ export async function enviarMensagemPeloCanal(
         erro: `Tipo de canal "${canal.tipo}" não suporta envio automático`,
         provider: "outro",
       };
+  }
+}
+
+/**
+ * Resolve o canal WhatsApp OFICIAL (Cloud API / Meta) conectado do
+ * escritório e devolve as credenciais decriptadas. Templates (HSM) só
+ * funcionam por aqui — o canal QR (Baileys) não suporta. Retorna null se
+ * não houver canal oficial conectado ou faltarem credenciais.
+ */
+export async function getCanalCloudApi(
+  escritorioId: number,
+): Promise<{ canalId: number; accessToken: string; phoneNumberId: string; wabaId?: string } | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [canal] = await db
+    .select()
+    .from(canaisIntegrados)
+    .where(
+      and(
+        eq(canaisIntegrados.escritorioId, escritorioId),
+        eq(canaisIntegrados.tipo, "whatsapp_api"),
+        eq(canaisIntegrados.status, "conectado"),
+      ),
+    )
+    .limit(1);
+  if (!canal || !canal.configEncrypted || !canal.configIv || !canal.configTag) return null;
+  const { decryptConfig } = await import("../escritorio/crypto-utils");
+  const config = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
+  if (!config?.accessToken || !config?.phoneNumberId) return null;
+  return {
+    canalId: canal.id,
+    accessToken: config.accessToken,
+    phoneNumberId: config.phoneNumberId,
+    wabaId: config.wabaId,
+  };
+}
+
+/**
+ * Envia um template (HSM) aprovado pelo canal WhatsApp oficial do
+ * escritório. Diferente do texto livre, template é necessário pra mensagens
+ * fora da janela de 24h (cobrança, lembrete, follow-up). Os `componentes`
+ * já vêm montados pelo motor (com as variáveis interpoladas).
+ */
+export async function enviarTemplatePeloCanalApi(opts: {
+  escritorioId: number;
+  telefone: string;
+  nome: string;
+  idioma?: string;
+  componentes?: any[];
+}): Promise<EnvioResultado> {
+  const cred = await getCanalCloudApi(opts.escritorioId);
+  if (!cred) {
+    return {
+      ok: false,
+      erro: "Nenhum canal WhatsApp oficial (API Meta) conectado — templates exigem a API oficial.",
+      provider: "whatsapp_api",
+    };
+  }
+  const telefone = (opts.telefone || "").replace(/\D/g, "");
+  if (!telefone || telefone.length < 10) {
+    return { ok: false, erro: "Telefone inválido pra Cloud API", provider: "whatsapp_api" };
+  }
+  try {
+    const { WhatsAppCloudClient } = await import("./whatsapp-cloud");
+    const client = new WhatsAppCloudClient({ accessToken: cred.accessToken, phoneNumberId: cred.phoneNumberId });
+    const msgId = await client.enviarTemplate(telefone, opts.nome, opts.idioma || "pt_BR", opts.componentes);
+    return { ok: true, idExterno: msgId, provider: "whatsapp_api" };
+  } catch (e: any) {
+    const apiMsg = e?.response?.data?.error?.message;
+    return { ok: false, erro: apiMsg || e?.message || "Falha ao enviar template", provider: "whatsapp_api" };
   }
 }
 

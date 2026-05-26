@@ -845,6 +845,29 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       }
     },
 
+    async enviarWhatsAppTemplate(telefone, template): Promise<boolean> {
+      // Template (HSM) só vai pelo canal oficial Meta (Cloud API). O helper
+      // resolve o canal whatsapp_api conectado, decripta as credenciais e
+      // dispara via Graph API. Retorna false (sem lançar) pro motor reportar.
+      try {
+        const { enviarTemplatePeloCanalApi } = await import("../integracoes/canal-envio");
+        const r = await enviarTemplatePeloCanalApi({
+          escritorioId,
+          telefone,
+          nome: template.nome,
+          idioma: template.idioma,
+          componentes: template.componentes,
+        });
+        if (!r.ok) {
+          log.warn({ erro: r.erro, template: template.nome }, "SmartFlow: envio de template WhatsApp falhou");
+        }
+        return r.ok;
+      } catch (err: any) {
+        log.error({ err: err.message }, "SmartFlow: erro ao enviar template WhatsApp");
+        return false;
+      }
+    },
+
     async criarCardKanban(params): Promise<number> {
       try {
         const { getDb } = await import("../db");
