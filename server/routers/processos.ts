@@ -865,13 +865,16 @@ export const processosRouter = router({
         `Detalhe CNJ: ${input.cnj} (${tribunal.siglaTribunal})`,
       );
 
+      const cfgTribunal = getConfigTribunal(tribunal.codigoTribunal);
+      if (!cfgTribunal) {
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: `Consulta automática ainda não disponível para ${tribunal.siglaTribunal}.`,
+        });
+      }
       let resultado;
       try {
-        resultado = await consultarTjce(
-          input.cnj,
-          storageState,
-          getConfigTribunal(tribunal.codigoTribunal) ?? undefined,
-        );
+        resultado = await consultarTjce(input.cnj, storageState, cfgTribunal);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         log.error({ cnj: input.cnj, err: msg }, "[consultarCNJSincrono] scraper crashed");
