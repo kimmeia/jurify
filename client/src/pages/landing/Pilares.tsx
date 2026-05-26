@@ -66,7 +66,7 @@ export function Pilares() {
         {/* Wide cell */}
         <motion.div
           variants={staggerItem}
-          className="group rounded-2xl border border-white/10 bg-white/[0.04] p-6 transition-all hover:-translate-y-1 hover:border-violet-400/40 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)] sm:col-span-2 lg:col-span-3"
+          className="group rounded-2xl border border-white/10 bg-white/[0.04] p-6 transition-all hover:-translate-y-1 hover:border-violet-400/40 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)] lg:col-span-3"
         >
           <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-violet-500/30 to-fuchsia-500/15">
             <FileSearch className="h-5 w-5 text-violet-200" />
