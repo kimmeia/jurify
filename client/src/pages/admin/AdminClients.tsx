@@ -20,7 +20,7 @@ import {
 import {
   AlertCircle, Eye, Coins, ShieldCheck, User, Calculator, CreditCard, Clock,
   Loader2, Search, Lock, Unlock, LogIn, FileText, Trash2, MessageSquarePlus,
-  AlertTriangle, RotateCcw, Users as UsersIcon, Gift,
+  AlertTriangle, RotateCcw, Users as UsersIcon, Gift, ArrowLeft, Crown, ChevronRight,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useEffect, useState } from "react";
@@ -140,23 +140,33 @@ function ClienteDetalheDialog({
   const [removerCortesiaOpen, setRemoverCortesiaOpen] = useState(false);
   const [motivoRemocaoCortesia, setMotivoRemocaoCortesia] = useState("");
 
+  // Pilha de navegação: permite abrir o cadastro de um colaborador a partir
+  // do cadastro do dono (aba Equipe) e voltar. O topo da pilha é o cliente
+  // atualmente exibido; todas as queries/mutations operam sobre ele.
+  const [navStack, setNavStack] = useState<number[]>([]);
+  useEffect(() => {
+    if (open && userId != null) setNavStack([userId]);
+  }, [open, userId]);
+  const current = navStack.length > 0 ? navStack[navStack.length - 1] : userId;
+  const ehSubView = navStack.length > 1;
+
   const utils = trpc.useUtils();
 
   const { data, isLoading } = trpc.admin.clienteDetalhes.useQuery(
-    { userId: userId! },
-    { enabled: !!userId && open, retry: false }
+    { userId: current! },
+    { enabled: !!current && open, retry: false }
   );
 
   const { data: notas, refetch: refetchNotas } = trpc.admin.listarNotasCliente.useQuery(
-    { userId: userId! },
-    { enabled: !!userId && open, retry: false },
+    { userId: current! },
+    { enabled: !!current && open, retry: false },
   );
 
   const concederMut = trpc.admin.concederCreditos.useMutation({
     onSuccess: (res) => {
       toast.success(res.mensagem);
       setCreditosQtd("");
-      utils.admin.clienteDetalhes.invalidate({ userId: userId! });
+      utils.admin.clienteDetalhes.invalidate({ userId: current! });
       onRefresh();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
@@ -166,7 +176,7 @@ function ClienteDetalheDialog({
     onSuccess: (res) => {
       toast.success(res.mensagem);
       setCreditosQtd("");
-      utils.admin.clienteDetalhes.invalidate({ userId: userId! });
+      utils.admin.clienteDetalhes.invalidate({ userId: current! });
       onRefresh();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
@@ -177,7 +187,7 @@ function ClienteDetalheDialog({
       toast.success("Usuário bloqueado");
       setBloquearOpen(false);
       setMotivoBloqueio("");
-      utils.admin.clienteDetalhes.invalidate({ userId: userId! });
+      utils.admin.clienteDetalhes.invalidate({ userId: current! });
       onRefresh();
     },
     onError: (err) => toast.error("Erro ao bloquear", { description: err.message }),
@@ -202,7 +212,7 @@ function ClienteDetalheDialog({
   const desbloquearMut = trpc.admin.desbloquearUsuario.useMutation({
     onSuccess: () => {
       toast.success("Usuário desbloqueado");
-      utils.admin.clienteDetalhes.invalidate({ userId: userId! });
+      utils.admin.clienteDetalhes.invalidate({ userId: current! });
       onRefresh();
     },
     onError: (err) => toast.error("Erro ao desbloquear", { description: err.message }),
@@ -249,7 +259,7 @@ function ClienteDetalheDialog({
       setCortesiaOpen(false);
       setMotivoCortesia("");
       setExpiraEmCortesia("");
-      utils.admin.clienteDetalhes.invalidate({ userId: userId! });
+      utils.admin.clienteDetalhes.invalidate({ userId: current! });
       onRefresh();
     },
     onError: (err) => toast.error("Falha ao ativar cortesia", { description: err.message }),
@@ -260,7 +270,7 @@ function ClienteDetalheDialog({
       toast.success("Cortesia removida");
       setRemoverCortesiaOpen(false);
       setMotivoRemocaoCortesia("");
-      utils.admin.clienteDetalhes.invalidate({ userId: userId! });
+      utils.admin.clienteDetalhes.invalidate({ userId: current! });
       onRefresh();
     },
     onError: (err) => toast.error("Falha ao remover cortesia", { description: err.message }),
@@ -297,9 +307,22 @@ function ClienteDetalheDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
+          {ehSubView && (
+            <button
+              onClick={() => setNavStack((s) => s.slice(0, -1))}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground w-fit mb-1"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Voltar para o escritório
+            </button>
+          )}
           <div className="flex items-center gap-2 flex-wrap">
             <DialogTitle>{user?.name || "Cliente"}</DialogTitle>
             <BloqueadoBadge bloqueado={isBloqueado} />
+            {data?.isDonoEscritorio && (
+              <Badge className="bg-indigo-500/15 text-indigo-700 border-indigo-500/25 text-[10px]">
+                <Crown className="h-2.5 w-2.5 mr-1" /> Dono
+              </Badge>
+            )}
           </div>
           <DialogDescription>{user?.email || ""}</DialogDescription>
           {isBloqueado && user?.motivoBloqueio && (
@@ -325,13 +348,63 @@ function ClienteDetalheDialog({
           </div>
         ) : data ? (
           <Tabs defaultValue="detalhes" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className={`grid w-full ${data.colaboradores && data.colaboradores.length > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
               <TabsTrigger value="detalhes">Detalhes</TabsTrigger>
+              {data.colaboradores && data.colaboradores.length > 0 && (
+                <TabsTrigger value="equipe">
+                  Equipe ({data.colaboradores.length})
+                </TabsTrigger>
+              )}
               <TabsTrigger value="notas">
                 Notas {notas && notas.length > 0 ? `(${notas.length})` : ""}
               </TabsTrigger>
               <TabsTrigger value="acoes">Ações</TabsTrigger>
             </TabsList>
+
+            {/* TAB: EQUIPE — colaboradores do escritório (clicáveis) */}
+            {data.colaboradores && data.colaboradores.length > 0 && (
+              <TabsContent value="equipe" className="space-y-2 py-3">
+                <p className="text-xs text-muted-foreground">
+                  Colaboradores vinculados a este escritório. A assinatura/cortesia
+                  do dono cobre toda a equipe. Clique para abrir o cadastro individual.
+                </p>
+                <div className="space-y-1.5">
+                  {data.colaboradores.map((c: any) => (
+                    <button
+                      key={c.userId}
+                      onClick={() => {
+                        if (c.userId !== current) setNavStack((s) => [...s, c.userId]);
+                      }}
+                      disabled={c.userId === current}
+                      className="w-full flex items-center gap-3 rounded-lg border p-2.5 text-left hover:bg-accent/50 transition-colors disabled:opacity-60 disabled:cursor-default"
+                    >
+                      <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary grid place-items-center text-xs font-semibold shrink-0">
+                        {(c.name || c.email || "?").charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium truncate">{c.name || "—"}</p>
+                          {c.ehDono && (
+                            <Badge className="bg-indigo-500/15 text-indigo-700 border-indigo-500/25 text-[9px] px-1">
+                              <Crown className="h-2 w-2 mr-0.5" /> Dono
+                            </Badge>
+                          )}
+                          {!c.ativo && (
+                            <Badge variant="outline" className="text-[9px] px-1">Inativo</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {c.cargo} · {c.email || "—"}
+                        </p>
+                      </div>
+                      {c.userId !== current && (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </TabsContent>
+            )}
 
             {/* TAB 1: DETALHES (conteúdo original) */}
             <TabsContent value="detalhes" className="space-y-5 py-3">
@@ -437,7 +510,7 @@ function ClienteDetalheDialog({
                     onClick={() => {
                       const qtd = parseInt(creditosQtd);
                       if (!qtd || qtd < 1) { toast.error("Quantidade inválida"); return; }
-                      concederMut.mutate({ userId: userId!, quantidade: qtd });
+                      concederMut.mutate({ userId: current!, quantidade: qtd });
                     }}
                     disabled={concederMut.isPending || retirarMut.isPending}
                     className="flex-1"
@@ -565,7 +638,7 @@ function ClienteDetalheDialog({
                     onClick={() => {
                       if (!novaNota.trim()) { toast.error("Escreva o conteúdo"); return; }
                       criarNotaMut.mutate({
-                        userId: userId!,
+                        userId: current!,
                         conteudo: novaNota.trim(),
                         categoria: categoriaNota as any,
                       });
@@ -684,7 +757,7 @@ function ClienteDetalheDialog({
                   variant="default"
                   className="w-full"
                   disabled={user?.role === "admin" || impersonateMut.isPending}
-                  onClick={() => impersonateMut.mutate({ userId: userId! })}
+                  onClick={() => impersonateMut.mutate({ userId: current! })}
                 >
                   {impersonateMut.isPending ? (
                     <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -712,7 +785,7 @@ function ClienteDetalheDialog({
                   disabled={resetSenhaMut.isPending}
                   onClick={() => {
                     if (confirm(`Resetar a senha de ${user?.name || user?.email}?`)) {
-                      resetSenhaMut.mutate({ userId: userId! });
+                      resetSenhaMut.mutate({ userId: current! });
                     }
                   }}
                 >
@@ -738,7 +811,7 @@ function ClienteDetalheDialog({
                     variant="outline"
                     className="w-full border-emerald-600/50 text-emerald-700"
                     disabled={desbloquearMut.isPending}
-                    onClick={() => desbloquearMut.mutate({ userId: userId! })}
+                    onClick={() => desbloquearMut.mutate({ userId: current! })}
                   >
                     {desbloquearMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
                     <Unlock className="h-3.5 w-3.5 mr-1.5" />
@@ -800,7 +873,7 @@ function ClienteDetalheDialog({
               disabled={!motivoBloqueio.trim() || bloquearMut.isPending}
               onClick={() => {
                 if (motivoBloqueio.trim().length < 3) { toast.error("Motivo muito curto"); return; }
-                bloquearMut.mutate({ userId: userId!, motivo: motivoBloqueio.trim() });
+                bloquearMut.mutate({ userId: current!, motivo: motivoBloqueio.trim() });
               }}
             >
               {bloquearMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
@@ -962,7 +1035,7 @@ function ClienteDetalheDialog({
                   ? new Date(expiraEmCortesia + "T23:59:59").getTime()
                   : undefined;
                 marcarCortesiaUserMut.mutate({
-                  userId: userId!,
+                  userId: current!,
                   motivo: motivoCortesia.trim(),
                   expiraEm: expira,
                 });
@@ -998,7 +1071,7 @@ function ClienteDetalheDialog({
               disabled={motivoRemocaoCortesia.trim().length < 3 || removerCortesiaUserMut.isPending}
               onClick={() => {
                 removerCortesiaUserMut.mutate({
-                  userId: userId!,
+                  userId: current!,
                   motivo: motivoRemocaoCortesia.trim(),
                 });
               }}
@@ -1020,7 +1093,9 @@ function ClienteDetalheDialog({
 export default function AdminClients() {
   const [busca, setBusca] = useState("");
   const [buscaDebounced, setBuscaDebounced] = useState("");
-  const [tipo, setTipo] = useState<"todos" | "admin" | "cliente" | "colaborador">("todos");
+  // Default = "cliente" (donos/assinantes). Colaboradores não aparecem como
+  // linhas soltas — ficam dentro do cadastro do dono (aba Equipe).
+  const [tipo, setTipo] = useState<"todos" | "admin" | "cliente" | "colaborador">("cliente");
   const [pagina, setPagina] = useState(0);
   const [detalheUserId, setDetalheUserId] = useState<number | null>(null);
   const [detalheOpen, setDetalheOpen] = useState(false);
@@ -1065,7 +1140,7 @@ export default function AdminClients() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Clientes</h1>
-        <p className="text-muted-foreground mt-1">Gerencie todos os utilizadores registados na plataforma.</p>
+        <p className="text-muted-foreground mt-1">Donos/assinantes da plataforma. Os colaboradores de cada escritório ficam dentro do cadastro do dono (aba Equipe).</p>
       </div>
 
       <Card>
@@ -1126,6 +1201,7 @@ export default function AdminClients() {
                   <TableHead>Email</TableHead>
                   <TableHead>Função</TableHead>
                   <TableHead>Assinatura</TableHead>
+                  <TableHead>Equipe</TableHead>
                   <TableHead>Registado em</TableHead>
                   <TableHead>Último acesso</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -1133,7 +1209,11 @@ export default function AdminClients() {
               </TableHeader>
               <TableBody>
                 {allUsers.map((u) => (
-                  <TableRow key={u.id}>
+                  <TableRow
+                    key={u.id}
+                    className="cursor-pointer"
+                    onClick={() => { setDetalheUserId(u.id); setDetalheOpen(true); }}
+                  >
                     <TableCell className="font-medium">{u.name || "—"}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{u.email || "—"}</TableCell>
                     <TableCell>
@@ -1144,7 +1224,23 @@ export default function AdminClients() {
                         cargoColaborador={u.cargoColaborador}
                       />
                     </TableCell>
-                    <TableCell><SubBadge active={u.hasActiveSubscription} /></TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <SubBadge active={u.hasActiveSubscription} />
+                        {u.planId && (
+                          <span className="text-xs text-muted-foreground capitalize">{u.planId}</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {u.tipoUsuario === "cliente" ? (
+                        <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+                          <UsersIcon className="h-3.5 w-3.5" /> {u.colaboradoresCount ?? 0}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-sm">{new Date(u.createdAt).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{new Date(u.lastSignedIn).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="text-right">

@@ -25,7 +25,6 @@ import { useIsMobile } from "@/hooks/useMobile";
 import {
   LayoutDashboard,
   Users,
-  CreditCard,
   Settings,
   LogOut,
   PanelLeft,
@@ -175,7 +174,6 @@ function AdminSidebarContent({
     { icon: LayoutDashboard, label: "Visão Geral", path: "/admin" },
     { icon: Users, label: "Clientes", path: "/admin/clients" },
     { icon: DollarSign, label: "Financeiro", path: "/admin/financeiro" },
-    { icon: CreditCard, label: "Assinaturas", path: "/admin/subscriptions" },
     { icon: BrainCircuit, label: "Agentes IA", path: "/admin/agentes-ia" },
     { icon: BarChart3, label: "Relatórios", path: "/admin/reports" },
     { icon: ScrollText, label: "Auditoria", path: "/admin/auditoria" },

@@ -362,17 +362,46 @@ export const adminRouter = router({
       let isDonoEscritorio = false;
       let colabsCount = 0;
       let donoDoEscritorio: { id: number; name: string | null; email: string | null } | null = null;
+      let colaboradoresLista: Array<{
+        userId: number;
+        name: string | null;
+        email: string | null;
+        cargo: string;
+        ativo: boolean;
+        ehDono: boolean;
+        lastSignedIn: Date | null;
+      }> = [];
       if (escritorioId) {
         const [escritInfo] = await db.select({ ownerId: escritorios.ownerId })
           .from(escritorios).where(eq(escritorios.id, escritorioId)).limit(1);
         if (escritInfo) {
           isDonoEscritorio = escritInfo.ownerId === input.userId;
           if (isDonoEscritorio) {
-            // Conta TODOS os colaboradores (incluindo o dono) — a UI exibe
-            // "afeta N colaboradores" e fica claro pro admin.
-            const colabs = await db.select({ id: colaboradores.id })
-              .from(colaboradores).where(eq(colaboradores.escritorioId, escritorioId));
+            // Lista os colaboradores do escritório (com dados do user) pra UI
+            // exibir a equipe dentro do cadastro do cliente. O dono também
+            // aparece (ehDono) pra deixar claro quem assina.
+            const colabs = await db
+              .select({
+                userId: colaboradores.userId,
+                cargo: colaboradores.cargo,
+                ativo: colaboradores.ativo,
+                name: users.name,
+                email: users.email,
+                lastSignedIn: users.lastSignedIn,
+              })
+              .from(colaboradores)
+              .leftJoin(users, eq(users.id, colaboradores.userId))
+              .where(eq(colaboradores.escritorioId, escritorioId));
             colabsCount = colabs.length;
+            colaboradoresLista = colabs.map((c) => ({
+              userId: c.userId,
+              name: c.name,
+              email: c.email,
+              cargo: c.cargo,
+              ativo: c.ativo,
+              ehDono: c.userId === escritInfo.ownerId,
+              lastSignedIn: c.lastSignedIn,
+            }));
           } else {
             // User é colaborador (não dono) — fornece info do dono pra UI
             // sugerir "libere no dono pra cobrir todo escritório".
@@ -393,6 +422,7 @@ export const adminRouter = router({
         stats,
         isDonoEscritorio,
         colabsCount,
+        colaboradores: colaboradoresLista,
         donoDoEscritorio,
       };
     }),

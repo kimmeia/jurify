@@ -14,7 +14,6 @@ import EsqueciSenha from "./pages/EsqueciSenha";
 import RedefinirSenha from "./pages/RedefinirSenha";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminClients from "./pages/admin/AdminClients";
-import AdminSubscriptions from "./pages/admin/AdminSubscriptions";
 import AdminReports from "./pages/admin/AdminReports";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminIntegrations from "./pages/admin/AdminIntegrations";
@@ -122,10 +121,10 @@ function Router() {
           <AdminClients />
         </AdminArea>
       </Route>
+      {/* Assinaturas deixou de ser aba própria — agora vive dentro do
+          cadastro do cliente (/admin/clients). Redireciona links antigos. */}
       <Route path="/admin/subscriptions">
-        <AdminArea>
-          <AdminSubscriptions />
-        </AdminArea>
+        <Redirect to="/admin/clients" />
       </Route>
       <Route path="/admin/financeiro">
         <AdminArea>
