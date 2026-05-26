@@ -19,8 +19,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, CheckCircle, AlertTriangle, Wifi, Unlink, KeyRound } from "lucide-react";
+import { Loader2, CheckCircle, AlertTriangle, Wifi, Unlink, KeyRound, FileText, UserCircle } from "lucide-react";
 import { toast } from "sonner";
+import { WhatsAppTemplatesDialog } from "./whatsapp-templates-dialog";
+import { WhatsAppProfileDialog } from "./whatsapp-profile-dialog";
 
 export type MetaChannelType = "whatsapp" | "instagram" | "messenger";
 
@@ -30,6 +32,7 @@ interface MetaConnectDialogProps {
   channel: MetaChannelType;
   canal?: any; // objeto do canal já conectado (se existir)
   onRefresh: () => void;
+  canEdit?: boolean;
 }
 
 // ─── Metadata por canal ──────────────────────────────────────────────────────
@@ -84,11 +87,13 @@ export function MetaConnectDialog({
   channel,
   canal,
   onRefresh,
+  canEdit = true,
 }: MetaConnectDialogProps) {
   const meta = CHANNEL_META[channel];
   const [conectando, setConectando] = useState(false);
   const [sdkLoaded, setSdkLoaded] = useState(false);
   const [pin, setPin] = useState("");
+  const [subDialog, setSubDialog] = useState<"templates" | "perfil" | null>(null);
 
   const { data: metaConfig } = trpc.metaChannels.getConfig.useQuery(undefined, {
     enabled: open,
@@ -455,18 +460,40 @@ export function MetaConnectDialog({
                 </Button>
               </div>
               {channel === "whatsapp" && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => subscribeMut.mutate({ canalId: canal.id })}
-                  disabled={subscribeMut.isPending}
-                >
-                  {subscribeMut.isPending ? (
-                    <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
-                  ) : null}
-                  Não está recebendo mensagens? Re-inscrever webhooks
-                </Button>
+                <>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setSubDialog("templates")}
+                    >
+                      <FileText className="h-3.5 w-3.5 mr-1" />
+                      Templates
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setSubDialog("perfil")}
+                    >
+                      <UserCircle className="h-3.5 w-3.5 mr-1" />
+                      Perfil do número
+                    </Button>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => subscribeMut.mutate({ canalId: canal.id })}
+                    disabled={subscribeMut.isPending}
+                  >
+                    {subscribeMut.isPending ? (
+                      <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                    ) : null}
+                    Não está recebendo mensagens? Re-inscrever webhooks
+                  </Button>
+                </>
               )}
             </div>
           )}
@@ -592,6 +619,23 @@ export function MetaConnectDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {channel === "whatsapp" && canal?.id && (
+        <>
+          <WhatsAppTemplatesDialog
+            open={subDialog === "templates"}
+            onClose={() => setSubDialog(null)}
+            canalId={canal.id}
+            canEdit={canEdit}
+          />
+          <WhatsAppProfileDialog
+            open={subDialog === "perfil"}
+            onClose={() => setSubDialog(null)}
+            canalId={canal.id}
+            canEdit={canEdit}
+          />
+        </>
+      )}
     </Dialog>
   );
 }
