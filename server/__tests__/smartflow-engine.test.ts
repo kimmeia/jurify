@@ -1230,6 +1230,20 @@ describe("SmartFlow Engine", () => {
       expect(interpretarSaidaAtendente("Olá, tudo bem?", fer, con))
         .toEqual({ resposta: "Olá, tudo bem?", acao: null, consulta: null });
     });
+    it("frase ANTES do JSON: extrai o objeto e a consulta (bug do JSON vazado pro cliente)", () => {
+      const raw = 'Claro! Vou verificar os horários disponíveis para você. Um momento, por favor.\n\n{"resposta":"Claro! Vou verificar os horários.","acao":null,"consulta":"ver_horarios"}';
+      expect(interpretarSaidaAtendente(raw, fer, con))
+        .toEqual({ resposta: "Claro! Vou verificar os horários.", acao: null, consulta: "ver_horarios" });
+    });
+    it("cerca markdown com frase antes do bloco json", () => {
+      const raw = 'Deixa eu ver os horários:\n```json\n{"resposta":"um momento","consulta":"ver_horarios"}\n```';
+      expect(interpretarSaidaAtendente(raw, fer, con))
+        .toEqual({ resposta: "um momento", acao: null, consulta: "ver_horarios" });
+    });
+    it("não vira falso-positivo: chaves soltas em texto comum continuam fallback", () => {
+      expect(interpretarSaidaAtendente("Oi {nome}, tudo bem?", fer, con))
+        .toEqual({ resposta: "Oi {nome}, tudo bem?", acao: null, consulta: null });
+    });
   });
 
   describe("orquestrarAtendente (vai-e-volta da consulta)", () => {
@@ -1281,6 +1295,32 @@ describe("SmartFlow Engine", () => {
       expect(r.respostas).toContain("Oi! Como posso ajudar?");
       expect(r.contexto.aguardandoMensagem).toBe(true);
       expect(r.contexto.aguardandoNodeClienteId).toBe("at");
+    });
+
+    it("salva a janela de agrupamento (acumularSegundos) no contexto ao pausar", async () => {
+      // O webhook lê `aguardandoAcumularSegundos` do contexto da execução
+      // pausada pra decidir se bufferiza as próximas mensagens do cliente.
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Oi!", acao: null });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const passo: Passo = { id: 1, ordem: 1, tipo: "ia_atendente", clienteId: "at", config: { agenteId: 7, ferramentas: [], acumularSegundos: 8 } };
+      const r = await executarCenario([passo], { ...ctxBase }, exec);
+      expect(r.contexto.aguardandoMensagem).toBe(true);
+      expect(r.contexto.aguardandoAcumularSegundos).toBe(8);
+    });
+
+    it("sem acumularSegundos → janela 0 (agrupamento desligado)", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Oi!", acao: null });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const r = await executarCenario([noAtendente(["agendar"])], { ...ctxBase }, exec);
+      expect(r.contexto.aguardandoAcumularSegundos).toBe(0);
+    });
+
+    it("acumularSegundos negativo/inválido vira 0", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Oi!", acao: null });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const passo: Passo = { id: 1, ordem: 1, tipo: "ia_atendente", clienteId: "at", config: { agenteId: 7, ferramentas: [], acumularSegundos: -5 } };
+      const r = await executarCenario([passo], { ...ctxBase }, exec);
+      expect(r.contexto.aguardandoAcumularSegundos).toBe(0);
     });
 
     it("com ação habilitada → envia resposta e roteia pela saída da ferramenta", async () => {

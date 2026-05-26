@@ -1591,6 +1591,39 @@ async function acharExecucaoAguardando(
 }
 
 /**
+ * Janela de agrupamento (segundos) configurada no bloco Atendente IA onde a
+ * conversa está PAUSADA esperando o cliente. Lê `aguardandoAcumularSegundos`
+ * do contexto salvo da execução aguardando (gravado por handleIaAtendente ao
+ * pausar). 0 = sem agrupamento (ou nenhuma execução aguardando — ex: 1ª
+ * mensagem de uma conversa nova, que processa na hora). O webhook usa isso pra
+ * decidir se bufferiza a mensagem antes de retomar o fluxo.
+ */
+export async function janelaAcumulacaoAtiva(escritorioId: number, contatoId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const agora = new Date();
+  const [pendente] = await db
+    .select({ contexto: smartflowExecucoes.contexto })
+    .from(smartflowExecucoes)
+    .where(
+      and(
+        eq(smartflowExecucoes.escritorioId, escritorioId),
+        eq(smartflowExecucoes.aguardandoMensagemContatoId, contatoId),
+        eq(smartflowExecucoes.status, "rodando"),
+        gte(smartflowExecucoes.retomarEm, agora),
+      ),
+    )
+    .limit(1);
+  if (!pendente?.contexto) return 0;
+  try {
+    const n = Number((JSON.parse(pendente.contexto) as Record<string, unknown>)?.aguardandoAcumularSegundos);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Retoma execução pendente injetando a resposta do cliente em
  * `ctx.respostaUsuario` e (se houver `aguardandoOpcoes`) também
  * `ctx.opcaoEscolhida = {indice, texto, numero}` quando a resposta bate

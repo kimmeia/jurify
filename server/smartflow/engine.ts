@@ -907,15 +907,25 @@ export function interpretarSaidaAtendente(
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/i, "")
     .trim();
-  try {
-    const p = JSON.parse(stripped) as { resposta?: unknown; acao?: unknown; consulta?: unknown };
-    if (p && typeof p.resposta === "string") {
-      const acao = typeof p.acao === "string" && ferramentas.includes(p.acao) ? p.acao : null;
-      const consulta = typeof p.consulta === "string" && consultas.includes(p.consulta) ? p.consulta : null;
-      return { resposta: p.resposta, acao, consulta };
+  // Candidatos a JSON, em ordem: (1) a string inteira; (2) do 1º "{" ao último
+  // "}". O (2) recupera o caso comum do LLM que escreve uma frase ANTES do JSON
+  // — sem ele, o JSON.parse falha, o objeto cru VAZA pro cliente e a consulta
+  // (ex: ver_horarios) some.
+  const candidatos = [stripped];
+  const ini = stripped.indexOf("{");
+  const fim = stripped.lastIndexOf("}");
+  if (ini >= 0 && fim > ini) candidatos.push(stripped.slice(ini, fim + 1));
+  for (const cand of candidatos) {
+    try {
+      const p = JSON.parse(cand) as { resposta?: unknown; acao?: unknown; consulta?: unknown };
+      if (p && typeof p.resposta === "string") {
+        const acao = typeof p.acao === "string" && ferramentas.includes(p.acao) ? p.acao : null;
+        const consulta = typeof p.consulta === "string" && consultas.includes(p.consulta) ? p.consulta : null;
+        return { resposta: p.resposta, acao, consulta };
+      }
+    } catch {
+      /* tenta o próximo candidato */
     }
-  } catch {
-    /* não-JSON → fallback abaixo */
   }
   return { resposta: raw || "", acao: null, consulta: null };
 }
@@ -975,10 +985,12 @@ async function handleIaAtendente(
     ferramentas?: string[];
     consultas?: string[];
     consultaConfig?: { responsavelModo?: "auto" | "fixo"; responsavelId?: number; duracaoMin?: number; dias?: number };
+    acumularSegundos?: number;
   };
   if (typeof cfg.agenteId !== "number" || cfg.agenteId <= 0) {
     return { sucesso: false, contexto: ctx, mensagemErro: "Atendente IA: escolha um agente." };
   }
+  const acumularSegundos = Number(cfg.acumularSegundos) > 0 ? Math.floor(Number(cfg.acumularSegundos)) : 0;
   const ferramentas = Array.isArray(cfg.ferramentas) ? cfg.ferramentas.filter((f) => typeof f === "string") : [];
   const consultas = Array.isArray(cfg.consultas) ? cfg.consultas.filter((c) => typeof c === "string") : [];
   // Mensagem do turno: a resposta nova (retomada) ou a 1ª mensagem.
@@ -1058,6 +1070,7 @@ async function handleIaAtendente(
         aguardandoContatoId: contatoId,
         aguardandoTimeoutMinutos: 1440,
         aguardandoNodeClienteId: passo.clienteId ?? null,
+        aguardandoAcumularSegundos: acumularSegundos,
       },
     };
   } catch (err: any) {

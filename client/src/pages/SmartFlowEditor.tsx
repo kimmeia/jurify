@@ -2492,6 +2492,21 @@ function ConfigIaAtendenteFields({
         )}
         <p className="text-[10px] text-muted-foreground mt-1">A consulta <strong>não vira saída</strong> — o agente busca os horários, oferece ao cliente e, quando ele escolher, usa a ação "Agendar".</p>
       </div>
+
+      <div>
+        <Label className="text-xs">Agrupar mensagens picadas (segundos)</Label>
+        <Input
+          type="number"
+          min={0}
+          max={120}
+          className="h-8"
+          value={Number(cfg.acumularSegundos) || 0}
+          onChange={(e) => onChange({ acumularSegundos: Math.max(0, Math.min(120, Math.floor(Number(e.target.value) || 0))) })}
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Espera o cliente parar de digitar por N segundos e <strong>junta as mensagens numa só</strong> antes do agente responder (bom pra quem manda "oi" / "queria agendar" / "sobre meu carro" picado). <strong>0 = desligado</strong> (responde a cada mensagem). Vale a partir do momento em que o agente está esperando resposta.
+        </p>
+      </div>
     </div>
   );
 }
