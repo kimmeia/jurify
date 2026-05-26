@@ -2023,6 +2023,7 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "whatsapp_enviar",               // envia mensagem no WhatsApp
     "whatsapp_aguardar_resposta",    // envia mensagem e pausa esperando resposta
     "transferir",                    // transfere pra humano
+    "distribuir_atendimento",        // escolhe atendente de um setor e seta dono da conversa
     "condicional",                   // if/else baseado em condição
     "para_cada_item",                // loop sobre lista no contexto
     "esperar",                       // delay (follow-up)

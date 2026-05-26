@@ -76,6 +76,7 @@ export type TipoPasso =
   | "whatsapp_enviar"
   | "whatsapp_aguardar_resposta"
   | "transferir"
+  | "distribuir_atendimento"
   | "condicional"
   | "para_cada_item"
   | "esperar"
@@ -451,6 +452,19 @@ export interface ConfigWhatsappAguardarResposta {
 export interface ConfigTransferir {
   /** reservado */
 }
+
+/**
+ * Config do passo `distribuir_atendimento` — escolhe um atendente de um SETOR
+ * e seta como dono da conversa (`atendenteId`), SEM marcar "em atendimento"
+ * (o bot segue o fluxo; só para quando o atendente manda mensagem no inbox).
+ * Saídas: `atribuido` (achou alguém) e `sem_atendente` (ninguém elegível).
+ */
+export interface ConfigDistribuirAtendimento {
+  /** Setor (tabela `setores`) de onde escolher o atendente. */
+  setorId?: number;
+  /** true = só atendentes online (heartbeat ~10min); false = grupo todo. */
+  somenteOnline?: boolean;
+}
 /**
  * Uma condição individual avaliada pelo passo `condicional`. Cada condição
  * tem um `id` estável (UUID do editor) usado pela chave de roteamento em
@@ -658,6 +672,7 @@ export type PassoConfigByTipo =
   | { tipo: "whatsapp_enviar"; config: ConfigWhatsappEnviar }
   | { tipo: "whatsapp_aguardar_resposta"; config: ConfigWhatsappAguardarResposta }
   | { tipo: "transferir"; config: ConfigTransferir }
+  | { tipo: "distribuir_atendimento"; config: ConfigDistribuirAtendimento }
   | { tipo: "condicional"; config: ConfigCondicional }
   | { tipo: "esperar"; config: ConfigEsperar }
   | { tipo: "para_cada_item"; config: ConfigParaCadaItem }
@@ -825,6 +840,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "whatsapp_enviar", label: "Enviar mensagem", descricao: "Envia mensagem pelo WhatsApp.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
   { id: "whatsapp_aguardar_resposta", label: "Aguardar resposta", descricao: "Envia mensagem e pausa o fluxo esperando o cliente responder. Suporta menu de opções automático.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
   { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e PARA o bot de responder (conversa fica 'em atendimento'). Use no fim de um caminho pra passar pro atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
+  { id: "distribuir_atendimento", label: "Distribuir p/ setor", descricao: "Escolhe um atendente de um setor (Comercial, Financeiro, Verificação processual…) e passa a conversa pra ele (menor carga / online primeiro). Opção: só online ou grupo todo. O bot SEGUE o fluxo — só para quando o atendente responder no inbox. Saídas: atribuído / sem atendente.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
   { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },
   { id: "para_cada_item", label: "Para cada item (loop)", descricao: "Itera sobre uma lista do contexto e executa o subfluxo do corpo pra cada item.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "fluxo" },
   { id: "esperar", label: "Esperar (delay)", descricao: "Pausa o fluxo por N minutos.", cor: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300", grupo: "fluxo" },
