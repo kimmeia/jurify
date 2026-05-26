@@ -54,4 +54,15 @@ export function tribunalTemMotorProprio(tribunal: string): boolean {
   return tribunal in REGISTRO;
 }
 
+/**
+ * Mapeia o `sistema` de uma credencial do cofre (ex: "pje_tjmg") pra a config
+ * do tribunal — pro LOGIN usar o portal do estado certo. Só PJe-TJ PDPJ
+ * ("pje_tjXX"); outros (esaj_*, eproc_*, pje_restrito_trt*, pje_*) → null.
+ */
+export function configPorSistema(sistema: string): TribunalPdpjConfig | null {
+  const m = /^pje_(tj[a-z]+)$/.exec(sistema);
+  if (!m) return null;
+  return getConfigTribunal(m[1]);
+}
+
 export const TRIBUNAIS_MOTOR_PROPRIO = Object.keys(REGISTRO);

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { pdpjTjConfig, getConfigTribunal, tribunalTemMotorProprio } from "./tribunais-pdpj";
+import {
+  pdpjTjConfig,
+  getConfigTribunal,
+  tribunalTemMotorProprio,
+  configPorSistema,
+} from "./tribunais-pdpj";
 
 describe("tribunais-pdpj (registro central)", () => {
   it("TJCE 1º grau bate com a config validada (comportamento preservado)", () => {
@@ -35,5 +40,25 @@ describe("tribunais-pdpj (registro central)", () => {
     expect(mg.urlBusca).toBe(
       "https://pje.tjmg.jus.br/pje1grau/Processo/ConsultaProcesso/listView.seam",
     );
+  });
+});
+
+describe("configPorSistema (login tribunal-aware)", () => {
+  it("pje_tjce → config do TJCE (login no portal certo)", () => {
+    const c = configPorSistema("pje_tjce");
+    expect(c).not.toBeNull();
+    expect(c!.urlEntrada).toBe("https://pje.tjce.jus.br/");
+  });
+
+  it("PJe-TJ não registrado → null (não cai no portal do TJCE)", () => {
+    expect(configPorSistema("pje_tjmg")).toBeNull();
+    expect(configPorSistema("pje_tjdft")).toBeNull();
+  });
+
+  it("sistemas não-PJe-TJ → null (e-SAJ, e-Proc, TRT, wildcard)", () => {
+    expect(configPorSistema("esaj_tjsp")).toBeNull();
+    expect(configPorSistema("eproc_trf2")).toBeNull();
+    expect(configPorSistema("pje_restrito_trt7")).toBeNull();
+    expect(configPorSistema("pje_*")).toBeNull();
   });
 });
