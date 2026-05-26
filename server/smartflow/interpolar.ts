@@ -153,11 +153,20 @@ const VARS_PAGAMENTO_RECEBIDO: CatalogoVariavel[] = [
   { path: "primeiraCobrancaDoCliente", label: "É a primeira cobrança do cliente?", exemplo: "true", categoria: "pagamento" },
 ];
 
+const VARS_COBRANCA_LINKS: CatalogoVariavel[] = [
+  { path: "linkPagamento", label: "Link de pagamento (Asaas)", exemplo: "https://www.asaas.com/i/abc123", categoria: "pagamento" },
+  { path: "linkBoleto", label: "Link do boleto (PDF)", exemplo: "https://www.asaas.com/b/pdf/abc123", categoria: "pagamento" },
+  { path: "pixCopiaECola", label: "PIX copia e cola", exemplo: "00020126360014br.gov.bcb.pix...", categoria: "pagamento" },
+  { path: "codigoBarras", label: "Código de barras (linha digitável)", exemplo: "23793.38128 60007.812... ", categoria: "pagamento" },
+  { path: "formaPagamento", label: "Forma de pagamento", exemplo: "BOLETO", categoria: "pagamento" },
+];
+
 const VARS_PAGAMENTO_VENCIDO: CatalogoVariavel[] = [
   { path: "pagamentoValor", label: "Valor da cobrança vencida", exemplo: "1500.00", categoria: "pagamento" },
   { path: "pagamentoDescricao", label: "Descrição da cobrança", exemplo: "Honorários", categoria: "pagamento" },
   { path: "vencimento", label: "Data de vencimento", exemplo: "2026-04-01", categoria: "pagamento" },
   { path: "diasAtraso", label: "Dias de atraso", exemplo: "5", categoria: "pagamento" },
+  ...VARS_COBRANCA_LINKS,
 ];
 
 const VARS_PAGAMENTO_PROXIMO: CatalogoVariavel[] = [
@@ -165,6 +174,7 @@ const VARS_PAGAMENTO_PROXIMO: CatalogoVariavel[] = [
   { path: "pagamentoDescricao", label: "Descrição da cobrança", exemplo: "Honorários", categoria: "pagamento" },
   { path: "vencimento", label: "Data de vencimento", exemplo: "2026-05-25", categoria: "pagamento" },
   { path: "diasAteVencer", label: "Dias até vencer", exemplo: "3", categoria: "pagamento" },
+  ...VARS_COBRANCA_LINKS,
 ];
 
 const VARS_ACAO: CatalogoVariavel[] = [
