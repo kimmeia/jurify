@@ -36,6 +36,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     executarAgente: vi.fn().mockResolvedValue("resposta-do-agente"),
     extrairCamposDoAgente: vi.fn().mockResolvedValue({}),
     conversarComAgente: vi.fn().mockResolvedValue({ resposta: "ok", acao: null }),
+    resolverResponsavelAgenda: vi.fn().mockResolvedValue(null),
     buscarHorarios: vi.fn().mockResolvedValue(["2026-04-15 10:00", "2026-04-15 14:00", "2026-04-16 09:00"]),
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
     criarAgendamentoInterno: vi.fn().mockResolvedValue(555),
@@ -2174,6 +2175,125 @@ describe("SmartFlow Engine", () => {
 
       expect(resultado.sucesso).toBe(false);
       expect(resultado.erro).toContain("ID do agendamento");
+    });
+  });
+
+  describe("responsável da agenda — cascata + consistência", () => {
+    it("agenda_criar reaproveita o responsável resolvido pelo Atendente IA (não recalcula)", async () => {
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(1);
+      const resolverResponsavelAgenda = vi.fn().mockResolvedValue(70);
+      const exec = criarMockExecutores({ criarAgendamentoInterno, resolverResponsavelAgenda });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "agenda_criar", config: {} },
+      ];
+
+      const r = await executarCenario(passos, { contatoId: 5, agendaResponsavelResolvidoId: 88 }, exec);
+
+      expect(r.sucesso).toBe(true);
+      expect(criarAgendamentoInterno).toHaveBeenCalledWith(expect.objectContaining({ responsavelId: 88 }));
+      // Reaproveita o valor do contexto — não chama a cascata de novo.
+      expect(resolverResponsavelAgenda).not.toHaveBeenCalled();
+    });
+
+    it("agenda_criar sem nada explícito cai na cascata do escritório (nunca 'sem responsável')", async () => {
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(1);
+      const resolverResponsavelAgenda = vi.fn().mockResolvedValue(70);
+      const exec = criarMockExecutores({ criarAgendamentoInterno, resolverResponsavelAgenda });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "agenda_criar", config: {} },
+      ];
+
+      const r = await executarCenario(passos, { contatoId: 5, conversaId: 9, atendenteResponsavelId: 42 }, exec);
+
+      expect(r.sucesso).toBe(true);
+      expect(criarAgendamentoInterno).toHaveBeenCalledWith(expect.objectContaining({ responsavelId: 70 }));
+      expect(resolverResponsavelAgenda).toHaveBeenCalledWith(
+        expect.objectContaining({ contatoId: 5, conversaId: 9, atendenteResponsavelId: 42 }),
+      );
+    });
+
+    it("advogado fixo no agenda_criar ignora a cascata", async () => {
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(1);
+      const resolverResponsavelAgenda = vi.fn().mockResolvedValue(70);
+      const exec = criarMockExecutores({ criarAgendamentoInterno, resolverResponsavelAgenda });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "agenda_criar", config: { responsavelId: 9 } },
+      ];
+
+      const r = await executarCenario(passos, { contatoId: 5, atendenteResponsavelId: 42 }, exec);
+
+      expect(r.sucesso).toBe(true);
+      expect(criarAgendamentoInterno).toHaveBeenCalledWith(expect.objectContaining({ responsavelId: 9 }));
+      expect(resolverResponsavelAgenda).not.toHaveBeenCalled();
+    });
+
+    it("fluxo Atendente IA → Agendar marca com o MESMO responsável que ofereceu a agenda", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Vou agendar!", acao: "agendar" });
+      const resolverResponsavelAgenda = vi.fn().mockResolvedValue(55);
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(900);
+      const exec = criarMockExecutores({ conversarComAgente, resolverResponsavelAgenda, criarAgendamentoInterno });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "ia_atendente", clienteId: "at",
+          config: { agenteId: 7, ferramentas: ["agendar"] }, proximoSe: { agendar: "a" },
+        },
+        { id: 2, ordem: 2, tipo: "agenda_criar", clienteId: "a", config: {} },
+      ];
+
+      const r = await executarCenario(
+        passos,
+        { mensagem: "quero marcar", contatoId: 5, conversaId: 9 },
+        exec,
+      );
+
+      expect(r.sucesso).toBe(true);
+      expect(criarAgendamentoInterno).toHaveBeenCalledWith(expect.objectContaining({ responsavelId: 55 }));
+      // Resolve 1x (no Atendente IA) e o Agendar reaproveita do contexto.
+      expect(resolverResponsavelAgenda).toHaveBeenCalledTimes(1);
+    });
+
+    it("Atendente IA modo 'auto' resolve a agenda e repassa o responsável pro ver_horarios", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "ok", acao: null });
+      const resolverResponsavelAgenda = vi.fn(async (p: any) => p.responsavelIdPreferido ?? p.atendenteResponsavelId ?? null);
+      const exec = criarMockExecutores({ conversarComAgente, resolverResponsavelAgenda });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "ia_atendente", clienteId: "at",
+          config: { agenteId: 7, ferramentas: ["agendar"], consultas: ["ver_horarios"] },
+        },
+      ];
+
+      const r = await executarCenario(passos, { mensagem: "oi", contatoId: 5, conversaId: 9, atendenteResponsavelId: 42 }, exec);
+
+      expect(resolverResponsavelAgenda).toHaveBeenCalledWith(
+        expect.objectContaining({ responsavelIdPreferido: null, atendenteResponsavelId: 42 }),
+      );
+      expect(conversarComAgente).toHaveBeenCalledWith(
+        expect.objectContaining({ consultaConfig: expect.objectContaining({ responsavelId: 42 }) }),
+      );
+      expect(r.contexto.agendaResponsavelResolvidoId).toBe(42);
+    });
+
+    it("Atendente IA modo 'fixo' usa o advogado escolhido como preferido da cascata", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "ok", acao: null });
+      const resolverResponsavelAgenda = vi.fn(async (p: any) => p.responsavelIdPreferido ?? null);
+      const exec = criarMockExecutores({ conversarComAgente, resolverResponsavelAgenda });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "ia_atendente", clienteId: "at",
+          config: { agenteId: 7, consultas: ["ver_horarios"], consultaConfig: { responsavelModo: "fixo", responsavelId: 12 } },
+        },
+      ];
+
+      const r = await executarCenario(passos, { mensagem: "oi", contatoId: 5, conversaId: 9, atendenteResponsavelId: 42 }, exec);
+
+      expect(resolverResponsavelAgenda).toHaveBeenCalledWith(
+        expect.objectContaining({ responsavelIdPreferido: 12 }),
+      );
+      expect(conversarComAgente).toHaveBeenCalledWith(
+        expect.objectContaining({ consultaConfig: expect.objectContaining({ responsavelId: 12 }) }),
+      );
+      expect(r.contexto.agendaResponsavelResolvidoId).toBe(12);
     });
   });
 
