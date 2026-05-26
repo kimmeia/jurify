@@ -22,6 +22,7 @@ import AdminTribunais from "./pages/admin/AdminTribunais";
 import AdminEmailLog from "./pages/admin/AdminEmailLog";
 import AdminFinanceiro from "./pages/admin/AdminFinanceiro";
 import AdminAgentesIA from "./pages/admin/AdminAgentesIA";
+import AdminSmartflow from "./pages/admin/AdminSmartflow";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Bancario from "./pages/calculos/Bancario";
 import Calculos from "./pages/calculos/Calculos";
@@ -132,6 +133,11 @@ function Router() {
       <Route path="/admin/agentes-ia">
         <AdminArea>
           <AdminAgentesIA />
+        </AdminArea>
+      </Route>
+      <Route path="/admin/smartflow">
+        <AdminArea>
+          <AdminSmartflow />
         </AdminArea>
       </Route>
       <Route path="/admin/reports">

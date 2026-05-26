@@ -72,6 +72,7 @@ import { dashboardRouter } from "./routers/dashboard";
 import { adminRouter } from "./routers/admin";
 import { adminFinanceiroRouter } from "./routers/admin-financeiro";
 import { adminAgentesIaRouter } from "./routers/admin-agentes-ia";
+import { adminSmartflowRouter } from "./routers/admin-smartflow";
 import { smartflowRouter } from "./smartflow/router-smartflow";
 import { kanbanRouter } from "./escritorio/router-kanban";
 
@@ -148,6 +149,7 @@ export const appRouter = router({
   admin: adminRouter,
   adminFinanceiro: adminFinanceiroRouter,
   adminAgentesIa: adminAgentesIaRouter,
+  adminSmartflow: adminSmartflowRouter,
   smartflow: smartflowRouter,
   kanban: kanbanRouter,
 });
