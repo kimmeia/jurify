@@ -305,3 +305,20 @@ export function deveDispararLembrete(
   const inicioJanela = new Date(agora.getTime() - toleranciaMin * 60 * 1000);
   return momento >= inicioJanela && momento <= agora;
 }
+
+/**
+ * Decide se a retomada de uma execução pausada deve REENTRAR no nó onde
+ * pausou (re-executando-o) em vez de continuar linearmente por `ordem`.
+ *
+ * Vale sempre que o nó de espera é conhecido (`waitNodeId`) e existe no
+ * cenário. Antes o gate era "o cenário tem alguma seta `proximoSe`?" (modo
+ * grafo) — mas um Atendente IA puramente conversacional (sem ações ligadas)
+ * não tem NENHUMA seta, então caía no resume LINEAR, que pulava o nó e parava
+ * a conversa após a 1ª resposta. Reentrar re-executa o agente a cada mensagem.
+ */
+export function deveReentrarNoWaitNode(
+  passos: Array<{ clienteId?: string | null }>,
+  waitNodeId: string | null | undefined,
+): boolean {
+  return !!waitNodeId && passos.some((p) => p.clienteId === waitNodeId);
+}

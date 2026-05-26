@@ -285,6 +285,13 @@ export const escritorios = mysqlTable("escritorios", {
    */
   jaUsouTrial: boolean("ja_usou_trial").default(false).notNull(),
   trialUsadoEm: timestamp("trial_usado_em"),
+  /**
+   * Responsável padrão da agenda (colaboradores.id). Usado como fallback
+   * quando o SmartFlow precisa de um dono pra agenda mas não há atendente
+   * na conversa nem responsável no contato. NULL = cai no colaborador
+   * com cargo "dono" (default seguro: funciona sem configuração).
+   */
+  agendaResponsavelPadraoId: int("agendaResponsavelPadraoId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

@@ -77,6 +77,7 @@ export async function atualizarEscritorio(
     diasFuncionamento?: string[];
     mensagemAusencia?: string;
     mensagemBoasVindas?: string;
+    agendaResponsavelPadraoId?: number | null;
   },
 ) {
   const db = await getDb();
@@ -94,6 +95,7 @@ export async function atualizarEscritorio(
   if (dados.diasFuncionamento !== undefined) updateData.diasFuncionamento = JSON.stringify(dados.diasFuncionamento);
   if (dados.mensagemAusencia !== undefined) updateData.mensagemAusencia = dados.mensagemAusencia || null;
   if (dados.mensagemBoasVindas !== undefined) updateData.mensagemBoasVindas = dados.mensagemBoasVindas || null;
+  if (dados.agendaResponsavelPadraoId !== undefined) updateData.agendaResponsavelPadraoId = dados.agendaResponsavelPadraoId || null;
 
   if (Object.keys(updateData).length === 0) return;
 

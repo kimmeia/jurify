@@ -29,6 +29,7 @@ import {
   contextoContemSlot,
   deveDispararProximo,
   deveDispararVencido,
+  deveReentrarNoWaitNode,
   diasEntre,
   parseVencimento,
   slotTimestampChave,
@@ -1498,14 +1499,12 @@ export async function retomarExecucao(execId: number): Promise<{ retomada: boole
     delete (contextoBase as any).aguardandoNodeClienteId;
 
     const executores = criarExecutoresReais(exec.escritorioId);
-    const modoGrafo = cenario.passos.some(
-      (p: any) => p.proximoSe && typeof p.proximoSe === "object" && Object.keys(p.proximoSe).length > 0,
-    );
 
-    // TIMEOUT de um "Aguardar resposta" em modo grafo: reentra no nó e segue o
-    // ramo "timeout" (cliente não respondeu no prazo). Sem ramo "timeout"
-    // configurado, o fluxo encerra naturalmente. Roda o cenário INTEIRO.
-    if (waitNodeId && modoGrafo) {
+    // TIMEOUT de um nó de espera: reentra NELE e segue o ramo "timeout" (cliente
+    // não respondeu no prazo). Sem ramo "timeout" configurado, o fluxo encerra
+    // naturalmente. Roda o cenário INTEIRO. Vale também pro Atendente IA puramente
+    // conversacional (sem setas) — antes o gate em modoGrafo o pulava no linear.
+    if (deveReentrarNoWaitNode(cenario.passos, waitNodeId)) {
       (contextoBase as any).__resumindoWaitClienteId = waitNodeId;
       (contextoBase as any).__resumindoWaitMotivo = "timeout";
       const resultado = await executarCenario(cenario.passos, contextoBase, executores);
@@ -1636,10 +1635,7 @@ async function retomarComResposta(
   // — é isso que faz o loop "volta pra IA até bater a condição" funcionar.
   // Roda o cenário INTEIRO (não um slice), porque o caminho pode voltar pra trás.
   const waitNodeId = (contextoBase as any).aguardandoNodeClienteId as string | null | undefined;
-  const modoGrafo = cenario.passos.some(
-    (p: any) => p.proximoSe && typeof p.proximoSe === "object" && Object.keys(p.proximoSe).length > 0,
-  );
-  if (waitNodeId && modoGrafo) {
+  if (deveReentrarNoWaitNode(cenario.passos, waitNodeId)) {
     delete (contextoBase as any).aguardandoNodeClienteId;
     (contextoBase as any).__resumindoWaitClienteId = waitNodeId;
     const executores = criarExecutoresReais(exec.escritorioId);

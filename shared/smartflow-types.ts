@@ -229,8 +229,16 @@ export interface ConfigIaAtendente {
   ferramentas?: FerramentaAtendente[];
   /** Consultas (busca-e-volta) habilitadas — NÃO viram saída; voltam pro agente. */
   consultas?: ConsultaAtendente[];
-  /** Config das consultas (ex: responsável/duração/dias da "ver_horarios"). */
-  consultaConfig?: { responsavelId?: number; duracaoMin?: number; dias?: number };
+  /**
+   * Config das consultas (ex: responsável/duração/dias da "ver_horarios").
+   *
+   * `responsavelModo`: "auto" (default) resolve o dono da agenda na hora pela
+   * cascata atendente da conversa → responsável do contato → padrão do
+   * escritório → dono; "fixo" usa sempre o `responsavelId` escolhido.
+   * Ausente = "auto" quando não há `responsavelId`, "fixo" quando há (preserva
+   * fluxos salvos antes do modo automático).
+   */
+  consultaConfig?: { responsavelModo?: "auto" | "fixo"; responsavelId?: number; duracaoMin?: number; dias?: number };
   /** Janela (segundos) pra juntar mensagens picadas. 0/ausente = desligado. */
   acumularSegundos?: number;
 }
