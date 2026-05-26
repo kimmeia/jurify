@@ -37,6 +37,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     extrairCamposDoAgente: vi.fn().mockResolvedValue({}),
     conversarComAgente: vi.fn().mockResolvedValue({ resposta: "ok", acao: null }),
     resolverResponsavelAgenda: vi.fn().mockResolvedValue(null),
+    distribuirAtendimentoPorSetor: vi.fn().mockResolvedValue({ id: 9, nome: "Atendente Teste" }),
     buscarHorarios: vi.fn().mockResolvedValue(["2026-04-15 10:00", "2026-04-15 14:00", "2026-04-16 09:00"]),
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
     criarAgendamentoInterno: vi.fn().mockResolvedValue(555),
@@ -2063,6 +2064,45 @@ describe("SmartFlow Engine", () => {
       expect(resultado.sucesso).toBe(true);
       expect(resultado.contexto.transferir).toBe(true);
       expect(resultado.respostas).toEqual([]);
+    });
+  });
+
+  describe("distribuir_atendimento", () => {
+    it("atribui ao atendente do setor → saída 'atribuido', publica o nome e NÃO para o bot", async () => {
+      const distribuirAtendimentoPorSetor = vi.fn().mockResolvedValue({ id: 12, nome: "Maria" });
+      const exec = criarMockExecutores({ distribuirAtendimentoPorSetor });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "distribuir_atendimento", clienteId: "d", config: { setorId: 3, somenteOnline: true }, proximoSe: { atribuido: "ok", sem_atendente: "x" } },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "ok", config: { template: "Você será atendido por {{atendenteEscolhidoNome}}" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "x", config: { template: "Sem atendente" } },
+      ];
+      const r = await executarCenario(passos, { conversaId: 9, contatoId: 5 }, exec);
+      expect(distribuirAtendimentoPorSetor).toHaveBeenCalledWith({ setorId: 3, somenteOnline: true, conversaId: 9 });
+      expect(r.contexto.atendenteEscolhidoNome).toBe("Maria");
+      expect(r.contexto.atendenteEscolhidoId).toBe(12);
+      expect(r.contexto.aguardandoMensagem).toBeFalsy(); // não para o bot
+      expect(r.respostas.join(" ")).toContain("Você será atendido por Maria");
+      expect(r.respostas.join(" ")).not.toContain("Sem atendente");
+    });
+
+    it("ninguém elegível → saída 'sem_atendente'", async () => {
+      const distribuirAtendimentoPorSetor = vi.fn().mockResolvedValue(null);
+      const exec = criarMockExecutores({ distribuirAtendimentoPorSetor });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "distribuir_atendimento", clienteId: "d", config: { setorId: 3 }, proximoSe: { atribuido: "ok", sem_atendente: "x" } },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "ok", config: { template: "OK" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "x", config: { template: "Ninguém disponível agora" } },
+      ];
+      const r = await executarCenario(passos, { conversaId: 9 }, exec);
+      expect(r.respostas.join(" ")).toContain("Ninguém disponível agora");
+      expect(r.respostas.join(" ")).not.toContain("OK");
+    });
+
+    it("sem setor configurado → erro claro", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario([{ id: 1, ordem: 1, tipo: "distribuir_atendimento", config: {} }], {}, exec);
+      expect(r.sucesso).toBe(false);
+      expect(r.erro).toContain("setor");
     });
   });
 

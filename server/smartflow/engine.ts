@@ -94,6 +94,10 @@ export interface SmartflowContexto {
    *  como default em passos que precisam de responsável (ex: Kanban
    *  "Criar card" sem responsavelId explícito herda esse valor). */
   atendenteResponsavelId?: number;
+  /** Atendente escolhido pelo passo `distribuir_atendimento` (id do colaborador
+   *  + nome) — pra usar em mensagem ("Você será atendido por {{atendenteEscolhidoNome}}"). */
+  atendenteEscolhidoId?: number;
+  atendenteEscolhidoNome?: string;
   /** Responsável da agenda resolvido pelo passo `ia_atendente` (cascata
    *  completa). O passo `agenda_criar` reaproveita esse valor pra garantir
    *  que a agenda mostrada ao cliente é a mesma onde o compromisso é marcado. */
@@ -274,6 +278,17 @@ export interface SmartflowExecutores {
     contatoId?: number;
     conversaId?: number;
   }) => Promise<{ resposta: string; acao: string | null; quando?: string | null }>;
+  /**
+   * Distribui a conversa pra um atendente de um SETOR: escolhe por menor carga
+   * (online primeiro) e seta como dono (`atendenteId`) — SEM marcar
+   * "em atendimento" (o bot segue). `somenteOnline` restringe a quem tem
+   * heartbeat recente. Retorna o atendente escolhido ou null (ninguém elegível).
+   */
+  distribuirAtendimentoPorSetor: (params: {
+    setorId: number;
+    somenteOnline: boolean;
+    conversaId?: number;
+  }) => Promise<{ id: number; nome: string } | null>;
   /**
    * Resolve quem é o dono da agenda pra um atendimento, em cascata:
    *   responsavelIdPreferido (advogado fixo) → atendente da conversa →
@@ -1587,6 +1602,48 @@ async function handleTransferir(
 }
 
 /**
+ * Handler do passo `distribuir_atendimento`. Escolhe um atendente do setor e o
+ * seta como dono da conversa (via executor), SEM parar o bot — o fluxo segue.
+ * Saídas: `atribuido` (achou) e `sem_atendente` (ninguém elegível). Publica
+ * `atendenteEscolhidoId`/`atendenteEscolhidoNome` e propaga como
+ * `atendenteResponsavelId` (cascata da agenda).
+ */
+async function handleDistribuirAtendimento(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as { setorId?: number; somenteOnline?: boolean };
+  const setorId = Number(cfg.setorId);
+  if (!Number.isInteger(setorId) || setorId <= 0) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Distribuir atendimento: escolha um setor." };
+  }
+  const conversaId = typeof ctx.conversaId === "number" ? ctx.conversaId : undefined;
+  try {
+    const escolhido = await exec.distribuirAtendimentoPorSetor({
+      setorId,
+      somenteOnline: cfg.somenteOnline === true,
+      conversaId,
+    });
+    if (!escolhido) {
+      return { sucesso: true, contexto: ctx, proximoRamoId: "sem_atendente" };
+    }
+    return {
+      sucesso: true,
+      contexto: {
+        ...ctx,
+        atendenteEscolhidoId: escolhido.id,
+        atendenteEscolhidoNome: escolhido.nome,
+        atendenteResponsavelId: escolhido.id,
+      },
+      proximoRamoId: "atribuido",
+    };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Distribuir atendimento: ${err?.message || String(err)}` };
+  }
+}
+
+/**
  * Avalia uma única condição sobre um contexto. Retorna `true` se bate.
  * Operadores `maior`, `menor`, `entre` são numéricos; `contem` é string-case
  * insensitive; os demais preservam semântica legada.
@@ -2554,6 +2611,7 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   whatsapp_enviar: handleWhatsAppEnviar,
   whatsapp_aguardar_resposta: handleWhatsappAguardarResposta,
   transferir: handleTransferir,
+  distribuir_atendimento: handleDistribuirAtendimento,
   condicional: handleCondicional,
   esperar: handleEsperar,
   webhook: handleWebhook,

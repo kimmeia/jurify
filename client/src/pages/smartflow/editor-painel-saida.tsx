@@ -84,6 +84,10 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
   transferir: [
     { path: "transferir", label: "Sinaliza transferência pra humano (encerra)", tipo: "booleano" },
   ],
+  distribuir_atendimento: [
+    { path: "atendenteEscolhidoNome", label: "Nome do atendente que recebeu a conversa", tipo: "texto" },
+    { path: "atendenteEscolhidoId", label: "ID do atendente escolhido", tipo: "número" },
+  ],
   condicional: [],
   // para_cada_item publica `item` e `indice` DENTRO do corpo do loop —
   // resolução dinâmica em `variaveisPublicadasPorPasso`.
