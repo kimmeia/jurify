@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow — V2 Light premium turbinado</title>
+<link rel="stylesheet" href="base.css" />
+<style>
+  /* ===== V2 LIGHT — claro premium: mesh gradient, glass, profundidade ===== */
+  body { background:#fcfbff; overflow-x:hidden; }
+  .mesh { position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden;
+    background:
+      radial-gradient(50% 40% at 12% 8%, rgba(124,58,237,.16), transparent 70%),
+      radial-gradient(46% 36% at 88% 4%, rgba(59,130,246,.14), transparent 70%),
+      radial-gradient(44% 40% at 70% 30%, rgba(217,70,239,.10), transparent 70%); }
+  .mesh b { position:absolute; border-radius:50%; filter:blur(80px); display:block; mix-blend-mode:multiply; opacity:.5; }
+  .mesh .m1 { width:520px; height:420px; left:6%; top:2%; background:radial-gradient(circle,#c4b5fd,transparent 70%); animation: drift1 22s ease-in-out infinite; }
+  .mesh .m2 { width:480px; height:440px; right:4%; top:-4%; background:radial-gradient(circle,#bfdbfe,transparent 70%); animation: drift2 26s ease-in-out infinite; }
+  @keyframes drift1 { 0%,100%{transform:translate(0,0);} 50%{transform:translate(30px,24px);} }
+  @keyframes drift2 { 0%,100%{transform:translate(0,0);} 50%{transform:translate(-36px,20px);} }
+  body > * { position:relative; z-index:1; }
+
+  .nav { position:sticky; top:0; z-index:50; background:rgba(252,251,255,.72); backdrop-filter:blur(14px); border-bottom:1px solid var(--line); }
+  .nav .wrap { height:72px; display:flex; align-items:center; gap:40px; }
+  .nav__links { display:flex; gap:30px; margin-left:auto; }
+  .nav__links a { font-size:14.5px; font-weight:500; color:var(--ink-2); }
+  .nav__cta { display:flex; gap:10px; align-items:center; }
+  .btn-glow { background:linear-gradient(100deg,#7c3aed,#9333ea); color:#fff; box-shadow:0 12px 34px -10px rgba(147,51,234,.7), inset 0 1px 0 rgba(255,255,255,.3); }
+
+  .heroL { position:relative; text-align:center; padding:84px 0 30px; }
+  .pill { box-shadow:0 0 0 1px rgba(124,58,237,.12), 0 8px 24px -10px rgba(124,58,237,.4); animation: fadeUp .7s both; }
+  .heroL h1 { font-family:var(--font-display); font-weight:800; font-size:60px; line-height:1.04; letter-spacing:-.035em; max-width:860px; margin:24px auto 0; animation: fadeUp .7s .08s both; }
+  .heroL h1 .g { background:linear-gradient(105deg,#7c3aed,#a855f7 50%,#d946ef); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .heroL .sub { font-size:20px; color:var(--muted); max-width:660px; margin:24px auto 0; line-height:1.55; animation: fadeUp .7s .16s both; }
+  .heroL .ctas { display:flex; gap:14px; justify-content:center; margin-top:34px; animation: fadeUp .7s .24s both; }
+  .heroL .micro { font-size:13.5px; color:var(--muted); margin-top:16px; animation: fadeUp .7s .32s both; }
+  .heroL .micro b { color:var(--ink-2); }
+
+  .stage { position:relative; max-width:1080px; margin:54px auto 0; animation: rise 1s .3s both; }
+  .stage::after { content:""; position:absolute; inset:2% 6% -14%; z-index:-1; background:radial-gradient(ellipse at center, rgba(124,58,237,.34), transparent 66%); filter:blur(54px); }
+  .glassframe { border-radius:18px; padding:8px; background:linear-gradient(160deg, rgba(255,255,255,.9), rgba(255,255,255,.55)); border:1px solid #fff; box-shadow:0 50px 90px -32px rgba(76,29,149,.45); }
+  .glassframe .browser { box-shadow:none; border-color:var(--line); }
+  .float { position:absolute; z-index:4; border-radius:14px; padding:11px 14px; background:rgba(255,255,255,.82); backdrop-filter:blur(14px); border:1px solid #fff; box-shadow:0 22px 50px -18px rgba(76,29,149,.4); display:flex; gap:11px; align-items:center; }
+  .float .fic { width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .float .ft { font-size:12.5px; font-weight:700; line-height:1.2; }
+  .float .fs { font-size:10.5px; color:var(--muted); margin-top:2px; }
+  .f-pix { top:12%; left:-50px; animation: bob 5s ease-in-out infinite; }
+  .f-wa { top:3%; right:-44px; animation: bob 5.6s ease-in-out .4s infinite; }
+  .f-com { bottom:8%; right:-36px; animation: bob 6s ease-in-out .8s infinite; }
+  @keyframes bob { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-12px);} }
+  @keyframes fadeUp { from{opacity:0; transform:translateY(24px);} to{opacity:1; transform:none;} }
+  @keyframes rise { from{opacity:0; transform:translateY(48px) scale(.97);} to{opacity:1; transform:none;} }
+
+  .trust { padding:56px 0 8px; }
+  .trust__lbl { text-align:center; font-size:12.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted-2); }
+  .trust__row { display:flex; justify-content:center; gap:14px; flex-wrap:wrap; margin-top:18px; }
+  .intpill { display:inline-flex; align-items:center; gap:8px; font-weight:700; font-size:15px; color:var(--ink-2); padding:9px 17px; border:1px solid #fff; border-radius:999px; background:rgba(255,255,255,.7); backdrop-filter:blur(8px); box-shadow:0 8px 20px -12px rgba(76,29,149,.4); }
+  .intpill .d { width:9px; height:9px; border-radius:50%; }
+
+  .sec { padding:92px 0; }
+  .sec__head { text-align:center; max-width:660px; margin:0 auto 54px; }
+  .sec__head h2 { font-family:var(--font-display); font-weight:800; font-size:42px; letter-spacing:-.025em; margin-top:12px; }
+  .sec__head p { font-size:18px; color:var(--muted); margin-top:14px; line-height:1.55; }
+
+  /* SmartFlow no canvas claro */
+  .canvas { max-width:1000px; margin:0 auto; border:1px solid var(--line); border-radius:24px; padding:26px; position:relative; overflow:hidden;
+    background:
+      linear-gradient(rgba(124,58,237,.05) 1px, transparent 1px) 0 0/26px 26px,
+      linear-gradient(90deg, rgba(124,58,237,.05) 1px, transparent 1px) 0 0/26px 26px,
+      #fff;
+    box-shadow:0 40px 80px -34px rgba(76,29,149,.4); }
+  .flowwrap { position:relative; height:300px; }
+  .node { position:absolute; display:flex; gap:10px; align-items:center; padding:11px 14px; border-radius:13px; background:#fff; border:1px solid var(--line); box-shadow:0 12px 30px -14px rgba(76,29,149,.45); font-size:13px; font-weight:600; white-space:nowrap; animation: nodepop .5s both; }
+  .node .nic { width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .node small { display:block; font-size:10.5px; font-weight:500; color:var(--muted); }
+  .node.trig { left:0; top:116px; } .node.ia { left:248px; top:34px; animation-delay:.15s; }
+  .node.dec { left:252px; top:200px; animation-delay:.3s; } .node.agd { right:0; top:14px; animation-delay:.45s; }
+  .node.cob { right:0; top:124px; animation-delay:.55s; } .node.notf { right:0; top:228px; animation-delay:.65s; }
+  @keyframes nodepop { from{opacity:0; transform:scale(.8);} to{opacity:1; transform:none;} }
+  .flowsvg { position:absolute; inset:0; width:100%; height:100%; z-index:0; overflow:visible; }
+  .flowsvg path { fill:none; stroke:url(#fg); stroke-width:2.4; stroke-linecap:round; stroke-dasharray:8 10; animation: dash 1s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset:-36; } }
+
+  .bento { display:grid; grid-template-columns:repeat(4,1fr); grid-auto-rows:166px; gap:16px; }
+  .bcell { position:relative; overflow:hidden; border:1px solid var(--line); border-radius:20px; padding:22px; background:rgba(255,255,255,.75); backdrop-filter:blur(8px); box-shadow:0 18px 40px -28px rgba(76,29,149,.4); transition:.2s; }
+  .bcell:hover { transform:translateY(-4px); box-shadow:0 28px 56px -26px rgba(124,58,237,.55); border-color:rgba(124,58,237,.3); }
+  .bcell .mic { width:46px; height:46px; border-radius:13px; background:linear-gradient(135deg,#ede9fe,#fff); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
+  .bcell .mic svg { width:23px; height:23px; stroke:var(--violet); }
+  .bcell h3 { font-size:16px; font-weight:700; margin-bottom:6px; }
+  .bcell p { font-size:13px; color:var(--muted); line-height:1.45; }
+  .bcell.feat { grid-column:span 2; grid-row:span 2; background:linear-gradient(150deg,#ede9fe,#fff 70%); border-color:rgba(124,58,237,.25); }
+  .bcell.feat h3 { font-family:var(--font-display); font-size:24px; }
+  .bcell.feat p { font-size:14px; }
+  .bcell.wide { grid-column:span 2; }
+  .mini-glow { position:absolute; right:-30px; bottom:-30px; width:170px; height:170px; border-radius:50%; background:radial-gradient(circle, rgba(124,58,237,.28), transparent 70%); filter:blur(14px); }
+
+  .price { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; align-items:stretch; }
+  .plan { background:rgba(255,255,255,.8); backdrop-filter:blur(8px); border:1px solid var(--line); border-radius:20px; padding:26px 22px; display:flex; flex-direction:column; position:relative; box-shadow:0 18px 40px -28px rgba(76,29,149,.4); transition:.2s; }
+  .plan:hover { transform:translateY(-4px); box-shadow:0 28px 54px -26px rgba(124,58,237,.5); }
+  .plan.pop { border:2px solid var(--violet); box-shadow:0 34px 76px -28px rgba(124,58,237,.6); }
+  .plan .tag { position:absolute; top:-13px; left:50%; transform:translateX(-50%); background:linear-gradient(100deg,#7c3aed,#9333ea); color:#fff; font-size:12px; font-weight:700; padding:5px 14px; border-radius:999px; box-shadow:0 8px 22px -6px rgba(147,51,234,.6); }
+  .plan h3 { font-family:var(--font-display); font-size:22px; font-weight:700; }
+  .plan .who { font-size:13px; color:var(--muted); margin:4px 0 18px; min-height:34px; }
+  .plan .val { font-size:38px; font-weight:800; letter-spacing:-.02em; font-family:var(--font-display); }
+  .plan .val small { font-size:15px; color:var(--muted); font-weight:500; }
+  .plan .trial { font-size:12.5px; color:var(--violet); font-weight:600; margin-top:6px; min-height:18px; }
+  .plan .btn { margin:18px 0; justify-content:center; }
+  .plan ul { list-style:none; display:flex; flex-direction:column; gap:10px; }
+  .plan li { display:flex; gap:9px; font-size:13.5px; line-height:1.4; }
+  .plan li svg { width:17px; height:17px; stroke:var(--emerald); flex-shrink:0; margin-top:2px; }
+
+  .cta { margin:24px auto 110px; max-width:1124px; }
+  .cta__box { position:relative; overflow:hidden; border-radius:30px; padding:72px 40px; text-align:center; background:linear-gradient(120deg,#6d28d9,#7c3aed 55%,#4f46e5); box-shadow:0 40px 90px -30px rgba(124,58,237,.7); }
+  .cta__box::after { content:""; position:absolute; inset:0; background:radial-gradient(circle at 82% 18%, rgba(255,255,255,.22), transparent 42%); }
+  .cta__box h2 { position:relative; font-family:var(--font-display); font-weight:800; font-size:48px; color:#fff; letter-spacing:-.025em; }
+  .cta__box p { position:relative; color:rgba(255,255,255,.9); font-size:18px; margin:14px 0 30px; }
+  .cta__box .btn { position:relative; }
+
+  .foot { border-top:1px solid var(--line); padding:50px 0 40px; }
+  .foot__grid { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:30px; }
+  .foot p { font-size:14px; color:var(--muted); margin-top:12px; max-width:260px; }
+  .foot h4 { font-size:13px; font-weight:700; margin-bottom:12px; }
+  .foot ul { list-style:none; display:flex; flex-direction:column; gap:9px; }
+  .foot ul a { font-size:14px; color:var(--muted); }
+  .foot__bar { border-top:1px solid var(--line); margin-top:36px; padding-top:22px; display:flex; justify-content:space-between; font-size:13px; color:var(--muted-2); }
+</style>
+</head>
+<body>
+<div class="mesh"><b class="m1"></b><b class="m2"></b></div>
+
+<nav class="nav">
+  <div class="wrap">
+    <span class="logo logo--md"><span class="j">Jurid</span><span class="f">Flow</span></span>
+    <div class="nav__links"><a>Recursos</a><a>Planos</a><a>Roadmap</a></div>
+    <div class="nav__cta"><button class="btn btn-ghost btn-sm">Entrar</button><button class="btn btn-glow btn-sm">Começar grátis</button></div>
+  </div>
+</nav>
+
+<header class="heroL">
+  <div class="wrap">
+    <span class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M12 3l1.9 5.8L20 10.7l-6.1 1.9L12 18.5l-1.9-5.9L4 10.7l6.1-1.9z"/></svg> O sistema operacional do escritório moderno</span>
+    <h1>Todo o seu escritório <span class="g">num só lugar</span>.<br/>Do primeiro contato ao recebimento.</h1>
+    <p class="sub">CRM, atendimento no WhatsApp, contratos automáticos, financeiro com Asaas, comissões, processos e cálculos. Integrados de verdade — não 5 ferramentas remendadas.</p>
+    <div class="ctas"><button class="btn btn-glow btn-lg">Começar grátis<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button><button class="btn btn-outline btn-lg">Ver demonstração</button></div>
+    <p class="micro"><b>14 dias grátis</b> em qualquer plano · Sem cartão de crédito · Configura em 5 minutos</p>
+  </div>
+  <div class="stage">
+    <div class="float f-pix"><span class="fic" style="background:var(--emerald-bg)"><svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" width="18" height="18"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span><div><div class="ft">+ R$ 1.500 recebido</div><div class="fs">Pix · Maria S. · agora</div></div></div>
+    <div class="float f-wa"><span class="fic" style="background:#25d366"><svg viewBox="0 0 24 24" fill="#fff" width="17" height="17"><path d="M12 2a10 10 0 0 0-8.7 15l-1.3 4 4.1-1.3A10 10 0 1 0 12 2z"/></svg></span><div><div class="ft">Nova mensagem</div><div class="fs">WhatsApp · Carlos M.</div></div></div>
+    <div class="float f-com"><span class="fic" style="background:var(--violet-soft)"><svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg></span><div><div class="ft">Comissão lançada</div><div class="fs">R$ 225 · Ana (atendente)</div></div></div>
+    <div class="glassframe">
+      <div class="browser">
+        <div class="browser__bar"><span class="browser__dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span><span class="browser__url">app.juridflow.com.br/dashboard</span></div>
+        <div class="app">
+          <aside class="side">
+            <div class="side__head"><div class="side__avatar">SA</div><div><div class="side__firm">Silva &amp; Associados</div><div class="side__sub">Escritório</div></div></div>
+            <nav class="nav">
+              <a class="nav__item is-active"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg> Dashboard</a>
+              <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/></svg> Cálculos</a>
+              <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> Clientes</a>
+              <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Modelos</a>
+              <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Agenda</a>
+              <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><circle cx="11.5" cy="14.5" r="2.5"/></svg> Processos</a>
+              <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><path d="M21 16v1a2 2 0 0 1-2 2h-1v-5h1a2 2 0 0 1 2 2z"/><path d="M3 16v1a2 2 0 0 0 2 2h1v-5H5a2 2 0 0 0-2 2z"/></svg> Atendimento</a>
+              <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> SmartFlow</a>
+              <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg> Relatórios</a>
+              <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Financeiro</a>
+            </nav>
+          </aside>
+          <div class="main">
+            <div class="band band--dash">
+              <div class="band__row"><div><div class="band__title">Painel Geral — Outubro</div><div class="band__date">1 out — 31 out 2026 · Ver outros períodos →</div></div><div class="band__icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></div></div>
+              <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+                <span class="bdg" style="background:rgba(255,255,255,.15); color:#fff;"><span class="dot" style="background:#fca5a5"></span> 3 movimentações novas</span>
+                <span class="bdg" style="background:rgba(255,255,255,.15); color:#fff;"><span class="dot" style="background:#fcd34d"></span> 2 cobranças atrasadas</span>
+                <span class="bdg" style="background:rgba(255,255,255,.15); color:#fff;"><span class="dot" style="background:#93c5fd"></span> 1 conversa aguardando</span>
+              </div>
+            </div>
+            <div class="pad">
+              <div class="kpis">
+                <div class="kpi"><div class="kpi__top"><span class="kpi__ic ic-emerald"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span><span class="kpi__label">Recebido</span></div><div class="kpi__val t-emerald">R$ 47.350</div><div class="kpi__sub">no período</div></div>
+                <div class="kpi"><div class="kpi__top"><span class="kpi__ic ic-blue"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span><span class="kpi__label">A receber</span></div><div class="kpi__val t-blue">R$ 12.100</div><div class="kpi__sub">em dia</div></div>
+                <div class="kpi"><div class="kpi__top"><span class="kpi__ic ic-rose"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg></span><span class="kpi__label">Vencido</span></div><div class="kpi__val t-rose">R$ 1.800</div><div class="kpi__sub">3,7% inadimplência</div></div>
+                <div class="kpi"><div class="kpi__top"><span class="kpi__ic ic-violet"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span><span class="kpi__label">Pipeline</span></div><div class="kpi__val t-violet">R$ 89.400</div><div class="kpi__sub">14 leads</div></div>
+              </div>
+              <div class="grid2 mt14">
+                <div class="c"><div class="c__title"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg> Fluxo de caixa — recebido por dia</div><div class="bars"><i style="height:42%"></i><i style="height:58%"></i><i style="height:35%"></i><i style="height:70%"></i><i style="height:52%"></i><i style="height:88%"></i><i style="height:64%"></i><i style="height:95%"></i><i style="height:78%"></i><i style="height:60%"></i><i style="height:82%"></i><i style="height:100%"></i><i style="height:71%"></i><i style="height:90%"></i></div></div>
+                <div class="c"><div class="c__title"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4"/></svg> Atividade recente</div>
+                  <div style="display:flex; gap:9px; margin-bottom:11px;"><span class="kpi__ic ic-emerald" style="width:24px;height:24px"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span><div style="font-size:11px"><b>Maria S. pagou R$ 1.500</b><div class="muted" style="font-size:9.5px">Pix via Asaas · há 8 min</div></div></div>
+                  <div style="display:flex; gap:9px; margin-bottom:11px;"><span class="kpi__ic ic-blue" style="width:24px;height:24px"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><div style="font-size:11px"><b>Nova conversa no WhatsApp</b><div class="muted" style="font-size:9.5px">Carlos M. · há 21 min</div></div></div>
+                  <div style="display:flex; gap:9px;"><span class="kpi__ic ic-violet" style="width:24px;height:24px"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><circle cx="11.5" cy="14.5" r="2.5"/></svg></span><div style="font-size:11px"><b>Movimentação no proc. 0801…</b><div class="muted" style="font-size:9.5px">TJCE · Despacho · há 1 h</div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="trust">
+  <div class="wrap">
+    <div class="trust__lbl">Conecta com o que seu escritório já usa</div>
+    <div class="trust__row">
+      <span class="intpill"><span class="d" style="background:#10b981"></span> Asaas</span>
+      <span class="intpill"><span class="d" style="background:#25d366"></span> WhatsApp</span>
+      <span class="intpill"><span class="d" style="background:#e1306c"></span> Instagram</span>
+      <span class="intpill"><span class="d" style="background:#3b82f6"></span> PJe · TJCE</span>
+      <span class="intpill"><span class="d" style="background:#f59e0b"></span> BACEN</span>
+      <span class="intpill"><span class="d" style="background:#6d28d9"></span> Cal.com</span>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="wrap">
+    <div class="sec__head"><span class="eyebrow">SmartFlow + Agentes IA</span><h2>Automações que trabalham 24h por você</h2><p>Arrasta os passos num canvas visual. O agente qualifica o lead, agenda, cobra inadimplente e avisa o responsável — sozinho.</p></div>
+    <div class="canvas">
+      <div class="flowwrap">
+        <svg class="flowsvg" viewBox="0 0 940 300" preserveAspectRatio="none">
+          <defs><linearGradient id="fg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#d946ef"/></linearGradient></defs>
+          <path d="M158 142 C 210 142, 210 64, 262 64" />
+          <path d="M158 142 C 210 142, 210 222, 262 222" />
+          <path d="M420 64 C 580 64, 620 40, 740 40" />
+          <path d="M420 222 C 580 222, 580 150, 740 150" />
+          <path d="M420 222 C 580 222, 620 256, 740 256" />
+        </svg>
+        <div class="node trig"><span class="nic" style="background:#25d366"><svg viewBox="0 0 24 24" fill="#fff" width="16" height="16"><path d="M12 2a10 10 0 0 0-8.7 15l-1.3 4 4.1-1.3A10 10 0 1 0 12 2z"/></svg></span><div>Mensagem recebida<small>Gatilho · WhatsApp</small></div></div>
+        <div class="node ia"><span class="nic" style="background:var(--violet-soft)"><svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="16" height="16"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg></span><div>IA qualifica o lead<small>Agente · classifica intenção</small></div></div>
+        <div class="node dec"><span class="nic" style="background:var(--amber-bg)"><svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="16" height="16"><path d="M12 2 2 12l10 10 10-10z"/></svg></span><div>É cliente?<small>Condição</small></div></div>
+        <div class="node agd"><span class="nic" style="background:var(--blue-bg)"><svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span><div>Agendar consulta<small>Ação · Agenda</small></div></div>
+        <div class="node cob"><span class="nic" style="background:var(--emerald-bg)"><svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" width="16" height="16"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span><div>Enviar cobrança<small>Ação · Asaas Pix</small></div></div>
+        <div class="node notf"><span class="nic" style="background:var(--violet-soft)"><svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="16" height="16"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span><div>Notifica responsável<small>Ação</small></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" style="padding-top:20px;">
+  <div class="wrap">
+    <div class="sec__head"><span class="eyebrow">Tudo num só lugar</span><h2>Módulos que conversam entre si</h2><p>Cliente cadastrado aqui já aparece na cobrança, no contrato, no atendimento e no SmartFlow.</p></div>
+    <div class="bento">
+      <div class="bcell feat"><div class="mini-glow"></div><div class="mic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><path d="M21 16v1a2 2 0 0 1-2 2h-1v-5h1a2 2 0 0 1 2 2z"/><path d="M3 16v1a2 2 0 0 0 2 2h1v-5H5a2 2 0 0 0-2 2z"/></svg></div><h3>Atendimento omnichannel</h3><p>WhatsApp, Instagram e e-mail num inbox só. Brief de IA, linha do tempo unificada e resposta sugerida. O lead nunca esfria.</p><div style="display:flex; gap:8px; margin-top:18px;"><span class="bdg bdg--emerald"><span class="dot" style="background:#25d366"></span> WhatsApp</span><span class="bdg" style="background:#fce7f3; color:#be185d;"><span class="dot" style="background:#e1306c"></span> Instagram</span></div></div>
+      <div class="bcell"><div class="mic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><h3>CRM jurídico</h3><p>CPF/CNPJ, profissão, endereço — pronto pra contrato.</p></div>
+      <div class="bcell"><div class="mic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><h3>Financeiro + Asaas</h3><p>Pix, boleto e cartão. Recorrência e fluxo de caixa.</p></div>
+      <div class="bcell"><div class="mic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div><h3>Comissões</h3><p>Fechou? Calcula a comissão e lança a despesa.</p></div>
+      <div class="bcell"><div class="mic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg></div><h3>Modelos de contrato</h3><p>DOCX com placeholders que viram campos.</p></div>
+      <div class="bcell"><div class="mic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/></svg></div><h3>Cálculos jurídicos</h3><p>Bancário, trabalhista, tributário. Resultado em PDF.</p></div>
+      <div class="bcell wide"><div class="mic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><circle cx="11.5" cy="14.5" r="2.5"/><line x1="13.3" y1="16.3" x2="15" y2="18"/></svg></div><h3>Processos &amp; Kanban — motor próprio</h3><p>Monitoramento por CPF/CNPJ direto nos tribunais, alertas de movimentação por palavra-chave e prazos no Kanban.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" style="padding-top:20px;">
+  <div class="wrap">
+    <div class="sec__head"><span class="eyebrow">Planos</span><h2>Comece grátis. Cresça quando quiser.</h2><p>14 dias de teste em qualquer plano pago. Sem cartão de crédito pra começar.</p></div>
+    <div class="price">
+      <div class="plan"><h3>Free</h3><div class="who">Advogado começando</div><div class="val">R$ 0</div><div class="trial">&nbsp;</div><button class="btn btn-outline">Criar conta grátis</button><ul><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 1 usuário</li><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Até 10 clientes</li><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 3 cálculos/mês</li><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Suporte por e-mail</li></ul></div>
+      <div class="plan"><h3>Básico</h3><div class="who">Autônomo ou dupla</div><div class="val">R$ 97<small>/mês</small></div><div class="trial">Teste 14 dias grátis</div><button class="btn btn-outline">Começar grátis</button><ul><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 1 colaborador</li><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Até 100 clientes</li><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Cálculos completos</li><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Financeiro Asaas</li></ul></div>
+      <div class="plan pop"><span class="tag">Mais popular</span><h3>Intermediário</h3><div class="who">Escritório (3–10 advs)</div><div class="val">R$ 247<small>/mês</small></div><div class="trial">Teste 14 dias grátis</div><button class="btn btn-glow">Começar grátis</button><ul><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Até 5 colaboradores</li><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Clientes ilimitados</li><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> WhatsApp + Instagram</li><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> SmartFlow + comissões</li></ul></div>
+      <div class="plan"><h3>Completo</h3><div class="who">Equipe (10+)</div><div class="val">R$ 497<small>/mês</small></div><div class="trial">Teste 14 dias grátis</div><button class="btn btn-outline">Começar grátis</button><ul><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Colaboradores ilimitados</li><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Múltiplas conexões WhatsApp</li><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Agentes IA personalizados</li><li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Suporte prioritário</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="cta__box">
+    <h2>Comece em 5 minutos.</h2>
+    <p>14 dias grátis em qualquer plano. Sem cartão de crédito. Cancele quando quiser.</p>
+    <button class="btn btn-light btn-lg">Criar conta grátis<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot__grid">
+      <div><span class="logo logo--sm"><span class="j">Jurid</span><span class="f">Flow</span></span><p>O sistema operacional do escritório de advocacia moderno.</p></div>
+      <div><h4>Produto</h4><ul><li><a>Recursos</a></li><li><a>Planos</a></li><li><a>Roadmap</a></li></ul></div>
+      <div><h4>Legal</h4><ul><li><a>Termos de uso</a></li><li><a>Privacidade</a></li></ul></div>
+      <div><h4>Suporte</h4><ul><li><a>contato@juridflow.com.br</a></li></ul></div>
+    </div>
+    <div class="foot__bar"><span>© 2026 JuridFlow.</span><span>Feito pra advogados que detestam Excel.</span></div>
+  </div>
+</footer>
+
+</body>
+</html>

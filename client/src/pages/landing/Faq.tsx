@@ -8,6 +8,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Reveal } from "./lpkit";
 
 const perguntas = [
   {
@@ -35,20 +36,24 @@ const perguntas = [
 export function Faq() {
   return (
     <section className="mx-auto max-w-3xl px-4 py-24">
-      <div className="mb-10 text-center">
-        <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-600">FAQ</p>
-        <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight md:text-4xl">
+      <Reveal className="mb-10 text-center">
+        <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-300">FAQ</p>
+        <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
           Perguntas frequentes
         </h2>
-      </div>
+      </Reveal>
 
       <Accordion type="single" collapsible className="space-y-3">
         {perguntas.map((p, i) => (
-          <AccordionItem key={i} value={`faq-${i}`} className="rounded-xl border bg-card px-5">
-            <AccordionTrigger className="py-4 text-left font-display font-bold hover:no-underline">
+          <AccordionItem
+            key={i}
+            value={`faq-${i}`}
+            className="rounded-xl border border-white/10 bg-white/[0.04] px-5"
+          >
+            <AccordionTrigger className="py-4 text-left font-display font-bold text-white hover:no-underline">
               {p.q}
             </AccordionTrigger>
-            <AccordionContent className="pb-5 leading-relaxed text-muted-foreground">
+            <AccordionContent className="pb-5 leading-relaxed text-violet-100/70">
               {p.a}
             </AccordionContent>
           </AccordionItem>
