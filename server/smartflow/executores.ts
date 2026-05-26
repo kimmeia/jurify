@@ -502,7 +502,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       );
     },
 
-    async conversarComAgente(params): Promise<{ resposta: string; acao: string | null }> {
+    async conversarComAgente(params): Promise<{ resposta: string; acao: string | null; quando: string | null }> {
       const { obterAgentePorId } = await import("../integracoes/router-agentes-ia");
       const { orquestrarAtendente, gerarSlotsLivres } = await import("./engine");
       const cfg = await obterAgentePorId(escritorioId, params.agenteId);
@@ -511,7 +511,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       const ferramentas = (params.ferramentas || []).filter((f) => typeof f === "string" && f.trim());
       const consultas = (params.consultas || []).filter((c) => typeof c === "string" && c.trim());
       const DESC_ACAO: Record<string, string> = {
-        agendar: "o cliente confirmou um horário e você vai marcar (informe o horário escolhido na resposta)",
+        agendar: "o cliente confirmou um horário e você vai marcar. OBRIGATÓRIO: preencha `quando` com a data/hora ISO EXATA que ele escolheu, copiada de um dos horários ISO que você ofereceu (ex: \"2026-05-27T14:00:00-03:00\"). Sem isso o sistema marca no horário errado",
         transferir: "o cliente pediu falar com um humano OU você não consegue resolver",
         encerrar: "a conversa terminou (cliente se despediu ou não quer mais nada)",
         gerar_cobranca: "é o momento de gerar uma cobrança/pagamento pro cliente",
@@ -530,7 +530,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         `AÇÕES (encerram seu turno e seguem o fluxo):\n${lista(DESC_ACAO, ferramentas)}`,
         "Use uma consulta quando precisar de um dado (ex: horários) ANTES de oferecer/agir.",
         "REGRA DAS AÇÕES (siga à risca): o padrão é acao=null — continue conversando. Só preencha `acao` quando a CONDIÇÃO daquela ação (descrita acima) estiver claramente satisfeita pela ÚLTIMA mensagem do cliente. NUNCA dispare uma ação na saudação, na 1ª troca, nem só porque ela está habilitada. Ex.: não use \"agendar\" enquanto o cliente não tiver escolhido/confirmado um horário; uma pergunta como \"você é advogado?\" ou \"tenho uma dúvida\" se responde conversando (acao=null), não agendando. Na dúvida, acao=null.",
-        'Responda SEMPRE em JSON puro (sem markdown): {"resposta": "<mensagem pro cliente>", "acao": "<ação ou null>", "consulta": "<consulta ou null>"}',
+        'Responda SEMPRE em JSON puro (sem markdown): {"resposta": "<mensagem pro cliente>", "acao": "<ação ou null>", "consulta": "<consulta ou null>", "quando": "<ISO do horário escolhido quando acao=agendar; senão null>"}',
       ].filter(Boolean).join("\n\n");
 
       const contextoCliente = await resolverContextoCliente(escritorioId, params.contatoId);
