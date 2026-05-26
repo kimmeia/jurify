@@ -42,11 +42,8 @@ export default function AdminTribunais() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Radar className="h-6 w-6 text-sky-600" />
-            Auditoria de Tribunais
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Tribunais</h1>
+          <p className="text-muted-foreground mt-1 max-w-2xl">
             Varredura não-invasiva (sem credencial) da porta de entrada de cada
             tribunal: identifica quais usam o PDPJ-cloud SSO, a tecnologia e a
             versão provável do PJe, estimando o reuso do adapter TJCE atual.
