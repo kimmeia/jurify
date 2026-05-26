@@ -127,7 +127,7 @@ const TEMPLATES_QUICK = [
   },
 ];
 
-/** 3 modelos em cards comparativos. Filtrados depois conforme provedor configurado. */
+/** Catálogo de modelos (cards comparativos). Filtrado conforme provedor configurado. */
 const MODELOS_DISPONIVEIS = [
   {
     id: "gpt-4o-mini",
@@ -139,30 +139,57 @@ const MODELOS_DISPONIVEIS = [
     custoDesc: "/1k convs",
   },
   {
+    id: "gpt-4o",
+    provider: "openai" as const,
+    nome: "GPT-4o",
+    tier: "Balanceado",
+    feat: "Bom equilíbrio · uso geral",
+    custo: "R$ 0,90",
+    custoDesc: "/1k convs",
+  },
+  {
+    id: "gpt-5.1",
+    provider: "openai" as const,
+    nome: "GPT-5.1",
+    tier: "Avançado",
+    feat: "Raciocínio forte · casos complexos",
+    custo: "R$ 1,20",
+    custoDesc: "/1k convs",
+  },
+  {
+    id: "gpt-5.5",
+    provider: "openai" as const,
+    nome: "GPT-5.5",
+    tier: "Topo de linha",
+    feat: "Flagship · máxima capacidade",
+    custo: "R$ 1,80",
+    custoDesc: "/1k convs",
+  },
+  {
     id: "claude-haiku-4-5-20251001",
     provider: "anthropic" as const,
-    nome: "Claude Haiku",
+    nome: "Claude Haiku 4.5",
     tier: "Econômico",
     feat: "Rápido · contexto jurídico",
     custo: "R$ 0,10",
     custoDesc: "/1k convs",
   },
   {
-    id: "claude-sonnet-4-20250514",
+    id: "claude-sonnet-4-6",
     provider: "anthropic" as const,
-    nome: "Claude Sonnet",
+    nome: "Claude Sonnet 4.6",
     tier: "Balanceado · recomendado",
-    feat: "Casos jurídicos complexos",
+    feat: "Casos complexos · 1M de contexto",
     custo: "R$ 0,36",
     custoDesc: "/1k convs",
   },
   {
-    id: "gpt-4o",
-    provider: "openai" as const,
-    nome: "GPT-4o",
-    tier: "Avançado",
-    feat: "Máxima precisão · casos complexos",
-    custo: "R$ 0,90",
+    id: "claude-opus-4-7",
+    provider: "anthropic" as const,
+    nome: "Claude Opus 4.7",
+    tier: "Topo de linha",
+    feat: "Máxima capacidade · raciocínio jurídico",
+    custo: "R$ 1,50",
     custoDesc: "/1k convs",
   },
 ];
