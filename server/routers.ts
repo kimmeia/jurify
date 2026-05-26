@@ -64,6 +64,7 @@ import { authRouter } from "./routers/auth";
 import { subscriptionRouter } from "./routers/subscription";
 import { whatsappCoexRouter } from "./routers/whatsapp-coex";
 import { metaChannelsRouter } from "./routers/meta-channels";
+import { whatsappCloudRouter } from "./routers/whatsapp-cloud-services";
 import { customer360Router } from "./routers/customer360";
 import { processosRouter } from "./routers/processos";
 import { prazosSugeridosRouter } from "./routers/router-prazos-sugeridos";
@@ -126,6 +127,7 @@ export const appRouter = router({
   // Integrações específicas
   whatsappCoex: whatsappCoexRouter, // legado — mantido para retrocompatibilidade
   metaChannels: metaChannelsRouter, // unificado: WhatsApp + Instagram + Messenger
+  whatsappCloud: whatsappCloudRouter, // serviços Cloud API: templates, perfil, interativas
   customer360: customer360Router, // perfil 360° do cliente para Atendimento
   adminIntegracoes: adminIntegracoesRouter,
   adminErros: adminErrosRouter,
