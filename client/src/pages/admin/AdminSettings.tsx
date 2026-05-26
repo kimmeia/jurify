@@ -2,6 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -9,8 +10,10 @@ import {
   Settings, Heart, Server, CreditCard, Shield, Globe, Clock,
   CheckCircle2, XCircle, AlertTriangle, Cpu, HardDrive,
   MessageSquare, Users, Building2, Radio, Bot, UserCheck,
-  Radar, KeyRound, Coins, Activity,
+  Radar, KeyRound, Coins, Activity, Plug, Database, HeartPulse,
 } from "lucide-react";
+import AdminIntegrations from "./AdminIntegrations";
+import AdminBackups from "./AdminBackups";
 
 function HealthIcon({ status }: { status: string }) {
   if (status === "ok") return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
@@ -47,13 +50,62 @@ export default function AdminSettings() {
   const formatCurrency = (cents: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 
+  const statusGeral = health?.checks?.some((c) => c.status === "erro")
+    ? { dot: "bg-rose-400", label: "Atenção" }
+    : health?.checks?.some((c) => c.status !== "ok")
+      ? { dot: "bg-amber-400", label: "Degradado" }
+      : { dot: "bg-emerald-400", label: "Operacional" };
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Configurações</h1>
-        <p className="text-muted-foreground mt-1">Saúde do sistema, planos, e visão operacional.</p>
+    <div className="space-y-5">
+      {/* HERO de status do sistema */}
+      <div className="rounded-2xl bg-gradient-to-br from-slate-800 via-slate-700 to-indigo-700 p-6 text-white relative overflow-hidden shadow-lg">
+        <Server className="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" strokeWidth={1.2} />
+        <div className="relative flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
+            <p className="text-sm text-white/70 mt-0.5">
+              Saúde do sistema, integrações, backups, planos e visão operacional.
+            </p>
+          </div>
+          <div className="flex items-center gap-5">
+            <div className="text-center">
+              <p className="text-[10px] uppercase tracking-wide text-white/60">Status</p>
+              <p className="text-sm font-semibold inline-flex items-center gap-1.5 mt-0.5">
+                <span className={`w-2 h-2 rounded-full ${statusGeral.dot}`} /> {statusGeral.label}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] uppercase tracking-wide text-white/60">Uptime</p>
+              <p className="text-sm font-semibold mt-0.5">{health ? formatUptime(health.uptime) : "—"}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] uppercase tracking-wide text-white/60">Node</p>
+              <p className="text-sm font-semibold mt-0.5">{health?.nodeVersion ?? "—"}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
+      <Tabs defaultValue="sistema" className="w-full">
+        <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex dark:bg-slate-900/40 dark:border-slate-800">
+          <TabsList className="bg-transparent gap-1 p-0 h-auto flex-wrap">
+            <TabsTrigger value="sistema" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+              <HeartPulse className="h-3.5 w-3.5" /> Sistema
+            </TabsTrigger>
+            <TabsTrigger value="integracoes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+              <Plug className="h-3.5 w-3.5" /> Integrações
+            </TabsTrigger>
+            <TabsTrigger value="backups" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+              <Database className="h-3.5 w-3.5" /> Backups
+            </TabsTrigger>
+            <TabsTrigger value="planos" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+              <CreditCard className="h-3.5 w-3.5" /> Planos
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="sistema" className="mt-4 space-y-6">
       {/* Saúde do Sistema */}
       <Card>
         <CardHeader className="pb-3">
@@ -116,42 +168,6 @@ export default function AdminSettings() {
           ) : null}
         </CardContent>
       </Card>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Planos */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-              Planos ativos
-            </CardTitle>
-            <CardDescription>Planos configurados no sistema (código fonte).</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loadPlanos ? (
-              <Skeleton className="h-32 w-full" />
-            ) : planos && planos.length > 0 ? (
-              <div className="space-y-3">
-                {planos.map((p) => (
-                  <div key={p.id} className="border rounded-lg p-3 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">{p.name}</span>
-                      <Badge variant="outline" className="text-[10px]">{p.id}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{p.description}</p>
-                    <div className="flex gap-4 text-xs">
-                      <span>Mensal: <span className="font-medium">{formatCurrency(p.priceMonthly)}</span></span>
-                      <span>Anual: <span className="font-medium">{formatCurrency(p.priceYearly)}</span></span>
-                      <span>Créditos: <span className="font-medium">{p.creditsPerMonth >= 999999 ? "Ilimitado" : p.creditsPerMonth}</span></span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Nenhum plano configurado.</p>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Operacional */}
         <Card>
@@ -254,7 +270,54 @@ export default function AdminSettings() {
             ) : null}
           </CardContent>
         </Card>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="integracoes" className="mt-4">
+          <AdminIntegrations />
+        </TabsContent>
+
+        <TabsContent value="backups" className="mt-4">
+          <AdminBackups />
+        </TabsContent>
+
+        <TabsContent value="planos" className="mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
+                Planos ativos
+              </CardTitle>
+              <CardDescription>
+                Planos configurados no sistema. A edição completa fica em Financeiro → Planos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadPlanos ? (
+                <Skeleton className="h-32 w-full" />
+              ) : planos && planos.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {planos.map((p) => (
+                    <div key={p.id} className="border rounded-lg p-4 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm">{p.name}</span>
+                        <Badge variant="outline" className="text-[10px]">{p.id}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{p.description}</p>
+                      <div className="flex flex-col gap-0.5 text-xs pt-1">
+                        <span>Mensal: <span className="font-medium">{formatCurrency(p.priceMonthly)}</span></span>
+                        <span>Anual: <span className="font-medium">{formatCurrency(p.priceYearly)}</span></span>
+                        <span>Créditos: <span className="font-medium">{p.creditsPerMonth >= 999999 ? "Ilimitado" : p.creditsPerMonth}</span></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhum plano configurado.</p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

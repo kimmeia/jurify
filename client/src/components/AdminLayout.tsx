@@ -30,14 +30,12 @@ import {
   PanelLeft,
   ShieldCheck,
   BarChart3,
-  Plug,
   ScrollText,
   DollarSign,
   BrainCircuit,
   Radar,
   Bug,
   Mail,
-  Database,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Redirect } from "wouter";
@@ -180,8 +178,6 @@ function AdminSidebarContent({
     { icon: Bug, label: "Erros", path: "/admin/erros" },
     { icon: Radar, label: "Tribunais", path: "/admin/tribunais" },
     { icon: Mail, label: "Log de Emails", path: "/admin/email-log" },
-    { icon: Database, label: "Backups", path: "/admin/backups" },
-    { icon: Plug, label: "Integrações", path: "/admin/integrations" },
     { icon: Settings, label: "Configurações", path: "/admin/settings" },
   ];
 

@@ -16,12 +16,10 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AdminClients from "./pages/admin/AdminClients";
 import AdminReports from "./pages/admin/AdminReports";
 import AdminSettings from "./pages/admin/AdminSettings";
-import AdminIntegrations from "./pages/admin/AdminIntegrations";
 import AdminAuditoria from "./pages/admin/AdminAuditoria";
 import AdminErros from "./pages/admin/AdminErros";
 import AdminTribunais from "./pages/admin/AdminTribunais";
 import AdminEmailLog from "./pages/admin/AdminEmailLog";
-import AdminBackups from "./pages/admin/AdminBackups";
 import AdminFinanceiro from "./pages/admin/AdminFinanceiro";
 import AdminAgentesIA from "./pages/admin/AdminAgentesIA";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
@@ -161,20 +159,18 @@ function Router() {
           <AdminEmailLog />
         </AdminArea>
       </Route>
+      {/* Integrações e Backups foram absorvidos por Configurações (abas).
+          Redireciona links antigos. */}
       <Route path="/admin/backups">
-        <AdminArea>
-          <AdminBackups />
-        </AdminArea>
+        <Redirect to="/admin/settings" />
+      </Route>
+      <Route path="/admin/integrations">
+        <Redirect to="/admin/settings" />
       </Route>
       <Route path="/roadmap">
         <ClientAreaNoGuard>
           <Roadmap />
         </ClientAreaNoGuard>
-      </Route>
-      <Route path="/admin/integrations">
-        <AdminArea>
-          <AdminIntegrations />
-        </AdminArea>
       </Route>
       <Route path="/admin/settings">
         <AdminArea>
