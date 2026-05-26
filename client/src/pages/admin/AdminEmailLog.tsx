@@ -15,9 +15,10 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  AlertCircle, ChevronLeft, ChevronRight, CheckCircle2,
+  AlertCircle, ChevronLeft, ChevronRight, CheckCircle2, XCircle,
   Mail, RotateCcw, Search,
 } from "lucide-react";
+import { KPICard } from "../dashboards/common";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -68,34 +69,16 @@ export default function AdminEmailLog() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Mail className="h-6 w-6 text-purple-600" />
-          Log de Emails
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Log de Emails</h1>
+        <p className="text-muted-foreground mt-1">
           Histórico de envios via Resend. Use pra auditar falhas e reenviar manualmente.
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Sucessos (24h)</CardDescription>
-            <CardTitle className="text-2xl text-emerald-600">{resumo?.sucesso24h ?? "—"}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Falhas (24h)</CardDescription>
-            <CardTitle className="text-2xl text-red-600">{resumo?.falha24h ?? "—"}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total (24h)</CardDescription>
-            <CardTitle className="text-2xl">{resumo?.total24h ?? "—"}</CardTitle>
-          </CardHeader>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <KPICard label="Enviados (24h)" value={resumo?.sucesso24h ?? "—"} icon={CheckCircle2} iconBg="bg-emerald-500/10" iconFg="text-emerald-600" valueColor="text-emerald-600" />
+        <KPICard label="Falhas (24h)" value={resumo?.falha24h ?? "—"} icon={XCircle} iconBg="bg-rose-500/10" iconFg="text-rose-600" valueColor="text-rose-600" />
+        <KPICard label="Total (24h)" value={resumo?.total24h ?? "—"} icon={Mail} iconBg="bg-slate-500/10" iconFg="text-slate-600" />
       </div>
 
       <Card>
