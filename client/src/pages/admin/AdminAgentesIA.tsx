@@ -232,13 +232,14 @@ function AgenteFormDialog({
           <div className="space-y-1.5">
             <Label>Prompt de sistema *</Label>
             <Textarea
-              rows={6}
+              rows={8}
               placeholder="Defina a 'personalidade' e as instruções do agente..."
               value={form.prompt}
               onChange={(e) => setForm({ ...form, prompt: e.target.value })}
+              maxLength={32000}
             />
             <p className="text-[11px] text-muted-foreground">
-              {form.prompt.length} / 8000 caracteres
+              {form.prompt.length.toLocaleString("pt-BR")} / 32.000 caracteres
             </p>
           </div>
 
