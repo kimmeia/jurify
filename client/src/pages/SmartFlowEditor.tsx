@@ -3248,11 +3248,13 @@ function ConfigCondicionalFields({
                         {ri > 0 && <div className="text-[9px] font-bold text-violet-500 text-center">{logica}</div>}
                         <div className="flex items-start gap-1">
                           <div className="flex-1 space-y-1.5">
-                            <CampoCondicaoCombobox
-                              value={String(r.campo || "")}
-                              onChange={(v) => atualizarReq(ri, { campo: v })}
-                              grupos={sugestoesAgrupadas}
-                            />
+                            {r.operador !== "horario_entre" && r.operador !== "dia_semana" && (
+                              <CampoCondicaoCombobox
+                                value={String(r.campo || "")}
+                                onChange={(v) => atualizarReq(ri, { campo: v })}
+                                grupos={sugestoesAgrupadas}
+                              />
+                            )}
                             <Select
                               value={r.operador || "igual"}
                               onValueChange={(v) =>
@@ -3260,6 +3262,10 @@ function ConfigCondicionalFields({
                                   ri,
                                   v === "tem_tag" || v === "nao_tem_tag"
                                     ? { operador: v, campo: "cliente.tags" }
+                                    : v === "horario_entre"
+                                    ? { operador: v, campo: "", valor: r.valor || "09:00", valor2: r.valor2 || "18:00" }
+                                    : v === "dia_semana"
+                                    ? { operador: v, campo: "", valor: r.valor || "seg,ter,qua,qui,sex" }
                                     : { operador: v },
                                 )
                               }
@@ -3277,9 +3283,11 @@ function ConfigCondicionalFields({
                                 <SelectItem value="entre">entre (range numérico)</SelectItem>
                                 <SelectItem value="tem_tag">tem a tag (contato)</SelectItem>
                                 <SelectItem value="nao_tem_tag">não tem a tag (contato)</SelectItem>
+                                <SelectItem value="horario_entre">está no horário (faixa)</SelectItem>
+                                <SelectItem value="dia_semana">é dia da semana</SelectItem>
                               </SelectContent>
                             </Select>
-                            {r.operador !== "existe" && r.operador !== "nao_existe" && r.operador !== "verdadeiro" && (
+                            {r.operador !== "existe" && r.operador !== "nao_existe" && r.operador !== "verdadeiro" && r.operador !== "horario_entre" && r.operador !== "dia_semana" && (
                               <Input
                                 value={String(r.valor || "")}
                                 onChange={(e) => atualizarReq(ri, { valor: e.target.value })}
@@ -3300,6 +3308,35 @@ function ConfigCondicionalFields({
                                 placeholder="Máximo"
                                 className="h-7 text-xs"
                               />
+                            )}
+                            {r.operador === "horario_entre" && (
+                              <div className="flex items-center gap-1.5">
+                                <Input type="time" value={String(r.valor || "")} onChange={(e) => atualizarReq(ri, { valor: e.target.value })} className="h-7 text-xs" />
+                                <span className="text-[10px] text-muted-foreground">até</span>
+                                <Input type="time" value={String(r.valor2 || "")} onChange={(e) => atualizarReq(ri, { valor2: e.target.value })} className="h-7 text-xs" />
+                              </div>
+                            )}
+                            {r.operador === "dia_semana" && (
+                              <div className="flex flex-wrap gap-1">
+                                {(([["seg", "Seg"], ["ter", "Ter"], ["qua", "Qua"], ["qui", "Qui"], ["sex", "Sex"], ["sab", "Sáb"], ["dom", "Dom"]]) as Array<[string, string]>).map(([id, lbl]) => {
+                                  const dias = String(r.valor || "").split(",").map((s) => s.trim()).filter(Boolean);
+                                  const sel = dias.includes(id);
+                                  return (
+                                    <button
+                                      key={id}
+                                      type="button"
+                                      onClick={() => {
+                                        const set = new Set(dias);
+                                        if (sel) set.delete(id); else set.add(id);
+                                        atualizarReq(ri, { valor: [...set].join(",") });
+                                      }}
+                                      className={`px-2 py-0.5 rounded text-[10px] border ${sel ? "bg-violet-600 text-white border-violet-600" : "bg-card text-muted-foreground hover:bg-accent"}`}
+                                    >
+                                      {lbl}
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             )}
                           </div>
                           {reqs.length > 1 && (

@@ -128,6 +128,61 @@ export function ymdNoFuso(date: Date, tz: string): { y: number; m: number; d: nu
   return { y: Number(r.year), m: Number(r.month), d: Number(r.day) };
 }
 
+// ─── Condições por horário / dia da semana (fuso IANA) ──────────────────────
+
+/** Minutos desde a meia-noite (0..1439) de `date` observado no fuso `tz`. */
+export function minutosDoDiaNoFuso(date: Date, tz: string): number {
+  const f = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false });
+  const [hh, mm] = f.format(date).split(":").map(Number);
+  return (hh % 24) * 60 + mm;
+}
+
+const DIA_SEMANA_INDICE: Record<string, number> = {
+  dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6, "sáb": 6,
+};
+
+/** 0=domingo .. 6=sábado de `date` observado no fuso `tz`. */
+export function diaSemanaNoFuso(date: Date, tz: string): number {
+  const wd = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(date);
+  const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return map[wd] ?? date.getUTCDay();
+}
+
+/**
+ * `true` se o horário de `agora` (no fuso `tz`) cai na janela [início, fim).
+ * Início inclusivo, fim exclusivo (ex: "09:00"–"18:00" → 18:00 já está FORA).
+ * Suporta janela que cruza a meia-noite (início > fim, ex: "22:00"–"06:00").
+ * `inicio`/`fim` em "HH:MM"; formato inválido → false.
+ */
+export function avaliarHorarioEntre(agora: Date, inicio: string, fim: string, tz: string): boolean {
+  const ini = parseHoraHHMM(inicio);
+  const f = parseHoraHHMM(fim);
+  if (!ini || !f) return false;
+  const minNow = minutosDoDiaNoFuso(agora, tz);
+  const minIni = ini.h * 60 + ini.m;
+  const minFim = f.h * 60 + f.m;
+  if (minIni === minFim) return false; // janela vazia
+  return minIni < minFim
+    ? minNow >= minIni && minNow < minFim
+    : minNow >= minIni || minNow < minFim; // cruza a meia-noite
+}
+
+/**
+ * `true` se o dia da semana de `agora` (no fuso `tz`) está na lista CSV.
+ * Aceita abreviações pt-BR (dom,seg,ter,qua,qui,sex,sab) e/ou números 0..6
+ * (0=domingo). Ex: "seg,ter,qua,qui,sex" = dias úteis.
+ */
+export function avaliarDiaSemana(agora: Date, diasCsv: string, tz: string): boolean {
+  const hoje = diaSemanaNoFuso(agora, tz);
+  for (const raw of String(diasCsv ?? "").split(",")) {
+    const t = raw.trim().toLowerCase();
+    if (!t) continue;
+    const idx = t in DIA_SEMANA_INDICE ? DIA_SEMANA_INDICE[t] : Number(t);
+    if (Number.isInteger(idx) && idx === hoje) return true;
+  }
+  return false;
+}
+
 // ─── Janela de disparo (slots de horário) ───────────────────────────────────
 
 /**

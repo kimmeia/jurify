@@ -14,6 +14,8 @@ import { describe, it, expect } from "vitest";
 import {
   aceitaCanal,
   acharSlotAtivo,
+  avaliarDiaSemana,
+  avaliarHorarioEntre,
   calcularMomentoLembrete,
   calcularSlotsDoDia,
   chaveDiaLocal,
@@ -31,6 +33,50 @@ import {
   temHorarioConfigurado,
   ymdNoFuso,
 } from "../smartflow/dispatcher-helpers";
+
+const TZ = "America/Sao_Paulo"; // UTC-3 (Brasil não tem DST desde 2019)
+
+describe("avaliarHorarioEntre (condição por horário)", () => {
+  it("dentro da faixa 09:00–18:00 (14:00 Brasília)", () => {
+    expect(avaliarHorarioEntre(new Date("2026-05-27T17:00:00Z"), "09:00", "18:00", TZ)).toBe(true);
+  });
+  it("fora da faixa (20:00 Brasília)", () => {
+    expect(avaliarHorarioEntre(new Date("2026-05-27T23:00:00Z"), "09:00", "18:00", TZ)).toBe(false);
+  });
+  it("fim é exclusivo: 18:00 em ponto já está fora de 09:00–18:00", () => {
+    expect(avaliarHorarioEntre(new Date("2026-05-27T21:00:00Z"), "09:00", "18:00", TZ)).toBe(false);
+  });
+  it("início é inclusivo: 09:00 em ponto está dentro", () => {
+    expect(avaliarHorarioEntre(new Date("2026-05-27T12:00:00Z"), "09:00", "18:00", TZ)).toBe(true);
+  });
+  it("janela que cruza a meia-noite (22:00–06:00)", () => {
+    expect(avaliarHorarioEntre(new Date("2026-05-28T02:00:00Z"), "22:00", "06:00", TZ)).toBe(true); // 23:00
+    expect(avaliarHorarioEntre(new Date("2026-05-28T08:00:00Z"), "22:00", "06:00", TZ)).toBe(true); // 05:00
+    expect(avaliarHorarioEntre(new Date("2026-05-27T15:00:00Z"), "22:00", "06:00", TZ)).toBe(false); // 12:00
+  });
+  it("formato inválido → false", () => {
+    expect(avaliarHorarioEntre(new Date("2026-05-27T17:00:00Z"), "9h", "18h", TZ)).toBe(false);
+  });
+});
+
+describe("avaliarDiaSemana (condição por dia da semana)", () => {
+  // 2026-05-27 12:00 Brasília é uma QUARTA-feira (qua, índice 3).
+  const quarta = new Date("2026-05-27T15:00:00Z");
+  it("dias úteis → quarta bate", () => {
+    expect(avaliarDiaSemana(quarta, "seg,ter,qua,qui,sex", TZ)).toBe(true);
+  });
+  it("fim de semana → quarta não bate", () => {
+    expect(avaliarDiaSemana(quarta, "sab,dom", TZ)).toBe(false);
+  });
+  it("abreviação única e número equivalem (qua = 3)", () => {
+    expect(avaliarDiaSemana(quarta, "qua", TZ)).toBe(true);
+    expect(avaliarDiaSemana(quarta, "3", TZ)).toBe(true);
+    expect(avaliarDiaSemana(quarta, "1,2", TZ)).toBe(false); // seg,ter
+  });
+  it("lista vazia → false", () => {
+    expect(avaliarDiaSemana(quarta, "", TZ)).toBe(false);
+  });
+});
 
 describe("aceitaCanal (gatilho mensagem_canal)", () => {
   it("aceita qualquer canal quando config.canais está vazio", () => {

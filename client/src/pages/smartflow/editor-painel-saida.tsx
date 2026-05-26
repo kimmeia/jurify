@@ -30,6 +30,8 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
   ia_consultar: [],
   ia_atendente: [
     { path: "acaoAtendente", label: "Ação que o atendente disparou (ex: agendar)", tipo: "texto" },
+    { path: "agendamentoQuandoTexto", label: "Data do agendamento (formatada, ex: 27/05/2026 14:00)", tipo: "texto" },
+    { path: "agendamentoQuando", label: "Data do agendamento (ISO, uso técnico)", tipo: "texto" },
   ],
   // Variáveis publicadas por ia_extrair_campos são dinâmicas (chaves da config) —
   // resolvidas em `variaveisPublicadasPorPasso`. Vazio aqui só satisfaz o tipo.
@@ -104,7 +106,7 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
   ],
   asaas_gerar_cobranca: [
     { path: "pagamentoId", label: "ID da cobrança no Asaas", tipo: "texto" },
-    { path: "pagamentoLink", label: "Link de pagamento (fatura)", tipo: "link" },
+    { path: "pagamentoLink", label: "Link da cobrança (fatura de pagamento)", tipo: "link" },
   ],
   asaas_cancelar_cobranca: [],
   asaas_consultar_valor_aberto: [

@@ -13,6 +13,10 @@
  * (inversão de dependência) pra ser 100% testável.
  */
 
+// Helpers PUROS de data/fuso (sem I/O, só Intl) — usados pelos operadores de
+// condição por horário/dia. dispatcher-helpers só importa tipos, sem ciclo.
+import { avaliarHorarioEntre, avaliarDiaSemana } from "./dispatcher-helpers";
+
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 
 export interface SmartflowContexto {
@@ -33,6 +37,9 @@ export interface SmartflowContexto {
   /** Horário ISO escolhido pelo cliente no Atendente IA (ação agendar) — o bloco
    * de Agendamento usa como data. Sem ele, o Agendamento marcaria "agora". */
   agendamentoQuando?: string;
+  /** Horário escolhido, formatado pt-BR (ex: "27/05/2026 14:00") — pra mensagem
+   * de confirmação ("Data do Agendamento" no editor). */
+  agendamentoQuandoTexto?: string;
   /** false = horário pedido estava ocupado (agenda_criar não criou) */
   agendaDisponivel?: boolean;
   /** Qtd de compromissos em conflito no horário pedido (agenda_criar) */
@@ -1041,9 +1048,20 @@ async function handleIaAtendente(
     let novoCtx: SmartflowContexto = { ...ctx };
     if (typeof agendaResponsavelResolvidoId === "number") novoCtx.agendaResponsavelResolvidoId = agendaResponsavelResolvidoId;
     // Horário escolhido pelo cliente (vindo junto com a ação agendar) — vira
-    // variável `agendamentoQuando` pro bloco de Agendamento usar como data.
-    // Sem isso o Agendamento não sabe o horário e marca "agora".
-    if (typeof quando === "string" && quando.trim()) novoCtx.agendamentoQuando = quando.trim();
+    // variável `agendamentoQuando` (ISO, p/ o bloco de Agendamento usar como
+    // data) + `agendamentoQuandoTexto` (formatada pt-BR, p/ mensagem de
+    // confirmação). Sem isso o Agendamento não sabe o horário e marca "agora".
+    if (typeof quando === "string" && quando.trim()) {
+      const isoQuando = quando.trim();
+      novoCtx.agendamentoQuando = isoQuando;
+      const d = new Date(isoQuando);
+      if (!Number.isNaN(d.getTime())) {
+        novoCtx.agendamentoQuandoTexto = d.toLocaleString("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+          day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+        });
+      }
+    }
     delete (novoCtx as any).__resumindoWaitClienteId;
     delete (novoCtx as any).__resumindoWaitMotivo;
 
@@ -1642,6 +1660,12 @@ function avaliarCondicao(
       const tem = alvo.length > 0 && arr.some((t) => String(t).trim().toLowerCase() === alvo);
       return operador === "tem_tag" ? tem : !tem;
     }
+    case "horario_entre":
+      // Ignora `campo` — usa o horário ATUAL (Brasília). valor=início, valor2=fim.
+      return avaliarHorarioEntre(new Date(), valor, valor2 ?? "", "America/Sao_Paulo");
+    case "dia_semana":
+      // Ignora `campo` — usa o dia ATUAL (Brasília). valor="seg,ter,qua,qui,sex".
+      return avaliarDiaSemana(new Date(), valor, "America/Sao_Paulo");
     default:
       // Operador desconhecido — fallback `igual` para não quebrar cenários
       // legados que salvaram strings estranhas no campo.

@@ -1359,6 +1359,9 @@ describe("SmartFlow Engine", () => {
       ];
       const r = await executarCenario(passos, { ...ctxBase, mensagem: "pode ser 27 as 14" }, exec);
       expect(r.contexto.agendamentoQuando).toBe("2026-05-27T14:00:00-03:00");
+      // versão formatada pt-BR (Brasília) pra mensagem de confirmação
+      expect(String(r.contexto.agendamentoQuandoTexto)).toContain("27/05/2026");
+      expect(String(r.contexto.agendamentoQuandoTexto)).toContain("14:00");
     });
 
     it("ação NÃO habilitada é ignorada → continua conversando", async () => {
