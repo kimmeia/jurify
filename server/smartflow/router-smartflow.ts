@@ -8,7 +8,7 @@ import { requireModulo } from "../_core/trpc-gates";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
 import { getDb } from "../db";
-import { smartflowCenarios, smartflowPassos, smartflowExecucoes } from "../../drizzle/schema";
+import { smartflowCenarios, smartflowPassos, smartflowExecucoes, smartflowTemplates } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { executarManual } from "./dispatcher";
@@ -163,6 +163,40 @@ export const smartflowRouter = router({
         templates: [] as any[],
       };
     }
+  }),
+
+  /**
+   * Galeria: modelos publicados pelo admin (disponíveis para clonar).
+   * Retorna no formato `TemplateSmartflow` (id "db:<n>") pra alimentar a
+   * mesma galeria/wizard usada pelos templates internos.
+   */
+  listarTemplatesDisponiveis: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await db
+      .select()
+      .from(smartflowTemplates)
+      .where(eq(smartflowTemplates.disponivelParaClientes, true))
+      .orderBy(desc(smartflowTemplates.updatedAt));
+    return rows.map((r) => {
+      let passos: any[] = [];
+      let configGatilho: Record<string, unknown> | undefined;
+      try { passos = JSON.parse(r.passos); } catch { passos = []; }
+      try { configGatilho = r.configGatilho ? JSON.parse(r.configGatilho) : undefined; } catch { configGatilho = undefined; }
+      return {
+        id: `db:${r.id}`,
+        nome: r.nome,
+        descricao: r.descricao,
+        icone: r.icone,
+        gradiente: r.gradiente,
+        gatilho: r.gatilho,
+        configGatilho,
+        passos,
+        categoria: r.categoria || undefined,
+        badge: r.badge || undefined,
+        dica: r.dica || undefined,
+      };
+    });
   }),
 
   /** Lista cenários do escritório */
@@ -436,8 +470,40 @@ export const smartflowRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      const { getTemplate } = await import("../../shared/smartflow-templates");
-      const tpl = getTemplate(input.templateId);
+      // Resolve o template: modelos do banco (admin) usam id "db:<n>";
+      // os internos (hardcoded) usam o id textual de TEMPLATES_SMARTFLOW.
+      let tpl: import("../../shared/smartflow-templates").TemplateSmartflow | null = null;
+      let origemTemplateId: number | null = null;
+      if (input.templateId.startsWith("db:")) {
+        const tplId = Number(input.templateId.slice(3));
+        const [row] = await db
+          .select()
+          .from(smartflowTemplates)
+          .where(and(eq(smartflowTemplates.id, tplId), eq(smartflowTemplates.disponivelParaClientes, true)))
+          .limit(1);
+        if (row) {
+          let passos: any[] = [];
+          let configGatilho: Record<string, unknown> | undefined;
+          try { passos = JSON.parse(row.passos); } catch { passos = []; }
+          try { configGatilho = row.configGatilho ? JSON.parse(row.configGatilho) : undefined; } catch { configGatilho = undefined; }
+          tpl = {
+            id: input.templateId,
+            nome: row.nome,
+            descricao: row.descricao,
+            icone: row.icone,
+            gradiente: row.gradiente,
+            gatilho: row.gatilho as GatilhoSmartflow,
+            configGatilho,
+            passos,
+            badge: (row.badge as "popular" | "novo") || undefined,
+            dica: row.dica || undefined,
+          };
+          origemTemplateId = tplId;
+        }
+      } else {
+        const { getTemplate } = await import("../../shared/smartflow-templates");
+        tpl = getTemplate(input.templateId);
+      }
       if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado." });
 
       const nomeFinal = input.nome?.trim() || tpl.nome;
@@ -454,6 +520,7 @@ export const smartflowRouter = router({
         gatilho: tpl.gatilho,
         configGatilho: temConfigGatilho ? JSON.stringify(configGatilhoFinal) : null,
         criadoPor: ctx.user.id,
+        origemTemplateId,
         // Templates nascem inativos — usuário revisa e ativa quando estiver pronto.
         ativo: false,
       });
