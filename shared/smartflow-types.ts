@@ -370,7 +370,38 @@ export interface ConfigCalcomRemarcar {
   motivo?: string;
 }
 export interface ConfigWhatsappEnviar {
+  /** "texto" (padrão) = mensagem livre; "template" = template aprovado (HSM) da Meta. */
+  modo?: "texto" | "template";
+  /** Texto livre (modo "texto"). */
   template?: string;
+
+  // ===== modo "template" (WhatsApp oficial / API Meta) =====
+  /** Nome do template aprovado na Meta. */
+  templateNome?: string;
+  /** Código de idioma do template (ex.: "pt_BR", "en_US"). */
+  templateIdioma?: string;
+  /**
+   * Cabeçalho do template quando ele tem header com mídia ou variável de
+   * texto. `valor` é a URL da mídia (image/video/document) ou o valor da
+   * variável de texto — interpolável com `{{...}}`.
+   */
+  templateHeader?: {
+    formato?: "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
+    valor?: string;
+    /** Nome do arquivo exibido (apenas DOCUMENT). */
+    nomeArquivo?: string;
+  };
+  /** Valores das variáveis {{1}}, {{2}}… do corpo, na ordem — interpoláveis. */
+  templateCorpo?: string[];
+  /**
+   * Botões com parte dinâmica: URL com sufixo variável, quick_reply com
+   * payload, ou copy_code. `valor` é a parte dinâmica — interpolável.
+   */
+  templateBotoes?: Array<{
+    index: number;
+    tipo: "URL" | "QUICK_REPLY" | "COPY_CODE";
+    valor?: string;
+  }>;
 }
 
 /**

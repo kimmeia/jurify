@@ -121,6 +121,50 @@ export const smartflowRouter = router({
     });
   }),
 
+  /**
+   * Lista os templates (HSM) aprovados do canal WhatsApp oficial (API Meta)
+   * do escritório — usado pelo editor pra montar o bloco "Enviar mensagem"
+   * no modo template. Degrada com mensagem clara quando não há canal oficial
+   * conectado ou a Meta recusa a consulta (em vez de quebrar a UI).
+   */
+  listarTemplatesWhatsapp: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "smartflow", "ver");
+    if (!perm.allowed) {
+      return { disponivel: false, motivo: "Sem permissão para ver SmartFlow.", templates: [] as any[] };
+    }
+    const { getCanalCloudApi } = await import("../integracoes/canal-envio");
+    const cred = await getCanalCloudApi(perm.escritorioId);
+    if (!cred) {
+      return {
+        disponivel: false,
+        motivo: "Nenhum canal WhatsApp oficial (API Meta) conectado. Templates só funcionam com a API oficial — conecte-a em Configurações › Canais.",
+        templates: [] as any[],
+      };
+    }
+    if (!cred.wabaId) {
+      return {
+        disponivel: false,
+        motivo: "O canal oficial está sem o WABA ID — não dá pra listar os templates. Reconecte o canal pela API oficial.",
+        templates: [] as any[],
+      };
+    }
+    try {
+      const { WhatsAppCloudClient } = await import("../integracoes/whatsapp-cloud");
+      const client = new WhatsAppCloudClient({ accessToken: cred.accessToken, phoneNumberId: cred.phoneNumberId });
+      const todos = await client.listarTemplates(cred.wabaId);
+      const aprovados = todos.filter((t) => String(t.status).toUpperCase() === "APPROVED");
+      return { disponivel: true, motivo: null as string | null, templates: aprovados };
+    } catch (e: any) {
+      const apiMsg = e?.response?.data?.error?.message;
+      log.warn({ err: apiMsg || e?.message }, "Falha ao listar templates WhatsApp");
+      return {
+        disponivel: false,
+        motivo: apiMsg || e?.message || "Falha ao consultar os templates na Meta.",
+        templates: [] as any[],
+      };
+    }
+  }),
+
   /** Lista cenários do escritório */
   listar: protectedProcedure.query(async ({ ctx }) => {
     const perm = await checkPermission(ctx.user.id, "smartflow", "ver");
