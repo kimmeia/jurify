@@ -148,12 +148,39 @@ const MODELOS_DISPONIVEIS = [
     custoDesc: "/1k convs",
   },
   {
+    id: "gpt-4.1",
+    provider: "openai" as const,
+    nome: "GPT-4.1",
+    tier: "Avançado",
+    feat: "Contexto longo · precisão",
+    custo: "R$ 0,80",
+    custoDesc: "/1k convs",
+  },
+  {
+    id: "gpt-5",
+    provider: "openai" as const,
+    nome: "GPT-5",
+    tier: "Raciocínio",
+    feat: "Nova geração · uso geral",
+    custo: "R$ 1,10",
+    custoDesc: "/1k convs",
+  },
+  {
     id: "gpt-5.1",
     provider: "openai" as const,
     nome: "GPT-5.1",
-    tier: "Avançado",
-    feat: "Raciocínio forte · casos complexos",
-    custo: "R$ 1,20",
+    tier: "Raciocínio",
+    feat: "Aprimorado · casos complexos",
+    custo: "R$ 1,30",
+    custoDesc: "/1k convs",
+  },
+  {
+    id: "gpt-5.2",
+    provider: "openai" as const,
+    nome: "GPT-5.2",
+    tier: "Raciocínio",
+    feat: "Mais preciso e consistente",
+    custo: "R$ 1,50",
     custoDesc: "/1k convs",
   },
   {
@@ -162,7 +189,7 @@ const MODELOS_DISPONIVEIS = [
     nome: "GPT-5.5",
     tier: "Topo de linha",
     feat: "Flagship · máxima capacidade",
-    custo: "R$ 1,80",
+    custo: "R$ 1,90",
     custoDesc: "/1k convs",
   },
   {
@@ -392,6 +419,7 @@ function AgenteFormDialog({
   };
 
   const temperaturaNum = parseFloat(form.temperatura) || 0.7;
+  const modeloRaciocinio = /^(gpt-[5-9]|o[1-9])/i.test(form.modelo || "");
   // Modelos disponíveis baseados em quais provedores estão conectados
   const modelosDisponiveis = MODELOS_DISPONIVEIS.filter((m) =>
     m.provider === "openai" ? chatgptConfigurado
@@ -415,7 +443,7 @@ function AgenteFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
         {/* Header simples */}
         <DialogHeader className="px-5 py-3 border-b">
           <DialogTitle className="flex items-center gap-2 text-base">
@@ -494,7 +522,7 @@ function AgenteFormDialog({
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Modelo (cérebro do agente)</p>
             {algumIAConfigurado ? (
               <>
-                <div className={`grid gap-1.5 ${modelosDisponiveis.length >= 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+                <div className="grid gap-1.5 grid-cols-2 sm:grid-cols-3">
                   {modelosDisponiveis.map((m) => {
                     const active = form.modelo === m.id;
                     return (
@@ -560,13 +588,14 @@ function AgenteFormDialog({
               </button>
             </div>
             <Textarea
-              rows={5}
+              rows={8}
               placeholder="Defina a personalidade e instruções do agente..."
               value={form.prompt}
               onChange={(e) => setForm({ ...form, prompt: e.target.value })}
               className="text-sm"
+              maxLength={32000}
             />
-            <p className="text-[10px] text-muted-foreground text-right mt-1">{form.prompt.length} / 8000</p>
+            <p className="text-[10px] text-muted-foreground text-right mt-1">{form.prompt.length.toLocaleString("pt-BR")} / 32.000</p>
           </div>
 
           {/* Tom (slider) + Tamanho (tokens) */}
@@ -592,6 +621,11 @@ function AgenteFormDialog({
                 <span>Preciso</span>
                 <span>Criativo</span>
               </div>
+              {modeloRaciocinio && (
+                <p className="text-[9px] text-muted-foreground mt-1 italic">
+                  GPT-5 responde no tom padrão — este controle não se aplica.
+                </p>
+              )}
             </div>
             <div>
               <Label className="text-xs">Tamanho da resposta</Label>

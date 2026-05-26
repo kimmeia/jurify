@@ -16,6 +16,7 @@ import { agentesAdmin, agenteDocumentos, adminIntegracoes } from "../../drizzle/
 import { registrarAuditoria } from "../_core/audit";
 import { decrypt } from "../escritorio/crypto-utils";
 import { createLogger } from "../_core/logger";
+import { montarBodyOpenAIChat } from "../_core/openai-model-params";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -147,7 +148,7 @@ export const adminAgentesIaRouter = router({
         "claude-sonnet-4-20250514",
         "claude-haiku-4-5-20251001",
       ]).default("gpt-4o-mini"),
-      prompt: z.string().min(10).max(8000),
+      prompt: z.string().min(10).max(32000),
       temperatura: z.string().default("0.70"),
       maxTokens: z.number().min(50).max(4000).default(800),
       modulosPermitidos: z.array(z.string()).optional(),
@@ -201,7 +202,7 @@ export const adminAgentesIaRouter = router({
         "claude-sonnet-4-20250514",
         "claude-haiku-4-5-20251001",
       ]).optional(),
-      prompt: z.string().min(10).max(8000).optional(),
+      prompt: z.string().min(10).max(32000).optional(),
       temperatura: z.string().optional(),
       maxTokens: z.number().min(50).max(4000).optional(),
       modulosPermitidos: z.array(z.string()).optional(),
@@ -535,15 +536,15 @@ export const adminAgentesIaRouter = router({
             Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
+          body: JSON.stringify(montarBodyOpenAIChat({
             model: agente.modelo,
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: input.pergunta },
             ],
-            temperature: temperatura,
-            max_tokens: agente.maxTokens,
-          }),
+            temperatura,
+            maxTokens: agente.maxTokens,
+          })),
           signal: AbortSignal.timeout(30000),
         });
 
