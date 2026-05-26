@@ -30,6 +30,9 @@ export interface SmartflowContexto {
   agendamentoId?: string;
   /** ID do compromisso criado na Agenda interna (passo agenda_criar) */
   agendamentoInternoId?: number;
+  /** Horário ISO escolhido pelo cliente no Atendente IA (ação agendar) — o bloco
+   * de Agendamento usa como data. Sem ele, o Agendamento marcaria "agora". */
+  agendamentoQuando?: string;
   /** false = horário pedido estava ocupado (agenda_criar não criou) */
   agendaDisponivel?: boolean;
   /** Qtd de compromissos em conflito no horário pedido (agenda_criar) */
@@ -249,7 +252,8 @@ export interface SmartflowExecutores {
   /**
    * "Atendente IA": o agente conduz a conversa (roteiro no prompt) e decide se
    * continua conversando ou dispara uma das `ferramentas` habilitadas. Retorna
-   * o texto a enviar + a ação escolhida (uma das ferramentas) ou null (continua).
+   * o texto a enviar + a ação escolhida (uma das ferramentas) ou null (continua),
+   * e `quando` (ISO do horário que o cliente escolheu) quando a ação é agendar.
    */
   conversarComAgente: (params: {
     agenteId: number;
@@ -262,7 +266,7 @@ export interface SmartflowExecutores {
     mensagem: string;
     contatoId?: number;
     conversaId?: number;
-  }) => Promise<{ resposta: string; acao: string | null }>;
+  }) => Promise<{ resposta: string; acao: string | null; quando?: string | null }>;
   /**
    * Resolve quem é o dono da agenda pra um atendimento, em cascata:
    *   responsavelIdPreferido (advogado fixo) → atendente da conversa →
@@ -902,7 +906,7 @@ export function interpretarSaidaAtendente(
   raw: string,
   ferramentas: string[],
   consultas: string[] = [],
-): { resposta: string; acao: string | null; consulta: string | null } {
+): { resposta: string; acao: string | null; consulta: string | null; quando: string | null } {
   const stripped = (raw || "")
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/i, "")
@@ -917,17 +921,20 @@ export function interpretarSaidaAtendente(
   if (ini >= 0 && fim > ini) candidatos.push(stripped.slice(ini, fim + 1));
   for (const cand of candidatos) {
     try {
-      const p = JSON.parse(cand) as { resposta?: unknown; acao?: unknown; consulta?: unknown };
+      const p = JSON.parse(cand) as { resposta?: unknown; acao?: unknown; consulta?: unknown; quando?: unknown };
       if (p && typeof p.resposta === "string") {
         const acao = typeof p.acao === "string" && ferramentas.includes(p.acao) ? p.acao : null;
         const consulta = typeof p.consulta === "string" && consultas.includes(p.consulta) ? p.consulta : null;
-        return { resposta: p.resposta, acao, consulta };
+        // `quando`: horário ISO que o cliente escolheu (preenchido junto com a
+        // ação agendar). Vira variável pro bloco de Agendamento usar como data.
+        const quando = typeof p.quando === "string" && p.quando.trim() ? p.quando.trim() : null;
+        return { resposta: p.resposta, acao, consulta, quando };
       }
     } catch {
       /* tenta o próximo candidato */
     }
   }
-  return { resposta: raw || "", acao: null, consulta: null };
+  return { resposta: raw || "", acao: null, consulta: null, quando: null };
 }
 
 /**
@@ -945,24 +952,24 @@ export async function orquestrarAtendente(opts: {
   chamarLLM: (extraContexto: string) => Promise<string>;
   executarConsulta: (nome: string) => Promise<string>;
   maxRodadas?: number;
-}): Promise<{ resposta: string; acao: string | null }> {
+}): Promise<{ resposta: string; acao: string | null; quando: string | null }> {
   const max = Math.max(1, opts.maxRodadas ?? 3);
   let extra = "";
   for (let i = 0; i < max; i++) {
     const raw = await opts.chamarLLM(extra);
-    const { resposta, acao, consulta } = interpretarSaidaAtendente(raw, opts.ferramentas, opts.consultas);
+    const { resposta, acao, consulta, quando } = interpretarSaidaAtendente(raw, opts.ferramentas, opts.consultas);
     if (consulta) {
       const resultado = await opts.executarConsulta(consulta);
       extra += `${extra ? "\n\n" : ""}[Resultado da consulta "${consulta}"]:\n${resultado}`;
       continue; // re-chama o agente com o resultado em mãos
     }
-    return { resposta, acao };
+    return { resposta, acao, quando };
   }
   // Esgotou as rodadas de consulta — força uma resposta final sem ação,
   // pedindo pro agente concluir com o que já tem.
   const raw = await opts.chamarLLM(`${extra}\n\n[Pare de consultar e responda ao cliente agora.]`);
   const { resposta } = interpretarSaidaAtendente(raw, opts.ferramentas, opts.consultas);
-  return { resposta, acao: null };
+  return { resposta, acao: null, quando: null };
 }
 
 /**
@@ -1019,7 +1026,7 @@ async function handleIaAtendente(
       ? { responsavelId: agendaResponsavelResolvidoId ?? cc?.responsavelId, duracaoMin: cc?.duracaoMin, dias: cc?.dias }
       : undefined;
 
-    const { resposta, acao } = await exec.conversarComAgente({
+    const { resposta, acao, quando } = await exec.conversarComAgente({
       agenteId: cfg.agenteId,
       roteiro: cfg.roteiro,
       ferramentas,
@@ -1033,6 +1040,10 @@ async function handleIaAtendente(
     // Limpa flags de retomada (este nó re-executa, não "passa direto").
     let novoCtx: SmartflowContexto = { ...ctx };
     if (typeof agendaResponsavelResolvidoId === "number") novoCtx.agendaResponsavelResolvidoId = agendaResponsavelResolvidoId;
+    // Horário escolhido pelo cliente (vindo junto com a ação agendar) — vira
+    // variável `agendamentoQuando` pro bloco de Agendamento usar como data.
+    // Sem isso o Agendamento não sabe o horário e marca "agora".
+    if (typeof quando === "string" && quando.trim()) novoCtx.agendamentoQuando = quando.trim();
     delete (novoCtx as any).__resumindoWaitClienteId;
     delete (novoCtx as any).__resumindoWaitMotivo;
 
@@ -2337,10 +2348,23 @@ async function handleAgendaCriar(
 
   // Data: distingue "horário específico" de "sem horário" (vazio → agora/pendente).
   const resolverData = () => {
-    const dataRaw = cfg.dataInicio ? interpolarVariaveis(cfg.dataInicio, ctx as any).trim() : "";
-    const p = dataRaw ? new Date(dataRaw) : null;
-    const especifico = !!p && !Number.isNaN(p.getTime());
-    const dataInicio = especifico ? (p as Date) : new Date();
+    // Fontes da data, em ordem de prioridade: (1) `dataInicio` da config (o
+    // usuário pode fixar/usar variável); (2) `agendamentoQuando` — o horário ISO
+    // que o cliente escolheu no Atendente IA. Sem nenhuma data válida, cai em
+    // "agora" (compat). A fonte (2) conserta o bug "agendou no horário errado":
+    // antes o horário escolhido não chegava aqui e marcava sempre em new Date().
+    const fontes = [
+      cfg.dataInicio ? interpolarVariaveis(cfg.dataInicio, ctx as any).trim() : "",
+      typeof ctx.agendamentoQuando === "string" ? ctx.agendamentoQuando.trim() : "",
+    ];
+    let escolhida: Date | null = null;
+    for (const f of fontes) {
+      if (!f) continue;
+      const d = new Date(f);
+      if (!Number.isNaN(d.getTime())) { escolhida = d; break; }
+    }
+    const especifico = !!escolhida;
+    const dataInicio = escolhida ?? new Date();
     const duracao = Number(cfg.duracaoMinutos) > 0 ? Number(cfg.duracaoMinutos) : 60;
     const dataFim = new Date(dataInicio.getTime() + duracao * 60 * 1000);
     return { dataInicio, dataFim, especifico };
