@@ -1,30 +1,40 @@
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Users,
   CreditCard,
-  TrendingUp,
   TrendingDown,
   DollarSign,
-  UserPlus,
-  UserCheck,
   AlertCircle,
   Activity,
   Target,
+  Zap,
+  UserCheck,
+  UserPlus,
+  Crown,
 } from "lucide-react";
+import {
+  HeroCard,
+  KPICard,
+  Avatar,
+  formatBRL,
+} from "./dashboards/common";
+
+function ymd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dia}`;
+}
 
 export default function AdminDashboard() {
   const { data: stats, isLoading: statsLoading } = trpc.admin.stats.useQuery(undefined, {
+    retry: false,
+  });
+
+  const { data: churn, isLoading: churnLoading } = trpc.admin.metricasChurn.useQuery(undefined, {
     retry: false,
   });
 
@@ -36,282 +46,237 @@ export default function AdminDashboard() {
     retry: false,
   });
 
-  const formatCurrency = (cents: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
+  const now = new Date();
+  const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const mrr = stats?.mrr ?? 0;
+  const arr = mrr * 12;
+  const assinantesPagantes = stats?.activeSubscriptions ?? 0;
+  const ticketMedio = assinantesPagantes > 0 ? mrr / assinantesPagantes : 0;
+  const conversao = stats?.conversionRate ?? 0;
+  const retencao = churn?.retencao12m ?? 0;
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Visão Geral
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Acompanhe as vendas, assinaturas e crescimento da plataforma.
-        </p>
-      </div>
+    <div className="space-y-6">
+      {/* ─── Hero executivo ─── */}
+      {statsLoading ? (
+        <Skeleton className="h-56 w-full rounded-2xl" />
+      ) : (
+        <HeroCard
+          tema="geral"
+          setorLabel="Plataforma · Visão consolidada"
+          periodo={{ dataInicio: ymd(inicioMes), dataFim: ymd(now) }}
+          badgeDireito={
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/15 border border-white/20">
+              <Zap className="h-3.5 w-3.5" /> Tempo real
+            </span>
+          }
+          tituloPrincipal="Receita recorrente mensal (MRR)"
+          valorPrincipal={formatBRL(mrr / 100)}
+          legenda={
+            <>
+              ARR projetado: {formatBRL(arr / 100)}
+              {ticketMedio > 0 && <> · ticket médio {formatBRL(ticketMedio / 100)}/mês</>}
+            </>
+          }
+          progresso={{
+            valor: conversao,
+            labelDir: <span>{conversao}%</span>,
+          }}
+          ringValue={retencao}
+          ringLabel={`${retencao}%`}
+          ringSublabel="Retenção 12m"
+          decoracaoIcon={Activity}
+        />
+      )}
 
-      {/* KPI Cards */}
+      {/* ─── KPI cards ─── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Receita Mensal (MRR)
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            {statsLoading ? (
-              <Skeleton className="h-8 w-24" />
-            ) : (
-              <>
-                <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(stats?.mrr ?? 0)}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Receita recorrente mensal
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Assinaturas Ativas
-            </CardTitle>
-            <CreditCard className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            {statsLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <>
-                <p className="text-2xl font-bold text-foreground">
-                  {stats?.activeSubscriptions ?? 0}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {stats?.trialingSubscriptions
-                    ? `+ ${stats.trialingSubscriptions} em trial`
-                    : "Planos ativos no momento"}
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total de Clientes
-            </CardTitle>
-            <Users className="h-4 w-4 text-violet-500" />
-          </CardHeader>
-          <CardContent>
-            {statsLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <>
-                <p className="text-2xl font-bold text-foreground">
-                  {stats?.totalClients ?? 0}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {stats?.newClientsThisMonth
-                    ? `+${stats.newClientsThisMonth} este mês`
-                    : "Utilizadores registados"}
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Taxa de Conversão
-            </CardTitle>
-            <TrendingUp className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            {statsLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <>
-                <p className="text-2xl font-bold text-foreground">
-                  {stats?.conversionRate ?? 0}%
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Clientes com plano ativo
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <KPICard
+          label="Receita mensal (MRR)"
+          value={statsLoading ? <Skeleton className="h-7 w-24" /> : formatBRL(mrr / 100)}
+          icon={DollarSign}
+          iconBg="bg-emerald-500/10"
+          iconFg="text-emerald-600"
+        />
+        <KPICard
+          label="Assinaturas ativas"
+          value={statsLoading ? <Skeleton className="h-7 w-16" /> : assinantesPagantes}
+          icon={CreditCard}
+          iconBg="bg-indigo-500/10"
+          iconFg="text-indigo-600"
+          hint={
+            stats?.trialingSubscriptions
+              ? `+ ${stats.trialingSubscriptions} em trial`
+              : "Planos ativos no momento"
+          }
+        />
+        <KPICard
+          label="Total de clientes"
+          value={statsLoading ? <Skeleton className="h-7 w-16" /> : (stats?.totalClients ?? 0)}
+          icon={Users}
+          iconBg="bg-violet-500/10"
+          iconFg="text-violet-600"
+          badge={
+            stats?.newClientsThisMonth ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700">
+                +{stats.newClientsThisMonth} este mês
+              </span>
+            ) : undefined
+          }
+        />
+        <KPICard
+          label="Conversão trial → pago"
+          value={statsLoading ? <Skeleton className="h-7 w-16" /> : `${conversao}%`}
+          icon={Target}
+          iconBg="bg-amber-500/10"
+          iconFg="text-amber-600"
+          hint="Clientes com plano ativo"
+        />
       </div>
 
-      {/* Secondary stats */}
+      {/* ─── Churn & retenção ─── */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+          <Activity className="h-4 w-4 text-muted-foreground" /> Churn & retenção
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <KPICard
+            label="Média móvel de cancelamentos"
+            value={
+              churnLoading ? (
+                <Skeleton className="h-7 w-20" />
+              ) : (
+                `${(churn?.churnAtual ?? 0).toFixed(2)}%`
+              )
+            }
+            icon={TrendingDown}
+            iconBg="bg-rose-500/10"
+            iconFg="text-rose-600"
+            valueColor={churnColor(churn?.churnAtual ?? 0)}
+            hint="Churn (últimos 3 meses)"
+          />
+          <KPICard
+            label="ARPU ÷ churn rate mensal"
+            value={churnLoading ? <Skeleton className="h-7 w-28" /> : formatBRL((churn?.ltvEstimado ?? 0) / 100)}
+            icon={Target}
+            iconBg="bg-violet-500/10"
+            iconFg="text-violet-600"
+            hint="LTV estimado"
+          />
+          <KPICard
+            label="Clientes antigos ainda ativos"
+            value={churnLoading ? <Skeleton className="h-7 w-20" /> : `${retencao}%`}
+            icon={Activity}
+            iconBg="bg-indigo-500/10"
+            iconFg="text-indigo-600"
+            hint="Retenção 12 meses"
+          />
+        </div>
+      </div>
+
+      {/* ─── Distribuição por plano ─── */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                <UserCheck className="h-5 w-5 text-emerald-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Plano Básico</p>
-                {statsLoading ? (
-                  <Skeleton className="h-6 w-10 mt-1" />
-                ) : (
-                  <p className="text-xl font-bold text-foreground">
-                    {stats?.planBreakdown?.basico ?? 0}
-                  </p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <UserPlus className="h-5 w-5 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Plano Intermediário</p>
-                {statsLoading ? (
-                  <Skeleton className="h-6 w-10 mt-1" />
-                ) : (
-                  <p className="text-xl font-bold text-foreground">
-                    {stats?.planBreakdown?.intermediario ?? 0}
-                  </p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="h-10 w-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-violet-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Plano Completo</p>
-                {statsLoading ? (
-                  <Skeleton className="h-6 w-10 mt-1" />
-                ) : (
-                  <p className="text-xl font-bold text-foreground">
-                    {stats?.planBreakdown?.completo ?? 0}
-                  </p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <PlanoCard
+          tom="emerald"
+          icon={UserCheck}
+          label="Plano Básico"
+          value={stats?.planBreakdown?.basico ?? 0}
+          loading={statsLoading}
+        />
+        <PlanoCard
+          tom="blue"
+          icon={UserPlus}
+          label="Plano Intermediário"
+          value={stats?.planBreakdown?.intermediario ?? 0}
+          loading={statsLoading}
+        />
+        <PlanoCard
+          tom="violet"
+          icon={Crown}
+          label="Plano Completo"
+          value={stats?.planBreakdown?.completo ?? 0}
+          loading={statsLoading}
+        />
       </div>
 
-      {/* Churn e retenção — Sprint 3 */}
-      <ChurnSection />
-
-      {/* Two-column layout: Recent Subscriptions + Recent Clients */}
+      {/* ─── Tabelas: últimas assinaturas + novos clientes ─── */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Recent Subscriptions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Últimas Assinaturas</CardTitle>
-            <CardDescription>
+        <Card className="overflow-hidden">
+          <div className="px-5 pt-5 pb-3 border-b border-border">
+            <h3 className="text-base font-semibold text-foreground">Últimas assinaturas</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
               Assinaturas mais recentes na plataforma.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <CardContent className="p-0">
             {subsLoading ? (
-              <div className="space-y-3">
+              <div className="space-y-3 p-5">
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
             ) : recentSubs && recentSubs.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Plano</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentSubs.map((sub) => (
-                    <TableRow key={sub.id}>
-                      <TableCell className="font-medium text-sm">
+              <ul className="divide-y divide-border">
+                {recentSubs.map((sub) => (
+                  <li key={sub.id} className="flex items-center gap-3 px-5 py-3">
+                    <Avatar nome={sub.userName || "—"} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate text-foreground">
                         {sub.userName || "—"}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {sub.planName || "—"}
-                      </TableCell>
-                      <TableCell>
-                        <SubscriptionStatusBadge status={sub.status} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {sub.planName || "Sem plano"}
+                      </p>
+                    </div>
+                    <SubscriptionStatusBadge status={sub.status} />
+                  </li>
+                ))}
+              </ul>
             ) : (
-              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <AlertCircle className="h-8 w-8 mb-2 opacity-50" />
-                <p className="text-sm">Nenhuma assinatura encontrada.</p>
-              </div>
+              <EmptyState texto="Nenhuma assinatura encontrada." />
             )}
           </CardContent>
         </Card>
 
-        {/* Recent Clients */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Novos Clientes</CardTitle>
-            <CardDescription>
+        <Card className="overflow-hidden">
+          <div className="px-5 pt-5 pb-3 border-b border-border">
+            <h3 className="text-base font-semibold text-foreground">Novos clientes</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
               Últimos clientes registados na plataforma.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <CardContent className="p-0">
             {usersLoading ? (
-              <div className="space-y-3">
+              <div className="space-y-3 p-5">
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
             ) : recentUsers && recentUsers.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Registado em</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentUsers.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell className="font-medium text-sm">
+              <ul className="divide-y divide-border">
+                {recentUsers.map((u) => (
+                  <li key={u.id} className="flex items-center gap-3 px-5 py-3">
+                    <Avatar nome={u.name || u.email || "—"} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate text-foreground">
                         {u.name || "—"}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
                         {u.email || "—"}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(u.createdAt).toLocaleDateString("pt-BR")}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                      </p>
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {new Date(u.createdAt).toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "short",
+                      })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             ) : (
-              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <AlertCircle className="h-8 w-8 mb-2 opacity-50" />
-                <p className="text-sm">Nenhum cliente encontrado.</p>
-              </div>
+              <EmptyState texto="Nenhum cliente encontrado." />
             )}
           </CardContent>
         </Card>
@@ -320,8 +285,70 @@ export default function AdminDashboard() {
   );
 }
 
+function churnColor(rate: number): string {
+  if (rate < 3) return "text-emerald-600";
+  if (rate < 7) return "text-amber-600";
+  return "text-rose-600";
+}
+
+const PLANO_TONS: Record<
+  "emerald" | "blue" | "violet",
+  { iconBg: string; iconFg: string }
+> = {
+  emerald: { iconBg: "bg-emerald-500/10", iconFg: "text-emerald-600" },
+  blue: { iconBg: "bg-blue-500/10", iconFg: "text-blue-600" },
+  violet: { iconBg: "bg-violet-500/10", iconFg: "text-violet-600" },
+};
+
+function PlanoCard({
+  tom,
+  icon: Icon,
+  label,
+  value,
+  loading,
+}: {
+  tom: "emerald" | "blue" | "violet";
+  icon: typeof UserCheck;
+  label: string;
+  value: number;
+  loading: boolean;
+}) {
+  const c = PLANO_TONS[tom];
+  return (
+    <Card>
+      <CardContent className="pt-5 pb-5">
+        <div className="flex items-center gap-4">
+          <div className={`h-10 w-10 rounded-xl ${c.iconBg} flex items-center justify-center`}>
+            <Icon className={`h-5 w-5 ${c.iconFg}`} />
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">{label}</p>
+            {loading ? (
+              <Skeleton className="h-6 w-10 mt-1" />
+            ) : (
+              <p className="text-xl font-bold text-foreground tabular-nums">{value}</p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyState({ texto }: { texto: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+      <AlertCircle className="h-8 w-8 mb-2 opacity-50" />
+      <p className="text-sm">{texto}</p>
+    </div>
+  );
+}
+
 function SubscriptionStatusBadge({ status }: { status: string }) {
-  const variants: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  const variants: Record<
+    string,
+    { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
+  > = {
     active: { label: "Ativa", variant: "default" },
     trialing: { label: "Trial", variant: "secondary" },
     canceled: { label: "Cancelada", variant: "destructive" },
@@ -333,97 +360,9 @@ function SubscriptionStatusBadge({ status }: { status: string }) {
 
   const config = variants[status] || { label: status, variant: "outline" as const };
 
-  return <Badge variant={config.variant} className="text-[10px]">{config.label}</Badge>;
-}
-
-/**
- * Seção de churn e retenção — mostra taxa de churn atual, LTV estimado
- * e retenção dos últimos 12 meses. Dados agregados no backend.
- */
-function ChurnSection() {
-  const { data: churn, isLoading } = trpc.admin.metricasChurn.useQuery(undefined, {
-    retry: false,
-  });
-
-  const formatCurrency = (cents: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
-
-  const churnColor = (rate: number) => {
-    if (rate < 3) return "text-emerald-600";
-    if (rate < 7) return "text-amber-600";
-    return "text-red-600";
-  };
-
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Churn (últimos 3 meses)
-          </CardTitle>
-          <TrendingDown className="h-4 w-4 text-red-500" />
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Skeleton className="h-8 w-20" />
-          ) : (
-            <>
-              <p className={`text-2xl font-bold ${churnColor(churn?.churnAtual ?? 0)}`}>
-                {(churn?.churnAtual ?? 0).toFixed(2)}%
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Média móvel de cancelamentos mensais
-              </p>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            LTV estimado
-          </CardTitle>
-          <Target className="h-4 w-4 text-violet-500" />
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Skeleton className="h-8 w-28" />
-          ) : (
-            <>
-              <p className="text-2xl font-bold text-foreground">
-                {formatCurrency(churn?.ltvEstimado ?? 0)}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                ARPU ÷ churn rate mensal
-              </p>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Retenção 12 meses
-          </CardTitle>
-          <Activity className="h-4 w-4 text-blue-500" />
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Skeleton className="h-8 w-20" />
-          ) : (
-            <>
-              <p className="text-2xl font-bold text-foreground">
-                {churn?.retencao12m ?? 0}%
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Clientes antigos ainda ativos
-              </p>
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+    <Badge variant={config.variant} className="text-[10px] shrink-0">
+      {config.label}
+    </Badge>
   );
 }

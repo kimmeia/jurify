@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JuridFlow — Redesign Admin · Clientes</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; background: #f6f7fb; }
+  .font-display { font-family: 'Poppins', 'Inter', sans-serif; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  .pulse-dot { position: relative; width: 6px; height: 6px; }
+  .pulse-dot::before { content:''; position:absolute; inset:0; border-radius:9999px; background:#6ee7b7; opacity:.75; animation: ping 1.6s cubic-bezier(0,0,.2,1) infinite; }
+  .pulse-dot::after { content:''; position:absolute; inset:0; border-radius:9999px; background:#34d399; }
+  @keyframes ping { 75%,100% { transform: scale(2.4); opacity:0; } }
+  .nav-item.active { background:#eef2ff; color:#4f46e5; font-weight:600; }
+  .nav-item.active .nav-ico { color:#4f46e5; }
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:9999px; }
+</style>
+</head>
+<body class="text-slate-900">
+
+<!-- BARRA EXPLICATIVA -->
+<div class="bg-slate-900 text-white py-3 px-6 text-sm flex items-center justify-between gap-4 sticky top-0 z-50">
+  <div class="flex items-center gap-2 min-w-0">
+    <i data-lucide="users" class="w-4 h-4 text-indigo-300 shrink-0"></i>
+    <span class="font-semibold truncate">Redesign Admin · aba Clientes</span>
+    <span class="text-slate-500 hidden sm:inline">·</span>
+    <span class="text-slate-400 hidden sm:inline truncate">Lista = só donos/assinantes · Assinatura + Equipe agora dentro do cadastro</span>
+  </div>
+  <span class="text-xs text-slate-400 shrink-0 hidden md:inline">Clique numa linha da lista para abrir o cadastro →</span>
+</div>
+
+<div class="flex min-h-[calc(100vh-49px)]">
+  <!-- SIDEBAR (compacta) -->
+  <aside class="w-[220px] shrink-0 bg-[#fbfbfe] border-r border-slate-200 flex flex-col">
+    <div class="h-16 flex items-center gap-2 px-4 border-b border-slate-100">
+      <span class="font-semibold tracking-tight text-slate-800">Admin</span>
+      <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-600 text-white">Painel</span>
+    </div>
+    <nav class="flex-1 px-2 py-2 space-y-0.5 text-sm">
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="layout-dashboard" class="nav-ico w-4 h-4 text-slate-500"></i>Visão Geral</div>
+      <div class="nav-item active flex items-center gap-3 h-9 px-3 rounded-lg"><i data-lucide="users" class="nav-ico w-4 h-4 text-slate-500"></i>Clientes</div>
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="dollar-sign" class="nav-ico w-4 h-4 text-slate-500"></i>Financeiro</div>
+      <div class="flex items-center gap-3 h-9 px-3 rounded-lg text-slate-400 line-through decoration-slate-300"><i data-lucide="credit-card" class="w-4 h-4"></i>Assinaturas</div>
+      <p class="text-[10px] text-slate-400 px-3 pt-1 pb-2 leading-snug italic">"Assinaturas" deixa de ser aba própria — passa a viver dentro de cada cliente.</p>
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="brain-circuit" class="nav-ico w-4 h-4 text-slate-500"></i>Agentes IA</div>
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="bar-chart-3" class="nav-ico w-4 h-4 text-slate-500"></i>Relatórios</div>
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="settings" class="nav-ico w-4 h-4 text-slate-500"></i>Configurações</div>
+    </nav>
+  </aside>
+
+  <main class="flex-1 p-6 overflow-x-hidden">
+
+    <!-- ═════════════ TELA: LISTA DE CLIENTES ═════════════ -->
+    <section id="lista" class="space-y-6 max-w-[1180px]">
+      <div class="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h1 class="text-2xl font-semibold tracking-tight text-slate-900 font-display">Clientes</h1>
+          <p class="text-slate-500 mt-1 text-sm">312 escritórios assinantes na plataforma. <span class="text-slate-400">Cada linha é um dono/assinante.</span></p>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input placeholder="Buscar escritório, dono ou e-mail…" class="h-9 w-72 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200">
+          </div>
+          <select class="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600">
+            <option>Todos os status</option><option>Ativos</option><option>Trial</option><option>Inadimplentes</option><option>Suspensos</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- mini KPIs -->
+      <div class="grid gap-4 sm:grid-cols-4">
+        <div class="rounded-xl p-4 border border-indigo-100 bg-indigo-50/60"><p class="text-[10px] uppercase tracking-wider font-semibold text-indigo-700">Ativos</p><p class="text-2xl font-bold text-indigo-600 tabular-nums mt-1">280</p></div>
+        <div class="rounded-xl p-4 border border-amber-100 bg-amber-50/60"><p class="text-[10px] uppercase tracking-wider font-semibold text-amber-700">Em trial</p><p class="text-2xl font-bold text-amber-600 tabular-nums mt-1">18</p></div>
+        <div class="rounded-xl p-4 border border-rose-100 bg-rose-50/60"><p class="text-[10px] uppercase tracking-wider font-semibold text-rose-700">Inadimplentes</p><p class="text-2xl font-bold text-rose-600 tabular-nums mt-1">9</p></div>
+        <div class="rounded-xl p-4 border border-slate-200 bg-slate-50/60"><p class="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Suspensos</p><p class="text-2xl font-bold text-slate-600 tabular-nums mt-1">5</p></div>
+      </div>
+
+      <!-- info: onde foram os colaboradores -->
+      <div class="rounded-xl border border-indigo-100 bg-indigo-50/50 px-4 py-3 flex items-start gap-3">
+        <i data-lucide="info" class="w-4 h-4 text-indigo-600 mt-0.5 shrink-0"></i>
+        <p class="text-xs text-indigo-900">Os <strong>colaboradores do escritório</strong> não aparecem mais como linhas soltas nesta lista — eles agora ficam dentro do cadastro do cliente (dono), na seção <strong>Equipe</strong>. A coluna "Equipe" mostra quantos são.</p>
+      </div>
+
+      <!-- TABELA: só donos/assinantes -->
+      <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+        <table class="w-full text-sm">
+          <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100 bg-slate-50/50">
+            <th class="px-5 py-3 font-medium">Escritório / Dono</th>
+            <th class="py-3 font-medium">Assinatura</th>
+            <th class="py-3 font-medium">MRR</th>
+            <th class="py-3 font-medium">Equipe</th>
+            <th class="py-3 font-medium">Último acesso</th>
+            <th class="py-3 pr-5 font-medium text-right"></th>
+          </tr></thead>
+          <tbody class="divide-y divide-slate-50">
+            <!-- linha clicável -->
+            <tr class="hover:bg-indigo-50/40 cursor-pointer" onclick="abrirCadastro()">
+              <td class="px-5 py-3"><div class="flex items-center gap-3">
+                <span class="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white grid place-items-center text-xs font-semibold">AS</span>
+                <div><p class="font-medium text-slate-800">Advocacia Silva</p><p class="text-xs text-slate-400">Dr. Rafael Silva · silva@adv.com</p></div>
+              </div></td>
+              <td><div class="flex items-center gap-2"><span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600 text-white font-medium">Ativa</span><span class="text-xs text-slate-500">Completo</span></div></td>
+              <td class="font-medium text-slate-700 tabular-nums">R$ 349</td>
+              <td><span class="inline-flex items-center gap-1 text-xs text-slate-600"><i data-lucide="users" class="w-3.5 h-3.5 text-slate-400"></i> 4</span></td>
+              <td class="text-slate-500 text-xs">há 2 horas</td>
+              <td class="pr-5 text-right"><i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 inline"></i></td>
+            </tr>
+            <tr class="hover:bg-indigo-50/40 cursor-pointer" onclick="abrirCadastro()">
+              <td class="px-5 py-3"><div class="flex items-center gap-3">
+                <span class="h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white grid place-items-center text-xs font-semibold">MC</span>
+                <div><p class="font-medium text-slate-800">Mendes &amp; Costa</p><p class="text-xs text-slate-400">Dra. Ana Mendes · ana@mc.adv.br</p></div>
+              </div></td>
+              <td><div class="flex items-center gap-2"><span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Trial</span><span class="text-xs text-slate-500">Intermediário · 5 dias rest.</span></div></td>
+              <td class="text-slate-400 tabular-nums">—</td>
+              <td><span class="inline-flex items-center gap-1 text-xs text-slate-600"><i data-lucide="users" class="w-3.5 h-3.5 text-slate-400"></i> 2</span></td>
+              <td class="text-slate-500 text-xs">ontem</td>
+              <td class="pr-5 text-right"><i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 inline"></i></td>
+            </tr>
+            <tr class="hover:bg-indigo-50/40 cursor-pointer" onclick="abrirCadastro()">
+              <td class="px-5 py-3"><div class="flex items-center gap-3">
+                <span class="h-9 w-9 rounded-xl bg-gradient-to-br from-pink-500 to-rose-500 text-white grid place-items-center text-xs font-semibold">RA</span>
+                <div><p class="font-medium text-slate-800">Ramos Advogados</p><p class="text-xs text-slate-400">Dr. Lucas Ramos · ramos@ra.law</p></div>
+              </div></td>
+              <td><div class="flex items-center gap-2"><span class="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium">Vencida</span><span class="text-xs text-slate-500">Completo · 12 dias</span></div></td>
+              <td class="font-medium text-slate-700 tabular-nums">R$ 349</td>
+              <td><span class="inline-flex items-center gap-1 text-xs text-slate-600"><i data-lucide="users" class="w-3.5 h-3.5 text-slate-400"></i> 7</span></td>
+              <td class="text-slate-500 text-xs">há 5 dias</td>
+              <td class="pr-5 text-right"><i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 inline"></i></td>
+            </tr>
+            <tr class="hover:bg-indigo-50/40 cursor-pointer" onclick="abrirCadastro()">
+              <td class="px-5 py-3"><div class="flex items-center gap-3">
+                <span class="h-9 w-9 rounded-xl bg-gradient-to-br from-slate-500 to-slate-700 text-white grid place-items-center text-xs font-semibold">LP</span>
+                <div><p class="font-medium text-slate-800">Lima Pereira</p><p class="text-xs text-slate-400">Dr. João Lima · lp@limapereira.adv.br</p></div>
+              </div></td>
+              <td><div class="flex items-center gap-2"><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 font-medium">Suspensa</span><span class="text-xs text-slate-500">Básico</span></div></td>
+              <td class="font-medium text-slate-700 tabular-nums">R$ 149</td>
+              <td><span class="inline-flex items-center gap-1 text-xs text-slate-600"><i data-lucide="users" class="w-3.5 h-3.5 text-slate-400"></i> 1</span></td>
+              <td class="text-slate-500 text-xs">há 1 mês</td>
+              <td class="pr-5 text-right"><i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 inline"></i></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+          <span>Mostrando 1–4 de 312 assinantes</span>
+          <div class="flex gap-1"><button class="h-7 px-2.5 rounded-md border border-slate-200 text-slate-500">Anterior</button><button class="h-7 px-2.5 rounded-md border border-slate-200 bg-white text-slate-700">Próxima</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════ TELA: CADASTRO DO CLIENTE ═════════════ -->
+    <section id="cadastro" class="hidden space-y-6 max-w-[1180px]">
+      <!-- voltar -->
+      <button onclick="voltarLista()" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800"><i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar para clientes</button>
+
+      <!-- header do cadastro -->
+      <div class="rounded-2xl bg-white border border-slate-200 p-6">
+        <div class="flex items-start justify-between gap-4 flex-wrap">
+          <div class="flex items-center gap-4">
+            <span class="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white grid place-items-center text-lg font-bold">AS</span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h1 class="text-xl font-bold text-slate-900 font-display">Advocacia Silva</h1>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600 text-white font-medium">Assinatura ativa</span>
+              </div>
+              <p class="text-sm text-slate-500 mt-0.5">Dono: <span class="font-medium text-slate-700">Dr. Rafael Silva</span> · silva@adv.com</p>
+              <p class="text-xs text-slate-400 mt-0.5">Cliente desde 12/03/2025 · último acesso há 2 horas</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button class="h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 flex items-center gap-1.5 hover:bg-slate-50"><i data-lucide="eye" class="w-4 h-4"></i> Impersonar</button>
+            <button class="h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 flex items-center gap-1.5 hover:bg-slate-50"><i data-lucide="key-round" class="w-4 h-4"></i> Resetar senha</button>
+            <button class="h-9 px-3 rounded-lg border border-rose-200 bg-white text-sm text-rose-600 flex items-center gap-1.5 hover:bg-rose-50"><i data-lucide="ban" class="w-4 h-4"></i> Suspender</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- tabs internas -->
+      <div class="bg-slate-50/80 border border-slate-200 rounded-xl p-1.5 inline-flex gap-1">
+        <button onclick="aba('assinatura')" data-tab="assinatura" class="tab-btn text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center bg-white shadow-sm text-slate-800 font-medium"><i data-lucide="credit-card" class="w-3.5 h-3.5"></i> Assinatura</button>
+        <button onclick="aba('equipe')" data-tab="equipe" class="tab-btn text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="users" class="w-3.5 h-3.5"></i> Equipe <span class="ml-0.5 text-[10px] px-1.5 rounded-full bg-slate-200 text-slate-600">4</span></button>
+        <button onclick="aba('uso')" data-tab="uso" class="tab-btn text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="activity" class="w-3.5 h-3.5"></i> Créditos &amp; uso</button>
+        <button onclick="aba('notas')" data-tab="notas" class="tab-btn text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="sticky-note" class="w-3.5 h-3.5"></i> Notas</button>
+      </div>
+
+      <!-- ── ABA: ASSINATURA (vinda da antiga aba Assinaturas) ── -->
+      <div data-panel="assinatura" class="space-y-4">
+        <div class="grid gap-4 lg:grid-cols-3">
+          <div class="lg:col-span-2 rounded-2xl bg-white border border-slate-200 p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-base font-semibold text-slate-800">Assinatura atual</h3>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600 text-white font-medium">Ativa</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div><p class="text-[11px] text-slate-400 uppercase tracking-wide">Plano</p><p class="text-sm font-semibold text-slate-800 mt-1">Completo</p></div>
+              <div><p class="text-[11px] text-slate-400 uppercase tracking-wide">Ciclo</p><p class="text-sm font-semibold text-slate-800 mt-1">Mensal</p></div>
+              <div><p class="text-[11px] text-slate-400 uppercase tracking-wide">Valor</p><p class="text-sm font-semibold text-slate-800 mt-1 tabular-nums">R$ 349/mês</p></div>
+              <div><p class="text-[11px] text-slate-400 uppercase tracking-wide">Próx. cobrança</p><p class="text-sm font-semibold text-slate-800 mt-1">12/06/2026</p></div>
+            </div>
+            <div class="flex items-center gap-2 mt-5 pt-4 border-t border-slate-100">
+              <button class="h-8 px-3 rounded-lg border border-slate-200 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="repeat" class="w-3.5 h-3.5"></i> Trocar plano</button>
+              <button class="h-8 px-3 rounded-lg border border-slate-200 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="gift" class="w-3.5 h-3.5"></i> Marcar cortesia</button>
+              <button class="h-8 px-3 rounded-lg border border-rose-200 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-1.5"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Cancelar</button>
+            </div>
+          </div>
+          <div class="rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 p-6 text-white shadow-lg">
+            <p class="text-xs font-medium text-white/85 uppercase tracking-wider">Receita gerada</p>
+            <p class="text-3xl font-extrabold tracking-tight tabular-nums mt-2 font-display">R$ 4.188</p>
+            <p class="text-xs text-white/70 mt-1">12 meses · adimplente</p>
+            <div class="mt-4 pt-4 border-t border-white/20 text-xs text-white/80 space-y-1">
+              <div class="flex justify-between"><span>Cliente Asaas</span><span class="tabular-nums">cus_0a1b2c</span></div>
+              <div class="flex justify-between"><span>Inadimplências</span><span>0</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- histórico de cobranças -->
+        <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+          <div class="px-5 pt-5 pb-3 border-b border-slate-100"><h3 class="text-base font-semibold text-slate-800">Histórico de cobranças</h3></div>
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100"><th class="px-5 py-2.5 font-medium">Data</th><th class="py-2.5 font-medium">Descrição</th><th class="py-2.5 font-medium">Valor</th><th class="py-2.5 pr-5 font-medium">Status</th></tr></thead>
+            <tbody class="divide-y divide-slate-50">
+              <tr><td class="px-5 py-3 text-slate-500">12/05/2026</td><td class="text-slate-700">Plano Completo · mensal</td><td class="tabular-nums text-slate-700">R$ 349</td><td class="pr-5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Pago</span></td></tr>
+              <tr><td class="px-5 py-3 text-slate-500">12/04/2026</td><td class="text-slate-700">Plano Completo · mensal</td><td class="tabular-nums text-slate-700">R$ 349</td><td class="pr-5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Pago</span></td></tr>
+              <tr><td class="px-5 py-3 text-slate-500">12/03/2026</td><td class="text-slate-700">Plano Completo · mensal</td><td class="tabular-nums text-slate-700">R$ 349</td><td class="pr-5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Pago</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── ABA: EQUIPE (colaboradores do escritório, agora aninhados) ── -->
+      <div data-panel="equipe" class="hidden space-y-4">
+        <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+          <div class="px-5 pt-5 pb-3 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 class="text-base font-semibold text-slate-800">Equipe do escritório</h3>
+              <p class="text-xs text-slate-400 mt-0.5">Colaboradores vinculados a Advocacia Silva — não são clientes, fazem parte do cadastro do dono.</p>
+            </div>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">4 membros</span>
+          </div>
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
+              <th class="px-5 py-2.5 font-medium">Colaborador</th><th class="py-2.5 font-medium">Cargo</th><th class="py-2.5 font-medium">Status</th><th class="py-2.5 font-medium">Último acesso</th><th class="py-2.5 pr-5 font-medium text-right">Ações</th>
+            </tr></thead>
+            <tbody class="divide-y divide-slate-50">
+              <tr class="hover:bg-slate-50/50">
+                <td class="px-5 py-3"><div class="flex items-center gap-3"><span class="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white grid place-items-center text-[11px] font-semibold">RS</span><div><p class="font-medium text-slate-800">Dr. Rafael Silva</p><p class="text-xs text-slate-400">silva@adv.com</p></div></div></td>
+                <td><span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold">Dono</span></td>
+                <td><span class="inline-flex items-center gap-1 text-xs text-emerald-600"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Ativo</span></td>
+                <td class="text-slate-500 text-xs">há 2 horas</td>
+                <td class="pr-5 text-right text-slate-300"><span class="text-xs">—</span></td>
+              </tr>
+              <tr class="hover:bg-slate-50/50">
+                <td class="px-5 py-3"><div class="flex items-center gap-3"><span class="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white grid place-items-center text-[11px] font-semibold">MA</span><div><p class="font-medium text-slate-800">Marina Alves</p><p class="text-xs text-slate-400">marina@adv.com</p></div></div></td>
+                <td><span class="text-xs text-slate-600">Advogada</span></td>
+                <td><span class="inline-flex items-center gap-1 text-xs text-emerald-600"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Ativo</span></td>
+                <td class="text-slate-500 text-xs">há 1 dia</td>
+                <td class="pr-5 text-right"><button class="text-xs text-indigo-600 font-medium hover:underline">Ver perfil</button></td>
+              </tr>
+              <tr class="hover:bg-slate-50/50">
+                <td class="px-5 py-3"><div class="flex items-center gap-3"><span class="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white grid place-items-center text-[11px] font-semibold">CB</span><div><p class="font-medium text-slate-800">Carlos Bastos</p><p class="text-xs text-slate-400">carlos@adv.com</p></div></div></td>
+                <td><span class="text-xs text-slate-600">Estagiário</span></td>
+                <td><span class="inline-flex items-center gap-1 text-xs text-emerald-600"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Ativo</span></td>
+                <td class="text-slate-500 text-xs">há 3 dias</td>
+                <td class="pr-5 text-right"><button class="text-xs text-indigo-600 font-medium hover:underline">Ver perfil</button></td>
+              </tr>
+              <tr class="hover:bg-slate-50/50">
+                <td class="px-5 py-3"><div class="flex items-center gap-3"><span class="h-8 w-8 rounded-lg bg-gradient-to-br from-slate-400 to-slate-600 text-white grid place-items-center text-[11px] font-semibold">PF</span><div><p class="font-medium text-slate-800">Paula Freitas</p><p class="text-xs text-slate-400">paula@adv.com</p></div></div></td>
+                <td><span class="text-xs text-slate-600">Financeiro</span></td>
+                <td><span class="inline-flex items-center gap-1 text-xs text-slate-400"><span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>Inativo</span></td>
+                <td class="text-slate-500 text-xs">há 2 meses</td>
+                <td class="pr-5 text-right"><button class="text-xs text-indigo-600 font-medium hover:underline">Ver perfil</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="px-5 py-3 border-t border-slate-100 text-xs text-slate-400">A assinatura/cortesia do dono cobre toda a equipe — colaboradores herdam o acesso.</div>
+        </div>
+      </div>
+
+      <!-- ── ABA: CRÉDITOS & USO ── -->
+      <div data-panel="uso" class="hidden space-y-4">
+        <div class="grid gap-4 sm:grid-cols-3">
+          <div class="rounded-xl bg-white border border-slate-200 p-5"><div class="w-10 h-10 rounded-xl bg-indigo-500/10 grid place-items-center mb-3"><i data-lucide="coins" class="w-5 h-5 text-indigo-600"></i></div><p class="text-2xl font-bold tabular-nums text-slate-900">1.240</p><p class="text-xs text-slate-500 mt-1.5">Saldo de créditos</p></div>
+          <div class="rounded-xl bg-white border border-slate-200 p-5"><div class="w-10 h-10 rounded-xl bg-emerald-500/10 grid place-items-center mb-3"><i data-lucide="trending-up" class="w-5 h-5 text-emerald-600"></i></div><p class="text-2xl font-bold tabular-nums text-slate-900">860</p><p class="text-xs text-slate-500 mt-1.5">Consumidos (30d)</p></div>
+          <div class="rounded-xl bg-white border border-slate-200 p-5"><div class="w-10 h-10 rounded-xl bg-violet-500/10 grid place-items-center mb-3"><i data-lucide="calculator" class="w-5 h-5 text-violet-600"></i></div><p class="text-2xl font-bold tabular-nums text-slate-900">312</p><p class="text-xs text-slate-500 mt-1.5">Cálculos realizados</p></div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="plus" class="w-4 h-4"></i> Conceder créditos</button>
+          <button class="h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="minus" class="w-4 h-4"></i> Retirar créditos</button>
+        </div>
+      </div>
+
+      <!-- ── ABA: NOTAS ── -->
+      <div data-panel="notas" class="hidden space-y-4">
+        <div class="rounded-2xl bg-white border border-slate-200 p-5">
+          <textarea placeholder="Adicionar nota interna sobre este cliente…" class="w-full h-20 rounded-lg border border-slate-200 p-3 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"></textarea>
+          <div class="flex justify-end mt-2"><button class="h-8 px-3 rounded-lg bg-indigo-600 text-white text-xs font-medium">Salvar nota</button></div>
+          <div class="mt-4 space-y-3">
+            <div class="flex gap-3"><span class="h-7 w-7 rounded-full bg-indigo-100 text-indigo-700 grid place-items-center text-[11px] font-semibold shrink-0">R</span><div><p class="text-sm text-slate-700">Cliente pediu upgrade pra plano completo após teste — converteu sozinho.</p><p class="text-[11px] text-slate-400 mt-0.5">Rafael (admin) · 14/05/2026</p></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  lucide.createIcons();
+  function abrirCadastro(){ document.getElementById('lista').classList.add('hidden'); document.getElementById('cadastro').classList.remove('hidden'); window.scrollTo({top:0,behavior:'smooth'}); }
+  function voltarLista(){ document.getElementById('cadastro').classList.add('hidden'); document.getElementById('lista').classList.remove('hidden'); window.scrollTo({top:0,behavior:'smooth'}); }
+  function aba(nome){
+    document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('hidden', p.getAttribute('data-panel') !== nome));
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      const on = b.getAttribute('data-tab') === nome;
+      b.classList.toggle('bg-white', on); b.classList.toggle('shadow-sm', on);
+      b.classList.toggle('text-slate-800', on); b.classList.toggle('font-medium', on);
+      b.classList.toggle('text-slate-500', !on);
+    });
+  }
+</script>
+</body>
+</html>

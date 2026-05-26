@@ -295,6 +295,9 @@ export async function getAllUsersWithSubscription(opts: GetAllUsersOpts = {}): P
     tipoUsuario: "admin" | "cliente" | "colaborador";
     escritorioVinculado: string | null;
     cargoColaborador: string | null;
+    colaboradoresCount: number;
+    planId: string | null;
+    subStatus: string | null;
   }>;
   total: number;
 }> {
@@ -351,20 +354,40 @@ export async function getAllUsersWithSubscription(opts: GetAllUsersOpts = {}): P
   // Subqueries auxiliares restritas aos userIds desta página (não carrega
   // o universo inteiro de subscriptions/escritórios/colaboradores).
   const activeSubs = await db
-    .select({ userId: subscriptions.userId })
+    .select({ userId: subscriptions.userId, status: subscriptions.status, planId: subscriptions.planId })
     .from(subscriptions)
     .where(and(
       inArray(subscriptions.userId, userIds),
       or(eq(subscriptions.status, "active"), eq(subscriptions.status, "trialing")),
     ));
   const activeUserIds = new Set<number>(activeSubs.map((s) => s.userId));
+  const subInfoMap = new Map<number, { status: string; planId: string | null }>();
+  for (const s of activeSubs) {
+    if (!subInfoMap.has(s.userId)) subInfoMap.set(s.userId, { status: s.status, planId: s.planId });
+  }
 
   const escritoriosOwned = await db
-    .select({ ownerId: escritorios.ownerId, nome: escritorios.nome })
+    .select({ id: escritorios.id, ownerId: escritorios.ownerId, nome: escritorios.nome })
     .from(escritorios)
     .where(inArray(escritorios.ownerId, userIds));
   const ownersMap = new Map<number, string>();
-  for (const e of escritoriosOwned) ownersMap.set(e.ownerId, e.nome);
+  const escritorioIdByOwner = new Map<number, number>();
+  for (const e of escritoriosOwned) {
+    ownersMap.set(e.ownerId, e.nome);
+    escritorioIdByOwner.set(e.ownerId, e.id);
+  }
+
+  // Contagem de colaboradores ativos por escritório (só dos donos desta página).
+  const escritorioIds = escritoriosOwned.map((e) => e.id);
+  const colabsCountMap = new Map<number, number>();
+  if (escritorioIds.length > 0) {
+    const counts = await db
+      .select({ escritorioId: colaboradores.escritorioId, total: sql<number>`COUNT(*)` })
+      .from(colaboradores)
+      .where(and(inArray(colaboradores.escritorioId, escritorioIds), eq(colaboradores.ativo, true)))
+      .groupBy(colaboradores.escritorioId);
+    for (const c of counts) colabsCountMap.set(c.escritorioId, Number(c.total));
+  }
 
   const colabsAtivos = await db
     .select({
@@ -402,6 +425,9 @@ export async function getAllUsersWithSubscription(opts: GetAllUsersOpts = {}): P
       cargoColaborador = colab.cargo;
     }
 
+    const escId = escritorioIdByOwner.get(u.id);
+    const subInfo = subInfoMap.get(u.id);
+
     return {
       id: u.id,
       name: u.name,
@@ -413,6 +439,9 @@ export async function getAllUsersWithSubscription(opts: GetAllUsersOpts = {}): P
       tipoUsuario,
       escritorioVinculado,
       cargoColaborador,
+      colaboradoresCount: escId != null ? (colabsCountMap.get(escId) ?? 0) : 0,
+      planId: subInfo?.planId ?? null,
+      subStatus: subInfo?.status ?? null,
     };
   });
 

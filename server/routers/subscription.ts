@@ -30,7 +30,7 @@ const log = createLogger("router-subscription");
  * Próxima data de vencimento padrão (3 dias a partir de hoje, formato YYYY-MM-DD).
  * 3 dias dá tempo do cliente abrir o link e pagar via boleto/PIX antes do vencimento.
  */
-function dataVencimentoPadrao(): string {
+export function dataVencimentoPadrao(): string {
   const d = new Date();
   d.setDate(d.getDate() + 3);
   return d.toISOString().slice(0, 10);
@@ -90,7 +90,7 @@ function buildSuccessUrl(ctx: { req: any }): string | null {
  * criada mas o auto-redirect não funciona (o cliente tem que voltar
  * manualmente pro sistema).
  */
-async function criarAssinaturaComFallback(
+export async function criarAssinaturaComFallback(
   client: { criarAssinatura: (input: any) => Promise<any> },
   input: any,
 ) {
@@ -118,7 +118,7 @@ async function criarAssinaturaComFallback(
  *
  * @throws Error se cpfCnpj for inválido ou ausente quando precisar criar customer
  */
-async function garantirAsaasCustomer(
+export async function garantirAsaasCustomer(
   userId: number,
   email: string | null | undefined,
   name: string | null | undefined,
