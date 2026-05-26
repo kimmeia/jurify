@@ -23,6 +23,7 @@ import {
   deveDispararLembrete,
   deveDispararProximo,
   deveDispararVencido,
+  deveReentrarNoWaitNode,
   diasEntre,
   parseHoraHHMM,
   parseVencimento,
@@ -366,6 +367,32 @@ describe("calcularSlotsDoDia com fuso horário", () => {
     expect(slots).toHaveLength(1);
     // Comportamento legado: setHours local. Só conferimos que retornou algo,
     // o teste do legado acima já cobre o comportamento exato.
+  });
+});
+
+describe("deveReentrarNoWaitNode (retomada de execução pausada)", () => {
+  it("reentra no nó conversacional mesmo SEM nenhuma seta proximoSe (bug do Atendente IA)", () => {
+    // Atendente IA puramente conversacional: 1 nó, sem ferramentas/ações ligadas
+    // → nenhum proximoSe. Tem que reentrar (re-executar o agente), senão a
+    // conversa morre após a 1ª resposta.
+    const passos = [{ clienteId: "at", proximoSe: {} }];
+    expect(deveReentrarNoWaitNode(passos, "at")).toBe(true);
+  });
+
+  it("reentra quando o nó de espera existe e tem setas", () => {
+    const passos = [{ clienteId: "at", proximoSe: { agendar: "x" } }, { clienteId: "x" }];
+    expect(deveReentrarNoWaitNode(passos, "at")).toBe(true);
+  });
+
+  it("não reentra quando não há nó de espera (fluxo linear legado)", () => {
+    const passos = [{ clienteId: null }, { clienteId: null }];
+    expect(deveReentrarNoWaitNode(passos, null)).toBe(false);
+    expect(deveReentrarNoWaitNode(passos, undefined)).toBe(false);
+  });
+
+  it("não reentra quando o waitNodeId não bate com nenhum nó", () => {
+    const passos = [{ clienteId: "a" }, { clienteId: "b" }];
+    expect(deveReentrarNoWaitNode(passos, "inexistente")).toBe(false);
   });
 });
 

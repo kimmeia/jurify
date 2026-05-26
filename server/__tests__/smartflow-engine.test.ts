@@ -1321,6 +1321,34 @@ describe("SmartFlow Engine", () => {
       expect(r.sucesso).toBe(false);
       expect(r.erro).toContain("agente");
     });
+
+    it("multi-turno: reentra no nó e re-executa o agente a cada mensagem (sem ações ligadas)", async () => {
+      // Atendente IA puramente conversacional: 1 nó, sem ferramentas e SEM
+      // proximoSe. Era o caso quebrado — a retomada pulava o nó e a conversa
+      // morria após a 1ª resposta. Aqui a retomada (como o dispatcher faz)
+      // reentra no nó e re-chama o agente.
+      const conversarComAgente = vi.fn()
+        .mockResolvedValueOnce({ resposta: "Olá! Como ajudo?", acao: null })
+        .mockResolvedValueOnce({ resposta: "Entendi sua dúvida, me conta mais.", acao: null });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_atendente", clienteId: "at", config: { agenteId: 7 } },
+      ];
+
+      const t1 = await executarCenario(passos, { mensagem: "oii", contatoId: 5, conversaId: 9 }, exec);
+      expect(t1.respostas).toContain("Olá! Como ajudo?");
+      expect(t1.contexto.aguardandoMensagem).toBe(true);
+      expect(t1.contexto.aguardandoNodeClienteId).toBe("at");
+
+      const t2 = await executarCenario(
+        passos,
+        { ...t1.contexto, __resumindoWaitClienteId: "at", respostaUsuario: "tenho uma dúvida" },
+        exec,
+      );
+      expect(conversarComAgente).toHaveBeenCalledTimes(2);
+      expect(t2.respostas).toContain("Entendi sua dúvida, me conta mais.");
+      expect(t2.contexto.aguardandoMensagem).toBe(true); // pausa de novo: segue conversando
+    });
   });
 
   describe("retomada por timeout (ramo 'timeout' do aguardar)", () => {
