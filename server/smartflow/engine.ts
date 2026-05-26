@@ -84,6 +84,10 @@ export interface SmartflowContexto {
    *  como default em passos que precisam de responsável (ex: Kanban
    *  "Criar card" sem responsavelId explícito herda esse valor). */
   atendenteResponsavelId?: number;
+  /** Responsável da agenda resolvido pelo passo `ia_atendente` (cascata
+   *  completa). O passo `agenda_criar` reaproveita esse valor pra garantir
+   *  que a agenda mostrada ao cliente é a mesma onde o compromisso é marcado. */
+  agendaResponsavelResolvidoId?: number;
   /** Dados livres por passo */
   [key: string]: unknown;
 }
@@ -259,6 +263,19 @@ export interface SmartflowExecutores {
     contatoId?: number;
     conversaId?: number;
   }) => Promise<{ resposta: string; acao: string | null }>;
+  /**
+   * Resolve quem é o dono da agenda pra um atendimento, em cascata:
+   *   responsavelIdPreferido (advogado fixo) → atendente da conversa →
+   *   responsável do contato (CRM) → padrão do escritório → dono.
+   * Retorna `null` só se o escritório não tiver nenhum colaborador elegível.
+   * Usado pelos passos `ia_atendente` (resolve 1x) e `agenda_criar` (fallback).
+   */
+  resolverResponsavelAgenda: (params: {
+    responsavelIdPreferido?: number | null;
+    contatoId?: number;
+    conversaId?: number;
+    atendenteResponsavelId?: number | null;
+  }) => Promise<number | null>;
   /** Busca horários disponíveis no Cal.com */
   buscarHorarios: (duracao: number) => Promise<string[]>;
   /** Cria agendamento no Cal.com */
@@ -957,7 +974,7 @@ async function handleIaAtendente(
     roteiro?: string;
     ferramentas?: string[];
     consultas?: string[];
-    consultaConfig?: { responsavelId?: number; duracaoMin?: number; dias?: number };
+    consultaConfig?: { responsavelModo?: "auto" | "fixo"; responsavelId?: number; duracaoMin?: number; dias?: number };
   };
   if (typeof cfg.agenteId !== "number" || cfg.agenteId <= 0) {
     return { sucesso: false, contexto: ctx, mensagemErro: "Atendente IA: escolha um agente." };
@@ -972,12 +989,30 @@ async function handleIaAtendente(
   const conversaId = typeof ctx.conversaId === "number" ? ctx.conversaId : undefined;
 
   try {
+    const cc = cfg.consultaConfig;
+    // Dono da agenda — resolvido UMA vez (cascata) e reaproveitado pelo passo
+    // Agendar, garantindo que a agenda oferecida é a mesma onde marca.
+    let agendaResponsavelResolvidoId: number | undefined;
+    if (consultas.includes("ver_horarios") || ferramentas.includes("agendar")) {
+      const modo = cc?.responsavelModo ?? (cc?.responsavelId ? "fixo" : "auto");
+      const resolvido = await exec.resolverResponsavelAgenda({
+        responsavelIdPreferido: modo === "fixo" ? (cc?.responsavelId ?? null) : null,
+        contatoId,
+        conversaId,
+        atendenteResponsavelId: typeof ctx.atendenteResponsavelId === "number" ? ctx.atendenteResponsavelId : null,
+      });
+      if (typeof resolvido === "number") agendaResponsavelResolvidoId = resolvido;
+    }
+    const consultaConfigResolvida = (cc || agendaResponsavelResolvidoId != null)
+      ? { responsavelId: agendaResponsavelResolvidoId ?? cc?.responsavelId, duracaoMin: cc?.duracaoMin, dias: cc?.dias }
+      : undefined;
+
     const { resposta, acao } = await exec.conversarComAgente({
       agenteId: cfg.agenteId,
       roteiro: cfg.roteiro,
       ferramentas,
       consultas,
-      consultaConfig: cfg.consultaConfig,
+      consultaConfig: consultaConfigResolvida,
       mensagem,
       contatoId,
       conversaId,
@@ -985,6 +1020,7 @@ async function handleIaAtendente(
 
     // Limpa flags de retomada (este nó re-executa, não "passa direto").
     let novoCtx: SmartflowContexto = { ...ctx };
+    if (typeof agendaResponsavelResolvidoId === "number") novoCtx.agendaResponsavelResolvidoId = agendaResponsavelResolvidoId;
     delete (novoCtx as any).__resumindoWaitClienteId;
     delete (novoCtx as any).__resumindoWaitMotivo;
 
@@ -2247,18 +2283,29 @@ async function handleAgendaCriar(
   const acao = cfg.acao || "agendar";
   const { interpolarVariaveis } = await import("./interpolar");
 
-  // Responsável: fixo (id), automático (atendente do cliente) ou variável.
-  const resolverResponsavel = (): number | undefined => {
+  // Responsável: variável > fixo (id) > reaproveita o resolvido pelo Atendente
+  // IA nesta conversa (consistência agenda mostrada == marcada) > automático
+  // (atendente do cliente) > cascata completa do escritório (só quando a ação
+  // exige um responsável, ex: agendar/consultar — `obrigatorio`).
+  const resolverResponsavel = async (obrigatorio: boolean): Promise<number | undefined> => {
     if (cfg.responsavelVar && cfg.responsavelVar.trim()) {
       const v = Number(interpolarVariaveis(cfg.responsavelVar, ctx as any).trim());
       return Number.isNaN(v) ? undefined : v;
     }
-    if (cfg.responsavelAuto) {
-      return typeof ctx.atendenteResponsavelId === "number" ? ctx.atendenteResponsavelId : undefined;
-    }
-    if (cfg.responsavelId) {
+    if (cfg.responsavelId && !cfg.responsavelAuto) {
       const v = Number(cfg.responsavelId);
       return Number.isNaN(v) ? undefined : v;
+    }
+    if (cfg.responsavelAuto || obrigatorio) {
+      if (typeof ctx.agendaResponsavelResolvidoId === "number") return ctx.agendaResponsavelResolvidoId;
+      if (cfg.responsavelAuto && typeof ctx.atendenteResponsavelId === "number") return ctx.atendenteResponsavelId;
+      const resolvido = await exec.resolverResponsavelAgenda({
+        responsavelIdPreferido: null,
+        contatoId: typeof ctx.contatoId === "number" ? ctx.contatoId : undefined,
+        conversaId: typeof ctx.conversaId === "number" ? ctx.conversaId : undefined,
+        atendenteResponsavelId: typeof ctx.atendenteResponsavelId === "number" ? ctx.atendenteResponsavelId : null,
+      });
+      if (typeof resolvido === "number") return resolvido;
     }
     return undefined;
   };
@@ -2298,7 +2345,7 @@ async function handleAgendaCriar(
   try {
     // ── Verificar horário disponível (não cria nada) ──
     if (acao === "verificar_horario") {
-      const responsavelId = resolverResponsavel();
+      const responsavelId = await resolverResponsavel(true);
       if (!responsavelId) return { sucesso: false, contexto: ctx, mensagemErro: `Verificar horário — ${erroResponsavel()}` };
       const { dataInicio, dataFim } = resolverData();
       const r = await exec.verificarDisponibilidadeAgenda({
@@ -2311,7 +2358,7 @@ async function handleAgendaCriar(
 
     // ── Consultar agenda: calcula HORÁRIOS LIVRES p/ oferecer (não cria nada) ──
     if (acao === "consultar") {
-      const responsavelId = resolverResponsavel();
+      const responsavelId = await resolverResponsavel(true);
       if (!responsavelId) return { sucesso: false, contexto: ctx, mensagemErro: `Consultar agenda — ${erroResponsavel()}` };
       const dias = Math.max(1, Math.min(365, Number(cfg.diasParaFrente) || 7));
       const incluirFimDeSemana = !!cfg.incluirFimDeSemana;
@@ -2368,7 +2415,7 @@ async function handleAgendaCriar(
       const agId = resolverAgendamentoId();
       if (!agId) return { sucesso: false, contexto: ctx, mensagemErro: "Editar: sem ID do agendamento (use {{agendamentoInternoId}} ou informe um)." };
       const patch: Parameters<typeof exec.editarAgendamentoInterno>[0] = { agendamentoId: agId };
-      const respEdit = resolverResponsavel();
+      const respEdit = await resolverResponsavel(false);
       if (respEdit) patch.responsavelId = respEdit;
       const dataRaw = cfg.dataInicio ? interpolarVariaveis(cfg.dataInicio, ctx as any).trim() : "";
       if (dataRaw) {
@@ -2383,7 +2430,7 @@ async function handleAgendaCriar(
     }
 
     // ── Agendar (default): cria o compromisso ──
-    const responsavelId = resolverResponsavel();
+    const responsavelId = await resolverResponsavel(true);
     if (!responsavelId) {
       return { sucesso: false, contexto: ctx, mensagemErro: `Agendar — ${erroResponsavel()}` };
     }

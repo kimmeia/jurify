@@ -2365,8 +2365,9 @@ function ConfigIaAtendenteFields({
     onChange({ consultas: Array.from(set) });
   };
   const consultaCfg = (cfg.consultaConfig && typeof cfg.consultaConfig === "object" ? cfg.consultaConfig : {}) as {
-    responsavelId?: number; duracaoMin?: number; dias?: number;
+    responsavelModo?: "auto" | "fixo"; responsavelId?: number; duracaoMin?: number; dias?: number;
   };
+  const responsavelModo: "auto" | "fixo" = consultaCfg.responsavelModo ?? (consultaCfg.responsavelId ? "fixo" : "auto");
   const patchConsultaCfg = (patch: Record<string, unknown>) => onChange({ consultaConfig: { ...consultaCfg, ...patch } });
   const { data: equipeData } = (trpc as any).configuracoes.listarColaboradores.useQuery();
   const colaboradoresAtivos = (equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []).filter((c: any) => c.ativo);
@@ -2441,17 +2442,35 @@ function ConfigIaAtendenteFields({
             <div>
               <Label className="text-[11px]">De quem é a agenda</Label>
               <Select
-                value={consultaCfg.responsavelId ? String(consultaCfg.responsavelId) : ""}
-                onValueChange={(v) => patchConsultaCfg({ responsavelId: Number(v) })}
+                value={responsavelModo}
+                onValueChange={(v) => patchConsultaCfg(v === "fixo" ? { responsavelModo: "fixo" } : { responsavelModo: "auto" })}
               >
-                <SelectTrigger className="h-8"><SelectValue placeholder="Escolha o advogado" /></SelectTrigger>
+                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {colaboradoresAtivos.map((c: any) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.userName ?? "—"} ({c.cargo})</SelectItem>
-                  ))}
+                  <SelectItem value="auto">Automático</SelectItem>
+                  <SelectItem value="fixo">Advogado fixo</SelectItem>
                 </SelectContent>
               </Select>
+              {responsavelModo === "auto" && (
+                <p className="text-[10px] text-muted-foreground mt-1">Resolve sozinho: atendente da conversa → responsável do cliente → padrão do escritório (Configurações → Agenda automática).</p>
+              )}
             </div>
+            {responsavelModo === "fixo" && (
+              <div>
+                <Label className="text-[11px]">Advogado</Label>
+                <Select
+                  value={consultaCfg.responsavelId ? String(consultaCfg.responsavelId) : ""}
+                  onValueChange={(v) => patchConsultaCfg({ responsavelId: Number(v) })}
+                >
+                  <SelectTrigger className="h-8"><SelectValue placeholder="Escolha o advogado" /></SelectTrigger>
+                  <SelectContent>
+                    {colaboradoresAtivos.map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.userName ?? "—"} ({c.cargo})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label className="text-[11px]">Duração</Label>
