@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { selecionarCenarioPorPalavraChave } from "../smartflow/dispatcher";
+import { mapearPassoEngine, selecionarCenarioPorPalavraChave } from "../smartflow/dispatcher";
 
 type Cen = { nome: string; configGatilho: Record<string, unknown> };
 
@@ -74,5 +74,35 @@ describe("selecionarCenarioPorPalavraChave", () => {
       cen("padrao", { gatilhoPadrao: true }),
     ];
     expect(selecionarCenarioPorPalavraChave(flows, "oi")?.nome).toBe("padrao");
+  });
+});
+
+describe("mapearPassoEngine (loader → engine)", () => {
+  // Regressão: o loader da RETOMADA (`carregarCenarioPorId`) não mapeava
+  // `clienteId`/`proximoSe`. Sem `clienteId` nos passos, a retomada graph-aware
+  // não reentrava no nó de espera → caía no caminho linear, PULAVA o nó e a
+  // conversa do Atendente IA morria após a 1ª resposta. Estes campos são
+  // obrigatórios — o teste de unidade do engine não pegava porque montava os
+  // passos à mão (com clienteId), sem passar pelo loader real.
+  const row = (over: Record<string, unknown> = {}) =>
+    ({ id: 1, ordem: 0, tipo: "ia_atendente", config: null, clienteId: null, proximoSe: null, ...over }) as Parameters<typeof mapearPassoEngine>[0];
+
+  it("preserva clienteId (essencial pra reentrar no nó na retomada)", () => {
+    expect(mapearPassoEngine(row({ clienteId: "abc-uuid" })).clienteId).toBe("abc-uuid");
+  });
+
+  it("parseia proximoSe (roteamento por setas)", () => {
+    expect(mapearPassoEngine(row({ proximoSe: JSON.stringify({ agendar: "x" }) })).proximoSe).toEqual({ agendar: "x" });
+  });
+
+  it("parseia config, com fallback {}", () => {
+    expect(mapearPassoEngine(row({ config: JSON.stringify({ agenteId: 7 }) })).config).toEqual({ agenteId: 7 });
+    expect(mapearPassoEngine(row()).config).toEqual({});
+  });
+
+  it("clienteId/proximoSe ausentes → null (nunca undefined, senão o some() da reentrada falha)", () => {
+    const p = mapearPassoEngine(row());
+    expect(p.clienteId).toBeNull();
+    expect(p.proximoSe).toBeNull();
   });
 });
