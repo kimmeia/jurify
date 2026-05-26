@@ -37,6 +37,13 @@ const passoInputSchema = z.object({
   proximoSe: z.record(z.string()).optional(),
 });
 
+/**
+ * Layout do editor — posições x/y dos nós, keyed por `clienteId` (passos) e
+ * "__gatilho__" (gatilho). Só visual; o engine ignora. Persistido pra que o
+ * canvas reabra exatamente como o usuário deixou.
+ */
+const layoutSchema = z.record(z.object({ x: z.number(), y: z.number() })).optional();
+
 async function garantirOwnership(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   cenarioId: number,
@@ -114,6 +121,50 @@ export const smartflowRouter = router({
     });
   }),
 
+  /**
+   * Lista os templates (HSM) aprovados do canal WhatsApp oficial (API Meta)
+   * do escritório — usado pelo editor pra montar o bloco "Enviar mensagem"
+   * no modo template. Degrada com mensagem clara quando não há canal oficial
+   * conectado ou a Meta recusa a consulta (em vez de quebrar a UI).
+   */
+  listarTemplatesWhatsapp: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "smartflow", "ver");
+    if (!perm.allowed) {
+      return { disponivel: false, motivo: "Sem permissão para ver SmartFlow.", templates: [] as any[] };
+    }
+    const { getCanalCloudApi } = await import("../integracoes/canal-envio");
+    const cred = await getCanalCloudApi(perm.escritorioId);
+    if (!cred) {
+      return {
+        disponivel: false,
+        motivo: "Nenhum canal WhatsApp oficial (API Meta) conectado. Templates só funcionam com a API oficial — conecte-a em Configurações › Canais.",
+        templates: [] as any[],
+      };
+    }
+    if (!cred.wabaId) {
+      return {
+        disponivel: false,
+        motivo: "O canal oficial está sem o WABA ID — não dá pra listar os templates. Reconecte o canal pela API oficial.",
+        templates: [] as any[],
+      };
+    }
+    try {
+      const { WhatsAppCloudClient } = await import("../integracoes/whatsapp-cloud");
+      const client = new WhatsAppCloudClient({ accessToken: cred.accessToken, phoneNumberId: cred.phoneNumberId });
+      const todos = await client.listarTemplates(cred.wabaId);
+      const aprovados = todos.filter((t) => String(t.status).toUpperCase() === "APPROVED");
+      return { disponivel: true, motivo: null as string | null, templates: aprovados };
+    } catch (e: any) {
+      const apiMsg = e?.response?.data?.error?.message;
+      log.warn({ err: apiMsg || e?.message }, "Falha ao listar templates WhatsApp");
+      return {
+        disponivel: false,
+        motivo: apiMsg || e?.message || "Falha ao consultar os templates na Meta.",
+        templates: [] as any[],
+      };
+    }
+  }),
+
   /** Lista cenários do escritório */
   listar: protectedProcedure.query(async ({ ctx }) => {
     const perm = await checkPermission(ctx.user.id, "smartflow", "ver");
@@ -177,6 +228,16 @@ export const smartflowRouter = router({
         configGatilhoParsed = null;
       }
 
+      // Layout do editor (posições dos nós) — devolve o objeto parseado pra
+      // que o canvas reabra exatamente como foi salvo.
+      let layoutParsed: Record<string, { x: number; y: number }> | null = null;
+      try {
+        const obj = cenario.layout ? JSON.parse(cenario.layout) : null;
+        if (obj && typeof obj === "object") layoutParsed = obj as Record<string, { x: number; y: number }>;
+      } catch {
+        layoutParsed = null;
+      }
+
       // Parse `proximoSe` por passo — o editor precisa do objeto já
       // estruturado pra reconstruir as edges do ReactFlow.
       const passosComEdges = passos.map((p) => {
@@ -190,7 +251,7 @@ export const smartflowRouter = router({
         return { ...p, proximoSe: proxSe };
       });
 
-      return { ...cenario, configGatilho: configGatilhoParsed, passos: passosComEdges };
+      return { ...cenario, configGatilho: configGatilhoParsed, layout: layoutParsed, passos: passosComEdges };
     }),
 
   /** Cria cenário com passos */
@@ -200,6 +261,7 @@ export const smartflowRouter = router({
       descricao: z.string().max(512).optional(),
       gatilho: z.enum(GATILHOS),
       configGatilho: z.record(z.any()).optional(),
+      layout: layoutSchema,
       passos: z.array(passoInputSchema),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -214,6 +276,7 @@ export const smartflowRouter = router({
         descricao: input.descricao || null,
         gatilho: input.gatilho,
         configGatilho: input.configGatilho ? JSON.stringify(input.configGatilho) : null,
+        layout: input.layout && Object.keys(input.layout).length > 0 ? JSON.stringify(input.layout) : null,
         criadoPor: ctx.user.id,
       });
       const cenarioId = (result as { insertId: number }).insertId;
@@ -247,6 +310,7 @@ export const smartflowRouter = router({
       descricao: z.string().max(512).optional(),
       gatilho: z.enum(GATILHOS),
       configGatilho: z.record(z.any()).optional(),
+      layout: layoutSchema,
       passos: z.array(passoInputSchema),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -264,6 +328,7 @@ export const smartflowRouter = router({
           descricao: input.descricao || null,
           gatilho: input.gatilho,
           configGatilho: input.configGatilho ? JSON.stringify(input.configGatilho) : null,
+          layout: input.layout && Object.keys(input.layout).length > 0 ? JSON.stringify(input.layout) : null,
         })
         .where(and(eq(smartflowCenarios.id, input.id), eq(smartflowCenarios.escritorioId, perm.escritorioId)));
 

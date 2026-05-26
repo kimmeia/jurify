@@ -819,6 +819,89 @@ async function diasDistintosDisparados(
 }
 
 /**
+ * Busca os links/códigos de pagamento de uma cobrança Asaas pra expor como
+ * variáveis nas mensagens de cobrança: link de pagamento, link do boleto,
+ * PIX copia-e-cola e código de barras (linha digitável). Lê do cache em
+ * `asaas_cobrancas`; se PIX/boleto ainda não estiverem cacheados, busca no
+ * Asaas sob demanda e cacheia (best-effort). Nunca lança — em qualquer falha
+ * devolve o que tiver (campos vazios), pra não derrubar o disparo da mensagem.
+ */
+async function enriquecerLinksCobranca(
+  escritorioId: number,
+  pagamentoId: string,
+): Promise<{
+  linkPagamento: string;
+  linkBoleto: string;
+  pixCopiaECola: string;
+  codigoBarras: string;
+  formaPagamento: string;
+}> {
+  const vazio = { linkPagamento: "", linkBoleto: "", pixCopiaECola: "", codigoBarras: "", formaPagamento: "" };
+  try {
+    const { getDb } = await import("../db");
+    const { asaasCobrancas } = await import("../../drizzle/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return vazio;
+
+    const [cob] = await db
+      .select()
+      .from(asaasCobrancas)
+      .where(and(eq(asaasCobrancas.escritorioId, escritorioId), eq(asaasCobrancas.asaasPaymentId, pagamentoId)))
+      .limit(1);
+    if (!cob) return vazio;
+
+    const forma = String(cob.formaPagamento || "");
+    const linkBoleto = cob.bankSlipUrl || "";
+    const linkPagamento = cob.invoiceUrl || cob.bankSlipUrl || "";
+    let pixCopiaECola = cob.pixQrCodePayload || "";
+    let codigoBarras = "";
+    if (cob.linhaDigitavelPayload) {
+      try {
+        const ld = JSON.parse(cob.linhaDigitavelPayload) as { identificationField?: string };
+        codigoBarras = ld.identificationField || "";
+      } catch { /* json corrompido — ignora */ }
+    }
+
+    // Busca sob demanda o que ainda não está cacheado. PIX só faz sentido pra
+    // cobrança PIX (ou UNDEFINED); boleto idem. Cacheia o resultado na linha
+    // pra próximos disparos (e pros botões de copiar na UI) não baterem no Asaas.
+    const precisaPix = !pixCopiaECola && (forma === "PIX" || forma === "UNDEFINED" || forma === "");
+    const precisaBoleto = !codigoBarras && (forma === "BOLETO" || forma === "UNDEFINED" || forma === "");
+    if ((precisaPix || precisaBoleto) && cob.asaasPaymentId) {
+      try {
+        const { getAsaasClient } = await import("../integracoes/router-asaas");
+        const client = await getAsaasClient(escritorioId);
+        if (client) {
+          if (precisaPix) {
+            try {
+              const qr = await client.obterPixQrCode(cob.asaasPaymentId);
+              if (qr?.payload) {
+                pixCopiaECola = qr.payload;
+                await db.update(asaasCobrancas).set({ pixQrCodePayload: qr.payload }).where(eq(asaasCobrancas.id, cob.id));
+              }
+            } catch { /* não-fatal */ }
+          }
+          if (precisaBoleto) {
+            try {
+              const ld = await client.obterLinhaDigitavel(cob.asaasPaymentId);
+              if (ld?.identificationField) {
+                codigoBarras = ld.identificationField;
+                await db.update(asaasCobrancas).set({ linhaDigitavelPayload: JSON.stringify(ld) }).where(eq(asaasCobrancas.id, cob.id));
+              }
+            } catch { /* não-fatal */ }
+          }
+        }
+      } catch { /* não-fatal */ }
+    }
+
+    return { linkPagamento, linkBoleto, pixCopiaECola, codigoBarras, formaPagamento: forma };
+  } catch {
+    return vazio;
+  }
+}
+
+/**
  * Dispara cenários com gatilho `pagamento_vencido`.
  * Chamado pelo webhook do Asaas (PAYMENT_OVERDUE) e pelo cobrancas-scheduler.
  *
@@ -887,6 +970,7 @@ export async function dispararPagamentoVencido(
         contatoId: params.contatoId,
         clienteAsaasId: params.clienteAsaasId,
       });
+      const links = await enriquecerLinksCobranca(escritorioId, params.pagamentoId);
 
       const contexto: SmartflowContexto = {
         mensagem: `Cobrança vencida: ${params.descricao}`,
@@ -895,6 +979,7 @@ export async function dispararPagamentoVencido(
         pagamentoDescricao: params.descricao,
         vencimento: params.vencimento,
         diasAtraso: diasAtrasoAtual,
+        ...links,
         nomeCliente: params.clienteNome || contato.nome,
         telefoneCliente: contato.telefone,
         emailCliente: contato.email,
@@ -968,6 +1053,7 @@ export async function dispararProximoVencimento(
       const contato = await resolverContatoAsaas(escritorioId, {
         contatoId: params.contatoId,
       });
+      const links = await enriquecerLinksCobranca(escritorioId, params.pagamentoId);
 
       const contexto: SmartflowContexto = {
         mensagem: `Cobrança vence em ${diasAteVencer} dia(s): ${params.descricao}`,
@@ -976,6 +1062,7 @@ export async function dispararProximoVencimento(
         pagamentoDescricao: params.descricao,
         vencimento: params.vencimento,
         diasAteVencer,
+        ...links,
         nomeCliente: params.clienteNome || contato.nome,
         telefoneCliente: contato.telefone,
         emailCliente: contato.email,

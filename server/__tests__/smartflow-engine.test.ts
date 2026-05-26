@@ -933,6 +933,87 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  describe("whatsapp_enviar — template (HSM)", () => {
+    it("envia template pela Cloud API com componentes interpolados (não via texto, não duplica em respostas)", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const enviarWhatsAppTemplate = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp, enviarWhatsAppTemplate });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "whatsapp_enviar",
+          clienteId: "n1",
+          config: {
+            modo: "template",
+            templateNome: "lembrete_audiencia",
+            templateIdioma: "pt_BR",
+            templateHeader: { formato: "IMAGE", valor: "https://x/{{cliente.nome}}.png" },
+            templateCorpo: ["{{cliente.nome}}", "amanhã 10h"],
+            templateBotoes: [{ index: 0, tipo: "URL", valor: "ver-{{cliente.nome}}" }],
+          },
+        },
+      ];
+
+      const r = await executarCenario(
+        passos,
+        { telefoneCliente: "5585999990000", cliente: { nome: "Ana" } },
+        exec,
+      );
+
+      expect(r.sucesso).toBe(true);
+      expect(enviarWhatsApp).not.toHaveBeenCalled();
+      expect(enviarWhatsAppTemplate).toHaveBeenCalledTimes(1);
+      const [tel, tpl] = (enviarWhatsAppTemplate as any).mock.calls[0];
+      expect(tel).toBe("5585999990000");
+      expect(tpl.nome).toBe("lembrete_audiencia");
+      expect(tpl.idioma).toBe("pt_BR");
+      expect(tpl.componentes).toEqual([
+        { type: "header", parameters: [{ type: "image", image: { link: "https://x/Ana.png" } }] },
+        { type: "body", parameters: [{ type: "text", text: "Ana" }, { type: "text", text: "amanhã 10h" }] },
+        { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: "ver-Ana" }] },
+      ]);
+      // Template é enviado direto pela API — não volta como texto pro canal.
+      expect(r.respostas).toEqual([]);
+    });
+
+    it("erro claro quando falta o telefone do contato", async () => {
+      const enviarWhatsAppTemplate = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsAppTemplate });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_enviar", clienteId: "n1", config: { modo: "template", templateNome: "x" } },
+      ];
+      const r = await executarCenario(passos, { canalId: 1 }, exec);
+      expect(r.sucesso).toBe(false);
+      expect(r.erro || "").toContain("telefone");
+      expect(enviarWhatsAppTemplate).not.toHaveBeenCalled();
+    });
+
+    it("reporta falha quando o envio do template falha", async () => {
+      const enviarWhatsAppTemplate = vi.fn().mockResolvedValue(false);
+      const exec = criarMockExecutores({ enviarWhatsAppTemplate });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_enviar", clienteId: "n1", config: { modo: "template", templateNome: "x" } },
+      ];
+      const r = await executarCenario(passos, { telefoneCliente: "5585999990000", cliente: {} }, exec);
+      expect(r.sucesso).toBe(false);
+      expect(enviarWhatsAppTemplate).toHaveBeenCalledTimes(1);
+    });
+
+    it("modo texto continua usando enviarWhatsApp (não o template)", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const enviarWhatsAppTemplate = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp, enviarWhatsAppTemplate });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_enviar", clienteId: "n1", config: { modo: "texto", template: "Oi {{cliente.nome}}" } },
+      ];
+      const r = await executarCenario(passos, { telefoneCliente: "5585", cliente: { nome: "Ana" } }, exec);
+      expect(r.sucesso).toBe(true);
+      expect(enviarWhatsAppTemplate).not.toHaveBeenCalled();
+      expect(enviarWhatsApp).toHaveBeenCalledWith("5585", "Oi Ana");
+    });
+  });
+
   describe("parsearOpcaoResposta", () => {
     it("acha por número", async () => {
       const { parsearOpcaoResposta } = await import("../smartflow/engine");

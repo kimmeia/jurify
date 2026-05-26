@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 540" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f1f5f9" stop-opacity="0.5"/>
+      <stop offset="0.5" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#ede9fe" stop-opacity="0.35"/>
+    </linearGradient>
+    <pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse">
+      <circle cx="1.2" cy="1.2" r="1.1" fill="#cbd5e1" opacity="0.55"/>
+    </pattern>
+    <linearGradient id="gSky" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0ea5e9"/><stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="gOrange" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f97316"/><stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="gAmber" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f59e0b"/><stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+    <linearGradient id="gTeal" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#0891b2"/>
+    </linearGradient>
+    <linearGradient id="gAmberLight" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fef3c7"/><stop offset="1" stop-color="#ffedd5"/>
+    </linearGradient>
+    <filter id="cardshadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.13"/>
+    </filter>
+    <marker id="aAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+    <marker id="aSky" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0ea5e9"/></marker>
+    <marker id="aGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#22c55e"/></marker>
+  </defs>
+
+  <!-- ===== Topbar ===== -->
+  <rect x="0" y="0" width="1200" height="58" fill="#ffffff"/>
+  <line x1="0" y1="58" x2="1200" y2="58" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="24" y="26" font-size="16" font-weight="700" fill="#0f172a">SmartFlow — novo visual do canvas</text>
+  <text x="24" y="46" font-size="11.5" fill="#64748b">Linhas sólidas com seta, coloridas por tipo de saída. Ao selecionar um bloco, as conexões dele acendem e as outras apagam. Auto-organizar virou botão manual.</text>
+  <!-- faux buttons -->
+  <rect x="905" y="15" width="132" height="28" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="971" y="33" font-size="11" font-weight="600" fill="#475569" text-anchor="middle">⤢ Auto-organizar</text>
+  <rect x="1048" y="15" width="84" height="28" rx="8" fill="#7c3aed"/>
+  <text x="1090" y="33" font-size="11.5" font-weight="700" fill="#ffffff" text-anchor="middle">Salvar</text>
+
+  <!-- ===== Canvas ===== -->
+  <rect x="0" y="58" width="1200" height="412" fill="url(#bg)"/>
+  <rect x="0" y="58" width="1200" height="412" fill="url(#dots)" opacity="0.6"/>
+
+  <!-- ========== NODES (cards) ========== -->
+
+  <!-- N1 Gatilho -->
+  <rect x="40" y="208" width="196" height="96" rx="12" fill="#ffffff" filter="url(#cardshadow)"/>
+  <path d="M52,208 H224 Q236,208 236,220 V238 H40 V220 Q40,208 52,208 Z" fill="url(#gAmberLight)"/>
+  <text x="54" y="227" font-size="11" font-weight="700" fill="#78350f" letter-spacing="0.6">⚡ MENSAGEM</text>
+  <text x="54" y="259" font-size="12.5" font-weight="600" fill="#1e293b">Mensagem recebida</text>
+  <text x="54" y="283" font-size="10" fill="#64748b">WhatsApp · “oi / olá”</text>
+  <rect x="40" y="208" width="196" height="96" rx="12" fill="none" stroke="#f59e0b" stroke-opacity="0.6" stroke-width="2"/>
+  <circle cx="236" cy="256" r="6" fill="#f59e0b" stroke="#ffffff" stroke-width="2"/>
+
+  <!-- N2 Atendente IA (SELECIONADO) -->
+  <rect x="314" y="174" width="222" height="164" rx="16" fill="none" stroke="#a78bfa" stroke-width="2"/>
+  <rect x="320" y="180" width="210" height="152" rx="12" fill="#ffffff" filter="url(#cardshadow)"/>
+  <path d="M332,180 H518 Q530,180 530,192 V210 H320 V192 Q320,180 332,180 Z" fill="url(#gSky)"/>
+  <text x="334" y="200" font-size="11.5" font-weight="700" fill="#ffffff" letter-spacing="0.5">🤖  ATENDENTE IA</text>
+  <text x="334" y="230" font-size="10.5" fill="#475569">Agente: “Sofia” · 2 ações</text>
+  <line x1="320" y1="240" x2="530" y2="240" stroke="#eef2f7" stroke-width="1"/>
+  <text x="338" y="262" font-size="10.5" fill="#334155">🗓  quer agendar →</text>
+  <circle cx="530" cy="258" r="6" fill="#0ea5e9" stroke="#ffffff" stroke-width="2"/>
+  <text x="338" y="304" font-size="10.5" fill="#334155">🙋  falar com humano →</text>
+  <circle cx="530" cy="300" r="6" fill="#0ea5e9" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="320" cy="256" r="5" fill="#94a3b8" stroke="#ffffff" stroke-width="2"/>
+  <rect x="320" y="180" width="210" height="152" rx="12" fill="none" stroke="#a78bfa" stroke-width="2"/>
+  <!-- selected tag -->
+  <rect x="320" y="162" width="92" height="16" rx="8" fill="#7c3aed"/>
+  <text x="366" y="173.5" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">● selecionado</text>
+
+  <!-- N3 Agendamento -->
+  <rect x="660" y="120" width="200" height="86" rx="12" fill="#ffffff" filter="url(#cardshadow)"/>
+  <path d="M672,120 H848 Q860,120 860,132 V150 H660 V132 Q660,120 672,120 Z" fill="url(#gOrange)"/>
+  <text x="674" y="139" font-size="11" font-weight="700" fill="#ffffff" letter-spacing="0.5">🗓  AGENDAMENTO</text>
+  <text x="674" y="172" font-size="10" fill="#475569">Cria compromisso na agenda</text>
+  <text x="674" y="190" font-size="9.5" fill="#94a3b8">usa o horário escolhido</text>
+  <circle cx="660" cy="163" r="5" fill="#94a3b8" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="860" cy="163" r="6" fill="#22c55e" stroke="#ffffff" stroke-width="2"/>
+  <rect x="660" y="120" width="200" height="86" rx="12" fill="none" stroke="#fdba74" stroke-width="2"/>
+
+  <!-- N4 Transferir -->
+  <rect x="660" y="300" width="200" height="74" rx="12" fill="#ffffff" filter="url(#cardshadow)"/>
+  <path d="M672,300 H848 Q860,300 860,312 V330 H660 V312 Q660,300 672,300 Z" fill="url(#gAmber)"/>
+  <text x="674" y="319" font-size="11" font-weight="700" fill="#ffffff" letter-spacing="0.5">🙋  TRANSFERIR</text>
+  <text x="674" y="352" font-size="10" fill="#475569">Passa pra um humano</text>
+  <circle cx="660" cy="337" r="5" fill="#94a3b8" stroke="#ffffff" stroke-width="2"/>
+  <rect x="660" y="300" width="200" height="74" rx="12" fill="none" stroke="#fcd34d" stroke-width="2"/>
+
+  <!-- N5 Enviar WhatsApp -->
+  <rect x="940" y="120" width="210" height="86" rx="12" fill="#ffffff" filter="url(#cardshadow)"/>
+  <path d="M952,120 H1138 Q1150,120 1150,132 V150 H940 V132 Q940,120 952,120 Z" fill="url(#gTeal)"/>
+  <text x="954" y="139" font-size="10.5" font-weight="700" fill="#ffffff" letter-spacing="0.5">💬  ENVIAR WHATSAPP</text>
+  <text x="954" y="172" font-size="10" fill="#475569">Confirmação do agendamento</text>
+  <circle cx="940" cy="163" r="5" fill="#94a3b8" stroke="#ffffff" stroke-width="2"/>
+  <rect x="940" y="120" width="210" height="86" rx="12" fill="none" stroke="#5eead4" stroke-width="2"/>
+
+  <!-- ========== EDGES (desenhadas por cima, com seta) ========== -->
+  <!-- A: gatilho -> atendente (âmbar, realçada) -->
+  <path d="M236,256 H312" fill="none" stroke="#f59e0b" stroke-width="2.6" marker-end="url(#aAmber)"/>
+  <!-- B: atendente (quer agendar, sky) -> agendamento (realçada) -->
+  <path d="M530,258 H583 Q595,258 595,246 V174 Q595,162 607,162 H654" fill="none" stroke="#0ea5e9" stroke-width="2.6" marker-end="url(#aSky)"/>
+  <!-- C: atendente (falar com humano, sky) -> transferir (realçada) -->
+  <path d="M530,300 H583 Q595,300 595,312 V325 Q595,337 607,337 H654" fill="none" stroke="#0ea5e9" stroke-width="2.6" marker-end="url(#aSky)"/>
+  <!-- D: agendamento -> enviar (verde, ATENUADA: não toca o bloco selecionado) -->
+  <g opacity="0.22">
+    <path d="M860,163 H934" fill="none" stroke="#22c55e" stroke-width="2" marker-end="url(#aGreen)"/>
+  </g>
+
+  <!-- × de remover (aparece no hover) sobre a aresta B -->
+  <circle cx="595" cy="210" r="9" fill="#ffffff" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="595" y="214" font-size="12" font-weight="700" fill="#ef4444" text-anchor="middle">×</text>
+
+  <!-- ========== Anotações ========== -->
+  <!-- nota do × -->
+  <line x1="595" y1="201" x2="560" y2="120" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="556" y="112" font-size="10.5" fill="#475569" text-anchor="end">passe o mouse → aparece o ×</text>
+  <text x="556" y="125" font-size="10.5" fill="#475569" text-anchor="end" opacity="0">.</text>
+
+  <!-- nota da aresta atenuada -->
+  <line x1="900" y1="163" x2="935" y2="250" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="940" y="258" font-size="10.5" fill="#475569">apagada: não toca</text>
+  <text x="940" y="272" font-size="10.5" fill="#475569">o bloco selecionado</text>
+
+  <!-- nota das saídas do atendente -->
+  <line x1="560" y1="300" x2="560" y2="392" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="568" y="384" font-size="10.5" fill="#475569">uma saída por ação do Atendente —</text>
+  <text x="568" y="398" font-size="10.5" fill="#475569">cada linha azul-céu leva ao bloco daquela ação.</text>
+
+  <!-- ========== Legenda ========== -->
+  <line x1="0" y1="470" x2="1200" y2="470" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="24" y="505" font-size="11" font-weight="700" fill="#334155">Cores das linhas:</text>
+
+  <line x1="150" y1="501" x2="176" y2="501" stroke="#22c55e" stroke-width="3" marker-end="url(#aGreen)"/>
+  <text x="186" y="505" font-size="11" fill="#475569">fluxo normal / condição</text>
+
+  <line x1="360" y1="501" x2="386" y2="501" stroke="#f59e0b" stroke-width="3" marker-end="url(#aAmber)"/>
+  <text x="396" y="505" font-size="11" fill="#475569">gatilho · fallback · tempo esgotado · loop</text>
+
+  <line x1="700" y1="501" x2="726" y2="501" stroke="#3b82f6" stroke-width="3"/>
+  <polygon points="726,497 734,501 726,505" fill="#3b82f6"/>
+  <text x="740" y="505" font-size="11" fill="#475569">depois do loop</text>
+
+  <line x1="868" y1="501" x2="894" y2="501" stroke="#0ea5e9" stroke-width="3" marker-end="url(#aSky)"/>
+  <text x="904" y="505" font-size="11" fill="#475569">ações do Atendente IA</text>
+</svg>

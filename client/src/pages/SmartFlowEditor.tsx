@@ -6,12 +6,13 @@
  *   /smartflow/novo          → cria cenário novo
  *   /smartflow/:id/editar    → edita cenário existente
  *
- * Ao salvar, os nós são ordenados pela posição Y e serializados como
- * passos sequenciais (campo `ordem` gerado automaticamente). As arestas
- * são puramente visuais — a execução do engine é linear.
+ * Ao salvar, cada nó vira um passo (campo `ordem` pela posição Y, só pra
+ * desempate) e as arestas viram o mapa `proximoSe` que o engine percorre
+ * como grafo. As posições x/y são persistidas em `layout` pra reabrir o
+ * canvas idêntico ao que o usuário deixou — auto-organizar é ação manual.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -27,7 +28,8 @@ import {
   applyNodeChanges,
   BaseEdge,
   EdgeLabelRenderer,
-  getBezierPath,
+  getSmoothStepPath,
+  MarkerType,
   useReactFlow,
   ReactFlowProvider,
   type Connection,
@@ -104,6 +106,7 @@ import { EditorPaleta } from "./smartflow/editor-paleta";
 import { EditorTestarDialog } from "./smartflow/editor-testar-dialog";
 import { EditorCanvasToolbar, calcularAutoLayout } from "./smartflow/editor-canvas-toolbar";
 import { variaveisPublicadasPorPasso } from "./smartflow/editor-painel-saida";
+import { ConfigWhatsappTemplateBuilder } from "./smartflow/config-whatsapp-template";
 import { PainelVariaveis } from "./smartflow/editor-painel-variaveis";
 import { validarPasso, ValidacaoPassoPanel } from "./smartflow/editor-validacao-passo";
 import { VariaveisFluxoContext } from "@/hooks/useSmartFlowVariaveis";
@@ -403,7 +406,12 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
           </div>
         ) : null
       ) : (
-        <Handle type="source" position={Position.Right} id="default" className="!bg-muted-foreground/40" />
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="default"
+          style={{ background: "#22c55e", width: 10, height: 10, border: "2px solid white" }}
+        />
       )}
     </div>
   );
@@ -558,36 +566,72 @@ function GatilhoNodeView({ data, selected }: NodeProps<GatilhoNode>) {
 const nodeTypes = { passo: PassoNodeView, gatilho: GatilhoNodeView };
 
 /**
- * Edge customizada "removivel". Renderiza o caminho Bezier padrão + um
- * botão X no ponto médio, visível somente no hover. Clicar no X remove
- * a edge via `setEdges` injetado por `useReactFlow`. Também suporta a
- * tecla Delete/Backspace via `deleteKeyCode` do próprio ReactFlow.
+ * Cor da aresta conforme o handle de saída — bate com a cor do "ponto" de
+ * cada ramo no nó, pra dar pra seguir visualmente de onde a linha parte:
+ *   • sem handle (gatilho → início)       → âmbar
+ *   • cond_* (condição satisfeita)         → verde
+ *   • default (fluxo normal / respondeu)   → verde
+ *   • depois (continuação após o loop)     → azul
+ *   • fallback / timeout / corpo do loop   → âmbar
+ *   • ferramentas do Atendente IA          → azul-céu
+ */
+function corDaEdge(sourceHandle?: string | null): string {
+  if (!sourceHandle) return "#f59e0b";
+  if (sourceHandle.startsWith("cond_")) return "#22c55e";
+  if (sourceHandle === "default") return "#22c55e";
+  if (sourceHandle === "depois") return "#3b82f6";
+  if (sourceHandle === "fallback" || sourceHandle === "timeout" || sourceHandle === "corpo") return "#f59e0b";
+  return "#0ea5e9";
+}
+
+/**
+ * Edge customizada "removivel". Linha SÓLIDA (não tracejada) com seta no
+ * destino, em curva ortogonal arredondada (smoothstep) — mais fácil de seguir
+ * que a Bézier. No hover (ou quando selecionada) engrossa, ganha sombra e
+ * revela o botão X pra remover. Cor, largura e atenuação vêm do `style` e do
+ * `markerEnd` calculados por `edgesView` no componente pai.
  */
 function RemovivelEdge(props: EdgeProps) {
-  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd } = props;
+  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd, selected } = props;
   const { setEdges } = useReactFlow();
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition,
+  const [hover, setHover] = useState(false);
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
+    sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, borderRadius: 14,
   });
+  const realcado = hover || !!selected;
+  const larguraBase = Number((style as CSSProperties | undefined)?.strokeWidth ?? 2);
+  const estilo: CSSProperties = {
+    ...style,
+    strokeWidth: realcado ? larguraBase + 1.5 : larguraBase,
+    opacity: realcado ? 1 : ((style as CSSProperties | undefined)?.opacity ?? 1),
+    filter: realcado ? "drop-shadow(0 1px 2px rgba(15,23,42,0.35))" : undefined,
+    transition: "stroke-width 120ms ease, opacity 120ms ease",
+  };
   return (
     <>
-      {/* Caminho mais grosso invisível por cima pra aumentar hit area. */}
+      {/* Caminho grosso invisível por cima — aumenta a hit area e dispara o hover. */}
       <path
         d={edgePath}
         fill="none"
         stroke="transparent"
-        strokeWidth={20}
+        strokeWidth={22}
         style={{ cursor: "pointer" }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
       />
-      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
+      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={estilo} />
       <EdgeLabelRenderer>
         <div
-          className="smartflow-edge-delete"
+          className="nodrag nopan"
           style={{
             position: "absolute",
             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
             pointerEvents: "all",
+            opacity: realcado ? 1 : 0,
+            transition: "opacity 120ms ease",
           }}
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => setHover(false)}
         >
           <button
             type="button"
@@ -797,6 +841,10 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
         ? truncar(String(config.novoHorario), 30)
         : "usa {horarioEscolhido}";
     case "whatsapp_enviar":
+      if (config.modo === "template") {
+        const nome = String(config.templateNome || "").trim();
+        return nome ? `📋 template: ${truncar(nome, 32)}` : "📋 template (escolha um)";
+      }
       return typeof config.template === "string" ? truncar(config.template, 50) : "";
     case "condicional": {
       const cs = Array.isArray(config.condicoes) ? (config.condicoes as any[]) : [];
@@ -1098,15 +1146,26 @@ function SmartFlowEditorInner() {
       }
     }
 
-    // Posições não são persistidas — recalcula o layout horizontal
-    // (esquerda→direita) no load pra um visual sempre organizado.
+    // Aplica as posições salvas (keyed por clienteId / "__gatilho__"). O
+    // auto-layout horizontal entra só como FALLBACK: cenários legados sem
+    // layout salvo, ou nós sem posição registrada. Assim o canvas reabre
+    // exatamente como o usuário deixou — sem realinhar nada por conta própria.
     const todosNodes = [gatilhoNode, ...passosNodes];
-    const layoutInicial = calcularAutoLayout(
+    const layoutSalvo = (cenario.layout && typeof cenario.layout === "object"
+      ? cenario.layout
+      : {}) as Record<string, { x: number; y: number }>;
+    const autoLayout = calcularAutoLayout(
       todosNodes.map((n) => ({ id: n.id, position: n.position, type: n.type as string })),
       es.map((e) => ({ source: e.source, target: e.target })),
       GATILHO_NODE_ID,
     );
-    setNodes(todosNodes.map((n) => ({ ...n, position: layoutInicial.get(n.id) ?? n.position })));
+    setNodes(
+      todosNodes.map((n) => {
+        const chave = isGatilhoNode(n) ? GATILHO_NODE_ID : (n as PassoNode).data.clienteId;
+        const salvo = layoutSalvo[chave];
+        return { ...n, position: salvo ?? autoLayout.get(n.id) ?? n.position };
+      }),
+    );
     setEdges(es);
 
     // Snapshot do estado salvo — referência pra "Salvo há X" e dirty.
@@ -1205,6 +1264,31 @@ function SmartFlowEditorInner() {
     return [...doGatilho, ...dosPassos];
   }, [catalogoVars, gatilhoNode, nodes]);
 
+  // Arestas decoradas só pra exibição: cor por ramo de origem + seta no
+  // destino + realce da conexão do nó selecionado (as demais ficam atenuadas,
+  // pra dar pra ver "de onde sai e onde chega"). O estado `edges` continua
+  // sendo a fonte da verdade (save, conexão); isto é uma projeção visual
+  // derivada, recalculada só quando edges ou seleção mudam.
+  const edgesView = useMemo<Edge[]>(() => {
+    return edges.map((e) => {
+      const cor = corDaEdge(e.sourceHandle);
+      const tocaSelecionado = !!selectedId && (e.source === selectedId || e.target === selectedId);
+      const atenuar = !!selectedId && !tocaSelecionado;
+      return {
+        ...e,
+        type: "removivel",
+        animated: false,
+        markerEnd: { type: MarkerType.ArrowClosed, color: cor, width: 16, height: 16 },
+        style: {
+          stroke: cor,
+          strokeWidth: tocaSelecionado ? 2.6 : 2,
+          opacity: atenuar ? 0.18 : 1,
+        },
+        zIndex: tocaSelecionado ? 10 : 0,
+      };
+    });
+  }, [edges, selectedId]);
+
   // Callbacks canvas. Drag/move/select também passa por `onNodesChange`,
   // mas só os tipos com efeito persistente marcam dirty (skip "select").
   const onNodesChange = useCallback(
@@ -1295,7 +1379,14 @@ function SmartFlowEditorInner() {
     // Não criar auto-link "default" a partir deles — senão nasce uma aresta
     // espúria (ex: ligando ramos irmãos). O usuário liga pelo ramo desejado.
     const origemRamifica = origem?.data.tipo === "condicional" || origem?.data.tipo === "para_cada_item";
-    const novosNodes = [...nodes, novoNode];
+    // Posiciona o novo nó à DIREITA da origem (fluxo esquerda→direita), um
+    // pouco abaixo de cada irmão já existente — sem realinhar os outros nós.
+    // O usuário arrasta livremente depois; nada se move sozinho (auto-organizar
+    // virou ação manual no botão da barra do canvas).
+    const origemNode = origem ?? nodes.find(isGatilhoNode) ?? null;
+    const origemPos = origemNode?.position ?? { x: 80, y: 80 };
+    const irmaos = edges.filter((e) => e.source === origemId).length;
+    novoNode.position = { x: origemPos.x + 320, y: origemPos.y + irmaos * 150 };
     const novasEdges: Edge[] = origemRamifica
       ? [...edges]
       : [
@@ -1306,16 +1397,9 @@ function SmartFlowEditorInner() {
             target: novoNode.id,
             sourceHandle: origemId === GATILHO_NODE_ID ? undefined : "default",
             type: "removivel",
-            animated: true,
           },
         ];
-    // Auto-organiza (esquerda→direita) já na adição — nunca empilha vertical.
-    const layout = calcularAutoLayout(
-      novosNodes.map((n) => ({ id: n.id, position: n.position, type: n.type as string })),
-      novasEdges.map((e) => ({ source: e.source, target: e.target })),
-      GATILHO_NODE_ID,
-    );
-    setNodes(novosNodes.map((n) => ({ ...n, position: layout.get(n.id) ?? n.position })));
+    setNodes([...nodes, novoNode]);
     setEdges(novasEdges);
     setSelectedId(novoNode.id);
     marcarDirty();
@@ -1572,6 +1656,15 @@ function SmartFlowEditorInner() {
       toast.warning(aviso);
     }
 
+    // Posições atuais de cada nó — keyed por clienteId (passos) e
+    // "__gatilho__" (gatilho). Persistido pra reabrir o canvas idêntico ao
+    // que o usuário deixou (o engine ignora estas coordenadas).
+    const layout: Record<string, { x: number; y: number }> = {};
+    for (const n of nodes) {
+      const chave = isGatilhoNode(n) ? GATILHO_NODE_ID : (n as PassoNode).data.clienteId;
+      layout[chave] = { x: Math.round(n.position.x), y: Math.round(n.position.y) };
+    }
+
     const base = {
       nome,
       descricao: descricao || undefined,
@@ -1579,6 +1672,7 @@ function SmartFlowEditorInner() {
       configGatilho: Object.keys(gatilhoNode.data.configGatilho).length > 0
         ? gatilhoNode.data.configGatilho
         : undefined,
+      layout,
       passos,
     };
     if (editandoId) {
@@ -1655,7 +1749,7 @@ function SmartFlowEditorInner() {
         >
           <ReactFlow
             nodes={nodes}
-            edges={edges}
+            edges={edgesView}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
@@ -1666,7 +1760,7 @@ function SmartFlowEditorInner() {
             onInit={setRfInstance}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            defaultEdgeOptions={{ type: "removivel", animated: true }}
+            defaultEdgeOptions={{ type: "removivel" }}
             deleteKeyCode={["Backspace", "Delete"]}
             fitView
             proOptions={{ hideAttribution: true }}
@@ -3304,9 +3398,12 @@ function CampoCondicaoCombobox({
 }
 
 /**
- * Campos do nó "Enviar mensagem WhatsApp" — texto livre com autocomplete
- * de variáveis. Compat com formato legado `{nome}` e `{intencao}` (engine
- * resolve via aliases em interpolar.ts).
+ * Campos do nó "Enviar mensagem WhatsApp". Dois modos:
+ *   • "texto"    — mensagem livre com autocomplete de variáveis (padrão).
+ *   • "template" — template aprovado (HSM) da Meta, montado pelo
+ *                  ConfigWhatsappTemplateBuilder. Necessário pra falar fora
+ *                  da janela de 24h (cobrança, lembrete, follow-up).
+ * Compat com formato legado `{nome}`/`{intencao}` (engine resolve via aliases).
  */
 function ConfigWhatsappEnviarFields({
   cfg,
@@ -3316,35 +3413,60 @@ function ConfigWhatsappEnviarFields({
   onChange: (patch: Record<string, unknown>) => void;
 }) {
   const variaveis = useSmartFlowVariaveis();
+  const modo = cfg.modo === "template" ? "template" : "texto";
   const insertNoCfg = (path: string) => {
     const atual = String(cfg.template || "");
     onChange({ template: atual + (atual ? " " : "") + `{{${path}}}` });
   };
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <Label className="text-xs">Template da mensagem</Label>
-        <VariableTrigger
-          inputId="cfg-whatsapp-template"
-          variaveis={variaveis}
-          onInsert={insertNoCfg}
-        />
+    <div className="space-y-3">
+      {/* Seletor de modo */}
+      <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted">
+        <button
+          type="button"
+          onClick={() => onChange({ modo: "texto" })}
+          className={`text-[11px] font-medium rounded-md py-1.5 transition-colors ${
+            modo === "texto" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          💬 Texto livre
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange({ modo: "template" })}
+          className={`text-[11px] font-medium rounded-md py-1.5 transition-colors ${
+            modo === "template" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          📋 Template aprovado
+        </button>
       </div>
-      <VariableInput
-        id="cfg-whatsapp-template"
-        as="textarea"
-        rows={4}
-        highlight
-        preview
-        value={String(cfg.template || "")}
-        onChange={(v) => onChange({ template: v })}
-        variaveis={variaveis}
-        placeholder="Olá {{nomeCliente}}, vi sua mensagem sobre {{intencao}}."
-      />
-      <p className="text-[10px] text-muted-foreground mt-1">
-        Use <code>{"{{"}</code> pra inserir variável dinâmica. Aliases legado
-        (<code>{"{nome}"}</code>, <code>{"{intencao}"}</code>, <code>{"{horario}"}</code>) continuam funcionando.
-      </p>
+
+      {modo === "texto" ? (
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <Label className="text-xs">Mensagem</Label>
+            <VariableTrigger inputId="cfg-whatsapp-template" variaveis={variaveis} onInsert={insertNoCfg} />
+          </div>
+          <VariableInput
+            id="cfg-whatsapp-template"
+            as="textarea"
+            rows={4}
+            highlight
+            preview
+            value={String(cfg.template || "")}
+            onChange={(v) => onChange({ template: v })}
+            variaveis={variaveis}
+            placeholder="Olá {{nomeCliente}}, vi sua mensagem sobre {{intencao}}."
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Use <code>{"{{"}</code> pra inserir variável dinâmica. Funciona dentro da janela de 24h
+            (cliente te respondeu há pouco). Pra falar fora dela, use template.
+          </p>
+        </div>
+      ) : (
+        <ConfigWhatsappTemplateBuilder cfg={cfg} onChange={onChange} />
+      )}
     </div>
   );
 }
