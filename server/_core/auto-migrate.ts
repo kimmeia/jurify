@@ -1366,6 +1366,9 @@ export async function runMigrations(): Promise<void> {
     // SmartFlow configGatilhoSF — config específica do gatilho (canais, dias, etc.)
     try { await connection.query(`ALTER TABLE smartflow_cenarios ADD COLUMN configGatilhoSF TEXT NULL`); } catch { /* exists */ }
 
+    // SmartFlow layoutSF — posições x/y dos nós no editor (JSON, só visual).
+    try { await connection.query(`ALTER TABLE smartflow_cenarios ADD COLUMN layoutSF TEXT NULL`); } catch { /* exists */ }
+
     // SmartFlow branching — UUID estável + mapa de saída por ramo.
     // Idempotente: catch silencioso se a coluna já existe.
     try { await connection.query(`ALTER TABLE smartflow_passos ADD COLUMN clienteIdPasso VARCHAR(36) NULL`); } catch { /* exists */ }
