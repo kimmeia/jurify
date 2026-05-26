@@ -29,6 +29,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { toIsoString } from "../_core/dates";
+import { montarBodyOpenAIChat } from "../_core/openai-model-params";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -231,15 +232,15 @@ async function gerarTituloThread(
         "Content-Type": "application/json",
         Authorization: `Bearer ${resolved.key}`,
       },
-      body: JSON.stringify({
+      body: JSON.stringify(montarBodyOpenAIChat({
         model: agente.modelo,
         messages: [
           { role: "system", content: prompt },
           { role: "user", content: primeiraPergunta.slice(0, 500) },
         ],
-        max_tokens: 30,
-        temperature: 0.3,
-      }),
+        maxTokens: 30,
+        temperatura: 0.3,
+      })),
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) return null;
@@ -549,15 +550,15 @@ export const agenteChatRouter = router({
               "Content-Type": "application/json",
               Authorization: `Bearer ${resolved.key}`,
             },
-            body: JSON.stringify({
+            body: JSON.stringify(montarBodyOpenAIChat({
               model: agente.modelo,
               messages: [
                 { role: "system", content: systemPrompt },
                 ...messagesForLLM.filter((m) => m.role !== "system"),
               ],
-              temperature: temperatura,
-              max_tokens: maxTokens,
-            }),
+              temperatura,
+              maxTokens,
+            })),
             signal: AbortSignal.timeout(60000),
           });
           if (!res.ok) {

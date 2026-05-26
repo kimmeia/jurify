@@ -26,6 +26,7 @@ import { getDb } from "../db";
 import { agentesIa, agenteIaDocumentos, adminIntegracoes } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { toIsoString } from "../_core/dates";
+import { montarBodyOpenAIChat } from "../_core/openai-model-params";
 import {
   parseAgenteVariaveis,
   serializarAgenteVariaveis,
@@ -506,7 +507,7 @@ export const agentesIaRouter = router({
         descricao: z.string().max(512).optional(),
         areaConhecimento: z.string().max(128).optional(),
         modelo: z.string().default("gpt-4o-mini"),
-        prompt: z.string().min(10),
+        prompt: z.string().min(10).max(32000),
         canalId: z.number().optional(),
         openaiApiKey: z.string().min(10).optional(),
         maxTokens: z.number().min(100).max(4000).optional(),
@@ -572,7 +573,7 @@ export const agentesIaRouter = router({
         descricao: z.string().max(512).optional(),
         areaConhecimento: z.string().max(128).optional(),
         modelo: z.string().optional(),
-        prompt: z.string().min(10).optional(),
+        prompt: z.string().min(10).max(32000).optional(),
         canalId: z.number().nullable().optional(),
         openaiApiKey: z.string().min(10).optional(),
         maxTokens: z.number().min(100).max(4000).optional(),
@@ -987,15 +988,15 @@ export const agentesIaRouter = router({
             Authorization: `Bearer ${resolved.key}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
+          body: JSON.stringify(montarBodyOpenAIChat({
             model: agente.modelo,
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: input.pergunta },
             ],
-            temperature: temperatura,
-            max_tokens: maxTokens,
-          }),
+            temperatura,
+            maxTokens,
+          })),
           signal: AbortSignal.timeout(30000),
         });
 

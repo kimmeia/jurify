@@ -9,6 +9,7 @@
 
 import { SmartflowExecutores } from "./engine";
 import { createLogger } from "../_core/logger";
+import { montarBodyOpenAIChat } from "../_core/openai-model-params";
 import { montarHistoricoMensagens } from "./historico-conversa";
 import type { ChatBotMessage } from "../integracoes/chatbot-openai";
 
@@ -81,16 +82,16 @@ async function invocarLLM(
       "Content-Type": "application/json",
       Authorization: `Bearer ${cfg.openaiApiKey}`,
     },
-    body: JSON.stringify({
+    body: JSON.stringify(montarBodyOpenAIChat({
       model: cfg.modelo || "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
         ...historicoMsgs,
         { role: "user", content: mensagem },
       ],
-      max_tokens: cfg.maxTokens,
-      temperature: cfg.temperatura,
-    }),
+      maxTokens: cfg.maxTokens,
+      temperatura: cfg.temperatura,
+    })),
     signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   });
   if (!res.ok) {
