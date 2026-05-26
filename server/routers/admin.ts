@@ -1648,6 +1648,147 @@ export const adminRouter = router({
     }),
 
   /**
+   * Histórico de cobranças do cliente no Asaas (somente leitura). Usado na
+   * aba Assinatura do cadastro do cliente. Resolve via asaasCustomerId.
+   */
+  cobrancasDoCliente: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { configurado: false as const, motivo: "db", resumo: null, cobrancas: [] };
+
+      const [u] = await db
+        .select({ asaasCustomerId: users.asaasCustomerId })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
+      if (!u?.asaasCustomerId) {
+        return { configurado: false as const, motivo: "sem_customer", resumo: null, cobrancas: [] };
+      }
+
+      try {
+        const { getAdminAsaasClient, isAsaasBillingConfigured } = await import("../billing/asaas-billing-client");
+        if (!(await isAsaasBillingConfigured())) {
+          return { configurado: false as const, motivo: "asaas_nao_configurado", resumo: null, cobrancas: [] };
+        }
+        const client = await getAdminAsaasClient();
+        const r = await client.resumoFinanceiroCliente(u.asaasCustomerId);
+        return {
+          configurado: true as const,
+          resumo: { total: r.total, pago: r.pago, pendente: r.pendente, vencido: r.vencido },
+          cobrancas: r.cobrancas
+            .slice(0, 20)
+            .map((c) => ({
+              id: c.id,
+              valor: c.value,
+              status: c.status,
+              descricao: c.description ?? null,
+              vencimento: c.dueDate,
+              pagoEm: c.paymentDate ?? null,
+              invoiceUrl: c.invoiceUrl,
+            })),
+        };
+      } catch (err: any) {
+        log.warn({ err: err?.message }, "Falha ao listar cobranças do cliente");
+        return { configurado: false as const, motivo: "erro", resumo: null, cobrancas: [] };
+      }
+    }),
+
+  /**
+   * Troca o plano da assinatura de um cliente (admin). Mesmo fluxo do
+   * `subscription.changePlan`, porém operando sobre um userId-alvo: cancela
+   * a assinatura atual no Asaas e cria uma nova com o plano escolhido.
+   *
+   * Exige que o cliente já tenha customer Asaas (asaasCustomerId). Para
+   * clientes sem cobrança, use cortesia.
+   */
+  trocarPlanoAdmin: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+      newPlanId: z.string().min(1),
+      interval: z.enum(["monthly", "yearly"]).default("monthly"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const [u] = await db
+        .select({ id: users.id, name: users.name, email: users.email, asaasCustomerId: users.asaasCustomerId })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
+      if (!u) throw new Error("Usuário não encontrado");
+
+      const { getPlanByIdResolved } = await import("../billing/products-resolver");
+      const newPlan = await getPlanByIdResolved(input.newPlanId);
+      if (!newPlan) throw new Error("Plano não encontrado");
+
+      if (!u.asaasCustomerId) {
+        throw new Error(
+          "Cliente não tem cadastro de cobrança no Asaas — não é possível trocar o plano por aqui. Use cortesia para liberar acesso.",
+        );
+      }
+
+      const { getAdminAsaasClient } = await import("../billing/asaas-billing-client");
+      const { criarAssinaturaComFallback, garantirAsaasCustomer, dataVencimentoPadrao } = await import("./subscription");
+      const client = await getAdminAsaasClient();
+
+      const currentSub = await getActiveSubscription(input.userId);
+
+      // Cancela a antiga no Asaas (best-effort) + marca local como canceled.
+      if (currentSub?.asaasSubscriptionId) {
+        try {
+          await client.cancelarAssinatura(currentSub.asaasSubscriptionId);
+          await db
+            .update(subscriptionsTable)
+            .set({ status: "canceled" })
+            .where(eq(subscriptionsTable.id, currentSub.id));
+        } catch (err: any) {
+          console.warn("Asaas cancel (trocarPlanoAdmin) falhou:", err.message);
+        }
+      }
+
+      const customerId = await garantirAsaasCustomer(input.userId, u.email, u.name, "");
+      const value = input.interval === "monthly" ? newPlan.priceMonthly : newPlan.priceYearly;
+
+      const sub = await criarAssinaturaComFallback(client, {
+        customer: customerId,
+        billingType: "UNDEFINED",
+        value: value / 100,
+        nextDueDate: dataVencimentoPadrao(),
+        cycle: input.interval === "monthly" ? "MONTHLY" : "YEARLY",
+        description: `${newPlan.name} — JuridFlow SaaS`,
+        externalReference: `${input.userId}:${input.newPlanId}`,
+      });
+
+      const existingLocal = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.asaasSubscriptionId, sub.id))
+        .limit(1);
+      if (existingLocal.length === 0) {
+        await db.insert(subscriptionsTable).values({
+          userId: input.userId,
+          asaasSubscriptionId: sub.id,
+          asaasCustomerId: customerId,
+          planId: input.newPlanId,
+          status: "incomplete",
+        });
+      }
+
+      await registrarAuditoria({
+        ctx,
+        acao: "subscription.trocarPlanoAdmin",
+        alvoTipo: "subscription",
+        alvoId: currentSub?.id ?? input.userId,
+        alvoNome: u.name || u.email || undefined,
+        detalhes: { newPlanId: input.newPlanId, interval: input.interval },
+      });
+
+      return { success: true, mensagem: `Plano alterado para ${newPlan.name}` };
+    }),
+
+  /**
    * Marca uma assinatura como cortesia (acesso liberado manualmente).
    *
    * Casos de uso: cliente piloto sem cobrança, isenção pontual, conta

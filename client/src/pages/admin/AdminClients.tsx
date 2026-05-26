@@ -20,7 +20,7 @@ import {
 import {
   AlertCircle, Eye, Coins, ShieldCheck, User, Calculator, CreditCard, Clock,
   Loader2, Search, Lock, Unlock, LogIn, FileText, Trash2, MessageSquarePlus,
-  AlertTriangle, RotateCcw, Users as UsersIcon, Gift, ArrowLeft, Crown, ChevronRight,
+  AlertTriangle, RotateCcw, Users as UsersIcon, Gift, ArrowLeft, Crown, ChevronRight, Mail,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useEffect, useState } from "react";
@@ -110,8 +110,12 @@ const CATEGORIA_CORES: Record<string, string> = {
   alerta: "bg-red-500/15 text-red-700",
 };
 
+function fmtBRLAdmin(v: number): string {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// DIALOG: DETALHES DO CLIENTE
+// CADASTRO DO CLIENTE (página inteira, estilo CRM do dono)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function ClienteDetalheDialog({
@@ -294,6 +298,40 @@ function ClienteDetalheDialog({
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
+  // ─── Assinatura: histórico, cancelar, trocar plano ───
+  const [cancelarOpen, setCancelarOpen] = useState(false);
+  const [motivoCancelamento, setMotivoCancelamento] = useState("");
+  const [trocarOpen, setTrocarOpen] = useState(false);
+  const [planoSelecionado, setPlanoSelecionado] = useState<string | null>(null);
+
+  const { data: cobrancasData } = trpc.admin.cobrancasDoCliente.useQuery(
+    { userId: current! },
+    { enabled: !!current && open, retry: false },
+  );
+  const { data: planosAtuais } = trpc.admin.planosAtuais.useQuery(undefined, { retry: false });
+
+  const cancelarSubMut = trpc.admin.cancelarAssinaturaAdmin.useMutation({
+    onSuccess: (res) => {
+      toast.success(res.mensagem);
+      setCancelarOpen(false);
+      setMotivoCancelamento("");
+      utils.admin.clienteDetalhes.invalidate({ userId: current! });
+      onRefresh();
+    },
+    onError: (err) => toast.error("Erro ao cancelar", { description: err.message }),
+  });
+
+  const trocarPlanoMut = trpc.admin.trocarPlanoAdmin.useMutation({
+    onSuccess: (res) => {
+      toast.success(res.mensagem);
+      setTrocarOpen(false);
+      setPlanoSelecionado(null);
+      utils.admin.clienteDetalhes.invalidate({ userId: current! });
+      onRefresh();
+    },
+    onError: (err) => toast.error("Erro ao trocar plano", { description: err.message }),
+  });
+
   if (!userId) return null;
 
   const user = data?.user as any;
@@ -303,63 +341,267 @@ function ClienteDetalheDialog({
   const calculos = data?.calculos;
   const isBloqueado = !!user?.bloqueado;
 
+  const temEquipe = !!(data?.colaboradores && data.colaboradores.length > 0);
+  const iniciais = (user?.name || user?.email || "?")
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p: string) => p.charAt(0))
+    .join("")
+    .toUpperCase() || "?";
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          {ehSubView && (
-            <button
-              onClick={() => setNavStack((s) => s.slice(0, -1))}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground w-fit mb-1"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Voltar para o escritório
-            </button>
-          )}
-          <div className="flex items-center gap-2 flex-wrap">
-            <DialogTitle>{user?.name || "Cliente"}</DialogTitle>
-            <BloqueadoBadge bloqueado={isBloqueado} />
-            {data?.isDonoEscritorio && (
-              <Badge className="bg-indigo-500/15 text-indigo-700 border-indigo-500/25 text-[10px]">
-                <Crown className="h-2.5 w-2.5 mr-1" /> Dono
-              </Badge>
-            )}
+    <div className="space-y-4">
+      {/* Voltar — para o escritório (se vendo um colaborador) ou para a lista */}
+      <button
+        onClick={() => (ehSubView ? setNavStack((s) => s.slice(0, -1)) : onOpenChange(false))}
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" /> {ehSubView ? "Voltar para o escritório" : "Voltar para clientes"}
+      </button>
+
+      {isLoading ? (
+        <Skeleton className="h-52 w-full rounded-2xl" />
+      ) : data ? (
+        <>
+          {/* ═══════════ HERO ═══════════ */}
+          <div className="rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 p-7 text-white relative overflow-hidden shadow-lg">
+            <UsersIcon className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
+            <div className="relative">
+              <div className="flex items-start gap-5 mb-5 flex-wrap">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-2xl font-bold shrink-0 shadow-lg ring-4 ring-white/20 tracking-tight">
+                  {iniciais}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <h2 className="text-2xl font-bold tracking-tight">{user?.name || "Cliente"}</h2>
+                    {data.isDonoEscritorio && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/20 text-white border border-white/25">
+                        <Crown className="w-3 h-3" /> Dono
+                      </span>
+                    )}
+                    {sub ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-400/25 text-emerald-50 border border-emerald-300/30">
+                        Assinatura {sub.status}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/15 text-white border border-white/20">
+                        Sem assinatura
+                      </span>
+                    )}
+                    {isBloqueado && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-400/30 text-rose-50 border border-rose-300/40">
+                        <Lock className="w-3 h-3" /> Bloqueado
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-white/75 flex-wrap">
+                    {user?.email && (
+                      <span className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" />{user.email}</span>
+                    )}
+                    {data.isDonoEscritorio && (
+                      <span className="flex items-center gap-1.5"><UsersIcon className="w-3.5 h-3.5" />{data.colabsCount} colaborador{data.colabsCount === 1 ? "" : "es"}</span>
+                    )}
+                    {user?.createdAt && (
+                      <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />Desde {new Date(user.createdAt).toLocaleDateString("pt-BR")}</span>
+                    )}
+                  </div>
+                </div>
+                {/* Ações rápidas */}
+                <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                  <Button
+                    variant="ghost" size="sm"
+                    disabled={user?.role === "admin" || impersonateMut.isPending}
+                    onClick={() => impersonateMut.mutate({ userId: current! })}
+                    className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                  >
+                    {impersonateMut.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <LogIn className="w-3.5 h-3.5 mr-1" />}
+                    Impersonar
+                  </Button>
+                  <Button
+                    variant="ghost" size="sm"
+                    disabled={resetSenhaMut.isPending}
+                    onClick={() => resetSenhaMut.mutate({ userId: current! })}
+                    className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 mr-1" /> Resetar senha
+                  </Button>
+                  {isBloqueado ? (
+                    <Button
+                      variant="ghost" size="sm"
+                      disabled={desbloquearMut.isPending}
+                      onClick={() => desbloquearMut.mutate({ userId: current! })}
+                      className="text-emerald-50 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-300/35 backdrop-blur-sm shadow-sm h-8 text-xs"
+                    >
+                      <Unlock className="w-3.5 h-3.5 mr-1" /> Desbloquear
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost" size="sm"
+                      onClick={() => setBloquearOpen(true)}
+                      className="text-rose-100 bg-rose-500/15 hover:bg-rose-500/30 border border-rose-300/35 backdrop-blur-sm shadow-sm h-8 text-xs"
+                    >
+                      <Lock className="w-3.5 h-3.5 mr-1" /> Bloquear
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Mini KPIs */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="rounded-xl bg-white/10 border border-white/15 p-3">
+                  <p className="text-[10px] uppercase tracking-wide text-white/65">Plano</p>
+                  <p className="text-base font-bold mt-0.5 capitalize">{sub?.planId || "—"}</p>
+                </div>
+                <div className="rounded-xl bg-white/10 border border-white/15 p-3">
+                  <p className="text-[10px] uppercase tracking-wide text-white/65">Créditos</p>
+                  <p className="text-base font-bold tabular-nums mt-0.5">{(credits as any)?.saldo ?? ((credits?.creditsTotal ?? 0) - (credits?.creditsUsed ?? 0))}</p>
+                </div>
+                <div className="rounded-xl bg-white/10 border border-white/15 p-3">
+                  <p className="text-[10px] uppercase tracking-wide text-white/65">Cálculos</p>
+                  <p className="text-base font-bold tabular-nums mt-0.5">{stats?.totalCalculos ?? 0}</p>
+                </div>
+                <div className="rounded-xl bg-white/10 border border-white/15 p-3">
+                  <p className="text-[10px] uppercase tracking-wide text-white/65">Último acesso</p>
+                  <p className="text-sm font-semibold mt-1">{user?.lastSignedIn ? new Date(user.lastSignedIn).toLocaleDateString("pt-BR") : "—"}</p>
+                </div>
+              </div>
+            </div>
           </div>
-          <DialogDescription>{user?.email || ""}</DialogDescription>
+
           {isBloqueado && user?.motivoBloqueio && (
-            <div className="mt-2 flex items-start gap-2 rounded-md bg-red-500/10 border border-red-500/30 p-2 text-xs text-red-700">
+            <div className="flex items-start gap-2 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-700">
               <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
               <div>
                 <strong>Bloqueado:</strong> {user.motivoBloqueio}
                 {user.bloqueadoEm && (
-                  <span className="text-red-600/70 ml-1">
-                    ({new Date(user.bloqueadoEm).toLocaleDateString("pt-BR")})
-                  </span>
+                  <span className="text-red-600/70 ml-1">({new Date(user.bloqueadoEm).toLocaleDateString("pt-BR")})</span>
                 )}
               </div>
             </div>
           )}
-        </DialogHeader>
 
-        {isLoading ? (
-          <div className="space-y-3 py-4">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-          </div>
-        ) : data ? (
           <Tabs defaultValue="detalhes" className="w-full">
-            <TabsList className={`grid w-full ${data.colaboradores && data.colaboradores.length > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
-              <TabsTrigger value="detalhes">Detalhes</TabsTrigger>
-              {data.colaboradores && data.colaboradores.length > 0 && (
-                <TabsTrigger value="equipe">
-                  Equipe ({data.colaboradores.length})
+            <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex">
+              <TabsList className="bg-transparent gap-1 p-0 h-auto flex-wrap">
+                <TabsTrigger value="detalhes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <User className="h-3.5 w-3.5" /> Detalhes
                 </TabsTrigger>
-              )}
-              <TabsTrigger value="notas">
-                Notas {notas && notas.length > 0 ? `(${notas.length})` : ""}
-              </TabsTrigger>
-              <TabsTrigger value="acoes">Ações</TabsTrigger>
-            </TabsList>
+                {temEquipe && (
+                  <TabsTrigger value="equipe" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                    <UsersIcon className="h-3.5 w-3.5" /> Equipe ({data.colaboradores!.length})
+                  </TabsTrigger>
+                )}
+                <TabsTrigger value="assinatura" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <CreditCard className="h-3.5 w-3.5" /> Assinatura
+                </TabsTrigger>
+                <TabsTrigger value="notas" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <MessageSquarePlus className="h-3.5 w-3.5" /> Notas {notas && notas.length > 0 ? `(${notas.length})` : ""}
+                </TabsTrigger>
+                <TabsTrigger value="acoes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <ShieldCheck className="h-3.5 w-3.5" /> Ações
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            {/* TAB: ASSINATURA */}
+            <TabsContent value="assinatura" className="space-y-4 py-3">
+              <div className="border rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <CreditCard className="h-4 w-4 text-muted-foreground" /> Assinatura atual
+                  </div>
+                  {sub ? (
+                    <Badge variant={sub.status === "active" ? "default" : "outline"} className="text-[10px]">{sub.status}</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px]">Sem plano</Badge>
+                  )}
+                </div>
+                {sub ? (
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                      <div>
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Plano</p>
+                        <p className="font-semibold capitalize mt-0.5">{sub.planId || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Válida até</p>
+                        <p className="font-semibold mt-0.5">{sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd).toLocaleDateString("pt-BR") : "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Cortesia</p>
+                        <p className="font-semibold mt-0.5">{sub.cortesia ? "Sim" : "Não"}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-4 pt-3 border-t flex-wrap">
+                      <Button size="sm" variant="outline" onClick={() => { setPlanoSelecionado(sub.planId || null); setTrocarOpen(true); }}>
+                        <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Trocar plano
+                      </Button>
+                      {!sub.cortesia && (
+                        <Button size="sm" variant="outline" className="border-emerald-500/50 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-500/10" onClick={() => setCortesiaOpen(true)}>
+                          <Gift className="h-3.5 w-3.5 mr-1.5" /> Marcar cortesia
+                        </Button>
+                      )}
+                      {sub.status !== "canceled" && (
+                        <Button size="sm" variant="outline" className="border-rose-500/50 text-rose-600 hover:text-rose-700 hover:bg-rose-500/10" onClick={() => setCancelarOpen(true)}>
+                          <AlertCircle className="h-3.5 w-3.5 mr-1.5" /> Cancelar assinatura
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">Cliente sem assinatura ativa.</p>
+                    <Button size="sm" variant="outline" className="border-emerald-500/50 text-emerald-700" onClick={() => setCortesiaOpen(true)}>
+                      <Gift className="h-3.5 w-3.5 mr-1.5" /> Marcar cortesia
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Histórico de cobranças (Asaas) */}
+              <div className="border rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <CreditCard className="h-4 w-4 text-muted-foreground" /> Histórico de cobranças
+                </div>
+                {!cobrancasData ? (
+                  <Skeleton className="h-16 w-full" />
+                ) : !cobrancasData.configurado ? (
+                  <p className="text-xs text-muted-foreground">
+                    {cobrancasData.motivo === "sem_customer"
+                      ? "Cliente ainda não tem cadastro de cobrança no Asaas."
+                      : "Histórico indisponível (Asaas não configurado)."}
+                  </p>
+                ) : (
+                  <>
+                    {cobrancasData.resumo && (
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-lg bg-emerald-500/10 p-2"><p className="text-[10px] text-emerald-700 uppercase">Pago</p><p className="text-sm font-bold text-emerald-700 tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.pago)}</p></div>
+                        <div className="rounded-lg bg-amber-500/10 p-2"><p className="text-[10px] text-amber-700 uppercase">Pendente</p><p className="text-sm font-bold text-amber-700 tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.pendente)}</p></div>
+                        <div className="rounded-lg bg-rose-500/10 p-2"><p className="text-[10px] text-rose-700 uppercase">Vencido</p><p className="text-sm font-bold text-rose-700 tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.vencido)}</p></div>
+                      </div>
+                    )}
+                    {cobrancasData.cobrancas.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {cobrancasData.cobrancas.map((c) => (
+                          <div key={c.id} className="flex items-center justify-between text-xs border-b pb-1.5 last:border-0">
+                            <div className="min-w-0">
+                              <p className="truncate">{c.descricao || "Cobrança"}</p>
+                              <p className="text-muted-foreground">venc. {new Date(c.vencimento).toLocaleDateString("pt-BR")}</p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="tabular-nums font-medium">{fmtBRLAdmin(c.valor)}</span>
+                              <Badge variant="outline" className="text-[9px]">{c.status}</Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Nenhuma cobrança encontrada.</p>
+                    )}
+                  </>
+                )}
+              </div>
+            </TabsContent>
 
             {/* TAB: EQUIPE — colaboradores do escritório (clicáveis) */}
             {data.colaboradores && data.colaboradores.length > 0 && (
@@ -426,32 +668,6 @@ function ClienteDetalheDialog({
                   <span className="text-muted-foreground">Último acesso:</span>{" "}
                   <span>{user?.lastSignedIn ? new Date(user.lastSignedIn).toLocaleDateString("pt-BR") : "—"}</span>
                 </div>
-              </div>
-
-              {/* Assinatura */}
-              <div className="border rounded-lg p-3 space-y-1">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <CreditCard className="h-4 w-4 text-muted-foreground" />
-                  Assinatura
-                </div>
-                {sub ? (
-                  <div className="text-sm space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Plano:</span>
-                      <span>{sub.planId || "—"}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Status:</span>
-                      <Badge variant={sub.status === "active" ? "default" : "outline"} className="text-[10px]">{sub.status}</Badge>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Válida até:</span>
-                      <span>{sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd).toLocaleDateString("pt-BR") : "—"}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Sem assinatura ativa</p>
-                )}
               </div>
 
               {/* Créditos */}
@@ -843,12 +1059,10 @@ function ClienteDetalheDialog({
               </div>
             </TabsContent>
           </Tabs>
-        ) : null}
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
-        </DialogFooter>
-      </DialogContent>
+        </>
+      ) : (
+        <div className="text-center py-12 text-sm text-muted-foreground">Cliente não encontrado.</div>
+      )}
 
       {/* Dialog de confirmação de bloqueio */}
       <AlertDialog open={bloquearOpen} onOpenChange={setBloquearOpen}>
@@ -1082,7 +1296,82 @@ function ClienteDetalheDialog({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Dialog>
+
+      {/* Cancelar assinatura (admin) */}
+      <AlertDialog open={cancelarOpen} onOpenChange={(o) => { if (!o) { setCancelarOpen(false); setMotivoCancelamento(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar assinatura?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cancela no Asaas e marca como <strong>cancelada</strong>. O escritório perde
+              o acesso ao fim do período. Ação auditada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            placeholder="Motivo do cancelamento (ex: cliente solicitou por e-mail)"
+            value={motivoCancelamento}
+            onChange={(e) => setMotivoCancelamento(e.target.value)}
+            rows={3}
+            className="text-sm"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelarSubMut.isPending}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cancelarSubMut.isPending || motivoCancelamento.trim().length < 3 || !sub?.id}
+              className="bg-rose-600 hover:bg-rose-700"
+              onClick={(e) => {
+                e.preventDefault();
+                if (!sub?.id) return;
+                cancelarSubMut.mutate({ subscriptionId: sub.id, motivo: motivoCancelamento.trim() });
+              }}
+            >
+              {cancelarSubMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
+              Cancelar assinatura
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Trocar plano (admin) */}
+      <Dialog open={trocarOpen} onOpenChange={(o) => { if (!o) { setTrocarOpen(false); setPlanoSelecionado(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Trocar plano</DialogTitle>
+            <DialogDescription>
+              Cancela a assinatura atual no Asaas e cria uma nova com o plano escolhido.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-1">
+            {(planosAtuais ?? []).map((p) => {
+              const ativo = planoSelecionado === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setPlanoSelecionado(p.id)}
+                  className={`w-full flex items-center justify-between rounded-lg border p-3 text-left transition-colors ${ativo ? "border-primary bg-primary/5" : "hover:bg-accent/50"}`}
+                >
+                  <span className="text-sm font-medium">
+                    {p.name}
+                    {sub?.planId === p.id && <span className="text-[10px] text-muted-foreground ml-1">(atual)</span>}
+                  </span>
+                  <span className="text-sm font-medium tabular-nums text-muted-foreground">{fmtBRLAdmin(p.priceMonthly / 100)}/mês</span>
+                </button>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setTrocarOpen(false); setPlanoSelecionado(null); }} disabled={trocarPlanoMut.isPending}>Cancelar</Button>
+            <Button
+              disabled={trocarPlanoMut.isPending || !planoSelecionado || planoSelecionado === sub?.planId}
+              onClick={() => { if (planoSelecionado) trocarPlanoMut.mutate({ userId: current!, newPlanId: planoSelecionado, interval: "monthly" }); }}
+            >
+              {trocarPlanoMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
+              Trocar plano
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
@@ -1135,6 +1424,19 @@ export default function AdminClients() {
   });
 
   const [migrarLegacyAberto, setMigrarLegacyAberto] = useState(false);
+
+  // Cadastro do cliente ocupa a tela inteira (estilo CRM do dono) — substitui
+  // a lista enquanto aberto, em vez de abrir um dialog por cima.
+  if (detalheOpen && detalheUserId) {
+    return (
+      <ClienteDetalheDialog
+        userId={detalheUserId}
+        open
+        onOpenChange={(o) => { if (!o) { setDetalheOpen(false); setDetalheUserId(null); } }}
+        onRefresh={() => refetch()}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -1319,13 +1621,6 @@ export default function AdminClients() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <ClienteDetalheDialog
-        userId={detalheUserId}
-        open={detalheOpen}
-        onOpenChange={setDetalheOpen}
-        onRefresh={() => refetch()}
-      />
     </div>
   );
 }
