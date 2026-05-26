@@ -59,16 +59,11 @@ export default function AdminAuditoria() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start gap-3">
-        <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-100 to-yellow-100 dark:from-amber-900/40 dark:to-yellow-900/40">
-          <ScrollText className="h-6 w-6 text-amber-600" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Auditoria</h1>
-          <p className="text-muted-foreground mt-1">
-            Histórico completo de ações administrativas. Imutável e rastreável.
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Auditoria</h1>
+        <p className="text-muted-foreground mt-1">
+          Histórico completo de ações administrativas. Imutável e rastreável.
+        </p>
       </div>
 
       {/* KPIs */}
