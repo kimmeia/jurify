@@ -28,7 +28,8 @@ import {
   prazosSugeridos,
 } from "../../drizzle/schema";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
-import { consultarTjce, consultarTjcePorCpf, TJCE_2G } from "./adapters/pje-tjce";
+import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
+import { getConfigTribunal } from "./tribunais-pdpj";
 import { detectarSubiuParaSegundoGrau, mesclarMovimentacoes } from "./detectar-grau-recurso";
 import { CUSTOS } from "../routers/processos";
 import { createLogger } from "../_core/logger";
@@ -218,9 +219,10 @@ export async function pollarUmMonitoramentoMovs(
       return { ok: false, detectadas: 0, erro: "Sessão expirada" };
     }
 
+    const cfgTribunal = getConfigTribunal(mon.tribunal);
     let resultado;
-    if (mon.tribunal === "tjce") {
-      resultado = await consultarTjce(mon.searchKey, sessao);
+    if (cfgTribunal) {
+      resultado = await consultarTjce(mon.searchKey, sessao, cfgTribunal);
     } else {
       log.warn(
         { tribunal: mon.tribunal, monId: mon.id },
@@ -239,7 +241,7 @@ export async function pollarUmMonitoramentoMovs(
         forcarRelogin: true,
       });
       if (sessaoNova) {
-        resultado = await consultarTjce(mon.searchKey, sessaoNova);
+        resultado = await consultarTjce(mon.searchKey, sessaoNova, cfgTribunal);
       }
     }
 
@@ -274,11 +276,12 @@ export async function pollarUmMonitoramentoMovs(
     // dispara quando detectado (não consulta sempre). Degrada com elegância: se
     // o 2º grau falhar (URL/sessão/estrutura), segue só com o 1º grau — sem
     // regressão no monitoramento que já funciona.
-    if (deteccaoGrau.subiu && mon.tribunal === "tjce") {
+    const cfg2grau = getConfigTribunal(mon.tribunal, 2);
+    if (deteccaoGrau.subiu && cfg2grau) {
       try {
         const sessao2 = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
         if (sessao2) {
-          const r2 = await consultarTjce(mon.searchKey, sessao2, TJCE_2G);
+          const r2 = await consultarTjce(mon.searchKey, sessao2, cfg2grau);
           if (r2.ok && r2.movimentacoes.length > 0) {
             resultado.movimentacoes = mesclarMovimentacoes(
               resultado.movimentacoes,
@@ -719,9 +722,10 @@ export async function pollarUmMonitoramentoNovasAcoes(
       return { ok: false, detectadas: 0, erro: "Sessão expirada" };
     }
 
+    const cfgTribunal = getConfigTribunal(mon.tribunal);
     let resultado;
-    if (mon.tribunal === "tjce") {
-      resultado = await consultarTjcePorCpf(mon.searchKey, sessao);
+    if (cfgTribunal) {
+      resultado = await consultarTjcePorCpf(mon.searchKey, sessao, cfgTribunal);
     } else {
       return { ok: false, detectadas: 0, erro: `Tribunal ${mon.tribunal} sem adapter de CPF` };
     }
@@ -734,7 +738,7 @@ export async function pollarUmMonitoramentoNovasAcoes(
         forcarRelogin: true,
       });
       if (sessaoNova) {
-        resultado = await consultarTjcePorCpf(mon.searchKey, sessaoNova);
+        resultado = await consultarTjcePorCpf(mon.searchKey, sessaoNova, cfgTribunal);
       }
     }
 
@@ -823,7 +827,7 @@ export async function pollarUmMonitoramentoNovasAcoes(
         let poloDoCliente: PoloIdentificado = "desconhecido";
 
         try {
-          const detalhe = await consultarTjce(cnj, sessao);
+          const detalhe = await consultarTjce(cnj, sessao, cfgTribunal);
           if (detalhe.ok && detalhe.capa) {
             if (detalhe.capa.dataDistribuicao) {
               const candidato = new Date(detalhe.capa.dataDistribuicao);

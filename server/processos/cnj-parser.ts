@@ -11,6 +11,7 @@
  */
 
 import { normalizarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
+import { TRIBUNAIS_MOTOR_PROPRIO } from "./tribunais-pdpj";
 
 export type SegmentoJustica =
   | "estadual"
@@ -64,11 +65,12 @@ const TJ_MAP: Record<string, { sigla: string; uf: string }> = {
   "27": { sigla: "TJTO", uf: "TO" },
 };
 
-/** Tribunais que temos adapter motor próprio funcional em produção. */
-const TRIBUNAIS_COM_MOTOR_PROPRIO = new Set<string>([
-  "tjce", // PJe TJCE 1º grau (validado 07/05/2026)
-  // Próximos: "tjsp", "trt7", "tjrj"...
-]);
+/**
+ * Tribunais com motor próprio — derivado do registro central
+ * (`tribunais-pdpj.ts`). Adicionar um estado lá habilita automaticamente a
+ * criação de monitoramento aqui.
+ */
+const TRIBUNAIS_COM_MOTOR_PROPRIO = new Set<string>(TRIBUNAIS_MOTOR_PROPRIO);
 
 /**
  * Mapeia código do tribunal pro valor `sistema` em `cofre_credenciais`.

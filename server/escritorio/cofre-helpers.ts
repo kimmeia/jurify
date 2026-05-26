@@ -20,6 +20,7 @@ import { decrypt, encrypt } from "./crypto-utils";
 import { getDb } from "../db";
 import { cofreCredenciais, cofreSessoes } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
+import { configPorSistema } from "../processos/tribunais-pdpj";
 
 const log = createLogger("cofre-helpers");
 
@@ -264,8 +265,10 @@ async function tentarReloginAutomaticoImpl(credencialId: number): Promise<string
     .limit(1);
   if (!cred) return null;
 
-  // Hoje só PJe TJCE tem adapter de testarLogin
-  if (cred.sistema !== "pje_tjce") {
+  // Login usa o portal do estado da credencial (config por sistema). Só PJe-TJ
+  // PDPJ tem adapter; outros sistemas (e-SAJ, e-Proc, TRT) → sem relogin auto.
+  const cfgTribunal = configPorSistema(cred.sistema);
+  if (!cfgTribunal) {
     log.info(
       { credencialId, sistema: cred.sistema },
       "[cofre] relogin automático não disponível pra esse sistema",
@@ -283,11 +286,14 @@ async function tentarReloginAutomaticoImpl(credencialId: number): Promise<string
     const { PjeTjceScraper } = await import(
       "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/pje-tjce"
     );
-    const scraper = new PjeTjceScraper({
-      username: decriptada.username,
-      password: decriptada.password,
-      totpSecret: decriptada.totpSecret,
-    });
+    const scraper = new PjeTjceScraper(
+      {
+        username: decriptada.username,
+        password: decriptada.password,
+        totpSecret: decriptada.totpSecret,
+      },
+      cfgTribunal,
+    );
 
     const resultado = await scraper.testarLogin();
 
