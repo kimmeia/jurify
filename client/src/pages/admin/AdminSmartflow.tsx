@@ -202,18 +202,33 @@ export default function AdminSmartflow() {
 
 function PromoverDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const utils = trpc.useUtils();
-  const { data: fluxos = [] } = (trpc as any).smartflow.listar.useQuery(undefined, { enabled: open });
+  const [fonte, setFonte] = useState<"biblioteca" | "fluxo">("biblioteca");
+  const { data: fluxos = [] } = (trpc as any).smartflow.listar.useQuery(undefined, { enabled: open && fonte === "fluxo" });
+  const { data: internos = [] } = (trpc as any).adminSmartflow.listarInternos.useQuery(undefined, { enabled: open && fonte === "biblioteca" });
   const [cenarioId, setCenarioId] = useState<string>("");
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [categoria, setCategoria] = useState("Outros");
 
+  const fechar = () => {
+    onOpenChange(false);
+    setCenarioId(""); setNome(""); setDescricao(""); setCategoria("Outros"); setFonte("biblioteca");
+  };
+
   const criarMut = (trpc as any).adminSmartflow.criar.useMutation({
     onSuccess: () => {
       toast.success("Modelo criado! Ative o toggle pra publicar na galeria.");
       utils.adminSmartflow.listar.invalidate();
-      onOpenChange(false);
-      setCenarioId(""); setNome(""); setDescricao(""); setCategoria("Outros");
+      fechar();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const importarMut = (trpc as any).adminSmartflow.importarInterno.useMutation({
+    onSuccess: () => {
+      toast.success("Modelo importado! Ative o toggle pra publicar na galeria.");
+      utils.adminSmartflow.listar.invalidate();
+      fechar();
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -249,52 +264,97 @@ function PromoverDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) fechar(); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5 text-violet-600" /> Promover fluxo a modelo</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5 text-violet-600" /> Novo modelo</DialogTitle>
           <DialogDescription>
-            Escolha um fluxo do seu SmartFlow. Ele é copiado como modelo (blueprint) —
-            seu fluxo original continua intacto. Os campos editáveis (mensagens, dias…)
-            viram o wizard que o cliente preenche ao clonar.
+            Comece de um modelo pronto da biblioteca interna ou promova um fluxo do seu
+            próprio SmartFlow. Em ambos os casos vira um blueprint editável — os campos
+            (mensagens, dias…) viram o wizard que o cliente preenche ao clonar.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 py-1">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Fluxo de origem</label>
-            <Select value={cenarioId} onValueChange={setCenarioId}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione um fluxo do seu SmartFlow" /></SelectTrigger>
-              <SelectContent>
-                {fluxos.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum fluxo no seu SmartFlow ainda.</div>
-                ) : fluxos.map((f: any) => (
-                  <SelectItem key={f.id} value={String(f.id)}>{f.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Nome público (opcional)</label>
-            <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Herda o nome do fluxo se vazio" className="mt-1 text-sm" />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Descrição pública</label>
-            <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="O que esse fluxo faz, em 1 linha" rows={2} className="mt-1 text-sm" />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Categoria</label>
-            <Select value={categoria} onValueChange={setCategoria}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>{CATEGORIAS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
+
+        {/* Seletor de fonte */}
+        <div className="bg-muted/50 border rounded-lg p-1 inline-flex gap-1 text-xs">
+          <button
+            onClick={() => setFonte("biblioteca")}
+            className={`px-3 py-1.5 rounded-md inline-flex items-center gap-1.5 ${fonte === "biblioteca" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+          >
+            <Layers className="h-3.5 w-3.5" /> Biblioteca interna
+          </button>
+          <button
+            onClick={() => setFonte("fluxo")}
+            className={`px-3 py-1.5 rounded-md inline-flex items-center gap-1.5 ${fonte === "fluxo" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+          >
+            <Zap className="h-3.5 w-3.5" /> Do meu fluxo
+          </button>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={criarMut.isPending}>Cancelar</Button>
-          <Button onClick={promover} disabled={criarMut.isPending || !cenarioId}>
-            {criarMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null} Criar modelo
-          </Button>
-        </DialogFooter>
+
+        {fonte === "biblioteca" ? (
+          <div className="space-y-2 py-1 max-h-[50vh] overflow-y-auto">
+            {internos.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">Carregando modelos prontos…</p>
+            ) : internos.map((t: any) => (
+              <div key={t.id} className="flex items-center gap-3 rounded-lg border p-3">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white shrink-0 bg-gradient-to-br ${t.gradiente}`}>
+                  <Zap className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold truncate">{t.nome}</p>
+                  <p className="text-[11px] text-muted-foreground line-clamp-1">{t.descricao}</p>
+                </div>
+                <Button
+                  size="sm" variant="outline" className="shrink-0 h-7 text-xs"
+                  disabled={importarMut.isPending}
+                  onClick={() => importarMut.mutate({ templateId: t.id })}
+                >
+                  {importarMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Plus className="h-3 w-3 mr-1" />}
+                  Usar
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3 py-1">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Fluxo de origem</label>
+                <Select value={cenarioId} onValueChange={setCenarioId}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione um fluxo do seu SmartFlow" /></SelectTrigger>
+                  <SelectContent>
+                    {fluxos.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">Você não tem fluxos no SmartFlow. Use a Biblioteca interna.</div>
+                    ) : fluxos.map((f: any) => (
+                      <SelectItem key={f.id} value={String(f.id)}>{f.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Nome público (opcional)</label>
+                <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Herda o nome do fluxo se vazio" className="mt-1 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Descrição pública</label>
+                <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="O que esse fluxo faz, em 1 linha" rows={2} className="mt-1 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Categoria</label>
+                <Select value={categoria} onValueChange={setCategoria}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>{CATEGORIAS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={fechar} disabled={criarMut.isPending}>Cancelar</Button>
+              <Button onClick={promover} disabled={criarMut.isPending || !cenarioId}>
+                {criarMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null} Criar modelo
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
