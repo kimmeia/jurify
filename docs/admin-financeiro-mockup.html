@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JuridFlow — Redesign Admin · Financeiro</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; background: #f6f7fb; }
+  .font-display { font-family: 'Poppins', 'Inter', sans-serif; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  .pulse-dot { position: relative; width: 6px; height: 6px; }
+  .pulse-dot::before { content:''; position:absolute; inset:0; border-radius:9999px; background:#6ee7b7; opacity:.75; animation: ping 1.6s cubic-bezier(0,0,.2,1) infinite; }
+  .pulse-dot::after { content:''; position:absolute; inset:0; border-radius:9999px; background:#34d399; }
+  @keyframes ping { 75%,100% { transform: scale(2.4); opacity:0; } }
+  ::-webkit-scrollbar { width:8px; height:8px; } ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:9999px; }
+</style>
+</head>
+<body class="text-slate-900">
+
+<!-- BARRA EXPLICATIVA -->
+<div class="bg-slate-900 text-white py-3 px-6 text-sm flex items-center justify-between gap-4 sticky top-0 z-40">
+  <div class="flex items-center gap-2 min-w-0">
+    <i data-lucide="dollar-sign" class="w-4 h-4 text-emerald-300 shrink-0"></i>
+    <span class="font-semibold truncate">Redesign Admin · Financeiro SaaS</span>
+    <span class="text-slate-500 hidden sm:inline">·</span>
+    <span class="text-slate-400 hidden sm:inline truncate">Hero financeiro + KPIs + status Asaas + tabs em pill</span>
+  </div>
+  <span class="text-xs text-slate-400 shrink-0 hidden md:inline">Troque as abas →</span>
+</div>
+
+<div class="max-w-[1180px] mx-auto p-6 space-y-5">
+
+  <!-- ═══════════ HERO FINANCEIRO ═══════════ -->
+  <div class="rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 p-7 text-white relative overflow-hidden shadow-lg">
+    <i data-lucide="wallet" class="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" stroke-width="1.2"></i>
+    <div class="relative">
+      <div class="flex items-start justify-between gap-3 flex-wrap mb-1">
+        <div>
+          <div class="flex items-center gap-2 mb-1"><span class="pulse-dot"></span><p class="text-xs font-medium text-white/85 uppercase tracking-wider">Faturamento da plataforma</p></div>
+          <p class="text-xs text-white/70">Assinaturas dos escritórios · via Asaas</p>
+        </div>
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/15 border border-white/20"><i data-lucide="wallet" class="w-3.5 h-3.5"></i> Saldo Asaas: R$ 18.940</span>
+      </div>
+      <div class="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+        <div class="lg:col-span-7">
+          <p class="text-sm font-medium text-white/80 mb-1">Receita recorrente mensal (MRR)</p>
+          <div class="flex items-baseline gap-3 flex-wrap">
+            <span class="text-5xl font-extrabold tracking-tight tabular-nums leading-none font-display">R$ 48.250</span>
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-300/25 text-emerald-50 border border-emerald-200/30"><i data-lucide="trending-up" class="w-3 h-3"></i> 142 assinaturas ativas</span>
+          </div>
+          <p class="text-xs text-white/65 mt-2 tabular-nums">ARR projetado: R$ 579.000 · recebido nos últimos 30 dias: R$ 44.180</p>
+        </div>
+        <div class="lg:col-span-5 flex items-center justify-center lg:justify-end">
+          <div class="relative w-32 h-32">
+            <svg width="128" height="128" viewBox="0 0 128 128" class="-rotate-90">
+              <circle cx="64" cy="64" r="54" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="9"></circle>
+              <circle cx="64" cy="64" r="54" fill="none" stroke="white" stroke-width="9" stroke-linecap="round" stroke-dasharray="339.3" stroke-dashoffset="12.2"></circle>
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center"><span class="text-2xl font-bold tabular-nums leading-none">96%</span><span class="text-[10px] text-white/75 uppercase tracking-wider mt-1">Adimplência</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATUS ASAAS -->
+  <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3">
+    <div class="h-8 w-8 rounded-lg bg-emerald-100 grid place-items-center"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i></div>
+    <div class="flex-1"><p class="text-sm font-medium text-emerald-900">Asaas conectado <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-800 ml-1">produção</span></p><p class="text-xs text-emerald-700">Saldo disponível R$ 18.940 · última verificação há 2 min</p></div>
+    <button class="text-xs font-medium text-emerald-700 hover:underline flex items-center gap-1"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Retestar</button>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="rounded-xl bg-white border border-slate-200 p-5"><div class="w-10 h-10 rounded-xl bg-emerald-500/10 grid place-items-center mb-3"><i data-lucide="repeat" class="w-5 h-5 text-emerald-600"></i></div><p class="text-2xl font-bold tabular-nums text-slate-900">R$ 48.250</p><p class="text-xs text-slate-500 mt-1.5">MRR</p></div>
+    <div class="rounded-xl bg-white border border-slate-200 p-5"><div class="w-10 h-10 rounded-xl bg-blue-500/10 grid place-items-center mb-3"><i data-lucide="banknote" class="w-5 h-5 text-blue-600"></i></div><p class="text-2xl font-bold tabular-nums text-slate-900">R$ 44.180</p><p class="text-xs text-slate-500 mt-1.5">Recebido (30d) · 138 pagamentos</p></div>
+    <div class="rounded-xl bg-white border border-slate-200 p-5"><div class="w-10 h-10 rounded-xl bg-amber-500/10 grid place-items-center mb-3"><i data-lucide="clock" class="w-5 h-5 text-amber-600"></i></div><p class="text-2xl font-bold tabular-nums text-slate-900">R$ 12.400</p><p class="text-xs text-slate-500 mt-1.5">Pendente</p></div>
+    <div class="rounded-xl bg-white border border-slate-200 p-5"><div class="w-10 h-10 rounded-xl bg-rose-500/10 grid place-items-center mb-3"><i data-lucide="alert-circle" class="w-5 h-5 text-rose-600"></i></div><p class="text-2xl font-bold tabular-nums text-slate-900">R$ 3.270</p><p class="text-xs text-slate-500 mt-1.5">Vencido</p></div>
+  </div>
+
+  <!-- TABS (pill) -->
+  <div class="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex">
+    <div class="flex gap-1 flex-wrap">
+      <button onclick="aba('visao')" data-tab="visao" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center bg-white shadow-sm text-slate-800 font-medium"><i data-lucide="bar-chart-3" class="h-3.5 w-3.5"></i> Visão</button>
+      <button onclick="aba('pagamentos')" data-tab="pagamentos" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="banknote" class="h-3.5 w-3.5"></i> Pagamentos</button>
+      <button onclick="aba('assinaturas')" data-tab="assinaturas" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="repeat" class="h-3.5 w-3.5"></i> Assinaturas</button>
+      <button onclick="aba('inadimplencia')" data-tab="inadimplencia" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="alert-triangle" class="h-3.5 w-3.5"></i> Inadimplência</button>
+      <button onclick="aba('cupons')" data-tab="cupons" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="ticket" class="h-3.5 w-3.5"></i> Cupons</button>
+      <button onclick="aba('planos')" data-tab="planos" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="layers" class="h-3.5 w-3.5"></i> Planos</button>
+    </div>
+  </div>
+
+  <!-- ── VISÃO: cash flow ── -->
+  <div data-panel="visao" class="space-y-4">
+    <div class="rounded-2xl bg-white border border-slate-200 p-6">
+      <div class="flex items-center justify-between mb-5"><div><h3 class="text-base font-semibold text-slate-800">Cash flow — últimos 6 meses</h3><p class="text-xs text-slate-400 mt-0.5">Recebido por mês (Asaas)</p></div><span class="text-xs text-emerald-600 font-medium">+8,1% vs. mês anterior</span></div>
+      <div class="flex items-end justify-between gap-3 h-44">
+        <div class="flex-1 flex flex-col items-center gap-2"><div class="w-full rounded-t-lg bg-emerald-200" style="height:55%"></div><span class="text-[11px] text-slate-400">Dez</span><span class="text-[10px] text-slate-500 tabular-nums">R$ 31k</span></div>
+        <div class="flex-1 flex flex-col items-center gap-2"><div class="w-full rounded-t-lg bg-emerald-300" style="height:62%"></div><span class="text-[11px] text-slate-400">Jan</span><span class="text-[10px] text-slate-500 tabular-nums">R$ 35k</span></div>
+        <div class="flex-1 flex flex-col items-center gap-2"><div class="w-full rounded-t-lg bg-emerald-300" style="height:68%"></div><span class="text-[11px] text-slate-400">Fev</span><span class="text-[10px] text-slate-500 tabular-nums">R$ 38k</span></div>
+        <div class="flex-1 flex flex-col items-center gap-2"><div class="w-full rounded-t-lg bg-emerald-400" style="height:74%"></div><span class="text-[11px] text-slate-400">Mar</span><span class="text-[10px] text-slate-500 tabular-nums">R$ 41k</span></div>
+        <div class="flex-1 flex flex-col items-center gap-2"><div class="w-full rounded-t-lg bg-emerald-400" style="height:80%"></div><span class="text-[11px] text-slate-400">Abr</span><span class="text-[10px] text-slate-500 tabular-nums">R$ 44k</span></div>
+        <div class="flex-1 flex flex-col items-center gap-2"><div class="w-full rounded-t-lg bg-gradient-to-t from-emerald-500 to-teal-400" style="height:88%"></div><span class="text-[11px] text-slate-600 font-medium">Mai</span><span class="text-[10px] text-emerald-600 font-medium tabular-nums">R$ 48k</span></div>
+      </div>
+    </div>
+    <div class="grid gap-4 sm:grid-cols-3">
+      <div class="rounded-xl bg-white border border-slate-200 p-5"><p class="text-[11px] uppercase tracking-wide text-slate-400">Ticket médio</p><p class="text-xl font-bold tabular-nums text-slate-800 mt-1">R$ 340</p></div>
+      <div class="rounded-xl bg-white border border-slate-200 p-5"><p class="text-[11px] uppercase tracking-wide text-slate-400">Churn de receita (mês)</p><p class="text-xl font-bold tabular-nums text-rose-600 mt-1">2,8%</p></div>
+      <div class="rounded-xl bg-white border border-slate-200 p-5"><p class="text-[11px] uppercase tracking-wide text-slate-400">Novas assinaturas (mês)</p><p class="text-xl font-bold tabular-nums text-emerald-600 mt-1">+11</p></div>
+    </div>
+  </div>
+
+  <!-- ── PAGAMENTOS ── -->
+  <div data-panel="pagamentos" class="hidden">
+    <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+      <div class="px-5 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+        <div><h3 class="text-base font-semibold text-slate-800">Pagamentos</h3><p class="text-xs text-slate-400 mt-0.5">Cobranças do Asaas</p></div>
+        <select class="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-600"><option>Todos</option><option>Pendentes</option><option>Recebidos</option><option>Vencidos</option></select>
+      </div>
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100 bg-slate-50/50"><th class="px-5 py-2.5 font-medium">Escritório</th><th class="py-2.5 font-medium">Valor</th><th class="py-2.5 font-medium">Vencimento</th><th class="py-2.5 font-medium">Status</th><th class="py-2.5 pr-5 font-medium text-right">Ação</th></tr></thead>
+        <tbody class="divide-y divide-slate-50">
+          <tr><td class="px-5 py-3 font-medium text-slate-700">Advocacia Silva</td><td class="tabular-nums text-slate-600">R$ 349</td><td class="text-slate-500 text-xs">12/05</td><td><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Recebido</span></td><td class="pr-5 text-right"><button class="text-xs text-slate-400 hover:text-slate-600">Ver</button></td></tr>
+          <tr><td class="px-5 py-3 font-medium text-slate-700">Mendes &amp; Costa</td><td class="tabular-nums text-slate-600">R$ 249</td><td class="text-slate-500 text-xs">15/05</td><td><span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Pendente</span></td><td class="pr-5 text-right"><button class="text-xs text-rose-600 hover:underline">Cancelar</button></td></tr>
+          <tr><td class="px-5 py-3 font-medium text-slate-700">Ramos Advogados</td><td class="tabular-nums text-slate-600">R$ 349</td><td class="text-slate-500 text-xs">02/05</td><td><span class="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium">Vencido</span></td><td class="pr-5 text-right"><button class="text-xs text-indigo-600 hover:underline">Cobrar</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── ASSINATURAS ── -->
+  <div data-panel="assinaturas" class="hidden">
+    <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+      <div class="px-5 pt-4 pb-3 border-b border-slate-100"><h3 class="text-base font-semibold text-slate-800">Assinaturas ativas</h3></div>
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100 bg-slate-50/50"><th class="px-5 py-2.5 font-medium">Escritório</th><th class="py-2.5 font-medium">Plano</th><th class="py-2.5 font-medium">Ciclo</th><th class="py-2.5 font-medium">Valor</th><th class="py-2.5 font-medium">Status</th><th class="py-2.5 pr-5 font-medium text-right">Ação</th></tr></thead>
+        <tbody class="divide-y divide-slate-50">
+          <tr><td class="px-5 py-3 font-medium text-slate-700">Advocacia Silva</td><td class="text-slate-600">Completo</td><td class="text-slate-500 text-xs">Mensal</td><td class="tabular-nums text-slate-600">R$ 349</td><td><span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600 text-white font-medium">Ativa</span></td><td class="pr-5 text-right"><button class="text-xs text-rose-600 hover:underline">Cancelar</button></td></tr>
+          <tr><td class="px-5 py-3 font-medium text-slate-700">Lima Pereira</td><td class="text-slate-600">Básico</td><td class="text-slate-500 text-xs">Anual</td><td class="tabular-nums text-slate-600">R$ 1.490</td><td><span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600 text-white font-medium">Ativa</span></td><td class="pr-5 text-right"><button class="text-xs text-rose-600 hover:underline">Cancelar</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── INADIMPLÊNCIA ── -->
+  <div data-panel="inadimplencia" class="hidden">
+    <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+      <div class="px-5 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between"><div><h3 class="text-base font-semibold text-slate-800">Inadimplentes</h3><p class="text-xs text-slate-400 mt-0.5">Escritórios com cobranças vencidas</p></div><span class="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium">9 escritórios · R$ 3.270</span></div>
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100"><th class="px-5 py-2.5 font-medium">Escritório</th><th class="py-2.5 font-medium">Valor</th><th class="py-2.5 font-medium">Vencido há</th><th class="py-2.5 pr-5 font-medium text-right">Ações</th></tr></thead>
+        <tbody class="divide-y divide-slate-50">
+          <tr><td class="px-5 py-3 font-medium text-slate-700">Ramos Advogados</td><td class="tabular-nums text-slate-600">R$ 349</td><td class="text-rose-600 text-xs font-medium">12 dias</td><td class="pr-5 text-right space-x-2"><button class="text-xs text-indigo-600 hover:underline">Cobrar</button><button class="text-xs text-slate-400 hover:text-rose-600">Suspender</button></td></tr>
+          <tr><td class="px-5 py-3 font-medium text-slate-700">Oliveira &amp; Sá</td><td class="tabular-nums text-slate-600">R$ 189</td><td class="text-rose-600 text-xs font-medium">8 dias</td><td class="pr-5 text-right space-x-2"><button class="text-xs text-indigo-600 hover:underline">Cobrar</button><button class="text-xs text-slate-400 hover:text-rose-600">Suspender</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── CUPONS ── -->
+  <div data-panel="cupons" class="hidden space-y-3">
+    <div class="flex justify-end"><button class="h-9 px-3 rounded-lg bg-indigo-600 text-white text-sm font-medium flex items-center gap-1.5"><i data-lucide="plus" class="w-4 h-4"></i> Novo cupom</button></div>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="rounded-xl bg-white border border-slate-200 p-4"><div class="flex items-center justify-between mb-2"><span class="font-mono text-sm font-bold text-slate-800">BEMVINDO20</span><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Ativo</span></div><p class="text-xs text-slate-500">20% off · 1ª mensalidade</p><p class="text-[11px] text-slate-400 mt-1">Usado 34× · expira 30/06</p></div>
+      <div class="rounded-xl bg-white border border-slate-200 p-4"><div class="flex items-center justify-between mb-2"><span class="font-mono text-sm font-bold text-slate-800">BLACK50</span><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">Inativo</span></div><p class="text-xs text-slate-500">50% off · 3 meses</p><p class="text-[11px] text-slate-400 mt-1">Usado 112× · expirado</p></div>
+      <div class="rounded-xl bg-white border border-dashed border-slate-300 p-4 grid place-items-center text-slate-400 hover:bg-slate-50 cursor-pointer"><span class="text-xs flex items-center gap-1.5"><i data-lucide="plus" class="w-4 h-4"></i> Criar cupom</span></div>
+    </div>
+  </div>
+
+  <!-- ── PLANOS ── -->
+  <div data-panel="planos" class="hidden space-y-3">
+    <div class="flex justify-end"><button class="h-9 px-3 rounded-lg bg-indigo-600 text-white text-sm font-medium flex items-center gap-1.5"><i data-lucide="plus" class="w-4 h-4"></i> Novo plano</button></div>
+    <div class="grid gap-4 sm:grid-cols-3">
+      <div class="rounded-2xl bg-white border border-slate-200 p-5"><div class="flex items-center justify-between"><h4 class="font-semibold text-slate-800">Básico</h4><button class="text-xs text-indigo-600 hover:underline">Editar</button></div><p class="text-2xl font-bold tabular-nums text-slate-900 mt-2">R$ 149<span class="text-sm text-slate-400 font-normal">/mês</span></p><ul class="text-xs text-slate-500 mt-3 space-y-1"><li>200 créditos/mês</li><li>3 colaboradores</li><li>42 assinantes</li></ul></div>
+      <div class="rounded-2xl bg-white border border-indigo-200 ring-1 ring-indigo-100 p-5"><div class="flex items-center justify-between"><h4 class="font-semibold text-slate-800">Intermediário</h4><button class="text-xs text-indigo-600 hover:underline">Editar</button></div><p class="text-2xl font-bold tabular-nums text-slate-900 mt-2">R$ 249<span class="text-sm text-slate-400 font-normal">/mês</span></p><ul class="text-xs text-slate-500 mt-3 space-y-1"><li>500 créditos/mês</li><li>8 colaboradores</li><li>63 assinantes</li></ul></div>
+      <div class="rounded-2xl bg-white border border-slate-200 p-5"><div class="flex items-center justify-between"><h4 class="font-semibold text-slate-800">Completo</h4><button class="text-xs text-indigo-600 hover:underline">Editar</button></div><p class="text-2xl font-bold tabular-nums text-slate-900 mt-2">R$ 349<span class="text-sm text-slate-400 font-normal">/mês</span></p><ul class="text-xs text-slate-500 mt-3 space-y-1"><li>Créditos ilimitados</li><li>Colaboradores ilimitados</li><li>37 assinantes</li></ul></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  lucide.createIcons();
+  function aba(n){
+    document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('hidden', p.getAttribute('data-panel') !== n));
+    document.querySelectorAll('.tab').forEach(b => {
+      const on = b.getAttribute('data-tab') === n;
+      b.classList.toggle('bg-white', on); b.classList.toggle('shadow-sm', on);
+      b.classList.toggle('text-slate-800', on); b.classList.toggle('font-medium', on);
+      b.classList.toggle('text-slate-500', !on);
+    });
+  }
+</script>
+</body>
+</html>
