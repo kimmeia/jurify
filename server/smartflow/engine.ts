@@ -985,10 +985,12 @@ async function handleIaAtendente(
     ferramentas?: string[];
     consultas?: string[];
     consultaConfig?: { responsavelModo?: "auto" | "fixo"; responsavelId?: number; duracaoMin?: number; dias?: number };
+    acumularSegundos?: number;
   };
   if (typeof cfg.agenteId !== "number" || cfg.agenteId <= 0) {
     return { sucesso: false, contexto: ctx, mensagemErro: "Atendente IA: escolha um agente." };
   }
+  const acumularSegundos = Number(cfg.acumularSegundos) > 0 ? Math.floor(Number(cfg.acumularSegundos)) : 0;
   const ferramentas = Array.isArray(cfg.ferramentas) ? cfg.ferramentas.filter((f) => typeof f === "string") : [];
   const consultas = Array.isArray(cfg.consultas) ? cfg.consultas.filter((c) => typeof c === "string") : [];
   // Mensagem do turno: a resposta nova (retomada) ou a 1ª mensagem.
@@ -1068,6 +1070,7 @@ async function handleIaAtendente(
         aguardandoContatoId: contatoId,
         aguardandoTimeoutMinutos: 1440,
         aguardandoNodeClienteId: passo.clienteId ?? null,
+        aguardandoAcumularSegundos: acumularSegundos,
       },
     };
   } catch (err: any) {

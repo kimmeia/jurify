@@ -155,34 +155,57 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
   // Se nenhum cenário do SmartFlow bate com a mensagem, caímos num auto-reply
   // fixo configurado no canal. Sem IA automática fora do fluxo desenhado.
   if (msg.tipo === "texto" && msg.conteudo) {
-    try {
-      const { dispararMensagemCanal } = await import("../smartflow/dispatcher");
-      const canalTipo = await buscarTipoDoCanal(canalId);
-      const sf = await dispararMensagemCanal(escritorioId, {
-        canalTipo,
-        canalId,
-        conversaId,
-        contatoId,
-        mensagem: msg.conteudo,
-        telefone: msg.telefone,
-        nomeCliente: msg.nome || "",
-      });
-      if (sf.executou) {
-        // SmartFlow assumiu — envia respostas geradas.
-        // Espalha os envios no tempo pra não disparar burst-protection do WhatsApp
-        // (2+ mensagens no mesmo tick é causa comum de E429 / silently dropped).
-        for (let i = 0; i < sf.respostas.length; i++) {
-          if (i > 0) await new Promise((r) => setTimeout(r, DELAY_ENTRE_RESPOSTAS_MS));
-          await enviarResposta(canalId, conversaId, msg.chatId, sf.respostas[i]);
+    const { dispararMensagemCanal, janelaAcumulacaoAtiva } = await import("../smartflow/dispatcher");
+
+    // Processa a mensagem (já COMBINADA, se o acumulador agrupou várias) pelo
+    // SmartFlow e envia as respostas geradas.
+    const processarMensagem = async (texto: string) => {
+      try {
+        const canalTipo = await buscarTipoDoCanal(canalId);
+        const sf = await dispararMensagemCanal(escritorioId, {
+          canalTipo,
+          canalId,
+          conversaId,
+          contatoId,
+          mensagem: texto,
+          telefone: msg.telefone,
+          nomeCliente: msg.nome || "",
+        });
+        if (sf.executou) {
+          // SmartFlow assumiu — envia respostas geradas.
+          // Espalha os envios no tempo pra não disparar burst-protection do WhatsApp
+          // (2+ mensagens no mesmo tick é causa comum de E429 / silently dropped).
+          for (let i = 0; i < sf.respostas.length; i++) {
+            if (i > 0) await new Promise((r) => setTimeout(r, DELAY_ENTRE_RESPOSTAS_MS));
+            await enviarResposta(canalId, conversaId, msg.chatId, sf.respostas[i]);
+          }
+        } else {
+          // Sem cenário ativo — dispara auto-reply fixo do canal (se configurado)
+          await enviarAutoReply(canalId, conversaId, msg.chatId);
         }
+      } catch (e: any) {
+        log.error(`[SmartFlow] Erro:`, e.message);
+        // Fallback: tenta auto-reply fixo se SmartFlow falhar
+        try { await enviarAutoReply(canalId, conversaId, msg.chatId); } catch { /* ignore */ }
+      }
+    };
+
+    // Agrupamento de mensagens "picadas": se o bloco Atendente IA onde a conversa
+    // está pausada configurou uma janela (`acumularSegundos`), bufferiza e só
+    // processa quando o cliente ficar quieto pela janela — juntando tudo numa
+    // mensagem só. Sem janela (ou 1ª mensagem de conversa nova, sem bloco ativo)
+    // processa na hora.
+    try {
+      const janela = await janelaAcumulacaoAtiva(escritorioId, contatoId);
+      if (janela > 0) {
+        const { acumularMensagem } = await import("../smartflow/acumulador");
+        acumularMensagem(`${canalId}:${conversaId}`, janela, msg.conteudo, processarMensagem);
       } else {
-        // Sem cenário ativo — dispara auto-reply fixo do canal (se configurado)
-        await enviarAutoReply(canalId, conversaId, msg.chatId);
+        await processarMensagem(msg.conteudo);
       }
     } catch (e: any) {
-      log.error(`[SmartFlow] Erro:`, e.message);
-      // Fallback: tenta auto-reply fixo se SmartFlow falhar
-      try { await enviarAutoReply(canalId, conversaId, msg.chatId); } catch { /* ignore */ }
+      log.error(`[SmartFlow] Erro ao agendar agrupamento:`, e?.message || String(e));
+      try { await processarMensagem(msg.conteudo); } catch { /* já loga dentro */ }
     }
   }
   return { contatoId, conversaId, mensagemId };
