@@ -1109,7 +1109,8 @@ export const adminRouter = router({
       return { success: true };
     }),
 
-  /** Deleta nota (somente o autor ou admin master) */
+  /** Deleta uma nota interna. São notas da equipe JuridFlow (adminProcedure),
+   *  então qualquer admin pode remover — incluindo notas de outro admin. */
   deletarNotaCliente: adminProcedure
     .input(z.object({ notaId: z.number() }))
     .mutation(async ({ input }) => {
@@ -1537,10 +1538,16 @@ export const adminRouter = router({
       const fimMes = new Date(inicioMes);
       fimMes.setMonth(fimMes.getMonth() + 1);
 
-      // Subs criadas antes do início do mês e (não canceladas OU canceladas após o início)
+      // Subs ativas no início do mês: criadas antes do início E que NÃO já
+      // estavam canceladas naquele momento. Antes contava toda sub criada
+      // antes do mês (inclusive já canceladas), inflando o denominador e
+      // subestimando o churn. Usamos updatedAt como proxy da data de cancelamento.
       const ativosInicio = allSubs.filter((s) => {
         const created = new Date(s.createdAt).getTime();
-        return created < inicioMes.getTime();
+        if (created >= inicioMes.getTime()) return false;
+        const jaCanceladaAntes =
+          s.status === "canceled" && new Date(s.updatedAt).getTime() < inicioMes.getTime();
+        return !jaCanceladaAntes;
       }).length;
 
       // Subs canceladas no mês (proxy: status canceled E updatedAt no mês)

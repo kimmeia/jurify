@@ -413,6 +413,15 @@ export const customer360Router = router({
       const db = await getDb();
       if (!db) throw new Error("DB indisponível");
 
+      // Garante que o contato pertence ao escritório do usuário (evita
+      // anexar tarefa a contato de outro escritório — IDOR).
+      const [contatoTarefa] = await db
+        .select({ id: contatos.id })
+        .from(contatos)
+        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!contatoTarefa) throw new Error("Contato não encontrado");
+
       const [r] = await db.insert(tarefas).values({
         escritorioId: esc.escritorio.id,
         contatoId: input.contatoId,
@@ -439,6 +448,14 @@ export const customer360Router = router({
       if (!esc) throw new Error("Escritório não encontrado");
       const db = await getDb();
       if (!db) throw new Error("DB indisponível");
+
+      // Garante que o contato pertence ao escritório do usuário (IDOR).
+      const [contatoNota] = await db
+        .select({ id: contatos.id })
+        .from(contatos)
+        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!contatoNota) throw new Error("Contato não encontrado");
 
       const [r] = await db.insert(clienteAnotacoes).values({
         escritorioId: esc.escritorio.id,

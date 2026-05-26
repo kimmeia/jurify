@@ -253,27 +253,48 @@ export default function AdminFinanceiro() {
         </div>
       </div>
 
-      {/* Status Asaas */}
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3 flex-wrap dark:bg-emerald-950/20 dark:border-emerald-900">
-        <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 grid place-items-center shrink-0">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+      {/* Status Asaas — degradado se obterSaldo falhou (status.erro) */}
+      {status.erro ? (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex items-center gap-3 flex-wrap dark:bg-amber-950/20 dark:border-amber-900">
+          <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 grid place-items-center shrink-0">
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+              Asaas conectado, mas o saldo está indisponível
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-800 ml-1.5 dark:bg-amber-800 dark:text-amber-100">{status.modo}</span>
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-300 truncate">{status.erro}</p>
+          </div>
+          <a
+            href="https://www.asaas.com/home" target="_blank" rel="noopener noreferrer"
+            className="text-xs font-medium text-amber-700 hover:underline inline-flex items-center gap-1 dark:text-amber-300"
+          >
+            Abrir painel Asaas <ExternalLink className="h-3 w-3" />
+          </a>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
-            Asaas conectado
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-800 ml-1.5 dark:bg-emerald-800 dark:text-emerald-100">{status.modo}</span>
-          </p>
-          <p className="text-xs text-emerald-700 dark:text-emerald-300">
-            Saldo disponível {formatBRL((status?.saldo ?? 0) * 100)}
-          </p>
+      ) : (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3 flex-wrap dark:bg-emerald-950/20 dark:border-emerald-900">
+          <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 grid place-items-center shrink-0">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+              Asaas conectado
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-800 ml-1.5 dark:bg-emerald-800 dark:text-emerald-100">{status.modo}</span>
+            </p>
+            <p className="text-xs text-emerald-700 dark:text-emerald-300">
+              Saldo disponível {status.saldo != null ? formatBRL(status.saldo * 100) : "—"}
+            </p>
+          </div>
+          <a
+            href="https://www.asaas.com/home" target="_blank" rel="noopener noreferrer"
+            className="text-xs font-medium text-emerald-700 hover:underline inline-flex items-center gap-1 dark:text-emerald-300"
+          >
+            Abrir painel Asaas <ExternalLink className="h-3 w-3" />
+          </a>
         </div>
-        <a
-          href="https://www.asaas.com/home" target="_blank" rel="noopener noreferrer"
-          className="text-xs font-medium text-emerald-700 hover:underline inline-flex items-center gap-1 dark:text-emerald-300"
-        >
-          Abrir painel Asaas <ExternalLink className="h-3 w-3" />
-        </a>
-      </div>
+      )}
 
       {/* KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
