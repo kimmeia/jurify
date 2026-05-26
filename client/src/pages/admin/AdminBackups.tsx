@@ -55,17 +55,11 @@ export default function AdminBackups() {
   const [chaveSelecionada, setChaveSelecionada] = useState<string | null>(null);
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Database className="h-6 w-6" /> Backups do banco
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Backups completos do MySQL armazenados em S3 (lifecycle 30d).
-            Cron diário + geração sob demanda.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-sm text-muted-foreground">
+          Backups completos do MySQL em S3 (lifecycle 30d). Cron diário + geração sob demanda.
+        </p>
         <Button
           onClick={() => gerarMut.mutate()}
           disabled={!status.data?.configurado || gerarMut.isPending}

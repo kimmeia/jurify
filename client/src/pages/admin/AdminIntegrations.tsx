@@ -715,18 +715,7 @@ export default function AdminIntegrations() {
   } = trpc.adminIntegracoes.listar.useQuery(undefined, { retry: false });
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Integrações
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Gerencie suas integrações com APIs externas. As chaves são
-          criptografadas e a conexão persiste até você desconectar manualmente.
-        </p>
-      </div>
-
+    <div className="space-y-6">
       {/* Cards grid */}
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
