@@ -71,6 +71,25 @@ function safeParseJson(raw: string | null | undefined): Record<string, string> |
   return null;
 }
 
+/**
+ * Mapeia uma linha de `smartflow_passos` (DB) para o `Passo` que o engine
+ * consome. CRÍTICO incluir `clienteId` e `proximoSe`: a retomada graph-aware
+ * (reentrar no nó de espera pelo `clienteId`) e o roteamento por setas dependem
+ * deles. Um loader que esquece esses campos faz a retomada cair no caminho
+ * linear, PULAR o nó de espera e a conversa do Atendente IA morre após a 1ª
+ * resposta. Centralizado pra os dois loaders (ativos + por id) não divergirem.
+ */
+export function mapearPassoEngine(p: typeof smartflowPassos.$inferSelect): Passo {
+  return {
+    id: p.id,
+    ordem: p.ordem,
+    tipo: p.tipo,
+    config: p.config ? JSON.parse(p.config) : {},
+    clienteId: p.clienteId ?? null,
+    proximoSe: p.proximoSe ? safeParseJson(p.proximoSe) : null,
+  };
+}
+
 function parseConfigGatilho(raw: string | null | undefined): Record<string, unknown> {
   if (!raw) return {};
   try {
@@ -123,14 +142,7 @@ async function carregarCenariosAtivos(
       .orderBy(smartflowPassos.ordem);
     if (passos.length === 0) continue;
 
-    const passosEngine: Passo[] = passos.map((p) => ({
-      id: p.id,
-      ordem: p.ordem,
-      tipo: p.tipo,
-      config: p.config ? JSON.parse(p.config) : {},
-      clienteId: p.clienteId ?? null,
-      proximoSe: p.proximoSe ? safeParseJson(p.proximoSe) : null,
-    }));
+    const passosEngine: Passo[] = passos.map(mapearPassoEngine);
 
     resultado.push({
       cenarioId: cenario.id,
@@ -217,12 +229,7 @@ async function carregarCenarioPorId(
     .where(eq(smartflowPassos.cenarioId, cenarioId))
     .orderBy(smartflowPassos.ordem);
 
-  const passosEngine: Passo[] = passos.map((p) => ({
-    id: p.id,
-    ordem: p.ordem,
-    tipo: p.tipo,
-    config: p.config ? JSON.parse(p.config) : {},
-  }));
+  const passosEngine: Passo[] = passos.map(mapearPassoEngine);
 
   return { cenarioId: cenario.id, nome: cenario.nome, passos: passosEngine, ativo: cenario.ativo };
 }
