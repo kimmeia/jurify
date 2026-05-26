@@ -16,7 +16,7 @@ import {
   criarLead, listarLeads, atualizarLead, excluirLead,
   obterMetricasDashboard, distribuirLead, obterMetricasDetalhadas,
 } from "./db-crm";
-import { conversas } from "../../drizzle/schema";
+import { conversas, contatos, leads } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 import { createLogger } from "../_core/logger";
@@ -474,6 +474,26 @@ export const crmRouter = router({
       if (!perm.allowed) throw new Error("Sem permissão para editar leads.");
       const { id, ...dados } = input;
       await atualizarLead(id, perm.escritorioId, dados);
+
+      // Lead chegou em "fechado_ganho" (fechou contrato) → promove o contato
+      // a Cliente. Cobre arrastar o card pra "Ganho" no Pipeline e editar a
+      // etapa na ficha. Idempotente. Mesmo gatilho do registrarFechamento.
+      if (input.etapaFunil === "fechado_ganho") {
+        const db = await getDb();
+        if (db) {
+          const [lead] = await db
+            .select({ contatoId: leads.contatoId })
+            .from(leads)
+            .where(and(eq(leads.id, id), eq(leads.escritorioId, perm.escritorioId)))
+            .limit(1);
+          if (lead?.contatoId) {
+            await db
+              .update(contatos)
+              .set({ estagio: "cliente" })
+              .where(and(eq(contatos.id, lead.contatoId), eq(contatos.escritorioId, perm.escritorioId)));
+          }
+        }
+      }
       return { success: true };
     }),
 

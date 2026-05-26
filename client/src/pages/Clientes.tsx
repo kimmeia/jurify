@@ -366,6 +366,12 @@ export default function Clientes() {
     return Number.isInteger(n) && n > 0 ? n : null;
   });
   const [showNovo, setShowNovo] = useState(false);
+  // Aba Clientes (fecharam contrato) × Leads (em atendimento). Default
+  // 'cliente' — a tela Clientes mostra clientes de verdade; leads ficam
+  // a um clique de distância sem poluir a lista.
+  const [aba, setAba] = useState<"cliente" | "lead">("cliente");
+  // Lead alvo do "Fechar contrato" (abre o RegistrarFechamentoDialog).
+  const [fecharAlvo, setFecharAlvo] = useState<{ id: number; nome: string; responsavelId: number | null } | null>(null);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
 
   // Botão "Duplicatas (PDF)" — gera relatório de clientes com mesmo CPF/CNPJ.
@@ -404,7 +410,13 @@ export default function Clientes() {
   // pra "Inativos" → bulk action exportava mix ou nada (IDs invisíveis).
   useEffect(() => {
     setSelecionados(new Set());
-  }, [segmento, buscaDebounced, pagina]);
+  }, [segmento, buscaDebounced, pagina, aba]);
+
+  // Trocar de aba (Clientes ↔ Leads) volta pra página 1 — senão a paginação
+  // herdada da aba anterior pode cair fora do range da nova lista.
+  useEffect(() => {
+    setPagina(1);
+  }, [aba]);
 
   // Sincroniza URL com selId/segmento — sem isso, F5 / back do browser
   // perde o estado (volta sempre pra lista geral). replaceState não
@@ -419,7 +431,7 @@ export default function Clientes() {
     window.history.replaceState({}, "", url);
   }, [selId, segmento]);
 
-  const { data: stats } = trpc.clientes.estatisticas.useQuery();
+  const { data: stats, refetch: refetchStats } = trpc.clientes.estatisticas.useQuery();
   // Todos os segmentos (incluindo com_debito) filtram no servidor — antes
   // o com_debito filtrava client-side em cima dos 50 da página, resultando
   // em lista vazia quando os inadimplentes estavam em outras páginas.
@@ -428,6 +440,7 @@ export default function Clientes() {
     pagina,
     limite: 50,
     segmento,
+    estagio: aba,
   });
 
   // Permissões pra mostrar/esconder ícone de excluir na row.
@@ -619,6 +632,29 @@ export default function Clientes() {
             </div>
           </div>
 
+          {/* ═══════════ ABAS CLIENTES / LEADS ═══════════ */}
+          <div className="flex items-center gap-1 border-b border-slate-200">
+            <button
+              onClick={() => setAba("cliente")}
+              className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 ${aba === "cliente" ? "border-violet-600 text-violet-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+            >
+              Clientes
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${aba === "cliente" ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-600"}`}>
+                {stats?.totalClientes ?? "—"}
+              </span>
+            </button>
+            <button
+              onClick={() => setAba("lead")}
+              className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 ${aba === "lead" ? "border-violet-600 text-violet-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+            >
+              Leads
+              <span className="text-[11px] font-normal text-slate-400 hidden sm:inline">em atendimento</span>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${aba === "lead" ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-600"}`}>
+                {stats?.totalLeads ?? "—"}
+              </span>
+            </button>
+          </div>
+
           {/* ═══════════ BUSCA + CHIPS ═══════════ */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 min-w-[260px] max-w-md">
@@ -706,10 +742,12 @@ export default function Clientes() {
                 <Users className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">
                   {segmento !== "todos"
-                    ? `Nenhum cliente neste filtro.`
-                    : "Nenhum cliente encontrado."}
+                    ? `Nenhum ${aba === "lead" ? "lead" : "cliente"} neste filtro.`
+                    : aba === "lead"
+                      ? "Nenhum lead em atendimento. Leads aparecem aqui quando alguém entra em contato."
+                      : "Nenhum cliente encontrado."}
                 </p>
-                {segmento === "todos" ? (
+                {segmento === "todos" && aba === "cliente" ? (
                   <Button
                     variant="outline"
                     size="sm"
@@ -736,7 +774,7 @@ export default function Clientes() {
           ) : (
             <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
               {/* Header */}
-              <div className="grid grid-cols-[24px_48px_1fr_180px_140px_100px_40px] gap-[14px] items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              <div className={`grid ${aba === "lead" ? "grid-cols-[24px_48px_1fr_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-semibold text-slate-500`}>
                 <Checkbox
                   checked={
                     selecionados.size > 0 &&
@@ -746,15 +784,15 @@ export default function Clientes() {
                 />
                 <div></div>
                 <div>
-                  Nome
+                  {aba === "lead" ? "Lead" : "Nome"}
                   <span className="text-slate-400 normal-case font-normal">
-                    {" "}· {clientesFiltrados.length} cliente{clientesFiltrados.length !== 1 ? "s" : ""}
+                    {" "}· {clientesFiltrados.length} {aba === "lead" ? "lead" : "cliente"}{clientesFiltrados.length !== 1 ? "s" : ""}
                   </span>
                 </div>
                 <div className="text-right">Financeiro</div>
                 <div className="text-right">Última interação</div>
                 <div className="text-right">Origem</div>
-                <div></div>
+                <div className="text-right normal-case">{aba === "lead" ? "Ação" : ""}</div>
               </div>
 
               {/* Rows */}
@@ -765,6 +803,8 @@ export default function Clientes() {
                   selecionado={selecionados.has(c.id)}
                   resumoFin={resumoFinanceiroBatch?.[c.id] ?? null}
                   podeExcluir={podeExcluirCliente}
+                  modoLead={aba === "lead"}
+                  onFechar={() => setFecharAlvo({ id: c.id, nome: c.nome, responsavelId: c.responsavelId ?? null })}
                   onToggle={() => toggleSelecionado(c.id)}
                   onAbrir={() => setSelId(c.id)}
                   onExcluir={() => setExcluirAlvo({ id: c.id, nome: c.nome })}
@@ -808,7 +848,24 @@ export default function Clientes() {
         </div>
       )}
 
-      <NovoClienteDialog open={showNovo} onOpenChange={setShowNovo} onSuccess={() => refetch()} />
+      <NovoClienteDialog open={showNovo} onOpenChange={setShowNovo} onSuccess={() => { refetch(); refetchStats(); }} />
+
+      {/* Fechar contrato a partir da aba Leads → promove o lead a Cliente.
+          Reusa o mesmo dialog da ficha (registra a conversão no comercial). */}
+      {fecharAlvo && (
+        <RegistrarFechamentoDialog
+          open={!!fecharAlvo}
+          onOpenChange={(o) => !o && setFecharAlvo(null)}
+          contatoId={fecharAlvo.id}
+          responsavelClienteId={fecharAlvo.responsavelId}
+          fechamentosExistentes={[]}
+          onSuccess={() => {
+            setFecharAlvo(null);
+            refetch();
+            refetchStats();
+          }}
+        />
+      )}
 
       {/* Confirmação de exclusão de cliente.
           Backend faz cascade: deleta conversas, leads, tarefas, anotações,
@@ -926,6 +983,8 @@ function LinhaCliente({
   selecionado,
   resumoFin,
   podeExcluir,
+  modoLead = false,
+  onFechar,
   onToggle,
   onAbrir,
   onExcluir,
@@ -934,6 +993,8 @@ function LinhaCliente({
   selecionado: boolean;
   resumoFin: any;
   podeExcluir: boolean;
+  modoLead?: boolean;
+  onFechar?: () => void;
   onToggle: () => void;
   onAbrir: () => void;
   onExcluir: () => void;
@@ -946,7 +1007,7 @@ function LinhaCliente({
 
   return (
     <div
-      className="grid grid-cols-[24px_48px_1fr_180px_140px_100px_40px] gap-[14px] items-center px-4 py-3 border-t border-slate-100 hover:bg-slate-50/70 cursor-pointer transition-colors group"
+      className={`grid ${modoLead ? "grid-cols-[24px_48px_1fr_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-3 border-t border-slate-100 hover:bg-slate-50/70 cursor-pointer transition-colors group`}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("[data-stop-row-click]")) return;
         onAbrir();
@@ -1037,34 +1098,51 @@ function LinhaCliente({
         <Badge variant="outline" className="text-[10px] font-normal">{c.origem}</Badge>
       </div>
 
-      {/* Menu de ações no hover */}
-      <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          title="Ver/Editar cliente"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAbrir();
-          }}
-        >
-          <PenLine className="h-3.5 w-3.5" />
-        </Button>
-        {podeExcluir && (
+      {/* Ações. No modo Lead, o "Fechar contrato" fica sempre visível
+          (é a ação principal); editar/excluir continuam no hover. */}
+      <div className="flex items-center justify-end gap-0.5">
+        {modoLead && onFechar && (
+          <Button
+            size="sm"
+            data-stop-row-click
+            className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+            title="Fechar contrato — torna este lead um cliente"
+            onClick={(e) => {
+              e.stopPropagation();
+              onFechar();
+            }}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Fechar
+          </Button>
+        )}
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 hover:bg-rose-50 hover:text-rose-600"
-            title="Excluir"
+            className="h-7 w-7"
+            title="Ver/Editar"
             onClick={(e) => {
               e.stopPropagation();
-              onExcluir();
+              onAbrir();
             }}
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <PenLine className="h-3.5 w-3.5" />
           </Button>
-        )}
+          {podeExcluir && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 hover:bg-rose-50 hover:text-rose-600"
+              title="Excluir"
+              onClick={(e) => {
+                e.stopPropagation();
+                onExcluir();
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -2524,6 +2602,18 @@ function ClienteDetalhe({
     },
     onError: (e: any) => toast.error(e.message),
   });
+  // Troca manual de estágio (reversível). Para REGISTRAR uma venda no
+  // comercial use o fluxo de fechamento; este botão só ajusta o selo
+  // (corrigir classificação errada ou devolver pra Lead).
+  const definirEstagioMut = (trpc as any).clientes.definirEstagio.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(r.estagio === "cliente" ? "Marcado como Cliente" : "Voltou para Lead");
+      refetch();
+      onUpdate();
+      utilsTrpc.clientes.estatisticas.invalidate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
   const [excluirConfirmAlvo, setExcluirConfirmAlvo] = useState(false);
   const [mesclarOpen, setMesclarOpen] = useState(false);
   const mesclarMut = trpc.crm.unificarContatos.useMutation({
@@ -2618,6 +2708,15 @@ function ClienteDetalhe({
                     <AlertTriangle className="w-3 h-3" /> Docs pendentes
                   </span>
                 )}
+                {(cliente as any).estagio === "lead" ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/20 text-white border border-white/40">
+                    <TrendingUp className="w-3 h-3" /> Lead
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-400/25 text-emerald-50 border border-emerald-300/40">
+                    <CheckCircle2 className="w-3 h-3" /> Cliente
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-4 text-xs text-white/75 flex-wrap">
                 {cliente.telefone && (
@@ -2655,6 +2754,31 @@ function ClienteDetalhe({
 
             {/* Ações */}
             <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+              {(cliente as any).estagio === "cliente" ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => definirEstagioMut.mutate({ contatoId: id, estagio: "lead" })}
+                  disabled={definirEstagioMut.isPending}
+                  title="Voltar este cadastro para Lead — não apaga nada, só muda o selo"
+                  className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                  Voltar p/ Lead
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => definirEstagioMut.mutate({ contatoId: id, estagio: "cliente" })}
+                  disabled={definirEstagioMut.isPending}
+                  title="Marcar como Cliente sem registrar venda (use Fechar contrato para contar no comercial)"
+                  className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                  Marcar Cliente
+                </Button>
+              )}
               {cliente.telefone && (
                 <Button
                   variant="ghost"
