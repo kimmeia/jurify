@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JuridFlow — Redesign Admin · Configurações</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; background: #f6f7fb; }
+  .font-display { font-family: 'Poppins', 'Inter', sans-serif; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  .nav-item.active { background:#eef2ff; color:#4f46e5; font-weight:600; }
+  .nav-item.active .nav-ico { color:#4f46e5; }
+  ::-webkit-scrollbar { width:8px; height:8px; } ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:9999px; }
+</style>
+</head>
+<body class="text-slate-900">
+
+<!-- BARRA EXPLICATIVA -->
+<div class="bg-slate-900 text-white py-3 px-6 text-sm flex items-center justify-between gap-4 sticky top-0 z-40">
+  <div class="flex items-center gap-2 min-w-0">
+    <i data-lucide="settings" class="w-4 h-4 text-indigo-300 shrink-0"></i>
+    <span class="font-semibold truncate">Redesign Admin · Configurações (hub único)</span>
+    <span class="text-slate-500 hidden sm:inline">·</span>
+    <span class="text-slate-400 hidden sm:inline truncate">Integrações e Backups viram abas internas</span>
+  </div>
+  <span class="text-xs text-slate-400 shrink-0 hidden md:inline">Troque as abas →</span>
+</div>
+
+<div class="flex min-h-[calc(100vh-49px)]">
+  <!-- SIDEBAR (mostra a consolidação) -->
+  <aside class="w-[220px] shrink-0 bg-[#fbfbfe] border-r border-slate-200 flex flex-col">
+    <div class="h-16 flex items-center gap-2 px-4 border-b border-slate-100">
+      <span class="font-semibold tracking-tight text-slate-800">Admin</span>
+      <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-600 text-white">Painel</span>
+    </div>
+    <nav class="flex-1 px-2 py-2 space-y-0.5 text-sm">
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="layout-dashboard" class="nav-ico w-4 h-4 text-slate-500"></i>Visão Geral</div>
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="users" class="nav-ico w-4 h-4 text-slate-500"></i>Clientes</div>
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="dollar-sign" class="nav-ico w-4 h-4 text-slate-500"></i>Financeiro</div>
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="brain-circuit" class="nav-ico w-4 h-4 text-slate-500"></i>Agentes IA</div>
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="bar-chart-3" class="nav-ico w-4 h-4 text-slate-500"></i>Relatórios</div>
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="scroll-text" class="nav-ico w-4 h-4 text-slate-500"></i>Auditoria</div>
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="bug" class="nav-ico w-4 h-4 text-slate-500"></i>Erros</div>
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="radar" class="nav-ico w-4 h-4 text-slate-500"></i>Tribunais</div>
+      <div class="nav-item flex items-center gap-3 h-9 px-3 rounded-lg text-slate-600"><i data-lucide="mail" class="nav-ico w-4 h-4 text-slate-500"></i>Log de Emails</div>
+      <!-- consolidados -->
+      <div class="flex items-center gap-3 h-9 px-3 rounded-lg text-slate-400"><i data-lucide="plug" class="w-4 h-4"></i>Integrações <i data-lucide="corner-right-down" class="w-3 h-3 ml-auto text-indigo-400"></i></div>
+      <div class="flex items-center gap-3 h-9 px-3 rounded-lg text-slate-400"><i data-lucide="database" class="w-4 h-4"></i>Backups <i data-lucide="corner-right-down" class="w-3 h-3 ml-auto text-indigo-400"></i></div>
+      <div class="nav-item active flex items-center gap-3 h-9 px-3 rounded-lg"><i data-lucide="settings" class="nav-ico w-4 h-4 text-slate-500"></i>Configurações</div>
+      <p class="text-[10px] text-indigo-500 px-3 pt-1 leading-snug italic">Integrações e Backups agora moram dentro de Configurações.</p>
+    </nav>
+  </aside>
+
+  <main class="flex-1 p-6 overflow-x-hidden">
+    <div class="max-w-[1100px] space-y-5">
+
+      <!-- HERO de status do sistema -->
+      <div class="rounded-2xl bg-gradient-to-br from-slate-800 via-slate-700 to-indigo-700 p-6 text-white relative overflow-hidden shadow-lg">
+        <i data-lucide="server-cog" class="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" stroke-width="1.2"></i>
+        <div class="relative flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight font-display">Configurações</h1>
+            <p class="text-sm text-white/70 mt-0.5">Saúde do sistema, integrações, backups, planos e visão operacional.</p>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class="text-center"><p class="text-[10px] uppercase tracking-wide text-white/60">Status</p><p class="text-sm font-semibold inline-flex items-center gap-1.5 mt-0.5"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> Operacional</p></div>
+            <div class="text-center"><p class="text-[10px] uppercase tracking-wide text-white/60">Uptime</p><p class="text-sm font-semibold mt-0.5">12d 4h</p></div>
+            <div class="text-center"><p class="text-[10px] uppercase tracking-wide text-white/60">Node</p><p class="text-sm font-semibold mt-0.5">v22.11</p></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABS (pill) -->
+      <div class="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex">
+        <div class="flex gap-1 flex-wrap">
+          <button onclick="aba('sistema')" data-tab="sistema" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center bg-white shadow-sm text-slate-800 font-medium"><i data-lucide="heart-pulse" class="h-3.5 w-3.5"></i> Sistema</button>
+          <button onclick="aba('integracoes')" data-tab="integracoes" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="plug" class="h-3.5 w-3.5"></i> Integrações</button>
+          <button onclick="aba('backups')" data-tab="backups" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="database" class="h-3.5 w-3.5"></i> Backups</button>
+          <button onclick="aba('planos')" data-tab="planos" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="layers" class="h-3.5 w-3.5"></i> Planos</button>
+        </div>
+      </div>
+
+      <!-- ══════ SISTEMA ══════ -->
+      <div data-panel="sistema" class="space-y-4">
+        <!-- health checks -->
+        <div class="rounded-2xl bg-white border border-slate-200 p-5">
+          <h3 class="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2"><i data-lucide="heart-pulse" class="w-4 h-4 text-slate-400"></i> Saúde do sistema</h3>
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="flex items-center justify-between rounded-xl border border-slate-100 p-3"><div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-sm text-slate-700">Banco de dados</span></div><span class="text-xs text-slate-400 font-mono">12ms</span></div>
+            <div class="flex items-center justify-between rounded-xl border border-slate-100 p-3"><div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-sm text-slate-700">Asaas (cobrança)</span></div><span class="text-xs text-slate-400 font-mono">produção</span></div>
+            <div class="flex items-center justify-between rounded-xl border border-slate-100 p-3"><div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-sm text-slate-700">Resend (e-mail)</span></div><span class="text-xs text-slate-400 font-mono">ok</span></div>
+            <div class="flex items-center justify-between rounded-xl border border-slate-100 p-3"><div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-sm text-slate-700">JWT_SECRET</span></div><span class="text-xs text-slate-400 font-mono">definido</span></div>
+            <div class="flex items-center justify-between rounded-xl border border-slate-100 p-3"><div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-amber-500"></span><span class="text-sm text-slate-700">Sentry</span></div><span class="text-xs text-amber-600 font-mono">token expira em 5d</span></div>
+            <div class="flex items-center justify-between rounded-xl border border-slate-100 p-3"><div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-sm text-slate-700">Storage S3 (backup)</span></div><span class="text-xs text-slate-400 font-mono">ok</span></div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100">
+            <div><p class="text-[10px] uppercase tracking-wide text-slate-400">Uptime</p><p class="text-sm font-semibold text-slate-700">12d 4h 22m</p></div>
+            <div><p class="text-[10px] uppercase tracking-wide text-slate-400">Node.js</p><p class="text-sm font-semibold text-slate-700">v22.11.0</p></div>
+            <div><p class="text-[10px] uppercase tracking-wide text-slate-400">Memória</p><p class="text-sm font-semibold text-slate-700">412 MB</p></div>
+            <div><p class="text-[10px] uppercase tracking-wide text-slate-400">Planos</p><p class="text-sm font-semibold text-slate-700">3</p></div>
+          </div>
+        </div>
+
+        <!-- visão operacional -->
+        <div class="rounded-2xl bg-white border border-slate-200 p-5">
+          <h3 class="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2"><i data-lucide="activity" class="w-4 h-4 text-slate-400"></i> Visão operacional</h3>
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div class="rounded-xl bg-blue-50/60 border border-blue-100 p-3"><div class="flex items-center gap-1.5 text-blue-700"><i data-lucide="building-2" class="w-3.5 h-3.5"></i><span class="text-[10px] uppercase tracking-wide font-semibold">Escritórios</span></div><p class="text-xl font-bold text-blue-600 tabular-nums mt-1">389</p></div>
+            <div class="rounded-xl bg-emerald-50/60 border border-emerald-100 p-3"><div class="flex items-center gap-1.5 text-emerald-700"><i data-lucide="user-check" class="w-3.5 h-3.5"></i><span class="text-[10px] uppercase tracking-wide font-semibold">Colab.</span></div><p class="text-xl font-bold text-emerald-600 tabular-nums mt-1">1.204</p></div>
+            <div class="rounded-xl bg-violet-50/60 border border-violet-100 p-3"><div class="flex items-center gap-1.5 text-violet-700"><i data-lucide="users" class="w-3.5 h-3.5"></i><span class="text-[10px] uppercase tracking-wide font-semibold">Contatos</span></div><p class="text-xl font-bold text-violet-600 tabular-nums mt-1">28.4k</p></div>
+            <div class="rounded-xl bg-amber-50/60 border border-amber-100 p-3"><div class="flex items-center gap-1.5 text-amber-700"><i data-lucide="message-square" class="w-3.5 h-3.5"></i><span class="text-[10px] uppercase tracking-wide font-semibold">Conversas</span></div><p class="text-xl font-bold text-amber-600 tabular-nums mt-1">3.1k</p></div>
+            <div class="rounded-xl bg-pink-50/60 border border-pink-100 p-3"><div class="flex items-center gap-1.5 text-pink-700"><i data-lucide="globe" class="w-3.5 h-3.5"></i><span class="text-[10px] uppercase tracking-wide font-semibold">Leads</span></div><p class="text-xl font-bold text-pink-600 tabular-nums mt-1">842</p></div>
+            <div class="rounded-xl bg-teal-50/60 border border-teal-100 p-3"><div class="flex items-center gap-1.5 text-teal-700"><i data-lucide="bot" class="w-3.5 h-3.5"></i><span class="text-[10px] uppercase tracking-wide font-semibold">Agentes IA</span></div><p class="text-xl font-bold text-teal-600 tabular-nums mt-1">57</p></div>
+          </div>
+          <div class="mt-4 pt-4 border-t border-slate-100">
+            <p class="text-xs font-medium text-slate-500 mb-2">Canais integrados</p>
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between py-1.5 px-3 rounded-md bg-slate-50"><div class="flex items-center gap-2"><i data-lucide="radio" class="w-3.5 h-3.5 text-slate-400"></i><span class="text-sm text-slate-700">WhatsApp Cloud</span><span class="text-xs text-slate-400 font-mono">+55 85 9xxxx</span></div><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Conectado</span></div>
+              <div class="flex items-center justify-between py-1.5 px-3 rounded-md bg-slate-50"><div class="flex items-center gap-2"><i data-lucide="radio" class="w-3.5 h-3.5 text-slate-400"></i><span class="text-sm text-slate-700">Instagram</span></div><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 font-medium">Inativo</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════ INTEGRAÇÕES ══════ -->
+      <div data-panel="integracoes" class="hidden space-y-4">
+        <p class="text-xs text-slate-400">Chaves globais usadas por toda a plataforma. As keys ficam criptografadas no banco.</p>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <!-- Asaas (conectado) -->
+          <div class="rounded-2xl bg-white border border-slate-200 p-5">
+            <div class="flex items-start justify-between mb-2">
+              <div class="h-10 w-10 rounded-xl bg-emerald-500/10 grid place-items-center"><i data-lucide="banknote" class="w-5 h-5 text-emerald-600"></i></div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Conectado</span>
+            </div>
+            <h4 class="font-semibold text-slate-800">Asaas</h4>
+            <p class="text-xs text-slate-500 mt-0.5">Cobrança das mensalidades dos escritórios.</p>
+            <p class="text-[11px] text-slate-400 mt-2 font-mono">key ••••••3f2a · produção · testado há 2 min</p>
+            <div class="flex gap-2 mt-3"><button class="text-xs text-slate-600 hover:underline">Retestar</button><button class="text-xs text-indigo-600 hover:underline">Configurar webhook</button><button class="text-xs text-rose-600 hover:underline ml-auto">Desconectar</button></div>
+          </div>
+          <!-- Resend -->
+          <div class="rounded-2xl bg-white border border-slate-200 p-5">
+            <div class="flex items-start justify-between mb-2">
+              <div class="h-10 w-10 rounded-xl bg-blue-500/10 grid place-items-center"><i data-lucide="mail" class="w-5 h-5 text-blue-600"></i></div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Conectado</span>
+            </div>
+            <h4 class="font-semibold text-slate-800">Resend</h4>
+            <p class="text-xs text-slate-500 mt-0.5">E-mail transacional (convites, notificações).</p>
+            <p class="text-[11px] text-slate-400 mt-2 font-mono">key ••••••a91c · 2 domínios verificados</p>
+            <div class="flex gap-2 mt-3"><button class="text-xs text-slate-600 hover:underline">Retestar</button><button class="text-xs text-rose-600 hover:underline ml-auto">Desconectar</button></div>
+          </div>
+          <!-- Sentry (erro/auto-cura) -->
+          <div class="rounded-2xl bg-white border border-amber-200 p-5">
+            <div class="flex items-start justify-between mb-2">
+              <div class="h-10 w-10 rounded-xl bg-amber-500/10 grid place-items-center"><i data-lucide="bug" class="w-5 h-5 text-amber-600"></i></div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium inline-flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3 h-3"></i> Erro</span>
+            </div>
+            <h4 class="font-semibold text-slate-800">Sentry</h4>
+            <p class="text-xs text-slate-500 mt-0.5">Monitoramento de erros frontend/backend.</p>
+            <p class="text-[11px] text-amber-600 mt-2">HTTP 401: auth token inválido ou expirado</p>
+            <div class="flex gap-2 mt-3"><button class="text-xs text-indigo-600 hover:underline">Reconectar</button><button class="text-xs text-slate-600 hover:underline">Retestar</button></div>
+          </div>
+          <!-- OpenAI -->
+          <div class="rounded-2xl bg-white border border-slate-200 p-5">
+            <div class="flex items-start justify-between mb-2">
+              <div class="h-10 w-10 rounded-xl bg-teal-500/10 grid place-items-center"><i data-lucide="sparkles" class="w-5 h-5 text-teal-600"></i></div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Conectado</span>
+            </div>
+            <h4 class="font-semibold text-slate-800">OpenAI</h4>
+            <p class="text-xs text-slate-500 mt-0.5">Agentes IA e resumos automáticos.</p>
+            <p class="text-[11px] text-slate-400 mt-2 font-mono">key ••••••7d10 · GPT-4 disponível</p>
+            <div class="flex gap-2 mt-3"><button class="text-xs text-slate-600 hover:underline">Retestar</button><button class="text-xs text-rose-600 hover:underline ml-auto">Desconectar</button></div>
+          </div>
+          <!-- Anthropic -->
+          <div class="rounded-2xl bg-white border border-slate-200 p-5">
+            <div class="flex items-start justify-between mb-2">
+              <div class="h-10 w-10 rounded-xl bg-orange-500/10 grid place-items-center"><i data-lucide="brain-circuit" class="w-5 h-5 text-orange-600"></i></div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Conectado</span>
+            </div>
+            <h4 class="font-semibold text-slate-800">Anthropic (Claude)</h4>
+            <p class="text-xs text-slate-500 mt-0.5">Agentes IA com modelos Claude.</p>
+            <p class="text-[11px] text-slate-400 mt-2 font-mono">key ••••••b3e8</p>
+            <div class="flex gap-2 mt-3"><button class="text-xs text-slate-600 hover:underline">Retestar</button><button class="text-xs text-rose-600 hover:underline ml-auto">Desconectar</button></div>
+          </div>
+          <!-- WhatsApp Cloud (desconectado) -->
+          <div class="rounded-2xl bg-white border border-dashed border-slate-300 p-5">
+            <div class="flex items-start justify-between mb-2">
+              <div class="h-10 w-10 rounded-xl bg-slate-100 grid place-items-center"><i data-lucide="message-circle" class="w-5 h-5 text-slate-400"></i></div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">Desconectado</span>
+            </div>
+            <h4 class="font-semibold text-slate-800">WhatsApp Cloud</h4>
+            <p class="text-xs text-slate-500 mt-0.5">Config global do WhatsApp CoEx.</p>
+            <button class="text-xs text-indigo-600 font-medium hover:underline mt-3 inline-flex items-center gap-1"><i data-lucide="plus" class="w-3.5 h-3.5"></i> Conectar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════ BACKUPS ══════ -->
+      <div data-panel="backups" class="hidden space-y-4">
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3">
+          <div class="h-8 w-8 rounded-lg bg-emerald-100 grid place-items-center"><i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i></div>
+          <div class="flex-1"><p class="text-sm font-medium text-emerald-900">Backups configurados</p><p class="text-xs text-emerald-700">Storage S3 ok · backup automático diário às 03:00</p></div>
+          <button class="h-9 px-3 rounded-lg bg-indigo-600 text-white text-sm font-medium flex items-center gap-1.5"><i data-lucide="play" class="w-4 h-4"></i> Gerar agora</button>
+        </div>
+
+        <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+          <div class="px-5 pt-4 pb-2 border-b border-slate-100"><h3 class="text-base font-semibold text-slate-800">Backups disponíveis</h3><p class="text-xs text-slate-400 mt-0.5">Dumps completos do banco de dados</p></div>
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100"><th class="px-5 py-2.5 font-medium">Arquivo</th><th class="py-2.5 font-medium">Data</th><th class="py-2.5 font-medium">Tamanho</th><th class="py-2.5 pr-5 font-medium text-right">Ações</th></tr></thead>
+            <tbody class="divide-y divide-slate-50">
+              <tr><td class="px-5 py-3 font-mono text-xs text-slate-600">dump-20260526-0300.sql.gz</td><td class="text-slate-500 text-xs">26/05 03:00</td><td class="tabular-nums text-slate-600">84 MB</td><td class="pr-5 text-right space-x-2"><button class="text-xs text-indigo-600 hover:underline">Baixar</button><button class="text-xs text-amber-600 hover:underline">Restaurar</button></td></tr>
+              <tr><td class="px-5 py-3 font-mono text-xs text-slate-600">dump-20260525-0300.sql.gz</td><td class="text-slate-500 text-xs">25/05 03:00</td><td class="tabular-nums text-slate-600">83 MB</td><td class="pr-5 text-right space-x-2"><button class="text-xs text-indigo-600 hover:underline">Baixar</button><button class="text-xs text-amber-600 hover:underline">Restaurar</button></td></tr>
+              <tr><td class="px-5 py-3 font-mono text-xs text-slate-600">dump-20260524-0300.sql.gz</td><td class="text-slate-500 text-xs">24/05 03:00</td><td class="tabular-nums text-slate-600">82 MB</td><td class="pr-5 text-right space-x-2"><button class="text-xs text-indigo-600 hover:underline">Baixar</button><button class="text-xs text-amber-600 hover:underline">Restaurar</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="rounded-2xl bg-white border border-slate-200 p-5">
+          <h3 class="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2"><i data-lucide="terminal" class="w-4 h-4 text-slate-400"></i> Como restaurar</h3>
+          <ol class="text-xs text-slate-500 space-y-1.5 list-decimal pl-4">
+            <li>Baixe o dump desejado.</li>
+            <li>Rode o script no servidor (ajuste os parâmetros).</li>
+            <li>Reinicie a aplicação.</li>
+          </ol>
+          <div class="mt-3 rounded-lg bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 flex items-start gap-2"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i> Atenção: dumps são do banco completo — restaurar substitui todos os dados atuais.</div>
+        </div>
+      </div>
+
+      <!-- ══════ PLANOS ══════ -->
+      <div data-panel="planos" class="hidden space-y-3">
+        <div class="flex items-center justify-between">
+          <p class="text-xs text-slate-400">Planos configurados no sistema. A edição completa fica em <span class="text-indigo-600">Financeiro → Planos</span>.</p>
+          <button class="h-8 px-3 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Editar em Financeiro</button>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <div class="rounded-2xl bg-white border border-slate-200 p-5"><div class="flex items-center justify-between"><h4 class="font-semibold text-slate-800">Básico</h4><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-mono">basico</span></div><p class="text-2xl font-bold tabular-nums text-slate-900 mt-2">R$ 149<span class="text-sm text-slate-400 font-normal">/mês</span></p><p class="text-xs text-slate-500 mt-1">Anual R$ 1.490 · 200 créditos/mês</p></div>
+          <div class="rounded-2xl bg-white border border-slate-200 p-5"><div class="flex items-center justify-between"><h4 class="font-semibold text-slate-800">Intermediário</h4><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-mono">intermediario</span></div><p class="text-2xl font-bold tabular-nums text-slate-900 mt-2">R$ 249<span class="text-sm text-slate-400 font-normal">/mês</span></p><p class="text-xs text-slate-500 mt-1">Anual R$ 2.490 · 500 créditos/mês</p></div>
+          <div class="rounded-2xl bg-white border border-slate-200 p-5"><div class="flex items-center justify-between"><h4 class="font-semibold text-slate-800">Completo</h4><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-mono">completo</span></div><p class="text-2xl font-bold tabular-nums text-slate-900 mt-2">R$ 349<span class="text-sm text-slate-400 font-normal">/mês</span></p><p class="text-xs text-slate-500 mt-1">Anual R$ 3.490 · créditos ilimitados</p></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+  lucide.createIcons();
+  function aba(n){
+    document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('hidden', p.getAttribute('data-panel') !== n));
+    document.querySelectorAll('.tab').forEach(b => {
+      const on = b.getAttribute('data-tab') === n;
+      b.classList.toggle('bg-white', on); b.classList.toggle('shadow-sm', on);
+      b.classList.toggle('text-slate-800', on); b.classList.toggle('font-medium', on);
+      b.classList.toggle('text-slate-500', !on);
+    });
+  }
+</script>
+</body>
+</html>
