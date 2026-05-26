@@ -198,3 +198,27 @@ export function exportCobrancasCSV(cobrancas: any[]) {
   link.click();
   URL.revokeObjectURL(url);
 }
+
+/** Dispara download de um Blob/string no navegador. */
+export function baixarBlob(content: string | Blob, filename: string, mimeType: string) {
+  const blob =
+    typeof content === "string" ? new Blob([content], { type: mimeType }) : content;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    a.remove();
+  }, 0);
+}
+
+/** Converte base64 \u2192 Blob no navegador (sem libs externas). */
+export function base64ToBlob(base64: string, mimeType: string): Blob {
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mimeType });
+}
