@@ -661,6 +661,76 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       return null;
     },
 
+    async distribuirAtendimentoPorSetor(params): Promise<{ id: number; nome: string } | null> {
+      const { getDb } = await import("../db");
+      const { colaboradores, users, conversas } = await import("../../drizzle/schema");
+      const { eq, and, or, inArray, sql } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) return null;
+
+      // Atendentes ATIVOS do setor (com o nome do usuário).
+      const candidatos = await db
+        .select({
+          id: colaboradores.id,
+          nome: users.name,
+          ultimaAtividade: colaboradores.ultimaAtividade,
+          maxSimultaneos: colaboradores.maxAtendimentosSimultaneos,
+        })
+        .from(colaboradores)
+        .innerJoin(users, eq(users.id, colaboradores.userId))
+        .where(and(
+          eq(colaboradores.escritorioId, escritorioId),
+          eq(colaboradores.setorId, params.setorId),
+          eq(colaboradores.ativo, true),
+        ));
+      if (candidatos.length === 0) return null;
+
+      const dezMinAtras = new Date(Date.now() - 10 * 60 * 1000);
+      const online = candidatos.filter((c) => c.ultimaAtividade && new Date(c.ultimaAtividade) >= dezMinAtras);
+
+      // `somenteOnline` → só os online; senão grupo todo (online tem prioridade).
+      const elegiveis = params.somenteOnline ? online : candidatos;
+      if (elegiveis.length === 0) return null;
+
+      // Carga = conversas abertas (aguardando/em_atendimento) por atendente.
+      const cargaPorId = new Map<number, number>();
+      const cargas = await db
+        .select({ atendenteId: conversas.atendenteId, n: sql<number>`COUNT(*)` })
+        .from(conversas)
+        .where(and(
+          eq(conversas.escritorioId, escritorioId),
+          inArray(conversas.atendenteId, elegiveis.map((c) => c.id)),
+          or(eq(conversas.status, "aguardando"), eq(conversas.status, "em_atendimento")),
+        ))
+        .groupBy(conversas.atendenteId);
+      for (const r of cargas) if (r.atendenteId != null) cargaPorId.set(r.atendenteId, Number(r.n));
+
+      const onlineIds = new Set(online.map((c) => c.id));
+      // Ordena: online primeiro (quando grupo todo) → menor carga proporcional → id estável.
+      const escolhido = [...elegiveis].sort((a, b) => {
+        const aOn = onlineIds.has(a.id) ? 0 : 1;
+        const bOn = onlineIds.has(b.id) ? 0 : 1;
+        if (aOn !== bOn) return aOn - bOn;
+        const aC = (cargaPorId.get(a.id) ?? 0) / Math.max(1, a.maxSimultaneos || 5);
+        const bC = (cargaPorId.get(b.id) ?? 0) / Math.max(1, b.maxSimultaneos || 5);
+        if (aC !== bC) return aC - bC;
+        return a.id - b.id;
+      })[0];
+
+      // Seta o dono da conversa SEM mexer no status (bot segue o fluxo). Marca
+      // ultimaDistribuicao pra round-robin nas próximas distribuições.
+      if (params.conversaId) {
+        await db.update(conversas)
+          .set({ atendenteId: escolhido.id })
+          .where(and(eq(conversas.id, params.conversaId), eq(conversas.escritorioId, escritorioId)));
+      }
+      await db.update(colaboradores)
+        .set({ ultimaDistribuicao: new Date() })
+        .where(eq(colaboradores.id, escolhido.id));
+
+      return { id: escolhido.id, nome: escolhido.nome || "Atendente" };
+    },
+
     async extrairCamposDoAgente(agenteId: number, contatoId: number, conversaId: number): Promise<Record<string, unknown>> {
       try {
         const { extrairECaptarCampos } = await import("../integracoes/agente-captura-campos");

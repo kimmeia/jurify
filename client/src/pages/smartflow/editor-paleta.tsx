@@ -74,6 +74,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   whatsapp_enviar: MessageCircle,
   whatsapp_aguardar_resposta: Pause,
   transferir: PhoneCall,
+  distribuir_atendimento: Users,
   condicional: GitBranch,
   para_cada_item: Repeat,
   esperar: Clock,

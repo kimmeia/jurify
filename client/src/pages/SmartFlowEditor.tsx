@@ -133,6 +133,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   whatsapp_enviar: MessageCircle,
   whatsapp_aguardar_resposta: Pause,
   transferir: PhoneCall,
+  distribuir_atendimento: Users,
   condicional: GitBranch,
   para_cada_item: Repeat,
   esperar: Clock,
@@ -252,6 +253,7 @@ const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
   whatsapp_enviar: { grad: "from-teal-500 to-cyan-600", border: "border-teal-300 dark:border-teal-800" },
   whatsapp_aguardar_resposta: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
   transferir: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
+  distribuir_atendimento: { grad: "from-teal-500 to-emerald-600", border: "border-teal-300 dark:border-teal-800" },
   condicional: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
   para_cada_item: { grad: "from-amber-500 to-yellow-500", border: "border-amber-300 dark:border-amber-800" },
   esperar: { grad: "from-slate-500 to-slate-600", border: "border-slate-300 dark:border-slate-700" },
@@ -405,6 +407,12 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
             ))}
           </div>
         ) : null
+      ) : data.tipo === "distribuir_atendimento" ? (
+        // Distribuir: "atribuído" (achou atendente) e "sem atendente" (ninguém elegível).
+        <div className="border-t bg-muted/20 py-1">
+          <HandleRow handleId="atribuido" label="atribuído →" cor="#14b8a6" />
+          <HandleRow handleId="sem_atendente" label="sem atendente disponível" italic cor="#f59e0b" />
+        </div>
       ) : (
         <Handle
           type="source"
@@ -3547,6 +3555,54 @@ function ConfigWhatsappEnviarFields({
  * "em_atendimento") e, opcionalmente, envia uma mensagem de despedida antes
  * de pausar. Campo vazio = pausa em silêncio.
  */
+function ConfigDistribuirAtendimentoFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const { data: setoresData } = (trpc as any).configuracoes.listarSetores.useQuery();
+  const setores: Array<{ id: number; nome: string; totalColaboradores?: number }> = Array.isArray(setoresData) ? setoresData : [];
+  const setorId = typeof cfg.setorId === "number" ? cfg.setorId : 0;
+  const somenteOnline = cfg.somenteOnline === true;
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-900 p-2">
+        <p className="text-[11px] text-teal-800 dark:text-teal-300">
+          Escolhe um atendente do setor (menor carga, online primeiro) e passa a conversa pra ele. <strong>O bot continua o fluxo</strong> — só para quando o atendente responder no inbox. Ligue as saídas <strong>atribuído</strong> e <strong>sem atendente</strong>.
+        </p>
+      </div>
+      <div>
+        <Label className="text-xs">Setor</Label>
+        <Select value={String(setorId || "")} onValueChange={(v) => onChange({ setorId: Number(v) })}>
+          <SelectTrigger><SelectValue placeholder="Escolha o setor" /></SelectTrigger>
+          <SelectContent>
+            {setores.map((s) => (
+              <SelectItem key={s.id} value={String(s.id)}>
+                {s.nome}
+                {typeof s.totalColaboradores === "number" && (
+                  <span className="text-muted-foreground ml-2 text-[10px]">{s.totalColaboradores} atendente(s)</span>
+                )}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {setores.length === 0 && (
+          <p className="text-[10px] text-destructive mt-1">Nenhum setor cadastrado. Crie em <strong>Configurações → Equipe</strong> e vincule atendentes.</p>
+        )}
+      </div>
+      <label className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs">
+        <Checkbox checked={somenteOnline} onCheckedChange={(v) => onChange({ somenteOnline: v === true })} />
+        <span>Só atendentes <strong>online</strong> (ativos nos últimos ~10 min). Desligado = qualquer atendente do setor.</span>
+      </label>
+      <p className="text-[10px] text-muted-foreground">
+        Disponível depois: <code>{"{{atendenteEscolhidoNome}}"}</code> — ex: "Você será atendido por {"{{atendenteEscolhidoNome}}"}".
+      </p>
+    </div>
+  );
+}
+
 function ConfigTransferirFields({
   cfg,
   onChange,
@@ -5116,6 +5172,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigWhatsappEnviarFields cfg={cfg} onChange={onChange} />;
     case "transferir":
       return <ConfigTransferirFields cfg={cfg} onChange={onChange} />;
+    case "distribuir_atendimento":
+      return <ConfigDistribuirAtendimentoFields cfg={cfg} onChange={onChange} />;
     case "condicional":
       return <ConfigCondicionalFields cfg={cfg} onChange={onChange} />;
     case "esperar":
