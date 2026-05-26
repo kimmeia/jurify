@@ -1230,6 +1230,20 @@ describe("SmartFlow Engine", () => {
       expect(interpretarSaidaAtendente("Olá, tudo bem?", fer, con))
         .toEqual({ resposta: "Olá, tudo bem?", acao: null, consulta: null });
     });
+    it("frase ANTES do JSON: extrai o objeto e a consulta (bug do JSON vazado pro cliente)", () => {
+      const raw = 'Claro! Vou verificar os horários disponíveis para você. Um momento, por favor.\n\n{"resposta":"Claro! Vou verificar os horários.","acao":null,"consulta":"ver_horarios"}';
+      expect(interpretarSaidaAtendente(raw, fer, con))
+        .toEqual({ resposta: "Claro! Vou verificar os horários.", acao: null, consulta: "ver_horarios" });
+    });
+    it("cerca markdown com frase antes do bloco json", () => {
+      const raw = 'Deixa eu ver os horários:\n```json\n{"resposta":"um momento","consulta":"ver_horarios"}\n```';
+      expect(interpretarSaidaAtendente(raw, fer, con))
+        .toEqual({ resposta: "um momento", acao: null, consulta: "ver_horarios" });
+    });
+    it("não vira falso-positivo: chaves soltas em texto comum continuam fallback", () => {
+      expect(interpretarSaidaAtendente("Oi {nome}, tudo bem?", fer, con))
+        .toEqual({ resposta: "Oi {nome}, tudo bem?", acao: null, consulta: null });
+    });
   });
 
   describe("orquestrarAtendente (vai-e-volta da consulta)", () => {
