@@ -170,4 +170,48 @@ export const adminSmartflowRouter = router({
       await db.delete(smartflowTemplates).where(eq(smartflowTemplates.id, input.id));
       return { success: true };
     }),
+
+  /**
+   * Biblioteca interna: modelos prontos hardcoded em `TEMPLATES_SMARTFLOW`.
+   * Servem de ponto de partida — o admin importa pro banco e publica.
+   */
+  listarInternos: adminProcedure.query(async () => {
+    const { TEMPLATES_SMARTFLOW } = await import("../../shared/smartflow-templates");
+    return TEMPLATES_SMARTFLOW.map((t) => ({
+      id: t.id,
+      nome: t.nome,
+      descricao: t.descricao,
+      icone: t.icone,
+      gradiente: t.gradiente,
+      gatilho: t.gatilho,
+      badge: t.badge ?? null,
+      qtdPassos: t.passos.length,
+    }));
+  }),
+
+  /** Importa um modelo da biblioteca interna pro banco (como rascunho). */
+  importarInterno: adminProcedure
+    .input(z.object({ templateId: z.string().max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database não disponível");
+      const { getTemplate } = await import("../../shared/smartflow-templates");
+      const tpl = getTemplate(input.templateId);
+      if (!tpl) throw new Error("Modelo interno não encontrado");
+      const [r] = await db.insert(smartflowTemplates).values({
+        nome: tpl.nome,
+        descricao: tpl.descricao,
+        icone: tpl.icone,
+        gradiente: tpl.gradiente,
+        gatilho: tpl.gatilho,
+        configGatilho: tpl.configGatilho ? JSON.stringify(tpl.configGatilho) : null,
+        passos: JSON.stringify(tpl.passos),
+        categoria: null,
+        badge: tpl.badge ?? null,
+        dica: tpl.dica ?? null,
+        disponivelParaClientes: false,
+        criadoPor: ctx.user.id,
+      });
+      return { id: (r as { insertId: number }).insertId };
+    }),
 });
