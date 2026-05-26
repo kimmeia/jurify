@@ -1,0 +1,290 @@
+/* ============================================================
+   JuridFlow — Landing mockups — base compartilhada
+   Tokens, logo, botões, moldura de navegador e "screenshots"
+   fiéis da UI real do app. Cada direção (A/B/C) traz seu
+   próprio <style> inline pro hero/seções.
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap");
+
+:root {
+  /* Marca — violeta vindo do "Flow" do logo */
+  --violet: #7c3aed;
+  --violet-2: #8b5cf6;
+  --violet-deep: #6d28d9;
+  --violet-soft: #f3effe;
+  --navy: #0b0b17;       /* "Jurid" / fundo dark do logo */
+  --navy-2: #12121f;
+  --navy-3: #1b1b2e;
+
+  --ink: #0f1115;
+  --ink-2: #2a2d36;
+  --muted: #6b7280;
+  --muted-2: #9aa1ad;
+  --line: #e8e8f1;
+  --line-2: #eef0f6;
+  --bg: #fafaff;
+  --card: #ffffff;
+
+  --emerald: #10b981;
+  --emerald-bg: #e9f9f1;
+  --amber: #f59e0b;
+  --amber-bg: #fef3e2;
+  --rose: #ef4444;
+  --rose-bg: #fde8e8;
+  --blue: #3b82f6;
+  --blue-bg: #e8f0fe;
+  --sky: #0ea5e9;
+
+  --shadow-sm: 0 1px 2px rgba(16, 17, 33, 0.06);
+  --shadow: 0 8px 24px -8px rgba(16, 17, 33, 0.18);
+  --shadow-lg: 0 30px 60px -20px rgba(16, 17, 33, 0.35);
+  --shadow-violet: 0 30px 80px -24px rgba(124, 58, 237, 0.5);
+
+  --font-display: "Poppins", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+body {
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+a { color: inherit; text-decoration: none; }
+
+/* ---------- Logo (recriação fiel do wordmark) ---------- */
+.logo {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+}
+.logo .j { color: var(--navy); }
+.logo .f { color: var(--violet); font-weight: 600; }
+.logo--light .j { color: #ffffff; }
+.logo--lg { font-size: 30px; }
+.logo--md { font-size: 22px; }
+.logo--sm { font-size: 18px; }
+
+/* ---------- Botões ---------- */
+.btn {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 15px;
+  border: none;
+  border-radius: 11px;
+  padding: 13px 22px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--violet); color: #fff; box-shadow: 0 8px 20px -6px rgba(124,58,237,.5); }
+.btn-primary:hover { background: var(--violet-deep); }
+.btn-ghost { background: transparent; color: var(--ink); }
+.btn-outline { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+.btn-light { background: #fff; color: var(--navy); }
+.btn-sm { padding: 9px 16px; font-size: 14px; }
+.btn-lg { padding: 16px 28px; font-size: 16px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 600;
+  padding: 6px 13px; border-radius: 999px;
+  background: var(--violet-soft); color: var(--violet-deep);
+}
+
+.eyebrow {
+  font-size: 13px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--violet);
+}
+
+/* ---------- Container ---------- */
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
+
+/* ---------- Moldura de navegador (browser chrome) ---------- */
+.browser {
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+}
+.browser__bar {
+  height: 38px;
+  background: #f3f4f8;
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 14px;
+}
+.browser__dots { display: flex; gap: 6px; }
+.browser__dots i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+.browser__url {
+  flex: 1; text-align: center; font-size: 12px; color: #9aa1ad;
+  font-family: var(--font-body); font-weight: 500;
+}
+
+/* ============================================================
+   APP SHELL — réplica fiel do layout do JuridFlow
+   ============================================================ */
+.app { display: flex; background: var(--bg); min-height: 540px; }
+
+/* Sidebar */
+.side {
+  width: 210px; flex-shrink: 0;
+  background: #fcfcff;
+  border-right: 1px solid var(--line-2);
+  padding: 14px 12px;
+  display: flex; flex-direction: column;
+}
+.side__head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 6px 14px; border-bottom: 1px solid var(--line-2); margin-bottom: 10px;
+}
+.side__avatar {
+  width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--violet), var(--violet-2));
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 14px;
+}
+.side__firm { font-size: 13px; font-weight: 700; color: var(--ink); line-height: 1.1; }
+.side__sub { font-size: 10.5px; color: var(--muted-2); }
+.nav { display: flex; flex-direction: column; gap: 1px; }
+.nav__item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 9px; border-radius: 8px;
+  font-size: 12.5px; font-weight: 500; color: var(--ink-2);
+}
+.nav__item svg { width: 16px; height: 16px; stroke: var(--muted); flex-shrink: 0; }
+.nav__item.is-active { background: var(--violet-soft); color: var(--violet-deep); font-weight: 600; }
+.nav__item.is-active svg { stroke: var(--violet); }
+.nav__item .soon {
+  margin-left: auto; font-size: 8.5px; font-weight: 700; color: var(--muted-2);
+  background: var(--line-2); padding: 1px 5px; border-radius: 999px; letter-spacing: .03em;
+}
+
+/* Conteúdo do app */
+.main { flex: 1; padding: 0; overflow: hidden; }
+
+/* Hero band (gradiente, igual aos heroes das páginas reais) */
+.band {
+  padding: 18px 22px; color: #fff;
+  position: relative; overflow: hidden;
+}
+.band--dash { background: linear-gradient(120deg, #1e293b, #334155 55%, #4338ca); }
+.band--cli { background: linear-gradient(120deg, #6d28d9, #7e22ce 55%, #4338ca); }
+.band--calc { background: linear-gradient(120deg, #d97706, #ea580c 55%, #be123c); }
+.band--atend { background: linear-gradient(120deg, #6d28d9, #4f46e5 55%, #2563eb); }
+.band__row { display: flex; align-items: flex-start; justify-content: space-between; }
+.band__title { font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: -.01em; }
+.band__date { font-size: 11.5px; opacity: .8; margin-top: 2px; }
+.band__icon { width: 30px; height: 30px; opacity: .85; }
+.band__icon svg { width: 30px; height: 30px; stroke: #fff; }
+
+.pad { padding: 16px 22px; }
+
+/* KPIs */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.kpi {
+  background: #fff; border: 1px solid var(--line-2); border-radius: 11px; padding: 11px 12px;
+}
+.kpi__top { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+.kpi__ic { width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; }
+.kpi__ic svg { width: 14px; height: 14px; }
+.kpi__label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+.kpi__val { font-size: 19px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.kpi__sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.ic-emerald { background: var(--emerald-bg); } .ic-emerald svg { stroke: var(--emerald); }
+.ic-blue { background: var(--blue-bg); } .ic-blue svg { stroke: var(--blue); }
+.ic-rose { background: var(--rose-bg); } .ic-rose svg { stroke: var(--rose); }
+.ic-violet { background: var(--violet-soft); } .ic-violet svg { stroke: var(--violet); }
+.ic-amber { background: var(--amber-bg); } .ic-amber svg { stroke: var(--amber); }
+.t-emerald { color: var(--emerald); } .t-rose { color: var(--rose); } .t-amber { color: var(--amber); }
+.t-blue { color: var(--blue); } .t-violet { color: var(--violet); }
+
+/* Badge */
+.bdg { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+.bdg--emerald { background: var(--emerald-bg); color: #047857; }
+.bdg--amber { background: var(--amber-bg); color: #b45309; }
+.bdg--rose { background: var(--rose-bg); color: #b91c1c; }
+.bdg--violet { background: var(--violet-soft); color: var(--violet-deep); }
+.bdg--slate { background: #eef0f6; color: #475569; }
+.dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+
+/* Card genérico */
+.c {
+  background: #fff; border: 1px solid var(--line-2); border-radius: 11px; padding: 13px 14px;
+}
+.c__title { font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.c__title svg { width: 14px; height: 14px; stroke: var(--violet); }
+
+/* Gráfico de barras / área (fake) */
+.bars { display: flex; align-items: flex-end; gap: 5px; height: 70px; }
+.bars i { flex: 1; border-radius: 3px 3px 0 0; background: linear-gradient(to top, var(--violet), var(--violet-2)); display: block; }
+.bars--soft i { background: linear-gradient(to top, rgba(124,58,237,.45), rgba(139,92,246,.2)); }
+
+.area { position: relative; height: 84px; border-radius: 8px; overflow: hidden; }
+
+/* Linha de tabela */
+.row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 8px; background: #fff;
+  font-size: 11.5px; margin-bottom: 6px;
+}
+.row__name { font-weight: 600; }
+.row__val { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+
+.av {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 700;
+}
+
+/* Inbox (atendimento) */
+.inbox { display: grid; grid-template-columns: 188px 1fr 150px; height: 100%; }
+.inbox__list { border-right: 1px solid var(--line-2); padding: 10px; overflow: hidden; }
+.conv { display: flex; gap: 9px; padding: 8px; border-radius: 9px; margin-bottom: 3px; }
+.conv.is-active { background: var(--violet-soft); }
+.conv__av { position: relative; }
+.conv__ch { position: absolute; right: -3px; bottom: -3px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; display: flex; align-items: center; justify-content: center; }
+.conv__ch svg { width: 8px; height: 8px; stroke: #fff; fill: #fff; }
+.conv__name { font-size: 11.5px; font-weight: 600; }
+.conv__msg { font-size: 10.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
+.conv__meta { margin-left: auto; text-align: right; }
+.conv__time { font-size: 9px; color: var(--muted-2); }
+.unread { background: var(--violet); color: #fff; font-size: 9px; font-weight: 700; border-radius: 999px; padding: 1px 6px; display: inline-block; margin-top: 3px; }
+
+.thread { padding: 12px; display: flex; flex-direction: column; gap: 8px; background: #fbfbfe; }
+.msg { max-width: 72%; font-size: 11px; padding: 8px 11px; border-radius: 12px; line-height: 1.35; }
+.msg--in { background: #fff; border: 1px solid var(--line-2); align-self: flex-start; border-bottom-left-radius: 4px; }
+.msg--out { background: var(--violet); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+.ai-card { border: 1px solid var(--violet); background: var(--violet-soft); border-radius: 10px; padding: 9px 11px; font-size: 10.5px; }
+.ai-card b { color: var(--violet-deep); }
+
+.rail { border-left: 1px solid var(--line-2); padding: 11px; background: #fcfcff; }
+.rail h5 { font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 8px; }
+.rail .item { font-size: 10.5px; margin-bottom: 9px; }
+.rail .item span { color: var(--muted); display: block; font-size: 9px; }
+
+/* WhatsApp / IG channel colors */
+.ch-wa { background: #25d366; } .ch-ig { background: #e1306c; } .ch-mail { background: #6b7280; } .ch-tel { background: #3b82f6; }
+
+/* Donut simples */
+.donut { width: 76px; height: 76px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.donut > div { width: 52px; height: 52px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; }
+
+/* Util */
+.muted { color: var(--muted); }
+.mono { font-variant-numeric: tabular-nums; }
+.grid2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.mt6 { margin-top: 6px; } .mt10 { margin-top: 10px; } .mt14 { margin-top: 14px; }

@@ -1,117 +1,106 @@
 /**
- * Pilares — 8 features-core do produto, em grid 4x2.
- *
- * Cada card tem ícone, título curto e 1 frase. Nada longo: o
- * objetivo é o visitante varrer o grid e perceber a amplitude do
- * produto sem ler tudo. Para detalhes, próxima seção (Demo).
+ * Módulos em bento grid — uma célula-destaque escura (Atendimento) ancora
+ * o layout, cercada por cards de vidro e um card largo (Processos).
  */
 
+import { motion } from "framer-motion";
 import {
+  Headphones,
   Users,
-  MessageCircle,
-  Wallet,
+  DollarSign,
   TrendingUp,
   FileText,
   Calculator,
-  Bot,
   FileSearch,
 } from "lucide-react";
-
-const pilares = [
-  {
-    icon: Users,
-    titulo: "CRM jurídico",
-    desc: "Cadastro completo de cliente: CPF, profissão, estado civil, endereço estruturado — pronto pra contrato.",
-    tom: "info",
-  },
-  {
-    icon: MessageCircle,
-    titulo: "Atendimento centralizado",
-    desc: "WhatsApp, Instagram e e-mail num inbox único. Conversa cai no atendente certo, automaticamente.",
-    tom: "accent",
-  },
-  {
-    icon: Wallet,
-    titulo: "Financeiro com Asaas",
-    desc: "Pix, boleto, cartão — emissão direto na plataforma. + Cobrança manual offline pra dinheiro/transferência.",
-    tom: "success",
-  },
-  {
-    icon: TrendingUp,
-    titulo: "Comissões automáticas",
-    desc: "Atendente fechou? Sistema calcula a comissão e gera despesa pendente. Sem planilha, sem briga no fim do mês.",
-    tom: "success",
-  },
-  {
-    icon: FileText,
-    titulo: "Modelos de contrato",
-    desc: "DOCX com placeholders {{1}}, {{2}}... mapeia pra dados do cliente ou pra preenchimento manual na hora.",
-    tom: "warning",
-  },
-  {
-    icon: Calculator,
-    titulo: "Cálculos jurídicos",
-    desc: "Bancário, trabalhista, tributário, previdenciário, monetário, imobiliário. Resultado em PDF, pronto pra petição.",
-    tom: "info",
-  },
-  {
-    icon: Bot,
-    titulo: "SmartFlow + Agentes IA",
-    desc: "Cobra inadimplente sozinho, qualifica lead novo, responde dúvida técnica. Trabalho 24h.",
-    tom: "accent",
-  },
-  {
-    icon: FileSearch,
-    titulo: "Processos & Kanban",
-    desc: "Monitoramento por CPF/CNPJ via motor próprio, kanban de prazos, alertas de movimentação. Não perde audiência.",
-    tom: "warning",
-  },
-] as const;
-
-const TOM_CLS: Record<string, { bg: string; fg: string }> = {
-  info: { bg: "bg-info-bg", fg: "text-info-fg" },
-  success: { bg: "bg-success-bg", fg: "text-success-fg" },
-  warning: { bg: "bg-warning-bg", fg: "text-warning-fg" },
-  accent: { bg: "bg-accent-purple-bg", fg: "text-accent-purple-fg" },
-};
+import { Reveal, staggerParent, staggerItem } from "./lpkit";
 
 export function Pilares() {
   return (
-    <section className="bg-muted/30 border-y">
-      <div className="max-w-6xl mx-auto px-4 py-20 lg:py-28">
-        <div className="text-center max-w-2xl mx-auto mb-14">
-          <p className="text-sm font-semibold text-primary uppercase tracking-wide mb-3">
-            Tudo num só lugar
-          </p>
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-            8 módulos que conversam entre si
-          </h2>
-          <p className="text-muted-foreground mt-4 text-lg">
-            Sem integração frágil entre 5 ferramentas. Cliente cadastrado aqui
-            já aparece na cobrança, no contrato e no SmartFlow.
-          </p>
-        </div>
+    <section className="mx-auto max-w-6xl px-4 py-24">
+      <Reveal className="mx-auto mb-12 max-w-2xl text-center">
+        <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-300">Tudo num só lugar</p>
+        <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+          Módulos que conversam entre si
+        </h2>
+        <p className="mt-4 text-lg text-violet-100/70">
+          Cliente cadastrado aqui já aparece na cobrança, no contrato, no atendimento e no
+          SmartFlow. Sem integração frágil entre sistemas diferentes.
+        </p>
+      </Reveal>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {pilares.map((p) => {
-            const cls = TOM_CLS[p.tom];
-            return (
-              <div
-                key={p.titulo}
-                className="group rounded-xl border bg-card p-5 hover:shadow-md hover:border-foreground/20 transition-all"
-              >
-                <div
-                  className={`h-11 w-11 rounded-lg ${cls.bg} ${cls.fg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
-                >
-                  <p.icon className="h-5 w-5" />
-                </div>
-                <h3 className="font-semibold mb-1.5">{p.titulo}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{p.desc}</p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <motion.div
+        variants={staggerParent}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, margin: "-60px" }}
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[168px]"
+      >
+        {/* Feature cell — destaque */}
+        <motion.div
+          variants={staggerItem}
+          className="group relative overflow-hidden rounded-2xl border border-violet-400/40 p-6 text-white sm:col-span-2 lg:row-span-2"
+          style={{ background: "radial-gradient(120% 120% at 100% 0%, #1a1140, #0c0a1c)" }}
+        >
+          <div className="pointer-events-none absolute -bottom-8 -right-8 h-40 w-40 rounded-full blur-2xl" style={{ background: "radial-gradient(circle, rgba(124,58,237,.5), transparent 70%)" }} />
+          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-violet-400/50 bg-violet-500/25">
+            <Headphones className="h-5 w-5 text-violet-200" />
+          </div>
+          <h3 className="font-display text-2xl font-bold">Atendimento omnichannel</h3>
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-violet-100/70">
+            WhatsApp, Instagram e e-mail num inbox só. Brief de IA, linha do tempo unificada e
+            resposta sugerida. O lead nunca esfria.
+          </p>
+          <div className="mt-5 flex gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#25d366]/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-300"><i className="h-1.5 w-1.5 rounded-full bg-[#25d366]" /> WhatsApp</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-pink-500/20 px-2.5 py-1 text-[11px] font-semibold text-pink-300"><i className="h-1.5 w-1.5 rounded-full bg-[#e1306c]" /> Instagram</span>
+          </div>
+        </motion.div>
+
+        <BentoCell icon={Users} titulo="CRM jurídico" desc="CPF/CNPJ, profissão, endereço — pronto pra contrato." />
+        <BentoCell icon={DollarSign} titulo="Financeiro + Asaas" desc="Pix, boleto e cartão. Recorrência e fluxo de caixa." />
+        <BentoCell icon={TrendingUp} titulo="Comissões" desc="Fechou? Calcula a comissão e lança a despesa." />
+        <BentoCell icon={FileText} titulo="Modelos de contrato" desc="DOCX com placeholders que viram campos." />
+        <BentoCell icon={Calculator} titulo="Cálculos jurídicos" desc="Bancário, trabalhista, tributário. Resultado em PDF." />
+
+        {/* Wide cell */}
+        <motion.div
+          variants={staggerItem}
+          className="group rounded-2xl border border-white/10 bg-white/[0.04] p-6 transition-all hover:-translate-y-1 hover:border-violet-400/40 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)] lg:col-span-3"
+        >
+          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-violet-500/30 to-fuchsia-500/15">
+            <FileSearch className="h-5 w-5 text-violet-200" />
+          </div>
+          <h3 className="font-bold text-white">Processos &amp; Kanban — motor próprio</h3>
+          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-violet-100/65">
+            Monitoramento por CPF/CNPJ direto nos tribunais, alertas de movimentação por
+            palavra-chave e prazos no Kanban.
+          </p>
+        </motion.div>
+      </motion.div>
     </section>
+  );
+}
+
+function BentoCell({
+  icon: Icon,
+  titulo,
+  desc,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  titulo: string;
+  desc: string;
+}) {
+  return (
+    <motion.div
+      variants={staggerItem}
+      className="group rounded-2xl border border-white/10 bg-white/[0.04] p-5 transition-all hover:-translate-y-1 hover:border-violet-400/40 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)]"
+    >
+      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-violet-500/30 to-fuchsia-500/15 transition-transform group-hover:scale-110">
+        <Icon className="h-5 w-5 text-violet-200" />
+      </div>
+      <h3 className="mb-1.5 font-bold text-white">{titulo}</h3>
+      <p className="text-sm leading-relaxed text-violet-100/65">{desc}</p>
+    </motion.div>
   );
 }

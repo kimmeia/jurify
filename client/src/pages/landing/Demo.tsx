@@ -1,144 +1,118 @@
 /**
- * Demo — captura grande mostrando o produto em ação.
- *
- * Mockup detalhado do módulo de modelos de contrato (placeholder
- * {{1}}, {{2}}) que é o diferencial mais "visual" do produto.
+ * Demo — showcase do módulo de modelos de contrato (placeholders
+ * {{1}}, {{2}}), o diferencial mais "visual" do produto. O screenshot
+ * do app fica claro, emoldurado em vidro escuro pra casar com o hero.
  */
 
 import { Badge } from "@/components/ui/badge";
-import { FileText, Variable, ArrowRight } from "lucide-react";
+import { FileText, Variable, CheckCircle2, ArrowRight } from "lucide-react";
+import { Reveal } from "./lpkit";
 
 export function Demo() {
   return (
-    <section id="demo" className="max-w-6xl mx-auto px-4 py-20 lg:py-28">
-      <div className="grid lg:grid-cols-2 gap-12 items-center">
-        {/* Coluna esquerda: copy */}
-        <div>
-          <p className="text-sm font-semibold text-primary uppercase tracking-wide mb-3">
-            Em ação
-          </p>
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-6">
-            Contrato pronto em <span className="text-primary">15 segundos</span>.
-            Não em 15 minutos.
-          </h2>
-          <p className="text-lg text-muted-foreground mb-6">
-            Sobe um <code className="text-sm bg-muted px-1.5 py-0.5 rounded font-mono">.docx</code>{" "}
-            com <code className="text-sm bg-muted px-1.5 py-0.5 rounded font-mono">{"{{1}}"}</code>,{" "}
-            <code className="text-sm bg-muted px-1.5 py-0.5 rounded font-mono">{"{{2}}"}</code>...
-            estilo template do WhatsApp. Cada placeholder vira um campo:
-          </p>
-          <ul className="space-y-3 mb-8">
-            <li className="flex items-start gap-3">
-              <div className="h-6 w-6 rounded-full bg-info-bg text-info-fg flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Variable className="h-3.5 w-3.5" />
-              </div>
-              <div>
-                <strong>Variável</strong> — preenche automático do cadastro
-                (nome, CPF, profissão, endereço completo)
-              </div>
-            </li>
-            <li className="flex items-start gap-3">
-              <div className="h-6 w-6 rounded-full bg-warning-bg text-warning-fg flex items-center justify-center flex-shrink-0 mt-0.5">
-                <FileText className="h-3.5 w-3.5" />
-              </div>
-              <div>
-                <strong>Manual</strong> — você preenche na hora (valor da causa,
-                foro, nº do processo)
-              </div>
-            </li>
-          </ul>
-          <p className="text-sm text-muted-foreground italic">
-            "Levei 15 contratos pra entender que era óbvio fazer assim."
-            <br />— provavelmente você, depois de testar.
-          </p>
-        </div>
+    <section id="demo" className="border-y border-white/[0.06] bg-[#0a0817]">
+      <div className="mx-auto max-w-6xl px-4 py-24">
+        <Reveal as="div" className="grid items-center gap-14 lg:grid-cols-2">
+          {/* Copy */}
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-300">Contratos</p>
+            <h2 className="font-display mt-3 text-3xl font-extrabold leading-tight tracking-tight text-white md:text-[38px]">
+              Contrato pronto em 15 segundos. Não em 15 minutos.
+            </h2>
+            <p className="mt-4 text-lg leading-relaxed text-violet-100/70">
+              Sobe um{" "}
+              <code className="rounded bg-violet-500/20 px-1.5 py-0.5 font-mono text-sm text-violet-200">.docx</code>{" "}
+              com placeholders{" "}
+              <code className="rounded bg-violet-500/20 px-1.5 py-0.5 font-mono text-sm text-violet-200">{"{{1}}"}</code>,{" "}
+              <code className="rounded bg-violet-500/20 px-1.5 py-0.5 font-mono text-sm text-violet-200">{"{{2}}"}</code>…
+              e cada um vira um campo.
+            </p>
+            <ul className="mt-6 space-y-3.5 text-violet-100/80">
+              <li className="flex gap-3 text-[15px]">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                <span>
+                  <strong className="text-white">Variável</strong> — preenche automático do cadastro (nome, CPF,
+                  profissão, endereço).
+                </span>
+              </li>
+              <li className="flex gap-3 text-[15px]">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                <span>
+                  <strong className="text-white">Manual</strong> — você preenche na hora (valor da causa, foro, nº do
+                  processo).
+                </span>
+              </li>
+              <li className="flex gap-3 text-[15px]">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                <span>
+                  <strong className="text-white">Assinatura eletrônica</strong> — envia, o cliente assina pelo link e o
+                  PDF volta carimbado.
+                </span>
+              </li>
+            </ul>
+          </div>
 
-        {/* Coluna direita: mockup */}
-        <div className="relative">
-          <div className="absolute -inset-4 bg-gradient-to-br from-info/15 to-accent-purple/10 blur-2xl rounded-3xl opacity-60" />
-          <div className="relative rounded-2xl border bg-card shadow-2xl overflow-hidden">
-            <div className="bg-muted/30 border-b px-4 py-3 flex items-center gap-2">
-              <FileText className="h-4 w-4 text-info" />
-              <span className="text-sm font-semibold">
-                Contrato de Honorários — Trabalhista
-              </span>
-              <Badge variant="secondary" className="ml-auto text-[10px]">
-                3 placeholders
-              </Badge>
-            </div>
-
-            <div className="p-5 space-y-3">
-              {/* Placeholder 1: variável */}
-              <div className="rounded-lg border p-3 space-y-2">
+          {/* Mockup (claro, em moldura de vidro) */}
+          <div className="rounded-2xl border border-white/[0.13] bg-gradient-to-b from-white/[0.12] to-white/[0.04] p-2 shadow-[0_40px_80px_-28px_rgba(0,0,0,0.7)]">
+            <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+              <div className="flex h-9 items-center gap-2 border-b bg-slate-100 px-4">
+                <span className="flex gap-1.5">
+                  <i className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                  <i className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                  <i className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                </span>
+                <span className="flex-1 text-center font-mono text-[11px] text-slate-400">
+                  app.juridflow.com.br/modelos-contrato
+                </span>
+              </div>
+              <div className="space-y-3 bg-[#fafaff] p-5">
                 <div className="flex items-center gap-2">
-                  <Badge className="bg-info-bg text-info-fg border-0 font-mono text-xs">
-                    {"{{1}}"}
-                  </Badge>
-                  <Badge variant="outline" className="text-[10px]">
-                    <Variable className="h-2.5 w-2.5 mr-1" /> Variável
-                  </Badge>
+                  <FileText className="h-4 w-4 text-violet-600" />
+                  <span className="text-sm font-bold text-slate-900">Contrato de Honorários — Trabalhista</span>
+                  <Badge variant="secondary" className="ml-auto text-[10px]">3 placeholders</Badge>
                 </div>
-                <div className="text-xs flex items-center gap-2">
-                  <span className="text-muted-foreground">Mapeado pra:</span>
-                  <code className="bg-muted px-1.5 py-0.5 rounded font-mono">
-                    cliente.nome
-                  </code>
-                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                  <span className="font-medium">"Maria da Silva"</span>
-                </div>
-              </div>
 
-              {/* Placeholder 2: manual */}
-              <div className="rounded-lg border p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-info-bg text-info-fg border-0 font-mono text-xs">
-                    {"{{2}}"}
-                  </Badge>
-                  <Badge variant="outline" className="text-[10px] bg-warning-bg text-warning-fg border-0">
-                    Manual
-                  </Badge>
+                {/* {{1}} variável */}
+                <div className="space-y-2 rounded-lg border bg-white p-3">
+                  <div className="flex items-center gap-2">
+                    <Badge className="border-0 bg-violet-100 font-mono text-xs text-violet-700">{"{{1}}"}</Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      <Variable className="mr-1 h-2.5 w-2.5" /> Variável
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-700">
+                    <span className="text-muted-foreground">Mapeado pra</span>
+                    <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono">cliente.nome</code>
+                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                    <span className="font-medium">Maria da Silva</span>
+                  </div>
                 </div>
-                <div className="text-xs">
-                  <span className="text-muted-foreground">Pergunta:</span>{" "}
-                  <span className="font-medium">"Valor da causa"</span>
-                </div>
-                <input
-                  type="text"
-                  defaultValue="R$ 28.500,00"
-                  readOnly
-                  className="w-full text-xs px-2 py-1 rounded border bg-background"
-                />
-              </div>
 
-              {/* Placeholder 3: variável (data) */}
-              <div className="rounded-lg border p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-info-bg text-info-fg border-0 font-mono text-xs">
-                    {"{{3}}"}
-                  </Badge>
-                  <Badge variant="outline" className="text-[10px]">
-                    <Variable className="h-2.5 w-2.5 mr-1" /> Variável
-                  </Badge>
+                {/* {{2}} manual */}
+                <div className="space-y-2 rounded-lg border bg-white p-3">
+                  <div className="flex items-center gap-2">
+                    <Badge className="border-0 bg-violet-100 font-mono text-xs text-violet-700">{"{{2}}"}</Badge>
+                    <Badge className="border-0 bg-amber-100 text-[10px] text-amber-700">Manual</Badge>
+                  </div>
+                  <div className="text-xs text-slate-700">
+                    <span className="text-muted-foreground">Pergunta:</span>{" "}
+                    <span className="font-medium">"Valor da causa"</span>
+                  </div>
+                  <input
+                    type="text"
+                    defaultValue="R$ 28.500,00"
+                    readOnly
+                    className="w-full rounded border bg-white px-2 py-1.5 text-xs text-slate-900"
+                  />
                 </div>
-                <div className="text-xs flex items-center gap-2">
-                  <span className="text-muted-foreground">Mapeado pra:</span>
-                  <code className="bg-muted px-1.5 py-0.5 rounded font-mono">
-                    data.hoje
-                  </code>
-                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                  <span className="font-medium">"30 de outubro de 2026"</span>
-                </div>
-              </div>
 
-              {/* Botão final */}
-              <div className="pt-2">
-                <div className="w-full bg-primary text-primary-foreground text-sm font-medium py-2 rounded-md text-center">
+                <div className="rounded-md bg-violet-600 py-2 text-center text-sm font-medium text-white">
                   Gerar e baixar (.docx)
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );

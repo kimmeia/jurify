@@ -28,7 +28,8 @@ import {
   prazosSugeridos,
 } from "../../drizzle/schema";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
-import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
+import { consultarTjce, consultarTjcePorCpf, TJCE_2G } from "./adapters/pje-tjce";
+import { detectarSubiuParaSegundoGrau, mesclarMovimentacoes } from "./detectar-grau-recurso";
 import { CUSTOS } from "../routers/processos";
 import { createLogger } from "../_core/logger";
 import { emitirNotificacao } from "../_core/sse-notifications";
@@ -228,6 +229,20 @@ export async function pollarUmMonitoramentoMovs(
       return { ok: false, detectadas: 0, erro: `Tribunal ${mon.tribunal} sem adapter` };
     }
 
+    // Sessão morta no ponto de uso (o PDPJ derrubou antes da nossa estimativa
+    // de 90min): força relogin e tenta de novo UMA vez. Sem isto o auto-login
+    // não dispara nesse caso e o monitoramento falha com "Sessão expirada" sem
+    // refazer login. Relogin é dedupado por credencial (cofre-helpers).
+    if (!resultado.ok && resultado.categoriaErro === "sessao_expirada") {
+      const sessaoNova = await recuperarSessao(mon.credencialId, {
+        tentarRelogin: true,
+        forcarRelogin: true,
+      });
+      if (sessaoNova) {
+        resultado = await consultarTjce(mon.searchKey, sessaoNova);
+      }
+    }
+
     if (!resultado.ok) {
       await db
         .update(motorMonitoramentos)
@@ -237,6 +252,46 @@ export async function pollarUmMonitoramentoMovs(
         })
         .where(eq(motorMonitoramentos.id, mon.id));
       return { ok: false, detectadas: 0, erro: resultado.mensagemErro ?? "Erro na consulta" };
+    }
+
+    // Detecção de grau (issue #529): marca se o processo parece ter subido pro
+    // 2º grau a partir das movimentações do 1º grau. Update ISOLADO pra não
+    // mexer na lógica de dedup/baseline abaixo — só persiste o sinal, pra
+    // validar a heurística com dados reais antes de ligar a consulta do 2º grau.
+    const deteccaoGrau = detectarSubiuParaSegundoGrau(resultado.movimentacoes);
+    await db
+      .update(motorMonitoramentos)
+      .set({
+        subiu2grau: deteccaoGrau.subiu,
+        indicios2grau: deteccaoGrau.indicios.length
+          ? deteccaoGrau.indicios.join(" | ").slice(0, 1000)
+          : null,
+      })
+      .where(eq(motorMonitoramentos.id, mon.id));
+
+    // Auto-detect grau (opção C): quando há indício de que o processo subiu pro
+    // 2º grau, consulta TAMBÉM o portal de 2º grau e junta as movimentações. Só
+    // dispara quando detectado (não consulta sempre). Degrada com elegância: se
+    // o 2º grau falhar (URL/sessão/estrutura), segue só com o 1º grau — sem
+    // regressão no monitoramento que já funciona.
+    if (deteccaoGrau.subiu && mon.tribunal === "tjce") {
+      try {
+        const sessao2 = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
+        if (sessao2) {
+          const r2 = await consultarTjce(mon.searchKey, sessao2, TJCE_2G);
+          if (r2.ok && r2.movimentacoes.length > 0) {
+            resultado.movimentacoes = mesclarMovimentacoes(
+              resultado.movimentacoes,
+              r2.movimentacoes,
+            );
+          }
+        }
+      } catch (err) {
+        log.warn(
+          { monId: mon.id, err: err instanceof Error ? err.message : String(err) },
+          "[motor-cron] consulta 2º grau falhou — seguindo só com 1º grau",
+        );
+      }
     }
 
     const novoHash = hashMovimentacoes(resultado.movimentacoes);
@@ -669,6 +724,18 @@ export async function pollarUmMonitoramentoNovasAcoes(
       resultado = await consultarTjcePorCpf(mon.searchKey, sessao);
     } else {
       return { ok: false, detectadas: 0, erro: `Tribunal ${mon.tribunal} sem adapter de CPF` };
+    }
+
+    // Sessão morta no ponto de uso: força relogin e tenta de novo uma vez
+    // (mesmo motivo do poll de movimentações). Relogin dedupado por credencial.
+    if (!resultado.ok && resultado.categoriaErro === "sessao_expirada") {
+      const sessaoNova = await recuperarSessao(mon.credencialId, {
+        tentarRelogin: true,
+        forcarRelogin: true,
+      });
+      if (sessaoNova) {
+        resultado = await consultarTjcePorCpf(mon.searchKey, sessaoNova);
+      }
     }
 
     if (!resultado.ok) {

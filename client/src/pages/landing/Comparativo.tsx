@@ -1,88 +1,90 @@
 /**
- * Comparativo — 3 razões pra trocar Astrea/Aurum/Excel pelo JuridFlow.
- *
- * Sem desmoralizar concorrente diretamente (anti-padrão de marketing
- * jurídico) — fala dos diferenciais técnicos do JuridFlow que outros
- * não têm.
+ * Diferenciais — 3 coisas que software jurídico tradicional não faz.
+ * Fala dos diferenciais técnicos do JuridFlow, sem desmoralizar concorrente.
  */
 
-import { CheckCircle2, Wallet, Bot, Vote } from "lucide-react";
+import { motion } from "framer-motion";
+import { CheckCircle2, Wallet, BrainCircuit, FileSearch } from "lucide-react";
+import { Reveal, staggerParent, staggerItem } from "./lpkit";
 
 const diffs = [
   {
     icon: Wallet,
     titulo: "Asaas embutido",
-    desc: "Não é só geração de boleto: é financeiro completo com Pix nativo, cartão, cobrança recorrente, comissão por atendente e fluxo de caixa.",
+    desc: "Não é só geração de boleto: é financeiro completo com Pix nativo, cartão, recorrência e comissão por atendente.",
     bullets: [
       "Pix instantâneo, sem taxa fixa por boleto",
-      "Webhook em tempo real (cliente pagou → comissão lançada)",
-      "Cobrança manual offline (dinheiro/transferência)",
+      "Webhook: cliente pagou → comissão lançada",
+      "Cobrança manual offline (dinheiro/transf.)",
     ],
   },
   {
-    icon: Bot,
+    icon: BrainCircuit,
     titulo: "IA nativa, não plugin",
-    desc: "Agentes que respondem cliente no WhatsApp, qualificam leads e cobram inadimplentes. Treinados com seus documentos do escritório.",
+    desc: "Agentes que respondem no WhatsApp, qualificam leads e cobram inadimplentes — treinados com os documentos do seu escritório.",
     bullets: [
-      "SmartFlow visual: arrasta passos sem código",
-      "Agentes específicos por área (cível, trabalhista...)",
-      "Aprende com seus contratos e jurisprudência",
+      "SmartFlow visual: arrasta passos, sem código",
+      "Brief instantâneo + resposta sugerida",
+      "Compliance Guard contra promessa de resultado",
     ],
   },
   {
-    icon: Vote,
-    titulo: "Roadmap público",
-    desc: "Você vota nas próximas features. Sugere o que precisa. Nada de \"está na nossa roadmap\" sem prazo. Transparência total.",
+    icon: FileSearch,
+    titulo: "Motor próprio de processos",
+    desc: "Monitora processos por CPF/CNPJ direto nos tribunais, com análise estratégica por IA e mensagem pronta pro cliente.",
     bullets: [
-      "Sugestões com upvote dos usuários",
-      "Status visível: análise → planejado → em dev → lançado",
-      "Comunidade direta com o time de produto",
+      "Alertas de movimentação por palavra-chave",
+      "Cofre de credenciais OAB (segredo de justiça)",
+      "Roadmap público: você vota nas próximas features",
     ],
   },
 ];
 
 export function Comparativo() {
   return (
-    <section className="bg-muted/30 border-y">
-      <div className="max-w-6xl mx-auto px-4 py-20 lg:py-28">
-        <div className="text-center max-w-2xl mx-auto mb-14">
-          <p className="text-sm font-semibold text-primary uppercase tracking-wide mb-3">
-            Por que sair do que você usa hoje
-          </p>
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-            3 coisas que ninguém mais faz
-          </h2>
-          <p className="text-muted-foreground mt-4 text-lg">
-            Software jurídico tradicional foca em CRM ou peticionamento. O
-            JuridFlow foi construído pra ser o sistema operacional inteiro.
-          </p>
-        </div>
+    <section className="mx-auto max-w-6xl px-4 py-24">
+      <Reveal className="mx-auto mb-12 max-w-2xl text-center">
+        <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-300">
+          Por que sair do que você usa hoje
+        </p>
+        <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+          3 coisas que ninguém mais faz
+        </h2>
+        <p className="mt-4 text-lg text-violet-100/70">
+          Software jurídico tradicional foca em CRM ou peticionamento. O JuridFlow foi
+          construído pra ser o sistema operacional inteiro do escritório.
+        </p>
+      </Reveal>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          {diffs.map((d) => (
-            <div
-              key={d.titulo}
-              className="rounded-2xl border bg-card p-7 flex flex-col"
-            >
-              <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-5">
-                <d.icon className="h-6 w-6" />
-              </div>
-              <h3 className="text-xl font-bold mb-3">{d.titulo}</h3>
-              <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
-                {d.desc}
-              </p>
-              <ul className="space-y-2 mt-auto">
-                {d.bullets.map((b) => (
-                  <li key={b} className="flex items-start gap-2 text-sm">
-                    <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0 mt-0.5" />
-                    <span>{b}</span>
-                  </li>
-                ))}
-              </ul>
+      <motion.div
+        variants={staggerParent}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, margin: "-60px" }}
+        className="grid gap-5 lg:grid-cols-3"
+      >
+        {diffs.map((d) => (
+          <motion.div
+            key={d.titulo}
+            variants={staggerItem}
+            className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.04] p-7 transition-all hover:-translate-y-1 hover:border-violet-400/40 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)]"
+          >
+            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-violet-500/30 to-fuchsia-500/15">
+              <d.icon className="h-6 w-6 text-violet-200" />
             </div>
-          ))}
-        </div>
-      </div>
+            <h3 className="font-display mb-3 text-xl font-bold text-white">{d.titulo}</h3>
+            <p className="mb-5 text-sm leading-relaxed text-violet-100/65">{d.desc}</p>
+            <ul className="mt-auto space-y-2.5 text-violet-100/80">
+              {d.bullets.map((b) => (
+                <li key={b} className="flex items-start gap-2 text-sm">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+        ))}
+      </motion.div>
     </section>
   );
 }

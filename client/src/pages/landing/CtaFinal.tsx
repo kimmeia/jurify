@@ -1,11 +1,10 @@
 /**
  * CTA final — banner de fechamento antes do footer.
- *
- * Reforça a oferta (7 dias grátis, sem cartão) e dá o último empurrão.
  */
 
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
+import { Aurora, Reveal } from "./lpkit";
 
 interface Props {
   onCta: (modo: "login" | "signup") => void;
@@ -13,33 +12,37 @@ interface Props {
 
 export function CtaFinal({ onCta }: Props) {
   return (
-    <section className="max-w-5xl mx-auto px-4 py-20 lg:py-28">
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-primary/80 p-10 lg:p-14 text-center">
-        {/* Pattern decorativo */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute -top-20 -right-20 h-72 w-72 rounded-full bg-white blur-3xl" />
-          <div className="absolute -bottom-20 -left-20 h-72 w-72 rounded-full bg-white blur-3xl" />
+    <section className="mx-auto max-w-6xl px-4 pb-24 pt-8">
+      <Reveal>
+        <div
+          className="relative overflow-hidden rounded-[28px] border border-white/10 p-12 text-center shadow-[0_50px_120px_-30px_rgba(124,58,237,0.7)] lg:p-16"
+          style={{ background: "linear-gradient(120deg, #4c1d95, #7c3aed 55%, #4f46e5)" }}
+        >
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{ background: "radial-gradient(circle at 78% 18%, rgba(255,255,255,.22), transparent 42%)" }}
+          />
+          <Aurora intensity={0.5} />
+          <div className="relative z-10">
+            <h2 className="font-display text-3xl font-extrabold tracking-tight text-white md:text-5xl">
+              Comece em 5 minutos.
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-lg text-violet-100/85">
+              14 dias grátis em qualquer plano. Sem cartão de crédito pra começar. Cancele quando
+              quiser.
+            </p>
+            <Button
+              size="lg"
+              variant="secondary"
+              className="mt-8 px-8 text-base shadow-xl"
+              onClick={() => onCta("signup")}
+            >
+              Criar conta grátis
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         </div>
-
-        <div className="relative">
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-primary-foreground mb-4">
-            Comece em 5 minutos.
-          </h2>
-          <p className="text-lg lg:text-xl text-primary-foreground/90 max-w-xl mx-auto mb-8">
-            7 dias grátis em qualquer plano. Sem cartão de crédito pra
-            começar. Cancele quando quiser.
-          </p>
-          <Button
-            size="lg"
-            variant="secondary"
-            className="text-base px-8 shadow-xl"
-            onClick={() => onCta("signup")}
-          >
-            Criar conta grátis
-            <ArrowRight className="h-4 w-4 ml-2" />
-          </Button>
-        </div>
-      </div>
+      </Reveal>
     </section>
   );
 }

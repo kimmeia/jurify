@@ -43,8 +43,42 @@ import {
   parseValorBRLCentavos,
 } from "../../lib/parser-utils";
 
-const URL_ENTRADA_TJCE = "https://pje.tjce.jus.br/";
 const HOST_KEYCLOAK = "sso.cloud.pje.jus.br";
+
+/**
+ * Config por tribunal/grau. O PDPJ-cloud unifica só o LOGIN (Keycloak): a URL
+ * de entrada inicia o OAuth e o redirect leva o client_id certo. A CONSULTA
+ * (urlBusca) é específica do frontend PJe de cada tribunal — o TJCE usa
+ * JSF/Seam (`/pjeNgrau/.../listView.seam`), por isso também é parametrizada.
+ * Ver issue #529 (expansão de tribunais).
+ */
+export interface TribunalPdpjConfig {
+  tribunal: string;
+  grau: 1 | 2;
+  nome: string;
+  /** Porta de entrada do tribunal; o redirect inicia o OAuth no Keycloak. */
+  urlEntrada: string;
+  /** URL de busca de processos (JSF/Seam) — varia por tribunal/grau. */
+  urlBusca: string;
+}
+
+export const TJCE_1G: TribunalPdpjConfig = {
+  tribunal: "tjce",
+  grau: 1,
+  nome: "Tribunal de Justiça do Ceará — PJe 1º grau (PDPJ-cloud)",
+  urlEntrada: "https://pje.tjce.jus.br/",
+  urlBusca:
+    "https://pje.tjce.jus.br/pje1grau/Processo/ConsultaProcesso/listView.seam",
+};
+
+export const TJCE_2G: TribunalPdpjConfig = {
+  tribunal: "tjce",
+  grau: 2,
+  nome: "Tribunal de Justiça do Ceará — PJe 2º grau (PDPJ-cloud)",
+  urlEntrada: "https://pje.tjce.jus.br/pje2grau/",
+  urlBusca:
+    "https://pje.tjce.jus.br/pje2grau/Processo/ConsultaProcesso/listView.seam",
+};
 
 export interface CredencialPjeTjce {
   username: string;
@@ -124,8 +158,8 @@ interface DiagnosticoTotp {
 }
 
 export class PjeTjceScraper {
-  readonly tribunal = "tjce";
-  readonly nome = "Tribunal de Justiça do Ceará — PJe via PDPJ-cloud";
+  readonly tribunal: string;
+  readonly nome: string;
 
   /**
    * Captura informação sobre o TOTP gerado quando preenchemos o input.
@@ -137,7 +171,13 @@ export class PjeTjceScraper {
    */
   private diagnosticoTotp: DiagnosticoTotp | null = null;
 
-  constructor(private credencial: CredencialPjeTjce) {}
+  constructor(
+    private credencial: CredencialPjeTjce,
+    private config: TribunalPdpjConfig = TJCE_1G,
+  ) {
+    this.tribunal = config.tribunal;
+    this.nome = config.nome;
+  }
 
   async testarLogin(): Promise<ResultadoLoginPjeTjce> {
     const inicio = Date.now();
@@ -234,8 +274,7 @@ export class PjeTjceScraper {
       //
       // O .seam é stateful: precisa do `cid` (conversation id) na URL.
       // Acessamos a URL de busca direta, JSF cria nova conversation.
-      const urlBusca =
-        "https://pje.tjce.jus.br/pje1grau/Processo/ConsultaProcesso/listView.seam";
+      const urlBusca = this.config.urlBusca;
       await page.goto(urlBusca, { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
 
@@ -244,7 +283,7 @@ export class PjeTjceScraper {
         return {
           ...baseResultado,
           latenciaMs: Date.now() - inicio,
-          categoriaErro: "tribunal_indisponivel",
+          categoriaErro: "sessao_expirada",
           mensagemErro: "Sessão expirada — PDPJ-cloud redirecionou pra login do Keycloak",
           finalizadoEm: new Date().toISOString(),
         };
@@ -646,8 +685,7 @@ export class PjeTjceScraper {
     page.setDefaultTimeout(TIMEOUT_NAV_MS);
 
     try {
-      const urlBusca =
-        "https://pje.tjce.jus.br/pje1grau/Processo/ConsultaProcesso/listView.seam";
+      const urlBusca = this.config.urlBusca;
       await page.goto(urlBusca, { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
 
@@ -655,7 +693,7 @@ export class PjeTjceScraper {
         return {
           ...baseResultado,
           latenciaMs: Date.now() - inicio,
-          categoriaErro: "tribunal_indisponivel",
+          categoriaErro: "sessao_expirada",
           mensagemErro: "Sessão expirada — PDPJ-cloud redirecionou pra login",
         };
       }
@@ -1370,7 +1408,7 @@ export class PjeTjceScraper {
     try {
       // waitUntil "load" (em vez de "domcontentloaded") dá tempo dos
       // redirects síncronos do TJCE completarem antes do waitForURL.
-      respostaGoto = await page.goto(URL_ENTRADA_TJCE, {
+      respostaGoto = await page.goto(this.config.urlEntrada, {
         waitUntil: "load",
         timeout: 45_000,
       });
@@ -1378,7 +1416,7 @@ export class PjeTjceScraper {
       page.off("framenavigated", onNav);
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(
-        `goto(${URL_ENTRADA_TJCE}) falhou após ${Date.now() - tStart}ms: ${msg}. ` +
+        `goto(${this.config.urlEntrada}) falhou após ${Date.now() - tStart}ms: ${msg}. ` +
           `trajetoria=${JSON.stringify(trajetoria)}`,
       );
     }

@@ -6,6 +6,7 @@
 
 @theme inline {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Poppins", "Inter", ui-sans-serif, system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -240,4 +241,24 @@
       max-width: 1280px; /* Standard content width */
     }
   }
+}
+
+/* ============================================================
+   Landing page — animações de ambiente (loops contínuos).
+   Entradas e reveals no scroll ficam no framer-motion; aqui só
+   o que é puramente decorativo e barato em CSS.
+   ============================================================ */
+@keyframes lp-drift-a { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(40px,30px) scale(1.08); } }
+@keyframes lp-drift-b { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-50px,24px) scale(1.1); } }
+@keyframes lp-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+@keyframes lp-dash { to { stroke-dashoffset: -36; } }
+
+.lp-drift-a { animation: lp-drift-a 18s ease-in-out infinite; }
+.lp-drift-b { animation: lp-drift-b 22s ease-in-out infinite; }
+.lp-drift-c { animation: lp-drift-a 26s ease-in-out infinite reverse; }
+.lp-bob { animation: lp-bob 5.5s ease-in-out infinite; }
+.lp-flow-line { stroke-dasharray: 8 10; animation: lp-dash 1s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-drift-a, .lp-drift-b, .lp-drift-c, .lp-bob, .lp-flow-line { animation: none; }
 }
