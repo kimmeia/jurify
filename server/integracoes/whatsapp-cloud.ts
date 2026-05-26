@@ -176,31 +176,6 @@ export class WhatsAppCloudClient {
     return res.data?.messages?.[0]?.id || "";
   }
 
-  /**
-   * Lista os templates de mensagem (HSM) do WABA. Retorna nome, idioma,
-   * status, categoria e os componentes (header/body/footer/buttons) — o
-   * editor usa os componentes pra montar os campos de variáveis.
-   *
-   * Requer `wabaId` (WhatsApp Business Account ID). Pega até 200 templates
-   * numa página — suficiente pra qualquer escritório na prática.
-   */
-  async listarTemplates(
-    wabaId: string,
-  ): Promise<Array<{ name: string; language: string; status: string; category: string; components: any[] }>> {
-    const res = await this.api.get(`/${wabaId}/message_templates`, {
-      params: { fields: "name,status,category,language,components", limit: 200 },
-    });
-    const data = res.data?.data;
-    if (!Array.isArray(data)) return [];
-    return data.map((t: any) => ({
-      name: t.name,
-      language: t.language,
-      status: t.status,
-      category: t.category,
-      components: Array.isArray(t.components) ? t.components : [],
-    }));
-  }
-
   /** Marcar mensagem como lida */
   async marcarLida(messageId: string): Promise<void> {
     await this.api.post(`/${this.phoneNumberId}/messages`, {
