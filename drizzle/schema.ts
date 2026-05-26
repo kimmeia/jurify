@@ -1991,11 +1991,41 @@ export const smartflowCenarios = mysqlTable("smartflow_cenarios", {
    */
   layout: text("layoutSF"),
   criadoPor: int("criadoPorSF"),
+  /** Quando o cenário foi criado a partir de um modelo da plataforma,
+   *  aponta pro `smartflow_templates.id` de origem. NULL = criado do zero. */
+  origemTemplateId: int("origemTemplateIdSF"),
   createdAt: timestamp("createdAtSF").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtSF").defaultNow().onUpdateNow().notNull(),
 });
 
 export type SmartflowCenario = typeof smartflowCenarios.$inferSelect;
+
+/**
+ * Modelos de SmartFlow da plataforma (admin cria → clientes clonam).
+ * Guarda um `TemplateSmartflow` serializado: gatilho + passos prontos +
+ * metadados da galeria. Quando `disponivelParaClientes`, aparece na galeria
+ * de cada escritório pra ser clonado via `smartflow.criarDeTemplate`.
+ */
+export const smartflowTemplates = mysqlTable("smartflow_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  nome: varchar("nomeTpl", { length: 128 }).notNull(),
+  descricao: varchar("descricaoTpl", { length: 512 }).default("").notNull(),
+  icone: varchar("iconeTpl", { length: 48 }).default("sparkles").notNull(),
+  gradiente: varchar("gradienteTpl", { length: 64 }).default("from-violet-500 to-indigo-500").notNull(),
+  gatilho: varchar("gatilhoTpl", { length: 48 }).notNull(),
+  configGatilho: text("configGatilhoTpl"),
+  /** JSON: PassoTemplate[] (clienteId, tipo, config, proximoSe). */
+  passos: text("passosTpl").notNull(),
+  categoria: varchar("categoriaTpl", { length: 48 }),
+  badge: varchar("badgeTpl", { length: 16 }),
+  dica: varchar("dicaTpl", { length: 512 }),
+  disponivelParaClientes: boolean("disponivelParaClientesTpl").default(false).notNull(),
+  criadoPor: int("criadoPorTpl"),
+  createdAt: timestamp("createdAtTpl").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtTpl").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SmartflowTemplate = typeof smartflowTemplates.$inferSelect;
 
 /**
  * Passo de um cenário — cada ação no fluxo.

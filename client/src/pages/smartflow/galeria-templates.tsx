@@ -33,10 +33,6 @@ import {
 import { VariableInput, VariableTrigger } from "@/components/VariableInput";
 import { useSmartFlowVariaveis } from "@/hooks/useSmartFlowVariaveis";
 
-// Templates exibidos na galeria. Por enquanto vazio — só "Criar do zero".
-// Serão populados pelos templates que o admin criar e marcar como disponíveis.
-const TEMPLATES_GALERIA: TemplateSmartflow[] = [];
-
 const ICONES: Record<string, LucideIcon> = {
   "message-circle-heart": MessageCircleHeart,
   "user-plus": UserPlus,
@@ -83,6 +79,12 @@ export function GaleriaTemplatesDialog({
     if (!o) reset();
     onOpenChange(o);
   };
+
+  // Modelos publicados pelo admin (galeria). Substitui a lista hardcoded.
+  const { data: templates = [] } = (trpc as any).smartflow.listarTemplatesDisponiveis.useQuery(
+    undefined,
+    { enabled: open },
+  ) as { data: TemplateSmartflow[] };
 
   const criarMut = (trpc as any).smartflow.criarDeTemplate.useMutation({
     onSuccess: (r: any) => {
@@ -146,13 +148,13 @@ export function GaleriaTemplatesDialog({
                 Como você quer começar?
               </DialogTitle>
               <DialogDescription>
-                Comece um fluxo do zero. Modelos prontos serão disponibilizados pelo
-                admin em breve.
+                Escolha um modelo pronto e ajuste com os dados do seu escritório, ou
+                comece um fluxo do zero.
               </DialogDescription>
             </DialogHeader>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
-              {TEMPLATES_GALERIA.map((tpl) => {
+              {templates.map((tpl) => {
                 const Icon = ICONES[tpl.icone] ?? Sparkles;
                 return (
                   <button
