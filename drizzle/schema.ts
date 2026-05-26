@@ -1996,6 +1996,7 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "calcom_remarcar",               // reagenda booking no Cal.com
     "agenda_criar",                  // cria compromisso na Agenda nativa do escritório
     "whatsapp_enviar",               // envia mensagem no WhatsApp
+    "whatsapp_template",             // envia template aprovado da Cloud API (Meta)
     "whatsapp_aguardar_resposta",    // envia mensagem e pausa esperando resposta
     "transferir",                    // transfere pra humano
     "condicional",                   // if/else baseado em condição

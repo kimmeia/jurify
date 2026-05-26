@@ -74,6 +74,7 @@ export type TipoPasso =
   | "calcom_remarcar"
   | "agenda_criar"
   | "whatsapp_enviar"
+  | "whatsapp_template"
   | "whatsapp_aguardar_resposta"
   | "transferir"
   | "condicional"
@@ -374,6 +375,28 @@ export interface ConfigWhatsappEnviar {
 }
 
 /**
+ * Config do passo `whatsapp_template` — envia um template aprovado da Cloud
+ * API oficial (Meta). Diferente do `whatsapp_enviar` (texto livre), templates
+ * só funcionam em canais `whatsapp_api` e usam placeholders posicionais
+ * (`{{1}}`, `{{2}}`) registrados na Meta.
+ *
+ * Cada posição em `parametros` é uma string que passa por `interpolarVariaveis`
+ * em runtime — ou seja, pode conter `{{cliente.nome}}` (variável do fluxo) ou
+ * texto literal. O índice do array (0-based) mapeia pro placeholder `{{N}}`
+ * (1-based) do corpo do template.
+ */
+export interface ConfigWhatsappTemplate {
+  /** Canal WhatsApp Business API a usar. Se ausente, usa o canal do contexto/único conectado. */
+  canalId?: number;
+  /** Nome do template aprovado na WABA. */
+  templateName?: string;
+  /** Código de idioma do template (ex: "pt_BR"). */
+  languageCode?: string;
+  /** Valor (interpolável) de cada placeholder posicional do corpo. */
+  parametros?: string[];
+}
+
+/**
  * Config do passo `whatsapp_aguardar_resposta` — envia mensagem e pausa
  * o fluxo até o contato responder. Quando configurado com `opcoes`, formata
  * a mensagem como menu numerado e parseia a resposta do cliente pra
@@ -614,6 +637,7 @@ export type PassoConfigByTipo =
   | { tipo: "calcom_cancelar"; config: ConfigCalcomCancelar }
   | { tipo: "calcom_remarcar"; config: ConfigCalcomRemarcar }
   | { tipo: "whatsapp_enviar"; config: ConfigWhatsappEnviar }
+  | { tipo: "whatsapp_template"; config: ConfigWhatsappTemplate }
   | { tipo: "whatsapp_aguardar_resposta"; config: ConfigWhatsappAguardarResposta }
   | { tipo: "transferir"; config: ConfigTransferir }
   | { tipo: "condicional"; config: ConfigCondicional }
@@ -781,6 +805,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "processo_buscar_movimentacoes", label: "Buscar movimentações", descricao: "Histórico de movimentações, publicações, sentenças e audiências de um processo. Filtros por tipo e janela.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "acoes" },
   { id: "agenda_criar", label: "Agendamento", descricao: "Mexe na Agenda do escritório: marcar consulta, ver horários livres, editar/remarcar e cancelar. Atribui a um responsável e vincula ao cliente.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "acoes" },
   { id: "whatsapp_enviar", label: "Enviar mensagem", descricao: "Envia mensagem pelo WhatsApp.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
+  { id: "whatsapp_template", label: "Enviar template", descricao: "Envia um template aprovado da API oficial (Meta). Liga cada variável {{N}} a um dado do fluxo.", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", grupo: "mensagem" },
   { id: "whatsapp_aguardar_resposta", label: "Aguardar resposta", descricao: "Envia mensagem e pausa o fluxo esperando o cliente responder. Suporta menu de opções automático.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
   { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e PARA o bot de responder (conversa fica 'em atendimento'). Use no fim de um caminho pra passar pro atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
   { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },

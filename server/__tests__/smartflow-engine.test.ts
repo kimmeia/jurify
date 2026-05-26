@@ -47,6 +47,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     cancelarBooking: vi.fn().mockResolvedValue(true),
     reagendarBooking: vi.fn().mockResolvedValue(true),
     enviarWhatsApp: vi.fn().mockResolvedValue(true),
+    enviarWhatsappTemplate: vi.fn().mockResolvedValue(true),
     chamarWebhook: vi.fn().mockResolvedValue({ ok: true }),
     criarCardKanban: vi.fn().mockResolvedValue(42),
     moverCardKanban: vi.fn().mockResolvedValue(true),
@@ -91,6 +92,62 @@ describe("SmartFlow Engine", () => {
           `tipo "${meta.id}" deveria ter tratamento no engine`,
         ).not.toContain("Tipo de passo desconhecido");
       }
+    });
+  });
+
+  describe("whatsapp_template", () => {
+    it("interpola os parâmetros e chama o executor com os valores resolvidos", async () => {
+      const enviarWhatsappTemplate = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsappTemplate });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "whatsapp_template",
+          config: {
+            templateName: "lembrete_asaas",
+            languageCode: "pt_BR",
+            canalId: 7,
+            parametros: ["{{cliente.nome}}", "texto fixo"],
+          },
+          clienteId: "n1",
+        },
+      ];
+      const r = await executarCenario(
+        passos,
+        { telefoneCliente: "5585999990000", cliente: { nome: "Maria" } },
+        exec,
+      );
+      expect(r.sucesso).toBe(true);
+      expect(enviarWhatsappTemplate).toHaveBeenCalledWith({
+        canalId: 7,
+        telefone: "5585999990000",
+        templateName: "lembrete_asaas",
+        languageCode: "pt_BR",
+        parametros: ["Maria", "texto fixo"],
+      });
+    });
+
+    it("falha quando não há telefone no contexto", async () => {
+      const enviarWhatsappTemplate = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsappTemplate });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_template", config: { templateName: "t" }, clienteId: "n1" },
+      ];
+      const r = await executarCenario(passos, {}, exec);
+      expect(r.sucesso).toBe(false);
+      expect(enviarWhatsappTemplate).not.toHaveBeenCalled();
+    });
+
+    it("falha quando nenhum template foi selecionado", async () => {
+      const enviarWhatsappTemplate = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsappTemplate });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_template", config: {}, clienteId: "n1" },
+      ];
+      const r = await executarCenario(passos, { telefoneCliente: "5585999990000" }, exec);
+      expect(r.sucesso).toBe(false);
+      expect(enviarWhatsappTemplate).not.toHaveBeenCalled();
     });
   });
 

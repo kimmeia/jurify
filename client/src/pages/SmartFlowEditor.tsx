@@ -79,6 +79,11 @@ import {
   type TipoCanalMensagem,
 } from "@shared/smartflow-types";
 import {
+  contarVariaveisTemplate,
+  WA_STATUS_TEMPLATE_LABELS,
+  type WACloudTemplate,
+} from "@shared/whatsapp-cloud-types";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -128,6 +133,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   calcom_remarcar: CalendarClock,
   agenda_criar: CalendarCheck,
   whatsapp_enviar: MessageCircle,
+  whatsapp_template: FileText,
   whatsapp_aguardar_resposta: Pause,
   transferir: PhoneCall,
   condicional: GitBranch,
@@ -247,6 +253,7 @@ const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
   calcom_remarcar: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
   agenda_criar: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
   whatsapp_enviar: { grad: "from-teal-500 to-cyan-600", border: "border-teal-300 dark:border-teal-800" },
+  whatsapp_template: { grad: "from-emerald-500 to-green-600", border: "border-emerald-300 dark:border-emerald-800" },
   whatsapp_aguardar_resposta: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
   transferir: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
   condicional: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
@@ -798,6 +805,10 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
         : "usa {horarioEscolhido}";
     case "whatsapp_enviar":
       return typeof config.template === "string" ? truncar(config.template, 50) : "";
+    case "whatsapp_template":
+      return typeof config.templateName === "string" && config.templateName
+        ? truncar(config.templateName, 50)
+        : "";
     case "condicional": {
       const cs = Array.isArray(config.condicoes) ? (config.condicoes as any[]) : [];
       if (cs.length > 0) {
@@ -3350,6 +3361,155 @@ function ConfigWhatsappEnviarFields({
 }
 
 /**
+ * Config do passo `whatsapp_template`. Escolhe um canal WhatsApp Business API,
+ * um template aprovado na Meta e liga cada placeholder {{N}} a uma variável do
+ * fluxo (interpolada em runtime).
+ */
+function ConfigWhatsappTemplateFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const { data: canaisData } = trpc.configuracoes.listarCanais.useQuery();
+  const canaisWa = ((canaisData?.canais as any[]) || []).filter(
+    (c) => c.tipo === "whatsapp_api" && c.status === "conectado",
+  );
+
+  const canalId = typeof cfg.canalId === "number" ? cfg.canalId : canaisWa[0]?.id;
+  const templateName = typeof cfg.templateName === "string" ? cfg.templateName : "";
+  const parametros = Array.isArray(cfg.parametros) ? (cfg.parametros as string[]) : [];
+
+  const { data: templates, isLoading } = trpc.whatsappCloud.listarTemplates.useQuery(
+    { canalId: canalId as number },
+    { enabled: !!canalId, retry: false },
+  );
+  const aprovados = ((templates as WACloudTemplate[] | undefined) || []).filter(
+    (t) => t.status === "APPROVED",
+  );
+  const selecionado = aprovados.find((t) => t.name === templateName);
+  const corpo = selecionado?.components?.find((c) => c.type === "BODY")?.text || "";
+  const numVars = selecionado ? contarVariaveisTemplate(corpo) : 0;
+
+  function escolherTemplate(nome: string) {
+    const t = aprovados.find((x) => x.name === nome);
+    const body = t?.components?.find((c) => c.type === "BODY")?.text || "";
+    const n = contarVariaveisTemplate(body);
+    onChange({
+      templateName: nome,
+      languageCode: t?.language || "pt_BR",
+      parametros: Array.from({ length: n }, (_, i) => parametros[i] || ""),
+    });
+  }
+
+  function setParam(i: number, valor: string) {
+    const arr = [...parametros];
+    arr[i] = valor;
+    onChange({ parametros: arr });
+  }
+
+  if (canaisWa.length === 0) {
+    return (
+      <p className="text-xs text-amber-600">
+        Nenhum WhatsApp Business API conectado. Conecte em <strong>Configurações → Canais</strong> para
+        usar templates.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {canaisWa.length > 1 && (
+        <div>
+          <Label className="text-xs">Canal WhatsApp</Label>
+          <Select
+            value={String(canalId)}
+            onValueChange={(v) => onChange({ canalId: Number(v), templateName: "", parametros: [] })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {canaisWa.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.nome || c.telefone || `Canal ${c.id}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <div>
+        <Label className="text-xs">Template aprovado</Label>
+        <Select value={templateName} onValueChange={escolherTemplate} disabled={isLoading}>
+          <SelectTrigger>
+            <SelectValue placeholder={isLoading ? "Carregando..." : "Selecione um template"} />
+          </SelectTrigger>
+          <SelectContent>
+            {aprovados.length === 0 ? (
+              <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                Nenhum template aprovado neste canal.
+              </div>
+            ) : (
+              aprovados.map((t) => (
+                <SelectItem key={`${t.name}_${t.language}`} value={t.name}>
+                  {t.name} <span className="text-muted-foreground">· {t.language}</span>
+                </SelectItem>
+              ))
+            )}
+          </SelectContent>
+        </Select>
+        {selecionado && (
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Status: {WA_STATUS_TEMPLATE_LABELS[selecionado.status]} · {selecionado.language}
+          </p>
+        )}
+      </div>
+
+      {selecionado && (
+        <div className="rounded-lg border bg-muted/30 p-2.5">
+          <p className="text-[10px] font-semibold text-muted-foreground mb-1">Prévia do corpo</p>
+          <p className="text-xs whitespace-pre-wrap text-foreground/80">{corpo}</p>
+        </div>
+      )}
+
+      {numVars > 0 && (
+        <div className="space-y-2">
+          <Label className="text-xs">Preencher cada variável</Label>
+          {Array.from({ length: numVars }, (_, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <span className="font-mono text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-1 mt-0.5">
+                {`{{${i + 1}}}`}
+              </span>
+              <div className="flex-1">
+                <div className="flex items-center justify-end mb-0.5">
+                  <VariableTrigger
+                    inputId={`cfg-tpl-param-${i}`}
+                    variaveis={variaveis}
+                    onInsert={(path) => setParam(i, `${parametros[i] || ""}{{${path}}}`)}
+                  />
+                </div>
+                <VariableInput
+                  id={`cfg-tpl-param-${i}`}
+                  value={parametros[i] || ""}
+                  onChange={(v) => setParam(i, v)}
+                  variaveis={variaveis}
+                  placeholder={`Valor de {{${i + 1}}} — ex.: {{cliente.nome}}`}
+                />
+              </div>
+            </div>
+          ))}
+          <p className="text-[10px] text-muted-foreground">
+            Cada posição puxa o valor real do contexto do fluxo no envio.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Config do passo `transferir`. Pausa o bot (marca a conversa como
  * "em_atendimento") e, opcionalmente, envia uma mensagem de despedida antes
  * de pausar. Campo vazio = pausa em silêncio.
@@ -4921,6 +5081,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigAgendaCriarFields cfg={cfg} onChange={onChange} />;
     case "whatsapp_enviar":
       return <ConfigWhatsappEnviarFields cfg={cfg} onChange={onChange} />;
+    case "whatsapp_template":
+      return <ConfigWhatsappTemplateFields cfg={cfg} onChange={onChange} />;
     case "transferir":
       return <ConfigTransferirFields cfg={cfg} onChange={onChange} />;
     case "condicional":

@@ -845,6 +845,65 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       }
     },
 
+    async enviarWhatsappTemplate(opts): Promise<boolean> {
+      // Templates só existem na Cloud API oficial (whatsapp_api). Resolve o
+      // canal: usa o canalId pedido se for um whatsapp_api conectado deste
+      // escritório; senão pega o primeiro whatsapp_api conectado.
+      try {
+        const { getDb } = await import("../db");
+        const { canaisIntegrados } = await import("../../drizzle/schema");
+        const { eq, and } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) return false;
+
+        let canal: typeof canaisIntegrados.$inferSelect | undefined;
+        if (opts.canalId) {
+          const [c] = await db.select().from(canaisIntegrados)
+            .where(and(
+              eq(canaisIntegrados.id, opts.canalId),
+              eq(canaisIntegrados.escritorioId, escritorioId),
+              eq(canaisIntegrados.tipo, "whatsapp_api"),
+            ))
+            .limit(1);
+          canal = c;
+        }
+        if (!canal) {
+          const [c] = await db.select().from(canaisIntegrados)
+            .where(and(
+              eq(canaisIntegrados.escritorioId, escritorioId),
+              eq(canaisIntegrados.tipo, "whatsapp_api"),
+              eq(canaisIntegrados.status, "conectado"),
+            ))
+            .limit(1);
+          canal = c;
+        }
+        if (!canal?.configEncrypted || !canal.configIv || !canal.configTag) {
+          log.warn({ escritorioId }, "SmartFlow: sem canal whatsapp_api pra enviar template");
+          return false;
+        }
+
+        const { decryptConfig } = await import("../escritorio/crypto-utils");
+        const config = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag) as {
+          accessToken?: string;
+          phoneNumberId?: string;
+        };
+        if (!config.accessToken || !config.phoneNumberId) return false;
+
+        const { WhatsAppCloudClient, montarComponentesEnvio } = await import("../integracoes/whatsapp-cloud");
+        const client = new WhatsAppCloudClient({
+          accessToken: config.accessToken,
+          phoneNumberId: config.phoneNumberId,
+        });
+        const components = montarComponentesEnvio({ bodyParams: opts.parametros });
+        await client.enviarTemplate(opts.telefone, opts.templateName, opts.languageCode, components);
+        return true;
+      } catch (err: any) {
+        const apiMsg = err?.response?.data?.error?.message;
+        log.error({ err: apiMsg || err.message }, "SmartFlow: erro ao enviar template WhatsApp");
+        return false;
+      }
+    },
+
     async criarCardKanban(params): Promise<number> {
       try {
         const { getDb } = await import("../db");

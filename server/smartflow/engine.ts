@@ -100,6 +100,11 @@ export interface PassoConfig {
   delayMinutos?: number;
   /** Para whatsapp_enviar: template da mensagem */
   template?: string;
+  /** Para whatsapp_template: nome/idioma/parâmetros/canal do template Cloud API */
+  templateName?: string;
+  languageCode?: string;
+  parametros?: string[];
+  canalId?: number;
   /** Para calcom_horarios: duração em minutos */
   duracao?: number;
   /** Para webhook: URL */
@@ -339,6 +344,17 @@ export interface SmartflowExecutores {
   ) => Promise<boolean>;
   /** Envia mensagem WhatsApp */
   enviarWhatsApp: (telefone: string, mensagem: string) => Promise<boolean>;
+  /**
+   * Envia um template aprovado da Cloud API oficial (Meta). Só funciona em
+   * canais `whatsapp_api`. `parametros` já vêm interpolados (valores finais).
+   */
+  enviarWhatsappTemplate: (opts: {
+    canalId?: number;
+    telefone: string;
+    templateName: string;
+    languageCode: string;
+    parametros: string[];
+  }) => Promise<boolean>;
   /**
    * Retorna a lista formatada de cobranças em aberto do cliente (PENDING /
    * OVERDUE), com link de pagamento quando disponível. Usada pra expandir
@@ -1231,6 +1247,66 @@ async function handleWhatsAppEnviar(
     sucesso: true,
     contexto: { ...ctx, mensagensEnviadas: [...enviadas, mensagem] },
     resposta: mensagem,
+  };
+}
+
+/**
+ * Handler do passo `whatsapp_template` — envia um template aprovado da Cloud
+ * API. Ao contrário do `whatsapp_enviar`, sempre envia diretamente (templates
+ * não são texto livre que o dispatcher possa entregar), interpolando cada
+ * parâmetro posicional contra o contexto do fluxo.
+ */
+async function handleWhatsappTemplate(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const templateName = typeof passo.config.templateName === "string" ? passo.config.templateName.trim() : "";
+  if (!templateName) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Nenhum template selecionado." };
+  }
+
+  const telefone = typeof ctx.telefoneCliente === "string" ? ctx.telefoneCliente.trim() : "";
+  if (!telefone) {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: "Sem telefone do cliente no contexto para enviar o template.",
+    };
+  }
+
+  const { interpolarVariaveis } = await import("./interpolar");
+  const brutos = Array.isArray(passo.config.parametros) ? (passo.config.parametros as string[]) : [];
+  const parametros = brutos.map((p) => interpolarVariaveis(String(p ?? ""), ctx as any));
+
+  const canalId = typeof passo.config.canalId === "number" && passo.config.canalId > 0
+    ? passo.config.canalId
+    : typeof ctx.canalId === "number" && ctx.canalId > 0
+      ? ctx.canalId
+      : undefined;
+  const languageCode = typeof passo.config.languageCode === "string" && passo.config.languageCode
+    ? passo.config.languageCode
+    : "pt_BR";
+
+  try {
+    const ok = await exec.enviarWhatsappTemplate({ canalId, telefone, templateName, languageCode, parametros });
+    if (!ok) {
+      return {
+        sucesso: false,
+        contexto: ctx,
+        mensagemErro: "Falha ao enviar template — verifique se há canal WhatsApp Business API conectado e o template aprovado.",
+      };
+    }
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `WhatsApp template: ${err?.message || String(err)}` };
+  }
+
+  const enviadas = ctx.mensagensEnviadas || [];
+  const marcador = `[template: ${templateName}]`;
+  return {
+    sucesso: true,
+    contexto: { ...ctx, mensagensEnviadas: [...enviadas, marcador] },
+    resposta: marcador,
   };
 }
 
@@ -2340,6 +2416,7 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   calcom_remarcar: handleCalcomRemarcar,
   agenda_criar: handleAgendaCriar,
   whatsapp_enviar: handleWhatsAppEnviar,
+  whatsapp_template: handleWhatsappTemplate,
   whatsapp_aguardar_resposta: handleWhatsappAguardarResposta,
   transferir: handleTransferir,
   condicional: handleCondicional,
