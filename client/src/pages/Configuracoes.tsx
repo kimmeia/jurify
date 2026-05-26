@@ -1816,6 +1816,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                   : undefined
           }
           onRefresh={refetch}
+          canEdit={canEdit}
         />
       )}
 
