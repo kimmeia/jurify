@@ -1,4 +1,4 @@
--- 0130_escritorio_agenda_responsavel_padrao: adiciona
+-- 0131_escritorio_agenda_responsavel_padrao: adiciona
 -- `escritorios.agendaResponsavelPadraoId` — responsável padrão da agenda usado
 -- como fallback pelo SmartFlow (Atendente IA / Agendar) quando não há atendente
 -- na conversa nem responsável no contato.
