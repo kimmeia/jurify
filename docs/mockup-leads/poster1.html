@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    width:1280px; height:1180px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:#eef2f7; color:#0f172a; padding:44px 48px;
+  }
+  .kicker { font-size:13px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#7c3aed; }
+  h1 { font-size:38px; font-weight:800; letter-spacing:-.02em; margin-top:6px; }
+  .sub { font-size:16px; color:#64748b; margin-top:8px; max-width:880px; line-height:1.5; }
+
+  /* lifecycle strip */
+  .flow { display:flex; align-items:stretch; gap:0; margin-top:30px; }
+  .step { flex:1; background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:18px 20px; position:relative; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+  .step .ico { width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; margin-bottom:10px; }
+  .step .t { font-size:15px; font-weight:700; }
+  .step .d { font-size:12.5px; color:#64748b; margin-top:4px; line-height:1.45; }
+  .arrow { align-self:center; font-size:26px; color:#94a3b8; padding:0 12px; font-weight:700; }
+  .b-violet{ background:#ede9fe; color:#6d28d9;} .b-blue{background:#e0f2fe;color:#0369a1;}
+  .b-amber{background:#fef3c7;color:#b45309;} .b-emerald{background:#d1fae5;color:#047857;}
+  .tagline { display:inline-flex; align-items:center; gap:8px; margin-top:14px; font-size:13px; font-weight:600; color:#475569; background:#fff; border:1px solid #e2e8f0; padding:8px 14px; border-radius:999px;}
+  .tagline b{color:#7c3aed;}
+
+  /* compare */
+  .compare { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:34px; }
+  .panel { background:#fff; border-radius:18px; border:1px solid #e2e8f0; overflow:hidden; box-shadow:0 4px 14px rgba(15,23,42,.05); }
+  .phead { padding:16px 20px; font-size:14px; font-weight:800; display:flex; align-items:center; gap:10px; }
+  .phead .pill { font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; }
+  .head-bad { background:#fff1f2; color:#9f1239; border-bottom:1px solid #fecdd3;}
+  .head-good{ background:#ecfdf5; color:#065f46; border-bottom:1px solid #bbf7d0;}
+  .pbody { padding:8px 14px 16px; }
+
+  /* fake list rows */
+  .row { display:flex; align-items:center; gap:12px; padding:11px 10px; border-bottom:1px solid #f1f5f9; }
+  .row:last-child{ border-bottom:none; }
+  .av { width:34px; height:34px; border-radius:50%; color:#fff; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .nm { font-size:13.5px; font-weight:600; }
+  .mt { font-size:11.5px; color:#94a3b8; }
+  .grow{ flex:1; min-width:0;}
+  .bdg { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:999px; white-space:nowrap;}
+  .bdg-lead{ background:#ede9fe; color:#6d28d9; }
+  .bdg-cli { background:#d1fae5; color:#047857; }
+  .muted-list .nm{ color:#475569;}
+  .note { font-size:12.5px; color:#64748b; padding:12px 12px 4px; line-height:1.5;}
+  .count-big{ font-size:13px; font-weight:800;}
+  .x{ color:#e11d48; font-weight:800;} .ck{ color:#059669; font-weight:800;}
+</style>
+</head>
+<body>
+  <div class="kicker">Módulo Atendimento · proposta</div>
+  <h1>Separar Leads de Clientes</h1>
+  <p class="sub">Hoje, todo mundo que manda mensagem já entra na lista de <b>Clientes</b>. A proposta é simples: quem chega é <b>Lead</b>; só vira <b>Cliente</b> quando fecha contrato. É o mesmo cadastro — ele só muda de estágio.</p>
+
+  <div class="flow">
+    <div class="step">
+      <div class="ico b-blue">💬</div>
+      <div class="t">Chega o contato</div>
+      <div class="d">WhatsApp, Instagram, site ou telefone. Você fala com a pessoa no Atendimento.</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="step">
+      <div class="ico b-violet">🎯</div>
+      <div class="t">Vira Lead</div>
+      <div class="d">Fica em "Leads" / Pipeline. Em negociação, ainda não é cliente.</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="step">
+      <div class="ico b-amber">📝</div>
+      <div class="t">Fecha contrato</div>
+      <div class="d">Assina contrato, registra fechamento ou gera a 1ª cobrança.</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="step">
+      <div class="ico b-emerald">✅</div>
+      <div class="t">Vira Cliente</div>
+      <div class="d">Entra na lista de Clientes e no relatório comercial como conversão.</div>
+    </div>
+  </div>
+
+  <div class="tagline">⚠️ Situação atual: as 4 etapas caem todas em <b>“Clientes”</b> — a lista vive inflada com quem nunca fechou.</div>
+
+  <div class="compare">
+    <!-- ANTES -->
+    <div class="panel">
+      <div class="phead head-bad">
+        <span class="pill" style="background:#fecdd3;color:#9f1239;">HOJE</span>
+        Lista de Clientes &nbsp;·&nbsp; <span class="count-big">252</span>
+      </div>
+      <div class="pbody muted-list">
+        <div class="row">
+          <div class="av" style="background:#64748b">JS</div>
+          <div class="grow"><div class="nm">João Silva</div><div class="mt">WhatsApp · só perguntou o preço · sem CPF</div></div>
+          <span class="bdg bdg-cli">Cliente</span>
+        </div>
+        <div class="row">
+          <div class="av" style="background:#64748b">MA</div>
+          <div class="grow"><div class="nm">Maria Andrade</div><div class="mt">Instagram · respondeu “vou pensar” · sem CPF</div></div>
+          <span class="bdg bdg-cli">Cliente</span>
+        </div>
+        <div class="row">
+          <div class="av" style="background:#7c3aed">RC</div>
+          <div class="grow"><div class="nm">Rafael Costa</div><div class="mt">Contrato assinado · CPF 605.167.503-56</div></div>
+          <span class="bdg bdg-cli">Cliente</span>
+        </div>
+        <div class="row">
+          <div class="av" style="background:#64748b">PN</div>
+          <div class="grow"><div class="nm">Pedro (número novo)</div><div class="mt">WhatsApp · 1 mensagem · “bom dia”</div></div>
+          <span class="bdg bdg-cli">Cliente</span>
+        </div>
+        <div class="note">Lead e cliente real ficam <span class="x">misturados</span>. Contadores, relatórios e limite do plano contam gente que nunca fechou.</div>
+      </div>
+    </div>
+
+    <!-- DEPOIS -->
+    <div class="panel">
+      <div class="phead head-good">
+        <span class="pill" style="background:#bbf7d0;color:#065f46;">PROPOSTA</span>
+        Clientes <span class="count-big">38</span> &nbsp;|&nbsp; Leads <span class="count-big">214</span>
+      </div>
+      <div class="pbody">
+        <div class="row">
+          <div class="av" style="background:#7c3aed">RC</div>
+          <div class="grow"><div class="nm">Rafael Costa</div><div class="mt">Contrato assinado · CPF 605.167.503-56</div></div>
+          <span class="bdg bdg-cli">Cliente</span>
+        </div>
+        <div class="row">
+          <div class="av" style="background:#0ea5e9">AL</div>
+          <div class="grow"><div class="nm">Ana Lima</div><div class="mt">Fechou em 12/05 · 2 processos ativos</div></div>
+          <span class="bdg bdg-cli">Cliente</span>
+        </div>
+        <div class="row">
+          <div class="av" style="background:#a78bfa">JS</div>
+          <div class="grow"><div class="nm">João Silva</div><div class="mt">WhatsApp · em negociação</div></div>
+          <span class="bdg bdg-lead">Lead</span>
+        </div>
+        <div class="row">
+          <div class="av" style="background:#a78bfa">MA</div>
+          <div class="grow"><div class="nm">Maria Andrade</div><div class="mt">Instagram · “vou pensar”</div></div>
+          <span class="bdg bdg-lead">Lead</span>
+        </div>
+        <div class="note">Clientes = só <span class="ck">contratos fechados</span>. Leads ficam separados (mas a um clique). Nada é apagado: o mesmo cadastro, com histórico, muda de estágio.</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
