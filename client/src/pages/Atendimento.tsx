@@ -455,9 +455,13 @@ export default function Atendimento() {
         </TabsList>
         <TabsContent value="inbox" className="mt-4">
           {/* Layout ULTRA: Lista | Chat hero | AI Rail (colapsa pra Customer 360°) */}
-          <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_auto] gap-0 rounded-xl border bg-card overflow-hidden" style={{ minHeight: 600 }}>
+          {/* Altura travada na viewport (lg+) — sem isso, a coluna mais alta
+              (lista de conversas) esticava o grid e o compositor "flutuava",
+              deixando um vão embaixo. Cada coluna rola por dentro (min-h-0).
+              No mobile (stack) mantém o fluxo natural com piso de 600px. */}
+          <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_auto] gap-0 rounded-xl border bg-card overflow-hidden lg:h-[calc(100dvh-220px)]" style={{ minHeight: 600 }}>
             {/* Coluna 1: Lista de conversas */}
-            <div className="border-r bg-muted/10 overflow-hidden flex flex-col">
+            <div className="border-r bg-muted/10 overflow-hidden flex flex-col lg:min-h-0">
               {/* Header: busca + pills de filtro com contador */}
               <div className="p-3 border-b space-y-2.5">
                 <div className="relative">
@@ -507,7 +511,7 @@ export default function Atendimento() {
                   })}
                 </div>
               </div>
-              <ScrollArea className="flex-1">
+              <ScrollArea className="flex-1 lg:min-h-0">
                 {!convs?.length ? (
                   <div className="text-center py-16 px-4">
                     <MessageCircle className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
@@ -643,7 +647,7 @@ export default function Atendimento() {
             </div>
 
             {/* Coluna 2: Chat hero */}
-            <div className="bg-card overflow-hidden flex flex-col">
+            <div className="bg-card overflow-hidden flex flex-col lg:min-h-0">
               {selId ? (
                 <ChatArea
                   cid={selId}
@@ -946,7 +950,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       contatoNome={conv?.contatoNome || "Cliente"}
       onEnviarMensagem={(texto) => setMsg(texto)}
     />
-    <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2" style={{ minHeight: 360, maxHeight: 420 }}>
+    <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2 min-h-[360px] max-h-[420px] lg:min-h-0 lg:max-h-none">
       {!msgs?.length ? (
         <p className="text-xs text-muted-foreground text-center py-12">Nenhuma mensagem ainda.</p>
       ) : (

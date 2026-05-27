@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JuridFlow — Correção de layout do Atendimento (Inbox)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: { extend: {
+      fontFamily: { sans: ['Inter','ui-sans-serif','system-ui','sans-serif'] },
+      colors: { primary: '#4f46e5', violetx: '#7c3aed' },
+    } },
+  };
+</script>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; background: #f6f7fb; color: #0f172a;
+         display: flex; flex-direction: column; overflow: hidden; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ───────────────────────────────────────────────────────────────
+     O CORAÇÃO DA CORREÇÃO está nestas classes.
+     Toda a diferença Antes/Depois é PURO CSS — nenhuma mudança de dados.
+     ─────────────────────────────────────────────────────────────── */
+
+  .topbar { flex: 0 0 auto; }
+
+  /* DEPOIS (corrigido): o palco ocupa exatamente a altura restante da janela */
+  .stage   { flex: 1 1 auto; min-height: 0; padding: 16px; }
+  .atende  { height: 100%; display: flex; flex-direction: column; }
+  .tabsbar { flex: 0 0 auto; }
+  .inbox   { flex: 1 1 auto; min-height: 0;
+             display: grid; grid-template-columns: 264px 1fr 56px;
+             border: 1px solid #e5e7eb; border-radius: 14px; overflow: hidden; background: #fff; }
+  .col     { display: flex; flex-direction: column; min-height: 0; }
+  .fixedrow{ flex: 0 0 auto; }                       /* headers, pills, composer  */
+  .list-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; }   /* lista rola sozinha     */
+  .msg-scroll  { flex: 1 1 0; min-height: 0; overflow-y: auto; }   /* mensagens preenchem    */
+
+  /* ANTES (bug): a página cresce com o conteúdo, a lista empurra a altura,
+     e a área de mensagens fica TRAVADA num teto fixo → sobra um vão embaixo. */
+  body.is-bug { overflow: auto; }
+  body.is-bug .stage  { flex: 0 0 auto; }
+  body.is-bug .atende { height: auto; }
+  body.is-bug .inbox  { min-height: 600px; height: auto; }   /* grid estica p/ a coluna mais alta */
+  body.is-bug .list-scroll { flex: 0 0 auto; overflow: visible; }            /* lista NÃO rola → cresce */
+  body.is-bug .msg-scroll  { flex: 0 1 auto; min-height: 360px; max-height: 420px; } /* teto fixo → vão */
+
+  /* Anotações (callouts) que só aparecem no modo certo */
+  .only-fix { display: none; }
+  .only-bug { display: none; }
+  body:not(.is-bug) .only-fix { display: flex; }
+  body.is-bug .only-bug { display: flex; }
+
+  .seg { font-size: 11px; }
+  .seg.active { background: #ede9fe; color: #6d28d9; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════ BARRA EXPLICATIVA + CONTROLES ════════════════════════ -->
+<div class="topbar bg-slate-900 text-white px-5 py-2.5 flex items-center gap-4 flex-wrap">
+  <div class="flex items-center gap-2 min-w-0">
+    <i data-lucide="layout-dashboard" class="w-4 h-4 text-indigo-300 shrink-0"></i>
+    <span class="font-semibold truncate">Atendimento · correção de layout do Inbox</span>
+    <span class="text-slate-500 hidden md:inline">·</span>
+    <span class="text-slate-400 hidden md:inline truncate text-sm">tela trava na altura da janela · cada coluna rola por dentro · compositor fixo no rodapé</span>
+  </div>
+  <div class="ml-auto flex items-center gap-2">
+    <div class="inline-flex rounded-lg bg-slate-800 p-0.5 text-sm">
+      <button id="btn-bug" onclick="setMode(true)"  class="px-3 py-1 rounded-md text-slate-300">✗ Antes (bug)</button>
+      <button id="btn-fix" onclick="setMode(false)" class="px-3 py-1 rounded-md bg-indigo-500 text-white font-semibold">✓ Depois (corrigido)</button>
+    </div>
+    <button onclick="addConversas()" class="px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600 text-sm text-white inline-flex items-center gap-1.5">
+      <i data-lucide="plus" class="w-3.5 h-3.5"></i> Simular +6 conversas
+    </button>
+  </div>
+</div>
+
+<!-- ════════════════════════ PALCO ════════════════════════ -->
+<div class="stage">
+  <div class="atende">
+
+    <!-- Abas Inbox / Pipeline -->
+    <div class="tabsbar grid grid-cols-2 gap-2 mb-3">
+      <div class="h-10 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center gap-2 text-sm font-medium text-slate-800">
+        <i data-lucide="inbox" class="w-4 h-4"></i> Inbox
+      </div>
+      <div class="h-10 rounded-lg flex items-center justify-center gap-2 text-sm font-medium text-slate-400">
+        <i data-lucide="trending-up" class="w-4 h-4"></i> Pipeline
+      </div>
+    </div>
+
+    <!-- GRID DE 3 COLUNAS -->
+    <div class="inbox">
+
+      <!-- ──────────── COLUNA 1 · LISTA ──────────── -->
+      <aside class="col border-r border-slate-200 bg-slate-50/60">
+        <!-- header fixo: busca + pills -->
+        <div class="fixedrow p-3 border-b border-slate-200 space-y-2.5 bg-white">
+          <div class="relative">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+            <input placeholder="Buscar por nome ou telefone…" class="w-full h-8 pl-8 pr-2 text-xs rounded-md border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-200">
+          </div>
+          <div class="flex gap-1 overflow-x-auto pb-0.5">
+            <button class="shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium bg-primary text-white">Todas <span class="opacity-90 tabular-nums" id="count-todas">10</span></button>
+            <button class="shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium bg-slate-100 text-slate-500">Aguardando <span class="opacity-70 tabular-nums">4</span></button>
+            <button class="shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium bg-slate-100 text-slate-500">Em atend. <span class="opacity-70 tabular-nums">6</span></button>
+          </div>
+        </div>
+
+        <!-- callouts -->
+        <div class="only-fix fixedrow mx-3 mt-2 items-center gap-1.5 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1">
+          <i data-lucide="check" class="w-3 h-3"></i> A lista rola por dentro daqui (a tela não cresce)
+        </div>
+        <div class="only-bug fixedrow mx-3 mt-2 items-center gap-1.5 text-[10px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-1">
+          <i data-lucide="alert-triangle" class="w-3 h-3"></i> A lista empurra a altura da página inteira
+        </div>
+
+        <!-- lista rolável -->
+        <div class="list-scroll" id="list-scroll">
+          <!-- items injetados via JS -->
+        </div>
+      </aside>
+
+      <!-- ──────────── COLUNA 2 · CHAT ──────────── -->
+      <section class="col bg-white">
+        <!-- header fixo (linha 1: contato) -->
+        <div class="fixedrow px-4 pt-2.5 pb-2 border-b border-slate-200">
+          <div class="flex items-center gap-3">
+            <div class="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-200 to-indigo-50 flex items-center justify-center text-xs font-bold text-indigo-700 shrink-0">RR</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <p class="text-sm font-semibold">Rafael Rocha</p>
+                <span class="text-[9px] px-1.5 py-0 rounded border bg-blue-50 text-blue-700 border-blue-200">Em atendimento</span>
+                <span class="text-[10px] px-1.5 py-0 rounded border bg-blue-50 text-blue-700 border-blue-200 inline-flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i> Rafael Rocha</span>
+                <span class="text-[10px] px-1.5 py-0 rounded border bg-emerald-50 text-emerald-700 border-emerald-200 inline-flex items-center gap-1">💬 WhatsApp (Top speed lava jato)</span>
+              </div>
+              <p class="text-[10px] text-slate-400 mt-0.5">558596042189</p>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button class="h-7 w-7 grid place-items-center rounded-md text-emerald-600 hover:bg-emerald-50"><i data-lucide="phone-call" class="w-3.5 h-3.5"></i></button>
+              <button class="h-7 w-7 grid place-items-center rounded-md text-blue-600 hover:bg-blue-50"><i data-lucide="phone" class="w-3.5 h-3.5"></i></button>
+            </div>
+          </div>
+          <!-- header linha 2: ações -->
+          <div class="flex items-center gap-1 mt-1.5 overflow-x-auto text-[10px]">
+            <button class="h-6 px-2 rounded inline-flex items-center gap-1 text-indigo-600 font-semibold shrink-0"><i data-lucide="scroll-text" class="w-3 h-3"></i> Linha do Tempo</button>
+            <button class="h-6 px-2 rounded inline-flex items-center gap-1 text-violet-600 shrink-0"><i data-lucide="trending-up" class="w-3 h-3"></i> Pipeline</button>
+            <button class="h-6 px-2 rounded inline-flex items-center gap-1 text-blue-600 shrink-0"><i data-lucide="calendar" class="w-3 h-3"></i> Agendar</button>
+            <button class="h-6 px-2 rounded inline-flex items-center gap-1 text-orange-600 shrink-0"><i data-lucide="arrow-right-left" class="w-3 h-3"></i> Transferir</button>
+            <button class="h-6 px-2 rounded inline-flex items-center gap-1 text-indigo-600 shrink-0"><i data-lucide="link-2" class="w-3 h-3"></i> Vincular</button>
+            <div class="flex-1"></div>
+            <button class="h-6 px-2 rounded inline-flex items-center gap-1 text-emerald-600 shrink-0"><i data-lucide="check-circle" class="w-3 h-3"></i> Resolver</button>
+            <button class="h-6 px-2 rounded inline-flex items-center gap-1 text-slate-500 shrink-0"><i data-lucide="x-circle" class="w-3 h-3"></i> Fechar</button>
+            <button class="h-6 w-6 grid place-items-center rounded text-red-500 shrink-0"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+          </div>
+        </div>
+
+        <!-- brief instantâneo (banner fixo) -->
+        <div class="fixedrow mx-3 mt-2 rounded-lg border border-violet-200 bg-violet-50/70 px-3 py-2 flex items-start gap-2">
+          <i data-lucide="sparkles" class="w-4 h-4 text-violet-500 mt-0.5 shrink-0"></i>
+          <div>
+            <p class="text-[10px] font-bold tracking-wide text-violet-700">BRIEF INSTANTÂNEO</p>
+            <p class="text-[13px] text-slate-700">Possível questão técnica ou pessoal, sem relação direta com processos ou compromissos legais.</p>
+          </div>
+        </div>
+
+        <!-- MENSAGENS (rolável) -->
+        <div class="msg-scroll p-4 space-y-2.5">
+          <!-- saída: áudio -->
+          <div class="flex justify-end">
+            <div class="max-w-[70%] rounded-2xl rounded-br-md bg-primary text-white px-3.5 py-2">
+              <p class="text-[10px] opacity-60 mb-1">Rafael Rocha</p>
+              <div class="flex items-center gap-2 bg-white/15 rounded-full px-2 py-1">
+                <i data-lucide="play" class="w-4 h-4"></i>
+                <div class="h-1 w-28 rounded-full bg-white/40 relative"><span class="absolute left-0 top-0 h-1 w-2 rounded-full bg-white"></span></div>
+                <span class="text-[11px] tabular-nums">0:00 / 0:03</span>
+                <i data-lucide="volume-2" class="w-3.5 h-3.5 opacity-80"></i>
+              </div>
+              <div class="flex items-center gap-1 justify-end mt-1 text-[10px] opacity-70"><span>14:13</span><i data-lucide="check" class="w-3 h-3"></i></div>
+            </div>
+          </div>
+          <!-- saída: texto -->
+          <div class="flex justify-end">
+            <div class="max-w-[70%] rounded-2xl rounded-br-md bg-primary text-white px-3.5 py-2">
+              <p class="text-[10px] opacity-60 mb-0.5">David Feitosa</p>
+              <p class="text-[13px]">da pra apagar mensagem ?</p>
+              <div class="flex items-center gap-1 justify-end mt-1 text-[10px] opacity-70"><span>14:15</span><i data-lucide="check" class="w-3 h-3"></i></div>
+            </div>
+          </div>
+          <!-- entrada: áudio -->
+          <div class="flex justify-start items-end gap-2">
+            <div class="h-7 w-7 rounded-full bg-emerald-100 text-emerald-700 grid place-items-center text-[11px] font-bold shrink-0">N</div>
+            <div class="max-w-[70%] rounded-2xl rounded-bl-md bg-slate-100 text-slate-800 px-3.5 py-2">
+              <div class="flex items-center gap-2 bg-white rounded-full px-2 py-1 border border-slate-200">
+                <i data-lucide="play" class="w-4 h-4 text-slate-600"></i>
+                <div class="h-1 w-28 rounded-full bg-slate-300 relative"><span class="absolute left-0 top-0 h-1 w-2 rounded-full bg-slate-500"></span></div>
+                <span class="text-[11px] tabular-nums text-slate-600">0:00 / 0:04</span>
+                <i data-lucide="volume-2" class="w-3.5 h-3.5 text-slate-500"></i>
+              </div>
+              <p class="text-[11px] opacity-60 mt-1">Áudio</p>
+              <div class="text-[10px] text-slate-400 text-right mt-0.5">14:16</div>
+            </div>
+          </div>
+          <!-- saída: texto -->
+          <div class="flex justify-end">
+            <div class="max-w-[70%] rounded-2xl rounded-br-md bg-primary text-white px-3.5 py-2">
+              <p class="text-[10px] opacity-60 mb-0.5">David Feitosa</p>
+              <p class="text-[13px]">blz</p>
+              <div class="flex items-center gap-1 justify-end mt-1 text-[10px] opacity-70"><span>14:16</span><i data-lucide="check" class="w-3 h-3"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- callout do vão (só no bug) -->
+        <div class="only-bug fixedrow items-center justify-center gap-2 mx-4 mb-2 rounded-lg border border-dashed border-red-300 bg-red-50/60 text-red-600 text-xs py-3">
+          <i data-lucide="move-vertical" class="w-4 h-4"></i> Vão vazio que cresce conforme chegam clientes (o bug do print)
+        </div>
+
+        <!-- COMPOSITOR (fixo no rodapé) -->
+        <div class="fixedrow border-t border-slate-200 bg-slate-50/70">
+          <div class="only-fix items-center justify-center gap-1.5 text-[10px] text-emerald-700 pt-1.5">
+            <i data-lucide="check" class="w-3 h-3"></i> Compositor sempre colado no rodapé
+          </div>
+          <!-- linha 1: tom -->
+          <div class="px-3 pt-2 pb-1.5 flex items-center gap-2 flex-wrap">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Tom:</span>
+            <div class="inline-flex bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm">
+              <button class="seg px-2.5 py-1 rounded-md text-slate-500">Formal</button>
+              <button class="seg px-2.5 py-1 rounded-md text-slate-500">Direto</button>
+              <button class="seg active px-2.5 py-1 rounded-md">Empático</button>
+              <button class="seg px-2.5 py-1 rounded-md text-slate-500">Amigável</button>
+            </div>
+            <button class="h-7 px-2.5 rounded-md border border-violet-300 text-violet-700 hover:bg-violet-50 text-[11px] inline-flex items-center gap-1">
+              <i data-lucide="sparkles" class="w-3 h-3"></i> Compor com IA
+            </button>
+            <div class="flex-1"></div>
+            <span class="text-[11px] text-rose-600 inline-flex items-center gap-1"><i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Compliance ON</span>
+          </div>
+          <!-- linha 2: input -->
+          <div class="px-3 pt-2 flex gap-2">
+            <button class="h-9 w-9 grid place-items-center rounded-md text-slate-500 hover:bg-slate-100 shrink-0"><i data-lucide="zap" class="w-4 h-4"></i></button>
+            <input placeholder="Digite sua mensagem… ou clique em ✨ Compor com IA" class="flex-1 h-9 rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-indigo-200">
+            <button class="h-9 w-9 grid place-items-center rounded-md text-slate-500 hover:bg-slate-100 shrink-0"><i data-lucide="mic" class="w-4 h-4"></i></button>
+            <button class="h-9 px-4 grid place-items-center rounded-md text-white bg-gradient-to-br from-violet-600 to-indigo-600 shrink-0"><i data-lucide="send" class="w-4 h-4"></i></button>
+          </div>
+          <!-- linha 3: hint -->
+          <div class="px-3 py-2 text-[10px] text-slate-400 flex items-center gap-1.5">
+            <kbd class="font-mono bg-white px-1 py-0.5 rounded border border-slate-200">/</kbd> respostas rápidas
+            <span class="mx-1">·</span>
+            <kbd class="font-mono bg-white px-1 py-0.5 rounded border border-slate-200">Enter</kbd> enviar
+          </div>
+        </div>
+      </section>
+
+      <!-- ──────────── COLUNA 3 · AI RAIL (fina) ──────────── -->
+      <aside class="col border-l border-slate-200 bg-white items-center justify-between py-3">
+        <div class="flex flex-col items-center gap-2">
+          <button class="h-9 w-9 grid place-items-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow"><i data-lucide="sparkles" class="w-4 h-4"></i></button>
+          <button class="h-9 w-9 grid place-items-center rounded-xl border border-slate-200 text-slate-500"><i data-lucide="scroll-text" class="w-4 h-4"></i></button>
+        </div>
+        <div class="flex flex-col items-center gap-1">
+          <span class="text-[8px] font-bold text-slate-400 tracking-wide">HEALTH</span>
+          <span class="h-9 w-9 grid place-items-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold tabular-nums">90</span>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // ─── Dados das conversas (espelham o print) ───
+  const CONVERSAS = [
+    { ini:'LS', nome:'Lourival Silva',            prev:'certo qual seria o servico',           tag:'Em atendimento', tagc:'blue',  dono:'' },
+    { ini:'SC', nome:'Silveira Corretor de Imóveis', prev:'✨ O novo ícone de viver bem che…',  tag:'Aguardando',     tagc:'amber', dono:'David' },
+    { ini:'N',  nome:'Nailsa',                     prev:'Áudio [media/uploads/whatsapp-…]',     tag:'Aguardando',     tagc:'amber', dono:'David' },
+    { ini:'MJ', nome:'Meridiano Jose',             prev:'Depois te falo algo nesse sentido',    tag:'Aguardando',     tagc:'amber', dono:'Rafael' },
+    { ini:'MS', nome:'Maria Simone',               prev:'amanhã lhe dou a resposta',            tag:'Aguardando',     tagc:'amber', dono:'David' },
+    { ini:'AU', nome:'Alexandre Uchoa',            prev:'pode ser ?',                            tag:'Em atendimento', tagc:'blue',  dono:'David' },
+    { ini:'RR', nome:'Rafael Rocha',               prev:'blz',                                   tag:'Em atendimento', tagc:'blue',  dono:'Rafael', sel:true },
+    { ini:'AM', nome:'Ana Martins',                prev:'🔥 PROMOÇÃO EM FORTALEZA */…',         tag:'Em atendimento', tagc:'blue',  dono:'David' },
+    { ini:'Z',  nome:'Ziane 😍',                    prev:'🔥 PROMOÇÃO EM FORTALEZA */…',         tag:'Em atendimento', tagc:'blue',  dono:'David' },
+    { ini:'J',  nome:'Juh',                         prev:'como podemos ajudar',                   tag:'Em atendimento', tagc:'blue',  dono:'David' },
+  ];
+  const AV = ['bg-rose-100 text-rose-700','bg-amber-100 text-amber-800','bg-emerald-100 text-emerald-700','bg-sky-100 text-sky-700','bg-violet-100 text-violet-700','bg-pink-100 text-pink-700','bg-teal-100 text-teal-700','bg-indigo-100 text-indigo-700'];
+  const TAGB = { blue:'bg-blue-50 text-blue-700 border-blue-200', amber:'bg-amber-50 text-amber-700 border-amber-200' };
+  const DOT  = { blue:'bg-blue-500', amber:'bg-amber-500' };
+
+  function colorFor(name){ let h=0; for(let i=0;i<name.length;i++) h=((h<<5)-h)+name.charCodeAt(i); return AV[Math.abs(h)%AV.length]; }
+
+  function itemHTML(c){
+    return `<button class="w-full text-left px-3 py-3 border-b border-slate-100 relative ${c.sel?'bg-violet-50':'hover:bg-slate-50'}">
+      ${c.sel?'<span class="absolute left-0 top-3 bottom-3 w-1 bg-violet-600 rounded-r"></span>':''}
+      <div class="flex items-start gap-2.5">
+        <div class="h-10 w-10 rounded-full grid place-items-center text-xs font-bold ${colorFor(c.nome)} shrink-0">${c.ini}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-sm font-medium truncate">${c.nome}</p>
+          </div>
+          <p class="text-xs text-slate-500 truncate mt-0.5">${c.prev}</p>
+          <div class="flex items-center gap-1 mt-1.5">
+            <span class="text-[9px] px-1.5 py-0 rounded border inline-flex items-center gap-1 ${TAGB[c.tagc]}">
+              <span class="w-1.5 h-1.5 rounded-full ${DOT[c.tagc]}"></span>${c.tag}
+            </span>
+            ${c.dono?`<span class="text-[9px] text-slate-400">· ${c.dono}</span>`:''}
+          </div>
+        </div>
+      </div>
+    </button>`;
+  }
+
+  function renderList(arr){
+    document.getElementById('list-scroll').innerHTML = arr.map(itemHTML).join('');
+    document.getElementById('count-todas').textContent = arr.length;
+    lucide.createIcons();
+  }
+
+  let lista = [...CONVERSAS];
+  function addConversas(){
+    const extra = ['Carlos Bezerra','Patrícia Lima','Wesley Souza','Núbia Castro','Igor Tavares','Dona Lúcia'];
+    extra.forEach((n,i)=> lista.splice(lista.length-3, 0, {
+      ini:n.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(),
+      nome:n, prev:'nova mensagem recebida…', tag: i%2? 'Aguardando':'Em atendimento', tagc: i%2?'amber':'blue', dono:'David'
+    }));
+    renderList(lista);
+  }
+
+  function setMode(isBug){
+    document.body.classList.toggle('is-bug', isBug);
+    document.getElementById('btn-bug').className = 'px-3 py-1 rounded-md ' + (isBug?'bg-red-500 text-white font-semibold':'text-slate-300');
+    document.getElementById('btn-fix').className = 'px-3 py-1 rounded-md ' + (!isBug?'bg-indigo-500 text-white font-semibold':'text-slate-300');
+  }
+
+  renderList(lista);
+  lucide.createIcons();
+</script>
+</body>
+</html>
