@@ -17,6 +17,7 @@ import {
   interpretarSaidaAtendente,
   orquestrarAtendente,
   gerarSlotsLivres,
+  formatarHorariosLivres,
   formatarISOComOffset,
   SmartflowContexto,
   SmartflowExecutores,
@@ -1250,6 +1251,33 @@ describe("SmartFlow Engine", () => {
         duracaoMin: 30, horaInicio: 9, horaFim: 18, ocupados: [], maxSlots: 10,
       });
       expect(slots).toHaveLength(10);
+    });
+  });
+
+  describe("formatarHorariosLivres (lista COMPLETA pro agente — regressão do corte por dia)", () => {
+    const slotsDia = [
+      "2026-05-29T09:00:00-03:00", "2026-05-29T09:30:00-03:00", "2026-05-29T10:00:00-03:00",
+      "2026-05-29T10:30:00-03:00", "2026-05-29T11:00:00-03:00", "2026-05-29T11:30:00-03:00",
+    ].map((iso) => ({ inicioISO: iso, fimISO: iso }));
+
+    it("NÃO trunca: o 5º+ horário do dia (11:00) aparece — era exatamente o bug", () => {
+      const txt = formatarHorariosLivres(slotsDia);
+      expect(txt).toContain("2026-05-29T11:00:00-03:00"); // 5º slot livre
+      expect(txt).toContain("2026-05-29T11:30:00-03:00"); // 6º slot livre
+      expect(txt).toContain("LISTA COMPLETA");
+    });
+
+    it("agrupa por dia", () => {
+      const txt = formatarHorariosLivres([
+        { inicioISO: "2026-05-28T09:00:00-03:00", fimISO: "x" },
+        { inicioISO: "2026-05-29T09:00:00-03:00", fimISO: "x" },
+      ]);
+      expect(txt).toContain("2026-05-28:");
+      expect(txt).toContain("2026-05-29:");
+    });
+
+    it("vazio → aviso amigável", () => {
+      expect(formatarHorariosLivres([])).toContain("Sem horários livres");
     });
   });
 

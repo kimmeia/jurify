@@ -2382,6 +2382,28 @@ export function gerarSlotsLivres(params: {
 }
 
 /**
+ * Formata os horários livres pro Atendente IA, agrupados por dia. LISTA
+ * COMPLETA (sem truncar por dia) — o agente precisa de toda a disponibilidade
+ * pra confirmar/negar um horário específico que o cliente pedir. Truncar
+ * escondia slots livres (ex: o 5º+ do dia) e o agente negava um horário que
+ * existia. Quem limita o tamanho é o `maxSlots` do gerador.
+ */
+export function formatarHorariosLivres(livres: SlotLivre[]): string {
+  if (livres.length === 0) return "Sem horários livres nos próximos dias.";
+  const porDia = new Map<string, string[]>();
+  for (const s of livres) {
+    const dia = s.inicioISO.slice(0, 10); // YYYY-MM-DD
+    const arr = porDia.get(dia);
+    if (arr) arr.push(s.inicioISO);
+    else porDia.set(dia, [s.inicioISO]);
+  }
+  const blocos = [...porDia.entries()]
+    .map(([dia, isos]) => `${dia}:\n${isos.map((iso) => `  - ${iso}`).join("\n")}`)
+    .join("\n");
+  return `Horários livres (ISO, fuso Brasília -03:00) — LISTA COMPLETA por dia. Ofereça POUCOS ao cliente (uns 3 por dia, espalhados), mas use a lista INTEIRA pra confirmar ou negar um horário específico que ele pedir — se está na lista, está livre:\n${blocos}`;
+}
+
+/**
  * Handler do passo `agenda_criar`. Cria um compromisso na Agenda NATIVA do
  * escritório (não no Cal.com), atribuído a um responsável e vinculado ao
  * cliente. Pensado pro "agendar consulta sem custo" do SDR: o lead cai na
