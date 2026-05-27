@@ -28,6 +28,7 @@ import {
   criarCanal,
   atualizarConfigCanal,
   obterConfigMascarada,
+  obterConfigCanal,
   atualizarStatusCanal,
   excluirCanal,
   contarCanaisPorTipo,
@@ -736,6 +737,48 @@ export const configuracoesRouter = router({
         detalhes: "Configuração atualizada",
       });
 
+      return { success: true };
+    }),
+
+  /** Flags de mídia da IA (Whisper / Vision) lidas do card do ChatGPT. */
+  flagsIA: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return { configurado: false, whisperAtivo: false, visionAtivo: false };
+    const { obterConfigIAMedia } = await import("../integracoes/config-ia-media");
+    const c = await obterConfigIAMedia(esc.escritorio.id);
+    return {
+      configurado: !!(c && c.openaiApiKey),
+      whisperAtivo: !!c?.whisperAtivo,
+      visionAtivo: !!c?.visionAtivo,
+    };
+  }),
+
+  /** Liga/desliga Whisper (áudio→texto) e Vision (imagem) no card do ChatGPT.
+   *  Merge no config do canal pra não apagar a chave OpenAI. */
+  atualizarFlagsIA: protectedProcedure
+    .input(z.object({ whisperAtivo: z.boolean().optional(), visionAtivo: z.boolean().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      await exigirPermissao(
+        ctx.user.id, "configuracoes", "editar",
+        "Sem permissão para editar a configuração do canal.",
+      );
+      const { obterConfigIAMedia } = await import("../integracoes/config-ia-media");
+      const c = await obterConfigIAMedia(esc.escritorio.id);
+      if (!c) throw new Error("Configure a chave da OpenAI no card do ChatGPT primeiro.");
+      const cfg = (await obterConfigCanal(c.canalId, esc.escritorio.id)) ?? {};
+      const novo: Record<string, any> = { ...cfg };
+      if (input.whisperAtivo !== undefined) novo.whisperAtivo = input.whisperAtivo;
+      if (input.visionAtivo !== undefined) novo.visionAtivo = input.visionAtivo;
+      await atualizarConfigCanal(c.canalId, esc.escritorio.id, novo);
+      await registrarAudit({
+        escritorioId: esc.escritorio.id,
+        colaboradorId: esc.colaborador.id,
+        canalId: c.canalId,
+        acao: "editou_config",
+        detalhes: `IA mídia: whisper=${novo.whisperAtivo ?? false} vision=${novo.visionAtivo ?? false}`,
+      });
       return { success: true };
     }),
 
