@@ -420,6 +420,18 @@ export const agendamentos = mysqlTable("agendamentos", {
   /** Telefone/WhatsApp/IM do contato da reunião — campo livre, não vinculado
    *  a contato CRM. Útil pra "telefonema rápido antes da audiência". */
   contatoTelefone: varchar("contatoTelefone", { length: 64 }),
+  /**
+   * Resultado do atendimento — preenchido ao concluir um compromisso de
+   * reunião/audiência/follow-up. NULL = não concluído ou não aplicável
+   * (prazo/tarefa). Separado de `status`: comparecimento responde "o cliente
+   * veio?", status responde "o compromisso foi tratado?".
+   */
+  comparecimento: mysqlEnum("comparecimento", ["compareceu", "nao_compareceu", "remarcado"]),
+  /**
+   * Observação pós-atendimento — o que aconteceu na reunião. Distinto de
+   * `descricao` (briefing ANTES do evento); esta é a nota DEPOIS.
+   */
+  observacaoAtendimento: text("observacaoAtendimento"),
   createdAt: timestamp("createdAtAgend").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAgend").defaultNow().onUpdateNow().notNull(),
 });

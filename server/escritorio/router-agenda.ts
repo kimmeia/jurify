@@ -88,6 +88,8 @@ interface EventoUnificado {
   processoId?: number | null;
   cor: string;
   createdAt: string;
+  comparecimento?: string | null;
+  observacaoAtendimento?: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -239,6 +241,8 @@ export const agendaRouter = router({
             processoId: ag.processoId,
             cor: ag.corHex || CORES_TIPO[ag.tipo] || "#3b82f6",
             createdAt: toIsoString(ag.createdAt) ?? "",
+            comparecimento: ag.comparecimento,
+            observacaoAtendimento: ag.observacaoAtendimento,
           });
         }
       }
@@ -671,6 +675,9 @@ export const agendaRouter = router({
       id: z.number(),
       fonte: z.enum(["compromisso", "tarefa"]),
       status: z.string(),
+      // Resultado do atendimento (só compromisso). Gravados junto ao concluir.
+      comparecimento: z.enum(["compareceu", "nao_compareceu", "remarcado"]).nullable().optional(),
+      observacaoAtendimento: z.string().max(2000).nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "agenda", "editar");
@@ -702,8 +709,11 @@ export const agendaRouter = router({
       }
 
       if (input.fonte === "compromisso") {
+        const set: Record<string, unknown> = { status: input.status as any };
+        if (input.comparecimento !== undefined) set.comparecimento = input.comparecimento;
+        if (input.observacaoAtendimento !== undefined) set.observacaoAtendimento = input.observacaoAtendimento;
         await db.update(agendamentos)
-          .set({ status: input.status as any })
+          .set(set)
           .where(and(eq(agendamentos.id, input.id), eq(agendamentos.escritorioId, perm.escritorioId)));
       } else {
         const statusMap: Record<string, string> = {
