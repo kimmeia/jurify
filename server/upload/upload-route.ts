@@ -106,6 +106,30 @@ function audioContainerCompativel(declarado: string, detectado: string): boolean
   return false;
 }
 
+/**
+ * Decide se o conteúdo detectado por magic number é aceitável dado o tipo
+ * declarado. Retorna a mensagem de rejeição, ou null se está OK.
+ *
+ * A tolerância de container de áudio (webm/mp4 detectados como video/* mas
+ * carregando só áudio) precisa valer nos DOIS gates — a allowlist do
+ * conteúdo E o match declarado-vs-detectado. O bug original aplicava a
+ * exceção só no segundo, então a allowlist rejeitava `video/webm` antes de
+ * a exceção ser consultada e a nota de voz nunca subia.
+ */
+export function rejeitarConteudoDetectado(
+  mimeDeclarado: string,
+  detectadoMime: string,
+): string | null {
+  const containerDeAudio = audioContainerCompativel(mimeDeclarado, detectadoMime);
+  if (!ALLOWED_TYPES.has(detectadoMime) && !containerDeAudio) {
+    return `Conteúdo do arquivo é "${detectadoMime}", que não é permitido.`;
+  }
+  if (detectadoMime !== mimeDeclarado && !containerDeAudio) {
+    return `Tipo declarado (${mimeDeclarado}) não bate com o conteúdo (${detectadoMime}).`;
+  }
+  return null;
+}
+
 /** Heurística simples pra "isso parece texto?" — sem bytes nulos e
  *  decodificável como UTF-8. Não é blindagem perfeita, mas barra
  *  binários disfarçados de .txt. */
@@ -164,22 +188,9 @@ export const uploadRouter = router({
       //    (sem magic), heurística UTF-8.
       const detectado = await fileTypeFromBuffer(buffer);
       if (detectado) {
-        if (!ALLOWED_TYPES.has(detectado.mime)) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `Conteúdo do arquivo é "${detectado.mime}", que não é permitido.`,
-          });
-        }
-        // Cliente declarou um tipo, conteúdo é outro: pode ser ataque.
-        // Exceção: containers WebM e MP4 podem ser detectados como
-        // "video/*" mesmo quando carregam só áudio (MediaRecorder devolve
-        // audio/webm mas o file-type vê "video/webm"). Tolerar essas duas
-        // duplas — em todo o resto, exigir bate exato.
-        if (detectado.mime !== mimeDeclarado && !audioContainerCompativel(mimeDeclarado, detectado.mime)) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `Tipo declarado (${mimeDeclarado}) não bate com o conteúdo (${detectado.mime}).`,
-          });
+        const motivo = rejeitarConteudoDetectado(mimeDeclarado, detectado.mime);
+        if (motivo) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: motivo });
         }
       } else {
         // Sem magic detectada — só aceita se for texto declarado E o
