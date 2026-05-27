@@ -504,7 +504,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
 
     async conversarComAgente(params): Promise<{ resposta: string; acao: string | null; quando: string | null }> {
       const { obterAgentePorId } = await import("../integracoes/router-agentes-ia");
-      const { orquestrarAtendente, gerarSlotsLivres } = await import("./engine");
+      const { orquestrarAtendente, gerarSlotsLivres, formatarHorariosLivres } = await import("./engine");
       const cfg = await obterAgentePorId(escritorioId, params.agenteId);
       if (!cfg) throw new Error(`Agente ${params.agenteId} não encontrado, inativo ou sem API key configurada.`);
 
@@ -540,7 +540,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         `Hoje é ${hojeFmt} (fuso de Brasília). Datas ANTERIORES a hoje já passaram — NUNCA ofereça nem diga que vai "verificar" uma data passada; avise que já passou e ofereça uma data futura.`,
         `CONSULTAS (buscam um dado e voltam pra você continuar):\n${lista(DESC_CONSULTA, consultas)}`,
         `AÇÕES (encerram seu turno e seguem o fluxo):\n${lista(DESC_ACAO, ferramentas)}`,
-        "Quando precisar de um dado (ex: horários), dispare a CONSULTA correspondente AGORA, no MESMO turno. NUNCA responda só \"um momento\"/\"vou verificar\" e pare — isso deixa o cliente esperando sem resposta. Ofereça apenas horários que a consulta retornou; se o cliente pedir um dia que não está na lista, diga quais dias você tem (não invente nem prometa checar separado).",
+        "Quando precisar de um dado (ex: horários), dispare a CONSULTA correspondente AGORA, no MESMO turno. NUNCA responda só \"um momento\"/\"vou verificar\" e pare — isso deixa o cliente esperando sem resposta. A lista da consulta é COMPLETA: ofereça POUCOS horários ao cliente, mas pra confirmar ou negar um horário específico que ele pedir, olhe a lista INTEIRA — se o horário está nela, está LIVRE (não negue só porque não foi um dos que você ofereceu). Só diga que não tem se realmente não estiver na lista; nunca invente nem prometa checar separado.",
         "REGRA DAS AÇÕES (siga à risca): o padrão é acao=null — continue conversando. Só preencha `acao` quando a CONDIÇÃO daquela ação (descrita acima) estiver claramente satisfeita pela ÚLTIMA mensagem do cliente. NUNCA dispare uma ação na saudação, na 1ª troca, nem só porque ela está habilitada. Ex.: não use \"agendar\" enquanto o cliente não tiver escolhido/confirmado um horário; uma pergunta como \"você é advogado?\" ou \"tenho uma dúvida\" se responde conversando (acao=null), não agendando. Na dúvida, acao=null.",
         "NÃO peça confirmação redundante: quando o cliente JÁ indicar um horário específico que está entre os que você ofereceu (ex: \"quinta às 10\", \"pode ser as 14h\"), dispare `agendar` DIRETO com esse horário em `quando` — dizer um horário da lista JÁ é a confirmação, não pergunte \"confirma?\" de novo. Só confirme se houver ambiguidade real (data sem hora, dois horários possíveis, ou horário fora dos que você ofereceu).",
         'Responda SEMPRE em JSON puro (sem markdown): {"resposta": "<mensagem pro cliente>", "acao": "<ação ou null>", "consulta": "<consulta ou null>", "quando": "<ISO do horário escolhido quando acao=agendar; senão null>"}',
@@ -564,21 +564,10 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
           const agora = new Date();
           const fim = new Date(agora.getTime() + dias * 24 * 60 * 60 * 1000);
           const ocupados = await this.listarAgendaResponsavel({ responsavelId: respId, dataInicio: agora.toISOString(), dataFim: fim.toISOString() });
-          const livres = gerarSlotsLivres({ agora, dias, incluirFimDeSemana: false, duracaoMin: dur, horaInicio: 9, horaFim: 18, ocupados });
-          if (livres.length === 0) return "Sem horários livres nos próximos dias.";
-          // Espalha por DIA (não só o 1º): até 4 horários por dia, vários dias.
-          // Antes pegava os 12 primeiros — que caíam TODOS no 1º dia, então o
-          // cliente só via (e só conseguia pedir) o dia seguinte.
-          const PORDIA = 4;
-          const MAXDIAS = 6;
-          const porDia = new Map<string, string[]>();
-          for (const s of livres) {
-            const dia = s.inicioISO.slice(0, 10); // YYYY-MM-DD
-            const arr = porDia.get(dia) ?? [];
-            if (arr.length < PORDIA) { arr.push(`${s.inicioISO} (até ${s.fimISO})`); porDia.set(dia, arr); }
-          }
-          const linhas = [...porDia.values()].slice(0, MAXDIAS).flat().map((s) => `- ${s}`).join("\n");
-          return `Horários livres (ISO -03:00, fuso Brasília):\n${linhas}`;
+          // maxSlots alto: a lista precisa ser COMPLETA pra o agente confirmar/negar
+          // um horário específico (antes truncava em 4/dia e ele negava o 5º+ livre).
+          const livres = gerarSlotsLivres({ agora, dias, incluirFimDeSemana: false, duracaoMin: dur, horaInicio: 9, horaFim: 18, ocupados, maxSlots: 120 });
+          return formatarHorariosLivres(livres);
         }
         if (nome === "ver_acoes_cliente") {
           if (!params.contatoId) return "Cliente ainda não identificado no sistema (sem cadastro).";
