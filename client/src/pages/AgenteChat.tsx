@@ -658,6 +658,9 @@ function ChatArea({
                     ) : (
                       <p className="whitespace-pre-wrap text-sm">{m.conteudo}</p>
                     )}
+                    {m.role === "assistant" && m.tokensUsados > 0 && (
+                      <p className="text-[10px] text-muted-foreground mt-1">{m.tokensUsados.toLocaleString("pt-BR")} tokens</p>
+                    )}
                     {m.role === "assistant" && (
                       <button
                         onClick={() => copiar(m.id, m.conteudo)}
@@ -725,7 +728,7 @@ function ChatArea({
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/csv,application/json"
+            accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,.jpg,.jpeg,.png,.webp,.gif,.ogg,.mp3,.m4a,.wav,.webm,image/*,audio/*"
             onChange={handleFile}
             className="hidden"
           />

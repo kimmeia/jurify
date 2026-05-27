@@ -111,7 +111,7 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
   const conteudo = transcricaoAudio
     ? `🎤 ${transcricaoAudio}`
     : msg.mediaUrl ? `${msg.conteudo}\n[media:${msg.mediaUrl}]` : msg.conteudo;
-  const mensagemId = await salvarMensagem({ conversaId, remetenteId: undefined, direcao: "entrada", tipo: tipoMsg, conteudo });
+  const mensagemId = await salvarMensagem({ conversaId, remetenteId: undefined, direcao: "entrada", tipo: tipoMsg, conteudo, mediaUrl: msg.mediaUrl || undefined });
   await atualizarConversa(conversaId, escritorioId, { status: "aguardando" });
 
   // Notificar via SSE APENAS:

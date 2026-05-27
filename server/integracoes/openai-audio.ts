@@ -43,6 +43,7 @@ export async function transcreverAudioOpenAI(apiKey: string, fonteMedia: string)
     const form = new FormData();
     form.append("file", new Blob([new Uint8Array(bytes)]), nomeArquivoDe(fonteMedia));
     form.append("model", "whisper-1");
+    form.append("response_format", "verbose_json");
     const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}` },
@@ -54,8 +55,14 @@ export async function transcreverAudioOpenAI(apiKey: string, fonteMedia: string)
       log.warn({ status: res.status, t: t.slice(0, 200) }, "Whisper: API retornou erro");
       return null;
     }
-    const data = (await res.json()) as { text?: string };
-    return (data.text || "").trim() || null;
+    const data = (await res.json()) as { text?: string; duration?: number };
+    const texto = (data.text || "").trim();
+    // Visibilidade de custo: Whisper cobra ~US$ 0,006/min. Loga duração + estimativa.
+    if (data.duration) {
+      const custoUsd = (data.duration / 60) * 0.006;
+      log.info({ duracaoSeg: Math.round(data.duration), custoUsd: custoUsd.toFixed(4) }, "Whisper: transcrição concluída");
+    }
+    return texto || null;
   } catch (e: any) {
     log.warn({ err: e?.message }, "Whisper: chamada falhou");
     return null;
