@@ -37,8 +37,11 @@ FROM node:22-slim
 #  vs alternativa anterior (mammoth+chromium) que perdia logos.
 # fonts-liberation + dejavu: cobrem fontes comuns em docs jurídicos
 #  brasileiros (Times, Arial substitutos via Liberation, DejaVu).
+# ffmpeg: converte nota de voz webm/opus (Chrome) → ogg/opus mono, único
+#  formato de áudio que a WhatsApp Cloud API aceita como nota de voz.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     mariadb-client \
+    ffmpeg \
     ca-certificates \
     libnss3 \
     libnspr4 \

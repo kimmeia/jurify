@@ -1231,6 +1231,7 @@ function AudioRecordButton({ onSend }: { onSend: (args: EnvioComposer) => void }
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const canceladoRef = useRef(false);
+  const inicioRef = useRef(0);
 
   const uploadMut = (trpc as any).upload.enviar.useMutation();
 
@@ -1269,7 +1270,7 @@ function AudioRecordButton({ onSend }: { onSend: (args: EnvioComposer) => void }
 
       rec.ondataavailable = (ev) => { if (ev.data && ev.data.size > 0) chunksRef.current.push(ev.data); };
       rec.onstop = async () => {
-        const dur = duracao;
+        const dur = Math.max(1, Math.round((Date.now() - inicioRef.current) / 1000));
         if (canceladoRef.current) { limparTudo(); setEstado("idle"); return; }
         const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
         if (blob.size < 800) { // áudio com menos de ~0.5s vira lixo
@@ -1296,6 +1297,7 @@ function AudioRecordButton({ onSend }: { onSend: (args: EnvioComposer) => void }
       };
 
       rec.start();
+      inicioRef.current = Date.now();
       setDuracao(0);
       setEstado("gravando");
       timerRef.current = setInterval(() => {
