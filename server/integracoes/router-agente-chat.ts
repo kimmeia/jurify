@@ -53,6 +53,16 @@ const ALLOWED_MIMES = [
   "text/markdown",
   "text/csv",
   "application/json",
+  // Imagem (Vision, nativo) e áudio (Whisper) — testar a IA multimodal aqui.
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "audio/ogg",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/wav",
+  "audio/webm",
 ];
 // MIMEs cujo conteúdo entra no contexto da IA (texto puro só)
 const TEXT_EXTRACTABLE_MIMES = new Set([
@@ -418,12 +428,13 @@ export const agenteChatRouter = router({
       let anexoNome: string | null = null;
       let anexoMime: string | null = null;
       let anexoConteudo: string | null = null;
+      let imagemAnexo: { base64: string; mime: string } | null = null;
 
       if (input.anexo) {
         const mimeType = input.anexo.tipo.split(";")[0].trim();
         if (!ALLOWED_MIMES.includes(mimeType)) {
           throw new Error(
-            `Tipo não permitido: ${mimeType}. Aceitos: PDF, DOCX, TXT, MD, CSV, JSON.`,
+            `Tipo não permitido: ${mimeType}. Aceitos: PDF, DOCX, TXT, MD, CSV, JSON, imagem e áudio.`,
           );
         }
         let base64Data = input.anexo.base64;
@@ -449,9 +460,24 @@ export const agenteChatRouter = router({
         anexoNome = input.anexo.nome.replace(/[^a-zA-Z0-9._\- ]/g, "_").slice(0, 200);
         anexoMime = mimeType;
 
-        // Extração best-effort de texto pra alimentar o contexto da IA.
-        // PDF/TXT/MD/CSV/JSON suportados; DOCX fica só como anexo.
-        anexoConteudo = await extrairTextoAnexo(mimeType, buffer);
+        // Imagem → vai NATIVA pro modelo (Vision). Áudio → transcrição (Whisper,
+        // usa a chave OpenAI do card do ChatGPT). Demais → extração de texto.
+        if (mimeType.startsWith("image/")) {
+          imagemAnexo = { base64: base64Data, mime: mimeType };
+        } else if (mimeType.startsWith("audio/")) {
+          const { obterConfigIAMedia } = await import("./config-ia-media");
+          const cfgMedia = await obterConfigIAMedia(esc.escritorio.id);
+          if (cfgMedia?.openaiApiKey) {
+            const { transcreverAudioOpenAI } = await import("./openai-audio");
+            const tx = await transcreverAudioOpenAI(cfgMedia.openaiApiKey, anexoUrl);
+            if (tx) anexoConteudo = `[Transcrição do áudio]\n${tx}`;
+          }
+          if (!anexoConteudo) {
+            anexoConteudo = "[Áudio anexado — configure a chave OpenAI no card do ChatGPT para transcrever]";
+          }
+        } else {
+          anexoConteudo = await extrairTextoAnexo(mimeType, buffer);
+        }
       }
 
       // ── Salva mensagem do usuário ──
@@ -537,6 +563,8 @@ export const agenteChatRouter = router({
             ultimaUser?.content || input.conteudo,
             maxTokens,
             temperatura,
+            undefined,
+            imagemAnexo ?? undefined,
           );
           if (r.erro || !r.resposta) {
             throw new Error(r.erro || "Claude não retornou resposta");
@@ -544,6 +572,18 @@ export const agenteChatRouter = router({
           respostaTexto = r.resposta;
           tokensUsados = r.tokensUsados;
         } else {
+          const openaiMsgs: any[] = [
+            { role: "system", content: systemPrompt },
+            ...messagesForLLM.filter((m) => m.role !== "system"),
+          ];
+          // Vision nativo: anexa a imagem na última mensagem do usuário.
+          if (imagemAnexo && openaiMsgs.length > 1) {
+            const ult = openaiMsgs[openaiMsgs.length - 1];
+            ult.content = [
+              { type: "text", text: ult.content },
+              { type: "image_url", image_url: { url: `data:${imagemAnexo.mime};base64,${imagemAnexo.base64}` } },
+            ];
+          }
           const res = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -552,10 +592,7 @@ export const agenteChatRouter = router({
             },
             body: JSON.stringify(montarBodyOpenAIChat({
               model: agente.modelo,
-              messages: [
-                { role: "system", content: systemPrompt },
-                ...messagesForLLM.filter((m) => m.role !== "system"),
-              ],
+              messages: openaiMsgs,
               temperatura,
               maxTokens,
             })),

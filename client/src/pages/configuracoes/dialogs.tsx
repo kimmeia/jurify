@@ -1149,7 +1149,7 @@ export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClo
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-medium">Ler imagens (Vision)</p>
-                <p className="text-[10px] text-muted-foreground leading-snug">O agente enxerga fotos enviadas (documentos, mandados) e responde sobre elas.</p>
+                <p className="text-[10px] text-muted-foreground leading-snug">O agente enxerga fotos enviadas (documentos, mandados) e responde sobre elas. Requer um modelo com visão (gpt-4o, gpt-4.1 ou Claude com visão).</p>
               </div>
               <Switch
                 checked={!!flagsIA?.visionAtivo}
