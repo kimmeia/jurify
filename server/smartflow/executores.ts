@@ -522,14 +522,20 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
       const cfg = await obterAgentePorId(escritorioId, params.agenteId);
       if (!cfg) throw new Error(`Agente ${params.agenteId} não encontrado, inativo ou sem API key configurada.`);
 
-      const ferramentas = (params.ferramentas || []).filter((f) => typeof f === "string" && f.trim());
+      const ferramentasBuiltin = (params.ferramentas || []).filter((f) => typeof f === "string" && f.trim());
       const consultas = (params.consultas || []).filter((c) => typeof c === "string" && c.trim());
+      const acoesCustom = (params.acoesCustom || []).filter((a) => a && typeof a.nome === "string" && a.nome.trim());
+      // Ferramentas efetivas = builtin habilitadas + ações customizadas (mesmo
+      // mecanismo: o agente emite o nome e o fluxo roteia por proximoSe[nome]).
+      const ferramentas = [...ferramentasBuiltin, ...acoesCustom.map((a) => a.nome.trim())];
       const DESC_ACAO: Record<string, string> = {
         agendar: "o cliente confirmou um horário e você vai marcar. OBRIGATÓRIO: preencha `quando` com a data/hora ISO EXATA que ele escolheu, copiada de um dos horários ISO que você ofereceu (ex: \"2026-05-27T14:00:00-03:00\"). Sem isso o sistema marca no horário errado",
         transferir: "o cliente pediu falar com um humano OU você não consegue resolver",
         encerrar: "a conversa terminou (cliente se despediu ou não quer mais nada)",
         gerar_cobranca: "é o momento de gerar uma cobrança/pagamento pro cliente",
         buscar_processo: "o cliente quer saber de um processo dele e é preciso consultar",
+        // Ações customizadas do usuário: a descrição é o "use quando…" que ele escreveu.
+        ...Object.fromEntries(acoesCustom.map((a) => [a.nome.trim(), (a.descricao || "").trim() || a.nome.trim()])),
       };
       const DESC_CONSULTA: Record<string, string> = {
         ver_horarios: "precisa saber os horários livres pra oferecer ao cliente (use ANTES de agendar)",
@@ -548,6 +554,7 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
         `AÇÕES (encerram seu turno e seguem o fluxo):\n${lista(DESC_ACAO, ferramentas)}`,
         "Quando precisar de um dado (ex: horários), dispare a CONSULTA correspondente AGORA, no MESMO turno. NUNCA responda só \"um momento\"/\"vou verificar\" e pare — isso deixa o cliente esperando sem resposta. Ofereça apenas horários que a consulta retornou; se o cliente pedir um dia que não está na lista, diga quais dias você tem (não invente nem prometa checar separado).",
         "REGRA DAS AÇÕES (siga à risca): o padrão é acao=null — continue conversando. Só preencha `acao` quando a CONDIÇÃO daquela ação (descrita acima) estiver claramente satisfeita pela ÚLTIMA mensagem do cliente. NUNCA dispare uma ação na saudação, na 1ª troca, nem só porque ela está habilitada. Ex.: não use \"agendar\" enquanto o cliente não tiver escolhido/confirmado um horário; uma pergunta como \"você é advogado?\" ou \"tenho uma dúvida\" se responde conversando (acao=null), não agendando. Na dúvida, acao=null.",
+        "NÃO peça confirmação redundante: quando o cliente JÁ indicar um horário específico que está entre os que você ofereceu (ex: \"quinta às 10\", \"pode ser as 14h\"), dispare `agendar` DIRETO com esse horário em `quando` — dizer um horário da lista JÁ é a confirmação, não pergunte \"confirma?\" de novo. Só confirme se houver ambiguidade real (data sem hora, dois horários possíveis, ou horário fora dos que você ofereceu).",
         'Responda SEMPRE em JSON puro (sem markdown): {"resposta": "<mensagem pro cliente>", "acao": "<ação ou null>", "consulta": "<consulta ou null>", "quando": "<ISO do horário escolhido quando acao=agendar; senão null>"}',
       ].filter(Boolean).join("\n\n");
 
