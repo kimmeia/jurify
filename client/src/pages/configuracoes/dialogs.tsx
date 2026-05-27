@@ -1072,6 +1072,13 @@ export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClo
     onError: (e: any) => toast.error(e.message),
   });
 
+  const utils = trpc.useUtils();
+  const { data: flagsIA } = trpc.configuracoes.flagsIA.useQuery(undefined, { enabled: open });
+  const flagsMut = trpc.configuracoes.atualizarFlagsIA.useMutation({
+    onSuccess: () => { utils.configuracoes.flagsIA.invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const handleSalvar = () => {
     if (!apiKey || apiKey.trim().length < 20) { toast.error("Informe uma API Key válida (sk-...)"); return; }
     // Mantém o canal como "ChatGPT Bot" mas só com a key — os agentes herdam dela
@@ -1124,6 +1131,34 @@ export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClo
               Gere em <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline">platform.openai.com/api-keys</a>.
               A chave é criptografada (AES-256-GCM) antes de ir pro banco.
             </p>
+          </div>
+
+          <div className="space-y-2.5 rounded-lg border border-slate-200 p-3">
+            <p className="text-xs font-semibold flex items-center gap-1.5">🎙️ Recursos de mídia</p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-medium">Transcrever áudios (Whisper)</p>
+                <p className="text-[10px] text-muted-foreground leading-snug">Notas de voz do WhatsApp viram texto pro agente entender e responder.</p>
+              </div>
+              <Switch
+                checked={!!flagsIA?.whisperAtivo}
+                disabled={!conectado || !canEdit || flagsMut.isPending}
+                onCheckedChange={(v) => flagsMut.mutate({ whisperAtivo: v })}
+              />
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-medium">Ler imagens (Vision)</p>
+                <p className="text-[10px] text-muted-foreground leading-snug">O agente enxerga fotos enviadas (documentos, mandados) e responde sobre elas.</p>
+              </div>
+              <Switch
+                checked={!!flagsIA?.visionAtivo}
+                disabled={!conectado || !canEdit || flagsMut.isPending}
+                onCheckedChange={(v) => flagsMut.mutate({ visionAtivo: v })}
+              />
+            </div>
+            {!conectado && <p className="text-[10px] text-amber-600">Salve a chave da OpenAI primeiro para liberar estes recursos.</p>}
+            <p className="text-[10px] text-muted-foreground">Consome créditos da OpenAI (Whisper ~US$ 0,006/min; Vision usa um modelo com visão).</p>
           </div>
 
           <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 p-3 space-y-1">
