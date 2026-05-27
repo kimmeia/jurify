@@ -51,7 +51,28 @@ export async function resolverChaveIA(): Promise<AIKeys | null> {
   return null;
 }
 
+/**
+ * Resolve a chave priorizando a do CLIENTE (escritório): chave do agente /
+ * canal ChatGPT ou Claude que o escritório configurou em Apps externos. Sem
+ * chave própria, cai na chave global da plataforma (admin) — assim quem
+ * configura passa a pagar o próprio uso, e quem não tem continua funcionando.
+ */
+export async function resolverChaveIAEscritorio(escritorioId?: number): Promise<AIKeys | null> {
+  if (escritorioId) {
+    try {
+      const { resolverAPIKey } = await import("../integracoes/router-agentes-ia");
+      const r = await resolverAPIKey(escritorioId, {}, undefined, { permitirGlobal: false });
+      if (r?.key) return { apiKey: r.key, provider: r.provider };
+    } catch (e) {
+      log.warn({ e: String(e), escritorioId }, "falha ao resolver chave do escritório — usando a global");
+    }
+  }
+  return resolverChaveIA();
+}
+
 export interface ChamadaIAOpts {
+  /** Escritório dono da chamada — usa a chave do cliente (fallback: global). */
+  escritorioId?: number;
   system: string;
   user: string;
   maxTokens?: number;
@@ -63,7 +84,7 @@ export interface ChamadaIAOpts {
 
 /** Chama o provedor configurado e devolve o texto. Lança se nenhum provedor disponível ou se a chamada falhar. */
 export async function chamarIA(opts: ChamadaIAOpts): Promise<string> {
-  const keys = await resolverChaveIA();
+  const keys = await resolverChaveIAEscritorio(opts.escritorioId);
   if (!keys) {
     throw new Error("Integração com IA não configurada. Configure OpenAI ou Anthropic em Admin → Integrações.");
   }

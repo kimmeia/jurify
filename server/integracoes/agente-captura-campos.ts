@@ -20,7 +20,7 @@ import {
   camposPersonalizadosCliente,
 } from "../../drizzle/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { chamarIA, parseJsonIA, resolverChaveIA } from "../_core/ai-call";
+import { chamarIA, parseJsonIA, resolverChaveIAEscritorio } from "../_core/ai-call";
 import { createLogger } from "../_core/logger";
 import { parseAgenteVariaveis, type AgenteVariavel } from "../../shared/agente-variaveis-types";
 
@@ -210,7 +210,7 @@ export async function extrairECaptarCampos(opts: {
     if (variaveisPendentes.length === 0) return [];
 
     // 5. Resolve chave de IA — se não tem, pula sem erro
-    const chaveIA = await resolverChaveIA();
+    const chaveIA = await resolverChaveIAEscritorio(opts.escritorioId);
     if (!chaveIA) return [];
 
     // 6. Prompt de extração estruturada — usa o atributo da variável como chave
@@ -237,6 +237,7 @@ export async function extrairECaptarCampos(opts: {
     const diaSemanaHoje = diasSemana[hoje.getDay()];
 
     const raw = await chamarIA({
+      escritorioId: opts.escritorioId,
       json: true,
       maxTokens: 400,
       temperature: 0.1,
