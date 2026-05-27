@@ -97,9 +97,11 @@ export function montarComponentesEnvio(opts: {
 export class WhatsAppCloudClient {
   private api: AxiosInstance;
   private phoneNumberId: string;
+  private accessToken: string;
 
   constructor(config: WACloudConfig) {
     this.phoneNumberId = config.phoneNumberId;
+    this.accessToken = config.accessToken;
     this.api = axios.create({
       baseURL: GRAPH_API,
       headers: {
@@ -174,6 +176,49 @@ export class WhatsAppCloudClient {
       audio: { link: audioUrl },
     });
     return res.data?.messages?.[0]?.id || "";
+  }
+
+  /**
+   * Sobe mídia pro endpoint /media e devolve o media_id. Enviar por id (em vez
+   * de `link`) evita depender de uma URL pública — o servidor manda os bytes
+   * direto pra Meta. Usa um POST próprio porque o multipart precisa do boundary
+   * que o axios calcula do FormData; a instância padrão força JSON.
+   */
+  async uploadMedia(buffer: Buffer, mime: string, filename: string): Promise<string> {
+    const form = new FormData();
+    form.append("messaging_product", "whatsapp");
+    form.append("file", new Blob([new Uint8Array(buffer)], { type: mime }), filename);
+    const res = await axios.post(`${GRAPH_API}/${this.phoneNumberId}/media`, form, {
+      headers: { Authorization: `Bearer ${this.accessToken}` },
+      timeout: 30_000,
+      maxBodyLength: Infinity,
+    });
+    return res.data?.id || "";
+  }
+
+  private async enviarMidiaPorId(telefone: string, payload: Record<string, unknown>): Promise<string> {
+    const res = await this.api.post(`/${this.phoneNumberId}/messages`, {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: telefone.replace(/\D/g, ""),
+      ...payload,
+    });
+    return res.data?.messages?.[0]?.id || "";
+  }
+
+  /** Enviar áudio (nota de voz) por media_id já carregado via uploadMedia. */
+  async enviarAudioPorId(telefone: string, mediaId: string): Promise<string> {
+    return this.enviarMidiaPorId(telefone, { type: "audio", audio: { id: mediaId } });
+  }
+
+  /** Enviar imagem por media_id. */
+  async enviarImagemPorId(telefone: string, mediaId: string, caption?: string): Promise<string> {
+    return this.enviarMidiaPorId(telefone, { type: "image", image: { id: mediaId, caption } });
+  }
+
+  /** Enviar documento por media_id. */
+  async enviarDocumentoPorId(telefone: string, mediaId: string, filename: string, caption?: string): Promise<string> {
+    return this.enviarMidiaPorId(telefone, { type: "document", document: { id: mediaId, filename, caption } });
   }
 
   /** Marcar mensagem como lida */
