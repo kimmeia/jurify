@@ -265,6 +265,51 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  // Prova ponta-a-ponta do caso do dono: agente captura "agendarAtendimento=SIM"
+  // → uma Condição lendo `cliente.campos.agendarAtendimento` ramifica pro TESTE OK.
+  // A contra-prova mostra que o caminho ERRADO ({{agendarAtendimento}} solto) cai
+  // no fallback — exatamente o bug que ele via.
+  describe("captura do agente → cliente.campos → Condição ramifica (caso real)", () => {
+    const cenario = (campoDaCondicao: string): Passo[] => [
+      { id: 1, ordem: 1, tipo: "ia_responder", clienteId: "ia", proximoSe: { default: "cond" }, config: { agenteId: 6 } },
+      {
+        id: 2, ordem: 2, tipo: "condicional", clienteId: "cond",
+        proximoSe: { cond_quer: "sim", fallback: "nao" },
+        config: { condicoes: [{ id: "quer", campo: campoDaCondicao, operador: "igual", valor: "SIM" }] },
+      },
+      { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "sim", config: { template: "TESTE OK" } },
+      { id: 4, ordem: 4, tipo: "whatsapp_enviar", clienteId: "nao", config: { template: "(nao quer)" } },
+    ];
+
+    it("caminho CERTO: cliente.campos.agendarAtendimento == SIM → dispara TESTE OK no mesmo disparo", async () => {
+      const executarAgente = vi.fn().mockResolvedValue("Perfeito, vou anotar seu interesse!");
+      // Simula a captura real (extrairECaptarCampos → out[chave]=valor → ctx.cliente.campos[chave]).
+      const extrairCamposDoAgente = vi.fn().mockResolvedValue({ agendarAtendimento: "SIM" });
+      const exec = criarMockExecutores({ executarAgente, extrairCamposDoAgente });
+
+      // contatoId + conversaId são obrigatórios pra captura rodar (engine.ts:843).
+      const r = await executarCenario(cenario("cliente.campos.agendarAtendimento"), { mensagem: "QUERO", contatoId: 5, conversaId: 9 }, exec);
+
+      expect(extrairCamposDoAgente).toHaveBeenCalledWith(6, 5, 9);
+      expect((r.contexto.cliente as any).campos).toMatchObject({ agendarAtendimento: "SIM" });
+      expect(r.respostas).toContain("Perfeito, vou anotar seu interesse!");
+      expect(r.respostas).toContain("TESTE OK");
+      expect(r.respostas).not.toContain("(nao quer)");
+    });
+
+    it("contra-prova: caminho ERRADO (agendarAtendimento solto, sem cliente.campos) cai no fallback", async () => {
+      const executarAgente = vi.fn().mockResolvedValue("ok");
+      const extrairCamposDoAgente = vi.fn().mockResolvedValue({ agendarAtendimento: "SIM" });
+      const exec = criarMockExecutores({ executarAgente, extrairCamposDoAgente });
+
+      const r = await executarCenario(cenario("agendarAtendimento"), { mensagem: "QUERO", contatoId: 5, conversaId: 9 }, exec);
+
+      // Mesmo com o valor capturado, a Condição no caminho raiz não acha → fallback.
+      expect(r.respostas).toContain("(nao quer)");
+      expect(r.respostas).not.toContain("TESTE OK");
+    });
+  });
+
   describe("ia_consultar (consulta interna — NÃO envia ao cliente)", () => {
     it("salva a resposta no campo escolhido e NÃO manda pro cliente", async () => {
       const chamarIA = vi.fn().mockResolvedValue("Sugiro terça 14h, quarta 10h e quinta 16h.");
@@ -1292,6 +1337,47 @@ describe("SmartFlow Engine", () => {
       expect(executarConsulta).toHaveBeenCalledTimes(2);
       expect(r.acao).toBeNull();
     });
+
+    it("anti-stall: 'um momento, vou verificar' SEM consulta → força a consulta e entrega o resultado", async () => {
+      const chamarLLM = vi.fn()
+        .mockResolvedValueOnce('{"resposta":"Só um momento, vou verificar os horários!","acao":null,"consulta":null}')
+        .mockResolvedValueOnce('{"resposta":"checando","acao":null,"consulta":"ver_horarios"}')
+        .mockResolvedValueOnce('{"resposta":"Tenho quinta 10h e 11h, qual prefere?","acao":null}');
+      const executarConsulta = vi.fn().mockResolvedValue("quinta 10h, 11h");
+      const r = await orquestrarAtendente({ ...base, chamarLLM, executarConsulta });
+      // o stall foi cutucado (chamada extra) e a consulta acabou disparando
+      expect(executarConsulta).toHaveBeenCalledWith("ver_horarios");
+      expect(chamarLLM).toHaveBeenCalledTimes(3);
+      expect(chamarLLM.mock.calls[1][0]).toContain("não disparou nenhuma consulta");
+      expect(r.resposta).toContain("quinta");
+    });
+
+    it("anti-stall NÃO dispara em resposta normal (sem cara de adiamento)", async () => {
+      const chamarLLM = vi.fn().mockResolvedValue('{"resposta":"Claro! Em que posso ajudar?","acao":null,"consulta":null}');
+      const executarConsulta = vi.fn();
+      const r = await orquestrarAtendente({ ...base, chamarLLM, executarConsulta });
+      expect(executarConsulta).not.toHaveBeenCalled();
+      expect(chamarLLM).toHaveBeenCalledTimes(1);
+      expect(r.resposta).toContain("Claro");
+    });
+
+    it("anti-stall só quando há consulta habilitada (sem consultas → 'um momento' é resposta legítima)", async () => {
+      const chamarLLM = vi.fn().mockResolvedValue('{"resposta":"Um momento, vou verificar!","acao":null,"consulta":null}');
+      const executarConsulta = vi.fn();
+      const r = await orquestrarAtendente({ ferramentas: [], consultas: [], chamarLLM, executarConsulta });
+      expect(executarConsulta).not.toHaveBeenCalled();
+      expect(chamarLLM).toHaveBeenCalledTimes(1);
+    });
+
+    it("anti-stall cutuca só UMA vez (não trava se o modelo insistir no adiamento)", async () => {
+      const chamarLLM = vi.fn().mockResolvedValue('{"resposta":"um momento, vou verificar","acao":null,"consulta":null}');
+      const executarConsulta = vi.fn();
+      const r = await orquestrarAtendente({ ...base, chamarLLM, executarConsulta, maxRodadas: 3 });
+      // cutuca 1x; o modelo insiste, mas não há loop infinito — encerra com resposta
+      expect(executarConsulta).not.toHaveBeenCalled();
+      expect(r.acao).toBeNull();
+      expect(typeof r.resposta).toBe("string");
+    });
   });
 
   describe("ia_atendente (Atendente IA com ferramentas)", () => {
@@ -1349,6 +1435,41 @@ describe("SmartFlow Engine", () => {
       expect(r.respostas).toContain("AGENDOU");
       expect(r.respostas).not.toContain("TRANSFERIU");
       expect(r.contexto.aguardandoMensagem).toBeFalsy();
+    });
+
+    it("ação CUSTOMIZADA → roteia pela saída do nome custom (encadeia etapas)", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Tenho seus dados!", acao: "dados_ok" });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "ia_atendente", clienteId: "etapa1",
+          config: { agenteId: 7, ferramentas: ["transferir"], acoesCustom: [{ nome: "dados_ok", descricao: "já coletou nome, caso e telefone" }] },
+          proximoSe: { dados_ok: "etapa2", transferir: "t" },
+        },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "etapa2", config: { template: "PROXIMA ETAPA" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "t", config: { template: "TRANSFERIU" } },
+      ];
+      const r = await executarCenario(passos, { ...ctxBase, mensagem: "joão, divórcio, 11999" }, exec);
+      expect(r.respostas).toContain("Tenho seus dados!");
+      expect(r.respostas).toContain("PROXIMA ETAPA"); // roteou pela ação custom
+      expect(r.respostas).not.toContain("TRANSFERIU");
+      expect(r.contexto.aguardandoMensagem).toBeFalsy(); // ação não pausa
+      // o handler repassa as ações custom pro agente (pra ele saber que existem)
+      expect(conversarComAgente).toHaveBeenCalledWith(expect.objectContaining({
+        acoesCustom: [{ nome: "dados_ok", descricao: "já coletou nome, caso e telefone" }],
+      }));
+    });
+
+    it("guarda do handler: ação que NÃO existe (builtin nem custom) → não roteia, pausa normal", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "oi", acao: "inventada" });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_atendente", clienteId: "at", config: { agenteId: 7, ferramentas: [], acoesCustom: [{ nome: "dados_ok", descricao: "x" }] }, proximoSe: { dados_ok: "a" } },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "a", config: { template: "NAO DEVE" } },
+      ];
+      const r = await executarCenario(passos, { ...ctxBase }, exec);
+      expect(r.respostas).not.toContain("NAO DEVE");
+      expect(r.contexto.aguardandoMensagem).toBe(true);
     });
 
     it("ação agendar com `quando` → grava agendamentoQuando (pro bloco de Agendamento usar a data)", async () => {
