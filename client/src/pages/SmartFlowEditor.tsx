@@ -1364,16 +1364,20 @@ function SmartFlowEditorInner() {
    * passos. O passo escolhido é criado na posição do mouse e conectado
    * automaticamente ao handle de origem.
    */
-  const onConnectEnd = useCallback<OnConnectEnd>((ev) => {
+  const onConnectEnd = useCallback<OnConnectEnd>((ev, connectionState) => {
     const source = conexaoPendenteRef.current;
     conexaoPendenteRef.current = null;
     if (!source) return;
 
-    const target = (ev.target as HTMLElement | null) ?? null;
-    // `react-flow__pane` é o fundo do canvas; qualquer outro alvo significa
-    // que o drop foi em cima de um handle/nó — deixamos o fluxo normal
-    // do ReactFlow tratar.
-    if (!target || !target.classList?.contains("react-flow__pane")) return;
+    // React Flow v12: `isValid` é true só quando a conexão termina sobre um
+    // handle/nó alvo válido — aí o `onConnect` já cria a aresta e não fazemos
+    // nada aqui. Em qualquer outro caso (soltou no canvas vazio ou em alvo
+    // inválido) abrimos o menu pra criar um novo bloco já conectado à origem.
+    //
+    // Antes a detecção era `ev.target.classList.contains("react-flow__pane")`,
+    // mas em v12 o alvo do evento de soltura nem sempre é o pane — então
+    // arrastar a bolinha pro vazio não abria o menu e "não fazia nada".
+    if (connectionState?.isValid) return;
 
     const x = "clientX" in ev ? ev.clientX : (ev as TouchEvent).changedTouches?.[0]?.clientX ?? 0;
     const y = "clientY" in ev ? ev.clientY : (ev as TouchEvent).changedTouches?.[0]?.clientY ?? 0;
