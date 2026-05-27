@@ -265,6 +265,51 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  // Prova ponta-a-ponta do caso do dono: agente captura "agendarAtendimento=SIM"
+  // → uma Condição lendo `cliente.campos.agendarAtendimento` ramifica pro TESTE OK.
+  // A contra-prova mostra que o caminho ERRADO ({{agendarAtendimento}} solto) cai
+  // no fallback — exatamente o bug que ele via.
+  describe("captura do agente → cliente.campos → Condição ramifica (caso real)", () => {
+    const cenario = (campoDaCondicao: string): Passo[] => [
+      { id: 1, ordem: 1, tipo: "ia_responder", clienteId: "ia", proximoSe: { default: "cond" }, config: { agenteId: 6 } },
+      {
+        id: 2, ordem: 2, tipo: "condicional", clienteId: "cond",
+        proximoSe: { cond_quer: "sim", fallback: "nao" },
+        config: { condicoes: [{ id: "quer", campo: campoDaCondicao, operador: "igual", valor: "SIM" }] },
+      },
+      { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "sim", config: { template: "TESTE OK" } },
+      { id: 4, ordem: 4, tipo: "whatsapp_enviar", clienteId: "nao", config: { template: "(nao quer)" } },
+    ];
+
+    it("caminho CERTO: cliente.campos.agendarAtendimento == SIM → dispara TESTE OK no mesmo disparo", async () => {
+      const executarAgente = vi.fn().mockResolvedValue("Perfeito, vou anotar seu interesse!");
+      // Simula a captura real (extrairECaptarCampos → out[chave]=valor → ctx.cliente.campos[chave]).
+      const extrairCamposDoAgente = vi.fn().mockResolvedValue({ agendarAtendimento: "SIM" });
+      const exec = criarMockExecutores({ executarAgente, extrairCamposDoAgente });
+
+      // contatoId + conversaId são obrigatórios pra captura rodar (engine.ts:843).
+      const r = await executarCenario(cenario("cliente.campos.agendarAtendimento"), { mensagem: "QUERO", contatoId: 5, conversaId: 9 }, exec);
+
+      expect(extrairCamposDoAgente).toHaveBeenCalledWith(6, 5, 9);
+      expect((r.contexto.cliente as any).campos).toMatchObject({ agendarAtendimento: "SIM" });
+      expect(r.respostas).toContain("Perfeito, vou anotar seu interesse!");
+      expect(r.respostas).toContain("TESTE OK");
+      expect(r.respostas).not.toContain("(nao quer)");
+    });
+
+    it("contra-prova: caminho ERRADO (agendarAtendimento solto, sem cliente.campos) cai no fallback", async () => {
+      const executarAgente = vi.fn().mockResolvedValue("ok");
+      const extrairCamposDoAgente = vi.fn().mockResolvedValue({ agendarAtendimento: "SIM" });
+      const exec = criarMockExecutores({ executarAgente, extrairCamposDoAgente });
+
+      const r = await executarCenario(cenario("agendarAtendimento"), { mensagem: "QUERO", contatoId: 5, conversaId: 9 }, exec);
+
+      // Mesmo com o valor capturado, a Condição no caminho raiz não acha → fallback.
+      expect(r.respostas).toContain("(nao quer)");
+      expect(r.respostas).not.toContain("TESTE OK");
+    });
+  });
+
   describe("ia_consultar (consulta interna — NÃO envia ao cliente)", () => {
     it("salva a resposta no campo escolhido e NÃO manda pro cliente", async () => {
       const chamarIA = vi.fn().mockResolvedValue("Sugiro terça 14h, quarta 10h e quinta 16h.");
