@@ -2501,6 +2501,15 @@ function ConfigIaAtendenteFields({
           <Checkbox checked={consultas.includes("ver_horarios")} onCheckedChange={(v) => toggleConsulta("ver_horarios", v === true)} />
           <span>Ver horários livres da agenda</span>
         </label>
+        <label className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs mt-1">
+          <Checkbox checked={consultas.includes("ver_acoes_cliente")} onCheckedChange={(v) => toggleConsulta("ver_acoes_cliente", v === true)} />
+          <span>Casos/processos do cliente</span>
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs mt-1">
+          <Checkbox checked={consultas.includes("ver_valor_aberto")} onCheckedChange={(v) => toggleConsulta("ver_valor_aberto", v === true)} />
+          <span>Valor em aberto (financeiro)</span>
+        </label>
+        <p className="text-[10px] text-muted-foreground mt-1">São <strong>fontes de dados do sistema</strong> — o agente busca e responde na hora (não viram saída). Precisam do cliente identificado no cadastro.</p>
         {consultas.includes("ver_horarios") && (
           <div className="mt-2 space-y-2 rounded border border-cyan-200 dark:border-cyan-900 bg-cyan-50/50 dark:bg-cyan-950/20 p-2">
             <div>
