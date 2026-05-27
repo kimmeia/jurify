@@ -231,6 +231,14 @@ export interface ConfigIaAtendente {
   roteiro?: string;
   /** Ferramentas (ações) habilitadas — cada uma é uma saída do nó. */
   ferramentas?: FerramentaAtendente[];
+  /**
+   * Ações CUSTOMIZADAS definidas pelo usuário. Cada uma vira uma saída do nó
+   * (igual às ferramentas builtin), mas com nome/descrição livres — o agente
+   * dispara quando a `descricao` ("use quando…") for satisfeita. Permite
+   * encadear etapas (ex: "dados_ok" → próxima etapa) e disparar QUALQUER bloco.
+   * O `nome` é a chave do `proximoSe` (sem espaços; ex: "dados_ok").
+   */
+  acoesCustom?: Array<{ nome: string; descricao: string }>;
   /** Consultas (busca-e-volta) habilitadas — NÃO viram saída; voltam pro agente. */
   consultas?: ConsultaAtendente[];
   /**

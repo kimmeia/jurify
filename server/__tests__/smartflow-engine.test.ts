@@ -1437,6 +1437,41 @@ describe("SmartFlow Engine", () => {
       expect(r.contexto.aguardandoMensagem).toBeFalsy();
     });
 
+    it("ação CUSTOMIZADA → roteia pela saída do nome custom (encadeia etapas)", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Tenho seus dados!", acao: "dados_ok" });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "ia_atendente", clienteId: "etapa1",
+          config: { agenteId: 7, ferramentas: ["transferir"], acoesCustom: [{ nome: "dados_ok", descricao: "já coletou nome, caso e telefone" }] },
+          proximoSe: { dados_ok: "etapa2", transferir: "t" },
+        },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "etapa2", config: { template: "PROXIMA ETAPA" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "t", config: { template: "TRANSFERIU" } },
+      ];
+      const r = await executarCenario(passos, { ...ctxBase, mensagem: "joão, divórcio, 11999" }, exec);
+      expect(r.respostas).toContain("Tenho seus dados!");
+      expect(r.respostas).toContain("PROXIMA ETAPA"); // roteou pela ação custom
+      expect(r.respostas).not.toContain("TRANSFERIU");
+      expect(r.contexto.aguardandoMensagem).toBeFalsy(); // ação não pausa
+      // o handler repassa as ações custom pro agente (pra ele saber que existem)
+      expect(conversarComAgente).toHaveBeenCalledWith(expect.objectContaining({
+        acoesCustom: [{ nome: "dados_ok", descricao: "já coletou nome, caso e telefone" }],
+      }));
+    });
+
+    it("guarda do handler: ação que NÃO existe (builtin nem custom) → não roteia, pausa normal", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "oi", acao: "inventada" });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_atendente", clienteId: "at", config: { agenteId: 7, ferramentas: [], acoesCustom: [{ nome: "dados_ok", descricao: "x" }] }, proximoSe: { dados_ok: "a" } },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "a", config: { template: "NAO DEVE" } },
+      ];
+      const r = await executarCenario(passos, { ...ctxBase }, exec);
+      expect(r.respostas).not.toContain("NAO DEVE");
+      expect(r.contexto.aguardandoMensagem).toBe(true);
+    });
+
     it("ação agendar com `quando` → grava agendamentoQuando (pro bloco de Agendamento usar a data)", async () => {
       const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Agendado!", acao: "agendar", quando: "2026-05-27T14:00:00-03:00" });
       const exec = criarMockExecutores({ conversarComAgente });

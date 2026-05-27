@@ -308,8 +308,13 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
   const condicoes = isCondicional && Array.isArray((data.config as any).condicoes)
     ? ((data.config as any).condicoes as Array<{ id: string; label?: string }>)
     : [];
-  const ferramentasAtendente = data.tipo === "ia_atendente" && Array.isArray((data.config as any).ferramentas)
-    ? ((data.config as any).ferramentas as string[])
+  const ferramentasAtendente = data.tipo === "ia_atendente"
+    ? [
+        ...(Array.isArray((data.config as any).ferramentas) ? ((data.config as any).ferramentas as string[]) : []),
+        ...(Array.isArray((data.config as any).acoesCustom)
+          ? ((data.config as any).acoesCustom as Array<{ nome?: string }>).map((a) => (a?.nome || "").trim()).filter(Boolean)
+          : []),
+      ]
     : [];
 
   return (
@@ -2383,6 +2388,12 @@ function ConfigIaAtendenteFields({
     const atual = String(cfg.roteiro || "");
     onChange({ roteiro: atual + (atual ? " " : "") + `{{${path}}}` });
   };
+  const acoesCustom: Array<{ nome: string; descricao: string }> = Array.isArray(cfg.acoesCustom)
+    ? (cfg.acoesCustom as Array<{ nome: string; descricao: string }>)
+    : [];
+  const setAcoesCustom = (lista: Array<{ nome: string; descricao: string }>) => onChange({ acoesCustom: lista });
+  const updateAcaoCustom = (i: number, patch: Partial<{ nome: string; descricao: string }>) =>
+    setAcoesCustom(acoesCustom.map((a, idx) => (idx === i ? { ...a, ...patch } : a)));
 
   return (
     <div className="space-y-3">
@@ -2437,6 +2448,51 @@ function ConfigIaAtendenteFields({
           ))}
         </div>
         <p className="text-[10px] text-muted-foreground mt-1">Cada ação marcada vira uma <strong>saída</strong> no bloco — ligue no que deve acontecer (ex: "Agendar" → bloco Agendamento). O agente só usa as marcadas.</p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Ações customizadas (suas)</Label>
+        <div className="space-y-2 mt-1">
+          {acoesCustom.map((a, i) => (
+            <div key={i} className="rounded border p-2 bg-muted/20 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <Input
+                  className="h-7 text-xs font-mono"
+                  value={a.nome ?? ""}
+                  onChange={(e) => updateAcaoCustom(i, { nome: e.target.value.toLowerCase().replace(/[^a-z0-9_]+/g, "_") })}
+                  placeholder="nome_da_acao (ex: dados_ok)"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-destructive shrink-0"
+                  onClick={() => setAcoesCustom(acoesCustom.filter((_, idx) => idx !== i))}
+                >
+                  Remover
+                </Button>
+              </div>
+              <Input
+                className="h-7 text-xs"
+                value={a.descricao ?? ""}
+                onChange={(e) => updateAcaoCustom(i, { descricao: e.target.value })}
+                placeholder='use quando… (ex: já coletou nome, caso e telefone)'
+              />
+            </div>
+          ))}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-2 h-7 text-xs"
+          onClick={() => setAcoesCustom([...acoesCustom, { nome: "", descricao: "" }])}
+        >
+          + Ação customizada
+        </Button>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Defina suas próprias ações — cada uma vira uma <strong>saída</strong> que você liga em QUALQUER bloco (outro Atendente IA, Kanban, webhook…). O <strong>nome</strong> é a chave; a <strong>descrição</strong> é o "use quando…" que o agente segue. Ótimo pra encadear etapas (ex: <code>dados_ok</code> → próxima etapa).
+        </p>
       </div>
 
       <div>

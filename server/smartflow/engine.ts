@@ -270,6 +270,8 @@ export interface SmartflowExecutores {
     agenteId: number;
     roteiro?: string;
     ferramentas: string[];
+    /** Ações customizadas (nome + "use quando…"). Viram saídas como as builtin. */
+    acoesCustom?: Array<{ nome: string; descricao: string }>;
     /** Consultas habilitadas (busca-e-volta), ex: ["ver_horarios"]. */
     consultas?: string[];
     /** Config das consultas (ex: responsável/duração/dias pra "ver_horarios"). */
@@ -1034,6 +1036,7 @@ async function handleIaAtendente(
     agenteId?: number;
     roteiro?: string;
     ferramentas?: string[];
+    acoesCustom?: Array<{ nome: string; descricao: string }>;
     consultas?: string[];
     consultaConfig?: { responsavelModo?: "auto" | "fixo"; responsavelId?: number; duracaoMin?: number; dias?: number };
     acumularSegundos?: number;
@@ -1043,6 +1046,11 @@ async function handleIaAtendente(
   }
   const acumularSegundos = Number(cfg.acumularSegundos) > 0 ? Math.floor(Number(cfg.acumularSegundos)) : 0;
   const ferramentas = Array.isArray(cfg.ferramentas) ? cfg.ferramentas.filter((f) => typeof f === "string") : [];
+  const acoesCustom = Array.isArray(cfg.acoesCustom)
+    ? cfg.acoesCustom.filter((a): a is { nome: string; descricao: string } => !!a && typeof a.nome === "string" && a.nome.trim().length > 0)
+    : [];
+  // Lista combinada (builtin + custom) — usada pra validar/rotear a ação escolhida.
+  const ferramentasTodas = [...ferramentas, ...acoesCustom.map((a) => a.nome.trim())];
   const consultas = Array.isArray(cfg.consultas) ? cfg.consultas.filter((c) => typeof c === "string") : [];
   // Mensagem do turno: a resposta nova (retomada) ou a 1ª mensagem.
   const mensagem = typeof ctx.respostaUsuario === "string" && ctx.respostaUsuario.trim()
@@ -1074,6 +1082,7 @@ async function handleIaAtendente(
       agenteId: cfg.agenteId,
       roteiro: cfg.roteiro,
       ferramentas,
+      acoesCustom,
       consultas,
       consultaConfig: consultaConfigResolvida,
       mensagem,
@@ -1112,8 +1121,8 @@ async function handleIaAtendente(
       }
     }
 
-    // Ação escolhida (e habilitada) → envia a resposta e sai pela ferramenta.
-    if (acao && ferramentas.includes(acao)) {
+    // Ação escolhida (e habilitada — builtin ou custom) → envia a resposta e sai pela saída.
+    if (acao && ferramentasTodas.includes(acao)) {
       const enviadas = novoCtx.mensagensEnviadas || [];
       return {
         sucesso: true,

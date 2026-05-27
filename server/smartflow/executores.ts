@@ -508,14 +508,20 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       const cfg = await obterAgentePorId(escritorioId, params.agenteId);
       if (!cfg) throw new Error(`Agente ${params.agenteId} não encontrado, inativo ou sem API key configurada.`);
 
-      const ferramentas = (params.ferramentas || []).filter((f) => typeof f === "string" && f.trim());
+      const ferramentasBuiltin = (params.ferramentas || []).filter((f) => typeof f === "string" && f.trim());
       const consultas = (params.consultas || []).filter((c) => typeof c === "string" && c.trim());
+      const acoesCustom = (params.acoesCustom || []).filter((a) => a && typeof a.nome === "string" && a.nome.trim());
+      // Ferramentas efetivas = builtin habilitadas + ações customizadas (mesmo
+      // mecanismo: o agente emite o nome e o fluxo roteia por proximoSe[nome]).
+      const ferramentas = [...ferramentasBuiltin, ...acoesCustom.map((a) => a.nome.trim())];
       const DESC_ACAO: Record<string, string> = {
         agendar: "o cliente confirmou um horário e você vai marcar. OBRIGATÓRIO: preencha `quando` com a data/hora ISO EXATA que ele escolheu, copiada de um dos horários ISO que você ofereceu (ex: \"2026-05-27T14:00:00-03:00\"). Sem isso o sistema marca no horário errado",
         transferir: "o cliente pediu falar com um humano OU você não consegue resolver",
         encerrar: "a conversa terminou (cliente se despediu ou não quer mais nada)",
         gerar_cobranca: "é o momento de gerar uma cobrança/pagamento pro cliente",
         buscar_processo: "o cliente quer saber de um processo dele e é preciso consultar",
+        // Ações customizadas do usuário: a descrição é o "use quando…" que ele escreveu.
+        ...Object.fromEntries(acoesCustom.map((a) => [a.nome.trim(), (a.descricao || "").trim() || a.nome.trim()])),
       };
       const DESC_CONSULTA: Record<string, string> = {
         ver_horarios: "precisa saber os horários livres pra oferecer ao cliente (use ANTES de agendar)",
