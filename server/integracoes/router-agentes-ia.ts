@@ -153,6 +153,7 @@ export async function resolverAPIKey(
   escritorioId: number,
   agenteAtual: any,
   providerPreferido?: string,
+  opts?: { permitirGlobal?: boolean },
 ): Promise<{ provider: "openai" | "anthropic"; key: string } | null> {
   // 1. Agente tem sua própria key. O nome do campo é `openaiApiKey` por
   // legado (quando só suportávamos OpenAI), mas o conteúdo é a key do
@@ -229,18 +230,22 @@ export async function resolverAPIKey(
     }
   }
 
-  // 4. Key admin global
-  try {
-    const [reg] = await db
-      .select()
-      .from(adminIntegracoes)
-      .where(eq(adminIntegracoes.provedor, "openai"))
-      .limit(1);
-    if (reg && reg.apiKeyEncrypted && reg.apiKeyIv && reg.apiKeyTag) {
-      return { provider: "openai", key: adminDecrypt(reg.apiKeyEncrypted, reg.apiKeyIv, reg.apiKeyTag) };
+  // 4. Key admin global — pulada quando o caller exige a chave do próprio
+  //    escritório (ex: recursos de atendimento, custeados pelo cliente quando
+  //    ele tem chave; ver resolverChaveIAEscritorio).
+  if (opts?.permitirGlobal !== false) {
+    try {
+      const [reg] = await db
+        .select()
+        .from(adminIntegracoes)
+        .where(eq(adminIntegracoes.provedor, "openai"))
+        .limit(1);
+      if (reg && reg.apiKeyEncrypted && reg.apiKeyIv && reg.apiKeyTag) {
+        return { provider: "openai", key: adminDecrypt(reg.apiKeyEncrypted, reg.apiKeyIv, reg.apiKeyTag) };
+      }
+    } catch (err) {
+      log.warn({ err: String(err) }, "Falha ao buscar key admin");
     }
-  } catch (err) {
-    log.warn({ err: String(err) }, "Falha ao buscar key admin");
   }
 
   return null;
