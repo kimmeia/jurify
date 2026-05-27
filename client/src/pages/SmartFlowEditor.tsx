@@ -377,7 +377,7 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
       )}
 
       {isCondicional ? (
-        <div className="border-t bg-muted/20 py-1">
+        <div className="border-t bg-muted/20 pt-1 pb-3">
           {condicoes.map((c, idx) => (
             <HandleRow
               key={c.id}
@@ -391,14 +391,14 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
       ) : data.tipo === "para_cada_item" ? (
         // Loop tem 2 saídas: "corpo" (subfluxo da iteração) e "depois"
         // (continuação após o loop terminar).
-        <div className="border-t bg-muted/20 py-1">
+        <div className="border-t bg-muted/20 pt-1 pb-3">
           <HandleRow handleId="corpo" label="🔁 corpo do loop" cor="#f59e0b" />
           <HandleRow handleId="depois" label="depois (terminou)" cor="#3b82f6" />
         </div>
       ) : data.tipo === "whatsapp_aguardar_resposta" ? (
         // Aguardar tem 2 saídas: "default" (respondeu) e "timeout" (não
         // respondeu no prazo — pra encerrar ou seguir outro caminho).
-        <div className="border-t bg-muted/20 py-1">
+        <div className="border-t bg-muted/20 pt-1 pb-3">
           <HandleRow handleId="default" label="respondeu →" cor="#22c55e" />
           <HandleRow handleId="timeout" label="não respondeu (tempo)" italic cor="#f59e0b" />
         </div>
@@ -406,7 +406,7 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
         // Atendente IA: uma saída por ferramenta habilitada. O agente decide
         // quando disparar cada uma; sem ferramenta, ele só conversa (sem saída).
         ferramentasAtendente.length > 0 ? (
-          <div className="border-t bg-muted/20 py-1">
+          <div className="border-t bg-muted/20 pt-1 pb-3">
             {ferramentasAtendente.map((f) => (
               <HandleRow key={f} handleId={f} label={FERRAMENTA_ATENDENTE_LABEL[f] || f} cor="#0ea5e9" />
             ))}
@@ -414,7 +414,7 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
         ) : null
       ) : data.tipo === "distribuir_atendimento" ? (
         // Distribuir: "atribuído" (achou atendente) e "sem atendente" (ninguém elegível).
-        <div className="border-t bg-muted/20 py-1">
+        <div className="border-t bg-muted/20 pt-1 pb-3">
           <HandleRow handleId="atribuido" label="atribuído →" cor="#14b8a6" />
           <HandleRow handleId="sem_atendente" label="sem atendente disponível" italic cor="#f59e0b" />
         </div>
@@ -1377,7 +1377,11 @@ function SmartFlowEditorInner() {
     // Antes a detecção era `ev.target.classList.contains("react-flow__pane")`,
     // mas em v12 o alvo do evento de soltura nem sempre é o pane — então
     // arrastar a bolinha pro vazio não abria o menu e "não fazia nada".
-    if (connectionState?.isValid) return;
+    // Só oferece criar um novo bloco quando soltou no VAZIO (sem nó alvo):
+    //  - isValid → o onConnect já criou a aresta;
+    //  - toNode preenchido (mas inválido) → soltou sobre um nó existente
+    //    errando o handle: cancela sem abrir menu (comportamento antigo).
+    if (connectionState?.isValid || connectionState?.toNode) return;
 
     const x = "clientX" in ev ? ev.clientX : (ev as TouchEvent).changedTouches?.[0]?.clientX ?? 0;
     const y = "clientY" in ev ? ev.clientY : (ev as TouchEvent).changedTouches?.[0]?.clientY ?? 0;
