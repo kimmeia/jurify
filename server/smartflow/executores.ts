@@ -10,6 +10,7 @@
 import { SmartflowExecutores } from "./engine";
 import { createLogger } from "../_core/logger";
 import { montarBodyOpenAIChat } from "../_core/openai-model-params";
+import type { ImagemAnexa } from "../../shared/smartflow-types";
 import { montarHistoricoMensagens } from "./historico-conversa";
 import type { ChatBotMessage } from "../integracoes/chatbot-openai";
 
@@ -45,6 +46,7 @@ async function invocarLLM(
   systemPromptBase: string,
   mensagem: string,
   historico: ChatBotMessage[] = [],
+  imagem?: ImagemAnexa,
 ): Promise<string> {
   const systemPrompt = [systemPromptBase, cfg.contextoDocumentos, cfg.contextoCliente]
     .filter(Boolean)
@@ -64,6 +66,7 @@ async function invocarLLM(
       cfg.maxTokens,
       cfg.temperatura,
       LLM_TIMEOUT_MS,
+      imagem,
     );
     if (r.erro || !r.resposta) throw new Error(r.erro || "Claude não retornou resposta");
     return r.resposta;
@@ -87,7 +90,15 @@ async function invocarLLM(
       messages: [
         { role: "system", content: systemPrompt },
         ...historicoMsgs,
-        { role: "user", content: mensagem },
+        {
+          role: "user",
+          content: imagem
+            ? [
+                { type: "text", text: mensagem },
+                { type: "image_url", image_url: { url: `data:${imagem.mime};base64,${imagem.base64}` } },
+              ]
+            : mensagem,
+        },
       ],
       maxTokens: cfg.maxTokens,
       temperatura: cfg.temperatura,
@@ -223,7 +234,7 @@ async function resolverContextoCliente(
 /**
  * Cria executores reais para um escritório específico.
  */
-export function criarExecutoresReais(escritorioId: number): SmartflowExecutores {
+export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemAnexa): SmartflowExecutores {
   return {
     async chamarIA(prompt: string, mensagem: string, contatoId?: number, conversaId?: number): Promise<string> {
       // Resolve config do agente ativo do escritório (provider + key + modelo
@@ -259,6 +270,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         prompt,
         mensagem,
         historico,
+        imagemAtual,
       );
     },
 
@@ -500,6 +512,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         cfg.prompt,
         mensagem,
         historico,
+        imagemAtual,
       );
     },
 

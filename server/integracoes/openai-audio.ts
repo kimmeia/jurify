@@ -14,7 +14,7 @@ const TIMEOUT_MS = 30000;
 /** Lê os bytes de uma fonte de mídia: URL pública (/uploads/...), caminho
  *  absoluto no disco, ou http(s). Cobre os formatos que os adapters (Baileys /
  *  Cloud API) gravam em `mediaUrl`. */
-async function lerBytes(fonte: string): Promise<Buffer | null> {
+export async function lerBytesDeMedia(fonte: string): Promise<Buffer | null> {
   try {
     if (/^https?:\/\//i.test(fonte)) {
       const r = await fetch(fonte, { signal: AbortSignal.timeout(TIMEOUT_MS) });
@@ -37,7 +37,7 @@ function nomeArquivoDe(fonte: string): string {
 /** Transcreve um áudio via Whisper. Retorna o texto, ou null em qualquer falha
  *  (sem transcrição o áudio simplesmente não dispara o fluxo — igual a antes). */
 export async function transcreverAudioOpenAI(apiKey: string, fonteMedia: string): Promise<string | null> {
-  const bytes = await lerBytes(fonteMedia);
+  const bytes = await lerBytesDeMedia(fonteMedia);
   if (!bytes) return null;
   try {
     const form = new FormData();

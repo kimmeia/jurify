@@ -7,8 +7,9 @@ import { getDb } from "../db";
 import { canaisIntegrados } from "../../drizzle/schema";
 import { and, eq } from "drizzle-orm";
 import { obterConfigCanal } from "../escritorio/db-canais";
-import { transcreverAudioOpenAI } from "./openai-audio";
+import { transcreverAudioOpenAI, lerBytesDeMedia } from "./openai-audio";
 import { createLogger } from "../_core/logger";
+import type { ImagemAnexa } from "../../shared/smartflow-types";
 
 const log = createLogger("config-ia-media");
 
@@ -52,6 +53,31 @@ export async function transcreverAudioWhatsapp(escritorioId: number, mediaUrl: s
     return await transcreverAudioOpenAI(c.openaiApiKey, mediaUrl);
   } catch (e: any) {
     log.warn({ err: e?.message, escritorioId }, "transcrição de áudio falhou");
+    return null;
+  }
+}
+
+function mimeImagemDe(fonte: string): string {
+  const ext = (fonte.split("?")[0].split(".").pop() || "").toLowerCase();
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "gif") return "image/gif";
+  return "image/jpeg";
+}
+
+/** Se o escritório tem Vision ligado, lê a imagem do WhatsApp e devolve
+ *  { base64, mime } pra enviar nativo ao LLM. Null se desligado ou falha.
+ *  A chamada usa o provider/modelo do agente ativo — então o modelo precisa
+ *  ter visão (gpt-4o, gpt-4.1, claude com visão, etc). */
+export async function obterImagemParaVision(escritorioId: number, mediaUrl: string): Promise<ImagemAnexa | null> {
+  try {
+    const c = await obterConfigIAMedia(escritorioId);
+    if (!c?.visionAtivo) return null;
+    const bytes = await lerBytesDeMedia(mediaUrl);
+    if (!bytes) return null;
+    return { base64: bytes.toString("base64"), mime: mimeImagemDe(mediaUrl) };
+  } catch (e: any) {
+    log.warn({ err: e?.message, escritorioId }, "leitura de imagem (Vision) falhou");
     return null;
   }
 }
