@@ -99,8 +99,18 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
       await definirResponsavelDoContato(contatoId, aid);
     }
   }
+  // Whisper: se o escritório ligou transcrição de áudio no card do ChatGPT,
+  // converte a nota de voz em texto AQUI — a transcrição vira o conteúdo salvo
+  // (aparece na conversa e entra no histórico do agente) e alimenta o fluxo.
+  let transcricaoAudio: string | null = null;
+  if (msg.tipo === "audio" && msg.mediaUrl) {
+    const { transcreverAudioWhatsapp } = await import("./config-ia-media");
+    transcricaoAudio = await transcreverAudioWhatsapp(escritorioId, msg.mediaUrl);
+  }
   const tipoMsg = mapTipo(msg.tipo);
-  const conteudo = msg.mediaUrl ? `${msg.conteudo}\n[media:${msg.mediaUrl}]` : msg.conteudo;
+  const conteudo = transcricaoAudio
+    ? `🎤 ${transcricaoAudio}`
+    : msg.mediaUrl ? `${msg.conteudo}\n[media:${msg.mediaUrl}]` : msg.conteudo;
   const mensagemId = await salvarMensagem({ conversaId, remetenteId: undefined, direcao: "entrada", tipo: tipoMsg, conteudo });
   await atualizarConversa(conversaId, escritorioId, { status: "aguardando" });
 
@@ -154,7 +164,10 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
   // Agentes IA só são acionados DENTRO do SmartFlow (via passo ia_responder).
   // Se nenhum cenário do SmartFlow bate com a mensagem, caímos num auto-reply
   // fixo configurado no canal. Sem IA automática fora do fluxo desenhado.
-  if (msg.tipo === "texto" && msg.conteudo) {
+  // Alimenta o SmartFlow com texto: mensagem de texto direta, ou a transcrição
+  // do áudio (Whisper). Outros tipos de mídia não disparam o fluxo aqui.
+  const textoFluxo = msg.tipo === "texto" ? (msg.conteudo || "") : (transcricaoAudio || "");
+  if (textoFluxo) {
     const { dispararMensagemCanal, janelaAcumulacaoAtiva } = await import("../smartflow/dispatcher");
 
     // Processa a mensagem (já COMBINADA, se o acumulador agrupou várias) pelo
@@ -199,13 +212,13 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
       const janela = await janelaAcumulacaoAtiva(escritorioId, contatoId);
       if (janela > 0) {
         const { acumularMensagem } = await import("../smartflow/acumulador");
-        acumularMensagem(`${canalId}:${conversaId}`, janela, msg.conteudo, processarMensagem);
+        acumularMensagem(`${canalId}:${conversaId}`, janela, textoFluxo, processarMensagem);
       } else {
-        await processarMensagem(msg.conteudo);
+        await processarMensagem(textoFluxo);
       }
     } catch (e: any) {
       log.error(`[SmartFlow] Erro ao agendar agrupamento:`, e?.message || String(e));
-      try { await processarMensagem(msg.conteudo); } catch { /* já loga dentro */ }
+      try { await processarMensagem(textoFluxo); } catch { /* já loga dentro */ }
     }
   }
   return { contatoId, conversaId, mensagemId };
