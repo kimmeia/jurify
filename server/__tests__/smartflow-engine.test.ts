@@ -1337,6 +1337,47 @@ describe("SmartFlow Engine", () => {
       expect(executarConsulta).toHaveBeenCalledTimes(2);
       expect(r.acao).toBeNull();
     });
+
+    it("anti-stall: 'um momento, vou verificar' SEM consulta → força a consulta e entrega o resultado", async () => {
+      const chamarLLM = vi.fn()
+        .mockResolvedValueOnce('{"resposta":"Só um momento, vou verificar os horários!","acao":null,"consulta":null}')
+        .mockResolvedValueOnce('{"resposta":"checando","acao":null,"consulta":"ver_horarios"}')
+        .mockResolvedValueOnce('{"resposta":"Tenho quinta 10h e 11h, qual prefere?","acao":null}');
+      const executarConsulta = vi.fn().mockResolvedValue("quinta 10h, 11h");
+      const r = await orquestrarAtendente({ ...base, chamarLLM, executarConsulta });
+      // o stall foi cutucado (chamada extra) e a consulta acabou disparando
+      expect(executarConsulta).toHaveBeenCalledWith("ver_horarios");
+      expect(chamarLLM).toHaveBeenCalledTimes(3);
+      expect(chamarLLM.mock.calls[1][0]).toContain("não disparou nenhuma consulta");
+      expect(r.resposta).toContain("quinta");
+    });
+
+    it("anti-stall NÃO dispara em resposta normal (sem cara de adiamento)", async () => {
+      const chamarLLM = vi.fn().mockResolvedValue('{"resposta":"Claro! Em que posso ajudar?","acao":null,"consulta":null}');
+      const executarConsulta = vi.fn();
+      const r = await orquestrarAtendente({ ...base, chamarLLM, executarConsulta });
+      expect(executarConsulta).not.toHaveBeenCalled();
+      expect(chamarLLM).toHaveBeenCalledTimes(1);
+      expect(r.resposta).toContain("Claro");
+    });
+
+    it("anti-stall só quando há consulta habilitada (sem consultas → 'um momento' é resposta legítima)", async () => {
+      const chamarLLM = vi.fn().mockResolvedValue('{"resposta":"Um momento, vou verificar!","acao":null,"consulta":null}');
+      const executarConsulta = vi.fn();
+      const r = await orquestrarAtendente({ ferramentas: [], consultas: [], chamarLLM, executarConsulta });
+      expect(executarConsulta).not.toHaveBeenCalled();
+      expect(chamarLLM).toHaveBeenCalledTimes(1);
+    });
+
+    it("anti-stall cutuca só UMA vez (não trava se o modelo insistir no adiamento)", async () => {
+      const chamarLLM = vi.fn().mockResolvedValue('{"resposta":"um momento, vou verificar","acao":null,"consulta":null}');
+      const executarConsulta = vi.fn();
+      const r = await orquestrarAtendente({ ...base, chamarLLM, executarConsulta, maxRodadas: 3 });
+      // cutuca 1x; o modelo insiste, mas não há loop infinito — encerra com resposta
+      expect(executarConsulta).not.toHaveBeenCalled();
+      expect(r.acao).toBeNull();
+      expect(typeof r.resposta).toBe("string");
+    });
   });
 
   describe("ia_atendente (Atendente IA com ferramentas)", () => {

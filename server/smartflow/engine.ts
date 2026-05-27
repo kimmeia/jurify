@@ -977,6 +977,7 @@ export async function orquestrarAtendente(opts: {
 }): Promise<{ resposta: string; acao: string | null; quando: string | null }> {
   const max = Math.max(1, opts.maxRodadas ?? 3);
   let extra = "";
+  let forcouConsulta = false;
   for (let i = 0; i < max; i++) {
     const raw = await opts.chamarLLM(extra);
     const { resposta, acao, consulta, quando } = interpretarSaidaAtendente(raw, opts.ferramentas, opts.consultas);
@@ -985,6 +986,16 @@ export async function orquestrarAtendente(opts: {
       extra += `${extra ? "\n\n" : ""}[Resultado da consulta "${consulta}"]:\n${resultado}`;
       continue; // re-chama o agente com o resultado em mãos
     }
+    // Anti-stall: o modelo prometeu "vou verificar" mas NÃO disparou a consulta
+    // (nem escolheu ação). Antes isso virava um "um momento" + pausa, deixando o
+    // cliente esperando uma resposta que nunca vinha sozinha (ele só voltava na
+    // próxima mensagem). Agora re-chamamos UMA vez forçando a consulta. Só quando
+    // há consulta disponível — senão o "um momento" é uma resposta legítima.
+    if (!acao && !forcouConsulta && opts.consultas.length > 0 && pareceStallDeConsulta(resposta)) {
+      forcouConsulta = true;
+      extra += `${extra ? "\n\n" : ""}[Você indicou que ia verificar algo mas não disparou nenhuma consulta. Dispare AGORA a consulta apropriada (ex: "${opts.consultas[0]}") e já responda com o resultado — não responda só "um momento".]`;
+      continue;
+    }
     return { resposta, acao, quando };
   }
   // Esgotou as rodadas de consulta — força uma resposta final sem ação,
@@ -992,6 +1003,17 @@ export async function orquestrarAtendente(opts: {
   const raw = await opts.chamarLLM(`${extra}\n\n[Pare de consultar e responda ao cliente agora.]`);
   const { resposta } = interpretarSaidaAtendente(raw, opts.ferramentas, opts.consultas);
   return { resposta, acao: null, quando: null };
+}
+
+/**
+ * Heurística do anti-stall: a resposta parece um "vou verificar e volto" sem
+ * entregar nada? Normaliza acentos (pra casar "só"/"horário") e procura frases
+ * típicas de adiamento. Usada só quando o modelo NÃO disparou consulta nem ação.
+ */
+function pareceStallDeConsulta(resposta: string): boolean {
+  const t = (resposta || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  if (!t.trim()) return false;
+  return /(um momento|um instante|aguarde|aguardo|vou verificar|estou verificando|verificando|vou checar|vou conferir|vou olhar|deixa eu ver|deixe-me ver|ja te (retorno|falo|respondo|trago|aviso)|vou consultar|consultando|ver os horari|verificar os horari|checar a agenda)/.test(t);
 }
 
 /**
