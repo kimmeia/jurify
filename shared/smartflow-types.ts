@@ -215,8 +215,12 @@ export interface ConfigIaConsultar {
  */
 export type FerramentaAtendente = "agendar" | "transferir" | "encerrar" | "gerar_cobranca" | "buscar_processo";
 
-/** Consultas (busca-e-volta) que o Atendente IA pode usar no meio da conversa. */
-export type ConsultaAtendente = "ver_horarios";
+/**
+ * Consultas (busca-e-volta) que o Atendente IA pode usar no meio da conversa.
+ * Cada uma é uma FONTE DE DADO do próprio sistema — o agente busca e segue
+ * respondendo com o resultado no mesmo turno (não vira saída do nó).
+ */
+export type ConsultaAtendente = "ver_horarios" | "ver_acoes_cliente" | "ver_valor_aberto";
 
 /**
  * Config do passo `ia_atendente` — o agente conduz a conversa inteira (roteiro

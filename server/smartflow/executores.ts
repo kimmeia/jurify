@@ -525,6 +525,8 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       };
       const DESC_CONSULTA: Record<string, string> = {
         ver_horarios: "precisa saber os horários livres pra oferecer ao cliente (use ANTES de agendar)",
+        ver_acoes_cliente: "o cliente pergunta sobre os processos/casos DELE e você precisa saber quais são",
+        ver_valor_aberto: "o cliente pergunta sobre pagamentos/valores em aberto dele",
       };
       const lista = (m: Record<string, string>, ids: string[]) =>
         ids.length ? ids.map((id) => `- "${id}": use quando ${m[id] || id}`).join("\n") : "(nenhuma)";
@@ -577,6 +579,22 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
           }
           const linhas = [...porDia.values()].slice(0, MAXDIAS).flat().map((s) => `- ${s}`).join("\n");
           return `Horários livres (ISO -03:00, fuso Brasília):\n${linhas}`;
+        }
+        if (nome === "ver_acoes_cliente") {
+          if (!params.contatoId) return "Cliente ainda não identificado no sistema (sem cadastro).";
+          const acoes = await this.listarAcoesCliente({ contatoId: params.contatoId, limite: 10 });
+          if (acoes.length === 0) return "Este cliente não tem casos/processos cadastrados.";
+          const linhas = acoes.map((a) => {
+            const ident = a.apelido || a.numeroCnj || a.classe || `Caso #${a.id}`;
+            const extra = [a.classe, a.polo ? `polo ${a.polo}` : "", a.numeroCnj && a.numeroCnj !== ident ? a.numeroCnj : ""].filter(Boolean).join(" · ");
+            return `- ${ident}${extra ? ` (${extra})` : ""}`;
+          }).join("\n");
+          return `Casos/processos do cliente (${acoes.length}):\n${linhas}`;
+        }
+        if (nome === "ver_valor_aberto") {
+          if (!params.contatoId) return "Cliente ainda não identificado no sistema (sem cadastro).";
+          const texto = await this.buscarCobrancasAbertas({ contatoId: params.contatoId });
+          return texto && texto.trim() ? texto.trim() : "O cliente não tem valores em aberto.";
         }
         return `Consulta "${nome}" não implementada.`;
       };
