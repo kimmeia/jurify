@@ -947,7 +947,7 @@ function AgenteFormDialog({
 
     {/* Modal de análise de [chave] no prompt — cria campos personalizados que faltam */}
     <Dialog open={analiseOpen} onOpenChange={setAnaliseOpen}>
-      <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="sm:max-w-3xl max-h-[88vh] overflow-y-auto p-0 gap-0">
         <DialogHeader className="px-5 pt-5 pb-3 border-b">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Sparkles className="h-4 w-4 text-sky-500" />

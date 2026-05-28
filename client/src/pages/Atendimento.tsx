@@ -418,8 +418,11 @@ export default function Atendimento() {
     setTab("inbox");
   }, []);
 
+  // Sem `max-w-7xl mx-auto` no wrapper: o Atendimento é dashboard-style e a
+  // inbox ganha mais espaço útil pro chat (coluna do meio = `1fr`) quanto
+  // mais largo for o viewport — o operador reclamava do canto vazio.
   return (
-    <div className="space-y-5 max-w-7xl mx-auto">
+    <div className="space-y-5">
       <div
         className="relative overflow-hidden rounded-2xl p-5 border"
         style={{
