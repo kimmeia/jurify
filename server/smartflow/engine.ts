@@ -276,6 +276,13 @@ export interface SmartflowExecutores {
     consultas?: string[];
     /** Config das consultas (ex: responsável/duração/dias pra "ver_horarios"). */
     consultaConfig?: { responsavelId?: number; duracaoMin?: number; dias?: number };
+    /**
+     * Variáveis pra interpolar no prompt do agente E no roteiro do bloco
+     * ANTES de mandar pro LLM. Resolve `{{atendente}}`, `{{cliente.nome}}`, etc.
+     * — assim o prompt fica dinâmico (ex: nome do atendente que recebeu a
+     * conversa via Distribuir p/ setor). Sem `vars`, prompt vai cru (compat).
+     */
+    vars?: Record<string, unknown>;
     mensagem: string;
     contatoId?: number;
     conversaId?: number;
@@ -1085,6 +1092,10 @@ async function handleIaAtendente(
       acoesCustom,
       consultas,
       consultaConfig: consultaConfigResolvida,
+      // Passa o ctx pra interpolação no prompt/roteiro: {{atendente}},
+      // {{cliente.nome}}, etc. — assim variáveis publicadas por blocos
+      // anteriores (ex: Distribuir p/ setor) entram no prompt do agente.
+      vars: ctx as unknown as Record<string, unknown>,
       mensagem,
       contatoId,
       conversaId,
@@ -1665,6 +1676,9 @@ async function handleDistribuirAtendimento(
         ...ctx,
         atendenteEscolhidoId: escolhido.id,
         atendenteEscolhidoNome: escolhido.nome,
+        // Alias curto pra usar em prompts: {{atendente}} → nome do atendente
+        // que recebeu a conversa. Facilita personalização ("Olá, sou {{atendente}}").
+        atendente: escolhido.nome,
         atendenteResponsavelId: escolhido.id,
       },
       proximoRamoId: "atribuido",

@@ -1488,6 +1488,22 @@ describe("SmartFlow Engine", () => {
       }));
     });
 
+    it("passa `vars` (o ctx) pro agente — assim {{atendente}} no prompt vira o nome real", async () => {
+      // O handler precisa enviar o ctx pra conversarComAgente como `vars` —
+      // é o que permite o agente ter o prompt interpolado com variáveis
+      // publicadas por blocos anteriores (ex: Distribuir p/ setor → atendente).
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "ok", acao: null });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const passos: Passo[] = [noAtendente(["agendar"])];
+      const ctx = { ...ctxBase, atendente: "Beatriz", atendenteEscolhidoNome: "Beatriz", atendenteEscolhidoId: 42 };
+      await executarCenario(passos, ctx, exec);
+      expect(conversarComAgente).toHaveBeenCalledWith(
+        expect.objectContaining({
+          vars: expect.objectContaining({ atendente: "Beatriz", atendenteEscolhidoNome: "Beatriz" }),
+        }),
+      );
+    });
+
     it("guarda do handler: ação que NÃO existe (builtin nem custom) → não roteia, pausa normal", async () => {
       const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "oi", acao: "inventada" });
       const exec = criarMockExecutores({ conversarComAgente });
@@ -2229,6 +2245,8 @@ describe("SmartFlow Engine", () => {
       expect(distribuirAtendimentoPorSetor).toHaveBeenCalledWith({ setorId: 3, somenteOnline: true, conversaId: 9 });
       expect(r.contexto.atendenteEscolhidoNome).toBe("Maria");
       expect(r.contexto.atendenteEscolhidoId).toBe(12);
+      // Alias curto pra interpolação em prompts ({{atendente}}).
+      expect(r.contexto.atendente).toBe("Maria");
       expect(r.contexto.aguardandoMensagem).toBeFalsy(); // não para o bot
       expect(r.respostas.join(" ")).toContain("Você será atendido por Maria");
       expect(r.respostas.join(" ")).not.toContain("Sem atendente");
