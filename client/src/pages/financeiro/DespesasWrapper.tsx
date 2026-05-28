@@ -60,7 +60,11 @@ export function DespesasWrapper() {
       <DespesasTab />
 
       <Dialog open={calcularAberto} onOpenChange={setCalcularAberto}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        {/* Precisa de `sm:max-w-4xl` (não `max-w-4xl`): o default do shadcn já
+            inclui `sm:max-w-lg` (512px). Sem o prefixo `sm:`, a regra unprefixed
+            é sobreposta no breakpoint sm+ e o dialog ficava preso em 512px —
+            KPIs e tabela de cobranças cortados, scroll horizontal. */}
+        <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Calculator className="h-4 w-4 text-pink-600" />

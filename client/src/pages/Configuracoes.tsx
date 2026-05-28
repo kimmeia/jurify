@@ -1457,7 +1457,7 @@ export default function Configuracoes() {
 
       {/* ─── Diagnóstico de permissões efetivas ─────────────────────────── */}
       <Dialog open={!!diagColabId} onOpenChange={(open) => !open && setDiagColabId(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Stethoscope className="h-5 w-5" />

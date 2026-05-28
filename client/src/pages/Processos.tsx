@@ -1706,7 +1706,7 @@ function MonitorarTab() {
 
       {/* Drawer de progresso da atualização em lote */}
       <Dialog open={atualDrawerOpen} onOpenChange={setAtualDrawerOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {progresso?.status === "concluido"
@@ -2725,7 +2725,7 @@ function NovasAcoesTab() {
       </div>
 
       <Dialog open={atualDrawerOpen} onOpenChange={setAtualDrawerOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {progresso?.status === "concluido"
