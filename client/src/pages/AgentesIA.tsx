@@ -947,54 +947,119 @@ function AgenteFormDialog({
 
     {/* Modal de análise de [chave] no prompt — cria campos personalizados que faltam */}
     <Dialog open={analiseOpen} onOpenChange={setAnaliseOpen}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Campos do prompt — criar os que faltam</DialogTitle>
-          <DialogDescription>
-            Detectei <strong>{sugestoes.length}</strong> variável(eis) <code>[chave]</code> no prompt que ainda não existem como campos personalizados. Revisa rótulo e tipo, e clica em criar.
+      <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto p-0 gap-0">
+        <DialogHeader className="px-5 pt-5 pb-3 border-b">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Sparkles className="h-4 w-4 text-sky-500" />
+            Criar os campos que o seu prompt usa
+          </DialogTitle>
+          <DialogDescription className="space-y-2 pt-1">
+            <span className="block text-[12px] leading-relaxed">
+              Encontrei <strong>{sugestoes.length}</strong> anotação(ões) no seu prompt no formato <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded border">[chave]</code> que ainda não existem no cadastro do cliente.
+            </span>
+            <span className="block text-[12px] leading-relaxed text-foreground/80 bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 rounded p-2">
+              <strong className="text-sky-700 dark:text-sky-300">O que vai acontecer:</strong> ao confirmar, cada chave vira um <strong>campo personalizado</strong> no cadastro do cliente E é linkada nas <strong>"variáveis a capturar"</strong> do agente. Aí a IA passa a extrair esses valores da conversa <em>sozinha</em> e salvá-los na ficha de cada cliente.
+            </span>
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-2">
-          {sugestoes.map((s, i) => (
-            <div key={s.chave} className="rounded border p-2 bg-muted/20 space-y-1.5">
-              <div className="grid grid-cols-12 gap-2 items-center">
-                <code className="col-span-4 text-xs font-mono px-2 py-1 bg-background rounded border truncate" title={s.chave}>{s.chave}</code>
-                <Input
-                  className="col-span-5 h-7 text-xs"
-                  value={s.label}
-                  onChange={(e) => atualizarSugestao(i, { label: e.target.value })}
-                  placeholder="Rótulo"
-                />
-                <Select value={s.tipo} onValueChange={(v) => atualizarSugestao(i, { tipo: v as TipoCampoCaptura, opcoes: v === "select" ? (s.opcoes && s.opcoes.length > 0 ? s.opcoes : ["SIM", "NAO"]) : undefined })}>
-                  <SelectTrigger className="col-span-3 h-7 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="texto">Texto</SelectItem>
-                    <SelectItem value="numero">Número</SelectItem>
-                    <SelectItem value="data">Data</SelectItem>
-                    <SelectItem value="textarea">Texto longo</SelectItem>
-                    <SelectItem value="select">Seleção (lista)</SelectItem>
-                    <SelectItem value="boolean">Sim/Não</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {s.tipo === "select" && (
-                <Input
-                  className="h-7 text-xs"
-                  value={(s.opcoes || []).join(", ")}
-                  onChange={(e) => atualizarSugestao(i, { opcoes: e.target.value.split(",").map((o) => o.trim()).filter(Boolean) })}
-                  placeholder="Opções separadas por vírgula (ex: SIM, NAO)"
-                />
-              )}
-            </div>
-          ))}
+
+        {/* Resumo rápido por tipo */}
+        <div className="px-5 py-2.5 border-b bg-muted/30 flex items-center gap-2 flex-wrap text-[11px]">
+          <span className="font-semibold text-muted-foreground uppercase tracking-wide">Resumo:</span>
+          {(["texto","numero","data","textarea","select","boolean"] as TipoCampoCaptura[]).map((t) => {
+            const n = sugestoes.filter((s) => s.tipo === t).length;
+            if (n === 0) return null;
+            const rotulos: Record<TipoCampoCaptura, string> = {
+              texto: "📝 texto", numero: "🔢 número", data: "📅 data",
+              textarea: "📄 texto longo", select: "📋 seleção", boolean: "✅ sim/não",
+            };
+            return (
+              <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border bg-card">
+                <strong>{n}</strong> {rotulos[t]}
+              </span>
+            );
+          })}
         </div>
-        <DialogFooter className="gap-2">
+
+        <div className="px-5 py-4 space-y-2.5">
+          {sugestoes.map((s, i) => {
+            const tipoExemplo: Record<TipoCampoCaptura, string> = {
+              texto: "qualquer texto curto (ex: nome do produto)",
+              numero: "número — valor em R$, quantidade, etc.",
+              data: "data (ex: 25/12/2025)",
+              textarea: "texto longo / parágrafos",
+              select: "uma das opções de uma lista fixa que você define abaixo",
+              boolean: "verdadeiro ou falso (Sim/Não)",
+            };
+            return (
+              <div key={s.chave} className="rounded-lg border bg-card p-3 space-y-2.5">
+                {/* Linha 1: chave + tipo */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide shrink-0">No prompt:</span>
+                    <code className="text-xs font-mono bg-muted/60 px-2 py-1 rounded border truncate" title={s.chave}>[{s.chave}]</code>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[10px] text-muted-foreground">tipo:</span>
+                    <Select
+                      value={s.tipo}
+                      onValueChange={(v) => atualizarSugestao(i, {
+                        tipo: v as TipoCampoCaptura,
+                        opcoes: v === "select" ? (s.opcoes && s.opcoes.length > 0 ? s.opcoes : ["SIM", "NAO"]) : undefined,
+                      })}
+                    >
+                      <SelectTrigger className="h-8 text-xs w-[170px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="texto">📝 Texto</SelectItem>
+                        <SelectItem value="numero">🔢 Número</SelectItem>
+                        <SelectItem value="data">📅 Data</SelectItem>
+                        <SelectItem value="textarea">📄 Texto longo</SelectItem>
+                        <SelectItem value="select">📋 Seleção (lista)</SelectItem>
+                        <SelectItem value="boolean">✅ Sim/Não</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground -mt-1.5 leading-relaxed">↳ {tipoExemplo[s.tipo]}</p>
+
+                {/* Rótulo */}
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Rótulo (como aparece pra você no cadastro do cliente)</Label>
+                  <Input
+                    className="h-8 text-sm mt-0.5"
+                    value={s.label}
+                    onChange={(e) => atualizarSugestao(i, { label: e.target.value })}
+                    placeholder="Ex: Valor financiado"
+                  />
+                </div>
+
+                {/* Opções (só pra select) */}
+                {s.tipo === "select" && (
+                  <div className="ml-2 pl-3 border-l-2 border-sky-300 dark:border-sky-700">
+                    <Label className="text-[10px] text-muted-foreground">Opções da lista (a IA escolhe UMA)</Label>
+                    <Input
+                      className="h-8 text-sm mt-0.5"
+                      value={(s.opcoes || []).join(", ")}
+                      onChange={(e) => atualizarSugestao(i, { opcoes: e.target.value.split(",").map((o) => o.trim()).filter(Boolean) })}
+                      placeholder="Separadas por vírgula — ex: SIM, NAO"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">A IA vai escolher exatamente uma destas opções pela conversa.</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <DialogFooter className="px-5 py-3 border-t bg-muted/30 gap-2">
           <Button variant="ghost" onClick={() => setAnaliseOpen(false)} disabled={criandoCampos}>
             Cancelar
           </Button>
-          <Button onClick={criarTodosDoModal} disabled={criandoCampos || sugestoes.length === 0}>
-            {criandoCampos && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-            Criar {sugestoes.length} campo(s) e linkar{salvarAposCriar ? " (e salvar)" : ""}
+          <Button onClick={criarTodosDoModal} disabled={criandoCampos || sugestoes.length === 0} className="bg-gradient-to-br from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700">
+            {criandoCampos
+              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Criando…</>
+              : <><Sparkles className="h-3.5 w-3.5 mr-1.5" />Criar {sugestoes.length} campos e linkar{salvarAposCriar ? " (e salvar agente)" : ""}</>
+            }
           </Button>
         </DialogFooter>
       </DialogContent>
