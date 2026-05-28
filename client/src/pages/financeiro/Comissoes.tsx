@@ -416,7 +416,7 @@ export function CalcularSection() {
       {/* Dialog: diagnóstico — explica diferença entre cobranças pagas
           e o que entra na comissão. Lista cada cobrança com motivo. */}
       <AlertDialog open={diagOpen} onOpenChange={setDiagOpen}>
-        <AlertDialogContent className="max-w-3xl">
+        <AlertDialogContent className="sm:max-w-3xl">
           <AlertDialogHeader>
             <AlertDialogTitle>🔍 Diagnóstico — diferença entre cobranças pagas e comissão</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1248,7 +1248,7 @@ function FechamentoDetalheDialog({
 
   return (
     <AlertDialog open onOpenChange={(o) => !o && onClose()}>
-      <AlertDialogContent className="max-w-3xl">
+      <AlertDialogContent className="sm:max-w-3xl">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <Lock className="h-4 w-4" />

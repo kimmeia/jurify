@@ -75,7 +75,7 @@ export function LinhaTempoUnificada({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0">
+      <DialogContent className="sm:max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-5 py-4 border-b bg-gradient-to-r from-indigo-50/60 to-violet-50/60">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center">
