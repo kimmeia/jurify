@@ -305,7 +305,10 @@ function AgenteFormDialog({
         temperatura: form.temperatura,
         maxTokens: form.maxTokens,
         modulosPermitidos: form.modulosPermitidos,
-        camposCaptura: form.camposCaptura,
+        // Descarta linhas totalmente em branco (botão "Adicionar" cria uma vazia
+        // e o usuário esquece de remover — Zod recusava o save inteiro). Linhas
+        // pela metade ainda falham, forçando completar ou remover.
+        camposCaptura: form.camposCaptura.filter((v) => v.atributo.trim() || v.campoChave.trim()),
         ativo: form.ativo,
       });
     } else {
@@ -318,7 +321,7 @@ function AgenteFormDialog({
         temperatura: form.temperatura,
         maxTokens: form.maxTokens,
         modulosPermitidos: form.modulosPermitidos,
-        camposCaptura: form.camposCaptura,
+        camposCaptura: form.camposCaptura.filter((v) => v.atributo.trim() || v.campoChave.trim()),
       });
     }
   };
