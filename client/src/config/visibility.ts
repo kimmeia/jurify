@@ -13,26 +13,11 @@
  * Pra esconder de novo: adicione em `MODULOS_OCULTOS_NO_MENU`.
  */
 
-/** Módulos que recebem badge "Beta" na sidebar. */
-export const MODULOS_BETA = new Set<string>([
-  "kanban",
-  "financeiro",
-  "agenda",
-  "processos",
-]);
+/** Módulos que recebem badge "Beta" na sidebar (vazio = nenhum). */
+export const MODULOS_BETA = new Set<string>([]);
 
-/**
- * Módulos que recebem badge "Em breve" na sidebar.
- * Diferente de Beta: não estão oficialmente lançados, mas o cliente
- * vê o item pra saber que está chegando.
- */
-export const MODULOS_EM_BREVE = new Set<string>([
-  "calculos",
-  "smartflow",
-  "agentesIa",
-  "roadmap",
-  "atendimento",
-]);
+/** Módulos que recebem badge "Em breve" na sidebar (vazio = nenhum). */
+export const MODULOS_EM_BREVE = new Set<string>([]);
 
 /**
  * Módulos completamente escondidos do menu lateral.
