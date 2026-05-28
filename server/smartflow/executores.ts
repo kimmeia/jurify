@@ -534,8 +534,17 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       const hojeFmt = new Date().toLocaleDateString("pt-BR", {
         timeZone: "America/Sao_Paulo", weekday: "long", day: "2-digit", month: "long", year: "numeric",
       });
+      // Interpola variáveis ({{atendente}}, {{cliente.nome}}, etc.) no prompt
+      // do agente E no roteiro do bloco ANTES de ir pro LLM. Sem `params.vars`,
+      // mantém o texto cru (retrocompat). Resolve o caso "distribuir setor →
+      // Atendente IA" — o prompt fica dinâmico com o nome do atendente.
+      const { interpolarVariaveis } = await import("./interpolar");
+      const vars = params.vars ?? {};
+      const interp = (s: string): string => Object.keys(vars).length > 0 ? interpolarVariaveis(s, vars as Record<string, any>) : s;
+      const promptBase = interp(cfg.prompt);
+      const roteiroFinal = params.roteiro?.trim() ? interp(params.roteiro.trim()) : "";
       const instrucao = [
-        params.roteiro?.trim() ? `ROTEIRO DESTE ATENDIMENTO:\n${params.roteiro.trim()}` : "",
+        roteiroFinal ? `ROTEIRO DESTE ATENDIMENTO:\n${roteiroFinal}` : "",
         "Conduza a conversa de forma humana e natural, seguindo o roteiro.",
         `Hoje é ${hojeFmt} (fuso de Brasília). Datas ANTERIORES a hoje já passaram — NUNCA ofereça nem diga que vai "verificar" uma data passada; avise que já passou e ofereça uma data futura.`,
         `CONSULTAS (buscam um dado e voltam pra você continuar):\n${lista(DESC_CONSULTA, consultas)}`,
@@ -595,7 +604,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         chamarLLM: (extra) =>
           invocarLLM(
             llmCfg,
-            extra ? `${cfg.prompt}\n\n${instrucao}\n\nDADOS JÁ CONSULTADOS NESTE TURNO:\n${extra}` : `${cfg.prompt}\n\n${instrucao}`,
+            extra ? `${promptBase}\n\n${instrucao}\n\nDADOS JÁ CONSULTADOS NESTE TURNO:\n${extra}` : `${promptBase}\n\n${instrucao}`,
             params.mensagem,
             historico,
           ),
