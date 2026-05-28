@@ -642,6 +642,10 @@ function RemovivelEdge(props: EdgeProps) {
             pointerEvents: "all",
             opacity: realcado ? 1 : 0,
             transition: "opacity 120ms ease",
+            // Força o botão X acima da própria seta — sem isso o path do SVG
+            // (BaseEdge) renderiza por cima visualmente e dá a impressão de
+            // que o botão está atrás da linha.
+            zIndex: 1000,
           }}
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
@@ -653,7 +657,7 @@ function RemovivelEdge(props: EdgeProps) {
               setEdges((eds) => eds.filter((ed) => ed.id !== id));
             }}
             title="Remover conexão"
-            className="flex items-center justify-center w-5 h-5 rounded-full bg-background border border-destructive/60 text-destructive shadow-sm hover:bg-destructive hover:text-white transition-colors text-[10px]"
+            className="flex items-center justify-center w-5 h-5 rounded-full bg-background border border-destructive/60 text-destructive shadow-md hover:bg-destructive hover:text-white transition-colors text-[10px] leading-none"
           >
             ×
           </button>
