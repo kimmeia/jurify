@@ -545,8 +545,9 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
       const lista = (m: Record<string, string>, ids: string[]) =>
         ids.length ? ids.map((id) => `- "${id}": use quando ${m[id] || id}`).join("\n") : "(nenhuma)";
 
-      const hojeFmt = new Date().toLocaleDateString("pt-BR", {
+      const hojeFmt = new Date().toLocaleString("pt-BR", {
         timeZone: "America/Sao_Paulo", weekday: "long", day: "2-digit", month: "long", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
       });
       // Interpola variáveis ({{atendente}}, {{cliente.nome}}, etc.) no prompt
       // do agente E no roteiro do bloco ANTES de ir pro LLM. Sem `params.vars`,
@@ -560,12 +561,13 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
       const instrucao = [
         roteiroFinal ? `ROTEIRO DESTE ATENDIMENTO:\n${roteiroFinal}` : "",
         "Conduza a conversa de forma humana e natural, seguindo o roteiro.",
-        `Hoje é ${hojeFmt} (fuso de Brasília). Datas ANTERIORES a hoje já passaram — NUNCA ofereça nem diga que vai "verificar" uma data passada; avise que já passou e ofereça uma data futura.`,
+        `AGORA é ${hojeFmt} (fuso de Brasília). Datas E HORÁRIOS anteriores a este momento JÁ PASSARAM — NUNCA ofereça nem confirme um horário que já passou hoje (ex: se agora são 16:54, NÃO ofereça 15h hoje — ofereça só os horários FUTUROS da lista). Mesmo que apareça na lista da consulta por engano, ignore qualquer horário ≤ agora.`,
         `CONSULTAS (buscam um dado e voltam pra você continuar):\n${lista(DESC_CONSULTA, consultas)}`,
         `AÇÕES (encerram seu turno e seguem o fluxo):\n${lista(DESC_ACAO, ferramentas)}`,
         "Quando precisar de um dado (ex: horários), dispare a CONSULTA correspondente AGORA, no MESMO turno. NUNCA responda só \"um momento\"/\"vou verificar\" e pare — isso deixa o cliente esperando sem resposta. A lista da consulta é COMPLETA: ofereça POUCOS horários ao cliente, mas pra confirmar ou negar um horário específico que ele pedir, olhe a lista INTEIRA — se o horário está nela, está LIVRE (não negue só porque não foi um dos que você ofereceu). Só diga que não tem se realmente não estiver na lista; nunca invente nem prometa checar separado.",
         "REGRA DAS AÇÕES (siga à risca): o padrão é acao=null — continue conversando. Só preencha `acao` quando a CONDIÇÃO daquela ação (descrita acima) estiver claramente satisfeita pela ÚLTIMA mensagem do cliente. NUNCA dispare uma ação na saudação, na 1ª troca, nem só porque ela está habilitada. Ex.: não use \"agendar\" enquanto o cliente não tiver escolhido/confirmado um horário; uma pergunta como \"você é advogado?\" ou \"tenho uma dúvida\" se responde conversando (acao=null), não agendando. Na dúvida, acao=null.",
         "NÃO peça confirmação redundante: quando o cliente JÁ indicar um horário específico que está entre os que você ofereceu (ex: \"quinta às 10\", \"pode ser as 14h\"), dispare `agendar` DIRETO com esse horário em `quando` — dizer um horário da lista JÁ é a confirmação, não pergunte \"confirma?\" de novo. Só confirme se houver ambiguidade real (data sem hora, dois horários possíveis, ou horário fora dos que você ofereceu).",
+        "AÇÕES CUSTOMIZADAS (nomes diferentes de agendar/transferir/encerrar/gerar_cobranca/buscar_processo): assim que a CONDIÇÃO descrita na ação (o \"use quando…\") estiver satisfeita pela conversa até aqui, DISPARE A AÇÃO IMEDIATAMENTE na sua próxima resposta. Ex.: se a ação `dados_ok` diz \"use quando já coletou nome, caso e telefone\" e você JÁ tem essas 3 informações, dispare `dados_ok` AGORA — não fique perguntando \"mais alguma coisa?\" nem \"posso prosseguir?\". Confie na descrição e dispare; o fluxo cuida do próximo passo.",
         'Responda SEMPRE em JSON puro (sem markdown): {"resposta": "<mensagem pro cliente>", "acao": "<ação ou null>", "consulta": "<consulta ou null>", "quando": "<ISO do horário escolhido quando acao=agendar; senão null>"}',
       ].filter(Boolean).join("\n\n");
 
@@ -711,6 +713,7 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
           nome: users.name,
           ultimaAtividade: colaboradores.ultimaAtividade,
           maxSimultaneos: colaboradores.maxAtendimentosSimultaneos,
+          ultimaDistribuicao: colaboradores.ultimaDistribuicao,
         })
         .from(colaboradores)
         .innerJoin(users, eq(users.id, colaboradores.userId))
@@ -742,7 +745,10 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
       for (const r of cargas) if (r.atendenteId != null) cargaPorId.set(r.atendenteId, Number(r.n));
 
       const onlineIds = new Set(online.map((c) => c.id));
-      // Ordena: online primeiro (quando grupo todo) → menor carga proporcional → id estável.
+      // Ordena: online primeiro → menor carga proporcional → ROUND-ROBIN por
+      // ultimaDistribuicao (quem recebeu há mais tempo ganha; null = nunca
+      // recebeu → prioridade máxima). Sem o round-robin caía sempre no MESMO
+      // atendente quando a carga estava empatada (bug: tudo ia pra Beatriz).
       const escolhido = [...elegiveis].sort((a, b) => {
         const aOn = onlineIds.has(a.id) ? 0 : 1;
         const bOn = onlineIds.has(b.id) ? 0 : 1;
@@ -750,7 +756,10 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
         const aC = (cargaPorId.get(a.id) ?? 0) / Math.max(1, a.maxSimultaneos || 5);
         const bC = (cargaPorId.get(b.id) ?? 0) / Math.max(1, b.maxSimultaneos || 5);
         if (aC !== bC) return aC - bC;
-        return a.id - b.id;
+        const aT = a.ultimaDistribuicao ? new Date(a.ultimaDistribuicao).getTime() : 0;
+        const bT = b.ultimaDistribuicao ? new Date(b.ultimaDistribuicao).getTime() : 0;
+        if (aT !== bT) return aT - bT;
+        return a.id - b.id; // último critério (estabilidade)
       })[0];
 
       // Seta o dono da conversa SEM mexer no status (bot segue o fluxo). Marca
