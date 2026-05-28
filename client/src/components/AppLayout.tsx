@@ -51,8 +51,6 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
-import { BetaBadge } from "./BetaBadge";
-import { EmBreveBadge } from "./EmBreveBadge";
 import { moduloOcultoNoMenu } from "@/config/visibility";
 import { toast } from "sonner";
 
@@ -418,7 +416,6 @@ function AppSidebarContent({
                 >
                   <Headphones className={`h-4 w-4 ${location === "/atendimento" ? "text-primary" : ""}`} />
                   <span className="flex-1">Atendimento</span>
-                  <EmBreveBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -432,7 +429,6 @@ function AppSidebarContent({
                 >
                   <BrainCircuit className={`h-4 w-4 ${location === "/agentes-ia" ? "text-primary" : ""}`} />
                   <span>Agentes IA</span>
-                  <EmBreveBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -459,7 +455,6 @@ function AppSidebarContent({
                 >
                   <Zap className={`h-4 w-4 ${location === "/smartflow" ? "text-primary" : ""}`} />
                   <span>SmartFlow</span>
-                  <EmBreveBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -513,7 +508,6 @@ function AppSidebarContent({
                 >
                   <Lightbulb className={`h-4 w-4 ${location === "/roadmap" ? "text-primary" : ""}`} />
                   <span className="flex-1">Roadmap</span>
-                  <EmBreveBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
