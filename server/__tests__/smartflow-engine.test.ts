@@ -17,6 +17,7 @@ import {
   interpretarSaidaAtendente,
   orquestrarAtendente,
   gerarSlotsLivres,
+  formatarHorariosLivres,
   formatarISOComOffset,
   SmartflowContexto,
   SmartflowExecutores,
@@ -1253,6 +1254,33 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  describe("formatarHorariosLivres (lista COMPLETA pro agente — regressão do corte por dia)", () => {
+    const slotsDia = [
+      "2026-05-29T09:00:00-03:00", "2026-05-29T09:30:00-03:00", "2026-05-29T10:00:00-03:00",
+      "2026-05-29T10:30:00-03:00", "2026-05-29T11:00:00-03:00", "2026-05-29T11:30:00-03:00",
+    ].map((iso) => ({ inicioISO: iso, fimISO: iso }));
+
+    it("NÃO trunca: o 5º+ horário do dia (11:00) aparece — era exatamente o bug", () => {
+      const txt = formatarHorariosLivres(slotsDia);
+      expect(txt).toContain("2026-05-29T11:00:00-03:00"); // 5º slot livre
+      expect(txt).toContain("2026-05-29T11:30:00-03:00"); // 6º slot livre
+      expect(txt).toContain("LISTA COMPLETA");
+    });
+
+    it("agrupa por dia", () => {
+      const txt = formatarHorariosLivres([
+        { inicioISO: "2026-05-28T09:00:00-03:00", fimISO: "x" },
+        { inicioISO: "2026-05-29T09:00:00-03:00", fimISO: "x" },
+      ]);
+      expect(txt).toContain("2026-05-28:");
+      expect(txt).toContain("2026-05-29:");
+    });
+
+    it("vazio → aviso amigável", () => {
+      expect(formatarHorariosLivres([])).toContain("Sem horários livres");
+    });
+  });
+
   describe("interpretarSaidaAtendente (parser da decisão do agente)", () => {
     const fer = ["agendar", "transferir"];
     const con = ["ver_horarios"];
@@ -1458,6 +1486,22 @@ describe("SmartFlow Engine", () => {
       expect(conversarComAgente).toHaveBeenCalledWith(expect.objectContaining({
         acoesCustom: [{ nome: "dados_ok", descricao: "já coletou nome, caso e telefone" }],
       }));
+    });
+
+    it("passa `vars` (o ctx) pro agente — assim {{atendente}} no prompt vira o nome real", async () => {
+      // O handler precisa enviar o ctx pra conversarComAgente como `vars` —
+      // é o que permite o agente ter o prompt interpolado com variáveis
+      // publicadas por blocos anteriores (ex: Distribuir p/ setor → atendente).
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "ok", acao: null });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const passos: Passo[] = [noAtendente(["agendar"])];
+      const ctx = { ...ctxBase, atendente: "Beatriz", atendenteEscolhidoNome: "Beatriz", atendenteEscolhidoId: 42 };
+      await executarCenario(passos, ctx, exec);
+      expect(conversarComAgente).toHaveBeenCalledWith(
+        expect.objectContaining({
+          vars: expect.objectContaining({ atendente: "Beatriz", atendenteEscolhidoNome: "Beatriz" }),
+        }),
+      );
     });
 
     it("guarda do handler: ação que NÃO existe (builtin nem custom) → não roteia, pausa normal", async () => {
@@ -2201,6 +2245,8 @@ describe("SmartFlow Engine", () => {
       expect(distribuirAtendimentoPorSetor).toHaveBeenCalledWith({ setorId: 3, somenteOnline: true, conversaId: 9 });
       expect(r.contexto.atendenteEscolhidoNome).toBe("Maria");
       expect(r.contexto.atendenteEscolhidoId).toBe(12);
+      // Alias curto pra interpolação em prompts ({{atendente}}).
+      expect(r.contexto.atendente).toBe("Maria");
       expect(r.contexto.aguardandoMensagem).toBeFalsy(); // não para o bot
       expect(r.respostas.join(" ")).toContain("Você será atendido por Maria");
       expect(r.respostas.join(" ")).not.toContain("Sem atendente");

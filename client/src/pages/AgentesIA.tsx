@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { AgenteCard, type AgenteCardData } from "./agentes/agente-card";
 import { AgentesHero } from "./agentes/agentes-hero";
 import type { AgenteVariavel } from "@shared/agente-variaveis-types";
+import { chavesFaltantes, type SugestaoCampo, type TipoCampoCaptura } from "@shared/prompt-campos-detector";
 
 // ─── Catálogo de módulos e áreas ───────────────────────────────────────────
 
@@ -338,16 +339,13 @@ function AgenteFormDialog({
     onError: (err) => toast.error("Erro ao atualizar", { description: err.message }),
   });
 
-  const handleSave = () => {
-    if (!form.nome.trim() || form.nome.length < 2) {
-      toast.error("Nome é obrigatório");
-      return;
-    }
-    if (!form.prompt.trim() || form.prompt.length < 10) {
-      toast.error("Prompt muito curto");
-      return;
-    }
-
+  // Salva o agente — `extraCaptura` é apendado em camposCaptura (usado quando
+  // o modal de análise acabou de criar campos novos e precisa linká-los já).
+  const doSave = (extraCaptura: AgenteVariavel[] = []) => {
+    const camposCapturaFinal = [
+      ...form.camposCaptura.filter((v) => v.atributo.trim() || v.campoChave.trim()),
+      ...extraCaptura,
+    ];
     if (agenteId) {
       atualizarMut.mutate({
         id: agenteId,
@@ -359,7 +357,7 @@ function AgenteFormDialog({
         temperatura: form.temperatura,
         maxTokens: form.maxTokens,
         modulosPermitidos: form.modulosPermitidos,
-        camposCaptura: form.camposCaptura,
+        camposCaptura: camposCapturaFinal,
         ativo: form.ativo,
       });
     } else {
@@ -372,8 +370,90 @@ function AgenteFormDialog({
         temperatura: form.temperatura,
         maxTokens: form.maxTokens,
         modulosPermitidos: form.modulosPermitidos,
-        camposCaptura: form.camposCaptura,
+        camposCaptura: camposCapturaFinal,
       });
+    }
+  };
+
+  // ── Análise [chave] no prompt → cria campos personalizados que faltam ──
+  // O usuário escreve [valor_financiado] no prompt; antes de salvar (ou via
+  // botão explícito), detectamos as chaves que não existem no catálogo e
+  // abrimos um modal pra revisar (label/tipo) e criar tudo de uma vez,
+  // já linkando em camposCaptura.
+  const [analiseOpen, setAnaliseOpen] = useState(false);
+  const [sugestoes, setSugestoes] = useState<SugestaoCampo[]>([]);
+  const [criandoCampos, setCriandoCampos] = useState(false);
+  // Quando true, o "Criar" do modal também aciona doSave após criar (fluxo
+  // disparado pelo botão Salvar). Quando false, só cria (botão Analisar manual).
+  const [salvarAposCriar, setSalvarAposCriar] = useState(false);
+  const utilsTrpc = (trpc as any).useUtils();
+  const criarCampoMut = trpc.camposCliente.criar.useMutation();
+
+  const handleSave = () => {
+    if (!form.nome.trim() || form.nome.length < 2) {
+      toast.error("Nome é obrigatório");
+      return;
+    }
+    if (!form.prompt.trim() || form.prompt.length < 10) {
+      toast.error("Prompt muito curto");
+      return;
+    }
+    const faltantes = chavesFaltantes(form.prompt, camposDisponiveis);
+    if (faltantes.length > 0) {
+      setSugestoes(faltantes);
+      setSalvarAposCriar(true);
+      setAnaliseOpen(true);
+      return;
+    }
+    doSave();
+  };
+
+  const analisarManual = () => {
+    const faltantes = chavesFaltantes(form.prompt, camposDisponiveis);
+    if (faltantes.length === 0) {
+      toast.success("Todos os campos do prompt já existem no cadastro.");
+      return;
+    }
+    setSugestoes(faltantes);
+    setSalvarAposCriar(false);
+    setAnaliseOpen(true);
+  };
+
+  const atualizarSugestao = (i: number, patch: Partial<SugestaoCampo>) =>
+    setSugestoes((arr) => arr.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+
+  const criarTodosDoModal = async () => {
+    setCriandoCampos(true);
+    const criados: AgenteVariavel[] = [];
+    const erros: string[] = [];
+    for (const s of sugestoes) {
+      try {
+        await criarCampoMut.mutateAsync({
+          chave: s.chave,
+          label: s.label.trim() || s.chave,
+          tipo: s.tipo,
+          opcoes: s.tipo === "select" ? s.opcoes : undefined,
+        });
+        criados.push({ atributo: s.chave, descricao: "", campoChave: s.chave });
+      } catch (err: any) {
+        erros.push(`${s.chave}: ${err.message}`);
+      }
+    }
+    setCriandoCampos(false);
+    if (criados.length > 0) {
+      try { await utilsTrpc?.camposCliente?.listar?.invalidate?.(); } catch { /* não-fatal */ }
+      setForm((f) => ({ ...f, camposCaptura: [...f.camposCaptura, ...criados] }));
+      toast.success(`${criados.length} campo(s) criado(s) e linkado(s) no agente.`);
+    }
+    if (erros.length > 0) {
+      toast.error(`Falha em ${erros.length} campo(s): ${erros.join("; ")}`);
+    }
+    setAnaliseOpen(false);
+    if (salvarAposCriar && erros.length === 0) {
+      // Passa os criados explicitamente — form.camposCaptura ainda não
+      // refletiu no próximo render (setForm é assíncrono), então doSave
+      // mergeia direto pra mandar tudo num save só.
+      doSave(criados);
     }
   };
 
@@ -442,6 +522,7 @@ function AgenteFormDialog({
   const temDuplicata = atributosDuplicados.size > 0;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
         {/* Header simples */}
@@ -674,17 +755,27 @@ function AgenteFormDialog({
           {/* 🎯 Variáveis a capturar — atributo + descrição + campo destino */}
           {camposDisponiveis.length > 0 && (
             <div>
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-1.5 gap-2">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
                   🎯 Variáveis a capturar da conversa
                 </p>
-                <button
-                  type="button"
-                  onClick={adicionarVariavel}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-950/30 text-[10px] font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-950/50"
-                >
-                  <Plus className="h-2.5 w-2.5" /> Adicionar variável
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={analisarManual}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/30 text-[10px] font-semibold text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-950/50"
+                    title="Detecta [chaves] no prompt que ainda não existem e oferece criar de uma vez"
+                  >
+                    <Sparkles className="h-2.5 w-2.5" /> Analisar prompt
+                  </button>
+                  <button
+                    type="button"
+                    onClick={adicionarVariavel}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-950/30 text-[10px] font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-950/50"
+                  >
+                    <Plus className="h-2.5 w-2.5" /> Adicionar variável
+                  </button>
+                </div>
               </div>
               <p className="text-[11px] text-muted-foreground mb-2 leading-relaxed">
                 A IA extrai cada variável da conversa e salva no campo personalizado mapeado.
@@ -799,9 +890,19 @@ function AgenteFormDialog({
             </div>
           )}
           {camposDisponiveis.length === 0 && (
-            <p className="text-[10px] text-muted-foreground italic">
-              💡 Crie campos personalizados em <strong>Configurações → Campos do cliente</strong> para habilitar a captação automática de valores.
-            </p>
+            <div className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-3 space-y-2">
+              <p className="text-[11px] text-muted-foreground italic">
+                💡 Crie campos personalizados em <strong>Configurações → Campos do cliente</strong> — ou deixe que eu detecte do seu prompt:
+              </p>
+              <button
+                type="button"
+                onClick={analisarManual}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/30 text-[11px] font-semibold text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-950/50"
+                title="Detecta [chaves] no prompt e oferece criar de uma vez"
+              >
+                <Sparkles className="h-3 w-3" /> Analisar prompt e criar campos
+              </button>
+            </div>
           )}
 
           {/* Toggle ativar */}
@@ -843,6 +944,127 @@ function AgenteFormDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Modal de análise de [chave] no prompt — cria campos personalizados que faltam */}
+    <Dialog open={analiseOpen} onOpenChange={setAnaliseOpen}>
+      <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto p-0 gap-0">
+        <DialogHeader className="px-5 pt-5 pb-3 border-b">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Sparkles className="h-4 w-4 text-sky-500" />
+            Criar os campos que o seu prompt usa
+          </DialogTitle>
+          <DialogDescription className="space-y-2 pt-1">
+            <span className="block text-[12px] leading-relaxed">
+              Encontrei <strong>{sugestoes.length}</strong> anotação(ões) no seu prompt no formato <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded border">[chave]</code> que ainda não existem no cadastro do cliente.
+            </span>
+            <span className="block text-[12px] leading-relaxed text-foreground/80 bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 rounded p-2">
+              <strong className="text-sky-700 dark:text-sky-300">O que vai acontecer:</strong> ao confirmar, cada chave vira um <strong>campo personalizado</strong> no cadastro do cliente E é linkada nas <strong>"variáveis a capturar"</strong> do agente. Aí a IA passa a extrair esses valores da conversa <em>sozinha</em> e salvá-los na ficha de cada cliente.
+            </span>
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Resumo rápido por tipo */}
+        <div className="px-5 py-2.5 border-b bg-muted/30 flex items-center gap-2 flex-wrap text-[11px]">
+          <span className="font-semibold text-muted-foreground uppercase tracking-wide">Resumo:</span>
+          {(["texto","numero","data","textarea","select","boolean"] as TipoCampoCaptura[]).map((t) => {
+            const n = sugestoes.filter((s) => s.tipo === t).length;
+            if (n === 0) return null;
+            const rotulos: Record<TipoCampoCaptura, string> = {
+              texto: "📝 texto", numero: "🔢 número", data: "📅 data",
+              textarea: "📄 texto longo", select: "📋 seleção", boolean: "✅ sim/não",
+            };
+            return (
+              <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border bg-card">
+                <strong>{n}</strong> {rotulos[t]}
+              </span>
+            );
+          })}
+        </div>
+
+        <div className="px-5 py-4 space-y-2.5">
+          {sugestoes.map((s, i) => {
+            const tipoExemplo: Record<TipoCampoCaptura, string> = {
+              texto: "qualquer texto curto (ex: nome do produto)",
+              numero: "número — valor em R$, quantidade, etc.",
+              data: "data (ex: 25/12/2025)",
+              textarea: "texto longo / parágrafos",
+              select: "uma das opções de uma lista fixa que você define abaixo",
+              boolean: "verdadeiro ou falso (Sim/Não)",
+            };
+            return (
+              <div key={s.chave} className="rounded-lg border bg-card p-3 space-y-2.5">
+                {/* Linha 1: chave + tipo */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide shrink-0">No prompt:</span>
+                    <code className="text-xs font-mono bg-muted/60 px-2 py-1 rounded border truncate" title={s.chave}>[{s.chave}]</code>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[10px] text-muted-foreground">tipo:</span>
+                    <Select
+                      value={s.tipo}
+                      onValueChange={(v) => atualizarSugestao(i, {
+                        tipo: v as TipoCampoCaptura,
+                        opcoes: v === "select" ? (s.opcoes && s.opcoes.length > 0 ? s.opcoes : ["SIM", "NAO"]) : undefined,
+                      })}
+                    >
+                      <SelectTrigger className="h-8 text-xs w-[170px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="texto">📝 Texto</SelectItem>
+                        <SelectItem value="numero">🔢 Número</SelectItem>
+                        <SelectItem value="data">📅 Data</SelectItem>
+                        <SelectItem value="textarea">📄 Texto longo</SelectItem>
+                        <SelectItem value="select">📋 Seleção (lista)</SelectItem>
+                        <SelectItem value="boolean">✅ Sim/Não</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground -mt-1.5 leading-relaxed">↳ {tipoExemplo[s.tipo]}</p>
+
+                {/* Rótulo */}
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Rótulo (como aparece pra você no cadastro do cliente)</Label>
+                  <Input
+                    className="h-8 text-sm mt-0.5"
+                    value={s.label}
+                    onChange={(e) => atualizarSugestao(i, { label: e.target.value })}
+                    placeholder="Ex: Valor financiado"
+                  />
+                </div>
+
+                {/* Opções (só pra select) */}
+                {s.tipo === "select" && (
+                  <div className="ml-2 pl-3 border-l-2 border-sky-300 dark:border-sky-700">
+                    <Label className="text-[10px] text-muted-foreground">Opções da lista (a IA escolhe UMA)</Label>
+                    <Input
+                      className="h-8 text-sm mt-0.5"
+                      value={(s.opcoes || []).join(", ")}
+                      onChange={(e) => atualizarSugestao(i, { opcoes: e.target.value.split(",").map((o) => o.trim()).filter(Boolean) })}
+                      placeholder="Separadas por vírgula — ex: SIM, NAO"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">A IA vai escolher exatamente uma destas opções pela conversa.</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <DialogFooter className="px-5 py-3 border-t bg-muted/30 gap-2">
+          <Button variant="ghost" onClick={() => setAnaliseOpen(false)} disabled={criandoCampos}>
+            Cancelar
+          </Button>
+          <Button onClick={criarTodosDoModal} disabled={criandoCampos || sugestoes.length === 0} className="bg-gradient-to-br from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700">
+            {criandoCampos
+              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Criando…</>
+              : <><Sparkles className="h-3.5 w-3.5 mr-1.5" />Criar {sugestoes.length} campos e linkar{salvarAposCriar ? " (e salvar agente)" : ""}</>
+            }
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

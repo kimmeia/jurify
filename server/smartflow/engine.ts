@@ -276,6 +276,13 @@ export interface SmartflowExecutores {
     consultas?: string[];
     /** Config das consultas (ex: responsável/duração/dias pra "ver_horarios"). */
     consultaConfig?: { responsavelId?: number; duracaoMin?: number; dias?: number };
+    /**
+     * Variáveis pra interpolar no prompt do agente E no roteiro do bloco
+     * ANTES de mandar pro LLM. Resolve `{{atendente}}`, `{{cliente.nome}}`, etc.
+     * — assim o prompt fica dinâmico (ex: nome do atendente que recebeu a
+     * conversa via Distribuir p/ setor). Sem `vars`, prompt vai cru (compat).
+     */
+    vars?: Record<string, unknown>;
     mensagem: string;
     contatoId?: number;
     conversaId?: number;
@@ -1085,6 +1092,10 @@ async function handleIaAtendente(
       acoesCustom,
       consultas,
       consultaConfig: consultaConfigResolvida,
+      // Passa o ctx pra interpolação no prompt/roteiro: {{atendente}},
+      // {{cliente.nome}}, etc. — assim variáveis publicadas por blocos
+      // anteriores (ex: Distribuir p/ setor) entram no prompt do agente.
+      vars: ctx as unknown as Record<string, unknown>,
       mensagem,
       contatoId,
       conversaId,
@@ -1665,6 +1676,9 @@ async function handleDistribuirAtendimento(
         ...ctx,
         atendenteEscolhidoId: escolhido.id,
         atendenteEscolhidoNome: escolhido.nome,
+        // Alias curto pra usar em prompts: {{atendente}} → nome do atendente
+        // que recebeu a conversa. Facilita personalização ("Olá, sou {{atendente}}").
+        atendente: escolhido.nome,
         atendenteResponsavelId: escolhido.id,
       },
       proximoRamoId: "atribuido",
@@ -2379,6 +2393,28 @@ export function gerarSlotsLivres(params: {
     }
   }
   return out;
+}
+
+/**
+ * Formata os horários livres pro Atendente IA, agrupados por dia. LISTA
+ * COMPLETA (sem truncar por dia) — o agente precisa de toda a disponibilidade
+ * pra confirmar/negar um horário específico que o cliente pedir. Truncar
+ * escondia slots livres (ex: o 5º+ do dia) e o agente negava um horário que
+ * existia. Quem limita o tamanho é o `maxSlots` do gerador.
+ */
+export function formatarHorariosLivres(livres: SlotLivre[]): string {
+  if (livres.length === 0) return "Sem horários livres nos próximos dias.";
+  const porDia = new Map<string, string[]>();
+  for (const s of livres) {
+    const dia = s.inicioISO.slice(0, 10); // YYYY-MM-DD
+    const arr = porDia.get(dia);
+    if (arr) arr.push(s.inicioISO);
+    else porDia.set(dia, [s.inicioISO]);
+  }
+  const blocos = [...porDia.entries()]
+    .map(([dia, isos]) => `${dia}:\n${isos.map((iso) => `  - ${iso}`).join("\n")}`)
+    .join("\n");
+  return `Horários livres (ISO, fuso Brasília -03:00) — LISTA COMPLETA por dia. Ofereça POUCOS ao cliente (uns 3 por dia, espalhados), mas use a lista INTEIRA pra confirmar ou negar um horário específico que ele pedir — se está na lista, está livre:\n${blocos}`;
 }
 
 /**
