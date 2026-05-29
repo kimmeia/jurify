@@ -43,6 +43,7 @@ import { Search as SearchIcon } from "lucide-react";
 import { OrigensLeadTab } from "./configuracoes/OrigensLeadTab";
 import { CamposClienteTab } from "./configuracoes/campos-cliente-tab";
 import { MetaConnectDialog } from "./configuracoes/meta-connect-dialog";
+import { WhatsappManualDialog } from "./configuracoes/whatsapp-manual-dialog";
 import { FinanceiroTab } from "./configuracoes/financeiro-tab";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1580,6 +1581,10 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
     type: "whatsapp" | "instagram" | "messenger";
     canalId?: number;
   } | null>(null);
+  // Dialog separado: cadastro manual de WhatsApp Cloud API. Bypassa o
+  // Embedded Signup (usado quando OAuth tá bloqueado — App Review pendente,
+  // BM dona do app coincide com a dos números, etc).
+  const [manualWhatsappOpen, setManualWhatsappOpen] = useState(false);
   const [legacyDialog, setLegacyDialog] = useState<string | null>(null);
   const [showAvancado, setShowAvancado] = useState(false);
   const { data: canaisData, refetch } = trpc.configuracoes.listarCanais.useQuery();
@@ -1719,6 +1724,15 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
               WhatsApp, Instagram e Messenger se conectam com 1 clique. Sem precisar copiar
               tokens ou IDs manualmente — basta autorizar pelo Facebook Login.
             </p>
+            {/* Fallback pra quando OAuth não roda (App Review pendente,
+                Tech Provider não aprovado, BM dona do app = dos números).
+                Pequeno e discreto pra não competir com o caminho padrão. */}
+            <button
+              onClick={() => setManualWhatsappOpen(true)}
+              className="text-[11px] text-blue-700 hover:text-blue-900 hover:underline mt-2 inline-flex items-center gap-1"
+            >
+              <span>📥</span> Ou cadastrar WhatsApp Cloud manualmente (avançado)
+            </button>
           </div>
         </div>
       </div>
@@ -1874,6 +1888,13 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
         canEdit={canEdit}
         isDono={isDono}
         onRefresh={refetch}
+      />
+
+      {/* Dialog: cadastro manual de WhatsApp Cloud (fallback p/ OAuth) */}
+      <WhatsappManualDialog
+        open={manualWhatsappOpen}
+        onClose={() => setManualWhatsappOpen(false)}
+        onConectado={() => refetch()}
       />
     </>
   );
