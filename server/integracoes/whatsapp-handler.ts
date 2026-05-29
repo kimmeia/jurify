@@ -200,8 +200,19 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
           // SmartFlow assumiu — envia respostas geradas.
           // Espalha os envios no tempo pra não disparar burst-protection do WhatsApp
           // (2+ mensagens no mesmo tick é causa comum de E429 / silently dropped).
+          //
+          // ANTI-RACE: a cada envio, re-checa o status da conversa. Se o atendente
+          // enviar uma mensagem no inbox DURANTE o processamento do SmartFlow
+          // (que pode levar segundos em fluxos com múltiplas LLMs), a conversa
+          // vira "em_atendimento" — e as respostas pendentes do bot NÃO devem
+          // sair. Sem isso, atendente e robô falavam ao mesmo tempo.
           for (let i = 0; i < sf.respostas.length; i++) {
             if (i > 0) await new Promise((r) => setTimeout(r, DELAY_ENTRE_RESPOSTAS_MS));
+            const statusAtual = await pegarStatusConversa(conversaId);
+            if (statusAtual === "em_atendimento") {
+              log.info({ conversaId, restantes: sf.respostas.length - i }, "[SmartFlow] Atendente assumiu — cancelando respostas pendentes do bot");
+              break;
+            }
             await enviarResposta(canalId, conversaId, msg.chatId, sf.respostas[i]);
           }
         } else {
@@ -390,6 +401,29 @@ async function definirResponsavelDoContato(contatoId: number, colaboradorId: num
 
 /** Lê atendenteId da conversa — usado pra notificar via SSE só o
  *  atendente responsável + dono/gestores (não todos do escritório). */
+/**
+ * Lê o status atual da conversa. Usado pelo loop de envio de respostas do
+ * SmartFlow pra detectar se o atendente assumiu (em_atendimento) durante o
+ * processamento — se assumiu, o resto das respostas do bot é cancelado.
+ */
+async function pegarStatusConversa(conversaId: number): Promise<string | null> {
+  try {
+    const { getDb } = await import("../db");
+    const { conversas } = await import("../../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return null;
+    const [row] = await db
+      .select({ status: conversas.status })
+      .from(conversas)
+      .where(eq(conversas.id, conversaId))
+      .limit(1);
+    return row?.status ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function pegarAtendenteDaConversa(conversaId: number): Promise<number | null> {
   try {
     const { getDb } = await import("../db");
