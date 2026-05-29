@@ -692,6 +692,29 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       const db = await getDb();
       if (!db) return null;
 
+      // STICKY: se a conversa JÁ tem atendente atrelado e ele está ativo,
+      // só republica esse nome — não redistribui. Evita "rouba" cliente que
+      // já está num atendimento em andamento. Se o atendente antigo for
+      // inativo/removido, cai pra distribuição normal.
+      if (params.conversaId) {
+        const [conv] = await db
+          .select({ atendenteId: conversas.atendenteId })
+          .from(conversas)
+          .where(and(eq(conversas.id, params.conversaId), eq(conversas.escritorioId, escritorioId)))
+          .limit(1);
+        if (conv?.atendenteId) {
+          const [existente] = await db
+            .select({ id: colaboradores.id, nome: users.name })
+            .from(colaboradores)
+            .innerJoin(users, eq(users.id, colaboradores.userId))
+            .where(and(eq(colaboradores.id, conv.atendenteId), eq(colaboradores.ativo, true)))
+            .limit(1);
+          if (existente?.id) {
+            return { id: existente.id, nome: existente.nome || "Atendente" };
+          }
+        }
+      }
+
       // Atendentes ATIVOS do setor (com o nome do usuário).
       const candidatos = await db
         .select({
