@@ -45,6 +45,10 @@ import { CamposClienteTab } from "./configuracoes/campos-cliente-tab";
 import { MetaConnectDialog } from "./configuracoes/meta-connect-dialog";
 import { WhatsappManualDialog } from "./configuracoes/whatsapp-manual-dialog";
 import { FinanceiroTab } from "./configuracoes/financeiro-tab";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1585,6 +1589,14 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
   // Embedded Signup (usado quando OAuth tá bloqueado — App Review pendente,
   // BM dona do app coincide com a dos números, etc).
   const [manualWhatsappOpen, setManualWhatsappOpen] = useState(false);
+  // Confirmação de exclusão de canal direto do card (sem precisar abrir o
+  // dialog grande pra clicar em Desconectar — caso clássico do canal com
+  // erro que o usuário só quer apagar e refazer).
+  const [excluirCanalInfo, setExcluirCanalInfo] = useState<{ id: number; nome: string } | null>(null);
+  const excluirCanalMut = trpc.configuracoes.excluirCanal.useMutation({
+    onSuccess: () => { toast.success("Canal excluído."); refetch(); setExcluirCanalInfo(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const [legacyDialog, setLegacyDialog] = useState<string | null>(null);
   const [showAvancado, setShowAvancado] = useState(false);
   const { data: canaisData, refetch } = trpc.configuracoes.listarCanais.useQuery();
@@ -1795,7 +1807,23 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                   <p className="text-xs text-muted-foreground">{canal.descricao}</p>
                 </div>
               </div>
-              <div className="mt-4 flex justify-end">
+              <div className={`mt-4 flex items-center ${canal.comErro && canal.canal?.id ? "justify-between" : "justify-end"}`}>
+                {/* Excluir direto do card — só pra cards em ERRO. Pro fluxo
+                    normal (canal OK) o usuário usa "Desconectar" dentro do
+                    dialog, que é mais explícito sobre as consequências. */}
+                {canal.comErro && canal.canal?.id && canEdit && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-7 px-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExcluirCanalInfo({ id: canal.canal!.id, nome: canal.nome });
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                  </Button>
+                )}
                 <Button
                   variant={canal.conectado || canal.isAdicionar ? "outline" : "default"}
                   size="sm"
@@ -1896,6 +1924,31 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
         onClose={() => setManualWhatsappOpen(false)}
         onConectado={() => refetch()}
       />
+
+      {/* Confirmação de excluir canal direto do card de erro */}
+      <AlertDialog open={!!excluirCanalInfo} onOpenChange={(o) => { if (!o) setExcluirCanalInfo(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir canal {excluirCanalInfo?.nome}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O canal e suas configurações serão removidos. Conversas e mensagens
+              passadas ficam preservadas no Atendimento. Você pode reconectar
+              criando um novo canal depois.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirCanalMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={excluirCanalMut.isPending}
+              onClick={() => excluirCanalInfo && excluirCanalMut.mutate({ canalId: excluirCanalInfo.id })}
+              className="bg-rose-600 hover:bg-rose-700 focus-visible:ring-rose-600"
+            >
+              {excluirCanalMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
