@@ -789,6 +789,12 @@ export const configuracoesRouter = router({
         tipo: "whatsapp_api",
         nome: nomeCanal,
         telefone: telefoneCanal,
+        // Cadastro manual pressupõe número já operacional na BM do cliente —
+        // testarConexao acima confirmou que a Graph API responde. Sem este
+        // flag a UI travaria o canal no fluxo de PIN/registro do Embedded
+        // Signup (que aqui não se aplica), escondendo Templates/Perfil e o
+        // próprio botão de re-inscrever webhooks.
+        registradoCloudApi: true,
         config: {
           accessToken: input.accessToken,
           phoneNumberId: input.phoneNumberId,
@@ -796,15 +802,29 @@ export const configuracoesRouter = router({
         },
       });
 
+      // Inscreve o app na WABA pra RECEBER mensagens — o Embedded Signup faz
+      // isso automático (connectWhatsApp), mas o cadastro manual não fazia, e
+      // sem isso o canal envia mas nunca recebe no Atendimento. Best-effort
+      // (igual ao fluxo OAuth): se falhar, o canal segue conectado e o usuário
+      // re-inscreve pelo botão da UI.
+      let webhooksInscritos = false;
+      try {
+        const { subscribeAppToWaba } = await import("../routers/meta-channels");
+        const sub = await subscribeAppToWaba(input.accessToken, input.wabaId);
+        webhooksInscritos = sub.ok;
+      } catch {
+        /* best-effort — não bloqueia o cadastro */
+      }
+
       await registrarAudit({
         escritorioId: esc.escritorio.id,
         colaboradorId: esc.colaborador.id,
         canalId: id,
         acao: "conectou",
-        detalhes: `Canal whatsapp_api "${nomeCanal}" cadastrado manualmente (phoneNumberId=${input.phoneNumberId})`,
+        detalhes: `Canal whatsapp_api "${nomeCanal}" cadastrado manualmente (phoneNumberId=${input.phoneNumberId}, webhooks=${webhooksInscritos ? "ok" : "pendente"})`,
       });
 
-      return { id, nome: nomeCanal, telefone: telefoneCanal };
+      return { id, nome: nomeCanal, telefone: telefoneCanal, webhooksInscritos };
     }),
 
   /** Atualiza configuração de um canal */
