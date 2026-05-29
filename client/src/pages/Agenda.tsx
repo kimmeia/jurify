@@ -2284,11 +2284,9 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                               ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
                               : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
                         }`}
-                        title={disabled ? "Em breve" : ""}
                       >
                         <span className="mr-1">{c.icon}</span>
                         {c.label}
-                        {disabled && <span className="ml-1 text-[8px] opacity-75">soon</span>}
                       </button>
                     );
                   })}

@@ -2158,7 +2158,6 @@ function ConfigGatilhoFields({
                   onCheckedChange={(v) => toggle(c.id, v === true)}
                 />
                 <span className="flex-1">{c.label}</span>
-                {c.emBreve && <Badge variant="outline" className="text-[9px] ml-auto">Em breve</Badge>}
               </label>
             );
           })}

@@ -306,11 +306,7 @@ export default function Calculos() {
                       </div>
                       <div className="flex-1">
                         <p className="font-semibold text-slate-900">{s.label}</p>
-                        <p className="text-xs text-slate-500">Em breve</p>
                       </div>
-                      <span className="text-[10px] uppercase font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
-                        Em breve
-                      </span>
                     </div>
                     <div className="text-xs text-slate-500">{s.descricao}</div>
                   </div>
