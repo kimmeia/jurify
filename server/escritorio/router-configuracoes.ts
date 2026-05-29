@@ -712,6 +712,101 @@ export const configuracoesRouter = router({
       return { id };
     }),
 
+  /**
+   * Cadastro manual de canal WhatsApp Cloud API — alternativa ao Embedded
+   * Signup pra casos onde o cliente já tem WABA + número configurados na BM
+   * dele e o OAuth tá bloqueado (BM dona do JuriFy = mesma BM dos números,
+   * App Review pendente, Tech Provider não aprovado, etc).
+   *
+   * Recebe os 3 valores que o Embedded Signup normalmente preencheria,
+   * **testa a conexão antes de salvar** (chama Graph API com `phoneNumberId`)
+   * e usa o `verified_name` + `display_phone_number` retornados como nome e
+   * telefone do canal — evita typos de copy-paste e garante que o canal só
+   * grava se as credenciais realmente funcionam.
+   *
+   * Migração pra OAuth depois: quando o Embedded Signup estiver liberado,
+   * o cliente refaz Conectar pelo fluxo normal — o `findCanalByPhoneNumberId`
+   * do webhook continua casando pelo mesmo `phoneNumberId`, então pode
+   * sobrescrever a config manual ou criar canal novo + desativar a manual.
+   */
+  conectarWhatsappCloudManual: protectedProcedure
+    .input(z.object({
+      accessToken: z.string().min(20),
+      phoneNumberId: z.string().min(5).max(64),
+      wabaId: z.string().min(5).max(64),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      await exigirPermissao(
+        ctx.user.id, "configuracoes", "criar",
+        "Sem permissão para criar canais de integração.",
+      );
+
+      // Enforce do limite de conexões WhatsApp do plano (mesma regra do
+      // criarCanal — não duplica caminho).
+      const { getActiveSubscriptionComHeranca } = await import("../db");
+      const { getPlanoBySlug } = await import("../billing/planos-repo");
+      const sub = await getActiveSubscriptionComHeranca(ctx.user.id);
+      const cortesiaAtiva = !!sub?.cortesia;
+      if (!cortesiaAtiva) {
+        const plano = sub?.planId ? await getPlanoBySlug(sub.planId) : null;
+        const limite = plano?.limites.maxConexoesWhatsapp ?? 0;
+        if (limite < 999999) {
+          const contagem = await contarCanaisPorTipo(esc.escritorio.id);
+          const whatsappAtual = contagem["whatsapp"] || 0;
+          if (whatsappAtual >= limite) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: `Limite de ${limite} conexão(ões) WhatsApp atingido no plano "${plano?.nome ?? "atual"}". Faça upgrade pra adicionar mais.`,
+            });
+          }
+        }
+      }
+
+      // Testa o trio na Graph API antes de gravar. Bloqueia credencial errada
+      // ou token expirado em cadastro silencioso (canal "conectado" mas
+      // morto — bug recorrente quando cola valores incorretos).
+      const { WhatsAppCloudClient } = await import("../integracoes/whatsapp-cloud");
+      const client = new WhatsAppCloudClient({
+        phoneNumberId: input.phoneNumberId,
+        accessToken: input.accessToken,
+        wabaId: input.wabaId,
+      });
+      const teste = await client.testarConexao();
+      if (!teste.ok) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Falha ao validar credenciais na Meta: ${teste.erro || "erro desconhecido"}. Confira accessToken, phoneNumberId e wabaId.`,
+        });
+      }
+
+      const nomeCanal = teste.nome || teste.telefone || "WhatsApp Cloud";
+      const telefoneCanal = teste.telefone || undefined;
+
+      const id = await criarCanal({
+        escritorioId: esc.escritorio.id,
+        tipo: "whatsapp_api",
+        nome: nomeCanal,
+        telefone: telefoneCanal,
+        config: {
+          accessToken: input.accessToken,
+          phoneNumberId: input.phoneNumberId,
+          wabaId: input.wabaId,
+        },
+      });
+
+      await registrarAudit({
+        escritorioId: esc.escritorio.id,
+        colaboradorId: esc.colaborador.id,
+        canalId: id,
+        acao: "conectou",
+        detalhes: `Canal whatsapp_api "${nomeCanal}" cadastrado manualmente (phoneNumberId=${input.phoneNumberId})`,
+      });
+
+      return { id, nome: nomeCanal, telefone: telefoneCanal };
+    }),
+
   /** Atualiza configuração de um canal */
   atualizarConfigCanal: protectedProcedure
     .input(z.object({
