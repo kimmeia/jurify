@@ -1,7 +1,7 @@
 import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
 import { isLidJid } from "../../shared/whatsapp-types";
 import type { TipoCanalMensagem, ImagemAnexa } from "../../shared/smartflow-types";
-import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, listarConversas, enviarMensagem as salvarMensagem, atualizarStatusMensagem, atualizarConversa, distribuirLead } from "../escritorio/db-crm";
+import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, listarConversas, enviarMensagem as salvarMensagem, atualizarStatusMensagem, atualizarConversa } from "../escritorio/db-crm";
 import { obterAutoReplyCanal } from "../escritorio/db-canais";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-whatsapp-handler");
@@ -77,27 +77,22 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     conversaId = await buscarConversaExistente(escritorioId, contatoId, canalId, msg.chatId);
   }
   if (!conversaId) {
-    // Stickiness: se o contato JÁ tem responsável definido (atribuído
-    // anteriormente), atribuímos a nova conversa pro mesmo atendente
-    // — assim o cliente fala sempre com a mesma pessoa quando volta
-    // a entrar em contato. Só se contato.responsavelId for null
-    // recorremos à distribuição automática.
+    // Stickiness CROSS-CONVERSA: se o contato JÁ tem responsável (atribuído
+    // antes), a nova conversa nasce com ele — cliente que volta cai com a
+    // mesma pessoa. Sem responsável prévio, a conversa nasce SEM atendente —
+    // quem decide é o SmartFlow (bloco Distribuir p/ setor, com o filtro de
+    // setor que o usuário definiu). A distribuição legacy (distribuirLead)
+    // não filtrava por setor, então jogava em qualquer atendente ativo —
+    // mesmo de outro setor que não era pra receber esse tipo de lead.
     const respExistente = await pegarResponsavelDoContato(contatoId);
-    const aid = respExistente
-      ?? (await distribuirLead(escritorioId, contatoId || undefined, canalId)) ?? undefined;
     conversaId = await criarConversa({
       escritorioId,
       contatoId,
       canalId,
-      atendenteId: aid,
+      atendenteId: respExistente ?? undefined,
       assunto: `WhatsApp: ${msg.nome || msg.telefone || "contato"}`,
       chatIdExterno: msg.chatId,
     });
-    // Se o contato ainda não tinha responsavelId, grava agora pra
-    // próximas conversas continuarem caindo no mesmo atendente.
-    if (!respExistente && aid) {
-      await definirResponsavelDoContato(contatoId, aid);
-    }
   }
   // Whisper: se o escritório ligou transcrição de áudio no card do ChatGPT,
   // converte a nota de voz em texto AQUI — a transcrição vira o conteúdo salvo
