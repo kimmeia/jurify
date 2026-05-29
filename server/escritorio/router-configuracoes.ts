@@ -784,17 +784,17 @@ export const configuracoesRouter = router({
       const nomeCanal = teste.nome || teste.telefone || "WhatsApp Cloud";
       const telefoneCanal = teste.telefone || undefined;
 
+      // NÃO marcamos registradoCloudApi aqui de propósito: um número recém
+      // adicionado à WABA quase sempre está "Pendente" na Meta (precisa do
+      // POST /{phone-number-id}/register com PIN pra ativar). Deixar o default
+      // (false) mantém a etapa de registro por PIN disponível na UI — e é o
+      // próprio registro que ativa o número e inscreve os webhooks. Forçar
+      // `true` aqui esconderia essa etapa e travaria o número em "Pendente".
       const id = await criarCanal({
         escritorioId: esc.escritorio.id,
         tipo: "whatsapp_api",
         nome: nomeCanal,
         telefone: telefoneCanal,
-        // Cadastro manual pressupõe número já operacional na BM do cliente —
-        // testarConexao acima confirmou que a Graph API responde. Sem este
-        // flag a UI travaria o canal no fluxo de PIN/registro do Embedded
-        // Signup (que aqui não se aplica), escondendo Templates/Perfil e o
-        // próprio botão de re-inscrever webhooks.
-        registradoCloudApi: true,
         config: {
           accessToken: input.accessToken,
           phoneNumberId: input.phoneNumberId,
@@ -802,11 +802,11 @@ export const configuracoesRouter = router({
         },
       });
 
-      // Inscreve o app na WABA pra RECEBER mensagens — o Embedded Signup faz
-      // isso automático (connectWhatsApp), mas o cadastro manual não fazia, e
-      // sem isso o canal envia mas nunca recebe no Atendimento. Best-effort
-      // (igual ao fluxo OAuth): se falhar, o canal segue conectado e o usuário
-      // re-inscreve pelo botão da UI.
+      // Inscreve o app na WABA pra RECEBER mensagens. O fluxo de registro por
+      // PIN também inscreve, mas fazemos aqui (best-effort) pra cobrir o caso
+      // de um número que JÁ chega registrado e não passa pela tela de PIN —
+      // sem isso ele enviaria mas nunca receberia. Se falhar, o canal segue
+      // e o usuário re-inscreve pelo botão da UI.
       let webhooksInscritos = false;
       try {
         const { subscribeAppToWaba } = await import("../routers/meta-channels");

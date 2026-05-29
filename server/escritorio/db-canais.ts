@@ -88,13 +88,6 @@ export async function criarCanal(dados: {
   nome: string;
   telefone?: string;
   config?: Record<string, any>;
-  /**
-   * WhatsApp Cloud manual: o número já está operacional na BM do cliente
-   * (validado via Graph API antes de chamar aqui), então não passa pelo
-   * POST /register com PIN do Embedded Signup. Marcar `true` evita que a UI
-   * trave o canal no estado "falta registrar na Cloud API".
-   */
-  registradoCloudApi?: boolean;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
@@ -122,7 +115,6 @@ export async function criarCanal(dados: {
     configTag,
     webhookSecret,
     status: dados.config ? "conectado" : "desconectado",
-    registradoCloudApi: dados.registradoCloudApi ?? false,
   });
 
   return (result as { insertId: number }).insertId;

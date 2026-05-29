@@ -100,14 +100,16 @@ beforeEach(() => {
 });
 
 describe("conectarWhatsappCloudManual", () => {
-  it("grava o canal com registradoCloudApi=true (não trava na tela de PIN)", async () => {
+  it("cria o canal whatsapp_api com a config colada, sem forçar registradoCloudApi", async () => {
     const caller = configuracoesRouter.createCaller(fakeCtx());
     await caller.conectarWhatsappCloudManual(INPUT_OK);
 
     expect(criarCanalMock).toHaveBeenCalledTimes(1);
     const arg = criarCanalMock.mock.calls[0][0] as any;
     expect(arg.tipo).toBe("whatsapp_api");
-    expect(arg.registradoCloudApi).toBe(true);
+    // NÃO força registradoCloudApi: número novo costuma estar "Pendente" e
+    // precisa do registro por PIN. Forçar true esconderia essa etapa.
+    expect(arg.registradoCloudApi).toBeUndefined();
     expect(arg.config).toMatchObject({
       accessToken: INPUT_OK.accessToken,
       phoneNumberId: INPUT_OK.phoneNumberId,
