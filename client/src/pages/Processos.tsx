@@ -31,6 +31,8 @@ import {
   useKeywordAlerts,
   checkKeywords,
 } from "./processos/search-history";
+import { ImportarAdvboxDialog } from "./processos/ImportarAdvboxDialog";
+import { Upload } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 
@@ -328,6 +330,7 @@ function ConsultarTab() {
   const [tentativas, setTentativas] = useState(0);
   const [credencialId, setCredencialId] = useState<string>("");
   const [vincularDialog, setVincularDialog] = useState<{ cnj: string; clientes: any[] } | null>(null);
+  const [importarAdvboxOpen, setImportarAdvboxOpen] = useState(false);
   // Detalhes enriquecidos por CNJ. Cards de busca por CPF/CNPJ chegam só
   // com `code`+`tribunal_acronym`. Quando user clica "Carregar detalhes",
   // o resultado de `consultarCNJSincrono` cai aqui e o ProcessoCard usa.
@@ -544,7 +547,20 @@ function ConsultarTab() {
             Buscar
           </Button>
           <KeywordAlertsButton />
+          <Button
+            variant="outline"
+            className="h-10 rounded-lg"
+            onClick={() => setImportarAdvboxOpen(true)}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Importar Advbox
+          </Button>
         </div>
+
+        <ImportarAdvboxDialog
+          open={importarAdvboxOpen}
+          onOpenChange={setImportarAdvboxOpen}
+        />
 
         {/* Seletor de credencial para segredo de justiça */}
         <div className="flex items-center gap-2">
