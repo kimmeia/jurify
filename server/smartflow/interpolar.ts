@@ -122,6 +122,8 @@ const VARS_CLIENTE: CatalogoVariavel[] = [
   { path: "emailCliente", label: "Email do cliente", exemplo: "joao@example.com", categoria: "cliente" },
   { path: "contatoId", label: "ID interno do contato", exemplo: "42", categoria: "cliente" },
   { path: "atendenteResponsavelId", label: "Atendente responsável", exemplo: "7", categoria: "cliente" },
+  { path: "conversaAtendenteId", label: "ID do atendente atual da conversa", exemplo: "7", categoria: "cliente" },
+  { path: "conversaTemAtendente", label: "True se a conversa JÁ tem atendente atribuído (mesma fonte do tag 'Sem atendente')", exemplo: "true", categoria: "cliente" },
   // Campos do cadastro (CRM). Carregados quando há contatoId no contexto.
   { path: "cliente.cpf", label: "CPF/CNPJ do cadastro", exemplo: "123.456.789-00", categoria: "cliente" },
   { path: "cliente.ehCliente", label: "É cliente? (tem CPF/CNPJ cadastrado)", exemplo: "true", categoria: "cliente" },
