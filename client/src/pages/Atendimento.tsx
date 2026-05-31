@@ -31,7 +31,7 @@ import { ComplianceGuard, ComplianceGuardBadge } from "./atendimento/compliance-
 import { LinhaTempoUnificada } from "./atendimento/linha-tempo-unificada";
 import { AIRail } from "./atendimento/ai-rail";
 import { CentroDeComando } from "./atendimento/centro-de-comando";
-import { Sparkles, ScrollText } from "lucide-react";
+import { Sparkles, ScrollText, Bot } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 function timeAgo(d: string) { if (!d) return ""; const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "agora"; if (m < 60) return m + "min"; const h = Math.floor(m / 60); if (h < 24) return h + "h"; return Math.floor(h / 24) + "d"; }
@@ -946,6 +946,23 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       contatoNome={conv?.contatoNome || "Cliente"}
       onEnviarMensagem={(texto) => setMsg(texto)}
     />
+    {conv?.status === "em_atendimento" && (
+      <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300">
+          <Bot className="h-3.5 w-3.5 shrink-0" />
+          <span><strong>Bot pausado</strong> — você está conduzindo o atendimento. O fluxo não responde enquanto isso.</span>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-[11px] shrink-0 border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/40"
+          onClick={() => atualizar.mutate({ id: cid, status: "aguardando" })}
+          title="Devolve o controle pro bot — o fluxo volta a responder na próxima mensagem do cliente"
+        >
+          Reativar bot
+        </Button>
+      </div>
+    )}
     <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2" style={{ minHeight: 360, maxHeight: 420 }}>
       {!msgs?.length ? (
         <p className="text-xs text-muted-foreground text-center py-12">Nenhuma mensagem ainda.</p>

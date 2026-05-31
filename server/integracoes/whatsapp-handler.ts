@@ -97,7 +97,13 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
   const tipoMsg = mapTipo(msg.tipo);
   const conteudo = msg.mediaUrl ? `${msg.conteudo}\n[media:${msg.mediaUrl}]` : msg.conteudo;
   const mensagemId = await salvarMensagem({ conversaId, remetenteId: undefined, direcao: "entrada", tipo: tipoMsg, conteudo });
-  await atualizarConversa(conversaId, escritorioId, { status: "aguardando" });
+  // Marca aguardando — MAS preserva em_atendimento (atendente assumiu, mantém
+  // o controle; sobrescrever fazia o bot voltar a responder na próxima msg do
+  // cliente, mesmo depois do atendente ter intervindo).
+  const statusAtual = await pegarStatusConversa(conversaId);
+  if (statusAtual !== "em_atendimento") {
+    await atualizarConversa(conversaId, escritorioId, { status: "aguardando" });
+  }
 
   // Notificar via SSE APENAS:
   //   - dono e gestores do escritório
