@@ -1215,12 +1215,31 @@ export async function dispararMensagemCanal(
     // `cliente.campos.<chave>` e `cliente.tags` no contexto (Decisão "tem a tag").
     const dadosCliente = await lerDadosCliente(escritorioId, params.contatoId);
 
+    // Expõe atendente atual da conversa em `conversaAtendenteId` (top-level) +
+    // `conversaTemAtendente` (boolean) pra fluxos como "se já tem atendente,
+    // mostre 'aguarde um momento'; senão, qualifique". É o MESMO campo que a
+    // UI usa pra exibir a tag "Sem atendente".
+    let conversaAtendenteId: number | null = null;
+    if (params.conversaId) {
+      try {
+        const { conversas } = await import("../../drizzle/schema");
+        const [row] = await db
+          .select({ atendenteId: conversas.atendenteId })
+          .from(conversas)
+          .where(eq(conversas.id, params.conversaId))
+          .limit(1);
+        conversaAtendenteId = row?.atendenteId ?? null;
+      } catch { /* não-fatal */ }
+    }
+
     const contexto: SmartflowContexto = {
       mensagem: params.mensagem,
       nomeCliente: params.nomeCliente,
       telefoneCliente: params.telefone,
       contatoId: params.contatoId,
       conversaId: params.conversaId,
+      conversaAtendenteId: conversaAtendenteId ?? undefined,
+      conversaTemAtendente: conversaAtendenteId !== null,
       canalId: params.canalId,
       canalTipo: params.canalTipo,
       cliente: dadosCliente,
