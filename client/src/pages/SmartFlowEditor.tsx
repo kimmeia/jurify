@@ -3632,40 +3632,80 @@ function ConfigDistribuirAtendimentoFields({
 }) {
   const { data: setoresData } = (trpc as any).configuracoes.listarSetores.useQuery();
   const setores: Array<{ id: number; nome: string; totalColaboradores?: number }> = Array.isArray(setoresData) ? setoresData : [];
+  const { data: equipeData } = (trpc as any).configuracoes.listarColaboradores.useQuery();
+  const atendentes: Array<{ id: number; userName?: string; cargo?: string; ativo?: boolean }> = (equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []).filter((c: any) => c.ativo);
+  const modo: "setor" | "atendente_fixo" = cfg.modo === "atendente_fixo" ? "atendente_fixo" : "setor";
   const setorId = typeof cfg.setorId === "number" ? cfg.setorId : 0;
+  const atendenteId = typeof cfg.atendenteId === "number" ? cfg.atendenteId : 0;
   const somenteOnline = cfg.somenteOnline === true;
   return (
     <div className="space-y-3">
       <div className="rounded-md bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-900 p-2">
         <p className="text-[11px] text-teal-800 dark:text-teal-300">
-          Escolhe um atendente do setor (menor carga, online primeiro) e passa a conversa pra ele. <strong>O bot continua o fluxo</strong> — só para quando o atendente responder no inbox. Ligue as saídas <strong>atribuído</strong> e <strong>sem atendente</strong>.
+          Atribui um atendente à conversa. <strong>O bot continua o fluxo</strong> — só para quando o atendente responder no inbox. Ligue as saídas <strong>atribuído</strong> e <strong>sem atendente</strong>.
         </p>
       </div>
+
       <div>
-        <Label className="text-xs">Setor</Label>
-        <Select value={String(setorId || "")} onValueChange={(v) => onChange({ setorId: Number(v) })}>
-          <SelectTrigger><SelectValue placeholder="Escolha o setor" /></SelectTrigger>
+        <Label className="text-xs">Como distribuir</Label>
+        <Select value={modo} onValueChange={(v) => onChange({ modo: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {setores.map((s) => (
-              <SelectItem key={s.id} value={String(s.id)}>
-                {s.nome}
-                {typeof s.totalColaboradores === "number" && (
-                  <span className="text-muted-foreground ml-2 text-[10px]">{s.totalColaboradores} atendente(s)</span>
-                )}
-              </SelectItem>
-            ))}
+            <SelectItem value="setor">Setor (rotação entre atendentes)</SelectItem>
+            <SelectItem value="atendente_fixo">Atendente fixo (sempre a mesma pessoa)</SelectItem>
           </SelectContent>
         </Select>
-        {setores.length === 0 && (
-          <p className="text-[10px] text-destructive mt-1">Nenhum setor cadastrado. Crie em <strong>Configurações → Equipe</strong> e vincule atendentes.</p>
-        )}
       </div>
-      <label className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs">
-        <Checkbox checked={somenteOnline} onCheckedChange={(v) => onChange({ somenteOnline: v === true })} />
-        <span>Só atendentes <strong>online</strong> (ativos nos últimos ~10 min). Desligado = qualquer atendente do setor.</span>
-      </label>
+
+      {modo === "setor" ? (
+        <>
+          <div>
+            <Label className="text-xs">Setor</Label>
+            <Select value={String(setorId || "")} onValueChange={(v) => onChange({ setorId: Number(v) })}>
+              <SelectTrigger><SelectValue placeholder="Escolha o setor" /></SelectTrigger>
+              <SelectContent>
+                {setores.map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    {s.nome}
+                    {typeof s.totalColaboradores === "number" && (
+                      <span className="text-muted-foreground ml-2 text-[10px]">{s.totalColaboradores} atendente(s)</span>
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {setores.length === 0 && (
+              <p className="text-[10px] text-destructive mt-1">Nenhum setor cadastrado. Crie em <strong>Configurações → Equipe</strong> e vincule atendentes.</p>
+            )}
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs">
+            <Checkbox checked={somenteOnline} onCheckedChange={(v) => onChange({ somenteOnline: v === true })} />
+            <span>Só atendentes <strong>online</strong> (ativos nos últimos ~10 min). Desligado = qualquer atendente do setor.</span>
+          </label>
+        </>
+      ) : (
+        <div>
+          <Label className="text-xs">Atendente</Label>
+          <Select value={String(atendenteId || "")} onValueChange={(v) => onChange({ atendenteId: Number(v) })}>
+            <SelectTrigger><SelectValue placeholder="Escolha o atendente" /></SelectTrigger>
+            <SelectContent>
+              {atendentes.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.userName || `Colaborador #${c.id}`}
+                  {c.cargo && <span className="text-muted-foreground ml-2 text-[10px]">{c.cargo}</span>}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {atendentes.length === 0 && (
+            <p className="text-[10px] text-destructive mt-1">Nenhum colaborador ativo.</p>
+          )}
+          <p className="text-[10px] text-muted-foreground mt-1">A conversa é atribuída a essa pessoa <strong>sempre</strong>, mesmo se já tinha outro atendente. Se o atendente estiver inativo, sai pela saída <strong>sem atendente</strong>.</p>
+        </div>
+      )}
+
       <p className="text-[10px] text-muted-foreground">
-        Disponível depois: <code>{"{{atendenteEscolhidoNome}}"}</code> — ex: "Você será atendido por {"{{atendenteEscolhidoNome}}"}".
+        Disponível depois: <code>{"{{atendente}}"}</code>, <code>{"{{atendenteEscolhidoNome}}"}</code> — ex: "Você será atendido por {"{{atendente}}"}".
       </p>
     </div>
   );

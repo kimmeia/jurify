@@ -692,6 +692,41 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       const db = await getDb();
       if (!db) return null;
 
+      // MODO "atendente fixo": atribui direto pessoa escolhida, sem setor/round-robin.
+      // Verifica que está ativa; se removida/inativa → null (sai por "sem_atendente").
+      // SOBRESCREVE qualquer atendente anterior — comportamento intencional do modo
+      // "fixo" (o usuário foi explícito sobre quem deve atender).
+      if (params.atendenteIdFixo) {
+        const [colab] = await db
+          .select({ id: colaboradores.id, nome: users.name })
+          .from(colaboradores)
+          .innerJoin(users, eq(users.id, colaboradores.userId))
+          .where(and(
+            eq(colaboradores.id, params.atendenteIdFixo),
+            eq(colaboradores.escritorioId, escritorioId),
+            eq(colaboradores.ativo, true),
+          ))
+          .limit(1);
+        if (!colab?.id) return null;
+        if (params.conversaId) {
+          await db.update(conversas)
+            .set({ atendenteId: colab.id })
+            .where(and(eq(conversas.id, params.conversaId), eq(conversas.escritorioId, escritorioId)));
+          // Stickiness cross-conv: próxima conversa do mesmo cliente continua nele.
+          const [conv] = await db
+            .select({ contatoId: conversas.contatoId })
+            .from(conversas)
+            .where(and(eq(conversas.id, params.conversaId), eq(conversas.escritorioId, escritorioId)))
+            .limit(1);
+          if (conv?.contatoId) {
+            await db.update(contatos)
+              .set({ responsavelId: colab.id })
+              .where(and(eq(contatos.id, conv.contatoId), eq(contatos.escritorioId, escritorioId)));
+          }
+        }
+        return { id: colab.id, nome: colab.nome || "Atendente" };
+      }
+
       // STICKY DENTRO DO SETOR: se a conversa JÁ tem atendente atrelado, ele
       // está ativo E É DO SETOR PEDIDO, só republica esse nome — não
       // redistribui. Evita "roubar" cliente que já está num atendimento em
