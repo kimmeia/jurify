@@ -3,7 +3,9 @@ import {
   pdpjTjConfig,
   getConfigTribunal,
   tribunalTemMotorProprio,
+  tribunalRequerCredencial,
   configPorSistema,
+  TRIBUNAIS_CONSULTA_PUBLICA,
 } from "./tribunais-pdpj";
 
 describe("tribunais-pdpj (registro central)", () => {
@@ -108,5 +110,27 @@ describe("configPorSistema (login tribunal-aware)", () => {
     expect(configPorSistema("eproc_trf2")).toBeNull();
     expect(configPorSistema("pje_restrito_trt7")).toBeNull();
     expect(configPorSistema("pje_*")).toBeNull();
+  });
+});
+
+describe("Consulta pública (TRF-5) — sem cofre", () => {
+  it("TRF-5 está no set de consulta pública e conta como motor próprio", () => {
+    expect(TRIBUNAIS_CONSULTA_PUBLICA.has("trf5")).toBe(true);
+    expect(tribunalTemMotorProprio("trf5")).toBe(true);
+  });
+
+  it("TRF-5 NÃO requer credencial — bifurcação que pula cofre/sessão", () => {
+    expect(tribunalRequerCredencial("trf5")).toBe(false);
+    // TJ continua exigindo
+    expect(tribunalRequerCredencial("tjce")).toBe(true);
+    expect(tribunalRequerCredencial("tjmg")).toBe(true);
+  });
+
+  it("getConfigTribunal('trf5') é null — TRF-5 não usa config PDPJ-cloud", () => {
+    // TRF-5 roda por adapter próprio (TRF5Scraper), não pela config PDPJ.
+    // configPorSistema também é null porque consulta pública não tem
+    // sistema cofre correspondente.
+    expect(getConfigTribunal("trf5")).toBeNull();
+    expect(configPorSistema("trf5")).toBeNull();
   });
 });
