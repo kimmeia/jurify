@@ -566,7 +566,7 @@ export default function Atendimento() {
                             {(c as any).canalTipo && (
                               <div
                                 className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-background border-2 border-background flex items-center justify-center text-[8px]"
-                                title={(c as any).canalNome || (c as any).canalTipo}
+                                title={`${(c as any).canalNome || (c as any).canalTipo}${(c as any).canalTelefone ? ` · ${(c as any).canalTelefone}` : ""}`}
                               >
                                 {(c as any).canalTipo?.startsWith("whatsapp") ? "💬"
                                   : (c as any).canalTipo === "instagram" ? "📷"
@@ -891,13 +891,14 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <Badge
                 variant="outline"
                 className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200 gap-1 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800"
-                title={`Conversa recebida via ${(conv as any).canalNome}`}
+                title={`Conversa recebida via ${(conv as any).canalNome || "canal"}${(conv as any).canalTelefone ? ` · ${(conv as any).canalTelefone}` : ""}`}
               >
                 {(conv as any).canalTipo?.startsWith("whatsapp") ? "💬"
                   : (conv as any).canalTipo === "instagram" ? "📷"
                   : (conv as any).canalTipo === "facebook" ? "🟪"
                   : "📡"}
-                {(conv as any).canalNome}
+                {/* Mostra o NÚMERO (distingue múltiplos WhatsApp); cai pro nome se não houver. */}
+                {(conv as any).canalTelefone || (conv as any).canalNome}
               </Badge>
             )}
           </div>

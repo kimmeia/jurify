@@ -71,6 +71,8 @@ export interface ConversaInfo {
   canalId: number;
   canalNome?: string;
   canalTipo?: string;
+  /** Número do canal que recebeu a conversa — distingue quando o escritório tem múltiplos WhatsApp. */
+  canalTelefone?: string;
   atendenteId?: number;
   atendenteNome?: string;
   status: StatusConversa;

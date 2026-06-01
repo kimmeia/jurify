@@ -100,30 +100,21 @@ async function findCanalByPhoneNumberId(phoneNumberId: string): Promise<CanalInf
   return null;
 }
 
-/** Busca canal CoEx pelo WABA ID (metadata do webhook) */
-async function findCanalByWabaId(wabaId: string): Promise<CanalInfo | null> {
-  const db = await getDb();
-  if (!db) return null;
-
-  try {
-    const canais = await db.select().from(canaisIntegrados)
-      .where(eq(canaisIntegrados.tipo, "whatsapp_api"));
-
-    for (const canal of canais) {
-      if (!canal.configEncrypted || !canal.configIv || !canal.configTag) continue;
-      try {
-        const config = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
-        if (config.wabaId === wabaId) {
-          return {
-            canalId: canal.id,
-            escritorioId: canal.escritorioId,
-            accessToken: typeof config.accessToken === "string" ? config.accessToken : "",
-          };
-        }
-      } catch { continue; }
-    }
-  } catch {}
-  return null;
+/**
+ * Resolve o canal de uma mensagem recebida ESTRITAMENTE pelo phone_number_id.
+ *
+ * Sem fallback por wabaId de propósito: vários números podem dividir a MESMA
+ * WABA e só alguns estarem conectados neste JuriFy (ex.: o cliente usa um dos
+ * números em outro sistema). Cair no wabaId entregava a mensagem de um número
+ * NÃO-conectado pro canal de outro número da mesma WABA — vazamento real entre
+ * sistemas/escritórios. O phone_number_id é único por número e sempre presente
+ * em eventos de mensagem, então é a única autoridade segura de roteamento.
+ */
+export async function resolverCanalDaMensagem(
+  phoneNumberId: string | undefined,
+): Promise<CanalInfo | null> {
+  if (!phoneNumberId) return null;
+  return findCanalByPhoneNumberId(phoneNumberId);
 }
 
 /** Extrai telefone do formato WhatsApp (5511999999999) */
@@ -205,11 +196,16 @@ export function registerWhatsAppCloudWebhook(app: Express) {
           const value = change.value;
           const phoneNumberId = value?.metadata?.phone_number_id;
 
-          // Encontrar canal associado
-          let canalInfo = phoneNumberId ? await findCanalByPhoneNumberId(phoneNumberId) : null;
-          if (!canalInfo && wabaId) canalInfo = await findCanalByWabaId(wabaId);
+          // Resolve o canal ESTRITAMENTE pelo número (phone_number_id), sem
+          // fallback por wabaId — ver resolverCanalDaMensagem. Mensagem de um
+          // número não-conectado é ignorada (não vaza pro canal de outro número
+          // que divida a mesma WABA).
+          const canalInfo = await resolverCanalDaMensagem(phoneNumberId);
           if (!canalInfo) {
-            log.warn(`[WhatsApp Cloud] Canal não encontrado para phoneNumberId=${phoneNumberId} wabaId=${wabaId}`);
+            log.warn(
+              { phoneNumberId, wabaId },
+              "[WhatsApp Cloud] Mensagem de número não conectado neste JuriFy — ignorada",
+            );
             continue;
           }
 
