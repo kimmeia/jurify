@@ -80,11 +80,22 @@ const TRIBUNAIS_COM_MOTOR_PROPRIO = new Set<string>(TRIBUNAIS_MOTOR_PROPRIO);
  */
 export function sistemaCofrePorTribunal(codigoTribunal: string): string | null {
   const map: Record<string, string> = {
+    // PJe-PDPJ (Keycloak SSO) — adapter genérico em pje-tjce.ts cobre todos
     tjce: "pje_tjce",
     tjrj: "pje_tjrj",
     tjmg: "pje_tjmg",
+    tjrn: "pje_tjrn",
+    tjma: "pje_tjma",
+    tjpa: "pje_tjpa",
+    tjro: "pje_tjro",
+    tjpe: "pje_tjpe",
+    tjpb: "pje_tjpb",
+    tjmt: "pje_tjmt",
+    tjrr: "pje_tjrr",
+    tjdf: "pje_tjdft",
+    // E-SAJ — adapters não existem ainda (TJSP, TJSC, TJBA…); deixados aqui
+    // como referência futura. Por ora retornam null abaixo pelo `?? null`.
     tjsp: "esaj_tjsp",
-    // Adicionar conforme implementamos novos adapters
   };
   return map[codigoTribunal] ?? null;
 }
