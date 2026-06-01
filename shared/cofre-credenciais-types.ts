@@ -48,6 +48,13 @@ export type SistemaCofre =
   | "pje_tjpr"
   | "pje_tjrs"
   | "pje_tjgo"
+  | "pje_tjrn"
+  | "pje_tjma"
+  | "pje_tjpa"
+  | "pje_tjro"
+  | "pje_tjpb"
+  | "pje_tjmt"
+  | "pje_tjrr"
   | "pje_*"
   | "pje_restrito_trt1"
   | "pje_restrito_trt2"
@@ -145,6 +152,13 @@ export const SISTEMAS_COFRE_LABELS: Record<SistemaCofre, { label: string; descri
   pje_tjpr: { label: "PJe TJPR", descricao: "Tribunal de Justiça do Paraná (autenticado)" },
   pje_tjrs: { label: "PJe TJRS", descricao: "Tribunal de Justiça do Rio Grande do Sul (autenticado)" },
   pje_tjgo: { label: "PJe TJGO", descricao: "Tribunal de Justiça de Goiás (autenticado)" },
+  pje_tjrn: { label: "PJe TJRN", descricao: "Tribunal de Justiça do Rio Grande do Norte (autenticado)" },
+  pje_tjma: { label: "PJe TJMA", descricao: "Tribunal de Justiça do Maranhão (autenticado)" },
+  pje_tjpa: { label: "PJe TJPA", descricao: "Tribunal de Justiça do Pará (autenticado)" },
+  pje_tjro: { label: "PJe TJRO", descricao: "Tribunal de Justiça de Rondônia (autenticado)" },
+  pje_tjpb: { label: "PJe TJPB", descricao: "Tribunal de Justiça da Paraíba (autenticado)" },
+  pje_tjmt: { label: "PJe TJMT", descricao: "Tribunal de Justiça do Mato Grosso (autenticado)" },
+  pje_tjrr: { label: "PJe TJRR", descricao: "Tribunal de Justiça de Roraima (autenticado)" },
   "pje_*": { label: "PJe — qualquer (TJ)", descricao: "Credencial coringa pra qualquer TJ que use PJe" },
   esaj_tjsp: { label: "E-SAJ TJSP", descricao: "Tribunal de Justiça de São Paulo (autenticado)" },
   esaj_tjsc: { label: "E-SAJ TJSC", descricao: "Tribunal de Justiça de Santa Catarina (autenticado)" },
