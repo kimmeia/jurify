@@ -11,6 +11,7 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { TrpcContext } from "../_core/context";
+import { dataHojeBR } from "../../shared/escritorio-types";
 
 type PermResult = {
   allowed: boolean;
@@ -173,6 +174,34 @@ describe("clientes.registrarFechamento — promove a Cliente", () => {
       caller.clientes.registrarFechamento({ contatoId: 50 }),
     ).rejects.toThrow(/Sem permissão/i);
     expect(contatoUpdates()).toHaveLength(0);
+  });
+
+  // dataFechamento no passado datas a conversão no mês correto: sobrescreve o
+  // createdAt do lead (que é o que Relatório Comercial e comissão agrupam).
+  it("data passada sobrescreve o createdAt do lead", async () => {
+    const caller = appRouter.createCaller(fakeCtx());
+    await caller.clientes.registrarFechamento({
+      contatoId: 50,
+      valorFechamento: "5000",
+      dataFechamento: "2020-03-15",
+    });
+    expect(captured.leadInserts).toHaveLength(1);
+    const cAt = captured.leadInserts[0].createdAt as Date;
+    expect(cAt).toBeInstanceOf(Date);
+    // Meio-dia em America/Sao_Paulo cai no mesmo dia civil em UTC.
+    expect(cAt.getUTCFullYear()).toBe(2020);
+    expect(cAt.getUTCMonth()).toBe(2); // março (0-based)
+    expect(cAt.getUTCDate()).toBe(15);
+  });
+
+  it("data de hoje NÃO sobrescreve o createdAt (usa NOW() do banco)", async () => {
+    const caller = appRouter.createCaller(fakeCtx());
+    await caller.clientes.registrarFechamento({
+      contatoId: 50,
+      dataFechamento: dataHojeBR("America/Sao_Paulo"),
+    });
+    expect(captured.leadInserts).toHaveLength(1);
+    expect(captured.leadInserts[0].createdAt).toBeUndefined();
   });
 });
 

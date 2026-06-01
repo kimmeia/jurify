@@ -8,7 +8,7 @@ import { eq, and, desc, like, or, sql, inArray, isNull, gte, lt } from "drizzle-
 import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
 import { verificarLimite } from "../billing/plan-limits";
-import { dataHojeBR, FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
+import { dataHojeBR, inicioDoDiaNoFuso, FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 import { reconciliarCobrancasOrfas } from "./db-financeiro";
 import { criarLead } from "./db-crm";
@@ -398,6 +398,13 @@ export const clientesRouter = router({
          * a quem vendeu), distorcendo o relatório comercial.
          */
         responsavelId: z.number().int().positive().optional(),
+        /**
+         * Data do fechamento (YYYY-MM-DD, no fuso do escritório). Permite
+         * datar a conversão num mês passado — ex: contrato assinado mês
+         * retrasado, registrado só agora. Define o mês no Relatório
+         * Comercial e na comissão. Hoje (ou futuro) usa o NOW() do servidor.
+         */
+        dataFechamento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -440,6 +447,27 @@ export const clientesRouter = router({
         if (!colab) throw new Error("Atendente inválido ou não pertence ao escritório.");
       }
 
+      // Só datas no PASSADO sobrescrevem o createdAt. Hoje (ou futuro por
+      // relógio adiantado do cliente) cai no NOW() do banco — preserva o
+      // timestamp exato e nunca data uma conversão no futuro.
+      let createdAtFechamento: Date | undefined;
+      if (input.dataFechamento) {
+        const [escritorio] = await db
+          .select({ fusoHorario: escritorios.fusoHorario })
+          .from(escritorios)
+          .where(eq(escritorios.id, perm.escritorioId))
+          .limit(1);
+        const tz = escritorio?.fusoHorario || FUSO_HORARIO_PADRAO;
+        if (input.dataFechamento < dataHojeBR(tz)) {
+          // Meio-dia no fuso do escritório: a data civil fica estável tanto
+          // no fuso quanto em UTC, então o mês bate nos filtros por range
+          // (gte/lte no fuso) E no DATE_FORMAT(createdAt) do relatório.
+          createdAtFechamento = new Date(
+            inicioDoDiaNoFuso(input.dataFechamento, tz).getTime() + 12 * 60 * 60 * 1000,
+          );
+        }
+      }
+
       const leadId = await criarLead({
         escritorioId: perm.escritorioId,
         contatoId: input.contatoId,
@@ -447,6 +475,7 @@ export const clientesRouter = router({
         etapaFunil: "fechado_ganho",
         valorEstimado: input.valorFechamento || undefined,
         origemLead: input.origemFechamento || "manual",
+        createdAt: createdAtFechamento,
       });
 
       // Fechou contrato → promove o contato a Cliente. Idempotente: se já
