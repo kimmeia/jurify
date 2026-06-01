@@ -17,7 +17,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Headphones, MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List } from "lucide-react";
+import { Headphones, MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
@@ -343,6 +343,13 @@ export default function Atendimento() {
   const [showNovo, setShowNovo] = useState(false); const [showIniciar, setShowIniciar] = useState(false); const [showNovoLead, setShowNovoLead] = useState(false);
   const [busca, setBusca] = useState(""); const [filtro, setFiltro] = useState("todos");
   const [inboxBusca, setInboxBusca] = useState("");
+  // Filtros avançados do inbox (canal / atendente / data). Client-side, sobre a
+  // lista que o servidor já cortou por permissão — só estreitam, não expõem nada.
+  const [filtroCanal, setFiltroCanal] = useState<number | "todos">("todos");
+  const [filtroAtendente, setFiltroAtendente] = useState<number | "todos">("todos");
+  const [filtroDataDe, setFiltroDataDe] = useState("");
+  const [filtroDataAte, setFiltroDataAte] = useState("");
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
   const [showLinhaTempo, setShowLinhaTempo] = useState<number | null>(null);
 
@@ -366,12 +373,17 @@ export default function Atendimento() {
   // local fica instantânea (sem ida ao servidor).
   const { data: convsAll, refetch: rC } = trpc.crm.listarConversas.useQuery(undefined, { refetchInterval: 5000 });
   const convs = (() => {
-    const todas = convsAll || [];
-    const porStatus = filtro === "todos" ? todas : todas.filter((c: any) => c.status === filtro);
+    let lista = convsAll || [];
+    if (filtro !== "todos") lista = lista.filter((c: any) => c.status === filtro);
+    // Filtros avançados (canal / atendente / data) — combinam em E com status+busca.
+    if (filtroCanal !== "todos") lista = lista.filter((c: any) => c.canalId === filtroCanal);
+    if (filtroAtendente !== "todos") lista = lista.filter((c: any) => c.atendenteId === filtroAtendente);
+    if (filtroDataDe) lista = lista.filter((c: any) => String(c.ultimaMensagemAt || c.createdAt || "").slice(0, 10) >= filtroDataDe);
+    if (filtroDataAte) lista = lista.filter((c: any) => String(c.ultimaMensagemAt || c.createdAt || "").slice(0, 10) <= filtroDataAte);
     const q = inboxBusca.trim().toLowerCase();
-    if (!q) return porStatus;
+    if (!q) return lista;
     const qDigits = q.replace(/\D/g, "");
-    return porStatus.filter((c: any) => {
+    return lista.filter((c: any) => {
       if (c.contatoNome?.toLowerCase().includes(q)) return true;
       // Telefone: compara só dígitos (cliente pode digitar com ou sem máscara).
       if (qDigits && (c.contatoTelefone || "").replace(/\D/g, "").includes(qDigits)) return true;
@@ -390,6 +402,28 @@ export default function Atendimento() {
 
   const hasWhatsapp = (canaisData?.canais || []).some((c: any) => (c.tipo === "whatsapp_qr" || c.tipo === "whatsapp_api") && c.status === "conectado");
   const hasTwilio = (canaisData?.canais || []).some((c: any) => c.tipo === "telefone_voip" && (c.status === "conectado" || c.temConfig));
+
+  // Opções dos filtros avançados do inbox (canal vem dos canais conectados;
+  // atendentes saem das conversas já carregadas — sem request extra).
+  const canaisFiltro = (canaisData?.canais || []).filter(
+    (c: any) => c.tipo === "whatsapp_api" || c.tipo === "whatsapp_qr",
+  );
+  const atendentesFiltro = (() => {
+    const map = new Map<number, string>();
+    for (const c of convsAll || []) {
+      const aid = (c as any).atendenteId;
+      if (aid) map.set(aid, (c as any).atendenteNome || `Atendente ${aid}`);
+    }
+    return [...map.entries()].map(([id, nome]) => ({ id, nome }));
+  })();
+  const filtrosAvancadosAtivos =
+    filtroCanal !== "todos" || filtroAtendente !== "todos" || !!filtroDataDe || !!filtroDataAte;
+  const limparFiltrosAvancados = () => {
+    setFiltroCanal("todos");
+    setFiltroAtendente("todos");
+    setFiltroDataDe("");
+    setFiltroDataAte("");
+  };
 
   // Consome o contatoId da URL assim que `convs` carregou. Roda uma vez só
   // (contatoUrlConsumido evita reabrir o diálogo se o usuário navegar depois).
@@ -513,21 +547,90 @@ export default function Atendimento() {
                     );
                   })}
                 </div>
+                {/* Filtros avançados: canal, atendente, data — tudo client-side */}
+                <div>
+                  <button
+                    onClick={() => setMostrarFiltros((v) => !v)}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    Filtros
+                    {filtrosAvancadosAtivos && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                  </button>
+                  {mostrarFiltros && (
+                    <div className="mt-2 space-y-2 rounded-lg border bg-background/60 p-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-muted-foreground">Canal (número)</label>
+                        <select
+                          value={filtroCanal === "todos" ? "todos" : String(filtroCanal)}
+                          onChange={(e) => setFiltroCanal(e.target.value === "todos" ? "todos" : Number(e.target.value))}
+                          className="w-full h-7 rounded-md border bg-background px-2 text-[11px]"
+                        >
+                          <option value="todos">Todos os canais</option>
+                          {canaisFiltro.map((c: any) => (
+                            <option key={c.id} value={c.id}>{c.telefone || c.nome || `Canal ${c.id}`}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-muted-foreground">Atendente</label>
+                        <select
+                          value={filtroAtendente === "todos" ? "todos" : String(filtroAtendente)}
+                          onChange={(e) => setFiltroAtendente(e.target.value === "todos" ? "todos" : Number(e.target.value))}
+                          className="w-full h-7 rounded-md border bg-background px-2 text-[11px]"
+                        >
+                          <option value="todos">Todos os atendentes</option>
+                          {atendentesFiltro.map((a) => (
+                            <option key={a.id} value={a.id}>{a.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-muted-foreground">De</label>
+                          <input
+                            type="date"
+                            value={filtroDataDe}
+                            onChange={(e) => setFiltroDataDe(e.target.value)}
+                            className="w-full h-7 rounded-md border bg-background px-2 text-[11px]"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-muted-foreground">Até</label>
+                          <input
+                            type="date"
+                            value={filtroDataAte}
+                            onChange={(e) => setFiltroDataAte(e.target.value)}
+                            className="w-full h-7 rounded-md border bg-background px-2 text-[11px]"
+                          />
+                        </div>
+                      </div>
+                      {filtrosAvancadosAtivos && (
+                        <button
+                          onClick={limparFiltrosAvancados}
+                          className="text-[11px] text-primary hover:underline"
+                        >
+                          Limpar filtros avançados
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               <ScrollArea className="flex-1 lg:min-h-0">
                 {!convs?.length ? (
                   <div className="text-center py-16 px-4">
                     <MessageCircle className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
                     <p className="text-sm text-muted-foreground">
-                      {inboxBusca
+                      {(inboxBusca || filtrosAvancadosAtivos)
                         ? "Nada encontrado"
                         : filtro === "todos"
                           ? "Nenhuma conversa"
                           : "Nenhuma neste filtro"}
                     </p>
-                    {(inboxBusca || filtro !== "todos") && (
+                    {(inboxBusca || filtro !== "todos" || filtrosAvancadosAtivos) && (
                       <button
-                        onClick={() => { setInboxBusca(""); setFiltro("todos"); }}
+                        onClick={() => { setInboxBusca(""); setFiltro("todos"); limparFiltrosAvancados(); }}
                         className="text-xs text-primary hover:underline mt-2"
                       >
                         Limpar filtros
