@@ -6,7 +6,7 @@
  * e compõe o `appRouter` final.
  */
 
-import { router } from "./_core/trpc";
+import { router, mergeRouters } from "./_core/trpc";
 
 // Cálculos
 import { financiamentoRouter } from "./calculos/router-financiamento";
@@ -31,7 +31,7 @@ import { camposClienteRouter } from "./escritorio/router-campos-cliente";
 import { modelosContratoRouter } from "./escritorio/router-modelos-contrato";
 import { clienteProcessosRouter } from "./escritorio/router-cliente-processos";
 import { importarProcessosRouter } from "./escritorio/router-importar-processos";
-import { relatoriosRouter } from "./escritorio/router-relatorios";
+import { relatoriosRouter, relatoriosPdfRouter } from "./escritorio/router-relatorios";
 import { permissoesRouter } from "./escritorio/router-permissoes";
 import { assinaturasRouter } from "./escritorio/router-assinaturas";
 import { tarefasRouter } from "./escritorio/router-tarefas";
@@ -114,7 +114,7 @@ export const appRouter = router({
   modelosContrato: modelosContratoRouter,
   clienteProcessos: clienteProcessosRouter,
   importarProcessos: importarProcessosRouter,
-  relatorios: relatoriosRouter,
+  relatorios: mergeRouters(relatoriosRouter, relatoriosPdfRouter),
   permissoes: permissoesRouter,
   assinaturas: assinaturasRouter,
   upload: uploadRouter,

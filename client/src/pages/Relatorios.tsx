@@ -24,15 +24,16 @@ import { Label } from "@/components/ui/label";
 import {
   BarChart3, MessageCircle, TrendingUp, DollarSign, ArrowUpRight, ArrowDownRight,
   Activity, CheckCircle2, Target, AlertTriangle, Percent,
-  LayoutGrid, Calculator, Wallet,
+  LayoutGrid, Calculator, Wallet, FileText, Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { RelatoriosTab as DreFinanceiroTab } from "./financeiro/Relatorios";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   ComposedChart, Area,
 } from "recharts";
 import {
-  formatBRLShort, formatDiaCurto, formatDiaCompleto,
+  formatBRLShort, formatDiaCurto, formatDiaCompleto, baixarBlob, base64ToBlob,
 } from "./financeiro/helpers";
 
 // ───────────────────────── helpers ─────────────────────────
@@ -781,6 +782,18 @@ function DashboardComercial() {
     { refetchInterval: 60_000, retry: false },
   );
 
+  // Export PDF — mesmos filtros da tela. Padrão do `financeiro.exportarDrePdf`:
+  // server gera via pdfkit, retorna base64, client baixa via blob.
+  const pdfMut = (trpc as any).relatorios?.exportarComercialPdf?.useMutation?.({
+    onSuccess: (r: { filename: string; base64: string; mimeType: string }) => {
+      const blob = base64ToBlob(r.base64, r.mimeType);
+      baixarBlob(blob, r.filename, r.mimeType);
+      toast.success("PDF baixado");
+    },
+    onError: (err: any) =>
+      toast.error("Erro ao gerar PDF", { description: err.message }),
+  });
+
   // Sem setor comercial configurado: convida o admin a configurar.
   if (setoresComerciais.length === 0) {
     return (
@@ -840,6 +853,26 @@ function DashboardComercial() {
                 onChange={(e) => setRange((r) => ({ ...r, fim: e.target.value }))}
                 max={new Date().toISOString().slice(0, 10)} />
             </div>
+          </div>
+          <div className="flex justify-end mt-3">
+            <Button
+              size="sm"
+              onClick={() => pdfMut?.mutate?.({
+                dataInicio: inicio,
+                dataFim: fim,
+                setorId: setorIdEfetivo,
+                atendenteId: atendenteIdEfetivo,
+              })}
+              disabled={isLoading || !data || pdfMut?.isPending}
+              title="Exporta o relatório comercial do período em PDF"
+            >
+              {pdfMut?.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <FileText className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              PDF
+            </Button>
           </div>
         </CardContent>
       </Card>
