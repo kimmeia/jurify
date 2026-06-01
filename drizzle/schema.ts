@@ -292,6 +292,11 @@ export const escritorios = mysqlTable("escritorios", {
    * com cargo "dono" (default seguro: funciona sem configuração).
    */
   agendaResponsavelPadraoId: int("agendaResponsavelPadraoId"),
+  /**
+   * Modelo de IA pra resumir movimentações (prefixo determina provider:
+   * "gpt-*" = OpenAI, "claude-*" = Anthropic). NULL = usa default global.
+   */
+  motorResumoModelo: varchar("motor_resumo_modelo", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -420,6 +425,18 @@ export const agendamentos = mysqlTable("agendamentos", {
   /** Telefone/WhatsApp/IM do contato da reunião — campo livre, não vinculado
    *  a contato CRM. Útil pra "telefonema rápido antes da audiência". */
   contatoTelefone: varchar("contatoTelefone", { length: 64 }),
+  /**
+   * Resultado do atendimento — preenchido ao concluir um compromisso de
+   * reunião/audiência/follow-up. NULL = não concluído ou não aplicável
+   * (prazo/tarefa). Separado de `status`: comparecimento responde "o cliente
+   * veio?", status responde "o compromisso foi tratado?".
+   */
+  comparecimento: mysqlEnum("comparecimento", ["compareceu", "nao_compareceu", "remarcado"]),
+  /**
+   * Observação pós-atendimento — o que aconteceu na reunião. Distinto de
+   * `descricao` (briefing ANTES do evento); esta é a nota DEPOIS.
+   */
+  observacaoAtendimento: text("observacaoAtendimento"),
   createdAt: timestamp("createdAtAgend").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAgend").defaultNow().onUpdateNow().notNull(),
 });
@@ -1999,11 +2016,41 @@ export const smartflowCenarios = mysqlTable("smartflow_cenarios", {
    */
   layout: text("layoutSF"),
   criadoPor: int("criadoPorSF"),
+  /** Quando o cenário foi criado a partir de um modelo da plataforma,
+   *  aponta pro `smartflow_templates.id` de origem. NULL = criado do zero. */
+  origemTemplateId: int("origemTemplateIdSF"),
   createdAt: timestamp("createdAtSF").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtSF").defaultNow().onUpdateNow().notNull(),
 });
 
 export type SmartflowCenario = typeof smartflowCenarios.$inferSelect;
+
+/**
+ * Modelos de SmartFlow da plataforma (admin cria → clientes clonam).
+ * Guarda um `TemplateSmartflow` serializado: gatilho + passos prontos +
+ * metadados da galeria. Quando `disponivelParaClientes`, aparece na galeria
+ * de cada escritório pra ser clonado via `smartflow.criarDeTemplate`.
+ */
+export const smartflowTemplates = mysqlTable("smartflow_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  nome: varchar("nomeTpl", { length: 128 }).notNull(),
+  descricao: varchar("descricaoTpl", { length: 512 }).default("").notNull(),
+  icone: varchar("iconeTpl", { length: 48 }).default("sparkles").notNull(),
+  gradiente: varchar("gradienteTpl", { length: 64 }).default("from-violet-500 to-indigo-500").notNull(),
+  gatilho: varchar("gatilhoTpl", { length: 48 }).notNull(),
+  configGatilho: text("configGatilhoTpl"),
+  /** JSON: PassoTemplate[] (clienteId, tipo, config, proximoSe). */
+  passos: text("passosTpl").notNull(),
+  categoria: varchar("categoriaTpl", { length: 48 }),
+  badge: varchar("badgeTpl", { length: 16 }),
+  dica: varchar("dicaTpl", { length: 512 }),
+  disponivelParaClientes: boolean("disponivelParaClientesTpl").default(false).notNull(),
+  criadoPor: int("criadoPorTpl"),
+  createdAt: timestamp("createdAtTpl").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtTpl").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SmartflowTemplate = typeof smartflowTemplates.$inferSelect;
 
 /**
  * Passo de um cenário — cada ação no fluxo.
@@ -2997,6 +3044,8 @@ export const eventosProcesso = mysqlTable(
     cnjAfetado: varchar("cnjAfetado", { length: 32 }),
     /** SHA-256 de (tipo + cnj + dataEvento + 200 chars do conteudo) — UNIQUE */
     hashDedup: varchar("hashDedup", { length: 64 }).notNull(),
+    /** Resumo curto (pt-BR) do conteúdo gerado por IA. NULL = não foi gerado. */
+    resumoIa: text("resumo_ia"),
     lido: boolean("lido").default(false).notNull(),
     alertaEnviado: boolean("alertaEnviado").default(false).notNull(),
     alertaEnviadoEm: timestamp("alertaEnviadoEm"),

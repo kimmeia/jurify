@@ -36,6 +36,7 @@ import {
   temHorarioConfigurado,
 } from "./dispatcher-helpers";
 import type {
+  ImagemAnexa,
   GatilhoSmartflow,
   TipoCanalMensagem,
   ConfigGatilhoMensagemCanal,
@@ -303,10 +304,11 @@ async function executarCenarioPorGatilho(
   gatilho: GatilhoSmartflow,
   contexto: SmartflowContexto,
   refs?: { contatoId?: number; conversaId?: number },
+  imagem?: ImagemAnexa,
 ): Promise<{ executou: boolean; respostas: string[]; execId?: number }> {
   const cenario = await carregarCenarioAtivo(escritorioId, gatilho);
   if (!cenario) return { executou: false, respostas: [] };
-  return executarCenarioCarregado(escritorioId, cenario, contexto, refs);
+  return executarCenarioCarregado(escritorioId, cenario, contexto, refs, imagem);
 }
 
 /**
@@ -351,6 +353,7 @@ async function executarCenarioCarregado(
   cenario: CenarioCarregado,
   contexto: SmartflowContexto,
   refs?: { contatoId?: number; conversaId?: number },
+  imagem?: ImagemAnexa,
 ): Promise<{ executou: boolean; respostas: string[]; execId?: number }> {
   // Limite por contato: cenários "1x na vida", "1x por dia", etc. pulam se já
   // rodaram dentro da janela pra este contato.
@@ -365,7 +368,7 @@ async function executarCenarioCarregado(
   const execId = await criarExecucao(escritorioId, cenario.cenarioId, contexto, refs);
   if (!execId) return { executou: false, respostas: [] };
 
-  const executores = criarExecutoresReais(escritorioId);
+  const executores = criarExecutoresReais(escritorioId, imagem);
   const resultado = await executarCenario(cenario.passos, contexto, executores);
 
   await finalizarExecucao(execId, resultado);
@@ -1230,6 +1233,7 @@ export async function dispararMensagemCanal(
     mensagem: string;
     telefone: string;
     nomeCliente: string;
+    imagem?: ImagemAnexa;
   },
 ): Promise<{ executou: boolean; respostas: string[]; execId?: number }> {
   const db = await getDb();
@@ -1256,7 +1260,7 @@ export async function dispararMensagemCanal(
     const pendente = await acharExecucaoAguardando(escritorioId, params.contatoId);
     if (pendente) {
       log.info({ execId: pendente.id, contatoId: params.contatoId }, "SmartFlow: retomando execução aguardando");
-      const respostas = await retomarComResposta(pendente.id, params.mensagem);
+      const respostas = await retomarComResposta(pendente.id, params.mensagem, params.imagem);
       return { executou: true, respostas, execId: pendente.id };
     }
 
@@ -1322,7 +1326,7 @@ export async function dispararMensagemCanal(
         const r = await executarCenarioCarregado(escritorioId, escolhido, contexto, {
           contatoId: params.contatoId,
           conversaId: params.conversaId,
-        });
+        }, params.imagem);
         return { executou: true, respostas: r.respostas, execId: r.execId };
       }
       // Nenhum fluxo casou e não há padrão — não dispara nada.
@@ -1337,6 +1341,7 @@ export async function dispararMensagemCanal(
         "whatsapp_mensagem",
         contexto,
         { contatoId: params.contatoId, conversaId: params.conversaId },
+        params.imagem,
       );
       return { executou: r.executou, respostas: r.respostas, execId: r.execId };
     }
@@ -1716,6 +1721,7 @@ export async function janelaAcumulacaoAtiva(escritorioId: number, contatoId: num
 async function retomarComResposta(
   execId: number,
   respostaTexto: string,
+  imagem?: ImagemAnexa,
 ): Promise<string[]> {
   const db = await getDb();
   if (!db) return [];
@@ -1761,7 +1767,7 @@ async function retomarComResposta(
   if (deveReentrarNoWaitNode(cenario.passos, waitNodeId)) {
     delete (contextoBase as any).aguardandoNodeClienteId;
     (contextoBase as any).__resumindoWaitClienteId = waitNodeId;
-    const executores = criarExecutoresReais(exec.escritorioId);
+    const executores = criarExecutoresReais(exec.escritorioId, imagem);
     const resultado = await executarCenario(cenario.passos, contextoBase, executores);
     await finalizarExecucao(execId, resultado);
     return resultado.respostas;
@@ -1781,7 +1787,7 @@ async function retomarComResposta(
     return [];
   }
 
-  const executores = criarExecutoresReais(exec.escritorioId);
+  const executores = criarExecutoresReais(exec.escritorioId, imagem);
   const resultado = await executarCenario(passosRestantes, contextoBase, executores);
 
   const totalResultado: ExecutarCenarioResultado = {

@@ -183,7 +183,7 @@ function AgenteFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{agenteId ? "Editar Agente" : "Novo Agente de IA"}</DialogTitle>
           <DialogDescription>
@@ -232,13 +232,14 @@ function AgenteFormDialog({
           <div className="space-y-1.5">
             <Label>Prompt de sistema *</Label>
             <Textarea
-              rows={6}
+              rows={8}
               placeholder="Defina a 'personalidade' e as instruções do agente..."
               value={form.prompt}
               onChange={(e) => setForm({ ...form, prompt: e.target.value })}
+              maxLength={32000}
             />
             <p className="text-[11px] text-muted-foreground">
-              {form.prompt.length} / 8000 caracteres
+              {form.prompt.length.toLocaleString("pt-BR")} / 32.000 caracteres
             </p>
           </div>
 
@@ -435,7 +436,7 @@ function TreinamentoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <BrainCircuit className="h-5 w-5 text-violet-600" />

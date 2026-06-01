@@ -26,6 +26,7 @@ import { getDb } from "../db";
 import { agentesIa, agenteIaDocumentos, adminIntegracoes } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { toIsoString } from "../_core/dates";
+import { montarBodyOpenAIChat } from "../_core/openai-model-params";
 import {
   parseAgenteVariaveis,
   serializarAgenteVariaveis,
@@ -152,6 +153,7 @@ export async function resolverAPIKey(
   escritorioId: number,
   agenteAtual: any,
   providerPreferido?: string,
+  opts?: { permitirGlobal?: boolean },
 ): Promise<{ provider: "openai" | "anthropic"; key: string } | null> {
   // 1. Agente tem sua própria key. O nome do campo é `openaiApiKey` por
   // legado (quando só suportávamos OpenAI), mas o conteúdo é a key do
@@ -228,18 +230,22 @@ export async function resolverAPIKey(
     }
   }
 
-  // 4. Key admin global
-  try {
-    const [reg] = await db
-      .select()
-      .from(adminIntegracoes)
-      .where(eq(adminIntegracoes.provedor, "openai"))
-      .limit(1);
-    if (reg && reg.apiKeyEncrypted && reg.apiKeyIv && reg.apiKeyTag) {
-      return { provider: "openai", key: adminDecrypt(reg.apiKeyEncrypted, reg.apiKeyIv, reg.apiKeyTag) };
+  // 4. Key admin global — pulada quando o caller exige a chave do próprio
+  //    escritório (ex: recursos de atendimento, custeados pelo cliente quando
+  //    ele tem chave; ver resolverChaveIAEscritorio).
+  if (opts?.permitirGlobal !== false) {
+    try {
+      const [reg] = await db
+        .select()
+        .from(adminIntegracoes)
+        .where(eq(adminIntegracoes.provedor, "openai"))
+        .limit(1);
+      if (reg && reg.apiKeyEncrypted && reg.apiKeyIv && reg.apiKeyTag) {
+        return { provider: "openai", key: adminDecrypt(reg.apiKeyEncrypted, reg.apiKeyIv, reg.apiKeyTag) };
+      }
+    } catch (err) {
+      log.warn({ err: String(err) }, "Falha ao buscar key admin");
     }
-  } catch (err) {
-    log.warn({ err: String(err) }, "Falha ao buscar key admin");
   }
 
   return null;
@@ -506,7 +512,7 @@ export const agentesIaRouter = router({
         descricao: z.string().max(512).optional(),
         areaConhecimento: z.string().max(128).optional(),
         modelo: z.string().default("gpt-4o-mini"),
-        prompt: z.string().min(10),
+        prompt: z.string().min(10).max(32000),
         canalId: z.number().optional(),
         openaiApiKey: z.string().min(10).optional(),
         maxTokens: z.number().min(100).max(4000).optional(),
@@ -572,7 +578,7 @@ export const agentesIaRouter = router({
         descricao: z.string().max(512).optional(),
         areaConhecimento: z.string().max(128).optional(),
         modelo: z.string().optional(),
-        prompt: z.string().min(10).optional(),
+        prompt: z.string().min(10).max(32000).optional(),
         canalId: z.number().nullable().optional(),
         openaiApiKey: z.string().min(10).optional(),
         maxTokens: z.number().min(100).max(4000).optional(),
@@ -987,15 +993,15 @@ export const agentesIaRouter = router({
             Authorization: `Bearer ${resolved.key}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
+          body: JSON.stringify(montarBodyOpenAIChat({
             model: agente.modelo,
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: input.pergunta },
             ],
-            temperature: temperatura,
-            max_tokens: maxTokens,
-          }),
+            temperatura,
+            maxTokens,
+          })),
           signal: AbortSignal.timeout(30000),
         });
 

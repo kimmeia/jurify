@@ -28,6 +28,7 @@ import {
   criarCanal,
   atualizarConfigCanal,
   obterConfigMascarada,
+  obterConfigCanal,
   atualizarStatusCanal,
   excluirCanal,
   contarCanaisPorTipo,
@@ -711,6 +712,121 @@ export const configuracoesRouter = router({
       return { id };
     }),
 
+  /**
+   * Cadastro manual de canal WhatsApp Cloud API — alternativa ao Embedded
+   * Signup pra casos onde o cliente já tem WABA + número configurados na BM
+   * dele e o OAuth tá bloqueado (BM dona do JuriFy = mesma BM dos números,
+   * App Review pendente, Tech Provider não aprovado, etc).
+   *
+   * Recebe os 3 valores que o Embedded Signup normalmente preencheria,
+   * **testa a conexão antes de salvar** (chama Graph API com `phoneNumberId`)
+   * e usa o `verified_name` + `display_phone_number` retornados como nome e
+   * telefone do canal — evita typos de copy-paste e garante que o canal só
+   * grava se as credenciais realmente funcionam.
+   *
+   * Migração pra OAuth depois: quando o Embedded Signup estiver liberado,
+   * o cliente refaz Conectar pelo fluxo normal — o `findCanalByPhoneNumberId`
+   * do webhook continua casando pelo mesmo `phoneNumberId`, então pode
+   * sobrescrever a config manual ou criar canal novo + desativar a manual.
+   */
+  conectarWhatsappCloudManual: protectedProcedure
+    .input(z.object({
+      accessToken: z.string().min(20),
+      phoneNumberId: z.string().min(5).max(64),
+      wabaId: z.string().min(5).max(64),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      await exigirPermissao(
+        ctx.user.id, "configuracoes", "criar",
+        "Sem permissão para criar canais de integração.",
+      );
+
+      // Enforce do limite de conexões WhatsApp do plano (mesma regra do
+      // criarCanal — não duplica caminho).
+      const { getActiveSubscriptionComHeranca } = await import("../db");
+      const { getPlanoBySlug } = await import("../billing/planos-repo");
+      const sub = await getActiveSubscriptionComHeranca(ctx.user.id);
+      const cortesiaAtiva = !!sub?.cortesia;
+      if (!cortesiaAtiva) {
+        const plano = sub?.planId ? await getPlanoBySlug(sub.planId) : null;
+        const limite = plano?.limites.maxConexoesWhatsapp ?? 0;
+        if (limite < 999999) {
+          const contagem = await contarCanaisPorTipo(esc.escritorio.id);
+          const whatsappAtual = contagem["whatsapp"] || 0;
+          if (whatsappAtual >= limite) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: `Limite de ${limite} conexão(ões) WhatsApp atingido no plano "${plano?.nome ?? "atual"}". Faça upgrade pra adicionar mais.`,
+            });
+          }
+        }
+      }
+
+      // Testa o trio na Graph API antes de gravar. Bloqueia credencial errada
+      // ou token expirado em cadastro silencioso (canal "conectado" mas
+      // morto — bug recorrente quando cola valores incorretos).
+      const { WhatsAppCloudClient } = await import("../integracoes/whatsapp-cloud");
+      const client = new WhatsAppCloudClient({
+        phoneNumberId: input.phoneNumberId,
+        accessToken: input.accessToken,
+        wabaId: input.wabaId,
+      });
+      const teste = await client.testarConexao();
+      if (!teste.ok) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Falha ao validar credenciais na Meta: ${teste.erro || "erro desconhecido"}. Confira accessToken, phoneNumberId e wabaId.`,
+        });
+      }
+
+      const nomeCanal = teste.nome || teste.telefone || "WhatsApp Cloud";
+      const telefoneCanal = teste.telefone || undefined;
+
+      // NÃO marcamos registradoCloudApi aqui de propósito: um número recém
+      // adicionado à WABA quase sempre está "Pendente" na Meta (precisa do
+      // POST /{phone-number-id}/register com PIN pra ativar). Deixar o default
+      // (false) mantém a etapa de registro por PIN disponível na UI — e é o
+      // próprio registro que ativa o número e inscreve os webhooks. Forçar
+      // `true` aqui esconderia essa etapa e travaria o número em "Pendente".
+      const id = await criarCanal({
+        escritorioId: esc.escritorio.id,
+        tipo: "whatsapp_api",
+        nome: nomeCanal,
+        telefone: telefoneCanal,
+        config: {
+          accessToken: input.accessToken,
+          phoneNumberId: input.phoneNumberId,
+          wabaId: input.wabaId,
+        },
+      });
+
+      // Inscreve o app na WABA pra RECEBER mensagens. O fluxo de registro por
+      // PIN também inscreve, mas fazemos aqui (best-effort) pra cobrir o caso
+      // de um número que JÁ chega registrado e não passa pela tela de PIN —
+      // sem isso ele enviaria mas nunca receberia. Se falhar, o canal segue
+      // e o usuário re-inscreve pelo botão da UI.
+      let webhooksInscritos = false;
+      try {
+        const { subscribeAppToWaba } = await import("../routers/meta-channels");
+        const sub = await subscribeAppToWaba(input.accessToken, input.wabaId);
+        webhooksInscritos = sub.ok;
+      } catch {
+        /* best-effort — não bloqueia o cadastro */
+      }
+
+      await registrarAudit({
+        escritorioId: esc.escritorio.id,
+        colaboradorId: esc.colaborador.id,
+        canalId: id,
+        acao: "conectou",
+        detalhes: `Canal whatsapp_api "${nomeCanal}" cadastrado manualmente (phoneNumberId=${input.phoneNumberId}, webhooks=${webhooksInscritos ? "ok" : "pendente"})`,
+      });
+
+      return { id, nome: nomeCanal, telefone: telefoneCanal, webhooksInscritos };
+    }),
+
   /** Atualiza configuração de um canal */
   atualizarConfigCanal: protectedProcedure
     .input(z.object({
@@ -736,6 +852,48 @@ export const configuracoesRouter = router({
         detalhes: "Configuração atualizada",
       });
 
+      return { success: true };
+    }),
+
+  /** Flags de mídia da IA (Whisper / Vision) lidas do card do ChatGPT. */
+  flagsIA: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return { configurado: false, whisperAtivo: false, visionAtivo: false };
+    const { obterConfigIAMedia } = await import("../integracoes/config-ia-media");
+    const c = await obterConfigIAMedia(esc.escritorio.id);
+    return {
+      configurado: !!(c && c.openaiApiKey),
+      whisperAtivo: !!c?.whisperAtivo,
+      visionAtivo: !!c?.visionAtivo,
+    };
+  }),
+
+  /** Liga/desliga Whisper (áudio→texto) e Vision (imagem) no card do ChatGPT.
+   *  Merge no config do canal pra não apagar a chave OpenAI. */
+  atualizarFlagsIA: protectedProcedure
+    .input(z.object({ whisperAtivo: z.boolean().optional(), visionAtivo: z.boolean().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      await exigirPermissao(
+        ctx.user.id, "configuracoes", "editar",
+        "Sem permissão para editar a configuração do canal.",
+      );
+      const { obterConfigIAMedia } = await import("../integracoes/config-ia-media");
+      const c = await obterConfigIAMedia(esc.escritorio.id);
+      if (!c) throw new Error("Configure a chave da OpenAI no card do ChatGPT primeiro.");
+      const cfg = (await obterConfigCanal(c.canalId, esc.escritorio.id)) ?? {};
+      const novo: Record<string, any> = { ...cfg };
+      if (input.whisperAtivo !== undefined) novo.whisperAtivo = input.whisperAtivo;
+      if (input.visionAtivo !== undefined) novo.visionAtivo = input.visionAtivo;
+      await atualizarConfigCanal(c.canalId, esc.escritorio.id, novo);
+      await registrarAudit({
+        escritorioId: esc.escritorio.id,
+        colaboradorId: esc.colaborador.id,
+        canalId: c.canalId,
+        acao: "editou_config",
+        detalhes: `IA mídia: whisper=${novo.whisperAtivo ?? false} vision=${novo.visionAtivo ?? false}`,
+      });
       return { success: true };
     }),
 

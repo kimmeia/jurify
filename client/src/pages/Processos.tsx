@@ -31,6 +31,8 @@ import {
   useKeywordAlerts,
   checkKeywords,
 } from "./processos/search-history";
+import { ImportarAdvboxDialog } from "./processos/ImportarAdvboxDialog";
+import { Upload } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 
@@ -1427,6 +1429,7 @@ function MonitorarTab() {
   const [deletarTarget, setDeletarTarget] = useState<{ id: number; nome: string } | null>(null);
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "pausado" | "erro">("todos");
   const [buscaTexto, setBuscaTexto] = useState("");
+  const [importarAdvboxOpen, setImportarAdvboxOpen] = useState(false);
   const utils = trpc.useUtils();
 
   // Estado pra "Atualizar todos" — drawer com lista + progress. ID da
@@ -1639,6 +1642,16 @@ function MonitorarTab() {
             </Button>
             <Button
               size="sm"
+              variant="outline"
+              className="h-9 rounded-lg"
+              onClick={() => setImportarAdvboxOpen(true)}
+              title="Importa em massa processos do export XLSX da Advbox."
+            >
+              <Upload className="h-3.5 w-3.5 mr-1" />
+              Importar Advbox
+            </Button>
+            <Button
+              size="sm"
               className="h-9 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-sm"
               onClick={() => setNovoOpen(true)}
             >
@@ -1646,6 +1659,12 @@ function MonitorarTab() {
             </Button>
           </div>
         </div>
+
+        <ImportarAdvboxDialog
+          open={importarAdvboxOpen}
+          onOpenChange={setImportarAdvboxOpen}
+          onSuccess={() => refetch()}
+        />
 
         {/* Busca + Filtros (chips) */}
         {listaMons.length > 0 && (
@@ -1706,7 +1725,7 @@ function MonitorarTab() {
 
       {/* Drawer de progresso da atualização em lote */}
       <Dialog open={atualDrawerOpen} onOpenChange={setAtualDrawerOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {progresso?.status === "concluido"
@@ -2725,7 +2744,7 @@ function NovasAcoesTab() {
       </div>
 
       <Dialog open={atualDrawerOpen} onOpenChange={setAtualDrawerOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {progresso?.status === "concluido"

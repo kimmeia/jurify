@@ -28,7 +28,8 @@ import {
   prazosSugeridos,
 } from "../../drizzle/schema";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
-import { consultarTjce, consultarTjcePorCpf, TJCE_2G } from "./adapters/pje-tjce";
+import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
+import { getConfigTribunal, tribunalRequerCredencial } from "./tribunais-pdpj";
 import { detectarSubiuParaSegundoGrau, mesclarMovimentacoes } from "./detectar-grau-recurso";
 import { CUSTOS } from "../routers/processos";
 import { createLogger } from "../_core/logger";
@@ -40,6 +41,7 @@ import {
 } from "./polo-matcher";
 import { extrairAnoCnj } from "./cnj-parser";
 import { hashEvento as hashEventoNorm } from "../../scripts/spike-motor-proprio/lib/parser-utils";
+import { resumirMovimentacao, modeloParaEscritorio } from "./resumir-movimentacao";
 
 /**
  * Idade máxima (em anos) que um CNJ pode ter pra ser considerado "novo"
@@ -193,53 +195,81 @@ export async function pollarUmMonitoramentoMovs(
   if (!db) return { ok: false, detectadas: 0, erro: "DB indisponível" };
 
   try {
-    if (!mon.credencialId) {
-      await db
-        .update(motorMonitoramentos)
-        .set({
-          status: "erro",
-          ultimoErro: "Credencial não vinculada",
-          ultimaConsultaEm: new Date(),
-        })
-        .where(eq(motorMonitoramentos.id, mon.id));
-      return { ok: false, detectadas: 0, erro: "Credencial não vinculada" };
-    }
+    // Bifurcação por estilo de tribunal:
+    //  - PDPJ-cloud (TJCE, TJRJ, …): exige credencial → cofre → sessão Keycloak
+    //  - Consulta pública (TRF-5):    sem credencial, adapter HTTP/Playwright direto
+    // Decisão antes de qualquer check de credencial pra TRF-5 não cair em
+    // "Credencial não vinculada".
+    const requerCred = tribunalRequerCredencial(mon.tribunal);
 
-    const sessao = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
-    if (!sessao) {
-      await db
-        .update(motorMonitoramentos)
-        .set({
-          status: "erro",
-          ultimoErro: "Sessão expirada — revalide a credencial",
-          ultimaConsultaEm: new Date(),
-        })
-        .where(eq(motorMonitoramentos.id, mon.id));
-      return { ok: false, detectadas: 0, erro: "Sessão expirada" };
-    }
+    let resultado: Awaited<ReturnType<typeof consultarTjce>>;
+    const cfgTribunal = getConfigTribunal(mon.tribunal);
 
-    let resultado;
-    if (mon.tribunal === "tjce") {
-      resultado = await consultarTjce(mon.searchKey, sessao);
+    if (!requerCred) {
+      // ── Caminho consulta pública (sem cofre) ──
+      if (mon.tribunal === "trf5") {
+        const { consultarTrf5 } = await import("./adapters/pje-trf5");
+        resultado = await consultarTrf5(mon.searchKey);
+      } else {
+        log.warn(
+          { tribunal: mon.tribunal, monId: mon.id },
+          "[motor-cron] consulta pública sem adapter",
+        );
+        return {
+          ok: false,
+          detectadas: 0,
+          erro: `Adapter de consulta pública não encontrado para ${mon.tribunal}`,
+        };
+      }
     } else {
-      log.warn(
-        { tribunal: mon.tribunal, monId: mon.id },
-        "[motor-cron] tribunal sem adapter",
-      );
-      return { ok: false, detectadas: 0, erro: `Tribunal ${mon.tribunal} sem adapter` };
-    }
+      // ── Caminho PDPJ-cloud (TJs com credencial OAB) ──
+      if (!mon.credencialId) {
+        await db
+          .update(motorMonitoramentos)
+          .set({
+            status: "erro",
+            ultimoErro: "Credencial não vinculada",
+            ultimaConsultaEm: new Date(),
+          })
+          .where(eq(motorMonitoramentos.id, mon.id));
+        return { ok: false, detectadas: 0, erro: "Credencial não vinculada" };
+      }
 
-    // Sessão morta no ponto de uso (o PDPJ derrubou antes da nossa estimativa
-    // de 90min): força relogin e tenta de novo UMA vez. Sem isto o auto-login
-    // não dispara nesse caso e o monitoramento falha com "Sessão expirada" sem
-    // refazer login. Relogin é dedupado por credencial (cofre-helpers).
-    if (!resultado.ok && resultado.categoriaErro === "sessao_expirada") {
-      const sessaoNova = await recuperarSessao(mon.credencialId, {
-        tentarRelogin: true,
-        forcarRelogin: true,
-      });
-      if (sessaoNova) {
-        resultado = await consultarTjce(mon.searchKey, sessaoNova);
+      const sessao = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
+      if (!sessao) {
+        await db
+          .update(motorMonitoramentos)
+          .set({
+            status: "erro",
+            ultimoErro: "Sessão expirada — revalide a credencial",
+            ultimaConsultaEm: new Date(),
+          })
+          .where(eq(motorMonitoramentos.id, mon.id));
+        return { ok: false, detectadas: 0, erro: "Sessão expirada" };
+      }
+
+      if (!cfgTribunal) {
+        log.warn(
+          { tribunal: mon.tribunal, monId: mon.id },
+          "[motor-cron] tribunal sem adapter",
+        );
+        return { ok: false, detectadas: 0, erro: `Tribunal ${mon.tribunal} sem adapter` };
+      }
+
+      resultado = await consultarTjce(mon.searchKey, sessao, cfgTribunal);
+
+      // Sessão morta no ponto de uso (o PDPJ derrubou antes da nossa estimativa
+      // de 90min): força relogin e tenta de novo UMA vez. Sem isto o auto-login
+      // não dispara nesse caso e o monitoramento falha com "Sessão expirada" sem
+      // refazer login. Relogin é dedupado por credencial (cofre-helpers).
+      if (!resultado.ok && resultado.categoriaErro === "sessao_expirada") {
+        const sessaoNova = await recuperarSessao(mon.credencialId, {
+          tentarRelogin: true,
+          forcarRelogin: true,
+        });
+        if (sessaoNova) {
+          resultado = await consultarTjce(mon.searchKey, sessaoNova, cfgTribunal);
+        }
       }
     }
 
@@ -274,11 +304,15 @@ export async function pollarUmMonitoramentoMovs(
     // dispara quando detectado (não consulta sempre). Degrada com elegância: se
     // o 2º grau falhar (URL/sessão/estrutura), segue só com o 1º grau — sem
     // regressão no monitoramento que já funciona.
-    if (deteccaoGrau.subiu && mon.tribunal === "tjce") {
+    //
+    // Só pra PDPJ-cloud — consulta pública (TRF-5) ainda não tem fluxo de 2º
+    // grau implementado.
+    const cfg2grau = requerCred ? getConfigTribunal(mon.tribunal, 2) : null;
+    if (deteccaoGrau.subiu && cfg2grau && mon.credencialId) {
       try {
         const sessao2 = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
         if (sessao2) {
-          const r2 = await consultarTjce(mon.searchKey, sessao2, TJCE_2G);
+          const r2 = await consultarTjce(mon.searchKey, sessao2, cfg2grau);
           if (r2.ok && r2.movimentacoes.length > 0) {
             resultado.movimentacoes = mesclarMovimentacoes(
               resultado.movimentacoes,
@@ -366,6 +400,7 @@ export async function pollarUmMonitoramentoMovs(
       const movsNovas: Array<{
         mov: typeof resultado.movimentacoes[number];
         eventoId: number;
+        resumoIa?: string | null;
       }> = [];
       for (const mov of resultado.movimentacoes) {
         const { dedup, jaConhecida } = await resolverDedupMovimentacao(
@@ -460,20 +495,48 @@ export async function pollarUmMonitoramentoMovs(
           })
           .where(eq(motorMonitoramentos.id, mon.id));
 
-        for (const { mov, eventoId } of movsNovas.slice(0, 3)) {
+        // Resumo IA: gera SÓ pras movs que vão pra notificação (top 3) pra
+        // bounded cost. As outras ficam com resumo_ia=NULL — UI pode
+        // hidratá-las depois sob demanda. Em paralelo pra não somar latência.
+        // Qualquer falha do resumirMovimentacao retorna null (silent) → caímos
+        // no comportamento atual (texto bruto truncado).
+        const movsParaNotif = movsNovas.slice(0, 3);
+        const modelo = await modeloParaEscritorio(mon.escritorioId);
+        await Promise.all(
+          movsParaNotif.map(async (m) => {
+            const resumo = await resumirMovimentacao(m.mov.texto, modelo);
+            m.resumoIa = resumo;
+            if (resumo) {
+              try {
+                await db
+                  .update(eventosProcesso)
+                  .set({ resumoIa: resumo })
+                  .where(eq(eventosProcesso.id, m.eventoId));
+              } catch (errUpd) {
+                log.warn(
+                  { eventoId: m.eventoId, err: errUpd instanceof Error ? errUpd.message : String(errUpd) },
+                  "[motor-cron] UPDATE resumo_ia falhou (segue sem)",
+                );
+              }
+            }
+          }),
+        );
+
+        for (const { mov, eventoId, resumoIa } of movsParaNotif) {
           await db.insert(notificacoes).values({
             userId: mon.criadoPor,
             titulo: `Nova movimentação: ${mon.apelido ?? mon.searchKey}`,
-            mensagem: mov.texto.slice(0, 200),
+            mensagem: resumoIa ?? mov.texto.slice(0, 200),
             tipo: "movimentacao",
             eventoId,
           });
         }
 
+        const resumoUltima = movsParaNotif[0]?.resumoIa;
         emitirNotificacao(mon.criadoPor, {
           tipo: "movimentacao_processo",
           titulo: "Nova movimentação",
-          mensagem: `${mon.apelido ?? mon.searchKey}: ${ultimaMov.texto.slice(0, 100)}`,
+          mensagem: `${mon.apelido ?? mon.searchKey}: ${resumoUltima ?? ultimaMov.texto.slice(0, 100)}`,
           dados: {
             monitoramentoId: mon.id,
             cnj: mon.searchKey,
@@ -719,9 +782,10 @@ export async function pollarUmMonitoramentoNovasAcoes(
       return { ok: false, detectadas: 0, erro: "Sessão expirada" };
     }
 
+    const cfgTribunal = getConfigTribunal(mon.tribunal);
     let resultado;
-    if (mon.tribunal === "tjce") {
-      resultado = await consultarTjcePorCpf(mon.searchKey, sessao);
+    if (cfgTribunal) {
+      resultado = await consultarTjcePorCpf(mon.searchKey, sessao, cfgTribunal);
     } else {
       return { ok: false, detectadas: 0, erro: `Tribunal ${mon.tribunal} sem adapter de CPF` };
     }
@@ -734,7 +798,7 @@ export async function pollarUmMonitoramentoNovasAcoes(
         forcarRelogin: true,
       });
       if (sessaoNova) {
-        resultado = await consultarTjcePorCpf(mon.searchKey, sessaoNova);
+        resultado = await consultarTjcePorCpf(mon.searchKey, sessaoNova, cfgTribunal);
       }
     }
 
@@ -823,7 +887,7 @@ export async function pollarUmMonitoramentoNovasAcoes(
         let poloDoCliente: PoloIdentificado = "desconhecido";
 
         try {
-          const detalhe = await consultarTjce(cnj, sessao);
+          const detalhe = await consultarTjce(cnj, sessao, cfgTribunal);
           if (detalhe.ok && detalhe.capa) {
             if (detalhe.capa.dataDistribuicao) {
               const candidato = new Date(detalhe.capa.dataDistribuicao);

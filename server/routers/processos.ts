@@ -32,6 +32,7 @@ import { decrypt as adminDecrypt } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
+import { tribunalRequerCredencial } from "../processos/tribunais-pdpj";
 import { normalizarCnj, mascararCnj, validarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import {
   ehRequestMotorProprio,
@@ -41,6 +42,7 @@ import {
   obterResultadoMotorProprio,
 } from "../processos/motor-proprio-runner";
 import { consultarTjce } from "../processos/adapters/pje-tjce";
+import { getConfigTribunal } from "../processos/tribunais-pdpj";
 import { resolverDedupMovimentacao } from "../processos/cron-monitoramento";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
 
@@ -864,9 +866,16 @@ export const processosRouter = router({
         `Detalhe CNJ: ${input.cnj} (${tribunal.siglaTribunal})`,
       );
 
+      const cfgTribunal = getConfigTribunal(tribunal.codigoTribunal);
+      if (!cfgTribunal) {
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: `Consulta automática ainda não disponível para ${tribunal.siglaTribunal}.`,
+        });
+      }
       let resultado;
       try {
-        resultado = await consultarTjce(input.cnj, storageState);
+        resultado = await consultarTjce(input.cnj, storageState, cfgTribunal);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         log.error({ cnj: input.cnj, err: msg }, "[consultarCNJSincrono] scraper crashed");
@@ -1129,7 +1138,9 @@ export const processosRouter = router({
     .input(
       z.object({
         numeroCnj: z.string().min(15).max(30),
-        credencialId: z.number().int().positive(),
+        // Opcional: alguns tribunais rodam por consulta pública sem login
+        // (TRF-5, etc). Pra esses, credencialId é ignorado se vier.
+        credencialId: z.number().int().positive().optional(),
         apelido: z.string().max(255).optional(),
         recurrenceHoras: z.number().int().min(1).max(168).default(6),
       }),
@@ -1145,30 +1156,42 @@ export const processosRouter = router({
       if (!tribunal.temMotorProprio) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
-          message: `Monitoramento para ${tribunal.siglaTribunal} ainda em desenvolvimento. Hoje cobrimos: TJCE 1º grau.`,
+          message: `Monitoramento para ${tribunal.siglaTribunal} ainda em desenvolvimento.`,
         });
       }
 
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-      // Confirma credencial pertence ao escritório (compartilhado entre dono + colaboradores)
-      const [cred] = await db
-        .select()
-        .from(cofreCredenciais)
-        .where(
-          and(
-            eq(cofreCredenciais.id, input.credencialId),
-            eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-            eq(cofreCredenciais.status, "ativa"),
-          ),
-        )
-        .limit(1);
-      if (!cred) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Credencial não encontrada ou inativa. Cadastre/valide em /processos?tab=cofre.",
-        });
+      // Tribunais PDPJ-cloud precisam de credencial; consulta pública (TRF-5)
+      // não. Bifurcação cedo pra erro claro sem mexer no caminho TJCE.
+      const requerCred = tribunalRequerCredencial(tribunal.codigoTribunal);
+      let credencialIdParaSalvar: number | null = null;
+      if (requerCred) {
+        if (!input.credencialId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `${tribunal.siglaTribunal} exige credencial OAB ativa no Cofre.`,
+          });
+        }
+        const [cred] = await db
+          .select()
+          .from(cofreCredenciais)
+          .where(
+            and(
+              eq(cofreCredenciais.id, input.credencialId),
+              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
+              eq(cofreCredenciais.status, "ativa"),
+            ),
+          )
+          .limit(1);
+        if (!cred) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Credencial não encontrada ou inativa. Cadastre/valide em /processos?tab=cofre.",
+          });
+        }
+        credencialIdParaSalvar = input.credencialId;
       }
 
       // Cobra primeira mensalidade
@@ -1189,7 +1212,7 @@ export const processosRouter = router({
         searchKey: cnjMascarado,
         apelido: input.apelido ?? cnjMascarado,
         tribunal: tribunal.codigoTribunal,
-        credencialId: input.credencialId,
+        credencialId: credencialIdParaSalvar,
         status: "ativo",
         recurrenceHoras: input.recurrenceHoras,
         ultimaCobrancaEm: new Date(),
@@ -1447,9 +1470,10 @@ export const processosRouter = router({
         `Histórico monitoramento ${mon.searchKey}`,
       );
 
+      const cfgTribunal = getConfigTribunal(mon.tribunal);
       let resultado;
-      if (mon.tribunal === "tjce") {
-        resultado = await consultarTjce(mon.searchKey, sessao);
+      if (cfgTribunal) {
+        resultado = await consultarTjce(mon.searchKey, sessao, cfgTribunal);
       } else {
         return {
           encontrado: false,
@@ -1901,7 +1925,10 @@ export const processosRouter = router({
     .input(
       z.object({
         // Opcional: restringir a um subset. Sem isso, atualiza tudo.
-        monitoramentoIds: z.array(z.number().int().positive()).max(200).optional(),
+        // Limite alto pra cobrir escritórios grandes — runner já controla
+        // paralelismo interno (3 polls simultâneos). Valor alto vira só
+        // payload maior, não estresse no PJe.
+        monitoramentoIds: z.array(z.number().int().positive()).max(5000).optional(),
       }).optional(),
     )
     .mutation(async ({ ctx, input }) => {

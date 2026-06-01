@@ -6,7 +6,7 @@
  * e compõe o `appRouter` final.
  */
 
-import { router } from "./_core/trpc";
+import { router, mergeRouters } from "./_core/trpc";
 
 // Cálculos
 import { financiamentoRouter } from "./calculos/router-financiamento";
@@ -30,7 +30,8 @@ import { origensLeadRouter } from "./escritorio/router-origens-lead";
 import { camposClienteRouter } from "./escritorio/router-campos-cliente";
 import { modelosContratoRouter } from "./escritorio/router-modelos-contrato";
 import { clienteProcessosRouter } from "./escritorio/router-cliente-processos";
-import { relatoriosRouter } from "./escritorio/router-relatorios";
+import { importarProcessosRouter } from "./escritorio/router-importar-processos";
+import { relatoriosRouter, relatoriosPdfRouter } from "./escritorio/router-relatorios";
 import { permissoesRouter } from "./escritorio/router-permissoes";
 import { assinaturasRouter } from "./escritorio/router-assinaturas";
 import { tarefasRouter } from "./escritorio/router-tarefas";
@@ -72,6 +73,7 @@ import { dashboardRouter } from "./routers/dashboard";
 import { adminRouter } from "./routers/admin";
 import { adminFinanceiroRouter } from "./routers/admin-financeiro";
 import { adminAgentesIaRouter } from "./routers/admin-agentes-ia";
+import { adminSmartflowRouter } from "./routers/admin-smartflow";
 import { smartflowRouter } from "./smartflow/router-smartflow";
 import { kanbanRouter } from "./escritorio/router-kanban";
 
@@ -111,7 +113,8 @@ export const appRouter = router({
   camposCliente: camposClienteRouter,
   modelosContrato: modelosContratoRouter,
   clienteProcessos: clienteProcessosRouter,
-  relatorios: relatoriosRouter,
+  importarProcessos: importarProcessosRouter,
+  relatorios: mergeRouters(relatoriosRouter, relatoriosPdfRouter),
   permissoes: permissoesRouter,
   assinaturas: assinaturasRouter,
   upload: uploadRouter,
@@ -148,6 +151,7 @@ export const appRouter = router({
   admin: adminRouter,
   adminFinanceiro: adminFinanceiroRouter,
   adminAgentesIa: adminAgentesIaRouter,
+  adminSmartflow: adminSmartflowRouter,
   smartflow: smartflowRouter,
   kanban: kanbanRouter,
 });

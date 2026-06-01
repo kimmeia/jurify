@@ -26,9 +26,16 @@ export async function gerarRespostaAnthropic(
   maxTokens?: number,
   temperatura?: number,
   timeoutMs: number = 30000,
+  imagem?: { base64: string; mime: string },
 ): Promise<{ resposta: string | null; tokensUsados: number; erro?: string }> {
   try {
-    const messages = [...historico.slice(-20).map(m => ({ role: m.role === "system" ? "user" as const : m.role, content: m.content })), { role: "user" as const, content: msgCliente }];
+    const conteudoUser: any = imagem
+      ? [
+          { type: "text", text: msgCliente },
+          { type: "image", source: { type: "base64", media_type: imagem.mime, data: imagem.base64 } },
+        ]
+      : msgCliente;
+    const messages = [...historico.slice(-20).map(m => ({ role: m.role === "system" ? "user" as const : m.role, content: m.content })), { role: "user" as const, content: conteudoUser }];
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },

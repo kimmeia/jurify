@@ -16,7 +16,7 @@ import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { conversas, contatos, mensagens, asaasCobrancas, agendamentos, eventosProcesso, clienteProcessos, assinaturasDigitais } from "../../drizzle/schema";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
-import { chamarIA, parseJsonIA, resolverChaveIA } from "../_core/ai-call";
+import { chamarIA, parseJsonIA, resolverChaveIAEscritorio } from "../_core/ai-call";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("router-atendimento-ia");
@@ -112,7 +112,7 @@ export const atendimentoIaRouter = router({
         : [];
 
       // Sem IA: devolve um fallback determinístico
-      const chave = await resolverChaveIA();
+      const chave = await resolverChaveIAEscritorio(esc.escritorio.id);
       if (!chave) {
         const motivo = msgs.length
           ? (msgs[msgs.length - 1]?.conteudo || "").slice(0, 140)
@@ -159,6 +159,7 @@ export const atendimentoIaRouter = router({
 
       try {
         const raw = await chamarIA({
+          escritorioId: esc.escritorio.id,
           system: [
             "Você é um assistente jurídico que ajuda advogado a entender CONTEXTO da conversa em 1 frase.",
             "Sua resposta vai aparecer como BRIEF INSTANTÂNEO no topo do chat — 1 a 2 linhas, no máximo 200 caracteres.",
@@ -611,7 +612,7 @@ export const atendimentoIaRouter = router({
         .limit(20);
       msgs.reverse();
 
-      const chave = await resolverChaveIA();
+      const chave = await resolverChaveIAEscritorio(esc.escritorio.id);
       if (!chave) {
         // Fallback determinístico — devolve template baseado no tom
         const primeiroNome = (contato?.nome || "Cliente").split(" ")[0];
@@ -635,6 +636,7 @@ export const atendimentoIaRouter = router({
 
       try {
         const raw = await chamarIA({
+          escritorioId: esc.escritorio.id,
           system: [
             "Você é um advogado brasileiro experiente respondendo via WhatsApp ao seu cliente.",
             `Tom da resposta: ${tomDescricao}`,

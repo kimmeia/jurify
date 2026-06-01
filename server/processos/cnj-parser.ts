@@ -11,6 +11,7 @@
  */
 
 import { normalizarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
+import { TRIBUNAIS_MOTOR_PROPRIO } from "./tribunais-pdpj";
 
 export type SegmentoJustica =
   | "estadual"
@@ -64,11 +65,12 @@ const TJ_MAP: Record<string, { sigla: string; uf: string }> = {
   "27": { sigla: "TJTO", uf: "TO" },
 };
 
-/** Tribunais que temos adapter motor próprio funcional em produção. */
-const TRIBUNAIS_COM_MOTOR_PROPRIO = new Set<string>([
-  "tjce", // PJe TJCE 1º grau (validado 07/05/2026)
-  // Próximos: "tjsp", "trt7", "tjrj"...
-]);
+/**
+ * Tribunais com motor próprio — derivado do registro central
+ * (`tribunais-pdpj.ts`). Adicionar um estado lá habilita automaticamente a
+ * criação de monitoramento aqui.
+ */
+const TRIBUNAIS_COM_MOTOR_PROPRIO = new Set<string>(TRIBUNAIS_MOTOR_PROPRIO);
 
 /**
  * Mapeia código do tribunal pro valor `sistema` em `cofre_credenciais`.
@@ -78,11 +80,25 @@ const TRIBUNAIS_COM_MOTOR_PROPRIO = new Set<string>([
  */
 export function sistemaCofrePorTribunal(codigoTribunal: string): string | null {
   const map: Record<string, string> = {
+    // PJe-PDPJ (Keycloak SSO) — adapter genérico em pje-tjce.ts cobre todos
     tjce: "pje_tjce",
     tjrj: "pje_tjrj",
     tjmg: "pje_tjmg",
+    tjrn: "pje_tjrn",
+    tjma: "pje_tjma",
+    tjpa: "pje_tjpa",
+    tjro: "pje_tjro",
+    tjpe: "pje_tjpe",
+    tjpb: "pje_tjpb",
+    tjmt: "pje_tjmt",
+    tjrr: "pje_tjrr",
+    tjdf: "pje_tjdft",
+    // E-SAJ — adapters não existem ainda (TJSP, TJSC, TJBA…); deixados aqui
+    // como referência futura. Por ora retornam null abaixo pelo `?? null`.
     tjsp: "esaj_tjsp",
-    // Adicionar conforme implementamos novos adapters
+    // TRF-5 e demais tribunais de consulta pública NÃO entram aqui — eles
+    // têm motor próprio mas sem cofre (acesso aberto). Retornar null aqui
+    // é o sinal pra UI/router não pedir credencial.
   };
   return map[codigoTribunal] ?? null;
 }

@@ -21,6 +21,10 @@ import { eq, and } from "drizzle-orm";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 import { createLogger } from "../_core/logger";
 import path from "path";
+import { promises as fsp } from "fs";
+import { fileTypeFromBuffer } from "file-type";
+import { prepararAudioParaCloud } from "../integracoes/whatsapp-cloud-audio";
+import type { WhatsAppCloudClient } from "../integracoes/whatsapp-cloud";
 const log = createLogger("escritorio-router-crm");
 
 /**
@@ -34,6 +38,53 @@ export function resolverMediaPathLocal(mediaUrl: string): string {
     return path.resolve(process.cwd(), mediaUrl.slice(1));
   }
   return mediaUrl;
+}
+
+/**
+ * Envia o conteúdo pela Cloud API escolhendo o método certo pelo tipo.
+ *
+ * Mídia local (o caso normal: upload devolve `/uploads/...`) sobe os bytes
+ * pra Meta via uploadMedia e manda por media_id — assim não dependemos de uma
+ * URL pública. Áudio passa antes pelo conversor (Chrome grava webm, que a
+ * Cloud API rejeita). URLs HTTP externas caem no envio por `link`. Texto e
+ * tipos sem mídia seguem como texto.
+ */
+async function enviarConteudoCloudApi(
+  client: WhatsAppCloudClient,
+  telefone: string,
+  tipo: string | undefined,
+  conteudo: string,
+  mediaUrl: string | undefined,
+): Promise<string> {
+  if (tipo && tipo !== "texto" && mediaUrl) {
+    const origem = resolverMediaPathLocal(mediaUrl);
+    const ehHttp = /^https?:\/\//i.test(origem);
+
+    if (tipo === "audio") {
+      if (ehHttp) return client.enviarAudio(telefone, origem);
+      const { path: audioPath, mime } = await prepararAudioParaCloud(origem);
+      const buf = await fsp.readFile(audioPath);
+      const mediaId = await client.uploadMedia(buf, mime, path.basename(audioPath));
+      return client.enviarAudioPorId(telefone, mediaId);
+    }
+
+    if (tipo === "imagem" || tipo === "documento") {
+      if (ehHttp) {
+        return tipo === "imagem"
+          ? client.enviarImagem(telefone, origem, conteudo || undefined)
+          : client.enviarDocumento(telefone, origem, path.basename(origem), conteudo || undefined);
+      }
+      const buf = await fsp.readFile(origem);
+      const ft = await fileTypeFromBuffer(buf);
+      const mime = ft?.mime || (tipo === "imagem" ? "image/jpeg" : "application/octet-stream");
+      const mediaId = await client.uploadMedia(buf, mime, path.basename(origem));
+      return tipo === "imagem"
+        ? client.enviarImagemPorId(telefone, mediaId, conteudo || undefined)
+        : client.enviarDocumentoPorId(telefone, mediaId, path.basename(origem), conteudo || undefined);
+    }
+  }
+
+  return client.enviarTexto(telefone, conteudo);
 }
 
 export const crmRouter = router({
@@ -276,7 +327,7 @@ export const crmRouter = router({
                   const client = new WhatsAppCloudClient({ accessToken: config.accessToken, phoneNumberId: config.phoneNumberId });
                   const telefone = convData.telefone?.replace(/\D/g, "") || "";
                   if (telefone) {
-                    const msgId = await client.enviarTexto(telefone, input.conteudo);
+                    const msgId = await enviarConteudoCloudApi(client, telefone, input.tipo, input.conteudo, input.mediaUrl);
                     log.info(`[CRM] Mensagem enviada via Cloud API CoEx para ${telefone} (msgId: ${msgId})`);
                     // Atualizar idExterno da mensagem para rastrear status
                     if (msgId) {
@@ -286,7 +337,15 @@ export const crmRouter = router({
                   }
                 } else { log.warn(`[CRM] Canal CoEx ${convData.canalId} sem accessToken ou phoneNumberId`); }
               }
-            } catch (cloudErr: any) { log.error(`[CRM] Erro ao enviar via Cloud API:`, cloudErr.message); }
+            } catch (cloudErr: any) {
+              // Persistir a falha (não só logar): a UI mostra status real e o
+              // erro de integração externa não morre no response.
+              log.error(`[CRM] Erro ao enviar via Cloud API:`, cloudErr?.response?.data?.error || cloudErr.message);
+              try {
+                const { mensagens } = await import("../../drizzle/schema");
+                await db.update(mensagens).set({ status: "falha" }).where(eq(mensagens.id, id));
+              } catch { /* não mascarar o erro original */ }
+            }
           }
         }
       } catch (err: any) {

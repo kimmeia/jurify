@@ -20,7 +20,7 @@ import {
   CalendarDays, Plus, Loader2, Clock, CheckCircle, ChevronLeft, ChevronRight,
   Trash2, ListTodo, CalendarClock, Sun, AlertTriangle, Search,
   Briefcase, Scale, Users, PhoneCall, MoreHorizontal, Check, MapPin, Bell,
-  Pencil, FileText, Paperclip, ExternalLink,
+  Pencil, FileText, Paperclip, ExternalLink, XCircle, RotateCcw, MessageSquareText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -224,9 +224,33 @@ function ConfirmarExclusaoButton({ onConfirm, titulo, variant = "card" }: {
 // CARD DE EVENTO
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function EventoCard({ ev, onStatusChange, onDelete, onEdit, onCardClick, podeEditar, podeExcluir }: {
+const COMPARECIMENTO_CFG: Record<string, { label: string; cls: string; Icon: typeof CheckCircle }> = {
+  compareceu: { label: "Compareceu", cls: "bg-emerald-100 text-emerald-700 border-emerald-200", Icon: CheckCircle },
+  nao_compareceu: { label: "Não compareceu", cls: "bg-rose-100 text-rose-700 border-rose-200", Icon: XCircle },
+  remarcado: { label: "Remarcado", cls: "bg-amber-100 text-amber-700 border-amber-200", Icon: RotateCcw },
+};
+
+/** Tipos de compromisso em que faz sentido perguntar se o cliente compareceu. */
+const TIPOS_COM_COMPARECIMENTO = ["reuniao_comercial", "audiencia", "follow_up"];
+function eventoPedeComparecimento(ev: any): boolean {
+  return ev?.fonte === "compromisso" && TIPOS_COM_COMPARECIMENTO.includes(ev?.tipo);
+}
+
+/** Badge compacto do resultado do atendimento (compareceu/não veio/remarcado). */
+function ComparecimentoBadge({ valor }: { valor: string | null | undefined }) {
+  if (!valor || !COMPARECIMENTO_CFG[valor]) return null;
+  const { label, cls, Icon } = COMPARECIMENTO_CFG[valor];
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-semibold ${cls}`}>
+      <Icon className="h-2.5 w-2.5" /> {label}
+    </span>
+  );
+}
+
+function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardClick, podeEditar, podeExcluir }: {
   ev: any;
   onStatusChange: (id: number, fonte: string, status: string) => void;
+  onConcluir?: (ev: any) => void;
   onDelete: (id: number, fonte: string) => void;
   onEdit?: (ev: any) => void;
   onCardClick?: (ev: any) => void;
@@ -361,6 +385,19 @@ function EventoCard({ ev, onStatusChange, onDelete, onEdit, onCardClick, podeEdi
             {ev.titulo}
           </p>
 
+          {/* Resultado do atendimento (comparecimento + observação) */}
+          {(ev.comparecimento || ev.observacaoAtendimento) && (
+            <div className="mt-1.5 space-y-1">
+              {ev.comparecimento && <ComparecimentoBadge valor={ev.comparecimento} />}
+              {ev.observacaoAtendimento && (
+                <p className="text-[11.5px] text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1.5 flex gap-1.5">
+                  <MessageSquareText className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
+                  <span className="whitespace-pre-wrap break-words line-clamp-2">{ev.observacaoAtendimento}</span>
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Linha 2: cliente + processo */}
           {(contato || cnj || ev.local || ev.contatoTelefone) && (
             <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-600 flex-wrap">
@@ -446,7 +483,8 @@ function EventoCard({ ev, onStatusChange, onDelete, onEdit, onCardClick, podeEdi
               className="h-7 text-[10.5px] rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm px-2.5"
               onClick={(e) => {
                 e.stopPropagation();
-                onStatusChange(ev.id, ev.fonte, "concluido");
+                if (onConcluir) onConcluir(ev);
+                else onStatusChange(ev.id, ev.fonte, "concluido");
               }}
             >
               <Check className="h-3 w-3 mr-1" />
@@ -782,9 +820,10 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar }: {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** Card destacado do "Próximo evento" — countdown vivo + ações rápidas. */
-function ProximoEventoHero({ ev, onStatusChange, onEdit, onCardClick, podeEditar }: {
+function ProximoEventoHero({ ev, onStatusChange, onConcluir, onEdit, onCardClick, podeEditar }: {
   ev: any;
   onStatusChange: (id: number, fonte: string, status: string) => void;
+  onConcluir?: (ev: any) => void;
   onEdit?: (ev: any) => void;
   onCardClick?: (ev: any) => void;
   podeEditar?: boolean;
@@ -890,7 +929,8 @@ function ProximoEventoHero({ ev, onStatusChange, onEdit, onCardClick, podeEditar
               className="h-8 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 shadow-sm"
               onClick={(e) => {
                 e.stopPropagation();
-                onStatusChange(ev.id, ev.fonte, "concluido");
+                if (onConcluir) onConcluir(ev);
+                else onStatusChange(ev.id, ev.fonte, "concluido");
               }}
             >
               <Check className="h-3 w-3 mr-1" />
@@ -1067,7 +1107,7 @@ function ListaView({
   filtroTipo, setFiltroTipo,
   filtroStatus, setFiltroStatus,
   eventos, isLoading,
-  onStatusChange, onDelete, onEdit, onCardClick,
+  onStatusChange, onConcluir, onDelete, onEdit, onCardClick,
   podeEditar, podeExcluir,
 }: {
   busca: string; setBusca: (s: string) => void;
@@ -1076,6 +1116,7 @@ function ListaView({
   filtroStatus: string; setFiltroStatus: (s: string) => void;
   eventos: any[] | undefined; isLoading: boolean;
   onStatusChange: (id: number, fonte: string, status: string) => void;
+  onConcluir?: (ev: any) => void;
   onDelete: (id: number, fonte: string) => void;
   onEdit?: (ev: any) => void;
   onCardClick?: (ev: any) => void;
@@ -1152,6 +1193,7 @@ function ListaView({
         <ProximoEventoHero
           ev={proximoEvento}
           onStatusChange={onStatusChange}
+          onConcluir={onConcluir}
           onEdit={onEdit}
           onCardClick={onCardClick}
           podeEditar={podeEditar}
@@ -1297,6 +1339,7 @@ function ListaView({
                       key={`${ev.fonte}-${ev.id}`}
                       ev={ev}
                       onStatusChange={onStatusChange}
+                      onConcluir={onConcluir}
                       onDelete={onDelete}
                       onEdit={onEdit}
                       onCardClick={onCardClick}
@@ -1346,6 +1389,7 @@ function DetalhesEventoDialog({
   onEdit,
   onDelete,
   onStatusChange,
+  onConcluir,
   podeEditar,
   podeExcluir,
 }: {
@@ -1355,6 +1399,7 @@ function DetalhesEventoDialog({
   onEdit: (ev: any) => void;
   onDelete: (id: number, fonte: string) => void;
   onStatusChange: (id: number, fonte: string, status: string) => void;
+  onConcluir?: (ev: any) => void;
   podeEditar: boolean;
   podeExcluir: boolean;
 }) {
@@ -1397,6 +1442,7 @@ function DetalhesEventoDialog({
   const statusLabel = STATUS_LABELS[evento.status] || evento.status;
 
   const handleConcluir = () => {
+    if (onConcluir) { onConcluir(evento); onOpenChange(false); return; }
     onStatusChange(evento.id, evento.fonte, "concluido");
     onOpenChange(false);
   };
@@ -1532,6 +1578,20 @@ function DetalhesEventoDialog({
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Descrição</p>
                 <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">{evento.descricao}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Resultado do atendimento */}
+          {(evento.comparecimento || evento.observacaoAtendimento) && (
+            <div className="flex items-start gap-2.5 text-sm">
+              <MessageSquareText className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Resultado do atendimento</p>
+                {evento.comparecimento && <div className="mt-1"><ComparecimentoBadge valor={evento.comparecimento} /></div>}
+                {evento.observacaoAtendimento && (
+                  <p className="text-sm text-slate-700 whitespace-pre-wrap break-words mt-1">{evento.observacaoAtendimento}</p>
+                )}
               </div>
             </div>
           )}
@@ -1994,12 +2054,12 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
+      <DialogContent className="max-w-lg max-h-[90dvh] flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{isEdit ? "Editar evento" : "Novo evento"}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3 py-1">
+        <div className="space-y-3 py-1 flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
           {/* Tipo de evento — só na criação, edit mantém o tipo */}
           {!isEdit && (
             <div className="flex gap-2">
@@ -2442,11 +2502,172 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={handleSubmit} disabled={isPending || !titulo || !dataInicio}>
             {isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : isEdit ? <Check className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
             {isEdit ? "Salvar alterações" : "Criar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DIALOG: RESULTADO DO ATENDIMENTO (ao concluir uma reunião)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Monta um ISO UTC a partir de dia (YYYY-MM-DD) + hora (HH:MM) locais. */
+function montarIsoLocal(dia: string, hora: string): string {
+  const [y, mo, d] = dia.split("-").map(Number);
+  const [h, m] = (hora || "09:00").split(":").map(Number);
+  return new Date(y, (mo || 1) - 1, d || 1, h || 0, m || 0, 0, 0).toISOString();
+}
+
+function ResultadoAtendimentoDialog({ evento, open, onOpenChange, onConcluido }: {
+  evento: any | null;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onConcluido: () => void;
+}) {
+  const [comparecimento, setComparecimento] = useState<"compareceu" | "nao_compareceu" | "remarcado">("compareceu");
+  const [observacao, setObservacao] = useState("");
+  const [dataRetorno, setDataRetorno] = useState("");
+  const [horaRetorno, setHoraRetorno] = useState("09:00");
+  const [criarFollowup, setCriarFollowup] = useState(true);
+
+  // Reset ao abrir (mesmo padrão de hidratação do CriarEventoDialog).
+  useMemo(() => {
+    if (!open) return;
+    setComparecimento("compareceu");
+    setObservacao("");
+    setDataRetorno("");
+    setHoraRetorno("09:00");
+    setCriarFollowup(true);
+  }, [open, evento?.id]);
+
+  const criarCompromissoMut = trpc.agenda.criarCompromisso.useMutation();
+  const atualizarStatusMut = trpc.agenda.atualizarStatus.useMutation({
+    onSuccess: async () => {
+      // Cria follow-up quando remarcou + tem data + opção marcada.
+      if (comparecimento === "remarcado" && criarFollowup && dataRetorno && evento) {
+        try {
+          await (criarCompromissoMut.mutateAsync as any)({
+            tipo: TIPOS_COM_COMPARECIMENTO.includes(evento.tipo) ? evento.tipo : "reuniao_comercial",
+            titulo: `Retorno: ${evento.contatoNome || evento.titulo}`,
+            descricao: `Follow-up de "${evento.titulo}".${observacao ? ` ${observacao}` : ""}`,
+            dataInicio: montarIsoLocal(dataRetorno, horaRetorno),
+            contatoId: evento.contatoId ?? undefined,
+            contatoTelefone: evento.contatoTelefone ?? undefined,
+            processoId: evento.processoId ?? undefined,
+          });
+        } catch (err: any) {
+          toast.error("Atendimento concluído, mas o follow-up falhou: " + err.message);
+        }
+      }
+      toast.success("Atendimento concluído");
+      onConcluido();
+      onOpenChange(false);
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  if (!evento) return null;
+
+  const remarcou = comparecimento === "remarcado";
+  const podeConcluir = !remarcou || !!dataRetorno;
+
+  const handleConfirmar = () => {
+    atualizarStatusMut.mutate({
+      id: evento.id,
+      fonte: "compromisso",
+      status: "concluido",
+      comparecimento,
+      observacaoAtendimento: observacao.trim() || null,
+    });
+  };
+
+  const opcoes: Array<{ v: "compareceu" | "nao_compareceu" | "remarcado"; label: string; Icon: typeof CheckCircle; active: string }> = [
+    { v: "compareceu", label: "Compareceu", Icon: CheckCircle, active: "bg-emerald-50 border-emerald-500 text-emerald-700" },
+    { v: "nao_compareceu", label: "Não veio", Icon: XCircle, active: "bg-rose-50 border-rose-500 text-rose-700" },
+    { v: "remarcado", label: "Remarcou", Icon: RotateCcw, active: "bg-amber-50 border-amber-500 text-amber-700" },
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md max-h-[90dvh] flex flex-col">
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="flex items-center gap-2">
+            <span className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center"><Check className="h-4 w-4" /></span>
+            Concluir atendimento
+          </DialogTitle>
+          <DialogDescription className="truncate">{evento.titulo}{evento.contatoNome ? ` · ${evento.contatoNome}` : ""}</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1 flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
+          <div>
+            <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">O cliente compareceu?</Label>
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              {opcoes.map(({ v, label, Icon, active }) => {
+                const sel = comparecimento === v;
+                return (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setComparecimento(v)}
+                    className={`flex flex-col items-center gap-1 py-3 rounded-xl border-2 text-xs font-semibold transition ${sel ? active : "border-slate-200 text-slate-500 hover:border-slate-300"}`}
+                  >
+                    <Icon className="h-5 w-5" /> {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {remarcou && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 space-y-3">
+              <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wide flex items-center gap-1">
+                <CalendarClock className="h-3.5 w-3.5" /> Retorno remarcado
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[11px] text-slate-600">Nova data *</Label>
+                  <Input type="date" value={dataRetorno} onChange={(e) => setDataRetorno(e.target.value)} className="mt-1 bg-white" />
+                </div>
+                <div>
+                  <Label className="text-[11px] text-slate-600">Hora</Label>
+                  <Input type="time" value={horaRetorno} onChange={(e) => setHoraRetorno(e.target.value)} className="mt-1 bg-white" />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-amber-800 font-medium cursor-pointer">
+                <input type="checkbox" checked={criarFollowup} onChange={(e) => setCriarFollowup(e.target.checked)} className="accent-amber-600" />
+                Criar follow-up na agenda pra lembrar
+              </label>
+            </div>
+          )}
+
+          <div>
+            <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Observação do atendimento</Label>
+            <Textarea
+              value={observacao}
+              onChange={(e) => setObservacao(e.target.value)}
+              rows={3}
+              placeholder="O que rolou na reunião… (ex: passei o valor, cliente vai pensar, retorno dia 20)"
+              className="mt-1.5"
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="shrink-0">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button
+            onClick={handleConfirmar}
+            disabled={!podeConcluir || atualizarStatusMut.isPending}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            {atualizarStatusMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
+            Concluir
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -2464,6 +2685,7 @@ export default function Agenda() {
   const [criarOpen, setCriarOpen] = useState(false);
   const [editEvento, setEditEvento] = useState<any | null>(null);
   const [detalhesEvento, setDetalhesEvento] = useState<any | null>(null);
+  const [resultadoEvento, setResultadoEvento] = useState<any | null>(null);
   const [filtroFonte, setFiltroFonte] = useState("todos");
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
   const [filtroStatus, setFiltroStatus] = useState("pendentes");
@@ -2505,6 +2727,17 @@ export default function Agenda() {
 
   const handleStatus = (id: number, fonte: string, status: string) => atualizarMut.mutate({ id, fonte: fonte as any, status });
   const handleDelete = (id: number, fonte: string) => excluirMut.mutate({ id, fonte: fonte as any });
+
+  // Concluir: reuniões/audiências/follow-ups abrem o registro de resultado
+  // (compareceu/não veio/remarcou + observação). Prazos e tarefas concluem direto.
+  const handleConcluir = (ev: any) => {
+    if (eventoPedeComparecimento(ev)) {
+      setDetalhesEvento(null);
+      setResultadoEvento(ev);
+    } else {
+      handleStatus(ev.id, ev.fonte, "concluido");
+    }
+  };
 
   const nomeUser = user?.name?.split(" ")[0] || "Usuário";
   const hoje = new Date();
@@ -2629,6 +2862,7 @@ export default function Agenda() {
             eventos={eventos}
             isLoading={isLoading}
             onStatusChange={handleStatus}
+            onConcluir={handleConcluir}
             onDelete={handleDelete}
             onEdit={(ev) => setEditEvento(ev)}
             onCardClick={(ev) => setDetalhesEvento(ev)}
@@ -2655,6 +2889,7 @@ export default function Agenda() {
         onEdit={(ev) => setEditEvento(ev)}
         onDelete={handleDelete}
         onStatusChange={handleStatus}
+        onConcluir={handleConcluir}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
       />
@@ -2667,6 +2902,13 @@ export default function Agenda() {
         }}
         eventoEdit={editEvento}
         onSuccess={() => { refetch(); setEditEvento(null); }}
+      />
+
+      <ResultadoAtendimentoDialog
+        evento={resultadoEvento}
+        open={!!resultadoEvento}
+        onOpenChange={(o) => { if (!o) setResultadoEvento(null); }}
+        onConcluido={() => { refetch(); setResultadoEvento(null); }}
       />
     </div>
   );

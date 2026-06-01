@@ -128,7 +128,7 @@ const TEMPLATES_QUICK = [
   },
 ];
 
-/** 3 modelos em cards comparativos. Filtrados depois conforme provedor configurado. */
+/** Catálogo de modelos (cards comparativos). Filtrado conforme provedor configurado. */
 const MODELOS_DISPONIVEIS = [
   {
     id: "gpt-4o-mini",
@@ -140,30 +140,84 @@ const MODELOS_DISPONIVEIS = [
     custoDesc: "/1k convs",
   },
   {
+    id: "gpt-4o",
+    provider: "openai" as const,
+    nome: "GPT-4o",
+    tier: "Balanceado",
+    feat: "Bom equilíbrio · uso geral",
+    custo: "R$ 0,90",
+    custoDesc: "/1k convs",
+  },
+  {
+    id: "gpt-4.1",
+    provider: "openai" as const,
+    nome: "GPT-4.1",
+    tier: "Avançado",
+    feat: "Contexto longo · precisão",
+    custo: "R$ 0,80",
+    custoDesc: "/1k convs",
+  },
+  {
+    id: "gpt-5",
+    provider: "openai" as const,
+    nome: "GPT-5",
+    tier: "Raciocínio",
+    feat: "Nova geração · uso geral",
+    custo: "R$ 1,10",
+    custoDesc: "/1k convs",
+  },
+  {
+    id: "gpt-5.1",
+    provider: "openai" as const,
+    nome: "GPT-5.1",
+    tier: "Raciocínio",
+    feat: "Aprimorado · casos complexos",
+    custo: "R$ 1,30",
+    custoDesc: "/1k convs",
+  },
+  {
+    id: "gpt-5.2",
+    provider: "openai" as const,
+    nome: "GPT-5.2",
+    tier: "Raciocínio",
+    feat: "Mais preciso e consistente",
+    custo: "R$ 1,50",
+    custoDesc: "/1k convs",
+  },
+  {
+    id: "gpt-5.5",
+    provider: "openai" as const,
+    nome: "GPT-5.5",
+    tier: "Topo de linha",
+    feat: "Flagship · máxima capacidade",
+    custo: "R$ 1,90",
+    custoDesc: "/1k convs",
+  },
+  {
     id: "claude-haiku-4-5-20251001",
     provider: "anthropic" as const,
-    nome: "Claude Haiku",
+    nome: "Claude Haiku 4.5",
     tier: "Econômico",
     feat: "Rápido · contexto jurídico",
     custo: "R$ 0,10",
     custoDesc: "/1k convs",
   },
   {
-    id: "claude-sonnet-4-20250514",
+    id: "claude-sonnet-4-6",
     provider: "anthropic" as const,
-    nome: "Claude Sonnet",
+    nome: "Claude Sonnet 4.6",
     tier: "Balanceado · recomendado",
-    feat: "Casos jurídicos complexos",
+    feat: "Casos complexos · 1M de contexto",
     custo: "R$ 0,36",
     custoDesc: "/1k convs",
   },
   {
-    id: "gpt-4o",
-    provider: "openai" as const,
-    nome: "GPT-4o",
-    tier: "Avançado",
-    feat: "Máxima precisão · casos complexos",
-    custo: "R$ 0,90",
+    id: "claude-opus-4-7",
+    provider: "anthropic" as const,
+    nome: "Claude Opus 4.7",
+    tier: "Topo de linha",
+    feat: "Máxima capacidade · raciocínio jurídico",
+    custo: "R$ 1,50",
     custoDesc: "/1k convs",
   },
 ];
@@ -445,6 +499,7 @@ function AgenteFormDialog({
   };
 
   const temperaturaNum = parseFloat(form.temperatura) || 0.7;
+  const modeloRaciocinio = /^(gpt-[5-9]|o[1-9])/i.test(form.modelo || "");
   // Modelos disponíveis baseados em quais provedores estão conectados
   const modelosDisponiveis = MODELOS_DISPONIVEIS.filter((m) =>
     m.provider === "openai" ? chatgptConfigurado
@@ -469,7 +524,7 @@ function AgenteFormDialog({
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
         {/* Header simples */}
         <DialogHeader className="px-5 py-3 border-b">
           <DialogTitle className="flex items-center gap-2 text-base">
@@ -548,7 +603,7 @@ function AgenteFormDialog({
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Modelo (cérebro do agente)</p>
             {algumIAConfigurado ? (
               <>
-                <div className={`grid gap-1.5 ${modelosDisponiveis.length >= 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+                <div className="grid gap-1.5 grid-cols-2 sm:grid-cols-3">
                   {modelosDisponiveis.map((m) => {
                     const active = form.modelo === m.id;
                     return (
@@ -614,13 +669,14 @@ function AgenteFormDialog({
               </button>
             </div>
             <Textarea
-              rows={5}
+              rows={8}
               placeholder="Defina a personalidade e instruções do agente..."
               value={form.prompt}
               onChange={(e) => setForm({ ...form, prompt: e.target.value })}
               className="text-sm"
+              maxLength={32000}
             />
-            <p className="text-[10px] text-muted-foreground text-right mt-1">{form.prompt.length} / 8000</p>
+            <p className="text-[10px] text-muted-foreground text-right mt-1">{form.prompt.length.toLocaleString("pt-BR")} / 32.000</p>
           </div>
 
           {/* Tom (slider) + Tamanho (tokens) */}
@@ -646,6 +702,11 @@ function AgenteFormDialog({
                 <span>Preciso</span>
                 <span>Criativo</span>
               </div>
+              {modeloRaciocinio && (
+                <p className="text-[9px] text-muted-foreground mt-1 italic">
+                  GPT-5 responde no tom padrão — este controle não se aplica.
+                </p>
+              )}
             </div>
             <div>
               <Label className="text-xs">Tamanho da resposta</Label>
@@ -886,7 +947,7 @@ function AgenteFormDialog({
 
     {/* Modal de análise de [chave] no prompt — cria campos personalizados que faltam */}
     <Dialog open={analiseOpen} onOpenChange={setAnaliseOpen}>
-      <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="sm:max-w-3xl max-h-[88vh] overflow-y-auto p-0 gap-0">
         <DialogHeader className="px-5 pt-5 pb-3 border-b">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Sparkles className="h-4 w-4 text-sky-500" />
@@ -1129,7 +1190,7 @@ function TreinamentoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <BrainCircuit className="h-5 w-5 text-violet-600" />

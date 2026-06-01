@@ -244,7 +244,7 @@ async function exchangeCodeForToken(code: string, redirectUri?: string): Promise
  * Docs:
  *   https://developers.facebook.com/docs/whatsapp/embedded-signup/manage-business-portfolios#subscribe-to-your-business-portfolio
  */
-async function subscribeAppToWaba(
+export async function subscribeAppToWaba(
   accessToken: string,
   wabaId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {

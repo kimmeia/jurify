@@ -6,6 +6,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area,
 } from "recharts";
 import { BarChart3, TrendingUp, Users, Calculator } from "lucide-react";
+import { KPICard } from "../dashboards/common";
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 
@@ -58,38 +59,10 @@ export default function AdminReports() {
 
       {/* KPI cards */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-emerald-500/10 flex items-center justify-center"><TrendingUp className="h-4 w-4 text-emerald-500" /></div>
-              <div><p className="text-xs text-muted-foreground">MRR atual</p><p className="text-lg font-bold">{formatCurrency(ultimoMesReceita)}</p></div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center"><Users className="h-4 w-4 text-blue-500" /></div>
-              <div><p className="text-xs text-muted-foreground">Clientes totais</p><p className="text-lg font-bold">{stats?.totalClients ?? 0}</p></div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center"><Calculator className="h-4 w-4 text-violet-500" /></div>
-              <div><p className="text-xs text-muted-foreground">Cálculos totais</p><p className="text-lg font-bold">{totalCalcModulos}</p></div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center"><BarChart3 className="h-4 w-4 text-amber-500" /></div>
-              <div><p className="text-xs text-muted-foreground">Conversão</p><p className="text-lg font-bold">{stats?.conversionRate ?? 0}%</p></div>
-            </div>
-          </CardContent>
-        </Card>
+        <KPICard label="MRR atual" value={formatCurrency(ultimoMesReceita)} icon={TrendingUp} iconBg="bg-emerald-500/10" iconFg="text-emerald-600" />
+        <KPICard label="Clientes totais" value={stats?.totalClients ?? 0} icon={Users} iconBg="bg-blue-500/10" iconFg="text-blue-600" />
+        <KPICard label="Cálculos totais" value={totalCalcModulos} icon={Calculator} iconBg="bg-violet-500/10" iconFg="text-violet-600" />
+        <KPICard label="Conversão" value={`${stats?.conversionRate ?? 0}%`} icon={BarChart3} iconBg="bg-amber-500/10" iconFg="text-amber-600" />
       </div>
 
       {/* Charts */}

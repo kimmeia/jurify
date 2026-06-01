@@ -30,6 +30,7 @@ import { encrypt, maskToken } from "./crypto-utils";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { checkPermission } from "./check-permission";
 import { createLogger } from "../_core/logger";
+import { configPorSistema } from "../processos/tribunais-pdpj";
 import {
   COFRE_VALIDACOES,
   type CofreCredencialView,
@@ -291,15 +292,19 @@ export const cofreCredenciaisRouter = router({
         "[cofre] validando credencial via login real",
       );
 
-      if (cred.sistema === "pje_tjce") {
+      const cfgTribunal = configPorSistema(cred.sistema);
+      if (cfgTribunal) {
         const { PjeTjceScraper } = await import(
           "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/pje-tjce"
         );
-        const scraper = new PjeTjceScraper({
-          username: cred.username,
-          password: cred.password,
-          totpSecret: cred.totpSecret,
-        });
+        const scraper = new PjeTjceScraper(
+          {
+            username: cred.username,
+            password: cred.password,
+            totpSecret: cred.totpSecret,
+          },
+          cfgTribunal,
+        );
         const resultado = await scraper.testarLogin();
 
         if (resultado.ok && resultado.totpSecretConfigurado) {

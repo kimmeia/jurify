@@ -207,6 +207,22 @@ describe("sistemaCofrePorTribunal", () => {
     expect(sistemaCofrePorTribunal("tjmg")).toBe("pje_tjmg");
   });
 
+  it("Lote 1 (TJs PJe-PDPJ) mapeia cada estado pro próprio sistema cofre", () => {
+    // Garantia anti-regressão: nunca pode cair em pje_tjce ou wildcard.
+    expect(sistemaCofrePorTribunal("tjrn")).toBe("pje_tjrn");
+    expect(sistemaCofrePorTribunal("tjma")).toBe("pje_tjma");
+    expect(sistemaCofrePorTribunal("tjpa")).toBe("pje_tjpa");
+    expect(sistemaCofrePorTribunal("tjro")).toBe("pje_tjro");
+    expect(sistemaCofrePorTribunal("tjpe")).toBe("pje_tjpe");
+    expect(sistemaCofrePorTribunal("tjpb")).toBe("pje_tjpb");
+    expect(sistemaCofrePorTribunal("tjmt")).toBe("pje_tjmt");
+    expect(sistemaCofrePorTribunal("tjrr")).toBe("pje_tjrr");
+  });
+
+  it("TJDF (CNJ) → pje_tjdft (cofre tem sigla histórica com T)", () => {
+    expect(sistemaCofrePorTribunal("tjdf")).toBe("pje_tjdft");
+  });
+
   it("Tribunal sem mapping retorna null", () => {
     expect(sistemaCofrePorTribunal("trt7")).toBeNull();
     expect(sistemaCofrePorTribunal("desconhecido")).toBeNull();

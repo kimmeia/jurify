@@ -418,8 +418,11 @@ export default function Atendimento() {
     setTab("inbox");
   }, []);
 
+  // Sem `max-w-7xl mx-auto` no wrapper: o Atendimento é dashboard-style e a
+  // inbox ganha mais espaço útil pro chat (coluna do meio = `1fr`) quanto
+  // mais largo for o viewport — o operador reclamava do canto vazio.
   return (
-    <div className="space-y-5 max-w-7xl mx-auto">
+    <div className="space-y-5">
       <div
         className="relative overflow-hidden rounded-2xl p-5 border"
         style={{
@@ -455,9 +458,13 @@ export default function Atendimento() {
         </TabsList>
         <TabsContent value="inbox" className="mt-4">
           {/* Layout ULTRA: Lista | Chat hero | AI Rail (colapsa pra Customer 360°) */}
-          <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_auto] gap-0 rounded-xl border bg-card overflow-hidden" style={{ minHeight: 600 }}>
+          {/* Altura travada na viewport (lg+) — sem isso, a coluna mais alta
+              (lista de conversas) esticava o grid e o compositor "flutuava",
+              deixando um vão embaixo. Cada coluna rola por dentro (min-h-0).
+              No mobile (stack) mantém o fluxo natural com piso de 600px. */}
+          <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_auto] gap-0 rounded-xl border bg-card overflow-hidden lg:h-[calc(100dvh-220px)]" style={{ minHeight: 600 }}>
             {/* Coluna 1: Lista de conversas */}
-            <div className="border-r bg-muted/10 overflow-hidden flex flex-col">
+            <div className="border-r bg-muted/10 overflow-hidden flex flex-col lg:min-h-0">
               {/* Header: busca + pills de filtro com contador */}
               <div className="p-3 border-b space-y-2.5">
                 <div className="relative">
@@ -507,7 +514,7 @@ export default function Atendimento() {
                   })}
                 </div>
               </div>
-              <ScrollArea className="flex-1">
+              <ScrollArea className="flex-1 lg:min-h-0">
                 {!convs?.length ? (
                   <div className="text-center py-16 px-4">
                     <MessageCircle className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
@@ -559,7 +566,7 @@ export default function Atendimento() {
                             {(c as any).canalTipo && (
                               <div
                                 className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-background border-2 border-background flex items-center justify-center text-[8px]"
-                                title={(c as any).canalNome || (c as any).canalTipo}
+                                title={`${(c as any).canalNome || (c as any).canalTipo}${(c as any).canalTelefone ? ` · ${(c as any).canalTelefone}` : ""}`}
                               >
                                 {(c as any).canalTipo?.startsWith("whatsapp") ? "💬"
                                   : (c as any).canalTipo === "instagram" ? "📷"
@@ -643,7 +650,7 @@ export default function Atendimento() {
             </div>
 
             {/* Coluna 2: Chat hero */}
-            <div className="bg-card overflow-hidden flex flex-col">
+            <div className="bg-card overflow-hidden flex flex-col lg:min-h-0">
               {selId ? (
                 <ChatArea
                   cid={selId}
@@ -884,13 +891,14 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <Badge
                 variant="outline"
                 className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200 gap-1 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800"
-                title={`Conversa recebida via ${(conv as any).canalNome}`}
+                title={`Conversa recebida via ${(conv as any).canalNome || "canal"}${(conv as any).canalTelefone ? ` · ${(conv as any).canalTelefone}` : ""}`}
               >
                 {(conv as any).canalTipo?.startsWith("whatsapp") ? "💬"
                   : (conv as any).canalTipo === "instagram" ? "📷"
                   : (conv as any).canalTipo === "facebook" ? "🟪"
                   : "📡"}
-                {(conv as any).canalNome}
+                {/* Mostra o NÚMERO (distingue múltiplos WhatsApp); cai pro nome se não houver. */}
+                {(conv as any).canalTelefone || (conv as any).canalNome}
               </Badge>
             )}
           </div>
@@ -963,7 +971,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         </Button>
       </div>
     )}
-    <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2" style={{ minHeight: 360, maxHeight: 420 }}>
+    <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2 min-h-[360px] max-h-[420px] lg:min-h-0 lg:max-h-none">
       {!msgs?.length ? (
         <p className="text-xs text-muted-foreground text-center py-12">Nenhuma mensagem ainda.</p>
       ) : (
@@ -1248,6 +1256,7 @@ function AudioRecordButton({ onSend }: { onSend: (args: EnvioComposer) => void }
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const canceladoRef = useRef(false);
+  const inicioRef = useRef(0);
 
   const uploadMut = (trpc as any).upload.enviar.useMutation();
 
@@ -1286,7 +1295,7 @@ function AudioRecordButton({ onSend }: { onSend: (args: EnvioComposer) => void }
 
       rec.ondataavailable = (ev) => { if (ev.data && ev.data.size > 0) chunksRef.current.push(ev.data); };
       rec.onstop = async () => {
-        const dur = duracao;
+        const dur = Math.max(1, Math.round((Date.now() - inicioRef.current) / 1000));
         if (canceladoRef.current) { limparTudo(); setEstado("idle"); return; }
         const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
         if (blob.size < 800) { // áudio com menos de ~0.5s vira lixo
@@ -1313,6 +1322,7 @@ function AudioRecordButton({ onSend }: { onSend: (args: EnvioComposer) => void }
       };
 
       rec.start();
+      inicioRef.current = Date.now();
       setDuracao(0);
       setEstado("gravando");
       timerRef.current = setInterval(() => {

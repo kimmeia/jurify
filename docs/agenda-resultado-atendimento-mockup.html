@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JuridFlow — Agenda: resultado do atendimento + dialog corrigido</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: { sans: ['Inter','ui-sans-serif','system-ui','sans-serif'] },
+    colors: { primary: '#4f46e5' },
+  } } };
+</script>
+<style>
+  body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; background: #eef0f6; color: #0f172a; margin: 0; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ── Frame que simula a janela do navegador (pra demonstrar overflow) ── */
+  .viewport { height: 520px; overflow: hidden; position: relative;
+              background: #f1f5f9; border-radius: 12px; border: 1px solid #cbd5e1; }
+  .viewport .scrim { position: absolute; inset: 0; background: rgba(15,23,42,.45); display: grid; place-items: center; padding: 16px; }
+
+  /* ANTES: dialog maior que a janela, centralizado → topo e rodapé cortados, sem scroll */
+  .dlg-antes { width: 340px; background: #fff; border-radius: 14px; box-shadow: 0 20px 50px -10px rgba(0,0,0,.4);
+               max-height: none; /* sem trava → estoura */ }
+  .dlg-antes .body { /* sem overflow → conteúdo empurra além da janela */ }
+
+  /* DEPOIS: dialog trava em 90% da janela, corpo rola, header/footer fixos */
+  .dlg-depois { width: 340px; background: #fff; border-radius: 14px; box-shadow: 0 20px 50px -10px rgba(0,0,0,.4);
+                max-height: calc(520px - 32px); display: flex; flex-direction: column; }
+  .dlg-depois .head, .dlg-depois .foot { flex: 0 0 auto; }
+  .dlg-depois .body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+  .seg-btn.active-green  { background:#dcfce7; border-color:#16a34a; color:#15803d; }
+  .seg-btn.active-rose   { background:#ffe4e6; border-color:#e11d48; color:#be123c; }
+  .seg-btn.active-amber  { background:#fef3c7; border-color:#d97706; color:#b45309; }
+</style>
+</head>
+<body>
+
+<!-- ════════ BARRA EXPLICATIVA ════════ -->
+<div class="bg-slate-900 text-white px-5 py-3 flex items-center gap-3 flex-wrap sticky top-0 z-30">
+  <i data-lucide="calendar-check" class="w-4 h-4 text-indigo-300 shrink-0"></i>
+  <span class="font-semibold">Agenda — proposta pra aprovação</span>
+  <span class="text-slate-500 hidden md:inline">·</span>
+  <span class="text-slate-400 hidden md:inline text-sm">(A) registrar se o cliente veio / remarcou + observação &nbsp;·&nbsp; (B) corrigir o layout do dialog</span>
+  <div class="ml-auto flex gap-2 text-sm">
+    <button onclick="goto('secA')" class="px-3 py-1 rounded-md bg-indigo-500 font-semibold">A · Resultado</button>
+    <button onclick="goto('secB')" class="px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600">B · Dialog</button>
+  </div>
+</div>
+
+<div class="max-w-6xl mx-auto px-4 py-8 space-y-12">
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SEÇÃO A — RESULTADO DO ATENDIMENTO
+       ═══════════════════════════════════════════════════════════════ -->
+  <section id="secA">
+    <h2 class="text-lg font-bold flex items-center gap-2 mb-1"><span class="w-6 h-6 rounded-lg bg-indigo-600 text-white grid place-items-center text-xs">A</span> Registrar o resultado ao concluir</h2>
+    <p class="text-sm text-slate-500 mb-5">Ao clicar em <b>Concluir</b> numa reunião, abre este passo rápido. Funciona só pra compromissos (tarefas continuam 1 clique).</p>
+
+    <div class="grid lg:grid-cols-2 gap-6 items-start">
+
+      <!-- O dialog de resultado -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
+          <span class="w-7 h-7 rounded-lg bg-emerald-600 text-white grid place-items-center"><i data-lucide="check" class="w-4 h-4"></i></span>
+          <div>
+            <p class="font-bold text-sm">Concluir atendimento</p>
+            <p class="text-[11px] text-slate-500">Agendamento Teste · Rafael Rocha · amanhã 10:00</p>
+          </div>
+          <button class="ml-auto text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+
+        <div class="p-5 space-y-4">
+          <div>
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">O cliente compareceu?</p>
+            <div class="grid grid-cols-3 gap-2">
+              <button onclick="pickComp('compareceu')" id="cmp-compareceu" class="seg-btn active-green flex flex-col items-center gap-1 py-3 rounded-xl border-2 text-xs font-semibold transition">
+                <i data-lucide="check-circle" class="w-5 h-5"></i> Compareceu
+              </button>
+              <button onclick="pickComp('nao')" id="cmp-nao" class="seg-btn border-2 border-slate-200 text-slate-500 flex flex-col items-center gap-1 py-3 rounded-xl text-xs font-semibold hover:border-slate-300 transition">
+                <i data-lucide="x-circle" class="w-5 h-5"></i> Não veio
+              </button>
+              <button onclick="pickComp('remarcou')" id="cmp-remarcou" class="seg-btn border-2 border-slate-200 text-slate-500 flex flex-col items-center gap-1 py-3 rounded-xl text-xs font-semibold hover:border-slate-300 transition">
+                <i data-lucide="rotate-ccw" class="w-5 h-5"></i> Remarcou
+              </button>
+            </div>
+          </div>
+
+          <!-- Campos de remarcação (revelam quando "Remarcou") -->
+          <div id="remarcar-fields" class="hidden rounded-xl bg-amber-50 border border-amber-200 p-3 space-y-3">
+            <p class="text-[11px] font-bold text-amber-700 uppercase tracking-wide flex items-center gap-1"><i data-lucide="calendar-clock" class="w-3.5 h-3.5"></i> Retorno remarcado</p>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[11px] text-slate-500">Nova data</label>
+                <input type="date" value="2026-05-20" class="mt-1 w-full h-9 rounded-md border border-slate-200 px-2 text-sm bg-white">
+              </div>
+              <div>
+                <label class="text-[11px] text-slate-500">Hora</label>
+                <input type="time" value="14:30" class="mt-1 w-full h-9 rounded-md border border-slate-200 px-2 text-sm bg-white">
+              </div>
+            </div>
+            <label class="flex items-center gap-2 text-xs text-amber-800 font-medium cursor-pointer">
+              <input type="checkbox" checked class="rounded accent-amber-600"> Criar follow-up na agenda pra lembrar (mesmo cliente)
+            </label>
+          </div>
+
+          <div>
+            <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Observação do atendimento</label>
+            <textarea rows="3" class="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200" placeholder="O que rolou na reunião…">Veio, passei o valor de R$ 1.269,00 (empréstimo consignado). Cliente vai pensar — retorno marcado p/ dia 20.</textarea>
+            <p class="text-[11px] text-slate-400 mt-1">Fica salvo no histórico do compromisso e aparece no card — pra você lembrar depois.</p>
+          </div>
+        </div>
+
+        <div class="px-5 py-3 border-t border-slate-100 flex justify-end gap-2 bg-slate-50">
+          <button class="px-3 py-1.5 rounded-md text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
+          <button class="px-4 py-1.5 rounded-md text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 inline-flex items-center gap-1.5"><i data-lucide="check" class="w-4 h-4"></i> Concluir</button>
+        </div>
+      </div>
+
+      <!-- Como fica na lista depois -->
+      <div>
+        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Como aparece na lista depois</p>
+        <div class="space-y-3">
+          <!-- Compareceu -->
+          <div class="bg-white rounded-xl border border-slate-200 opacity-90 p-3 flex items-start gap-3" style="border-left:4px solid #10b981">
+            <div class="w-14 h-14 rounded-xl bg-emerald-50 border border-emerald-200 grid place-items-center shrink-0">
+              <span class="text-lg font-extrabold text-emerald-700 leading-none">10</span><span class="text-[10px] font-bold text-emerald-600">00</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1"><i data-lucide="check-circle" class="w-2.5 h-2.5"></i> Compareceu</span>
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Reunião</span>
+              </div>
+              <p class="text-sm font-bold line-through text-slate-400 mt-1">Agendamento Teste — Rafael Rocha</p>
+              <p class="text-[12px] text-slate-600 mt-1 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1.5 flex gap-1.5"><i data-lucide="message-square-text" class="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0"></i> Veio, passei o valor de R$ 1.269,00. Cliente vai pensar.</p>
+            </div>
+          </div>
+          <!-- Remarcado -->
+          <div class="bg-white rounded-xl border border-slate-200 p-3 flex items-start gap-3" style="border-left:4px solid #f59e0b">
+            <div class="w-14 h-14 rounded-xl bg-amber-50 border border-amber-200 grid place-items-center shrink-0">
+              <span class="text-lg font-extrabold text-amber-700 leading-none">10</span><span class="text-[10px] font-bold text-amber-600">00</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 inline-flex items-center gap-1"><i data-lucide="rotate-ccw" class="w-2.5 h-2.5"></i> Remarcado p/ 20/05</span>
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Reunião</span>
+              </div>
+              <p class="text-sm font-bold text-slate-800 mt-1">Francisco Assis</p>
+              <p class="text-[12px] text-slate-600 mt-1 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1.5 flex gap-1.5"><i data-lucide="message-square-text" class="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0"></i> Pediu pra remarcar, tem audiência. Retorno dia 20 às 14:30.</p>
+            </div>
+          </div>
+          <!-- Não veio -->
+          <div class="bg-white rounded-xl border border-slate-200 p-3 flex items-start gap-3" style="border-left:4px solid #f43f5e">
+            <div class="w-14 h-14 rounded-xl bg-rose-50 border border-rose-200 grid place-items-center shrink-0">
+              <span class="text-lg font-extrabold text-rose-700 leading-none">10</span><span class="text-[10px] font-bold text-rose-600">30</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 inline-flex items-center gap-1"><i data-lucide="x-circle" class="w-2.5 h-2.5"></i> Não compareceu</span>
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Reunião</span>
+              </div>
+              <p class="text-sm font-bold text-slate-800 mt-1">Antônio — Reunião Presencial</p>
+              <p class="text-[12px] text-slate-600 mt-1 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1.5 flex gap-1.5"><i data-lucide="message-square-text" class="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0"></i> Não atendeu, mandei msg. Tentar de novo amanhã.</p>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4 text-[12px] text-slate-500 bg-white border border-slate-200 rounded-xl p-3">
+          <p class="font-semibold text-slate-700 mb-1">Modelo de dados (resumo técnico)</p>
+          2 colunas novas em <code class="bg-slate-100 px-1 rounded">agendamentos</code>:
+          <code class="bg-slate-100 px-1 rounded">comparecimento</code> (compareceu/nao_compareceu/remarcado) e
+          <code class="bg-slate-100 px-1 rounded">observacaoAtendimento</code> (texto). Migration não-destrutiva (ambas opcionais/NULL).
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SEÇÃO B — DIALOG CORRIGIDO (antes/depois)
+       ═══════════════════════════════════════════════════════════════ -->
+  <section id="secB">
+    <h2 class="text-lg font-bold flex items-center gap-2 mb-1"><span class="w-6 h-6 rounded-lg bg-indigo-600 text-white grid place-items-center text-xs">B</span> Dialog de agendamento — layout corrigido</h2>
+    <p class="text-sm text-slate-500 mb-5">O dialog não tinha trava de altura: em reunião (com lembretes + anexos) ele passava da tela e o <b>rodapé "Salvar" sumia</b>. As duas molduras abaixo simulam a janela do navegador.</p>
+
+    <div class="grid lg:grid-cols-2 gap-6">
+
+      <!-- ANTES -->
+      <div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200">ANTES</span>
+          <span class="text-xs text-slate-500">estoura a janela · rodapé cortado</span>
+        </div>
+        <div class="viewport">
+          <div class="scrim items-start overflow-hidden">
+            <div class="dlg-antes" style="margin-top:-40px;">
+              <div class="px-4 py-3 border-b border-slate-100"><p class="font-bold text-sm">Novo evento</p></div>
+              <div class="body p-4 space-y-3 text-sm">
+                <div><p class="text-xs text-slate-500">Título</p><div class="h-9 rounded-md border border-slate-200 bg-slate-50 mt-1"></div></div>
+                <div class="grid grid-cols-2 gap-2"><div><p class="text-xs text-slate-500">Data</p><div class="h-9 rounded-md border border-slate-200 bg-slate-50 mt-1"></div></div><div><p class="text-xs text-slate-500">Hora</p><div class="h-9 rounded-md border border-slate-200 bg-slate-50 mt-1"></div></div></div>
+                <div class="rounded-xl bg-blue-50 border border-blue-200 p-3 space-y-2">
+                  <p class="text-xs font-bold text-blue-900 flex items-center gap-1"><i data-lucide="bell" class="w-3 h-3"></i> Lembretes</p>
+                  <div class="flex gap-1 flex-wrap"><span class="px-2 py-0.5 rounded-full bg-blue-600 text-white text-[10px]">30 min</span><span class="px-2 py-0.5 rounded-full bg-white border text-[10px]">1h</span><span class="px-2 py-0.5 rounded-full bg-white border text-[10px]">1 dia</span></div>
+                  <div class="h-8 rounded-md border border-blue-200 bg-white"></div>
+                  <div class="h-20 rounded-md border border-blue-200 bg-white"></div>
+                </div>
+                <div><p class="text-xs text-slate-500">Cliente / contato</p><div class="h-9 rounded-md border border-slate-200 bg-slate-50 mt-1"></div></div>
+                <div><p class="text-xs text-slate-500">Telefone</p><div class="h-9 rounded-md border border-slate-200 bg-slate-50 mt-1"></div></div>
+                <div><p class="text-xs text-slate-500">Descrição</p><div class="h-12 rounded-md border border-slate-200 bg-slate-50 mt-1"></div></div>
+              </div>
+              <!-- rodapé fica abaixo do corte da janela -->
+              <div class="px-4 py-3 border-t border-slate-100 flex justify-end gap-2 bg-slate-50">
+                <div class="h-8 w-20 rounded-md bg-slate-200"></div><div class="h-8 w-20 rounded-md bg-indigo-300"></div>
+              </div>
+            </div>
+          </div>
+          <div class="absolute left-0 right-0 bottom-0 bg-rose-600 text-white text-[11px] font-semibold text-center py-1 flex items-center justify-center gap-1">
+            <i data-lucide="arrow-down" class="w-3 h-3"></i> "Salvar" fica aqui embaixo, fora da tela — não dá pra clicar
+          </div>
+        </div>
+      </div>
+
+      <!-- DEPOIS -->
+      <div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">DEPOIS</span>
+          <span class="text-xs text-slate-500">cabeçalho + rodapé fixos · corpo rola por dentro</span>
+        </div>
+        <div class="viewport">
+          <div class="scrim">
+            <div class="dlg-depois">
+              <div class="head px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                <p class="font-bold text-sm">Novo evento</p>
+                <i data-lucide="x" class="w-4 h-4 text-slate-400"></i>
+              </div>
+              <div class="body p-4 space-y-3 text-sm">
+                <div><p class="text-xs text-slate-500">Título</p><div class="h-9 rounded-md border border-slate-200 bg-slate-50 mt-1"></div></div>
+                <div class="grid grid-cols-2 gap-2"><div><p class="text-xs text-slate-500">Data</p><div class="h-9 rounded-md border border-slate-200 bg-slate-50 mt-1"></div></div><div><p class="text-xs text-slate-500">Hora</p><div class="h-9 rounded-md border border-slate-200 bg-slate-50 mt-1"></div></div></div>
+                <div class="rounded-xl bg-blue-50 border border-blue-200 p-3 space-y-2">
+                  <p class="text-xs font-bold text-blue-900 flex items-center gap-1"><i data-lucide="bell" class="w-3 h-3"></i> Lembretes</p>
+                  <div class="flex gap-1 flex-wrap"><span class="px-2 py-0.5 rounded-full bg-blue-600 text-white text-[10px]">30 min</span><span class="px-2 py-0.5 rounded-full bg-white border text-[10px]">1h</span><span class="px-2 py-0.5 rounded-full bg-white border text-[10px]">1 dia</span></div>
+                  <div class="h-8 rounded-md border border-blue-200 bg-white"></div>
+                  <div class="h-20 rounded-md border border-blue-200 bg-white"></div>
+                </div>
+                <div><p class="text-xs text-slate-500">Cliente / contato</p><div class="h-9 rounded-md border border-slate-200 bg-slate-50 mt-1"></div></div>
+                <div><p class="text-xs text-slate-500">Telefone</p><div class="h-9 rounded-md border border-slate-200 bg-slate-50 mt-1"></div></div>
+                <div><p class="text-xs text-slate-500">Processo vinculado</p><div class="h-9 rounded-md border border-slate-200 bg-slate-50 mt-1"></div></div>
+                <div><p class="text-xs text-slate-500">Descrição</p><div class="h-12 rounded-md border border-slate-200 bg-slate-50 mt-1"></div></div>
+                <div class="rounded-xl bg-violet-50 border border-violet-200 p-3"><p class="text-xs font-bold text-violet-900 flex items-center gap-1"><i data-lucide="paperclip" class="w-3 h-3"></i> Arquivos da reunião</p></div>
+              </div>
+              <div class="foot px-4 py-3 border-t border-slate-100 flex justify-end gap-2 bg-white">
+                <button class="px-3 py-1.5 rounded-md text-sm text-slate-600 border border-slate-200">Cancelar</button>
+                <button class="px-4 py-1.5 rounded-md text-sm font-semibold text-white bg-indigo-600 inline-flex items-center gap-1"><i data-lucide="check" class="w-4 h-4"></i> Salvar</button>
+              </div>
+            </div>
+          </div>
+          <div class="absolute left-0 right-0 bottom-0 bg-emerald-600 text-white text-[11px] font-semibold text-center py-1 flex items-center justify-center gap-1">
+            <i data-lucide="check" class="w-3 h-3"></i> "Salvar" sempre visível, fixo no rodapé
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-5 text-[12px] text-slate-500 bg-white border border-slate-200 rounded-xl p-3 max-w-3xl">
+      <span class="font-semibold text-slate-700">Correção (CSS-only):</span>
+      <code class="bg-slate-100 px-1 rounded">DialogContent</code> ganha <code class="bg-slate-100 px-1 rounded">max-h-[90dvh]</code> + vira coluna flex; corpo do form em <code class="bg-slate-100 px-1 rounded">overflow-y-auto</code>; cabeçalho e rodapé <code class="bg-slate-100 px-1 rounded">shrink-0</code>. Sem mudar nenhum campo nem lógica.
+    </div>
+  </section>
+
+</div>
+
+<script>
+  function goto(id){ document.getElementById(id).scrollIntoView({behavior:'smooth', block:'start'}); }
+  function pickComp(which){
+    const map = { compareceu:'green', nao:'rose', remarcou:'amber' };
+    ['compareceu','nao','remarcou'].forEach(k=>{
+      const el = document.getElementById('cmp-'+k);
+      el.className = el.className.replace(/active-(green|rose|amber)/g,'').replace(/\s+/g,' ').trim();
+      if(k===which){ el.classList.add('active-'+map[k]); }
+      else { /* reset to neutral handled by base classes */ }
+    });
+    document.getElementById('remarcar-fields').classList.toggle('hidden', which!=='remarcou');
+    lucide.createIcons();
+  }
+  lucide.createIcons();
+</script>
+</body>
+</html>

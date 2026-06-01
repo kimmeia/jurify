@@ -7,6 +7,14 @@
  */
 import type { LucideIcon } from "lucide-react";
 
+/** Imagem anexa a uma mensagem, pra envio multimodal nativo ao LLM (Vision). */
+export interface ImagemAnexa {
+  /** Conteúdo do arquivo em base64 (sem o prefixo data:). */
+  base64: string;
+  /** MIME real (image/jpeg, image/png, image/webp, image/gif). */
+  mime: string;
+}
+
 export type GatilhoSmartflow =
   | "whatsapp_mensagem"
   | "mensagem_canal"

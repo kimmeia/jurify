@@ -55,12 +55,12 @@ export async function consultarTjce(
 export async function consultarTjcePorCpf(
   documento: string,
   storageStateJson: string,
+  config: TribunalPdpjConfig = TJCE_1G,
 ) {
-  const scraper = new PjeTjceScraper({
-    username: "(via-sessao)",
-    password: "(via-sessao)",
-    totpSecret: null,
-  });
+  const scraper = new PjeTjceScraper(
+    { username: "(via-sessao)", password: "(via-sessao)", totpSecret: null },
+    config,
+  );
   return scraper.consultarPorCpf(documento, storageStateJson);
 }
 

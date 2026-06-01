@@ -11,6 +11,7 @@
  */
 
 import { createLogger } from "../_core/logger";
+import { montarBodyOpenAIChat } from "../_core/openai-model-params";
 
 const log = createLogger("llm-extracao");
 
@@ -258,34 +259,36 @@ async function invocarOpenAIComTool(
   const msgsHist = historico
     .slice(-20)
     .map((m) => ({ role: m.role === "system" ? ("user" as const) : m.role, content: m.content }));
-  const body = {
+  const body = montarBodyOpenAIChat({
     model: modelo || "gpt-4o-mini",
-    max_tokens: maxTokens,
-    temperature: temperatura,
+    maxTokens,
+    temperatura,
     messages: [
       { role: "system", content: systemPrompt },
       ...msgsHist,
       { role: "user", content: mensagem },
     ],
-    tools: [
-      {
-        type: "function",
-        function: {
-          name: "salvar_campos_extraidos",
-          description: "Salva os campos que o usuário informou em qualquer momento da conversa. Omita campos que não foram informados.",
-          parameters: {
-            type: "object",
-            properties: schema.properties,
-            required: schema.required,
+    extra: {
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "salvar_campos_extraidos",
+            description: "Salva os campos que o usuário informou em qualquer momento da conversa. Omita campos que não foram informados.",
+            parameters: {
+              type: "object",
+              properties: schema.properties,
+              required: schema.required,
+            },
           },
         },
+      ],
+      tool_choice: {
+        type: "function",
+        function: { name: "salvar_campos_extraidos" },
       },
-    ],
-    tool_choice: {
-      type: "function",
-      function: { name: "salvar_campos_extraidos" },
     },
-  };
+  });
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
