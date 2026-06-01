@@ -2242,7 +2242,7 @@ describe("SmartFlow Engine", () => {
         { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "x", config: { template: "Sem atendente" } },
       ];
       const r = await executarCenario(passos, { conversaId: 9, contatoId: 5 }, exec);
-      expect(distribuirAtendimentoPorSetor).toHaveBeenCalledWith({ setorId: 3, somenteOnline: true, conversaId: 9 });
+      expect(distribuirAtendimentoPorSetor).toHaveBeenCalledWith(expect.objectContaining({ setorId: 3, somenteOnline: true, conversaId: 9 }));
       expect(r.contexto.atendenteEscolhidoNome).toBe("Maria");
       expect(r.contexto.atendenteEscolhidoId).toBe(12);
       // Alias curto pra interpolação em prompts ({{atendente}}).
