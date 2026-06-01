@@ -220,6 +220,29 @@ describe("resumirPreview", () => {
     );
     const resumo = resumirPreview(linhas);
     expect(resumo.monitoraveisPorSistema).toEqual({});
+    expect(resumo.monitoraveisConsultaPublica).toBe(0);
     expect(resumo.novos).toBe(1);
+  });
+
+  it("TRF-5 (consulta pública) entra em monitoraveisConsultaPublica, não em PorSistema", () => {
+    // TRF-5 tem motor próprio mas sistemaCofrePorTribunal('trf5') = null
+    // (consulta pública não usa cofre). Deve contar separadamente.
+    const linhas = decidirPreview(
+      [
+        linha({
+          cnj: "08001276920254058109",
+          cnjOriginal: "0800127-69.2025.4.05.8109",
+          tribunal: "TRF-5",
+          codigoTribunal: "trf5",
+          temMotorProprio: true,
+        }),
+        // E um TJCE pra garantir que ambos coexistem
+        linha({ cnj: "11111111111111111111", cnjOriginal: "0000001-00.2025.8.06.0001" }),
+      ],
+      new Map(), new Map(), mapaVazio(),
+    );
+    const resumo = resumirPreview(linhas);
+    expect(resumo.monitoraveisConsultaPublica).toBe(1);
+    expect(resumo.monitoraveisPorSistema).toEqual({ pje_tjce: 1 });
   });
 });

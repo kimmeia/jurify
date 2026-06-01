@@ -64,8 +64,27 @@ export function getConfigTribunal(
   return REGISTRO[tribunal];
 }
 
-/** Usado pelo cnj-parser pra marcar `temMotorProprio` no parse do CNJ. */
+/**
+ * Tribunais que rodam por CONSULTA PÚBLICA (sem credencial OAB no Cofre).
+ * Padrão PJe JSF/RichFaces aberto — adapter herda do TRT2Scraper genérico
+ * com override de URL. Não usam REGISTRO porque a config TribunalPdpjConfig
+ * é específica do fluxo PDPJ-cloud (login Keycloak); estes não.
+ *
+ * Cron decide o caminho via `tribunalRequerCredencial` abaixo.
+ */
+export const TRIBUNAIS_CONSULTA_PUBLICA = new Set<string>([
+  "trf5",
+]);
+
+/** Usado pelo cnj-parser pra marcar `temMotorProprio` no parse do CNJ.
+ *  União dos dois registros (PDPJ-cloud com credencial + consulta pública). */
 export function tribunalTemMotorProprio(tribunal: string): boolean {
+  return tribunal in REGISTRO || TRIBUNAIS_CONSULTA_PUBLICA.has(tribunal);
+}
+
+/** Indica se o tribunal precisa de credencial OAB no Cofre. False pra
+ *  consulta pública (trf5 etc), true pra PDPJ-cloud (TJs). */
+export function tribunalRequerCredencial(tribunal: string): boolean {
   return tribunal in REGISTRO;
 }
 
@@ -88,4 +107,7 @@ export function configPorSistema(sistema: string): TribunalPdpjConfig | null {
   return getConfigTribunal(trib);
 }
 
-export const TRIBUNAIS_MOTOR_PROPRIO = Object.keys(REGISTRO);
+export const TRIBUNAIS_MOTOR_PROPRIO = [
+  ...Object.keys(REGISTRO),
+  ...TRIBUNAIS_CONSULTA_PUBLICA,
+];

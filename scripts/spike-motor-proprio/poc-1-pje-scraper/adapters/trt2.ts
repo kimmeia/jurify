@@ -57,6 +57,12 @@ export class TRT2Scraper implements ScraperTribunalAdapter {
     return "https://pje.trt2.jus.br/consultaprocessual/";
   }
 
+  /** Override em subclasses pra retornar a UF da sede do tribunal.
+   *  Usado em `extrairCapa` pra preencher o ProcessoCapa.uf. */
+  protected getUf(): string {
+    return "SP";
+  }
+
   async consultarPorCnj(cnj: string): Promise<ResultadoScraper> {
     const inicio = Date.now();
     const cnjMascarado = mascararCnj(cnj);
@@ -403,7 +409,7 @@ export class TRT2Scraper implements ScraperTribunalAdapter {
     return null;
   }
 
-  private async extrairCapa(page: Page, cnj: string): Promise<ProcessoCapa> {
+  protected async extrairCapa(page: Page, cnj: string): Promise<ProcessoCapa> {
     const lerCampoPorLabel = async (labels: string[]): Promise<string | null> => {
       for (const label of labels) {
         // Estratégia: localiza elemento com texto do label, navega pro irmão
@@ -445,7 +451,7 @@ export class TRT2Scraper implements ScraperTribunalAdapter {
       orgaoJulgador: orgao,
       juiz: null,
       comarca: null,
-      uf: "SP",
+      uf: this.getUf(),
       valorCausaCentavos: parseValorBRLCentavos(valorRaw),
       dataDistribuicao: parseDataBR(dataDistRaw),
       status: null,

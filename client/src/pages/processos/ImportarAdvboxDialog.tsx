@@ -68,6 +68,9 @@ type Resumo = {
   semCliente: number;
   semCnjOuInvalido: number;
   monitoraveisPorSistema: Record<string, number>;
+  /** Processos de tribunal com motor próprio SEM cofre (TRF-5 consulta
+   *  pública). UI exibe como elegível sem dropdown de credencial. */
+  monitoraveisConsultaPublica: number;
 };
 
 type PreviewResultado = {
@@ -391,10 +394,10 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
               </table>
             </ScrollArea>
 
-            {/* Bloco de monitoramento — só faz sentido quando há linhas
-                monitoráveis. Calcula custo dinâmico baseado na credencial
-                escolhida. */}
-            {Object.keys(preview.resumo.monitoraveisPorSistema).length > 0 && (
+            {/* Bloco de monitoramento — aparece quando há linhas elegíveis
+                (via cofre + credencial OU consulta pública sem credencial). */}
+            {(Object.keys(preview.resumo.monitoraveisPorSistema).length > 0 ||
+              preview.resumo.monitoraveisConsultaPublica > 0) && (
               <div className="border-2 border-indigo-200 bg-indigo-50/40 rounded-lg p-3 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-2">
@@ -405,7 +408,6 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                       </Label>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
                         Cada processo monitorado consome {CUSTO_MONITORAMENTO_MES} créditos/mês.
-                        Requer credencial OAB do tribunal.
                       </p>
                     </div>
                   </div>
@@ -421,47 +423,63 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
 
                 {ativarMonitor && (
                   <div className="space-y-2">
-                    <Label className="text-xs">Credencial OAB</Label>
-                    {credsAtivas.length === 0 ? (
-                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-                        Nenhuma credencial ativa. Cadastre uma em{" "}
-                        <a href="/processos?tab=cofre" className="underline">
-                          Cofre
-                        </a>{" "}
-                        antes de monitorar.
-                      </p>
-                    ) : (
-                      <Select value={credencialIdEscolhida} onValueChange={setCredencialIdEscolhida}>
-                        <SelectTrigger className="h-9 text-xs">
-                          <SelectValue placeholder="Escolha a credencial" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {credsAtivas.map((c) => {
-                            const monitoraveis = preview.resumo.monitoraveisPorSistema[c.sistema] ?? 0;
-                            return (
-                              <SelectItem key={c.id} value={String(c.id)}>
-                                {c.apelido ?? c.sistema} ({c.sistema}) — {monitoraveis} processo(s) elegível(is)
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
+                    {preview.resumo.monitoraveisConsultaPublica > 0 && (
+                      <div className="text-xs bg-emerald-50 border border-emerald-200 rounded p-2">
+                        <strong className="tabular-nums">
+                          {preview.resumo.monitoraveisConsultaPublica}
+                        </strong>{" "}
+                        processo(s) de tribunal de <strong>consulta pública</strong> (TRF-5
+                        etc) serão monitorados sem credencial.
+                      </div>
                     )}
 
-                    {credencialIdEscolhida && (() => {
+                    {Object.keys(preview.resumo.monitoraveisPorSistema).length > 0 && (
+                      <>
+                        <Label className="text-xs">Credencial OAB (PJe-TJ)</Label>
+                        {credsAtivas.length === 0 ? (
+                          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                            Nenhuma credencial ativa. Cadastre uma em{" "}
+                            <a href="/processos?tab=cofre" className="underline">Cofre</a>{" "}
+                            pra monitorar os PJe-TJ. Os de consulta pública (TRF-5) vão
+                            mesmo sem credencial.
+                          </p>
+                        ) : (
+                          <Select value={credencialIdEscolhida} onValueChange={setCredencialIdEscolhida}>
+                            <SelectTrigger className="h-9 text-xs">
+                              <SelectValue placeholder="Opcional — escolha pra monitorar os PJe-TJ" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {credsAtivas.map((c) => {
+                                const monitoraveis = preview.resumo.monitoraveisPorSistema[c.sistema] ?? 0;
+                                return (
+                                  <SelectItem key={c.id} value={String(c.id)}>
+                                    {c.apelido ?? c.sistema} ({c.sistema}) — {monitoraveis} elegível(is)
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </>
+                    )}
+
+                    {(() => {
                       const cred = credsAtivas.find((c) => String(c.id) === credencialIdEscolhida);
-                      if (!cred) return null;
-                      const monitoraveis = preview.resumo.monitoraveisPorSistema[cred.sistema] ?? 0;
-                      const custo = monitoraveis * CUSTO_MONITORAMENTO_MES;
+                      const monitoraveisCred = cred
+                        ? (preview.resumo.monitoraveisPorSistema[cred.sistema] ?? 0)
+                        : 0;
+                      const total = monitoraveisCred + preview.resumo.monitoraveisConsultaPublica;
+                      if (total === 0) return null;
+                      const custo = total * CUSTO_MONITORAMENTO_MES;
                       return (
                         <div className="text-xs bg-white border rounded p-2 space-y-1">
                           <p>
-                            <strong className="tabular-nums">{monitoraveis}</strong> processo(s) serão
-                            monitorados automaticamente. Os demais ficam como vínculo (sem poll).
+                            Total: <strong className="tabular-nums">{total}</strong> processo(s) vão
+                            monitorar. Os demais ficam como vínculo (sem poll).
                           </p>
                           <p className="text-indigo-700 font-medium">
                             Custo estimado: <span className="tabular-nums">{custo}</span> créditos
-                            (1ª mensalidade) · recorrente mensal a cada poll bem-sucedido.
+                            (1ª mensalidade).
                           </p>
                         </div>
                       );
@@ -570,21 +588,22 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
         <DialogFooter>
           {etapa === "preview" && (() => {
             const novos = preview!.resumo.novos;
-            // Monitoráveis na credencial escolhida (inclui "ja_existe" também).
+            // Monitor sai via credencial (PJe-TJ) + consulta pública (TRF-5).
             const credEscolhida = credsAtivas.find((c) => String(c.id) === credencialIdEscolhida);
-            const monitoraveis = credEscolhida
+            const monitorCred = credEscolhida
               ? (preview!.resumo.monitoraveisPorSistema[credEscolhida.sistema] ?? 0)
               : 0;
-            const monitorPendente = ativarMonitor && monitoraveis > 0;
-            const credFaltando = ativarMonitor && !credencialIdEscolhida;
+            const monitorPublico = preview!.resumo.monitoraveisConsultaPublica;
+            const monitorTotal = ativarMonitor ? monitorCred + monitorPublico : 0;
+            const monitorPendente = monitorTotal > 0;
 
             let label: string;
             if (novos > 0 && monitorPendente) {
-              label = `Importar ${novos} + ativar ${monitoraveis} monitor(es)`;
+              label = `Importar ${novos} + ativar ${monitorTotal} monitor(es)`;
             } else if (novos > 0) {
               label = `Importar ${novos} processo(s)`;
             } else if (monitorPendente) {
-              label = `Ativar ${monitoraveis} monitor(es)`;
+              label = `Ativar ${monitorTotal} monitor(es)`;
             } else {
               label = "Importar";
             }
@@ -594,10 +613,7 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                 <Button variant="outline" onClick={handleClose}>Cancelar</Button>
                 <Button
                   onClick={handleImportar}
-                  disabled={(novos === 0 && !monitorPendente) || credFaltando}
-                  title={
-                    credFaltando ? "Escolha a credencial OAB ou desative o monitoramento" : undefined
-                  }
+                  disabled={novos === 0 && !monitorPendente}
                 >
                   {label}
                 </Button>
