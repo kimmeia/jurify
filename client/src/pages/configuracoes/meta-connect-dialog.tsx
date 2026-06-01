@@ -331,7 +331,22 @@ export function MetaConnectDialog({
     FB.login(function (response: any) {
       if (!response.authResponse?.code) {
         setConectando(false);
-        toast.error("Conexão cancelada ou não autorizada.");
+        // FB.login não devolve `code` em cenários BEM diferentes: o usuário
+        // fechou a janela, não aprovou as permissões, ou o login ficou
+        // incompleto (ex.: confirmação em duas etapas pendente). Nenhum é uma
+        // "falha" definitiva — todos são recuperáveis. Por isso não usamos um
+        // erro vermelho genérico de "conexão cancelada", que assustava à toa.
+        if (response?.status === "not_authorized") {
+          toast.warning("Permissões não aprovadas", {
+            description:
+              "Você entrou no Facebook mas não aprovou as permissões. Tente de novo e autorize para conectar.",
+          });
+        } else {
+          toast.warning("Conexão não concluída", {
+            description:
+              "O login no Facebook não foi finalizado (janela fechada ou aprovação pendente — ex.: confirmação em duas etapas). Pode tentar de novo.",
+          });
+        }
         return;
       }
 
