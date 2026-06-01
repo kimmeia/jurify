@@ -1910,7 +1910,10 @@ export const processosRouter = router({
     .input(
       z.object({
         // Opcional: restringir a um subset. Sem isso, atualiza tudo.
-        monitoramentoIds: z.array(z.number().int().positive()).max(200).optional(),
+        // Limite alto pra cobrir escritórios grandes — runner já controla
+        // paralelismo interno (3 polls simultâneos). Valor alto vira só
+        // payload maior, não estresse no PJe.
+        monitoramentoIds: z.array(z.number().int().positive()).max(5000).optional(),
       }).optional(),
     )
     .mutation(async ({ ctx, input }) => {
