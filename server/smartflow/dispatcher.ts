@@ -1234,6 +1234,7 @@ export async function dispararMensagemCanal(
     telefone: string;
     nomeCliente: string;
     imagem?: ImagemAnexa;
+    tipoMensagem?: "texto" | "audio" | "imagem" | "documento" | "video" | "sticker" | "localizacao" | "contato";
   },
 ): Promise<{ executou: boolean; respostas: string[]; execId?: number }> {
   const db = await getDb();
@@ -1241,6 +1242,8 @@ export async function dispararMensagemCanal(
 
   try {
     // Humano assumiu a conversa? Ignora SmartFlow.
+    // Log em info (não debug) com tipoMensagem visível — sem isso, "bot mudo em
+    // áudio" é indistinguível de "Whisper falhou" no diagnóstico via Railway.
     if (params.conversaId) {
       const { conversas } = await import("../../drizzle/schema");
       const [conv] = await db
@@ -1249,7 +1252,10 @@ export async function dispararMensagemCanal(
         .where(eq(conversas.id, params.conversaId))
         .limit(1);
       if (conv?.status === "em_atendimento") {
-        log.debug({ conversaId: params.conversaId }, "SmartFlow: conversa em_atendimento — ignorando");
+        log.info(
+          { conversaId: params.conversaId, tipoMensagem: params.tipoMensagem || "texto" },
+          "SmartFlow: conversa em_atendimento — bot pausado, mensagem ignorada",
+        );
         return { executou: false, respostas: [] };
       }
     }

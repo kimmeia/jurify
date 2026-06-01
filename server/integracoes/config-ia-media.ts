@@ -45,14 +45,33 @@ export async function obterConfigIAMedia(escritorioId: number): Promise<ConfigIA
 }
 
 /** Transcreve um áudio do WhatsApp se o escritório tem Whisper ligado e uma
- *  chave OpenAI configurada. Retorna o texto ou null (silencioso). */
+ *  chave OpenAI configurada. Retorna o texto ou null. Loga cada motivo de skip
+ *  pra ficar simples diagnosticar "Whisper não rodou" via Railway. */
 export async function transcreverAudioWhatsapp(escritorioId: number, mediaUrl: string): Promise<string | null> {
   try {
+    log.info({ escritorioId, mediaUrl }, "Whisper: iniciando transcrição");
     const c = await obterConfigIAMedia(escritorioId);
-    if (!c?.whisperAtivo || !c.openaiApiKey) return null;
-    return await transcreverAudioOpenAI(c.openaiApiKey, mediaUrl);
+    if (!c) {
+      log.warn({ escritorioId }, "Whisper: SEM canal ChatGPT configurado — toggle Whisper inacessível");
+      return null;
+    }
+    if (!c.whisperAtivo) {
+      log.warn({ escritorioId }, "Whisper: toggle DESLIGADO no card do ChatGPT");
+      return null;
+    }
+    if (!c.openaiApiKey) {
+      log.warn({ escritorioId }, "Whisper: SEM chave OpenAI no card do ChatGPT");
+      return null;
+    }
+    const t = await transcreverAudioOpenAI(c.openaiApiKey, mediaUrl);
+    if (t) {
+      log.info({ escritorioId, tamanho: t.length }, "Whisper: transcrição OK");
+    } else {
+      log.warn({ escritorioId, mediaUrl }, "Whisper: transcrição retornou vazio/null (ver logs de openai-audio acima)");
+    }
+    return t;
   } catch (e: any) {
-    log.warn({ err: e?.message, escritorioId }, "transcrição de áudio falhou");
+    log.warn({ err: e?.message, escritorioId }, "Whisper: transcrição falhou");
     return null;
   }
 }
