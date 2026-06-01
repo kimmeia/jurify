@@ -3638,6 +3638,7 @@ function ConfigDistribuirAtendimentoFields({
   const setorId = typeof cfg.setorId === "number" ? cfg.setorId : 0;
   const atendenteId = typeof cfg.atendenteId === "number" ? cfg.atendenteId : 0;
   const somenteOnline = cfg.somenteOnline === true;
+  const redistribuirSempre = cfg.redistribuirSempre === true;
   return (
     <div className="space-y-3">
       <div className="rounded-md bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-900 p-2">
@@ -3681,6 +3682,14 @@ function ConfigDistribuirAtendimentoFields({
           <label className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs">
             <Checkbox checked={somenteOnline} onCheckedChange={(v) => onChange({ somenteOnline: v === true })} />
             <span>Só atendentes <strong>online</strong> (ativos nos últimos ~10 min). Desligado = qualquer atendente do setor.</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs">
+            <Checkbox checked={redistribuirSempre} onCheckedChange={(v) => onChange({ redistribuirSempre: v === true })} />
+            <span>
+              <strong>Redistribuir sempre</strong> (ignora atendente atual da conversa).
+              <br />
+              <span className="text-[10px] text-muted-foreground">Padrão: desligado — cliente que já tem atendente continua com ele (sticky). Ligue pra setor de fila, ou pra testes onde você quer ver round-robin de verdade com o mesmo contato.</span>
+            </span>
           </label>
         </>
       ) : (

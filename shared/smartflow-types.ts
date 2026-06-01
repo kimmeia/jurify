@@ -482,6 +482,10 @@ export interface ConfigDistribuirAtendimento {
   atendenteId?: number;
   /** true = só atendentes online (heartbeat ~10min); false = grupo todo. Só vale pra modo="setor". */
   somenteOnline?: boolean;
+  /** Default false (sticky): respeita o atendente já atrelado à conversa.
+   *  true = ignora sticky e roda round-robin SEMPRE — útil pra setor de fila
+   *  rotativa, ou pra testes. Só vale pra modo="setor". */
+  redistribuirSempre?: boolean;
 }
 /**
  * Uma condição individual avaliada pelo passo `condicional`. Cada condição

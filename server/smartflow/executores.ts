@@ -734,7 +734,9 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       // removido), ignora e cai na distribuição normal — assim conserta caso
       // típico em que uma distribuição anterior (ou legacy) jogou em alguém
       // de outro setor.
-      if (params.conversaId) {
+      // Toggle "redistribuirSempre" do bloco pula esse check — força fresh
+      // pick a cada execução (round-robin sempre), útil pra setor de fila.
+      if (params.conversaId && !params.redistribuirSempre) {
         const [conv] = await db
           .select({ atendenteId: conversas.atendenteId })
           .from(conversas)
