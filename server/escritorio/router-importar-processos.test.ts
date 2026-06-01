@@ -14,6 +14,8 @@ function linha(over: Partial<LinhaAdvbox>): LinhaAdvbox {
     cnjOriginal: "3032130-39.2026.8.06.0001",
     cnjValido: true,
     tribunal: "TJCE",
+    codigoTribunal: "tjce",
+    temMotorProprio: true,
     clientes: [{ nome: "JONAS GOMES", cpfCnpj: "08737698303", tipoDoc: "cpf", textoOriginal: "..." }],
     classe: "CONTRATOS BANCÁRIOS",
     valorCausaCentavos: 4511452,
@@ -162,7 +164,7 @@ describe("resumirPreview", () => {
     const linhas = decidirPreview(
       [
         linha({}),                                  // cnj_em_outro_cliente (cnj no DB com contato 88)
-        linha({ cnj: null, cnjValido: false }),     // sem_cnj_invalido
+        linha({ cnj: null, cnjValido: false, codigoTribunal: null, temMotorProprio: false }),
         linha({ clientes: [] }),                    // sem_cliente
         linha({ cnj: "00000000000000000000", cnjOriginal: "0000000-00.0000.0.00.0000" }), // novo
       ],
@@ -174,5 +176,47 @@ describe("resumirPreview", () => {
     expect(resumo.semCnjOuInvalido).toBe(1);
     expect(resumo.semCliente).toBe(1);
     expect(resumo.jaExistem).toBe(0);
+  });
+
+  it("monitoraveisPorSistema agrupa só linhas 'novas' elegíveis", () => {
+    // 2 TJCE (monitorável) + 1 TRF-5 (sem motor próprio) + 1 já existe
+    const m = mapa(
+      [["42|99999999999999999999", 7]],
+      [["99999999999999999999", [{ contatoId: 42, contatoNome: "X" }]]],
+    );
+    const porDoc = new Map([["08737698303", { id: 42, nome: "X" }]]);
+    const linhas = decidirPreview(
+      [
+        linha({}),  // TJCE — monitorável
+        linha({ cnj: "11111111111111111111", cnjOriginal: "0000001-00.2025.8.06.0001" }), // TJCE — monitorável
+        linha({
+          cnj: "22222222222222222222",
+          cnjOriginal: "0800127-69.2025.4.05.8109",
+          tribunal: "TRF-5",
+          codigoTribunal: "trf5",
+          temMotorProprio: false,
+        }),
+        linha({ cnj: "99999999999999999999", cnjOriginal: "9999999-99.2025.8.06.0001" }), // já existe (mesmo contato)
+      ],
+      porDoc, new Map(), m,
+    );
+    const resumo = resumirPreview(linhas);
+    expect(resumo.monitoraveisPorSistema).toEqual({ pje_tjce: 2 });
+  });
+
+  it("monitoraveisPorSistema vazio quando nenhum 'novo' é elegível", () => {
+    const linhas = decidirPreview(
+      [
+        linha({
+          tribunal: "TRT-7",
+          codigoTribunal: "trt7",
+          temMotorProprio: false,
+        }),
+      ],
+      new Map(), new Map(), mapaVazio(),
+    );
+    const resumo = resumirPreview(linhas);
+    expect(resumo.monitoraveisPorSistema).toEqual({});
+    expect(resumo.novos).toBe(1);
   });
 });

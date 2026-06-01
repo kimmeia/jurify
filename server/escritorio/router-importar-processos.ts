@@ -12,14 +12,24 @@
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { contatos, clienteProcessos } from "../../drizzle/schema";
+import {
+  contatos,
+  clienteProcessos,
+  motorMonitoramentos,
+  cofreCredenciais,
+} from "../../drizzle/schema";
 import { checkPermission } from "./check-permission";
 import { verificarLimite } from "../billing/plan-limits";
 import { parseAdvboxXlsx, type LinhaAdvbox } from "../processos/parser-advbox";
+import { sistemaCofrePorTribunal } from "../processos/cnj-parser";
+import { mascararCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import { createLogger } from "../_core/logger";
+
+/** Custo em créditos pra monitorar 1 processo por mês. Bate com `CUSTOS.monitorar_processo_mes` em routers/processos.ts. */
+const CUSTO_MONITORAMENTO_MES = 2;
 
 const log = createLogger("importar-processos");
 
@@ -37,6 +47,8 @@ const linhaExecucaoSchema = z.object({
   cnjOriginal: z.string(),
   cnjValido: z.boolean(),
   tribunal: z.string().nullable(),
+  codigoTribunal: z.string().nullable(),
+  temMotorProprio: z.boolean(),
   classe: z.string().nullable(),
   valorCausaCentavos: z.number().int().nullable(),
   clientes: z.array(
@@ -185,13 +197,26 @@ export function resumirPreview(linhas: PreviewLinha[]): {
   cnjEmOutroCliente: number;
   semCliente: number;
   semCnjOuInvalido: number;
+  /** Pra cada sistema de cofre (ex: "pje_tjce"), quantas linhas "novas"
+   *  são elegíveis pra monitoramento automático. UI usa pra calcular
+   *  custo de créditos e filtrar credenciais úteis no dropdown. */
+  monitoraveisPorSistema: Record<string, number>;
 } {
+  const novos = linhas.filter((l) => l.status === "novo");
+  const monitoraveisPorSistema: Record<string, number> = {};
+  for (const l of novos) {
+    if (!l.temMotorProprio || !l.codigoTribunal) continue;
+    const sistema = sistemaCofrePorTribunal(l.codigoTribunal);
+    if (!sistema) continue;
+    monitoraveisPorSistema[sistema] = (monitoraveisPorSistema[sistema] ?? 0) + 1;
+  }
   return {
-    novos: linhas.filter((l) => l.status === "novo").length,
+    novos: novos.length,
     jaExistem: linhas.filter((l) => l.status === "ja_existe_processo").length,
     cnjEmOutroCliente: linhas.filter((l) => l.status === "cnj_em_outro_cliente").length,
     semCliente: linhas.filter((l) => l.status === "sem_cliente").length,
     semCnjOuInvalido: linhas.filter((l) => l.status === "sem_cnj_invalido").length,
+    monitoraveisPorSistema,
   };
 }
 
@@ -275,10 +300,18 @@ export const importarProcessosRouter = router({
     }),
 
   /** Cria contato + vínculo de cada linha aprovada. Aceita até 100 linhas
-   *  por chamada — UI deve quebrar em chunks pra dar feedback de progresso. */
+   *  por chamada — UI deve quebrar em chunks pra dar feedback de progresso.
+   *
+   *  Quando `monitorar=true` + `credencialId` válido, também ativa monitor
+   *  automático de movimentações nos processos elegíveis (tribunal tem
+   *  motor próprio E credencial é do mesmo sistema do tribunal). Cobra
+   *  CUSTO_MONITORAMENTO_MES créditos por processo monitorado. Sem saldo
+   *  → linha vira vínculo só (não monitora; registra em erros). */
   executarAdvbox: protectedProcedure
     .input(z.object({
       linhas: z.array(linhaExecucaoSchema).min(1).max(MAX_LINHAS_POR_CHAMADA),
+      monitorar: z.boolean().optional(),
+      credencialId: z.number().int().positive().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "criar");
@@ -300,18 +333,74 @@ export const importarProcessosRouter = router({
         }
       }
 
+      // Se vai monitorar, carrega credencial uma vez (fora do loop) e
+      // valida que está ativa. Caller passa `credencialId` quando o user
+      // marca o checkbox no preview e escolhe a credencial.
+      let credencialSistema: string | null = null;
+      if (input.monitorar) {
+        if (!input.credencialId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Credencial OAB obrigatória pra ativar monitoramento.",
+          });
+        }
+        const [cred] = await db
+          .select()
+          .from(cofreCredenciais)
+          .where(and(
+            eq(cofreCredenciais.id, input.credencialId),
+            eq(cofreCredenciais.escritorioId, perm.escritorioId),
+            eq(cofreCredenciais.status, "ativa"),
+          ))
+          .limit(1);
+        if (!cred) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Credencial não encontrada ou inativa.",
+          });
+        }
+        credencialSistema = cred.sistema;
+      }
+
       // Mapas atualizados a cada inserção pra evitar duplicatas DENTRO do mesmo lote
       // (planilha pode ter o mesmo cliente em 5 linhas — só cria 1x).
       const { porDoc, porNome } = await carregarMapaContatos(db, perm.escritorioId);
       const mapaProcessos = await carregarMapaProcessos(db, perm.escritorioId);
+
+      // Mapa de CNJs já monitorados (independente de qual credencial). Evita
+      // criar monitoramento duplicado quando o user já ativou manualmente
+      // antes ou quando re-importa a mesma planilha.
+      const cnjsJaMonitorados = new Set<string>();
+      if (input.monitorar) {
+        const monsExistentes = await db
+          .select({ searchKey: motorMonitoramentos.searchKey })
+          .from(motorMonitoramentos)
+          .where(and(
+            eq(motorMonitoramentos.escritorioId, perm.escritorioId),
+            eq(motorMonitoramentos.tipoMonitoramento, "movimentacoes"),
+          ));
+        for (const m of monsExistentes) {
+          if (m.searchKey) cnjsJaMonitorados.add(m.searchKey.replace(/\D/g, ""));
+        }
+      }
 
       const resultado = {
         contatosCriados: 0,
         contatosReutilizados: 0,
         processosCriados: 0,
         processosJaExistiam: 0,
+        monitoramentosCriados: 0,
+        monitoramentosJaExistiam: 0,
+        monitoramentosNaoElegiveis: 0,
+        creditosConsumidos: 0,
         erros: [] as { linhaNum: number; motivo: string }[],
       };
+
+      // `consumirCreditosEscritorio` é dinâmico pra evitar import circular
+      // do billing (que importa o schema, que importa este router).
+      const { consumirCreditosEscritorio } = input.monitorar
+        ? await import("../billing/escritorio-creditos")
+        : { consumirCreditosEscritorio: null as any };
 
       for (const linha of input.linhas) {
         try {
@@ -382,6 +471,59 @@ export const importarProcessosRouter = router({
           listaCnj.push({ contatoId: contatoPrincipal, contatoNome: linha.clientes[0]?.nome ?? "" });
           mapaProcessos.porCnj.set(linha.cnj, listaCnj);
           resultado.processosCriados++;
+
+          // 3) Ativa monitoramento automático se pedido + elegível
+          //    (tem motor próprio + credencial bate com o sistema do tribunal).
+          //    Falhas aqui (sem créditos, etc) não desfazem o vínculo já
+          //    criado — só registram em erros pra UI mostrar.
+          if (input.monitorar && credencialSistema && input.credencialId) {
+            try {
+              if (!linha.temMotorProprio || !linha.codigoTribunal) {
+                resultado.monitoramentosNaoElegiveis++;
+              } else {
+                const sistemaDoTribunal = sistemaCofrePorTribunal(linha.codigoTribunal);
+                if (sistemaDoTribunal !== credencialSistema) {
+                  resultado.monitoramentosNaoElegiveis++;
+                } else if (cnjsJaMonitorados.has(linha.cnj)) {
+                  resultado.monitoramentosJaExistiam++;
+                } else {
+                  await consumirCreditosEscritorio(
+                    perm.escritorioId,
+                    ctx.user.id,
+                    CUSTO_MONITORAMENTO_MES,
+                    "monitorar_processo_mes",
+                    `Import Advbox CNJ ${linha.cnj} (${linha.tribunal ?? "?"})`,
+                  );
+                  const cnjMascarado = mascararCnj(linha.cnj);
+                  await db.insert(motorMonitoramentos).values({
+                    escritorioId: perm.escritorioId,
+                    criadoPor: ctx.user.id,
+                    tipoMonitoramento: "movimentacoes",
+                    searchType: "lawsuit_cnj",
+                    searchKey: cnjMascarado,
+                    apelido: cnjMascarado,
+                    tribunal: linha.codigoTribunal,
+                    credencialId: input.credencialId,
+                    status: "ativo",
+                    recurrenceHoras: 6,
+                    ultimaCobrancaEm: new Date(),
+                  });
+                  cnjsJaMonitorados.add(linha.cnj);
+                  resultado.monitoramentosCriados++;
+                  resultado.creditosConsumidos += CUSTO_MONITORAMENTO_MES;
+                }
+              }
+            } catch (err: any) {
+              log.warn(
+                { linhaNum: linha.linhaNum, cnj: linha.cnj, err: err?.message },
+                "Falha ao ativar monitoramento — vínculo já foi criado",
+              );
+              resultado.erros.push({
+                linhaNum: linha.linhaNum,
+                motivo: `Monitor não criado: ${err?.message ?? "erro desconhecido"}`,
+              });
+            }
+          }
         } catch (err: any) {
           log.warn(
             { linhaNum: linha.linhaNum, err: err?.message },

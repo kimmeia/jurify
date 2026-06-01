@@ -38,6 +38,13 @@ export type LinhaAdvbox = {
   cnjValido: boolean;
   /** Sigla do tribunal inferida do CNJ (ex: "TJCE"). Null se CNJ inválido. */
   tribunal: string | null;
+  /** Código interno do tribunal (ex: "tjce", "trt7") — usado pra cruzar com
+   *  credenciais do cofre. Null se CNJ inválido. */
+  codigoTribunal: string | null;
+  /** True se temos adapter de monitoramento automático pra esse tribunal
+   *  (hoje só TJCE 1º grau). Quando false, importação cria vínculo mas não
+   *  monitora. */
+  temMotorProprio: boolean;
   /** Cliente(s) extraído(s) da coluna A. Sempre pelo menos 1 quando a linha é válida. */
   clientes: ClienteAdvbox[];
   /** Classe processual (coluna D — "Tipo de ação"). */
@@ -204,6 +211,8 @@ export async function parseAdvboxXlsx(buffer: Buffer): Promise<ResultadoParse> {
     let cnj: string | null = null;
     let cnjValido = false;
     let tribunal: string | null = null;
+    let codigoTribunal: string | null = null;
+    let temMotorProprio = false;
     if (cnjOriginal) {
       const normalizado = normalizarCnj(cnjOriginal);
       if (normalizado.length === 20) {
@@ -211,6 +220,8 @@ export async function parseAdvboxXlsx(buffer: Buffer): Promise<ResultadoParse> {
         cnjValido = validarCnj(cnjOriginal);
         const tParse = parseCnjTribunal(cnjOriginal);
         tribunal = tParse?.siglaTribunal ?? null;
+        codigoTribunal = tParse?.codigoTribunal ?? null;
+        temMotorProprio = tParse?.temMotorProprio ?? false;
         if (!cnjValido) alertas.push("CNJ com dígito verificador inválido.");
       } else {
         alertas.push("Número do processo fora do formato CNJ.");
@@ -235,6 +246,8 @@ export async function parseAdvboxXlsx(buffer: Buffer): Promise<ResultadoParse> {
       cnjOriginal,
       cnjValido,
       tribunal,
+      codigoTribunal,
+      temMotorProprio,
       clientes,
       classe: classeRaw || null,
       valorCausaCentavos,
