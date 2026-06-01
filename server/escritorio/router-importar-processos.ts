@@ -201,6 +201,9 @@ export function resumirPreview(linhas: PreviewLinha[]): {
    *  são elegíveis pra monitoramento automático. UI usa pra calcular
    *  custo de créditos e filtrar credenciais úteis no dropdown. */
   monitoraveisPorSistema: Record<string, number>;
+  /** Tribunais com motor próprio sem cofre (TRF-5 consulta pública). UI
+   *  mostra como elegível sem dropdown de credencial. */
+  monitoraveisConsultaPublica: number;
 } {
   const novos = linhas.filter((l) => l.status === "novo");
   // Monitor é independente do vínculo: linhas "novo" + "ja_existe_processo"
@@ -210,11 +213,19 @@ export function resumirPreview(linhas: PreviewLinha[]): {
     (l) => l.status === "novo" || l.status === "ja_existe_processo",
   );
   const monitoraveisPorSistema: Record<string, number> = {};
+  // Tribunais com motor próprio MAS sem credencial (consulta pública —
+  // TRF-5 etc). Contabilizados separado porque UI não pede credencial
+  // pra ativar — só toggle. Custo de crédito é o mesmo.
+  let monitoraveisConsultaPublica = 0;
   for (const l of monitoraveis) {
     if (!l.temMotorProprio || !l.codigoTribunal) continue;
     const sistema = sistemaCofrePorTribunal(l.codigoTribunal);
-    if (!sistema) continue;
-    monitoraveisPorSistema[sistema] = (monitoraveisPorSistema[sistema] ?? 0) + 1;
+    if (sistema) {
+      monitoraveisPorSistema[sistema] = (monitoraveisPorSistema[sistema] ?? 0) + 1;
+    } else {
+      // temMotorProprio=true + sistemaCofre=null = consulta pública.
+      monitoraveisConsultaPublica++;
+    }
   }
   return {
     novos: novos.length,
@@ -223,6 +234,7 @@ export function resumirPreview(linhas: PreviewLinha[]): {
     semCliente: linhas.filter((l) => l.status === "sem_cliente").length,
     semCnjOuInvalido: linhas.filter((l) => l.status === "sem_cnj_invalido").length,
     monitoraveisPorSistema,
+    monitoraveisConsultaPublica,
   };
 }
 
@@ -339,17 +351,12 @@ export const importarProcessosRouter = router({
         }
       }
 
-      // Se vai monitorar, carrega credencial uma vez (fora do loop) e
-      // valida que está ativa. Caller passa `credencialId` quando o user
-      // marca o checkbox no preview e escolhe a credencial.
+      // Se vai monitorar, valida credencial (se passada) uma vez fora do
+      // loop. Credencial é OPCIONAL agora: TRF-5 e demais consulta pública
+      // monitoram sem ela. Pra processos que EXIGEM credencial (PJe-TJ),
+      // a linha cai como "não elegível" quando credencialSistema=null.
       let credencialSistema: string | null = null;
-      if (input.monitorar) {
-        if (!input.credencialId) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Credencial OAB obrigatória pra ativar monitoramento.",
-          });
-        }
+      if (input.monitorar && input.credencialId) {
         const [cred] = await db
           .select()
           .from(cofreCredenciais)
@@ -481,17 +488,27 @@ export const importarProcessosRouter = router({
             resultado.processosCriados++;
           }
 
-          // 3) Ativa monitoramento automático se pedido + elegível
-          //    (tem motor próprio + credencial bate com o sistema do tribunal).
+          // 3) Ativa monitoramento automático se pedido + elegível.
+          //    Linha elegível = tem motor próprio E uma das 2 condições:
+          //      (a) tribunal usa cofre + credencial bate com sistema
+          //      (b) tribunal é consulta pública (TRF-5) — credencial irrelevante
           //    Falhas aqui (sem créditos, etc) não desfazem o vínculo já
           //    criado — só registram em erros pra UI mostrar.
-          if (input.monitorar && credencialSistema && input.credencialId) {
+          if (input.monitorar) {
             try {
               if (!linha.temMotorProprio || !linha.codigoTribunal) {
                 resultado.monitoramentosNaoElegiveis++;
               } else {
                 const sistemaDoTribunal = sistemaCofrePorTribunal(linha.codigoTribunal);
-                if (sistemaDoTribunal !== credencialSistema) {
+                const consultaPublica = sistemaDoTribunal === null;
+                const credBate =
+                  sistemaDoTribunal !== null &&
+                  credencialSistema !== null &&
+                  sistemaDoTribunal === credencialSistema;
+
+                if (!consultaPublica && !credBate) {
+                  // Precisa de credencial mas a escolhida não bate (ou não foi
+                  // escolhida).
                   resultado.monitoramentosNaoElegiveis++;
                 } else if (cnjsJaMonitorados.has(linha.cnj)) {
                   resultado.monitoramentosJaExistiam++;
@@ -512,7 +529,8 @@ export const importarProcessosRouter = router({
                     searchKey: cnjMascarado,
                     apelido: cnjMascarado,
                     tribunal: linha.codigoTribunal,
-                    credencialId: input.credencialId,
+                    // TRF-5 etc não usa credencial — fica NULL no schema
+                    credencialId: consultaPublica ? null : input.credencialId,
                     status: "ativo",
                     recurrenceHoras: 6,
                     ultimaCobrancaEm: new Date(),

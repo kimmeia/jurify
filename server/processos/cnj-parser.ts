@@ -96,6 +96,9 @@ export function sistemaCofrePorTribunal(codigoTribunal: string): string | null {
     // E-SAJ — adapters não existem ainda (TJSP, TJSC, TJBA…); deixados aqui
     // como referência futura. Por ora retornam null abaixo pelo `?? null`.
     tjsp: "esaj_tjsp",
+    // TRF-5 e demais tribunais de consulta pública NÃO entram aqui — eles
+    // têm motor próprio mas sem cofre (acesso aberto). Retornar null aqui
+    // é o sinal pra UI/router não pedir credencial.
   };
   return map[codigoTribunal] ?? null;
 }

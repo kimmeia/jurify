@@ -29,7 +29,7 @@ import {
 } from "../../drizzle/schema";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
 import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
-import { getConfigTribunal } from "./tribunais-pdpj";
+import { getConfigTribunal, tribunalRequerCredencial } from "./tribunais-pdpj";
 import { detectarSubiuParaSegundoGrau, mesclarMovimentacoes } from "./detectar-grau-recurso";
 import { CUSTOS } from "../routers/processos";
 import { createLogger } from "../_core/logger";
@@ -195,54 +195,81 @@ export async function pollarUmMonitoramentoMovs(
   if (!db) return { ok: false, detectadas: 0, erro: "DB indisponível" };
 
   try {
-    if (!mon.credencialId) {
-      await db
-        .update(motorMonitoramentos)
-        .set({
-          status: "erro",
-          ultimoErro: "Credencial não vinculada",
-          ultimaConsultaEm: new Date(),
-        })
-        .where(eq(motorMonitoramentos.id, mon.id));
-      return { ok: false, detectadas: 0, erro: "Credencial não vinculada" };
-    }
+    // Bifurcação por estilo de tribunal:
+    //  - PDPJ-cloud (TJCE, TJRJ, …): exige credencial → cofre → sessão Keycloak
+    //  - Consulta pública (TRF-5):    sem credencial, adapter HTTP/Playwright direto
+    // Decisão antes de qualquer check de credencial pra TRF-5 não cair em
+    // "Credencial não vinculada".
+    const requerCred = tribunalRequerCredencial(mon.tribunal);
 
-    const sessao = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
-    if (!sessao) {
-      await db
-        .update(motorMonitoramentos)
-        .set({
-          status: "erro",
-          ultimoErro: "Sessão expirada — revalide a credencial",
-          ultimaConsultaEm: new Date(),
-        })
-        .where(eq(motorMonitoramentos.id, mon.id));
-      return { ok: false, detectadas: 0, erro: "Sessão expirada" };
-    }
-
+    let resultado: Awaited<ReturnType<typeof consultarTjce>>;
     const cfgTribunal = getConfigTribunal(mon.tribunal);
-    let resultado;
-    if (cfgTribunal) {
-      resultado = await consultarTjce(mon.searchKey, sessao, cfgTribunal);
-    } else {
-      log.warn(
-        { tribunal: mon.tribunal, monId: mon.id },
-        "[motor-cron] tribunal sem adapter",
-      );
-      return { ok: false, detectadas: 0, erro: `Tribunal ${mon.tribunal} sem adapter` };
-    }
 
-    // Sessão morta no ponto de uso (o PDPJ derrubou antes da nossa estimativa
-    // de 90min): força relogin e tenta de novo UMA vez. Sem isto o auto-login
-    // não dispara nesse caso e o monitoramento falha com "Sessão expirada" sem
-    // refazer login. Relogin é dedupado por credencial (cofre-helpers).
-    if (!resultado.ok && resultado.categoriaErro === "sessao_expirada") {
-      const sessaoNova = await recuperarSessao(mon.credencialId, {
-        tentarRelogin: true,
-        forcarRelogin: true,
-      });
-      if (sessaoNova) {
-        resultado = await consultarTjce(mon.searchKey, sessaoNova, cfgTribunal);
+    if (!requerCred) {
+      // ── Caminho consulta pública (sem cofre) ──
+      if (mon.tribunal === "trf5") {
+        const { consultarTrf5 } = await import("./adapters/pje-trf5");
+        resultado = await consultarTrf5(mon.searchKey);
+      } else {
+        log.warn(
+          { tribunal: mon.tribunal, monId: mon.id },
+          "[motor-cron] consulta pública sem adapter",
+        );
+        return {
+          ok: false,
+          detectadas: 0,
+          erro: `Adapter de consulta pública não encontrado para ${mon.tribunal}`,
+        };
+      }
+    } else {
+      // ── Caminho PDPJ-cloud (TJs com credencial OAB) ──
+      if (!mon.credencialId) {
+        await db
+          .update(motorMonitoramentos)
+          .set({
+            status: "erro",
+            ultimoErro: "Credencial não vinculada",
+            ultimaConsultaEm: new Date(),
+          })
+          .where(eq(motorMonitoramentos.id, mon.id));
+        return { ok: false, detectadas: 0, erro: "Credencial não vinculada" };
+      }
+
+      const sessao = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
+      if (!sessao) {
+        await db
+          .update(motorMonitoramentos)
+          .set({
+            status: "erro",
+            ultimoErro: "Sessão expirada — revalide a credencial",
+            ultimaConsultaEm: new Date(),
+          })
+          .where(eq(motorMonitoramentos.id, mon.id));
+        return { ok: false, detectadas: 0, erro: "Sessão expirada" };
+      }
+
+      if (!cfgTribunal) {
+        log.warn(
+          { tribunal: mon.tribunal, monId: mon.id },
+          "[motor-cron] tribunal sem adapter",
+        );
+        return { ok: false, detectadas: 0, erro: `Tribunal ${mon.tribunal} sem adapter` };
+      }
+
+      resultado = await consultarTjce(mon.searchKey, sessao, cfgTribunal);
+
+      // Sessão morta no ponto de uso (o PDPJ derrubou antes da nossa estimativa
+      // de 90min): força relogin e tenta de novo UMA vez. Sem isto o auto-login
+      // não dispara nesse caso e o monitoramento falha com "Sessão expirada" sem
+      // refazer login. Relogin é dedupado por credencial (cofre-helpers).
+      if (!resultado.ok && resultado.categoriaErro === "sessao_expirada") {
+        const sessaoNova = await recuperarSessao(mon.credencialId, {
+          tentarRelogin: true,
+          forcarRelogin: true,
+        });
+        if (sessaoNova) {
+          resultado = await consultarTjce(mon.searchKey, sessaoNova, cfgTribunal);
+        }
       }
     }
 
@@ -277,8 +304,11 @@ export async function pollarUmMonitoramentoMovs(
     // dispara quando detectado (não consulta sempre). Degrada com elegância: se
     // o 2º grau falhar (URL/sessão/estrutura), segue só com o 1º grau — sem
     // regressão no monitoramento que já funciona.
-    const cfg2grau = getConfigTribunal(mon.tribunal, 2);
-    if (deteccaoGrau.subiu && cfg2grau) {
+    //
+    // Só pra PDPJ-cloud — consulta pública (TRF-5) ainda não tem fluxo de 2º
+    // grau implementado.
+    const cfg2grau = requerCred ? getConfigTribunal(mon.tribunal, 2) : null;
+    if (deteccaoGrau.subiu && cfg2grau && mon.credencialId) {
       try {
         const sessao2 = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
         if (sessao2) {
