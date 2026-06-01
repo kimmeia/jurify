@@ -35,8 +35,23 @@ export function pdpjTjConfig(
 
 // Tribunais PJe habilitados (motor próprio). Adicionar um estado = uma linha.
 // Ex.: tjmg: pdpjTjConfig("mg")  — depois de validar login + consulta reais.
+//
+// TJDF é exceção: o código do CNJ é "tjdf" mas o portal vive em
+// pje.tjdft.jus.br (com T do "Distrito Federal e Territórios"). Override
+// usado pra alinhar a URL sem mudar o id interno.
 const REGISTRO: Record<string, TribunalPdpjConfig> = {
   tjce: pdpjTjConfig("ce"),
+  tjrj: pdpjTjConfig("rj"),
+  tjmg: pdpjTjConfig("mg"),
+  tjrn: pdpjTjConfig("rn"),
+  tjma: pdpjTjConfig("ma"),
+  tjpa: pdpjTjConfig("pa"),
+  tjro: pdpjTjConfig("ro"),
+  tjpe: pdpjTjConfig("pe"),
+  tjpb: pdpjTjConfig("pb"),
+  tjmt: pdpjTjConfig("mt"),
+  tjrr: pdpjTjConfig("rr"),
+  tjdf: pdpjTjConfig("dft", 1, { tribunal: "tjdf" }),
 };
 
 /** Config de consulta de um tribunal (grau 1 por padrão). null = sem motor próprio. */
@@ -58,11 +73,19 @@ export function tribunalTemMotorProprio(tribunal: string): boolean {
  * Mapeia o `sistema` de uma credencial do cofre (ex: "pje_tjmg") pra a config
  * do tribunal — pro LOGIN usar o portal do estado certo. Só PJe-TJ PDPJ
  * ("pje_tjXX"); outros (esaj_*, eproc_*, pje_restrito_trt*, pje_*) → null.
+ *
+ * Casos especiais: alguns sistemas no cofre usam sigla histórica diferente
+ * do código do CNJ. TJDFT no cofre vs tjdf no CNJ (estado DF).
  */
+const ALIAS_SISTEMA_PARA_TRIBUNAL: Record<string, string> = {
+  tjdft: "tjdf",
+};
+
 export function configPorSistema(sistema: string): TribunalPdpjConfig | null {
   const m = /^pje_(tj[a-z]+)$/.exec(sistema);
   if (!m) return null;
-  return getConfigTribunal(m[1]);
+  const trib = ALIAS_SISTEMA_PARA_TRIBUNAL[m[1]] ?? m[1];
+  return getConfigTribunal(trib);
 }
 
 export const TRIBUNAIS_MOTOR_PROPRIO = Object.keys(REGISTRO);
