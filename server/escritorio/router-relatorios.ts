@@ -12,7 +12,7 @@
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, router, createCallerFactory } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
 import { getDb } from "../db";
@@ -34,6 +34,7 @@ import {
   dataHojeBR,
   FUSO_HORARIO_PADRAO,
 } from "../../shared/escritorio-types";
+import { gerarComercialPdf, type DetalheAtendentePdf } from "./relatorios-comercial-pdf";
 
 const log = createLogger("relatorios");
 
@@ -1422,4 +1423,77 @@ export const relatoriosRouter = router({
       })),
     };
   }),
+});
+
+/**
+ * Caller do próprio router — definido DEPOIS de `relatoriosRouter` pra não
+ * criar referência circular (se `exportarComercialPdf` vivesse dentro do
+ * router, referenciá-lo no próprio inicializador seria erro de tipo).
+ */
+const chamarRelatorios = createCallerFactory(relatoriosRouter);
+
+/**
+ * Export do dashboard Comercial em PDF. Mesclado no namespace `relatorios`
+ * em `server/routers.ts`. Reusa `comercialDashboard` + `detalheAtendenteComercial`
+ * via caller — os mesmos filtros/permissão da tela, então os números do PDF
+ * batem exatamente com os da UI (sem duplicar a lógica de SQL).
+ */
+export const relatoriosPdfRouter = router({
+  exportarComercialPdf: protectedProcedure
+    .input(
+      z
+        .object({
+          dataInicio: z.string().optional(),
+          dataFim: z.string().optional(),
+          setorId: z.number().int().positive().optional(),
+          atendenteId: z.number().int().positive().optional(),
+        })
+        .optional(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
+      }
+      const caller = chamarRelatorios(ctx);
+
+      // comercialDashboard já aplica permissão de relatórios + resolve período.
+      const data = await caller.comercialDashboard(input);
+      if (!data) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Sem dados para o período." });
+      }
+
+      // Drill-down por atendente do ranking (todos). verProprios já restringe
+      // o ranking ao próprio colaborador, então o loop respeita a permissão.
+      const detalhes: DetalheAtendentePdf[] = [];
+      for (const r of data.ranking) {
+        const det = await caller.detalheAtendenteComercial({
+          atendenteId: r.atendenteId,
+          dataInicio: data.periodo.dataInicio,
+          dataFim: data.periodo.dataFim,
+        });
+        if (det && det.itens.length > 0) {
+          detalhes.push({
+            atendenteId: r.atendenteId,
+            nome: r.nome,
+            setorNome: r.setorNome,
+            totalFechado: det.totalFechado,
+            totalRecebido: det.totalRecebido,
+            itens: det.itens,
+          });
+        }
+      }
+
+      const buffer = await gerarComercialPdf({
+        data,
+        detalhes,
+        nomeEscritorio: esc.escritorio.nome,
+      });
+
+      return {
+        filename: `relatorio_comercial_${data.periodo.dataInicio}_${data.periodo.dataFim}.pdf`,
+        base64: buffer.toString("base64"),
+        mimeType: "application/pdf",
+      };
+    }),
 });
