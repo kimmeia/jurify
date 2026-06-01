@@ -178,8 +178,10 @@ describe("resumirPreview", () => {
     expect(resumo.jaExistem).toBe(0);
   });
 
-  it("monitoraveisPorSistema agrupa só linhas 'novas' elegíveis", () => {
-    // 2 TJCE (monitorável) + 1 TRF-5 (sem motor próprio) + 1 já existe
+  it("monitoraveisPorSistema inclui linhas 'novo' E 'ja_existe_processo'", () => {
+    // Cenário do bug: user importou antes (sem monitor), agora reimporta
+    // pra ativar monitor. Todas as linhas TJCE devem aparecer como
+    // elegíveis pra monitor (mesmo as que já têm vínculo).
     const m = mapa(
       [["42|99999999999999999999", 7]],
       [["99999999999999999999", [{ contatoId: 42, contatoNome: "X" }]]],
@@ -187,21 +189,22 @@ describe("resumirPreview", () => {
     const porDoc = new Map([["08737698303", { id: 42, nome: "X" }]]);
     const linhas = decidirPreview(
       [
-        linha({}),  // TJCE — monitorável
-        linha({ cnj: "11111111111111111111", cnjOriginal: "0000001-00.2025.8.06.0001" }), // TJCE — monitorável
+        linha({}),  // TJCE novo — monitorável
+        linha({ cnj: "11111111111111111111", cnjOriginal: "0000001-00.2025.8.06.0001" }), // TJCE novo — monitorável
         linha({
           cnj: "22222222222222222222",
           cnjOriginal: "0800127-69.2025.4.05.8109",
           tribunal: "TRF-5",
           codigoTribunal: "trf5",
           temMotorProprio: false,
-        }),
-        linha({ cnj: "99999999999999999999", cnjOriginal: "9999999-99.2025.8.06.0001" }), // já existe (mesmo contato)
+        }),  // não elegível
+        linha({ cnj: "99999999999999999999", cnjOriginal: "9999999-99.2025.8.06.0001" }), // ja_existe — também monitorável
       ],
       porDoc, new Map(), m,
     );
     const resumo = resumirPreview(linhas);
-    expect(resumo.monitoraveisPorSistema).toEqual({ pje_tjce: 2 });
+    // 2 novos + 1 ja_existe TJCE = 3 monitoráveis pje_tjce
+    expect(resumo.monitoraveisPorSistema).toEqual({ pje_tjce: 3 });
   });
 
   it("monitoraveisPorSistema vazio quando nenhum 'novo' é elegível", () => {

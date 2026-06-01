@@ -203,8 +203,14 @@ export function resumirPreview(linhas: PreviewLinha[]): {
   monitoraveisPorSistema: Record<string, number>;
 } {
   const novos = linhas.filter((l) => l.status === "novo");
+  // Monitor é independente do vínculo: linhas "novo" + "ja_existe_processo"
+  // podem ambas ser monitoradas (vínculo já criado antes via import anterior
+  // ou cadastro manual continua sendo válido pra ativar monitor agora).
+  const monitoraveis = linhas.filter(
+    (l) => l.status === "novo" || l.status === "ja_existe_processo",
+  );
   const monitoraveisPorSistema: Record<string, number> = {};
-  for (const l of novos) {
+  for (const l of monitoraveis) {
     if (!l.temMotorProprio || !l.codigoTribunal) continue;
     const sistema = sistemaCofrePorTribunal(l.codigoTribunal);
     if (!sistema) continue;
@@ -443,34 +449,37 @@ export const importarProcessosRouter = router({
             contatoIds.push(achado.id);
           }
 
-          // 2) Vincula processo ao primeiro cliente.
+          // 2) Vincula processo ao primeiro cliente — só insere se ainda
+          //    não existe. Se já existe (re-import ou cadastro manual
+          //    anterior), prossegue pra etapa de monitor: o user pode
+          //    estar re-importando JUSTO pra ativar monitor que não foi
+          //    ligado na 1ª vez.
           const contatoPrincipal = contatoIds[0];
           const chaveProc = `${contatoPrincipal}|${linha.cnj}`;
           if (mapaProcessos.porContatoECnj.has(chaveProc)) {
             resultado.processosJaExistiam++;
-            continue;
+          } else {
+            await db.insert(clienteProcessos).values({
+              escritorioId: perm.escritorioId,
+              contatoId: contatoPrincipal,
+              numeroCnj: linha.cnj,
+              tribunal: linha.tribunal ?? null,
+              classe: linha.classe ?? null,
+              valorCausa: linha.valorCausaCentavos ?? null,
+              polo: "ativo",
+              tipo: "litigioso",
+              criadoPor: ctx.user.id,
+            });
+            // Atualiza o mapaPorCnj pra dedupe cross-cliente DENTRO do
+            // batch (linha A cria CNJ X com cliente 1; linha B com CNJ X
+            // em cliente 2 deve ser detectada como duplicata na 2ª iteração).
+            const listaCnj = mapaProcessos.porCnj.get(linha.cnj) ?? [];
+            listaCnj.push({ contatoId: contatoPrincipal, contatoNome: linha.clientes[0]?.nome ?? "" });
+            mapaProcessos.porCnj.set(linha.cnj, listaCnj);
+            // Marca chave como criada — evita re-tentar em chunk seguinte.
+            mapaProcessos.porContatoECnj.set(chaveProc, 0);
+            resultado.processosCriados++;
           }
-
-          const [r] = await db.insert(clienteProcessos).values({
-            escritorioId: perm.escritorioId,
-            contatoId: contatoPrincipal,
-            numeroCnj: linha.cnj,
-            tribunal: linha.tribunal ?? null,
-            classe: linha.classe ?? null,
-            valorCausa: linha.valorCausaCentavos ?? null,
-            polo: "ativo",
-            tipo: "litigioso",
-            criadoPor: ctx.user.id,
-          });
-          const novoProcId = (r as { insertId: number }).insertId;
-          mapaProcessos.porContatoECnj.set(chaveProc, novoProcId);
-          // Atualiza também o mapaPorCnj pra dedupe cross-cliente DENTRO do
-          // batch (linha A cria CNJ X com cliente 1; linha B com CNJ X em
-          // cliente 2 deve ser detectada como duplicata na 2ª iteração).
-          const listaCnj = mapaProcessos.porCnj.get(linha.cnj) ?? [];
-          listaCnj.push({ contatoId: contatoPrincipal, contatoNome: linha.clientes[0]?.nome ?? "" });
-          mapaProcessos.porCnj.set(linha.cnj, listaCnj);
-          resultado.processosCriados++;
 
           // 3) Ativa monitoramento automático se pedido + elegível
           //    (tem motor próprio + credencial bate com o sistema do tribunal).
