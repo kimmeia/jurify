@@ -175,6 +175,8 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
 
   // Alimenta o SmartFlow com texto: texto direto, transcrição do áudio (Whisper),
   // ou a legenda da imagem (Vision; sem legenda usa um texto padrão pra disparar).
+  // Áudio sem transcrição (Whisper desligado ou falhou) NÃO dispara — antes desse
+  // gate o handler ignorava áudio mesmo com Whisper ligado, e o bot ficava mudo.
   const textoFluxo = msg.tipo === "texto" ? (msg.conteudo || "")
     : transcricaoAudio ? transcricaoAudio
     : imagemVision ? (msg.conteudo || "Analise a imagem que enviei.")
