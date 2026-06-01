@@ -54,6 +54,7 @@ interface CenarioCarregado {
   passos: Passo[];
   gatilho: GatilhoSmartflow;
   configGatilho: Record<string, unknown>;
+  limitePorContato: "sempre" | "dia" | "semana" | "mes" | "vida";
 }
 
 function safeParseJson(raw: string | null | undefined): Record<string, string> | null {
@@ -150,6 +151,7 @@ async function carregarCenariosAtivos(
       passos: passosEngine,
       gatilho: cenario.gatilho as GatilhoSmartflow,
       configGatilho: parseConfigGatilho(cenario.configGatilho),
+      limitePorContato: (cenario as any).limitePorContato ?? "sempre",
     });
   }
   return resultado;
@@ -307,12 +309,59 @@ async function executarCenarioPorGatilho(
   return executarCenarioCarregado(escritorioId, cenario, contexto, refs);
 }
 
+/**
+ * Verifica se o limite "X vezes por contato" do cenário foi atingido. Olha
+ * `smartflow_execucoes` por execuções anteriores deste cenário pra este
+ * contato na janela respectiva. "sempre" pula a checagem (sem limite).
+ * "vida" qualquer execução anterior bloqueia. Demais opções têm janela
+ * deslizante (24h, 7d, 30d). Retorna true se DEVE PULAR o cenário.
+ */
+async function atingiuLimitePorContato(
+  cenario: CenarioCarregado,
+  contatoId: number | undefined,
+): Promise<boolean> {
+  if (cenario.limitePorContato === "sempre" || !contatoId) return false;
+  const db = await getDb();
+  if (!db) return false;
+  const janelaMs: Record<string, number | null> = {
+    dia: 24 * 60 * 60 * 1000,
+    semana: 7 * 24 * 60 * 60 * 1000,
+    mes: 30 * 24 * 60 * 60 * 1000,
+    vida: null, // sem corte temporal — qualquer execução anterior bloqueia
+  };
+  const ms = janelaMs[cenario.limitePorContato];
+  const filtros: any[] = [
+    eq(smartflowExecucoes.cenarioId, cenario.cenarioId),
+    eq(smartflowExecucoes.contatoId, contatoId),
+  ];
+  if (ms !== null) {
+    const desde = new Date(Date.now() - ms);
+    filtros.push(gte(smartflowExecucoes.createdAt, desde));
+  }
+  const [existe] = await db
+    .select({ id: smartflowExecucoes.id })
+    .from(smartflowExecucoes)
+    .where(and(...filtros))
+    .limit(1);
+  return !!existe;
+}
+
 async function executarCenarioCarregado(
   escritorioId: number,
   cenario: CenarioCarregado,
   contexto: SmartflowContexto,
   refs?: { contatoId?: number; conversaId?: number },
 ): Promise<{ executou: boolean; respostas: string[]; execId?: number }> {
+  // Limite por contato: cenários "1x na vida", "1x por dia", etc. pulam se já
+  // rodaram dentro da janela pra este contato.
+  if (await atingiuLimitePorContato(cenario, refs?.contatoId)) {
+    log.info(
+      { cenarioId: cenario.cenarioId, contatoId: refs?.contatoId, limite: cenario.limitePorContato },
+      "[SmartFlow] Cenário PULADO — limite por contato atingido",
+    );
+    return { executou: false, respostas: [] };
+  }
+
   const execId = await criarExecucao(escritorioId, cenario.cenarioId, contexto, refs);
   if (!execId) return { executou: false, respostas: [] };
 

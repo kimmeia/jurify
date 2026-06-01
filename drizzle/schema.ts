@@ -1985,6 +1985,14 @@ export const smartflowCenarios = mysqlTable("smartflow_cenarios", {
   /** Configuração específica do gatilho (JSON — canais, dias de atraso, etc.) */
   configGatilho: text("configGatilhoSF"),
   /**
+   * Limite de quantas vezes esse cenário pode rodar pra UM contato.
+   * - "sempre": sem limite (default — comportamento histórico).
+   * - "dia"/"semana"/"mes": no máximo 1 vez na janela respectiva.
+   * - "vida": apenas 1 vez na vida desse contato (ex: boas-vindas).
+   * Checado no dispatcher antes de executar, contra smartflow_execucoes.
+   */
+  limitePorContato: mysqlEnum("limitePorContatoSF", ["sempre", "dia", "semana", "mes", "vida"]).default("sempre").notNull(),
+  /**
    * Posições x/y dos nós no editor visual (JSON). Keyed por `clienteId` do
    * passo e por "__gatilho__" pro nó de gatilho. Puramente visual — o engine
    * ignora. Null em cenários nunca salvos pelo editor com layout persistido.
