@@ -175,10 +175,20 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
 
   // Alimenta o SmartFlow com texto: texto direto, transcrição do áudio (Whisper),
   // ou a legenda da imagem (Vision; sem legenda usa um texto padrão pra disparar).
+  // Áudio sem transcrição (Whisper desligado ou falhou) NÃO dispara — antes desse
+  // gate o handler ignorava áudio mesmo com Whisper ligado, e o bot ficava mudo.
   const textoFluxo = msg.tipo === "texto" ? (msg.conteudo || "")
     : transcricaoAudio ? transcricaoAudio
     : imagemVision ? (msg.conteudo || "Analise a imagem que enviei.")
     : "";
+  // Áudio que chegou sem transcrição = Whisper desligado, sem chave OpenAI ou
+  // chamada falhou. Sem log explícito aqui, dava "bot mudo em áudio" sem pista.
+  if (msg.tipo === "audio" && !transcricaoAudio) {
+    log.warn(
+      { conversaId, contatoId, mediaUrl: msg.mediaUrl },
+      "[SmartFlow] Áudio recebido sem transcrição — bot não vai responder. Confira: card ChatGPT em Configurações → Apps externos tem 'Whisper' ON + chave OpenAI válida.",
+    );
+  }
   if (textoFluxo) {
     const { dispararMensagemCanal, janelaAcumulacaoAtiva } = await import("../smartflow/dispatcher");
 
@@ -196,6 +206,7 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
           telefone: msg.telefone,
           nomeCliente: msg.nome || "",
           imagem: imagemVision,
+          tipoMensagem: msg.tipo,
         });
         if (sf.executou) {
           // SmartFlow assumiu — envia respostas geradas.
