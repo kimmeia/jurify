@@ -51,12 +51,22 @@ const linhaExecucaoSchema = z.object({
 export type LinhaExecucao = z.infer<typeof linhaExecucaoSchema>;
 
 export type PreviewLinha = LinhaAdvbox & {
-  status: "novo" | "ja_existe_processo" | "sem_cliente" | "sem_cnj_invalido";
-  /** Quando o cliente principal (1º da linha) já existe por CPF/CNPJ. */
+  status:
+    | "novo"
+    | "ja_existe_processo"
+    | "cnj_em_outro_cliente"
+    | "sem_cliente"
+    | "sem_cnj_invalido";
+  /** Quando o cliente principal (1º da linha) já existe por CPF/CNPJ ou nome. */
   contatoExistenteId: number | null;
   contatoExistenteNome: string | null;
   /** Quando o vínculo (contato+CNJ) já existe. */
   processoExistenteId: number | null;
+  /** Outros contatos do escritório que já têm esse CNJ vinculado. Usado pra
+   *  detectar potencial duplicata acidental (ex: cliente cadastrado antes
+   *  com nome diferente) sem bloquear litisconsórcio real. Vazio quando o
+   *  CNJ ainda não está no escritório. */
+  cnjEmOutrosContatos: { contatoId: number; contatoNome: string }[];
 };
 
 /** Normaliza nome pra match: maiúscula, trim, colapsa espaços, remove acentos. */
@@ -104,6 +114,15 @@ async function carregarMapaContatos(
   return { porDoc, porNome };
 }
 
+export type MapaProcessos = {
+  /** chave "contatoId|cnjNormalizado" → processoId. Detecta duplicata exata. */
+  porContatoECnj: Map<string, number>;
+  /** chave cnjNormalizado → lista de contatos vinculados. Detecta
+   *  "mesmo CNJ vinculado a outro cliente do escritório" (possível
+   *  duplicata acidental ou litisconsórcio legítimo). */
+  porCnj: Map<string, { contatoId: number; contatoNome: string }[]>;
+};
+
 /**
  * Decide status de cada linha + se há contato/processo existente. Pura — só
  * mexe nos mapas que o caller carregou. Exportada pra testar isolado.
@@ -112,7 +131,7 @@ export function decidirPreview(
   processos: LinhaAdvbox[],
   porDoc: Map<string, { id: number; nome: string }>,
   porNome: Map<string, { id: number; nome: string }>,
-  mapaProcessos: Map<string, number>,
+  mapaProcessos: MapaProcessos,
 ): PreviewLinha[] {
   return processos.map((p) => {
     let contatoExistenteId: number | null = null;
@@ -130,13 +149,23 @@ export function decidirPreview(
 
     let processoExistenteId: number | null = null;
     if (contatoExistenteId && p.cnj) {
-      processoExistenteId = mapaProcessos.get(`${contatoExistenteId}|${p.cnj}`) ?? null;
+      processoExistenteId =
+        mapaProcessos.porContatoECnj.get(`${contatoExistenteId}|${p.cnj}`) ?? null;
     }
+
+    // Lista de outros contatos que já têm esse CNJ. Filtra o próprio
+    // contatoExistenteId pra não duplicar com `processoExistenteId`.
+    const cnjEmOutrosContatos = p.cnj
+      ? (mapaProcessos.porCnj.get(p.cnj) ?? []).filter(
+          (c) => c.contatoId !== contatoExistenteId,
+        )
+      : [];
 
     let status: PreviewLinha["status"];
     if (p.clientes.length === 0) status = "sem_cliente";
     else if (!p.cnj || !p.cnjValido) status = "sem_cnj_invalido";
     else if (processoExistenteId) status = "ja_existe_processo";
+    else if (cnjEmOutrosContatos.length > 0) status = "cnj_em_outro_cliente";
     else status = "novo";
 
     return {
@@ -145,6 +174,7 @@ export function decidirPreview(
       contatoExistenteId,
       contatoExistenteNome,
       processoExistenteId,
+      cnjEmOutrosContatos,
     };
   });
 }
@@ -152,39 +182,52 @@ export function decidirPreview(
 export function resumirPreview(linhas: PreviewLinha[]): {
   novos: number;
   jaExistem: number;
+  cnjEmOutroCliente: number;
   semCliente: number;
   semCnjOuInvalido: number;
 } {
   return {
     novos: linhas.filter((l) => l.status === "novo").length,
     jaExistem: linhas.filter((l) => l.status === "ja_existe_processo").length,
+    cnjEmOutroCliente: linhas.filter((l) => l.status === "cnj_em_outro_cliente").length,
     semCliente: linhas.filter((l) => l.status === "sem_cliente").length,
     semCnjOuInvalido: linhas.filter((l) => l.status === "sem_cnj_invalido").length,
   };
 }
 
-/** Mapa de processos já vinculados: chave = "contatoId|cnjNormalizado". */
+/**
+ * Carrega ambos mapas de dedupe de processo em uma query única:
+ *  - porContatoECnj: dedup exato (mesmo cliente + mesmo CNJ)
+ *  - porCnj: detecta CNJ vinculado a outro cliente do escritório
+ */
 async function carregarMapaProcessos(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   escritorioId: number,
-): Promise<Map<string, number>> {
+): Promise<MapaProcessos> {
   const rows = await db
     .select({
       id: clienteProcessos.id,
       contatoId: clienteProcessos.contatoId,
       numeroCnj: clienteProcessos.numeroCnj,
+      contatoNome: contatos.nome,
     })
     .from(clienteProcessos)
+    .innerJoin(contatos, eq(contatos.id, clienteProcessos.contatoId))
     .where(and(
       eq(clienteProcessos.escritorioId, escritorioId),
       isNotNull(clienteProcessos.numeroCnj),
     ));
-  const m = new Map<string, number>();
+  const porContatoECnj = new Map<string, number>();
+  const porCnj = new Map<string, { contatoId: number; contatoNome: string }[]>();
   for (const r of rows) {
     if (!r.numeroCnj) continue;
-    m.set(`${r.contatoId}|${r.numeroCnj.replace(/\D/g, "")}`, r.id);
+    const cnjKey = r.numeroCnj.replace(/\D/g, "");
+    porContatoECnj.set(`${r.contatoId}|${cnjKey}`, r.id);
+    const lista = porCnj.get(cnjKey) ?? [];
+    lista.push({ contatoId: r.contatoId, contatoNome: r.contatoNome });
+    porCnj.set(cnjKey, lista);
   }
-  return m;
+  return { porContatoECnj, porCnj };
 }
 
 export const importarProcessosRouter = router({
@@ -314,7 +357,7 @@ export const importarProcessosRouter = router({
           // 2) Vincula processo ao primeiro cliente.
           const contatoPrincipal = contatoIds[0];
           const chaveProc = `${contatoPrincipal}|${linha.cnj}`;
-          if (mapaProcessos.has(chaveProc)) {
+          if (mapaProcessos.porContatoECnj.has(chaveProc)) {
             resultado.processosJaExistiam++;
             continue;
           }
@@ -331,7 +374,13 @@ export const importarProcessosRouter = router({
             criadoPor: ctx.user.id,
           });
           const novoProcId = (r as { insertId: number }).insertId;
-          mapaProcessos.set(chaveProc, novoProcId);
+          mapaProcessos.porContatoECnj.set(chaveProc, novoProcId);
+          // Atualiza também o mapaPorCnj pra dedupe cross-cliente DENTRO do
+          // batch (linha A cria CNJ X com cliente 1; linha B com CNJ X em
+          // cliente 2 deve ser detectada como duplicata na 2ª iteração).
+          const listaCnj = mapaProcessos.porCnj.get(linha.cnj) ?? [];
+          listaCnj.push({ contatoId: contatoPrincipal, contatoNome: linha.clientes[0]?.nome ?? "" });
+          mapaProcessos.porCnj.set(linha.cnj, listaCnj);
           resultado.processosCriados++;
         } catch (err: any) {
           log.warn(
