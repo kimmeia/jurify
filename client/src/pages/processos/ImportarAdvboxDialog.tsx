@@ -42,15 +42,22 @@ type PreviewLinha = {
   valorCausaTexto: string;
   clientes: ClienteAdvbox[];
   alertas: string[];
-  status: "novo" | "ja_existe_processo" | "sem_cliente" | "sem_cnj_invalido";
+  status:
+    | "novo"
+    | "ja_existe_processo"
+    | "cnj_em_outro_cliente"
+    | "sem_cliente"
+    | "sem_cnj_invalido";
   contatoExistenteId: number | null;
   contatoExistenteNome: string | null;
   processoExistenteId: number | null;
+  cnjEmOutrosContatos: { contatoId: number; contatoNome: string }[];
 };
 
 type Resumo = {
   novos: number;
   jaExistem: number;
+  cnjEmOutroCliente: number;
   semCliente: number;
   semCnjOuInvalido: number;
 };
@@ -268,7 +275,7 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
               </Button>
             </div>
 
-            <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="grid grid-cols-5 gap-2 text-center">
               <div className="bg-emerald-50 border border-emerald-200 rounded p-3">
                 <p className="text-[10px] text-emerald-700 uppercase font-semibold">Novos</p>
                 <p className="text-2xl font-bold text-emerald-700 tabular-nums">{preview.resumo.novos}</p>
@@ -276,6 +283,13 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
               <div className="bg-slate-50 border rounded p-3">
                 <p className="text-[10px] text-slate-700 uppercase font-semibold">Já existem</p>
                 <p className="text-2xl font-bold text-slate-700 tabular-nums">{preview.resumo.jaExistem}</p>
+              </div>
+              <div
+                className="bg-orange-50 border border-orange-200 rounded p-3"
+                title="CNJ já cadastrado no escritório vinculado a OUTRO cliente — pulados pra evitar duplicata acidental."
+              >
+                <p className="text-[10px] text-orange-700 uppercase font-semibold">Outro cliente</p>
+                <p className="text-2xl font-bold text-orange-700 tabular-nums">{preview.resumo.cnjEmOutroCliente}</p>
               </div>
               <div className="bg-amber-50 border border-amber-200 rounded p-3">
                 <p className="text-[10px] text-amber-700 uppercase font-semibold">Sem cliente</p>
@@ -315,6 +329,14 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                       <td className="p-2">
                         {l.status === "novo" && <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Novo</Badge>}
                         {l.status === "ja_existe_processo" && <Badge variant="secondary">Já existe</Badge>}
+                        {l.status === "cnj_em_outro_cliente" && (
+                          <Badge
+                            className="bg-orange-100 text-orange-700 border-orange-200"
+                            title={`Vinculado a ${l.cnjEmOutrosContatos.map((c) => c.contatoNome).join(", ")}`}
+                          >
+                            Outro cliente
+                          </Badge>
+                        )}
                         {l.status === "sem_cliente" && <Badge className="bg-amber-100 text-amber-700 border-amber-200">Sem cliente</Badge>}
                         {l.status === "sem_cnj_invalido" && <Badge className="bg-rose-100 text-rose-700 border-rose-200">CNJ inválido</Badge>}
                       </td>
