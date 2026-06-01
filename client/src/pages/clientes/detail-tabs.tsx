@@ -1287,6 +1287,12 @@ export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
 // Registrar fechamento retroativo
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/** Data civil de hoje no fuso do navegador, em YYYY-MM-DD (sem drift de UTC). */
+function hojeLocalISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /**
  * Permite marcar "cliente fechou contrato" depois do cadastro — espelha o
  * checkbox do NovoClienteDialog. Cria um lead `fechado_ganho` na meta
@@ -1313,6 +1319,7 @@ export function RegistrarFechamentoDialog({
   onSuccess: () => void;
 }) {
   const [valor, setValor] = useState("");
+  const [data, setData] = useState(hojeLocalISO);
   const [origem, setOrigem] = useState("");
   const [responsavelId, setResponsavelId] = useState<string>(
     responsavelClienteId ? String(responsavelClienteId) : "",
@@ -1331,6 +1338,7 @@ export function RegistrarFechamentoDialog({
   useEffect(() => {
     if (open) {
       setResponsavelId(responsavelClienteId ? String(responsavelClienteId) : "");
+      setData(hojeLocalISO());
     }
   }, [open, responsavelClienteId]);
 
@@ -1340,6 +1348,7 @@ export function RegistrarFechamentoDialog({
         description: "Conversão adicionada ao Relatório Comercial.",
       });
       setValor("");
+      setData(hojeLocalISO());
       setOrigem("");
       onOpenChange(false);
       onSuccess();
@@ -1401,6 +1410,20 @@ export function RegistrarFechamentoDialog({
             />
           </div>
           <div className="space-y-1.5">
+            <Label className="text-xs">Data do fechamento</Label>
+            <Input
+              type="date"
+              max={hojeLocalISO()}
+              value={data}
+              onChange={(e) => setData(e.target.value)}
+              className="h-9 text-sm"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Define o mês que conta no Relatório Comercial e na comissão. Use
+              uma data passada se o contrato fechou em outro mês.
+            </p>
+          </div>
+          <div className="space-y-1.5">
             <Label className="text-xs">Origem</Label>
             <select
               value={origem}
@@ -1446,6 +1469,7 @@ export function RegistrarFechamentoDialog({
               mut.mutate({
                 contatoId,
                 valorFechamento: valor.trim() || undefined,
+                dataFechamento: data || undefined,
                 origemFechamento: origem || undefined,
                 responsavelId: responsavelId ? Number(responsavelId) : undefined,
               })
