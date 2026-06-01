@@ -119,6 +119,7 @@ export interface CatalogoGatilho {
 const VARS_CLIENTE: CatalogoVariavel[] = [
   { path: "nomeCliente", label: "Nome do cliente", exemplo: "João Silva", categoria: "cliente" },
   { path: "telefoneCliente", label: "Telefone do cliente", exemplo: "(11) 99999-0000", categoria: "cliente" },
+  { path: "dddCliente", label: "DDD do telefone (2 dígitos) — pra Condição por região (ex: 85=Fortaleza)", exemplo: "85", categoria: "cliente" },
   { path: "emailCliente", label: "Email do cliente", exemplo: "joao@example.com", categoria: "cliente" },
   { path: "contatoId", label: "ID interno do contato", exemplo: "42", categoria: "cliente" },
   { path: "atendenteResponsavelId", label: "Atendente responsável", exemplo: "7", categoria: "cliente" },

@@ -1232,10 +1232,25 @@ export async function dispararMensagemCanal(
       } catch { /* não-fatal */ }
     }
 
+    // DDD do telefone (string de 2 dígitos) — pra condições por região tipo
+    // "se DDD=85, presencial; senão virtual". Robusto a formatos:
+    //  - "5585XXXXXXXX" / "55859XXXXXXXX" (com país) → "85"
+    //  - "85XXXXXXXX" / "859XXXXXXXX" (sem país) → "85"
+    //  - "" / outro → ""
+    const dddCliente = (() => {
+      const digits = (params.telefone || "").replace(/\D/g, "");
+      if (digits.length === 12 || digits.length === 13) {
+        if (digits.startsWith("55")) return digits.slice(2, 4);
+      }
+      if (digits.length === 10 || digits.length === 11) return digits.slice(0, 2);
+      return "";
+    })();
+
     const contexto: SmartflowContexto = {
       mensagem: params.mensagem,
       nomeCliente: params.nomeCliente,
       telefoneCliente: params.telefone,
+      dddCliente,
       contatoId: params.contatoId,
       conversaId: params.conversaId,
       conversaAtendenteId: conversaAtendenteId ?? undefined,
