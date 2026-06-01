@@ -178,9 +178,17 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
 
   const handleImportar = async () => {
     if (!preview) return;
-    const linhasParaImportar = preview.linhas.filter((l) => l.status === "novo");
+    // Linhas pra enviar: as novas SEMPRE (precisam criar vínculo), e as
+    // "já existem" só quando monitorar=true (backend cria só o monitor,
+    // pula o vínculo). Outros status (sem_cliente, cnj_em_outro_cliente,
+    // sem_cnj_invalido) ficam de fora — não há ação útil no executar.
+    const linhasParaImportar = preview.linhas.filter((l) => {
+      if (l.status === "novo") return true;
+      if (l.status === "ja_existe_processo" && ativarMonitor) return true;
+      return false;
+    });
     if (linhasParaImportar.length === 0) {
-      toast.warning("Nenhuma linha nova pra importar.");
+      toast.warning("Nada pra importar.");
       return;
     }
 
@@ -312,7 +320,7 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
               </Button>
             </div>
 
-            <div className="grid grid-cols-5 gap-2 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-center">
               <div className="bg-emerald-50 border border-emerald-200 rounded p-3">
                 <p className="text-[10px] text-emerald-700 uppercase font-semibold">Novos</p>
                 <p className="text-2xl font-bold text-emerald-700 tabular-nums">{preview.resumo.novos}</p>
@@ -560,25 +568,42 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
         )}
 
         <DialogFooter>
-          {etapa === "preview" && (
-            <>
-              <Button variant="outline" onClick={handleClose}>Cancelar</Button>
-              <Button
-                onClick={handleImportar}
-                disabled={
-                  preview!.resumo.novos === 0 ||
-                  (ativarMonitor && !credencialIdEscolhida)
-                }
-                title={
-                  ativarMonitor && !credencialIdEscolhida
-                    ? "Escolha a credencial OAB ou desative o monitoramento"
-                    : undefined
-                }
-              >
-                Importar {preview!.resumo.novos} processo(s)
-              </Button>
-            </>
-          )}
+          {etapa === "preview" && (() => {
+            const novos = preview!.resumo.novos;
+            // Monitoráveis na credencial escolhida (inclui "ja_existe" também).
+            const credEscolhida = credsAtivas.find((c) => String(c.id) === credencialIdEscolhida);
+            const monitoraveis = credEscolhida
+              ? (preview!.resumo.monitoraveisPorSistema[credEscolhida.sistema] ?? 0)
+              : 0;
+            const monitorPendente = ativarMonitor && monitoraveis > 0;
+            const credFaltando = ativarMonitor && !credencialIdEscolhida;
+
+            let label: string;
+            if (novos > 0 && monitorPendente) {
+              label = `Importar ${novos} + ativar ${monitoraveis} monitor(es)`;
+            } else if (novos > 0) {
+              label = `Importar ${novos} processo(s)`;
+            } else if (monitorPendente) {
+              label = `Ativar ${monitoraveis} monitor(es)`;
+            } else {
+              label = "Importar";
+            }
+
+            return (
+              <>
+                <Button variant="outline" onClick={handleClose}>Cancelar</Button>
+                <Button
+                  onClick={handleImportar}
+                  disabled={(novos === 0 && !monitorPendente) || credFaltando}
+                  title={
+                    credFaltando ? "Escolha a credencial OAB ou desative o monitoramento" : undefined
+                  }
+                >
+                  {label}
+                </Button>
+              </>
+            );
+          })()}
           {etapa === "done" && (
             <Button onClick={handleClose}>Fechar</Button>
           )}
