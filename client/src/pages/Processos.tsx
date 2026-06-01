@@ -330,7 +330,6 @@ function ConsultarTab() {
   const [tentativas, setTentativas] = useState(0);
   const [credencialId, setCredencialId] = useState<string>("");
   const [vincularDialog, setVincularDialog] = useState<{ cnj: string; clientes: any[] } | null>(null);
-  const [importarAdvboxOpen, setImportarAdvboxOpen] = useState(false);
   // Detalhes enriquecidos por CNJ. Cards de busca por CPF/CNPJ chegam só
   // com `code`+`tribunal_acronym`. Quando user clica "Carregar detalhes",
   // o resultado de `consultarCNJSincrono` cai aqui e o ProcessoCard usa.
@@ -547,20 +546,7 @@ function ConsultarTab() {
             Buscar
           </Button>
           <KeywordAlertsButton />
-          <Button
-            variant="outline"
-            className="h-10 rounded-lg"
-            onClick={() => setImportarAdvboxOpen(true)}
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Importar Advbox
-          </Button>
         </div>
-
-        <ImportarAdvboxDialog
-          open={importarAdvboxOpen}
-          onOpenChange={setImportarAdvboxOpen}
-        />
 
         {/* Seletor de credencial para segredo de justiça */}
         <div className="flex items-center gap-2">
@@ -1443,6 +1429,7 @@ function MonitorarTab() {
   const [deletarTarget, setDeletarTarget] = useState<{ id: number; nome: string } | null>(null);
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "pausado" | "erro">("todos");
   const [buscaTexto, setBuscaTexto] = useState("");
+  const [importarAdvboxOpen, setImportarAdvboxOpen] = useState(false);
   const utils = trpc.useUtils();
 
   // Estado pra "Atualizar todos" — drawer com lista + progress. ID da
@@ -1655,6 +1642,16 @@ function MonitorarTab() {
             </Button>
             <Button
               size="sm"
+              variant="outline"
+              className="h-9 rounded-lg"
+              onClick={() => setImportarAdvboxOpen(true)}
+              title="Importa em massa processos do export XLSX da Advbox."
+            >
+              <Upload className="h-3.5 w-3.5 mr-1" />
+              Importar Advbox
+            </Button>
+            <Button
+              size="sm"
               className="h-9 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-sm"
               onClick={() => setNovoOpen(true)}
             >
@@ -1662,6 +1659,12 @@ function MonitorarTab() {
             </Button>
           </div>
         </div>
+
+        <ImportarAdvboxDialog
+          open={importarAdvboxOpen}
+          onOpenChange={setImportarAdvboxOpen}
+          onSuccess={() => refetch()}
+        />
 
         {/* Busca + Filtros (chips) */}
         {listaMons.length > 0 && (
