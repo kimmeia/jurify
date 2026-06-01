@@ -314,6 +314,7 @@ export const smartflowRouter = router({
       configGatilho: z.record(z.any()).optional(),
       layout: layoutSchema,
       passos: z.array(passoInputSchema),
+      limitePorContato: z.enum(["sempre", "dia", "semana", "mes", "vida"]).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "smartflow", "editar");
@@ -331,6 +332,7 @@ export const smartflowRouter = router({
           gatilho: input.gatilho,
           configGatilho: input.configGatilho ? JSON.stringify(input.configGatilho) : null,
           layout: input.layout && Object.keys(input.layout).length > 0 ? JSON.stringify(input.layout) : null,
+          limitePorContato: input.limitePorContato ?? "sempre",
         })
         .where(and(eq(smartflowCenarios.id, input.id), eq(smartflowCenarios.escritorioId, perm.escritorioId)));
 
