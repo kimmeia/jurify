@@ -292,6 +292,11 @@ export const escritorios = mysqlTable("escritorios", {
    * com cargo "dono" (default seguro: funciona sem configuração).
    */
   agendaResponsavelPadraoId: int("agendaResponsavelPadraoId"),
+  /**
+   * Modelo de IA pra resumir movimentações (prefixo determina provider:
+   * "gpt-*" = OpenAI, "claude-*" = Anthropic). NULL = usa default global.
+   */
+  motorResumoModelo: varchar("motor_resumo_modelo", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -3031,6 +3036,8 @@ export const eventosProcesso = mysqlTable(
     cnjAfetado: varchar("cnjAfetado", { length: 32 }),
     /** SHA-256 de (tipo + cnj + dataEvento + 200 chars do conteudo) — UNIQUE */
     hashDedup: varchar("hashDedup", { length: 64 }).notNull(),
+    /** Resumo curto (pt-BR) do conteúdo gerado por IA. NULL = não foi gerado. */
+    resumoIa: text("resumo_ia"),
     lido: boolean("lido").default(false).notNull(),
     alertaEnviado: boolean("alertaEnviado").default(false).notNull(),
     alertaEnviadoEm: timestamp("alertaEnviadoEm"),

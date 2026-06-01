@@ -41,6 +41,7 @@ import {
 } from "./polo-matcher";
 import { extrairAnoCnj } from "./cnj-parser";
 import { hashEvento as hashEventoNorm } from "../../scripts/spike-motor-proprio/lib/parser-utils";
+import { resumirMovimentacao, modeloParaEscritorio } from "./resumir-movimentacao";
 
 /**
  * Idade máxima (em anos) que um CNJ pode ter pra ser considerado "novo"
@@ -369,6 +370,7 @@ export async function pollarUmMonitoramentoMovs(
       const movsNovas: Array<{
         mov: typeof resultado.movimentacoes[number];
         eventoId: number;
+        resumoIa?: string | null;
       }> = [];
       for (const mov of resultado.movimentacoes) {
         const { dedup, jaConhecida } = await resolverDedupMovimentacao(
@@ -463,20 +465,48 @@ export async function pollarUmMonitoramentoMovs(
           })
           .where(eq(motorMonitoramentos.id, mon.id));
 
-        for (const { mov, eventoId } of movsNovas.slice(0, 3)) {
+        // Resumo IA: gera SÓ pras movs que vão pra notificação (top 3) pra
+        // bounded cost. As outras ficam com resumo_ia=NULL — UI pode
+        // hidratá-las depois sob demanda. Em paralelo pra não somar latência.
+        // Qualquer falha do resumirMovimentacao retorna null (silent) → caímos
+        // no comportamento atual (texto bruto truncado).
+        const movsParaNotif = movsNovas.slice(0, 3);
+        const modelo = await modeloParaEscritorio(mon.escritorioId);
+        await Promise.all(
+          movsParaNotif.map(async (m) => {
+            const resumo = await resumirMovimentacao(m.mov.texto, modelo);
+            m.resumoIa = resumo;
+            if (resumo) {
+              try {
+                await db
+                  .update(eventosProcesso)
+                  .set({ resumoIa: resumo })
+                  .where(eq(eventosProcesso.id, m.eventoId));
+              } catch (errUpd) {
+                log.warn(
+                  { eventoId: m.eventoId, err: errUpd instanceof Error ? errUpd.message : String(errUpd) },
+                  "[motor-cron] UPDATE resumo_ia falhou (segue sem)",
+                );
+              }
+            }
+          }),
+        );
+
+        for (const { mov, eventoId, resumoIa } of movsParaNotif) {
           await db.insert(notificacoes).values({
             userId: mon.criadoPor,
             titulo: `Nova movimentação: ${mon.apelido ?? mon.searchKey}`,
-            mensagem: mov.texto.slice(0, 200),
+            mensagem: resumoIa ?? mov.texto.slice(0, 200),
             tipo: "movimentacao",
             eventoId,
           });
         }
 
+        const resumoUltima = movsParaNotif[0]?.resumoIa;
         emitirNotificacao(mon.criadoPor, {
           tipo: "movimentacao_processo",
           titulo: "Nova movimentação",
-          mensagem: `${mon.apelido ?? mon.searchKey}: ${ultimaMov.texto.slice(0, 100)}`,
+          mensagem: `${mon.apelido ?? mon.searchKey}: ${resumoUltima ?? ultimaMov.texto.slice(0, 100)}`,
           dados: {
             monitoramentoId: mon.id,
             cnj: mon.searchKey,
