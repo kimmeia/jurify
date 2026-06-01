@@ -36,10 +36,21 @@ export function WhatsappManualDialog({ open, onClose, onConectado }: WhatsappMan
   const [wabaId, setWabaId] = useState("");
 
   const conectarMut = (trpc as any).configuracoes.conectarWhatsappCloudManual.useMutation({
-    onSuccess: (data: { id: number; nome: string; telefone?: string }) => {
+    onSuccess: (data: { id: number; nome: string; telefone?: string; webhooksInscritos?: boolean }) => {
       toast.success("WhatsApp Cloud conectado!", {
         description: `${data.nome}${data.telefone ? ` · ${data.telefone}` : ""}`,
       });
+      // Inscrição em webhooks é best-effort no backend (token do system user
+      // nem sempre tem escopo pra inscrever). Se falhou, o canal envia mas não
+      // recebe — avisa e aponta pro botão de re-inscrever em vez de deixar o
+      // usuário no escuro ("cadastrei e não chega mensagem").
+      if (data.webhooksInscritos === false) {
+        toast.warning("Envio ativado, recebimento pendente", {
+          description:
+            "Não consegui inscrever o número para receber mensagens automaticamente. Abra o canal e use “Re-inscrever webhooks” para ativar o recebimento no Atendimento.",
+          duration: 12000,
+        });
+      }
       reset();
       onConectado?.(data.id);
       onClose();

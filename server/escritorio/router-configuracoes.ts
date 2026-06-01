@@ -784,6 +784,12 @@ export const configuracoesRouter = router({
       const nomeCanal = teste.nome || teste.telefone || "WhatsApp Cloud";
       const telefoneCanal = teste.telefone || undefined;
 
+      // NÃO marcamos registradoCloudApi aqui de propósito: um número recém
+      // adicionado à WABA quase sempre está "Pendente" na Meta (precisa do
+      // POST /{phone-number-id}/register com PIN pra ativar). Deixar o default
+      // (false) mantém a etapa de registro por PIN disponível na UI — e é o
+      // próprio registro que ativa o número e inscreve os webhooks. Forçar
+      // `true` aqui esconderia essa etapa e travaria o número em "Pendente".
       const id = await criarCanal({
         escritorioId: esc.escritorio.id,
         tipo: "whatsapp_api",
@@ -796,15 +802,29 @@ export const configuracoesRouter = router({
         },
       });
 
+      // Inscreve o app na WABA pra RECEBER mensagens. O fluxo de registro por
+      // PIN também inscreve, mas fazemos aqui (best-effort) pra cobrir o caso
+      // de um número que JÁ chega registrado e não passa pela tela de PIN —
+      // sem isso ele enviaria mas nunca receberia. Se falhar, o canal segue
+      // e o usuário re-inscreve pelo botão da UI.
+      let webhooksInscritos = false;
+      try {
+        const { subscribeAppToWaba } = await import("../routers/meta-channels");
+        const sub = await subscribeAppToWaba(input.accessToken, input.wabaId);
+        webhooksInscritos = sub.ok;
+      } catch {
+        /* best-effort — não bloqueia o cadastro */
+      }
+
       await registrarAudit({
         escritorioId: esc.escritorio.id,
         colaboradorId: esc.colaborador.id,
         canalId: id,
         acao: "conectou",
-        detalhes: `Canal whatsapp_api "${nomeCanal}" cadastrado manualmente (phoneNumberId=${input.phoneNumberId})`,
+        detalhes: `Canal whatsapp_api "${nomeCanal}" cadastrado manualmente (phoneNumberId=${input.phoneNumberId}, webhooks=${webhooksInscritos ? "ok" : "pendente"})`,
       });
 
-      return { id, nome: nomeCanal, telefone: telefoneCanal };
+      return { id, nome: nomeCanal, telefone: telefoneCanal, webhooksInscritos };
     }),
 
   /** Atualiza configuração de um canal */
