@@ -442,7 +442,7 @@ export async function listarConversas(escritorioId: number, filtros?: {
     .select({
       id: conversas.id, contatoId: conversas.contatoId,
       contatoNome: contatos.nome, contatoTelefone: contatos.telefone,
-      canalId: conversas.canalId, canalNome: canaisIntegrados.nome, canalTipo: canaisIntegrados.tipo,
+      canalId: conversas.canalId, canalNome: canaisIntegrados.nome, canalTipo: canaisIntegrados.tipo, canalTelefone: canaisIntegrados.telefone,
       atendenteId: conversas.atendenteId,
       status: conversas.status, prioridade: conversas.prioridade,
       assunto: conversas.assunto,
