@@ -21,7 +21,13 @@ export async function lerBytesDeMedia(fonte: string): Promise<Buffer | null> {
       if (!r.ok) return null;
       return Buffer.from(await r.arrayBuffer());
     }
-    const abs = path.isAbsolute(fonte) ? fonte : path.join(process.cwd(), fonte.replace(/^\/+/, ""));
+    // `/uploads/...` é URL pública (não path absoluto). Em Linux, path.isAbsolute
+    // dá true e a leitura cai na raiz do FS (ENOENT). Resolve contra cwd ANTES
+    // de checar isAbsolute pra cobrir essa convenção dos adapters.
+    const isUrlPublica = fonte.startsWith("/uploads/");
+    const abs = (isUrlPublica || !path.isAbsolute(fonte))
+      ? path.join(process.cwd(), fonte.replace(/^\/+/, ""))
+      : fonte;
     return await fs.readFile(abs);
   } catch (e: any) {
     log.warn({ err: e?.message, fonte }, "Whisper: falha ao ler o arquivo de áudio");
