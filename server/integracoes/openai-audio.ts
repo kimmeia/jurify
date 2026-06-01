@@ -38,7 +38,11 @@ function nomeArquivoDe(fonte: string): string {
  *  (sem transcrição o áudio simplesmente não dispara o fluxo — igual a antes). */
 export async function transcreverAudioOpenAI(apiKey: string, fonteMedia: string): Promise<string | null> {
   const bytes = await lerBytesDeMedia(fonteMedia);
-  if (!bytes) return null;
+  if (!bytes) {
+    log.warn({ fonteMedia }, "Whisper: falhou ANTES de chamar API — arquivo de áudio não pôde ser lido");
+    return null;
+  }
+  log.info({ fonteMedia, bytes: bytes.length, arquivo: nomeArquivoDe(fonteMedia) }, "Whisper: enviando pra OpenAI");
   try {
     const form = new FormData();
     form.append("file", new Blob([new Uint8Array(bytes)]), nomeArquivoDe(fonteMedia));
@@ -52,7 +56,7 @@ export async function transcreverAudioOpenAI(apiKey: string, fonteMedia: string)
     });
     if (!res.ok) {
       const t = await res.text();
-      log.warn({ status: res.status, t: t.slice(0, 200) }, "Whisper: API retornou erro");
+      log.warn({ status: res.status, body: t.slice(0, 500), fonteMedia }, "Whisper: API retornou erro");
       return null;
     }
     const data = (await res.json()) as { text?: string; duration?: number };
@@ -60,11 +64,11 @@ export async function transcreverAudioOpenAI(apiKey: string, fonteMedia: string)
     // Visibilidade de custo: Whisper cobra ~US$ 0,006/min. Loga duração + estimativa.
     if (data.duration) {
       const custoUsd = (data.duration / 60) * 0.006;
-      log.info({ duracaoSeg: Math.round(data.duration), custoUsd: custoUsd.toFixed(4) }, "Whisper: transcrição concluída");
+      log.info({ duracaoSeg: Math.round(data.duration), custoUsd: custoUsd.toFixed(4), texto: texto.slice(0, 80) }, "Whisper: transcrição concluída");
     }
     return texto || null;
   } catch (e: any) {
-    log.warn({ err: e?.message }, "Whisper: chamada falhou");
+    log.warn({ err: e?.message, fonteMedia }, "Whisper: chamada falhou");
     return null;
   }
 }
