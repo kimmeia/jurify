@@ -297,6 +297,9 @@ export interface SmartflowExecutores {
     setorId: number;
     somenteOnline: boolean;
     conversaId?: number;
+    /** Se setado, IGNORA setor/round-robin e atribui esse colaborador direto
+     *  (modo "atendente fixo" do bloco). Verifica ativo; se inativo, devolve null. */
+    atendenteIdFixo?: number;
   }) => Promise<{ id: number; nome: string } | null>;
   /**
    * Resolve quem é o dono da agenda pra um atendimento, em cascata:
@@ -1655,17 +1658,31 @@ async function handleDistribuirAtendimento(
   ctx: SmartflowContexto,
   exec: SmartflowExecutores,
 ): Promise<PassoResultado> {
-  const cfg = passo.config as { setorId?: number; somenteOnline?: boolean };
-  const setorId = Number(cfg.setorId);
-  if (!Number.isInteger(setorId) || setorId <= 0) {
-    return { sucesso: false, contexto: ctx, mensagemErro: "Distribuir atendimento: escolha um setor." };
-  }
+  const cfg = passo.config as { modo?: string; setorId?: number; atendenteId?: number; somenteOnline?: boolean };
+  const modo = cfg.modo === "atendente_fixo" ? "atendente_fixo" : "setor";
   const conversaId = typeof ctx.conversaId === "number" ? ctx.conversaId : undefined;
+
+  // Validação por modo: setor exige setorId; atendente_fixo exige atendenteId.
+  let setorId = 0;
+  let atendenteIdFixo: number | undefined = undefined;
+  if (modo === "atendente_fixo") {
+    atendenteIdFixo = Number(cfg.atendenteId);
+    if (!Number.isInteger(atendenteIdFixo) || atendenteIdFixo <= 0) {
+      return { sucesso: false, contexto: ctx, mensagemErro: "Distribuir atendimento (atendente fixo): escolha o atendente." };
+    }
+  } else {
+    setorId = Number(cfg.setorId);
+    if (!Number.isInteger(setorId) || setorId <= 0) {
+      return { sucesso: false, contexto: ctx, mensagemErro: "Distribuir atendimento (setor): escolha um setor." };
+    }
+  }
+
   try {
     const escolhido = await exec.distribuirAtendimentoPorSetor({
       setorId,
       somenteOnline: cfg.somenteOnline === true,
       conversaId,
+      atendenteIdFixo,
     });
     if (!escolhido) {
       return { sucesso: true, contexto: ctx, proximoRamoId: "sem_atendente" };
