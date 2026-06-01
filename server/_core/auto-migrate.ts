@@ -1369,6 +1369,10 @@ export async function runMigrations(): Promise<void> {
     // SmartFlow layoutSF — posições x/y dos nós no editor (JSON, só visual).
     try { await connection.query(`ALTER TABLE smartflow_cenarios ADD COLUMN layoutSF TEXT NULL`); } catch { /* exists */ }
 
+    // SmartFlow limitePorContatoSF — quantas vezes o cenário pode rodar pro mesmo contato.
+    // Default "sempre" preserva comportamento anterior.
+    try { await connection.query(`ALTER TABLE smartflow_cenarios ADD COLUMN limitePorContatoSF ENUM('sempre','dia','semana','mes','vida') NOT NULL DEFAULT 'sempre'`); } catch { /* exists */ }
+
     // SmartFlow branching — UUID estável + mapa de saída por ramo.
     // Idempotente: catch silencioso se a coluna já existe.
     try { await connection.query(`ALTER TABLE smartflow_passos ADD COLUMN clienteIdPasso VARCHAR(36) NULL`); } catch { /* exists */ }

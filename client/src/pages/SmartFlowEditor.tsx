@@ -1034,6 +1034,7 @@ function SmartFlowEditorInner() {
   // Dados gerais do cenário (gatilho vive como nó no canvas)
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [limitePorContato, setLimitePorContato] = useState<"sempre" | "dia" | "semana" | "mes" | "vida">("sempre");
 
   // Estado de "alterações não salvas". Cada handler de mutação no canvas
   // chama `marcarDirty()`. Reseta ao carregar o cenário e após save OK.
@@ -1079,6 +1080,8 @@ function SmartFlowEditorInner() {
     if (!cenario) return;
     setNome(cenario.nome || "");
     setDescricao(cenario.descricao || "");
+    const lim = (cenario as any).limitePorContato;
+    if (lim === "dia" || lim === "semana" || lim === "mes" || lim === "vida" || lim === "sempre") setLimitePorContato(lim);
     const gatilhoAtual = (cenario.gatilho as GatilhoSmartflow) || "mensagem_canal";
     const configGatilhoAtual = (cenario.configGatilho as Record<string, unknown>) || {};
     const gatilhoNode = criarGatilhoNode(gatilhoAtual, configGatilhoAtual);
@@ -1699,6 +1702,7 @@ function SmartFlowEditorInner() {
         : undefined,
       layout,
       passos,
+      limitePorContato,
     };
     if (editandoId) {
       atualizarMut.mutate({ id: editandoId, ...base });
@@ -1745,14 +1749,27 @@ function SmartFlowEditorInner() {
         onExcluir={() => setExcluirOpen(true)}
       />
 
-      {/* Descrição (sub-bar) */}
-      <div className="px-4 py-2 border-b bg-muted/30">
+      {/* Descrição + limite por contato (sub-bar) */}
+      <div className="px-4 py-2 border-b bg-muted/30 flex items-center gap-3">
         <Input
           value={descricao}
           onChange={(e) => { setDescricao(e.target.value); marcarDirty(); }}
           placeholder="Descrição (opcional) — explique o que o cenário faz"
-          className="bg-transparent border-none shadow-none text-sm"
+          className="bg-transparent border-none shadow-none text-sm flex-1"
         />
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Label className="text-[10px] text-muted-foreground whitespace-nowrap">Roda por contato:</Label>
+          <Select value={limitePorContato} onValueChange={(v) => { setLimitePorContato(v as any); marcarDirty(); }}>
+            <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sempre">Sempre (sem limite)</SelectItem>
+              <SelectItem value="dia">1x por dia</SelectItem>
+              <SelectItem value="semana">1x por semana</SelectItem>
+              <SelectItem value="mes">1x por mês</SelectItem>
+              <SelectItem value="vida">1x na vida</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Workspace */}
