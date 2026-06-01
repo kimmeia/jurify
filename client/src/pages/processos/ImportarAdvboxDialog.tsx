@@ -17,10 +17,15 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  FileUp, Loader2, CheckCircle2, AlertTriangle, FileSpreadsheet,
+  FileUp, Loader2, CheckCircle2, AlertTriangle, FileSpreadsheet, Radar,
 } from "lucide-react";
 import { toast } from "sonner";
+
+const CUSTO_MONITORAMENTO_MES = 2;
 
 const TAMANHO_CHUNK = 50;
 
@@ -37,6 +42,8 @@ type PreviewLinha = {
   cnjOriginal: string;
   cnjValido: boolean;
   tribunal: string | null;
+  codigoTribunal: string | null;
+  temMotorProprio: boolean;
   classe: string | null;
   valorCausaCentavos: number | null;
   valorCausaTexto: string;
@@ -60,6 +67,7 @@ type Resumo = {
   cnjEmOutroCliente: number;
   semCliente: number;
   semCnjOuInvalido: number;
+  monitoraveisPorSistema: Record<string, number>;
 };
 
 type PreviewResultado = {
@@ -73,6 +81,10 @@ type ResultadoFinal = {
   contatosReutilizados: number;
   processosCriados: number;
   processosJaExistiam: number;
+  monitoramentosCriados: number;
+  monitoramentosJaExistiam: number;
+  monitoramentosNaoElegiveis: number;
+  creditosConsumidos: number;
   erros: { linhaNum: number; motivo: string }[];
 };
 
@@ -111,6 +123,15 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
   const [preview, setPreview] = useState<PreviewResultado | null>(null);
   const [progresso, setProgresso] = useState<{ atual: number; total: number }>({ atual: 0, total: 0 });
   const [resultado, setResultado] = useState<ResultadoFinal | null>(null);
+  const [ativarMonitor, setAtivarMonitor] = useState(false);
+  const [credencialIdEscolhida, setCredencialIdEscolhida] = useState<string>("");
+
+  const { data: credenciais } = (trpc as any).cofreCredenciais.listarParaSelecao.useQuery(
+    undefined,
+    { retry: false, enabled: etapa === "preview" },
+  );
+  const credsAtivas: { id: number; sistema: string; apelido?: string | null; status: string }[] =
+    (credenciais ?? []).filter((c: any) => c.status === "ativa");
 
   const previewMut = (trpc as any).importarProcessos.previewAdvbox.useMutation({
     onSuccess: (r: PreviewResultado) => {
@@ -132,6 +153,8 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
     setPreview(null);
     setProgresso({ atual: 0, total: 0 });
     setResultado(null);
+    setAtivarMonitor(false);
+    setCredencialIdEscolhida("");
     onOpenChange(false);
   };
 
@@ -171,19 +194,29 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
     const acumulado: ResultadoFinal = {
       contatosCriados: 0, contatosReutilizados: 0,
       processosCriados: 0, processosJaExistiam: 0,
+      monitoramentosCriados: 0, monitoramentosJaExistiam: 0,
+      monitoramentosNaoElegiveis: 0, creditosConsumidos: 0,
       erros: [],
     };
+
+    const credId = ativarMonitor && credencialIdEscolhida
+      ? Number(credencialIdEscolhida)
+      : undefined;
 
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       try {
         const r: ResultadoFinal = await executarMut.mutateAsync({
+          monitorar: ativarMonitor,
+          credencialId: credId,
           linhas: chunk.map((l) => ({
             linhaNum: l.linhaNum,
             cnj: l.cnj,
             cnjOriginal: l.cnjOriginal,
             cnjValido: l.cnjValido,
             tribunal: l.tribunal,
+            codigoTribunal: l.codigoTribunal,
+            temMotorProprio: l.temMotorProprio,
             classe: l.classe,
             valorCausaCentavos: l.valorCausaCentavos,
             clientes: l.clientes.map((c) => ({
@@ -197,6 +230,10 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
         acumulado.contatosReutilizados += r.contatosReutilizados;
         acumulado.processosCriados += r.processosCriados;
         acumulado.processosJaExistiam += r.processosJaExistiam;
+        acumulado.monitoramentosCriados += r.monitoramentosCriados;
+        acumulado.monitoramentosJaExistiam += r.monitoramentosJaExistiam;
+        acumulado.monitoramentosNaoElegiveis += r.monitoramentosNaoElegiveis;
+        acumulado.creditosConsumidos += r.creditosConsumidos;
         acumulado.erros.push(...r.erros);
       } catch (err: any) {
         // Falha no chunk inteiro vira erro por linha pra mostrar.
@@ -346,9 +383,89 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
               </table>
             </ScrollArea>
 
+            {/* Bloco de monitoramento — só faz sentido quando há linhas
+                monitoráveis. Calcula custo dinâmico baseado na credencial
+                escolhida. */}
+            {Object.keys(preview.resumo.monitoraveisPorSistema).length > 0 && (
+              <div className="border-2 border-indigo-200 bg-indigo-50/40 rounded-lg p-3 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <Radar className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" />
+                    <div>
+                      <Label htmlFor="ativar-mon" className="text-sm font-semibold cursor-pointer">
+                        Ativar monitoramento automático
+                      </Label>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Cada processo monitorado consome {CUSTO_MONITORAMENTO_MES} créditos/mês.
+                        Requer credencial OAB do tribunal.
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="ativar-mon"
+                    checked={ativarMonitor}
+                    onCheckedChange={(v) => {
+                      setAtivarMonitor(v);
+                      if (!v) setCredencialIdEscolhida("");
+                    }}
+                  />
+                </div>
+
+                {ativarMonitor && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">Credencial OAB</Label>
+                    {credsAtivas.length === 0 ? (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                        Nenhuma credencial ativa. Cadastre uma em{" "}
+                        <a href="/processos?tab=cofre" className="underline">
+                          Cofre
+                        </a>{" "}
+                        antes de monitorar.
+                      </p>
+                    ) : (
+                      <Select value={credencialIdEscolhida} onValueChange={setCredencialIdEscolhida}>
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue placeholder="Escolha a credencial" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {credsAtivas.map((c) => {
+                            const monitoraveis = preview.resumo.monitoraveisPorSistema[c.sistema] ?? 0;
+                            return (
+                              <SelectItem key={c.id} value={String(c.id)}>
+                                {c.apelido ?? c.sistema} ({c.sistema}) — {monitoraveis} processo(s) elegível(is)
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    )}
+
+                    {credencialIdEscolhida && (() => {
+                      const cred = credsAtivas.find((c) => String(c.id) === credencialIdEscolhida);
+                      if (!cred) return null;
+                      const monitoraveis = preview.resumo.monitoraveisPorSistema[cred.sistema] ?? 0;
+                      const custo = monitoraveis * CUSTO_MONITORAMENTO_MES;
+                      return (
+                        <div className="text-xs bg-white border rounded p-2 space-y-1">
+                          <p>
+                            <strong className="tabular-nums">{monitoraveis}</strong> processo(s) serão
+                            monitorados automaticamente. Os demais ficam como vínculo (sem poll).
+                          </p>
+                          <p className="text-indigo-700 font-medium">
+                            Custo estimado: <span className="tabular-nums">{custo}</span> créditos
+                            (1ª mensalidade) · recorrente mensal a cada poll bem-sucedido.
+                          </p>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
+
             <p className="text-[11px] text-muted-foreground">
               Polo padrão: <strong>ativo</strong>. Tipo: <strong>litigioso</strong>. Cliente sem CPF/CNPJ é
-              criado com flag "documentação pendente". Tributo é inferido do CNJ.
+              criado com flag "documentação pendente". Tribunal é inferido do CNJ.
             </p>
           </div>
         )}
@@ -392,6 +509,36 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                 <p className="text-2xl font-bold tabular-nums">{resultado.contatosReutilizados}</p>
               </div>
             </div>
+
+            {(resultado.monitoramentosCriados > 0 ||
+              resultado.monitoramentosJaExistiam > 0 ||
+              resultado.monitoramentosNaoElegiveis > 0) && (
+              <div className="border-2 border-indigo-200 bg-indigo-50/40 rounded-lg p-3">
+                <p className="flex items-center gap-2 text-sm font-semibold text-indigo-700 mb-2">
+                  <Radar className="h-4 w-4" />
+                  Monitoramento
+                </p>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="bg-white border rounded p-2">
+                    <p className="text-[10px] text-muted-foreground uppercase">Ativados</p>
+                    <p className="text-lg font-bold tabular-nums text-emerald-700">{resultado.monitoramentosCriados}</p>
+                  </div>
+                  <div className="bg-white border rounded p-2">
+                    <p className="text-[10px] text-muted-foreground uppercase">Já ativos</p>
+                    <p className="text-lg font-bold tabular-nums">{resultado.monitoramentosJaExistiam}</p>
+                  </div>
+                  <div className="bg-white border rounded p-2">
+                    <p className="text-[10px] text-muted-foreground uppercase">Não elegíveis</p>
+                    <p className="text-lg font-bold tabular-nums text-amber-700">{resultado.monitoramentosNaoElegiveis}</p>
+                  </div>
+                </div>
+                {resultado.creditosConsumidos > 0 && (
+                  <p className="text-[11px] text-muted-foreground mt-2">
+                    Consumido: <strong className="tabular-nums">{resultado.creditosConsumidos}</strong> créditos
+                  </p>
+                )}
+              </div>
+            )}
             {resultado.erros.length > 0 && (
               <div className="border border-amber-200 bg-amber-50 rounded p-3">
                 <p className="flex items-center gap-2 text-sm font-semibold text-amber-800">
@@ -418,7 +565,15 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
               <Button variant="outline" onClick={handleClose}>Cancelar</Button>
               <Button
                 onClick={handleImportar}
-                disabled={preview!.resumo.novos === 0}
+                disabled={
+                  preview!.resumo.novos === 0 ||
+                  (ativarMonitor && !credencialIdEscolhida)
+                }
+                title={
+                  ativarMonitor && !credencialIdEscolhida
+                    ? "Escolha a credencial OAB ou desative o monitoramento"
+                    : undefined
+                }
               >
                 Importar {preview!.resumo.novos} processo(s)
               </Button>
