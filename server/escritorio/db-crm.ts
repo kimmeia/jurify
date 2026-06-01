@@ -616,6 +616,13 @@ export async function criarLead(dados: {
    * conversão.
    */
   etapaFunil?: "novo" | "qualificado" | "proposta" | "negociacao" | "fechado_ganho" | "fechado_perdido";
+  /**
+   * Sobrescreve o `createdAt` do lead. Default: NOW() do banco. Usado por
+   * "registrar fechamento" pra datar a conversão num mês passado — o mês de
+   * `createdAt` é o que conta no Relatório Comercial e na atribuição de
+   * comissão (ambos agrupam por essa coluna).
+   */
+  createdAt?: Date;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
@@ -630,6 +637,7 @@ export async function criarLead(dados: {
     valorEstimado: normalizarValorBR(dados.valorEstimado),
     origemLead: dados.origemLead || null,
     etapaFunil: dados.etapaFunil || "novo",
+    ...(dados.createdAt ? { createdAt: dados.createdAt } : {}),
   });
   return (result as { insertId: number }).insertId;
 }
