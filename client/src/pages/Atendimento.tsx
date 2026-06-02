@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { DndContext, closestCenter, DragOverlay, useSensor, useSensors, PointerSensor, TouchSensor, useDroppable } from "@dnd-kit/core";
 import type { DragStartEvent, DragEndEvent } from "@dnd-kit/core";
@@ -17,6 +17,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Headphones, MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
@@ -413,7 +414,11 @@ export default function Atendimento() {
     resolvido: (convsAll || []).filter((c: any) => c.status === "resolvido").length,
   };
   const { data: contatos, refetch: rCt } = trpc.crm.listarContatos.useQuery(busca ? { busca } : undefined);
-  const { data: leads, refetch: rL } = trpc.crm.listarLeads.useQuery(undefined, { refetchInterval: 8000 });
+  // Pausa o polling enquanto há drag em curso no Pipeline (senão refetch
+  // chega no meio do drop, troca a referência do array `leads`, e o dnd-kit
+  // perde o tracking — bug de "depois do 1º drag, os outros param").
+  const [pipelineDragAtivo, setPipelineDragAtivo] = useState(false);
+  const { data: leads, refetch: rL } = trpc.crm.listarLeads.useQuery(undefined, { refetchInterval: pipelineDragAtivo ? false : 8000 });
   const { data: canaisData } = trpc.configuracoes.listarCanais.useQuery();
 
   const hasWhatsapp = (canaisData?.canais || []).some((c: any) => (c.tipo === "whatsapp_qr" || c.tipo === "whatsapp_api") && c.status === "conectado");
@@ -818,7 +823,7 @@ export default function Atendimento() {
             })()}
           </div>
         </TabsContent>
-        <TabsContent value="pipeline" className="mt-4"><PipelineKanban leads={leads || []} onUpdate={rL} onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined} onAddLead={() => setShowNovoLead(true)} onGoToConversa={goToConversaFromLead} /></TabsContent>
+        <TabsContent value="pipeline" className="mt-4"><PipelineKanban leads={leads || []} onUpdate={rL} onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined} onAddLead={() => setShowNovoLead(true)} onGoToConversa={goToConversaFromLead} onDragChange={setPipelineDragAtivo} /></TabsContent>
       </Tabs>
       {waPopup && <WhatsAppCallPopup phone={waPopup} onClose={() => setWaPopup(null)} />}
       {telPopup && <TwilioCallPopup phone={telPopup} onClose={() => setTelPopup(null)} />}
@@ -1591,12 +1596,41 @@ function blobParaBase64(blob: Blob): Promise<string> {
   });
 }
 
-function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { leads: any[]; onUpdate: () => void; onWA?: (p: string) => void; onAddLead: () => void; onGoToConversa: (conversaId: number) => void }) {
+function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDragChange }: { leads: any[]; onUpdate: () => void; onWA?: (p: string) => void; onAddLead: () => void; onGoToConversa: (conversaId: number) => void; onDragChange?: (ativo: boolean) => void }) {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [busca, setBusca] = useState("");
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [excluirLeadAlvo, setExcluirLeadAlvo] = useState<{ id: number; nome: string } | null>(null);
-  const mut = trpc.crm.atualizarLead.useMutation({ onSuccess: () => { toast.success("Lead movido!"); onUpdate(); }, onError: (e: any) => toast.error(e.message) });
+  const [detalheLeadId, setDetalheLeadId] = useState<number | null>(null);
+  // Filtros avançados
+  const [responsaveisFiltro, setResponsaveisFiltro] = useState<number[]>([]);
+  const [setorFiltro, setSetorFiltro] = useState<number | null>(null);
+  const [periodoFiltro, setPeriodoFiltro] = useState<"todos" | "7d" | "30d" | "90d">("todos");
+  const [valorMin, setValorMin] = useState<string>("");
+  const [valorMax, setValorMax] = useState<string>("");
+  const [showFiltros, setShowFiltros] = useState(false);
+  const utils = trpc.useUtils();
+  // OTIMISTIC UPDATE: muda etapa no cache antes da resposta do backend. Sem
+  // isso, o card "voltava" pra coluna antiga até o refetch chegar (~400ms),
+  // dando impressão de bug + atrapalhando o segundo drag em sequência.
+  const mut = trpc.crm.atualizarLead.useMutation({
+    onMutate: async (vars: any) => {
+      await utils.crm.listarLeads.cancel();
+      const snap = utils.crm.listarLeads.getData();
+      if (vars.etapaFunil) {
+        utils.crm.listarLeads.setData(undefined, (old: any) =>
+          (old || []).map((l: any) => (l.id === vars.id ? { ...l, etapaFunil: vars.etapaFunil } : l)),
+        );
+      }
+      return { snap };
+    },
+    onError: (e: any, _vars, ctx) => {
+      toast.error(e.message);
+      if (ctx?.snap) utils.crm.listarLeads.setData(undefined, ctx.snap);
+    },
+    onSettled: () => { onUpdate(); },
+    onSuccess: () => { toast.success("Lead movido!"); },
+  });
   const excluirMut = trpc.crm.excluirLead.useMutation({
     onSuccess: () => { toast.success("Lead excluído!"); setExcluirLeadAlvo(null); onUpdate(); },
     onError: (e: any) => toast.error(e.message),
@@ -1612,16 +1646,71 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { 
     .filter((l: any) => l.etapaFunil === "fechado_ganho")
     .reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
 
-  // Busca local
+  // Listas dos filtros (atendentes + setores)
+  const { data: atendentesLista } = trpc.crm.listarAtendentes.useQuery();
+  const { data: setoresFiltroLista } = trpc.configuracoes.listarSetores.useQuery();
+  // Map de atendente → setor pra filtragem por setor (lead carrega responsavelId).
+  const atendenteToSetor = useMemo(() => {
+    const m: Record<number, number | null> = {};
+    for (const a of (atendentesLista || []) as any[]) m[a.id] = a.setorId ?? null;
+    return m;
+  }, [atendentesLista]);
+
+  // Busca local + filtros
   const buscaQ = busca.trim().toLowerCase();
   const buscaDigits = buscaQ.replace(/\D/g, "");
-  const leadsFiltrados = buscaQ
-    ? leads.filter((l: any) => {
-        if ((l.contatoNome || "").toLowerCase().includes(buscaQ)) return true;
-        if (buscaDigits && (l.contatoTelefone || "").replace(/\D/g, "").includes(buscaDigits)) return true;
-        return false;
-      })
-    : leads;
+  const periodoMs = (() => {
+    if (periodoFiltro === "todos") return null;
+    const dias = periodoFiltro === "7d" ? 7 : periodoFiltro === "30d" ? 30 : 90;
+    return Date.now() - dias * 24 * 60 * 60 * 1000;
+  })();
+  const vMin = valorMin ? parseValorBR(valorMin) : null;
+  const vMax = valorMax ? parseValorBR(valorMax) : null;
+  const leadsFiltrados = leads.filter((l: any) => {
+    if (buscaQ) {
+      const okNome = (l.contatoNome || "").toLowerCase().includes(buscaQ);
+      const okTel = buscaDigits && (l.contatoTelefone || "").replace(/\D/g, "").includes(buscaDigits);
+      if (!okNome && !okTel) return false;
+    }
+    if (responsaveisFiltro.length > 0 && !responsaveisFiltro.includes(l.responsavelId)) return false;
+    if (setorFiltro && atendenteToSetor[l.responsavelId] !== setorFiltro) return false;
+    if (periodoMs) {
+      const t = l.ultimaAtividadeAt ? new Date(l.ultimaAtividadeAt).getTime() : (l.createdAt ? new Date(l.createdAt).getTime() : 0);
+      if (t < periodoMs) return false;
+    }
+    if (vMin !== null || vMax !== null) {
+      const v = parseValorBR(l.valorEstimado);
+      if (vMin !== null && v < vMin) return false;
+      if (vMax !== null && v > vMax) return false;
+    }
+    return true;
+  });
+  const filtrosAtivos =
+    (responsaveisFiltro.length > 0 ? 1 : 0) +
+    (setorFiltro ? 1 : 0) +
+    (periodoFiltro !== "todos" ? 1 : 0) +
+    (vMin !== null || vMax !== null ? 1 : 0);
+  const limparFiltrosAv = () => {
+    setResponsaveisFiltro([]); setSetorFiltro(null); setPeriodoFiltro("todos"); setValorMin(""); setValorMax("");
+  };
+
+  // Memoize a lista de IDs por etapa pra estabilizar referência do
+  // SortableContext entre renders. Sem isso, cada render gera novo array de
+  // items e o dnd-kit perde estado interno (sintoma: drag para de funcionar
+  // após o 1º card movido).
+  const itemsByEtapa = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    for (const e of ETAPAS) map[e] = [];
+    for (const l of leadsFiltrados) {
+      if (map[l.etapaFunil]) map[l.etapaFunil].push(l);
+    }
+    return map;
+  }, [leadsFiltrados]);
+  const idsByEtapa = useMemo(() => {
+    const m: Record<string, number[]> = {};
+    for (const e of ETAPAS) m[e] = itemsByEtapa[e].map((l: any) => l.id);
+    return m;
+  }, [itemsByEtapa]);
 
   return (<div className="space-y-4">
     {/* Top bar: métricas inline + busca + filtros + toggle view + Novo Lead */}
@@ -1658,6 +1747,21 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { 
             className="h-9 pl-8 pr-3 text-xs w-48 bg-background"
           />
         </div>
+        <button
+          onClick={() => setShowFiltros((v) => !v)}
+          className={
+            "relative h-9 w-9 inline-flex items-center justify-center rounded-md border text-muted-foreground hover:bg-muted " +
+            (filtrosAtivos > 0 ? "border-violet-500 text-violet-600" : "")
+          }
+          title="Filtros: atendente, setor, período, valor"
+        >
+          <Filter className="h-3.5 w-3.5" />
+          {filtrosAtivos > 0 && (
+            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-violet-600 text-white text-[9px] font-bold flex items-center justify-center">
+              {filtrosAtivos}
+            </span>
+          )}
+        </button>
         <div className="inline-flex items-center bg-muted/40 rounded-lg p-0.5">
           <button
             type="button"
@@ -1688,13 +1792,86 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { 
       </div>
     </div>
 
+    {showFiltros && (
+      <div className="rounded-xl border bg-card p-3 grid gap-3 md:grid-cols-4 text-[11px]">
+        <div className="space-y-1.5">
+          <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">Atendente</p>
+          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+            {(atendentesLista || []).length === 0 && (
+              <span className="text-muted-foreground/60">Nenhum cadastrado</span>
+            )}
+            {((atendentesLista || []) as any[]).map((a) => {
+              const ativo = responsaveisFiltro.includes(a.id);
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => setResponsaveisFiltro((p) => ativo ? p.filter((x) => x !== a.id) : [...p, a.id])}
+                  className={"inline-flex items-center gap-1 rounded-full px-2 py-0.5 border text-[10px] " + (ativo ? "bg-violet-600 text-white border-violet-600" : "bg-muted/30 hover:bg-muted")}
+                >
+                  {a.nome || `#${a.id}`}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">Setor</p>
+          <select
+            value={setorFiltro ?? ""}
+            onChange={(e) => setSetorFiltro(e.target.value ? Number(e.target.value) : null)}
+            className="w-full h-8 rounded-md border bg-background px-2 text-[11px]"
+          >
+            <option value="">Todos os setores</option>
+            {((setoresFiltroLista || []) as any[]).map((s) => (
+              <option key={s.id} value={s.id}>{s.nome}</option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">Período</p>
+          <div className="grid grid-cols-4 gap-1">
+            {(["todos", "7d", "30d", "90d"] as const).map((p) => {
+              const label = p === "todos" ? "Todos" : p === "7d" ? "7d" : p === "30d" ? "30d" : "90d";
+              const ativo = periodoFiltro === p;
+              return (
+                <button
+                  key={p}
+                  onClick={() => setPeriodoFiltro(p)}
+                  className={"h-7 rounded text-[10px] border " + (ativo ? "bg-violet-600 text-white border-violet-600" : "bg-muted/30 hover:bg-muted")}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">Valor (R$)</p>
+          <div className="flex items-center gap-1">
+            <Input value={valorMin} onChange={(e) => setValorMin(e.target.value)} placeholder="Mín" className="h-8 text-[11px]" />
+            <span className="text-muted-foreground">–</span>
+            <Input value={valorMax} onChange={(e) => setValorMax(e.target.value)} placeholder="Máx" className="h-8 text-[11px]" />
+          </div>
+        </div>
+        {filtrosAtivos > 0 && (
+          <div className="md:col-span-4">
+            <button onClick={limparFiltrosAv} className="text-[10px] text-violet-600 hover:underline">
+              Limpar filtros
+            </button>
+          </div>
+        )}
+      </div>
+    )}
+
     {view === "kanban" ? (
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
-        onDragStart={(e: DragStartEvent) => setActiveId(Number(e.active.id))}
+        onDragStart={(e: DragStartEvent) => { setActiveId(Number(e.active.id)); onDragChange?.(true); }}
+        onDragCancel={() => { setActiveId(null); onDragChange?.(false); }}
         onDragEnd={(e: DragEndEvent) => {
           setActiveId(null);
+          onDragChange?.(false);
           if (!e.over) return;
           const oid = String(e.over.id);
           if (ETAPAS.includes(oid as EtapaFunil)) {
@@ -1706,11 +1883,11 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { 
         <div className="overflow-x-auto -mx-2 pb-2">
           <div className="grid gap-3 px-2 pt-1" style={{ gridTemplateColumns: "200px 200px 200px 200px 1fr 200px" }}>
             {ETAPAS.map((etapa) => {
-              const items = leadsFiltrados.filter((l: any) => l.etapaFunil === etapa);
+              const items = itemsByEtapa[etapa];
               const val = items.reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
               return (
                 <KCol key={etapa} etapa={etapa} count={items.length} val={val}>
-                  <SortableContext items={items.map((l: any) => l.id)} strategy={verticalListSortingStrategy}>
+                  <SortableContext items={idsByEtapa[etapa]} strategy={verticalListSortingStrategy}>
                     {!items.length ? (
                       <div className="p-3 min-h-[120px] flex items-center justify-center">
                         <div
@@ -1723,7 +1900,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { 
                     ) : (
                       <div className="p-2.5 space-y-2 max-h-[820px] overflow-y-auto">
                         {items.map((l: any) => (
-                          <KCard key={l.id} lead={l} onWA={onWA} onDelete={handleDeleteLead} onGoToConversa={onGoToConversa} />
+                          <KCard key={l.id} lead={l} onWA={onWA} onDelete={handleDeleteLead} onGoToConversa={onGoToConversa} onOpen={() => setDetalheLeadId(l.id)} />
                         ))}
                       </div>
                     )}
@@ -1743,6 +1920,14 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { 
         onGoToConversa={onGoToConversa}
       />
     )}
+    <LeadDetalheSheet
+      lead={detalheLeadId ? (leads.find((l: any) => l.id === detalheLeadId) || null) : null}
+      atendentes={(atendentesLista || []) as any[]}
+      onClose={() => setDetalheLeadId(null)}
+      onUpdate={onUpdate}
+      onGoToConversa={onGoToConversa}
+      onWA={onWA}
+    />
 
     <AlertDialog open={!!excluirLeadAlvo} onOpenChange={(o) => !o && setExcluirLeadAlvo(null)}>
       <AlertDialogContent>
@@ -1767,6 +1952,159 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { 
       </AlertDialogContent>
     </AlertDialog>
   </div>);
+}
+
+/** Painel lateral do Pipeline: detalhes + notas (observacoes) + edição rápida. */
+function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa, onWA }: {
+  lead: any | null;
+  atendentes: any[];
+  onClose: () => void;
+  onUpdate: () => void;
+  onGoToConversa: (conversaId: number) => void;
+  onWA?: (p: string) => void;
+}) {
+  const [notas, setNotas] = useState("");
+  const [valorEdit, setValorEdit] = useState("");
+  const [probEdit, setProbEdit] = useState(50);
+  const [respEdit, setRespEdit] = useState<number | null>(null);
+  const [etapaEdit, setEtapaEdit] = useState<EtapaFunil>("novo");
+  const [dirty, setDirty] = useState(false);
+  // Re-hidrata quando troca de lead
+  useEffect(() => {
+    if (!lead) return;
+    setNotas(lead.observacoes || "");
+    setValorEdit(lead.valorEstimado || "");
+    setProbEdit(lead.probabilidade ?? 50);
+    setRespEdit(lead.responsavelId ?? null);
+    setEtapaEdit(lead.etapaFunil as EtapaFunil);
+    setDirty(false);
+  }, [lead?.id]);
+  const mutEdit = trpc.crm.atualizarLead.useMutation({
+    onSuccess: () => { toast.success("Lead atualizado"); setDirty(false); onUpdate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const salvar = () => {
+    if (!lead) return;
+    mutEdit.mutate({
+      id: lead.id,
+      observacoes: notas,
+      valorEstimado: valorEdit || undefined,
+      probabilidade: probEdit,
+      responsavelId: respEdit ?? undefined,
+      etapaFunil: etapaEdit,
+    });
+  };
+  const open = !!lead;
+  return (
+    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+        {lead && (
+          <>
+            <SheetHeader className="space-y-1">
+              <div className="flex items-start gap-3">
+                <div className={"w-12 h-12 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0 " + gradientFromName(lead.contatoNome || "?")}>
+                  {initials(lead.contatoNome || "?")}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <SheetTitle className="text-left text-base truncate">{lead.contatoNome}</SheetTitle>
+                  {lead.contatoTelefone && (
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <Phone className="h-3 w-3" /> {lead.contatoTelefone}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </SheetHeader>
+            <div className="mt-4 space-y-4">
+              <div className="flex flex-wrap gap-1.5">
+                {lead.conversaId && (
+                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => onGoToConversa(lead.conversaId)}>
+                    <Inbox className="h-3 w-3 mr-1" /> Ir pra conversa
+                  </Button>
+                )}
+                {lead.contatoTelefone && onWA && (
+                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => onWA(lead.contatoTelefone)}>
+                    <PhoneCall className="h-3 w-3 mr-1" /> WhatsApp
+                  </Button>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Etapa</label>
+                <select
+                  value={etapaEdit}
+                  onChange={(e) => { setEtapaEdit(e.target.value as EtapaFunil); setDirty(true); }}
+                  className="w-full h-8 rounded-md border bg-background px-2 text-xs"
+                >
+                  {ETAPAS.map((e) => (
+                    <option key={e} value={e}>{ETAPA_FUNIL_LABELS[e]}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Valor estimado</label>
+                  <Input
+                    value={valorEdit}
+                    onChange={(e) => { setValorEdit(e.target.value); setDirty(true); }}
+                    placeholder="R$ 0,00"
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Probabilidade</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range" min={0} max={100} step={5}
+                      value={probEdit}
+                      onChange={(e) => { setProbEdit(Number(e.target.value)); setDirty(true); }}
+                      className="flex-1"
+                    />
+                    <span className="text-xs tabular-nums w-10 text-right">{probEdit}%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Responsável</label>
+                <select
+                  value={respEdit ?? ""}
+                  onChange={(e) => { setRespEdit(e.target.value ? Number(e.target.value) : null); setDirty(true); }}
+                  className="w-full h-8 rounded-md border bg-background px-2 text-xs"
+                >
+                  <option value="">— Sem responsável —</option>
+                  {atendentes.map((a) => (
+                    <option key={a.id} value={a.id}>{a.nome || `#${a.id}`}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Notas / Observações</label>
+                <textarea
+                  value={notas}
+                  onChange={(e) => { setNotas(e.target.value); setDirty(true); }}
+                  placeholder="Anote tudo sobre esse lead: contexto, próximos passos, objeções, contatos da família..."
+                  className="w-full min-h-[160px] rounded-md border bg-background px-2.5 py-2 text-xs resize-y"
+                  maxLength={2000}
+                />
+                <p className="text-[10px] text-muted-foreground text-right">{notas.length}/2000</p>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 border-t">
+                <Button onClick={salvar} disabled={!dirty || mutEdit.isPending} className="flex-1 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700">
+                  {mutEdit.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+                  Salvar
+                </Button>
+                <Button variant="outline" onClick={onClose}>Fechar</Button>
+              </div>
+            </div>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
 }
 
 /** Visualização tabular do Pipeline — alternativa ao Kanban. */
@@ -1919,10 +2257,13 @@ function KCol({ etapa, count, val, children }: { etapa: EtapaFunil; count: numbe
   );
 }
 
-function KCard({ lead, onWA, onDelete, onGoToConversa }: { lead: any; onWA?: (p: string) => void; onDelete: (id: number, nome: string) => void; onGoToConversa: (conversaId: number) => void }) {
+function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen }: { lead: any; onWA?: (p: string) => void; onDelete: (id: number, nome: string) => void; onGoToConversa: (conversaId: number) => void; onOpen?: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id });
   const v = parseValorBR(lead.valorEstimado);
   const hex = ETAPA_HEX[lead.etapaFunil as EtapaFunil] || ETAPA_HEX.novo;
+  // Click no card abre detalhes/notas. Drag e click coexistem via
+  // activationConstraint: { distance: 5 } no PointerSensor — se mover <5px
+  // dnd-kit não inicia drag, então onClick dispara normal.
   return (
     <div
       ref={setNodeRef}
@@ -1934,6 +2275,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa }: { lead: any; onWA?: (p:
       }}
       {...attributes}
       {...listeners}
+      onClick={() => { if (!isDragging) onOpen?.(); }}
       className="rounded-xl bg-background border border-border border-l-4 px-3 py-2.5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-grab active:cursor-grabbing group"
     >
       <div className="flex items-start gap-2.5">
