@@ -586,7 +586,7 @@ function ClienteDetalheDialog({
                           <div key={c.id} className="flex items-center justify-between text-xs border-b pb-1.5 last:border-0">
                             <div className="min-w-0">
                               <p className="truncate">{c.descricao || "Cobrança"}</p>
-                              <p className="text-muted-foreground">venc. {new Date(c.vencimento).toLocaleDateString("pt-BR")}</p>
+                              <p className="text-muted-foreground">venc. {new Date(c.vencimento + "T12:00:00").toLocaleDateString("pt-BR")}</p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                               <span className="tabular-nums font-medium">{fmtBRLAdmin(c.valor)}</span>
