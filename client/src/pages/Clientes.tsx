@@ -1175,6 +1175,15 @@ function fmtMoeda(centavosOuDecimal: number | string | null | undefined): string
 
 function fmtData(iso: string | null | undefined): string {
   if (!iso) return "—";
+  // Asaas guarda vencimento/dataPagamento como "YYYY-MM-DD" puro (varchar
+  // 10) e o backend devolve assim, sem hora. `new Date("2026-06-01")` é
+  // interpretado como UTC midnight, e em UTC-3 o toLocaleDateString mostra
+  // o DIA ANTERIOR (cobrança paga 01/06 virava 31/05 na ficha do cliente,
+  // sumindo do relatório de Jun). Parse manual quando a string já está no
+  // formato data-only — sem timezone interference.
+  const ymd = iso.slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
   try {
     return new Date(iso).toLocaleDateString("pt-BR");
   } catch {
