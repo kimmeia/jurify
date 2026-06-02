@@ -188,15 +188,21 @@ export const crmRouter = router({
     .input(z.object({
       status: z.enum(["aguardando", "em_atendimento", "resolvido", "fechado"]).optional(),
       atendenteId: z.number().optional(),
+      atendenteIds: z.array(z.number()).optional(),
+      setorId: z.number().optional(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
       if (!perm.allowed) return [];
-      const filtros = input ?? {};
+      const filtros: any = { ...(input ?? {}) };
       // Respeita verProprios — força filtro pelo próprio colaborador,
-      // ignorando qualquer atendenteId vindo do client.
+      // ignorando qualquer atendenteId/atendenteIds/setorId vindo do client.
       if (!perm.verTodos && perm.verProprios) {
         filtros.atendenteId = perm.colaboradorId;
+        delete filtros.atendenteIds;
+        delete filtros.setorId;
       }
       return listarConversas(perm.escritorioId, filtros);
     }),

@@ -3,7 +3,7 @@
  * Fase 3 — Inclui algoritmo de distribuição inteligente de leads
  */
 
-import { eq, and, desc, asc, or, sql, gte, lte, like } from "drizzle-orm";
+import { eq, and, desc, asc, or, sql, gte, lte, like, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
@@ -428,7 +428,12 @@ export async function criarConversa(dados: {
 }
 
 export async function listarConversas(escritorioId: number, filtros?: {
-  status?: string; atendenteId?: number;
+  status?: string;
+  atendenteId?: number;
+  atendenteIds?: number[];
+  setorId?: number;
+  dataInicio?: string;
+  dataFim?: string;
 }) {
   const db = await getDb();
   if (!db) return [];
@@ -436,7 +441,52 @@ export async function listarConversas(escritorioId: number, filtros?: {
   if (filtros?.status && STATUS_CONV_VALIDOS.has(filtros.status as StatusConv)) {
     conditions.push(eq(conversas.status, filtros.status as StatusConv));
   }
-  if (filtros?.atendenteId) conditions.push(eq(conversas.atendenteId, filtros.atendenteId));
+
+  // Multi-atendente (e compat com atendenteId único legacy).
+  const atendentesFiltro: number[] = [];
+  if (filtros?.atendenteIds && filtros.atendenteIds.length > 0) atendentesFiltro.push(...filtros.atendenteIds);
+  if (filtros?.atendenteId) atendentesFiltro.push(filtros.atendenteId);
+
+  // Setor: traduz pra `atendenteId IN (atendentes do setor)`. Mais barato do
+  // que JOIN, e não precisa expor colaboradores na query principal.
+  if (filtros?.setorId) {
+    const atendsSetor = await db
+      .select({ id: colaboradores.id })
+      .from(colaboradores)
+      .where(and(
+        eq(colaboradores.escritorioId, escritorioId),
+        eq(colaboradores.setorId, filtros.setorId),
+      ));
+    const setorIds = atendsSetor.map((a) => a.id);
+    if (setorIds.length === 0) return [];
+    // Intersecção com atendentes já filtrados (se houver) — usuário pode pedir
+    // "setor X + atendente Y" e Y precisa estar no setor X.
+    if (atendentesFiltro.length > 0) {
+      const inter = atendentesFiltro.filter((id) => setorIds.includes(id));
+      if (inter.length === 0) return [];
+      atendentesFiltro.length = 0;
+      atendentesFiltro.push(...inter);
+    } else {
+      atendentesFiltro.push(...setorIds);
+    }
+  }
+
+  if (atendentesFiltro.length === 1) {
+    conditions.push(eq(conversas.atendenteId, atendentesFiltro[0]));
+  } else if (atendentesFiltro.length > 1) {
+    conditions.push(inArray(conversas.atendenteId, atendentesFiltro));
+  }
+
+  // Período: filtra por ultimaMensagemAt (atividade), não createdAt — usuário
+  // quer ver conversas com mensagem nova no intervalo.
+  if (filtros?.dataInicio) {
+    const dt = new Date(filtros.dataInicio);
+    if (!isNaN(dt.getTime())) conditions.push(gte(conversas.ultimaMensagemAt, dt));
+  }
+  if (filtros?.dataFim) {
+    const dt = new Date(filtros.dataFim);
+    if (!isNaN(dt.getTime())) conditions.push(lte(conversas.ultimaMensagemAt, dt));
+  }
 
   const rows = await db
     .select({
