@@ -717,20 +717,25 @@ export async function listarLeads(escritorioId: number, etapa?: string) {
       id: leads.id, contatoId: leads.contatoId,
       contatoNome: contatos.nome, contatoTelefone: contatos.telefone,
       responsavelId: leads.responsavelId,
+      responsavelNome: users.name,
       conversaId: leads.conversaId,
       etapaFunil: leads.etapaFunil, valorEstimado: leads.valorEstimado,
       origemLead: leads.origemLead, probabilidade: leads.probabilidade,
       dataFechamentoPrevisto: leads.dataFechamentoPrevisto,
       createdAt: leads.createdAt,
+      updatedAt: leads.updatedAt,
     })
     .from(leads)
     .innerJoin(contatos, eq(leads.contatoId, contatos.id))
+    .leftJoin(colaboradores, eq(leads.responsavelId, colaboradores.id))
+    .leftJoin(users, eq(colaboradores.userId, users.id))
     .where(and(...conditions))
     .orderBy(desc(leads.createdAt)).limit(200);
 
   return rows.map((r) => ({
     ...r,
     createdAt: toIsoString(r.createdAt) ?? "",
+    updatedAt: toIsoString(r.updatedAt) ?? "",
   }));
 }
 
