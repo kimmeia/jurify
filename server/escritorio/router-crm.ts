@@ -666,6 +666,7 @@ export const crmRouter = router({
         id: colaboradores.id,
         userId: colaboradores.userId,
         cargo: colaboradores.cargo,
+        setorId: colaboradores.setorId,
         nome: users.name,
         email: users.email,
       })

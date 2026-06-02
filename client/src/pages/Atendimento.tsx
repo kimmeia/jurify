@@ -1599,26 +1599,19 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
     onSuccess: () => { toast.success("Lead excluído!"); setExcluirLeadAlvo(null); onUpdate(); },
     onError: (e: any) => toast.error(e.message),
   });
-  const total = leads.filter((l: any) => !l.etapaFunil.startsWith("fechado")).reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
-
   const handleDeleteLead = (id: number, nome: string) => setExcluirLeadAlvo({ id, nome });
 
-  // "Ganhos do mês" = leads fechado_ganho cujo updatedAt cai no mês corrente.
-  // Sem date picker — sempre o mês atual. Antes mostrava o ACUMULADO de
-  // todos os tempos, o que enganava a leitura.
-  // `inicioMesTs` em useMemo pra não invalidar `itemsByEtapa` a cada render
-  // (Date.now() mudaria toda vez senão).
+  // Métricas "do mês" usam `fechadoEm` (timestamp setado APENAS quando o lead
+  // virou fechado_ganho/perdido). Antes usava `updatedAt`, que muda em
+  // qualquer edição — leads fechados há meses sumiam da view só porque
+  // ninguém editou desde, e edições no card davam a impressão de "fechou
+  // agora" mesmo quando o status não tinha mudado.
   const inicioMesTs = useMemo(() => {
     const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0);
     return d.getTime();
   }, []);
-  const totalGanhoMes = leads
-    .filter((l: any) => l.etapaFunil === "fechado_ganho" && l.updatedAt && new Date(l.updatedAt).getTime() >= inicioMesTs)
-    .reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
-  // Mantido pro cálculo de taxa de conversão (que não muda com período)
-  const totalGanho = leads
-    .filter((l: any) => l.etapaFunil === "fechado_ganho")
-    .reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
+  const fechouNoMes = (l: any) =>
+    l.fechadoEm && new Date(l.fechadoEm).getTime() >= inicioMesTs;
 
   // Handler único de drop: move lead pra etapa destino com optimistic update.
   // Cobre tanto drop na coluna (id da etapa) quanto drop sobre outro card
@@ -1682,29 +1675,36 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
     setResponsaveisFiltro([]); setSetorFiltro(null); setPeriodoFiltro("todos"); setValorMin(""); setValorMax("");
   };
 
-  // Cards agrupados por etapa pro board. A coluna "Ganho" só mostra os
-  // fechamentos do mês corrente (alinhado com o KPI "Ganhos do mês"). Sem
-  // isso, a coluna acumulava o histórico de meses anteriores enquanto o
-  // KPI dizia outra coisa — dado conflitante na mesma tela.
+  // Cards agrupados por etapa pro board. As colunas de FECHADO (ganho e
+  // perdido) só mostram os do mês corrente — alinhado com KPI e taxa de
+  // conversão. Usa `fechadoEm` (não `updatedAt`) pra ser fiel ao momento
+  // real do fechamento, sem ser afetado por edições posteriores no card.
   const itemsByEtapa = useMemo(() => {
     const map: Record<string, any[]> = {};
     for (const e of ETAPAS) map[e] = [];
     for (const l of leadsFiltrados) {
-      if (l.etapaFunil === "fechado_ganho") {
-        if (!l.updatedAt || new Date(l.updatedAt).getTime() < inicioMesTs) continue;
+      if (l.etapaFunil === "fechado_ganho" || l.etapaFunil === "fechado_perdido") {
+        if (!l.fechadoEm || new Date(l.fechadoEm).getTime() < inicioMesTs) continue;
       }
       if (map[l.etapaFunil]) map[l.etapaFunil].push(l);
     }
     return map;
   }, [leadsFiltrados, inicioMesTs]);
 
-  // Taxa de conversão = ganhos / (ganhos + perdidos). Métrica honesta porque
-  // ignora leads ainda abertos (que ainda podem virar). Se não tem fechamento
-  // nenhum, mostra "—" pra evitar 0/0=NaN ou 100% enganoso.
-  const fechadosGanho = leads.filter((l: any) => l.etapaFunil === "fechado_ganho").length;
-  const fechadosPerd = leads.filter((l: any) => l.etapaFunil === "fechado_perdido").length;
-  const taxaConv = fechadosGanho + fechadosPerd > 0
-    ? Math.round((fechadosGanho / (fechadosGanho + fechadosPerd)) * 100)
+  // KPIs agora usam `leadsFiltrados` — respeitam Setor, Atendente, Período
+  // e faixa de Valor aplicados via filtros. Sem filtros, equivalente a leads.
+  // - Total de leads: contagem do conjunto filtrado.
+  // - Em pipeline: soma dos leads abertos (não fechados).
+  // - Ganhos do mês: soma dos fechados_ganho cujo fechadoEm cai no mês.
+  // - Taxa de conversão: ganhos/(ganhos+perdidos) do mês.
+  const total = leadsFiltrados.filter((l: any) => !l.etapaFunil.startsWith("fechado")).reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
+  const totalGanhoMes = leadsFiltrados
+    .filter((l: any) => l.etapaFunil === "fechado_ganho" && fechouNoMes(l))
+    .reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
+  const fechadosGanhoMes = leadsFiltrados.filter((l: any) => l.etapaFunil === "fechado_ganho" && fechouNoMes(l)).length;
+  const fechadosPerdMes = leadsFiltrados.filter((l: any) => l.etapaFunil === "fechado_perdido" && fechouNoMes(l)).length;
+  const taxaConv = fechadosGanhoMes + fechadosPerdMes > 0
+    ? Math.round((fechadosGanhoMes / (fechadosGanhoMes + fechadosPerdMes)) * 100)
     : null;
 
   return (<div className="space-y-4">
@@ -1731,10 +1731,14 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
         </div>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-4">
-        <KpiCard label="Total de leads" value={String(leads.length)} />
+        <KpiCard
+          label="Total de leads"
+          value={String(leadsFiltrados.length)}
+          hint={(filtrosAtivos > 0 || buscaQ) ? `de ${leads.length} no total` : undefined}
+        />
         <KpiCard label="Ganhos do mês" value={formatBRL(totalGanhoMes)} hint={new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })} />
         <KpiCard label="Em pipeline" value={formatBRL(total)} />
-        <KpiCard label="Taxa de conversão" value={taxaConv !== null ? `${taxaConv}%` : "—"} hint={taxaConv === null ? "sem fechamentos ainda" : `${fechadosGanho} ganhos / ${fechadosPerd} perdidos`} />
+        <KpiCard label="Taxa de conversão" value={taxaConv !== null ? `${taxaConv}%` : "—"} hint={taxaConv === null ? "sem fechamentos no mês" : `${fechadosGanhoMes} ganhos / ${fechadosPerdMes} perdidos`} />
       </div>
     </div>
 
