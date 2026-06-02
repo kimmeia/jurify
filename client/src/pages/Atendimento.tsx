@@ -77,13 +77,13 @@ function previewMensagem(c: any): string {
   return preview ? `${prefix} · ${preview}` : prefix;
 }
 
-const EST: Record<EtapaFunil, { bg: string; border: string; header: string; dot: string }> = {
-  novo: { bg: "bg-slate-50/80", border: "border-slate-200", header: "bg-slate-100", dot: "bg-slate-400" },
-  qualificado: { bg: "bg-blue-50/80", border: "border-blue-200", header: "bg-blue-100", dot: "bg-blue-500" },
-  proposta: { bg: "bg-violet-50/80", border: "border-violet-200", header: "bg-violet-100", dot: "bg-violet-500" },
-  negociacao: { bg: "bg-amber-50/80", border: "border-amber-200", header: "bg-amber-100", dot: "bg-amber-500" },
-  fechado_ganho: { bg: "bg-emerald-50/80", border: "border-emerald-200", header: "bg-emerald-100", dot: "bg-emerald-500" },
-  fechado_perdido: { bg: "bg-red-50/80", border: "border-red-200", header: "bg-red-100", dot: "bg-red-400" },
+const EST: Record<EtapaFunil, { bg: string; border: string; header: string; dot: string; text: string }> = {
+  novo: { bg: "bg-slate-100", border: "border-slate-200", header: "bg-slate-100", dot: "bg-slate-400", text: "text-slate-700" },
+  qualificado: { bg: "bg-blue-100", border: "border-blue-200", header: "bg-blue-100", dot: "bg-blue-500", text: "text-blue-700" },
+  proposta: { bg: "bg-violet-100", border: "border-violet-200", header: "bg-violet-100", dot: "bg-violet-500", text: "text-violet-700" },
+  negociacao: { bg: "bg-amber-100", border: "border-amber-200", header: "bg-amber-100", dot: "bg-amber-500", text: "text-amber-700" },
+  fechado_ganho: { bg: "bg-emerald-100", border: "border-emerald-200", header: "bg-emerald-100", dot: "bg-emerald-500", text: "text-emerald-700" },
+  fechado_perdido: { bg: "bg-red-100", border: "border-red-200", header: "bg-red-100", dot: "bg-red-400", text: "text-red-700" },
 };
 const ETAPAS: EtapaFunil[] = ["novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido"];
 
@@ -1564,6 +1564,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
   const [activeId, setActiveId] = useState<number | null>(null);
   const [busca, setBusca] = useState("");
   const [view, setView] = useState<"kanban" | "lista">("kanban");
+  const [compacto, setCompacto] = useState(false);
   const [excluirLeadAlvo, setExcluirLeadAlvo] = useState<{ id: number; nome: string } | null>(null);
   const [detalheLeadId, setDetalheLeadId] = useState<number | null>(null);
   // Bug conhecido do Radix Dialog (1.x): ao fechar o Sheet/Dialog ele às vezes
@@ -1689,84 +1690,127 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
     return m;
   }, [itemsByEtapa]);
 
+  // Taxa de conversão = ganhos / (ganhos + perdidos). Métrica honesta porque
+  // ignora leads ainda abertos (que ainda podem virar). Se não tem fechamento
+  // nenhum, mostra "—" pra evitar 0/0=NaN ou 100% enganoso.
+  const fechadosGanho = leads.filter((l: any) => l.etapaFunil === "fechado_ganho").length;
+  const fechadosPerd = leads.filter((l: any) => l.etapaFunil === "fechado_perdido").length;
+  const taxaConv = fechadosGanho + fechadosPerd > 0
+    ? Math.round((fechadosGanho / (fechadosGanho + fechadosPerd)) * 100)
+    : null;
+
   return (<div className="space-y-4">
-    {/* Top bar: métricas inline + busca + filtros + toggle view + Novo Lead */}
-    <div className="flex items-center gap-2 flex-wrap">
-      <div className="flex items-center gap-2">
-        <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl border bg-card shadow-sm">
-          <span className="h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
-          <div className="leading-tight">
-            <p className="text-base font-bold leading-none tabular-nums">{leads.length}</p>
-            <p className="text-[9px] uppercase tracking-wide text-muted-foreground font-bold mt-0.5">leads</p>
-          </div>
-        </div>
-        <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50/70 shadow-sm">
-          <div className="leading-tight">
-            <p className="text-base font-bold leading-none tabular-nums text-emerald-700">{formatBRL(totalGanho)}</p>
-            <p className="text-[9px] uppercase tracking-wide text-emerald-700/70 font-bold mt-0.5">ganhos</p>
-          </div>
-        </div>
-        <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl border bg-card shadow-sm">
-          <div className="leading-tight">
-            <p className="text-base font-bold leading-none tabular-nums text-muted-foreground">{formatBRL(total)}</p>
-            <p className="text-[9px] uppercase tracking-wide text-muted-foreground font-bold mt-0.5">em pipeline</p>
-          </div>
-        </div>
-      </div>
-      <div className="flex-1" />
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <div className="relative">
-          <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <Input
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar lead…"
-            className="h-9 pl-8 pr-3 text-xs w-48 bg-background"
-          />
-        </div>
-        <button
-          onClick={() => setShowFiltros((v) => !v)}
-          className={
-            "relative h-9 w-9 inline-flex items-center justify-center rounded-md border text-muted-foreground hover:bg-muted " +
-            (filtrosAtivos > 0 ? "border-violet-500 text-violet-600" : "")
-          }
-          title="Filtros: atendente, setor, período, valor"
-        >
-          <Filter className="h-3.5 w-3.5" />
-          {filtrosAtivos > 0 && (
-            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-violet-600 text-white text-[9px] font-bold flex items-center justify-center">
-              {filtrosAtivos}
+    {/* Hero gradient com 4 KPIs */}
+    <div
+      className="relative overflow-hidden rounded-2xl px-6 py-5 text-white shadow-lg"
+      style={{
+        background:
+          "radial-gradient(circle at 20% 0%, rgba(255,255,255,0.18), transparent 40%), " +
+          "radial-gradient(circle at 80% 100%, rgba(255,255,255,0.12), transparent 50%), " +
+          "linear-gradient(135deg, #4338ca 0%, #4f46e5 40%, #06b6d4 100%)",
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div>
+          <h2 className="text-xl font-extrabold tracking-tight leading-tight">Pipeline de Vendas</h2>
+          <p className="text-xs text-white/85 mt-1 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+              <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+              Atualização ao vivo
             </span>
-          )}
-        </button>
-        <div className="inline-flex items-center bg-muted/40 rounded-lg p-0.5">
-          <button
-            type="button"
-            onClick={() => setView("kanban")}
-            className={
-              "px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition " +
-              (view === "kanban" ? "bg-background text-violet-600 shadow-sm ring-1 ring-violet-300/40" : "text-muted-foreground hover:text-foreground")
-            }
-            title="Visualização Kanban"
-          >
-            <BarChart3 className="h-3.5 w-3.5 rotate-90" /> Kanban
-          </button>
-          <button
-            type="button"
-            onClick={() => setView("lista")}
-            className={
-              "px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition " +
-              (view === "lista" ? "bg-background text-violet-600 shadow-sm ring-1 ring-violet-300/40" : "text-muted-foreground hover:text-foreground")
-            }
-            title="Visualização Lista"
-          >
-            <List className="h-3.5 w-3.5" /> Lista
-          </button>
+            Negociações em andamento · arraste os cards entre etapas
+          </p>
         </div>
-        <Button size="sm" onClick={onAddLead} className="bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-md">
-          <Plus className="h-4 w-4 mr-1" /> Novo Lead
-        </Button>
       </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-4">
+        <KpiCard label="Total de leads" value={String(leads.length)} />
+        <KpiCard label="Ganhos do mês" value={formatBRL(totalGanho)} />
+        <KpiCard label="Em pipeline" value={formatBRL(total)} />
+        <KpiCard label="Taxa de conversão" value={taxaConv !== null ? `${taxaConv}%` : "—"} hint={taxaConv === null ? "sem fechamentos ainda" : `${fechadosGanho} ganhos / ${fechadosPerd} perdidos`} />
+      </div>
+    </div>
+
+    {/* Toolbar */}
+    <div className="rounded-xl border bg-card p-2.5 flex items-center gap-2 flex-wrap">
+      <div className="relative flex-1 max-w-xs">
+        <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <Input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por nome ou telefone…"
+          className="h-9 pl-8 pr-3 text-xs bg-muted/30"
+        />
+      </div>
+      <button
+        onClick={() => setShowFiltros((v) => !v)}
+        className={
+          "relative h-9 px-3 inline-flex items-center gap-1.5 rounded-md border text-xs font-semibold transition " +
+          (filtrosAtivos > 0 || showFiltros
+            ? "border-violet-500 text-violet-700 bg-violet-50"
+            : "text-muted-foreground hover:bg-muted")
+        }
+        title="Filtros: atendente, setor, período, valor"
+      >
+        <Filter className="h-3.5 w-3.5" />
+        Filtros
+        {filtrosAtivos > 0 && (
+          <span className="inline-flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-violet-600 text-white text-[9px] font-bold">
+            {filtrosAtivos}
+          </span>
+        )}
+      </button>
+      <div className="flex-1" />
+      <div className="inline-flex items-center bg-muted/40 rounded-lg p-0.5">
+        <button
+          type="button"
+          onClick={() => setCompacto(false)}
+          className={
+            "px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition " +
+            (!compacto ? "bg-background text-violet-600 shadow-sm" : "text-muted-foreground hover:text-foreground")
+          }
+          title="Cards no tamanho normal"
+        >
+          Normal
+        </button>
+        <button
+          type="button"
+          onClick={() => setCompacto(true)}
+          className={
+            "px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition " +
+            (compacto ? "bg-background text-violet-600 shadow-sm" : "text-muted-foreground hover:text-foreground")
+          }
+          title="Cards menores — cabem mais por coluna"
+        >
+          Compacto
+        </button>
+      </div>
+      <div className="inline-flex items-center bg-muted/40 rounded-lg p-0.5">
+        <button
+          type="button"
+          onClick={() => setView("kanban")}
+          className={
+            "px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition " +
+            (view === "kanban" ? "bg-background text-violet-600 shadow-sm" : "text-muted-foreground hover:text-foreground")
+          }
+          title="Visualização Kanban"
+        >
+          <BarChart3 className="h-3.5 w-3.5 rotate-90" /> Kanban
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("lista")}
+          className={
+            "px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition " +
+            (view === "lista" ? "bg-background text-violet-600 shadow-sm" : "text-muted-foreground hover:text-foreground")
+          }
+          title="Visualização Lista"
+        >
+          <List className="h-3.5 w-3.5" /> Lista
+        </button>
+      </div>
+      <Button size="sm" onClick={onAddLead} className="bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-md h-9">
+        <Plus className="h-4 w-4 mr-1" /> Novo Lead
+      </Button>
     </div>
 
     {showFiltros && (
@@ -1850,10 +1894,24 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           setActiveId(null);
           onDragChange?.(false);
           if (!e.over) return;
+          // O closestCenter geralmente mira no card mais próximo ANTES da
+          // coluna. Quando o usuário solta sobre outro card, e.over.id é o
+          // ID NUMÉRICO desse card, não a string da etapa. Antes o check só
+          // aceitava strings de etapa, e por isso "arrasta mas volta" sempre
+          // que soltava em cima de um card existente (caso comum). Agora
+          // resolve a etapa do card-alvo nesse caso.
           const oid = String(e.over.id);
+          let destinoEtapa: EtapaFunil | null = null;
           if (ETAPAS.includes(oid as EtapaFunil)) {
-            const ld = leads.find((l: any) => l.id === Number(e.active.id));
-            if (ld && ld.etapaFunil !== oid) mut.mutate({ id: ld.id, etapaFunil: oid as EtapaFunil });
+            destinoEtapa = oid as EtapaFunil;
+          } else {
+            const overLead = leads.find((l: any) => l.id === Number(oid));
+            if (overLead) destinoEtapa = overLead.etapaFunil as EtapaFunil;
+          }
+          if (!destinoEtapa) return;
+          const ld = leads.find((l: any) => l.id === Number(e.active.id));
+          if (ld && ld.etapaFunil !== destinoEtapa) {
+            mut.mutate({ id: ld.id, etapaFunil: destinoEtapa });
           }
         }}
       >
@@ -1877,7 +1935,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                     ) : (
                       <div className="p-2.5 space-y-2 max-h-[820px] overflow-y-auto">
                         {items.map((l: any) => (
-                          <KCard key={l.id} lead={l} onWA={onWA} onDelete={handleDeleteLead} onGoToConversa={onGoToConversa} onOpen={() => setDetalheLeadId(l.id)} />
+                          <KCard key={l.id} lead={l} onWA={onWA} onDelete={handleDeleteLead} onGoToConversa={onGoToConversa} onOpen={() => setDetalheLeadId(l.id)} compacto={compacto} />
                         ))}
                       </div>
                     )}
@@ -1972,110 +2030,165 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
     });
   };
   const open = !!lead;
+  const etapaSt = lead ? EST[lead.etapaFunil as EtapaFunil] : null;
+  // Formata telefone tipo "85 98811-1508" (DDI opcional). Pra simplificar
+  // só assumo formato BR 10/11/12/13 dígitos com ou sem 55 prefix.
+  const fmtTel = (tel: string | null | undefined): string => {
+    if (!tel) return "";
+    const d = tel.replace(/\D/g, "");
+    if (d.length >= 12 && d.startsWith("55")) {
+      const rest = d.slice(2);
+      const ddd = rest.slice(0, 2);
+      const num = rest.slice(2);
+      if (num.length === 9) return `${ddd} ${num.slice(0, 5)}-${num.slice(5)}`;
+      if (num.length === 8) return `${ddd} ${num.slice(0, 4)}-${num.slice(4)}`;
+    }
+    if (d.length === 11) return `${d.slice(0, 2)} ${d.slice(2, 7)}-${d.slice(7)}`;
+    if (d.length === 10) return `${d.slice(0, 2)} ${d.slice(2, 6)}-${d.slice(6)}`;
+    return tel;
+  };
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+      <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col gap-0">
         {lead && (
           <>
-            <SheetHeader className="space-y-1">
-              <div className="flex items-start gap-3">
-                <div className={"w-12 h-12 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0 " + gradientFromName(lead.contatoNome || "?")}>
+            {/* HEADER */}
+            <div className="px-5 pt-5 pb-4 border-b">
+              <div className="flex items-start gap-3 pr-8">
+                <div className={"w-[52px] h-[52px] rounded-xl flex items-center justify-center text-white text-base font-bold flex-shrink-0 " + gradientFromName(lead.contatoNome || "?")}>
                   {initials(lead.contatoNome || "?")}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <SheetTitle className="text-left text-base truncate">{lead.contatoNome}</SheetTitle>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <SheetTitle className="text-left text-lg leading-tight truncate">{lead.contatoNome}</SheetTitle>
+                    {etapaSt && (
+                      <span className={"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide " + etapaSt.bg + " " + etapaSt.text}>
+                        <span className={"h-1.5 w-1.5 rounded-full " + etapaSt.dot} />
+                        {ETAPA_FUNIL_LABELS[lead.etapaFunil as EtapaFunil]}
+                      </span>
+                    )}
+                  </div>
                   {lead.contatoTelefone && (
-                    <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                      <Phone className="h-3 w-3" /> {lead.contatoTelefone}
+                    <p className="text-[12.5px] text-muted-foreground flex items-center gap-1.5 mt-1">
+                      <Phone className="h-3 w-3" /> {fmtTel(lead.contatoTelefone)}
                     </p>
                   )}
                 </div>
               </div>
-            </SheetHeader>
-            <div className="mt-4 space-y-4">
-              <div className="flex flex-wrap gap-1.5">
-                {lead.conversaId && (
-                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => onGoToConversa(lead.conversaId)}>
-                    <Inbox className="h-3 w-3 mr-1" /> Ir pra conversa
-                  </Button>
+              {/* Quick actions */}
+              <div className="grid grid-cols-2 gap-2 mt-3.5">
+                {lead.conversaId ? (
+                  <button
+                    onClick={() => onGoToConversa(lead.conversaId)}
+                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-[12.5px] font-semibold hover:bg-blue-100"
+                  >
+                    <Inbox className="h-3.5 w-3.5" /> Ir pra conversa
+                  </button>
+                ) : (
+                  <div className="h-9 rounded-lg bg-muted/30 border border-dashed text-muted-foreground text-[11px] inline-flex items-center justify-center">Sem conversa</div>
                 )}
-                {lead.contatoTelefone && onWA && (
-                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => onWA(lead.contatoTelefone)}>
-                    <PhoneCall className="h-3 w-3 mr-1" /> WhatsApp
-                  </Button>
+                {lead.contatoTelefone && onWA ? (
+                  <button
+                    onClick={() => onWA(lead.contatoTelefone)}
+                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-[12.5px] font-semibold hover:bg-emerald-100"
+                  >
+                    <PhoneCall className="h-3.5 w-3.5" /> WhatsApp
+                  </button>
+                ) : (
+                  <div className="h-9 rounded-lg bg-muted/30 border border-dashed text-muted-foreground text-[11px] inline-flex items-center justify-center">Sem WhatsApp</div>
                 )}
               </div>
+            </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Etapa</label>
-                <select
-                  value={etapaEdit}
-                  onChange={(e) => { setEtapaEdit(e.target.value as EtapaFunil); setDirty(true); }}
-                  className="w-full h-8 rounded-md border bg-background px-2 text-xs"
-                >
-                  {ETAPAS.map((e) => (
-                    <option key={e} value={e}>{ETAPA_FUNIL_LABELS[e]}</option>
-                  ))}
-                </select>
-              </div>
+            {/* BODY */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Valor estimado</label>
-                  <Input
-                    value={valorEdit}
-                    onChange={(e) => { setValorEdit(e.target.value); setDirty(true); }}
-                    placeholder="R$ 0,00"
-                    className="h-8 text-xs"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Probabilidade</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="range" min={0} max={100} step={5}
-                      value={probEdit}
-                      onChange={(e) => { setProbEdit(Number(e.target.value)); setDirty(true); }}
-                      className="flex-1"
-                    />
-                    <span className="text-xs tabular-nums w-10 text-right">{probEdit}%</span>
+              {/* Seção: Status e Valor */}
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5 flex items-center gap-1.5">
+                  <BarChart3 className="h-3 w-3" /> Status e Valor
+                </p>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-foreground/80">Etapa</label>
+                    <select
+                      value={etapaEdit}
+                      onChange={(e) => { setEtapaEdit(e.target.value as EtapaFunil); setDirty(true); }}
+                      className="w-full h-9 rounded-lg border bg-background px-2.5 text-[13px]"
+                    >
+                      {ETAPAS.map((e) => (
+                        <option key={e} value={e}>{ETAPA_FUNIL_LABELS[e]}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-foreground/80">Valor estimado</label>
+                      <Input
+                        value={valorEdit}
+                        onChange={(e) => { setValorEdit(e.target.value); setDirty(true); }}
+                        placeholder="R$ 0,00"
+                        className="h-9 text-[13px]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-foreground/80">Probabilidade</label>
+                      <div className="flex items-center gap-2.5 h-9 px-3 rounded-lg border bg-background">
+                        <input
+                          type="range" min={0} max={100} step={5}
+                          value={probEdit}
+                          onChange={(e) => { setProbEdit(Number(e.target.value)); setDirty(true); }}
+                          className="flex-1"
+                        />
+                        <span className="text-[13px] font-bold text-violet-700 tabular-nums w-9 text-right">{probEdit}%</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-foreground/80">Responsável</label>
+                    <select
+                      value={respEdit ?? ""}
+                      onChange={(e) => { setRespEdit(e.target.value ? Number(e.target.value) : null); setDirty(true); }}
+                      className="w-full h-9 rounded-lg border bg-background px-2.5 text-[13px]"
+                    >
+                      <option value="">— Sem responsável —</option>
+                      {atendentes.map((a) => (
+                        <option key={a.id} value={a.id}>{a.nome || `#${a.id}`}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Responsável</label>
-                <select
-                  value={respEdit ?? ""}
-                  onChange={(e) => { setRespEdit(e.target.value ? Number(e.target.value) : null); setDirty(true); }}
-                  className="w-full h-8 rounded-md border bg-background px-2 text-xs"
-                >
-                  <option value="">— Sem responsável —</option>
-                  {atendentes.map((a) => (
-                    <option key={a.id} value={a.id}>{a.nome || `#${a.id}`}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Notas / Observações</label>
+              {/* Seção: Notas */}
+              <div className="pt-5 border-t">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5 flex items-center gap-1.5">
+                  <ScrollText className="h-3 w-3" /> Notas e Observações
+                </p>
                 <textarea
                   value={notas}
                   onChange={(e) => { setNotas(e.target.value); setDirty(true); }}
-                  placeholder="Anote tudo sobre esse lead: contexto, próximos passos, objeções, contatos da família..."
-                  className="w-full min-h-[160px] rounded-md border bg-background px-2.5 py-2 text-xs resize-y"
+                  placeholder="Contexto, próximos passos, objeções, contatos da família…"
+                  className="w-full min-h-[180px] rounded-lg border bg-background px-3 py-2.5 text-[13px] resize-y leading-relaxed placeholder:italic placeholder:text-muted-foreground/60"
                   maxLength={2000}
                 />
-                <p className="text-[10px] text-muted-foreground text-right">{notas.length}/2000</p>
+                <p className="text-[10.5px] text-muted-foreground text-right mt-1">{notas.length} / 2000</p>
               </div>
+            </div>
 
-              <div className="flex items-center gap-2 pt-2 border-t">
-                <Button onClick={salvar} disabled={!dirty || mutEdit.isPending} className="flex-1 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700">
-                  {mutEdit.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
-                  Salvar
-                </Button>
-                <Button variant="outline" onClick={onClose}>Fechar</Button>
-              </div>
+            {/* FOOTER */}
+            <div className="px-5 py-3.5 border-t bg-background shadow-[0_-4px_12px_rgba(0,0,0,0.04)] flex items-center gap-2">
+              <Button variant="outline" onClick={onClose} className="font-semibold">
+                Fechar
+              </Button>
+              <Button
+                onClick={salvar}
+                disabled={!dirty || mutEdit.isPending}
+                className="flex-1 h-10 bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 font-bold shadow-md shadow-indigo-500/25"
+              >
+                {mutEdit.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Check className="h-4 w-4 mr-1.5" />}
+                Salvar alterações
+              </Button>
             </div>
           </>
         )}
@@ -2192,6 +2305,26 @@ function gradientFromName(name: string) {
   return AVATAR_GRADIENTS[Math.abs(h) % AVATAR_GRADIENTS.length];
 }
 
+function KpiCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-xl bg-white/12 border border-white/20 backdrop-blur-sm px-3.5 py-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-wider opacity-85">{label}</p>
+      <p className="text-xl font-extrabold leading-tight tabular-nums mt-0.5 -tracking-tight">{value}</p>
+      {hint && <p className="text-[10px] opacity-80 mt-0.5">{hint}</p>}
+    </div>
+  );
+}
+
+/** Cores pra header gradient da coluna (RGB sem hex pra usar com alpha). */
+const COL_HEAD_GRADIENT: Record<EtapaFunil, string> = {
+  novo: "linear-gradient(180deg, #f1f5f9 0%, #f8fafc 100%)",
+  qualificado: "linear-gradient(180deg, #dbeafe 0%, #eff6ff 100%)",
+  proposta: "linear-gradient(180deg, #f3e8ff 0%, #faf5ff 100%)",
+  negociacao: "linear-gradient(180deg, #fef3c7 0%, #fffbeb 100%)",
+  fechado_ganho: "linear-gradient(180deg, #d1fae5 0%, #ecfdf5 100%)",
+  fechado_perdido: "linear-gradient(180deg, #fee2e2 0%, #fef2f2 100%)",
+};
+
 function KCol({ etapa, count, val, children }: { etapa: EtapaFunil; count: number; val: number; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: etapa });
   const st = EST[etapa];
@@ -2200,31 +2333,31 @@ function KCol({ etapa, count, val, children }: { etapa: EtapaFunil; count: numbe
     <div
       ref={setNodeRef}
       className={
-        "rounded-2xl border flex flex-col transition-colors " +
-        st.bg + " " + st.border +
-        (isOver ? " ring-2 ring-primary/30" : "")
+        "rounded-2xl border flex flex-col bg-card transition-colors overflow-hidden " +
+        st.border +
+        (isOver ? " ring-2 ring-violet-400/40" : "")
       }
     >
       <div
-        className={"px-3 py-2.5 border-b " + st.border}
-        style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.4), transparent)" }}
+        className={"px-3 py-2.5 border-b sticky top-0 z-10 backdrop-blur-sm " + st.border}
+        style={{ background: COL_HEAD_GRADIENT[etapa] }}
       >
         <div className="flex items-center gap-2">
           <span className={"h-2.5 w-2.5 rounded-full " + (isGanho ? st.dot + " animate-pulse" : st.dot)} />
-          <span className={"text-sm font-semibold flex-1 truncate " + (isGanho ? "text-emerald-900" : "")}>
+          <span className={"text-[13.5px] font-bold flex-1 truncate " + (isGanho ? "text-emerald-900" : "text-foreground")}>
             {ETAPA_FUNIL_LABELS[etapa]}
           </span>
           <span
             className={
-              "text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-full " +
-              (isGanho ? "bg-emerald-600 text-white" : "bg-white/70 text-muted-foreground")
+              "text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-full min-w-[22px] text-center " +
+              (isGanho ? "bg-emerald-600 text-white" : "bg-white/80 text-muted-foreground border border-black/5")
             }
           >
             {count}
           </span>
         </div>
         {val > 0 && (
-          <p className={"text-[11px] font-semibold mt-1 ml-4.5 " + (isGanho ? "text-emerald-700" : "text-muted-foreground")}>
+          <p className={"text-[11.5px] font-semibold mt-1 ml-[18px] " + (isGanho ? "text-emerald-700" : "text-muted-foreground")}>
             {formatBRL(val)} {isGanho ? "fechado" : "estimado"}
           </p>
         )}
@@ -2234,16 +2367,54 @@ function KCol({ etapa, count, val, children }: { etapa: EtapaFunil; count: numbe
   );
 }
 
-function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen }: { lead: any; onWA?: (p: string) => void; onDelete: (id: number, nome: string) => void; onGoToConversa: (conversaId: number) => void; onOpen?: () => void }) {
+/** Cor do chip baseada na origem do lead (paleta segura, fallback cinza). */
+function corOrigem(origem: string): { bg: string; text: string; dot: string } {
+  const s = (origem || "").toLowerCase();
+  if (s.includes("indica")) return { bg: "bg-emerald-100", text: "text-emerald-700", dot: "bg-emerald-500" };
+  if (s.includes("facebook") || s.includes("fb") || s.includes("instagram") || s.includes("meta")) return { bg: "bg-violet-100", text: "text-violet-700", dot: "bg-violet-500" };
+  if (s.includes("google")) return { bg: "bg-blue-100", text: "text-blue-700", dot: "bg-blue-500" };
+  if (s.includes("site") || s.includes("organico")) return { bg: "bg-cyan-100", text: "text-cyan-700", dot: "bg-cyan-500" };
+  if (s.includes("ligac") || s.includes("telefone") || s.includes("call")) return { bg: "bg-amber-100", text: "text-amber-700", dot: "bg-amber-500" };
+  if (s.includes("evento") || s.includes("present")) return { bg: "bg-pink-100", text: "text-pink-700", dot: "bg-pink-500" };
+  return { bg: "bg-slate-100", text: "text-slate-700", dot: "bg-slate-400" };
+}
+
+/** Badge contextual por etapa: diz o próximo passo pro atendente. */
+const ACAO_POR_ETAPA: Partial<Record<EtapaFunil, { label: string; emoji: string; tone: "amber" | "emerald" }>> = {
+  qualificado: { label: "Enviar proposta", emoji: "⚡", tone: "amber" },
+  proposta: { label: "Aguardando assinatura", emoji: "📄", tone: "amber" },
+  negociacao: { label: "Negociar fechamento", emoji: "🤝", tone: "amber" },
+  fechado_ganho: { label: "Lançar cobrança", emoji: "💰", tone: "emerald" },
+};
+
+function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto }: { lead: any; onWA?: (p: string) => void; onDelete: (id: number, nome: string) => void; onGoToConversa: (conversaId: number) => void; onOpen?: () => void; compacto?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id });
   const v = parseValorBR(lead.valorEstimado);
   const hex = ETAPA_HEX[lead.etapaFunil as EtapaFunil] || ETAPA_HEX.novo;
-  // ALÇA DEDICADA pra drag: só o ⋮⋮ no canto inicia drag (via {...listeners}).
-  // Card todo é clickable pra abrir o painel. Sem isso, click e drag
-  // competiam pelos mesmos eventos de pointer e às vezes o drag falhava
-  // depois do 1º (em especial quando o Sheet do Radix deixava o body em
-  // pointer-events:none por um frame, capturava o pointerdown e quebrava
-  // o useSortable do próximo card).
+  const etapa = lead.etapaFunil as EtapaFunil;
+  const isGanho = etapa === "fechado_ganho";
+  const isPerd = etapa === "fechado_perdido";
+
+  // Dias parado: usa updatedAt do lead. Escala: ≤3d cinza, 4-7d laranja
+  // (warn), >7d vermelho (danger). Pra Ganho/Perdido não mostra dias —
+  // mostra "✓ Fechado" / "Encerrado".
+  const diasParado = lead.updatedAt ? Math.floor((Date.now() - new Date(lead.updatedAt).getTime()) / (24 * 60 * 60 * 1000)) : null;
+  const paradoCls = diasParado === null || isGanho || isPerd
+    ? "text-muted-foreground"
+    : diasParado > 7 ? "text-red-700 font-semibold"
+    : diasParado > 3 ? "text-orange-700 font-semibold"
+    : "text-muted-foreground";
+
+  const acao = ACAO_POR_ETAPA[etapa];
+  const corOrig = lead.origemLead ? corOrigem(lead.origemLead) : null;
+
+  // Background sutil pra Ganho/Perdido (mostra status do card só de bater o olho)
+  const cardBg = isGanho
+    ? "bg-gradient-to-br from-emerald-50/70 to-background"
+    : isPerd
+    ? "bg-gradient-to-br from-rose-50/70 to-background"
+    : "bg-background";
+
   return (
     <div
       ref={setNodeRef}
@@ -2255,52 +2426,105 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen }: { lead: any; on
       }}
       {...attributes}
       onClick={() => { if (!isDragging) onOpen?.(); }}
-      className="relative rounded-xl bg-background border border-border border-l-4 pl-7 pr-3 py-2.5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group"
+      className={
+        "relative rounded-xl border border-border border-l-[3px] shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group " +
+        cardBg + (compacto ? " pl-6 pr-2.5 py-2" : " pl-7 pr-3 py-2.5")
+      }
     >
-      {/* Alça de drag */}
       <button
         type="button"
         {...listeners}
         onClick={(e) => e.stopPropagation()}
-        className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-5 inline-flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing touch-none"
+        className="absolute left-0.5 top-1/2 -translate-y-1/2 h-7 w-5 inline-flex items-center justify-center text-muted-foreground/30 group-hover:text-muted-foreground/70 cursor-grab active:cursor-grabbing touch-none"
         aria-label="Arrastar"
         title="Arrastar pra outra etapa"
       >
         <GripVertical className="h-3.5 w-3.5" />
       </button>
       <div className="flex items-start gap-2.5">
-        <div className={"w-9 h-9 rounded-lg flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 " + gradientFromName(lead.contatoNome || "?")}>
+        <div className={(compacto ? "w-7 h-7 text-[10px]" : "w-9 h-9 text-[11px]") + " rounded-lg flex items-center justify-center text-white font-bold flex-shrink-0 " + gradientFromName(lead.contatoNome || "?")}>
           {initials(lead.contatoNome || "?")}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-semibold truncate">{lead.contatoNome}</p>
-          {lead.contatoTelefone && (
+          <p className={(compacto ? "text-[12px]" : "text-[13px]") + " font-semibold truncate text-foreground"}>{lead.contatoNome}</p>
+          {!compacto && lead.contatoTelefone && (
             <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
               <Phone className="h-2.5 w-2.5 flex-shrink-0" /> {lead.contatoTelefone}
             </p>
           )}
-          <div className="flex items-center justify-between mt-2 gap-2">
+
+          {/* Tag de origem (se houver) */}
+          {!compacto && corOrig && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              <span className={"inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold " + corOrig.bg + " " + corOrig.text}>
+                <span className={"h-1 w-1 rounded-full " + corOrig.dot} />
+                {lead.origemLead}
+              </span>
+            </div>
+          )}
+
+          {/* Valor + probabilidade */}
+          <div className="flex items-center justify-between mt-1.5 gap-2">
             {v > 0 ? (
-              <span className="text-[13px] font-bold text-emerald-700">{formatBRL(v)}</span>
+              <span className={(compacto ? "text-[12px]" : "text-[13.5px]") + " font-extrabold text-emerald-700 tabular-nums -tracking-tight"}>{formatBRL(v)}</span>
             ) : (
-              <span className="text-[10px] text-muted-foreground">sem valor</span>
+              <span className="text-[10px] text-muted-foreground italic">sem valor</span>
             )}
-            {lead.probabilidade && lead.probabilidade !== 50 && (
-              <span className="text-[10px] text-muted-foreground tabular-nums flex items-center gap-0.5 flex-shrink-0">
+            {lead.probabilidade > 0 && (
+              <span className="text-[10px] text-muted-foreground tabular-nums flex items-center gap-0.5 flex-shrink-0 font-semibold">
                 <Percent className="h-2.5 w-2.5" />{lead.probabilidade}%
               </span>
             )}
           </div>
-          {lead.probabilidade > 0 && (
-            <div className="h-1 rounded-full bg-muted overflow-hidden mt-1.5">
+          {!compacto && lead.probabilidade > 0 && (
+            <div className="h-1 rounded-full bg-muted overflow-hidden mt-1">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-amber-400 to-emerald-500 transition-all"
                 style={{ width: lead.probabilidade + "%" }}
               />
             </div>
           )}
-          {/* Ações visíveis no hover */}
-          <div className="flex items-center justify-end gap-0.5 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+
+          {/* Badge de ação contextual por etapa */}
+          {!compacto && acao && (
+            <div className={
+              "mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase tracking-wide border " +
+              (acao.tone === "emerald"
+                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                : "bg-amber-50 text-amber-800 border-amber-200")
+            }>
+              <span>{acao.emoji}</span> {acao.label}
+            </div>
+          )}
+
+          {/* Footer: responsável + dias parado */}
+          {!compacto && (
+            <div className="mt-1.5 pt-1.5 border-t border-dashed border-muted flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                {lead.responsavelNome ? (
+                  <>
+                    <span className={"h-4 w-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0 " + gradientFromName(lead.responsavelNome)}>
+                      {initials(lead.responsavelNome)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground truncate font-medium">{lead.responsavelNome.split(" ")[0]}</span>
+                  </>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground italic">Sem dono</span>
+                )}
+              </div>
+              <span className={"text-[10px] tabular-nums flex items-center gap-0.5 flex-shrink-0 " + paradoCls}>
+                {isGanho ? "✓ Fechado" : isPerd ? "Encerrado" :
+                  diasParado === null ? "" :
+                  diasParado === 0 ? "hoje" :
+                  diasParado === 1 ? "1d" :
+                  diasParado > 7 ? `${diasParado}d sem retorno` :
+                  `${diasParado}d`}
+              </span>
+            </div>
+          )}
+
+          {/* Ações no hover (mantidas — atalho rápido sem abrir painel) */}
+          <div className="flex items-center justify-end gap-0.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
             {lead.conversaId && (
               <Button
                 variant="ghost" size="sm"
