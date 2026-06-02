@@ -801,9 +801,42 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const { data: tplList } = (trpc as any).templates?.listar?.useQuery?.(undefined, { retry: false }) || { data: [] };
   const conv = convs.find((c: any) => c.id === cid);
   const { data: msgs, refetch } = trpc.crm.listarMensagens.useQuery({ conversaId: cid }, { refetchInterval: 3000 });
+  // Paginação cursor: `msgs` é o LIVE (últimas 50, polling). `older` acumula
+  // pacotes anteriores carregados sob demanda — sem isso, conversa com >50
+  // mensagens mostrava só uma fatia e o resto sumia.
+  const utils = trpc.useUtils();
+  const [older, setOlder] = useState<any[]>([]);
+  const [maybeMore, setMaybeMore] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  useEffect(() => { setOlder([]); setMaybeMore(true); }, [cid]);
+  // Sem msgs ainda, ou já carregou tudo (lote pequeno = chegou no início).
+  useEffect(() => {
+    if (msgs && msgs.length < 50 && older.length === 0) setMaybeMore(false);
+  }, [msgs, older.length]);
+  const carregarMaisAntigas = async () => {
+    const refId = older[0]?.id ?? msgs?.[0]?.id;
+    if (!refId || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const mais = await utils.crm.listarMensagens.fetch({ conversaId: cid, beforeId: refId });
+      if (!mais || mais.length === 0) { setMaybeMore(false); return; }
+      if (mais.length < 50) setMaybeMore(false);
+      // Preserva scroll: o scroll do usuário fica no mesmo conteúdo quando
+      // prependemos. Sem isso, jogar pra cima do tudo cada "carregar mais".
+      const el = ref.current;
+      const prevH = el?.scrollHeight ?? 0;
+      setOlder((prev) => [...mais, ...prev]);
+      requestAnimationFrame(() => {
+        if (el) el.scrollTop = el.scrollHeight - prevH;
+      });
+    } finally { setLoadingOlder(false); }
+  };
   const enviar = trpc.crm.enviarMensagem.useMutation({ onSuccess: () => { setMsg(""); refetch(); onUpdate(); }, onError: (e: any) => toast.error(e.message) });
   const atualizar = trpc.crm.atualizarConversa.useMutation({ onSuccess: () => { onUpdate(); toast.success("Atualizado!"); } });
   const excluir = trpc.crm.excluirConversa.useMutation({ onSuccess: () => { toast.success("Conversa excluída."); onDeleted(); }, onError: (e: any) => toast.error(e.message) });
+  // Auto-scroll só dispara em mudanças do LIVE (polling/envio), não quando
+  // prependemos antigas — senão o "carregar mais" pulava pra fim e o usuário
+  // perdia o que queria ler.
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [msgs]);
   const send = () => { if (msg.trim()) enviar.mutate({ conversaId: cid, conteudo: msg.trim() }); };
 
@@ -972,10 +1005,23 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       </div>
     )}
     <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2 min-h-[360px] max-h-[420px] lg:min-h-0 lg:max-h-none">
-      {!msgs?.length ? (
+      {maybeMore && (msgs?.length ?? 0) > 0 && (
+        <div className="flex justify-center pb-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px]"
+            onClick={carregarMaisAntigas}
+            disabled={loadingOlder}
+          >
+            {loadingOlder ? "Carregando..." : "Carregar mensagens anteriores"}
+          </Button>
+        </div>
+      )}
+      {!msgs?.length && older.length === 0 ? (
         <p className="text-xs text-muted-foreground text-center py-12">Nenhuma mensagem ainda.</p>
       ) : (
-        msgs.map((m: any) => (
+        [...older, ...(msgs || [])].map((m: any) => (
           <div key={m.id} className={"flex " + (m.direcao === "saida" ? "justify-end" : "justify-start")}>
             <div className={"max-w-[70%] rounded-2xl px-3.5 py-2 " + (m.direcao === "saida" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-muted rounded-bl-md") + (m.direcao === "saida" && m.status === "falha" ? " ring-2 ring-destructive/60" : "")}>
               {m.remetenteNome && m.direcao === "saida" && <p className="text-[10px] opacity-60 mb-0.5">{m.remetenteNome}</p>}

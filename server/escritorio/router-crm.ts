@@ -357,7 +357,11 @@ export const crmRouter = router({
     }),
 
   listarMensagens: protectedProcedure
-    .input(z.object({ conversaId: z.number(), limite: z.number().max(200).optional() }))
+    .input(z.object({
+      conversaId: z.number(),
+      limite: z.number().max(200).optional(),
+      beforeId: z.number().optional(),
+    }))
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
       if (!perm.allowed) return [];
@@ -384,7 +388,7 @@ export const crmRouter = router({
       if (!perm.verTodos && perm.verProprios && conv.atendenteId !== perm.colaboradorId) {
         return [];
       }
-      return listarMensagens(input.conversaId, input.limite ?? 50);
+      return listarMensagens(input.conversaId, input.limite ?? 50, input.beforeId);
     }),
 
   /** Inicia nova conversa: cria contato (se não existe) + conversa + envia 1ª mensagem */

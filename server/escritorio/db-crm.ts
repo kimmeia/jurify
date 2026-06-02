@@ -578,12 +578,21 @@ export async function atualizarStatusMensagem(
   await db.update(mensagens).set({ status }).where(eq(mensagens.id, id));
 }
 
-export async function listarMensagens(conversaId: number, limite = 50) {
+export async function listarMensagens(conversaId: number, limite = 50, beforeId?: number) {
   const db = await getDb();
   if (!db) return [];
+  // Pega as N mais RECENTES (desc) e depois reverte pra ordem cronológica. Sem
+  // isso, conversa com >50 msgs mostrava só as ANTIGAS (limit + asc = bug).
+  // `beforeId` permite paginação cursor: passa o id da msg mais antiga já
+  // carregada e recebe as 50 anteriores a ela (frontend faz "carregar mais").
+  const whereConds = beforeId
+    ? and(eq(mensagens.conversaId, conversaId), sql`${mensagens.id} < ${beforeId}`)
+    : eq(mensagens.conversaId, conversaId);
   const rows = await db.select().from(mensagens)
-    .where(eq(mensagens.conversaId, conversaId))
-    .orderBy(asc(mensagens.createdAt)).limit(limite);
+    .where(whereConds)
+    .orderBy(desc(mensagens.createdAt), desc(mensagens.id))
+    .limit(limite);
+  rows.reverse();
 
   // Buscar nomes dos remetentes
   const remIds = [...new Set(rows.filter(r => r.remetenteId).map(r => r.remetenteId!))];
