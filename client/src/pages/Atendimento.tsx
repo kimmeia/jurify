@@ -19,7 +19,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
-import { Headphones, MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, GripVertical } from "lucide-react";
+import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
@@ -456,40 +456,25 @@ export default function Atendimento() {
   // inbox ganha mais espaço útil pro chat (coluna do meio = `1fr`) quanto
   // mais largo for o viewport — o operador reclamava do canto vazio.
   return (
-    <div className="space-y-5">
-      <div
-        className="relative overflow-hidden rounded-2xl p-5 border"
-        style={{
-          background:
-            "linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 50%, rgba(236,72,153,0.06) 100%)",
-          borderColor: "rgba(139,92,246,0.18)",
-        }}
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 flex items-center justify-center shadow-md">
-            <Headphones className="h-5 w-5 text-white" />
-          </div>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold tracking-tight">Atendimento</h1>
-            <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
-              <Sparkles className="h-3 w-3 text-violet-500" />
-              <span>Inbox · Pipeline · com Brief Instantâneo IA, Compliance Guard e Linha do Tempo Unificada</span>
-            </p>
-          </div>
+    <div className="space-y-4">
+      <Tabs value={tab} onValueChange={setTab}>
+        {/* Barra única: tabs Inbox/Pipeline à esquerda + Nova Conversa à direita.
+            Substitui o card hero "Atendimento" que ocupava ~74px sem agregar — o
+            nome da seção já está no menu lateral. */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <TabsList className="h-10 w-auto">
+            <TabsTrigger value="inbox" className="text-xs sm:text-sm gap-1.5 px-4"><Inbox className="h-3.5 w-3.5" /> Inbox</TabsTrigger>
+            <TabsTrigger value="pipeline" className="text-xs sm:text-sm gap-1.5 px-4"><TrendingUp className="h-3.5 w-3.5" /> Pipeline</TabsTrigger>
+          </TabsList>
+          <div className="flex-1" />
           <Button
             size="sm"
             onClick={() => setShowIniciar(true)}
-            className="bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+            className="h-10 bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-md shadow-emerald-500/20"
           >
             <MessageCircle className="h-4 w-4 mr-1.5" /> Nova Conversa
           </Button>
         </div>
-      </div>
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-2 h-10">
-          <TabsTrigger value="inbox" className="text-xs sm:text-sm gap-1.5"><Inbox className="h-3.5 w-3.5" /> Inbox</TabsTrigger>
-          <TabsTrigger value="pipeline" className="text-xs sm:text-sm gap-1.5"><TrendingUp className="h-3.5 w-3.5" /> Pipeline</TabsTrigger>
-        </TabsList>
         <TabsContent value="inbox" className="mt-4">
           {/* Layout ULTRA: Lista | Chat hero | AI Rail (colapsa pra Customer 360°) */}
           {/* Altura travada na viewport (lg+) — sem isso, a coluna mais alta
