@@ -1,9 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { DndContext, closestCenter, DragOverlay, useSensor, useSensors, PointerSensor, TouchSensor, useDroppable } from "@dnd-kit/core";
-import type { DragStartEvent, DragEndEvent } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +15,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
-import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, GripVertical } from "lucide-react";
+import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
@@ -1546,7 +1542,12 @@ function blobParaBase64(blob: Blob): Promise<string> {
 }
 
 function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDragChange }: { leads: any[]; onUpdate: () => void; onWA?: (p: string) => void; onAddLead: () => void; onGoToConversa: (conversaId: number) => void; onDragChange?: (ativo: boolean) => void }) {
-  const [activeId, setActiveId] = useState<number | null>(null);
+  // Drag HTML5 nativo (mesmo padrão do Kanban). Tentativas anteriores com
+  // dnd-kit quebravam quando o drop caía sobre outro card (e.over.id virava
+  // id numérico, não a etapa) ou logo após fechar o Sheet (Radix prendia
+  // pointer-events). HTML5 nativo + handlers explícitos resolve os 2.
+  const [dragLeadId, setDragLeadId] = useState<number | null>(null);
+  const [dragOverLeadId, setDragOverLeadId] = useState<number | null>(null);
   const [busca, setBusca] = useState("");
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [compacto, setCompacto] = useState(false);
@@ -1599,15 +1600,35 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
     onError: (e: any) => toast.error(e.message),
   });
   const total = leads.filter((l: any) => !l.etapaFunil.startsWith("fechado")).reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
-  const al = activeId ? leads.find((l: any) => l.id === activeId) : null;
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }));
 
   const handleDeleteLead = (id: number, nome: string) => setExcluirLeadAlvo({ id, nome });
 
-  // Métricas inline (substituem o KPIs strip removido do header)
+  // "Ganhos do mês" = leads fechado_ganho cujo updatedAt cai no mês corrente.
+  // Sem date picker — sempre o mês atual. Antes mostrava o ACUMULADO de
+  // todos os tempos, o que enganava a leitura ("R$ 196.100 no mês" quando
+  // era acumulado histórico).
+  const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
+  const totalGanhoMes = leads
+    .filter((l: any) => l.etapaFunil === "fechado_ganho" && l.updatedAt && new Date(l.updatedAt) >= inicioMes)
+    .reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
+  // Mantido pro cálculo de taxa de conversão (que não muda com período)
   const totalGanho = leads
     .filter((l: any) => l.etapaFunil === "fechado_ganho")
     .reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
+
+  // Handler único de drop: move lead pra etapa destino com optimistic update.
+  // Cobre tanto drop na coluna (id da etapa) quanto drop sobre outro card
+  // (pega a etapa do card-alvo).
+  const moverLeadPara = (etapaDestino: EtapaFunil) => {
+    if (!dragLeadId) return;
+    const id = dragLeadId;
+    setDragLeadId(null);
+    setDragOverLeadId(null);
+    onDragChange?.(false);
+    const ld = leads.find((l: any) => l.id === id);
+    if (!ld || ld.etapaFunil === etapaDestino) return;
+    mut.mutate({ id, etapaFunil: etapaDestino });
+  };
 
   // Listas dos filtros (atendentes + setores)
   const { data: atendentesLista } = trpc.crm.listarAtendentes.useQuery();
@@ -1657,10 +1678,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
     setResponsaveisFiltro([]); setSetorFiltro(null); setPeriodoFiltro("todos"); setValorMin(""); setValorMax("");
   };
 
-  // Memoize a lista de IDs por etapa pra estabilizar referência do
-  // SortableContext entre renders. Sem isso, cada render gera novo array de
-  // items e o dnd-kit perde estado interno (sintoma: drag para de funcionar
-  // após o 1º card movido).
+  // Cards agrupados por etapa pro board.
   const itemsByEtapa = useMemo(() => {
     const map: Record<string, any[]> = {};
     for (const e of ETAPAS) map[e] = [];
@@ -1669,11 +1687,6 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
     }
     return map;
   }, [leadsFiltrados]);
-  const idsByEtapa = useMemo(() => {
-    const m: Record<string, number[]> = {};
-    for (const e of ETAPAS) m[e] = itemsByEtapa[e].map((l: any) => l.id);
-    return m;
-  }, [itemsByEtapa]);
 
   // Taxa de conversão = ganhos / (ganhos + perdidos). Métrica honesta porque
   // ignora leads ainda abertos (que ainda podem virar). Se não tem fechamento
@@ -1709,7 +1722,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-4">
         <KpiCard label="Total de leads" value={String(leads.length)} />
-        <KpiCard label="Ganhos do mês" value={formatBRL(totalGanho)} />
+        <KpiCard label="Ganhos do mês" value={formatBRL(totalGanhoMes)} hint={new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })} />
         <KpiCard label="Em pipeline" value={formatBRL(total)} />
         <KpiCard label="Taxa de conversão" value={taxaConv !== null ? `${taxaConv}%` : "—"} hint={taxaConv === null ? "sem fechamentos ainda" : `${fechadosGanho} ganhos / ${fechadosPerd} perdidos`} />
       </div>
@@ -1870,68 +1883,93 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
     )}
 
     {view === "kanban" ? (
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={(e: DragStartEvent) => { setActiveId(Number(e.active.id)); onDragChange?.(true); }}
-        onDragCancel={() => { setActiveId(null); onDragChange?.(false); }}
-        onDragEnd={(e: DragEndEvent) => {
-          setActiveId(null);
-          onDragChange?.(false);
-          if (!e.over) return;
-          // O closestCenter geralmente mira no card mais próximo ANTES da
-          // coluna. Quando o usuário solta sobre outro card, e.over.id é o
-          // ID NUMÉRICO desse card, não a string da etapa. Antes o check só
-          // aceitava strings de etapa, e por isso "arrasta mas volta" sempre
-          // que soltava em cima de um card existente (caso comum). Agora
-          // resolve a etapa do card-alvo nesse caso.
-          const oid = String(e.over.id);
-          let destinoEtapa: EtapaFunil | null = null;
-          if (ETAPAS.includes(oid as EtapaFunil)) {
-            destinoEtapa = oid as EtapaFunil;
-          } else {
-            const overLead = leads.find((l: any) => l.id === Number(oid));
-            if (overLead) destinoEtapa = overLead.etapaFunil as EtapaFunil;
-          }
-          if (!destinoEtapa) return;
-          const ld = leads.find((l: any) => l.id === Number(e.active.id));
-          if (ld && ld.etapaFunil !== destinoEtapa) {
-            mut.mutate({ id: ld.id, etapaFunil: destinoEtapa });
-          }
-        }}
-      >
-        <div className="overflow-x-auto -mx-2 pb-2">
-          <div className="grid gap-3 px-2 pt-1" style={{ gridTemplateColumns: "200px 200px 200px 200px 1fr 200px" }}>
-            {ETAPAS.map((etapa) => {
-              const items = itemsByEtapa[etapa];
-              const val = items.reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
-              return (
-                <KCol key={etapa} etapa={etapa} count={items.length} val={val}>
-                  <SortableContext items={idsByEtapa[etapa]} strategy={verticalListSortingStrategy}>
-                    {!items.length ? (
-                      <div className="p-3 min-h-[120px] flex items-center justify-center">
-                        <div
-                          className="w-full h-20 rounded-lg flex items-center justify-center text-[11px] text-muted-foreground/60 opacity-40"
-                          style={{ border: `1.5px dashed ${ETAPA_HEX[etapa]}`, background: "white" }}
-                        >
-                          arraste aqui
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-2.5 space-y-2 max-h-[820px] overflow-y-auto">
-                        {items.map((l: any) => (
-                          <KCard key={l.id} lead={l} onWA={onWA} onDelete={handleDeleteLead} onGoToConversa={onGoToConversa} onOpen={() => setDetalheLeadId(l.id)} compacto={compacto} />
-                        ))}
-                      </div>
-                    )}
-                  </SortableContext>
-                </KCol>
-              );
-            })}
-          </div>
-        </div>
-        <DragOverlay>{al ? <KOver lead={al} /> : null}</DragOverlay>
-      </DndContext>
+      // Mesmo layout do Kanban de tarefas: flex horizontal com scroll, colunas
+      // de largura fixa, maxHeight + scroll interno, header sticky. Drag HTML5
+      // nativo (não dnd-kit) — comprovadamente confiável em produção.
+      <div className="flex gap-4 overflow-x-auto pb-4 px-2">
+        {ETAPAS.map((etapa) => {
+          const items = itemsByEtapa[etapa];
+          const val = items.reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
+          const st = EST[etapa];
+          const isGanho = etapa === "fechado_ganho";
+          const isOver = dragLeadId !== null;
+          return (
+            <div
+              key={etapa}
+              className={
+                "flex-shrink-0 rounded-xl p-3 flex flex-col gap-2 bg-muted/30 " +
+                (compacto ? "w-60" : "w-72")
+              }
+              style={{ maxHeight: "calc(100vh - 260px)" }}
+              onDragOver={(e) => { if (dragLeadId) e.preventDefault(); }}
+              onDrop={() => moverLeadPara(etapa)}
+            >
+              {/* Header sticky no topo da coluna */}
+              <div
+                className="sticky top-0 z-10 bg-muted/30 backdrop-blur -mx-3 -mt-3 px-3 pt-3 pb-2 rounded-t-xl"
+              >
+                <div className="flex items-center gap-2">
+                  <span className={"h-2.5 w-2.5 rounded-full shrink-0 " + (isGanho ? st.dot + " animate-pulse" : st.dot)} />
+                  <span className={"text-xs font-bold uppercase tracking-wide flex-1 truncate " + (isGanho ? "text-emerald-800" : "text-foreground")}>
+                    {ETAPA_FUNIL_LABELS[etapa]}
+                  </span>
+                  <Badge variant="outline" className={"text-[10px] h-5 px-1.5 shrink-0 " + (isGanho ? "bg-emerald-600 text-white border-emerald-600" : "")}>
+                    {items.length}
+                  </Badge>
+                </div>
+                {val > 0 && (
+                  <p className={"text-[11px] font-semibold mt-1 ml-[18px] " + (isGanho ? "text-emerald-700" : "text-muted-foreground")}>
+                    {formatBRL(val)} {isGanho ? "fechado" : "estimado"}
+                  </p>
+                )}
+              </div>
+
+              {/* Lista de cards com scroll interno */}
+              <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-2">
+                {items.length === 0 ? (
+                  <div
+                    className={
+                      "rounded-lg flex items-center justify-center text-[11px] py-6 transition-colors " +
+                      (isOver
+                        ? "border-2 border-dashed border-violet-400 bg-violet-50 text-violet-700"
+                        : "border border-dashed border-slate-300 text-muted-foreground/60")
+                    }
+                  >
+                    {isOver ? "soltar aqui" : "arraste aqui"}
+                  </div>
+                ) : (
+                  items.map((l: any) => (
+                    <KCard
+                      key={l.id}
+                      lead={l}
+                      onWA={onWA}
+                      onDelete={handleDeleteLead}
+                      onGoToConversa={onGoToConversa}
+                      onOpen={() => setDetalheLeadId(l.id)}
+                      compacto={compacto}
+                      isDragging={dragLeadId === l.id}
+                      isOver={dragOverLeadId === l.id && dragLeadId !== l.id}
+                      onDragStartLead={() => { setDragLeadId(l.id); onDragChange?.(true); }}
+                      onDragEndLead={() => { setDragLeadId(null); setDragOverLeadId(null); onDragChange?.(false); }}
+                      onDragOverLead={() => {
+                        if (dragLeadId && dragLeadId !== l.id && dragOverLeadId !== l.id) {
+                          setDragOverLeadId(l.id);
+                        }
+                      }}
+                      onDropOnLead={() => {
+                        // Drop sobre outro card: move pra etapa desse card (mesmo
+                        // fix que tentei no dnd-kit, mas agora explícito).
+                        if (!dragLeadId || dragLeadId === l.id) return;
+                        moverLeadPara(l.etapaFunil as EtapaFunil);
+                      }}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     ) : (
       <KanbanLista
         leads={leadsFiltrados}
@@ -2300,58 +2338,6 @@ function KpiCard({ label, value, hint }: { label: string; value: string; hint?: 
   );
 }
 
-/** Cores pra header gradient da coluna (RGB sem hex pra usar com alpha). */
-const COL_HEAD_GRADIENT: Record<EtapaFunil, string> = {
-  novo: "linear-gradient(180deg, #f1f5f9 0%, #f8fafc 100%)",
-  qualificado: "linear-gradient(180deg, #dbeafe 0%, #eff6ff 100%)",
-  proposta: "linear-gradient(180deg, #f3e8ff 0%, #faf5ff 100%)",
-  negociacao: "linear-gradient(180deg, #fef3c7 0%, #fffbeb 100%)",
-  fechado_ganho: "linear-gradient(180deg, #d1fae5 0%, #ecfdf5 100%)",
-  fechado_perdido: "linear-gradient(180deg, #fee2e2 0%, #fef2f2 100%)",
-};
-
-function KCol({ etapa, count, val, children }: { etapa: EtapaFunil; count: number; val: number; children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id: etapa });
-  const st = EST[etapa];
-  const isGanho = etapa === "fechado_ganho";
-  return (
-    <div
-      ref={setNodeRef}
-      className={
-        "rounded-2xl border flex flex-col bg-card transition-colors overflow-hidden " +
-        st.border +
-        (isOver ? " ring-2 ring-violet-400/40" : "")
-      }
-    >
-      <div
-        className={"px-3 py-2.5 border-b sticky top-0 z-10 backdrop-blur-sm " + st.border}
-        style={{ background: COL_HEAD_GRADIENT[etapa] }}
-      >
-        <div className="flex items-center gap-2">
-          <span className={"h-2.5 w-2.5 rounded-full " + (isGanho ? st.dot + " animate-pulse" : st.dot)} />
-          <span className={"text-[13.5px] font-bold flex-1 truncate " + (isGanho ? "text-emerald-900" : "text-foreground")}>
-            {ETAPA_FUNIL_LABELS[etapa]}
-          </span>
-          <span
-            className={
-              "text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-full min-w-[22px] text-center " +
-              (isGanho ? "bg-emerald-600 text-white" : "bg-white/80 text-muted-foreground border border-black/5")
-            }
-          >
-            {count}
-          </span>
-        </div>
-        {val > 0 && (
-          <p className={"text-[11.5px] font-semibold mt-1 ml-[18px] " + (isGanho ? "text-emerald-700" : "text-muted-foreground")}>
-            {formatBRL(val)} {isGanho ? "fechado" : "estimado"}
-          </p>
-        )}
-      </div>
-      {children}
-    </div>
-  );
-}
-
 /** Cor do chip baseada na origem do lead (paleta segura, fallback cinza). */
 function corOrigem(origem: string): { bg: string; text: string; dot: string } {
   const s = (origem || "").toLowerCase();
@@ -2372,8 +2358,20 @@ const ACAO_POR_ETAPA: Partial<Record<EtapaFunil, { label: string; emoji: string;
   fechado_ganho: { label: "Lançar cobrança", emoji: "💰", tone: "emerald" },
 };
 
-function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto }: { lead: any; onWA?: (p: string) => void; onDelete: (id: number, nome: string) => void; onGoToConversa: (conversaId: number) => void; onOpen?: () => void; compacto?: boolean }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id });
+function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragging, isOver, onDragStartLead, onDragEndLead, onDragOverLead, onDropOnLead }: {
+  lead: any;
+  onWA?: (p: string) => void;
+  onDelete: (id: number, nome: string) => void;
+  onGoToConversa: (conversaId: number) => void;
+  onOpen?: () => void;
+  compacto?: boolean;
+  isDragging?: boolean;
+  isOver?: boolean;
+  onDragStartLead?: () => void;
+  onDragEndLead?: () => void;
+  onDragOverLead?: () => void;
+  onDropOnLead?: () => void;
+}) {
   const v = parseValorBR(lead.valorEstimado);
   const hex = ETAPA_HEX[lead.etapaFunil as EtapaFunil] || ETAPA_HEX.novo;
   const etapa = lead.etapaFunil as EtapaFunil;
@@ -2395,37 +2393,37 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto }: { lea
 
   // Background sutil pra Ganho/Perdido (mostra status do card só de bater o olho)
   const cardBg = isGanho
-    ? "bg-gradient-to-br from-emerald-50/70 to-background"
+    ? "bg-gradient-to-br from-emerald-50/70 to-white"
     : isPerd
-    ? "bg-gradient-to-br from-rose-50/70 to-background"
-    : "bg-background";
+    ? "bg-gradient-to-br from-rose-50/70 to-white"
+    : "bg-white";
 
   return (
     <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.4 : 1,
-        borderLeftColor: hex,
+      draggable
+      onDragStart={(e) => { e.stopPropagation(); onDragStartLead?.(); }}
+      onDragEnd={() => onDragEndLead?.()}
+      onDragOver={(e) => {
+        if (isDragging) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onDragOverLead?.();
       }}
-      {...attributes}
+      onDrop={(e) => {
+        if (isDragging) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onDropOnLead?.();
+      }}
+      style={{ borderLeftColor: hex, opacity: isDragging ? 0.4 : 1 }}
       onClick={() => { if (!isDragging) onOpen?.(); }}
       className={
-        "relative rounded-xl border border-border border-l-[3px] shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group " +
-        cardBg + (compacto ? " pl-6 pr-2.5 py-2" : " pl-7 pr-3 py-2.5")
+        "relative rounded-xl border border-l-[3px] shadow-sm hover:shadow-md hover:border-slate-400 transition-all cursor-pointer active:cursor-grabbing group " +
+        cardBg +
+        (isOver ? " ring-2 ring-violet-500 ring-offset-1 border-violet-300" : " border-slate-200") +
+        (compacto ? " px-2.5 py-2" : " p-3")
       }
     >
-      <button
-        type="button"
-        {...listeners}
-        onClick={(e) => e.stopPropagation()}
-        className="absolute left-0.5 top-1/2 -translate-y-1/2 h-7 w-5 inline-flex items-center justify-center text-muted-foreground/30 group-hover:text-muted-foreground/70 cursor-grab active:cursor-grabbing touch-none"
-        aria-label="Arrastar"
-        title="Arrastar pra outra etapa"
-      >
-        <GripVertical className="h-3.5 w-3.5" />
-      </button>
       <div className="flex items-start gap-2.5">
         <div className={(compacto ? "w-7 h-7 text-[10px]" : "w-9 h-9 text-[11px]") + " rounded-lg flex items-center justify-center text-white font-bold flex-shrink-0 " + gradientFromName(lead.contatoNome || "?")}>
           {initials(lead.contatoNome || "?")}
@@ -2539,26 +2537,6 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto }: { lea
               <Trash2 className="h-3 w-3" />
             </Button>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-function KOver({ lead }: { lead: any }) {
-  const v = parseValorBR(lead.valorEstimado);
-  const hex = ETAPA_HEX[lead.etapaFunil as EtapaFunil] || ETAPA_HEX.novo;
-  return (
-    <div
-      className="rounded-xl bg-background border-l-4 border-2 border-primary shadow-2xl p-3 w-[200px] rotate-3"
-      style={{ borderLeftColor: hex }}
-    >
-      <div className="flex items-start gap-2.5">
-        <div className={"w-9 h-9 rounded-lg flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 " + gradientFromName(lead.contatoNome || "?")}>
-          {initials(lead.contatoNome || "?")}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-semibold truncate">{lead.contatoNome}</p>
-          {v > 0 && <span className="text-[13px] font-bold text-emerald-700">{formatBRL(v)}</span>}
         </div>
       </div>
     </div>
