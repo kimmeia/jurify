@@ -17,7 +17,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Headphones, MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List } from "lucide-react";
+import { Headphones, MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
@@ -343,6 +343,12 @@ export default function Atendimento() {
   const [showNovo, setShowNovo] = useState(false); const [showIniciar, setShowIniciar] = useState(false); const [showNovoLead, setShowNovoLead] = useState(false);
   const [busca, setBusca] = useState(""); const [filtro, setFiltro] = useState("todos");
   const [inboxBusca, setInboxBusca] = useState("");
+  // Filtros avançados que vão pro backend (atendente, setor, período). Status
+  // continua client-side pra contadores baterem.
+  const [atendentesFiltro, setAtendentesFiltro] = useState<number[]>([]);
+  const [setorFiltro, setSetorFiltro] = useState<number | null>(null);
+  const [periodoFiltro, setPeriodoFiltro] = useState<"todos" | "7d" | "30d" | "90d">("todos");
+  const [showFiltros, setShowFiltros] = useState(false);
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
   const [showLinhaTempo, setShowLinhaTempo] = useState<number | null>(null);
 
@@ -361,10 +367,32 @@ export default function Atendimento() {
     { enabled: !!contatoIdUrl, retry: false },
   );
 
-  // Sempre buscamos todas as conversas e filtramos no client. Permite
-  // contadores corretos nas pills sem quintuplicar o request, e a busca
-  // local fica instantânea (sem ida ao servidor).
-  const { data: convsAll, refetch: rC } = trpc.crm.listarConversas.useQuery(undefined, { refetchInterval: 5000 });
+  // Filtros que vão pro backend (atendente, setor, período). Status fica
+  // client-side pra contadores baterem na coluna esquerda.
+  const filtrosBackend = (() => {
+    const f: any = {};
+    if (atendentesFiltro.length > 0) f.atendenteIds = atendentesFiltro;
+    if (setorFiltro) f.setorId = setorFiltro;
+    if (periodoFiltro !== "todos") {
+      const dias = periodoFiltro === "7d" ? 7 : periodoFiltro === "30d" ? 30 : 90;
+      f.dataInicio = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+    }
+    return Object.keys(f).length > 0 ? f : undefined;
+  })();
+  const { data: convsAll, refetch: rC } = trpc.crm.listarConversas.useQuery(filtrosBackend, { refetchInterval: 5000 });
+  // Listas pros dropdowns de filtro. listarAtendentes já é usado no detalhe;
+  // listarSetores entra novo no escopo principal pra alimentar o filtro.
+  const { data: atendentesPrincipal } = trpc.crm.listarAtendentes.useQuery();
+  const { data: setoresLista } = trpc.configuracoes.listarSetores.useQuery();
+  const filtrosAtivos =
+    (atendentesFiltro.length > 0 ? 1 : 0) +
+    (setorFiltro ? 1 : 0) +
+    (periodoFiltro !== "todos" ? 1 : 0);
+  const limparFiltrosAvancados = () => {
+    setAtendentesFiltro([]);
+    setSetorFiltro(null);
+    setPeriodoFiltro("todos");
+  };
   const convs = (() => {
     const todas = convsAll || [];
     const porStatus = filtro === "todos" ? todas : todas.filter((c: any) => c.status === filtro);
@@ -467,24 +495,119 @@ export default function Atendimento() {
             <div className="border-r bg-muted/10 overflow-hidden flex flex-col lg:min-h-0">
               {/* Header: busca + pills de filtro com contador */}
               <div className="p-3 border-b space-y-2.5">
-                <div className="relative">
-                  <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <Input
-                    value={inboxBusca}
-                    onChange={(e) => setInboxBusca(e.target.value)}
-                    placeholder="Buscar por nome ou telefone…"
-                    className="h-8 pl-8 pr-8 text-xs"
-                  />
-                  {inboxBusca && (
-                    <button
-                      onClick={() => setInboxBusca("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      aria-label="Limpar busca"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                <div className="flex items-center gap-1.5">
+                  <div className="relative flex-1">
+                    <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <Input
+                      value={inboxBusca}
+                      onChange={(e) => setInboxBusca(e.target.value)}
+                      placeholder="Buscar por nome ou telefone…"
+                      className="h-8 pl-8 pr-8 text-xs"
+                    />
+                    {inboxBusca && (
+                      <button
+                        onClick={() => setInboxBusca("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        aria-label="Limpar busca"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setShowFiltros((v) => !v)}
+                    className={
+                      "relative h-8 w-8 inline-flex items-center justify-center rounded-md border text-muted-foreground hover:bg-muted " +
+                      (filtrosAtivos > 0 ? "border-primary text-primary" : "")
+                    }
+                    title="Filtros avançados (atendente, setor, período)"
+                    aria-label="Filtros avançados"
+                  >
+                    <Filter className="h-3.5 w-3.5" />
+                    {filtrosAtivos > 0 && (
+                      <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center">
+                        {filtrosAtivos}
+                      </span>
+                    )}
+                  </button>
                 </div>
+                {showFiltros && (
+                  <div className="rounded-md border bg-background p-2.5 space-y-2.5 text-[11px]">
+                    <div className="space-y-1">
+                      <p className="font-medium text-muted-foreground">Atendentes</p>
+                      <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                        {(atendentesPrincipal || []).map((a: any) => {
+                          const ativo = atendentesFiltro.includes(a.id);
+                          return (
+                            <button
+                              key={a.id}
+                              onClick={() =>
+                                setAtendentesFiltro((prev) =>
+                                  ativo ? prev.filter((x) => x !== a.id) : [...prev, a.id],
+                                )
+                              }
+                              className={
+                                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 border text-[10px] " +
+                                (ativo
+                                  ? "bg-primary text-primary-foreground border-primary"
+                                  : "bg-muted/30 hover:bg-muted")
+                              }
+                            >
+                              {a.nome || `#${a.id}`}
+                            </button>
+                          );
+                        })}
+                        {(atendentesPrincipal || []).length === 0 && (
+                          <span className="text-muted-foreground/60">Nenhum atendente cadastrado</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-medium text-muted-foreground">Setor</p>
+                      <select
+                        value={setorFiltro ?? ""}
+                        onChange={(e) => setSetorFiltro(e.target.value ? Number(e.target.value) : null)}
+                        className="w-full h-7 rounded-md border bg-background px-2 text-[11px]"
+                      >
+                        <option value="">Todos os setores</option>
+                        {(setoresLista || []).map((s: any) => (
+                          <option key={s.id} value={s.id}>{s.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-medium text-muted-foreground">Período</p>
+                      <div className="grid grid-cols-4 gap-1">
+                        {(["todos", "7d", "30d", "90d"] as const).map((p) => {
+                          const label = p === "todos" ? "Todos" : p === "7d" ? "7 dias" : p === "30d" ? "30 dias" : "90 dias";
+                          const ativo = periodoFiltro === p;
+                          return (
+                            <button
+                              key={p}
+                              onClick={() => setPeriodoFiltro(p)}
+                              className={
+                                "h-6 rounded text-[10px] border " +
+                                (ativo
+                                  ? "bg-primary text-primary-foreground border-primary"
+                                  : "bg-muted/30 hover:bg-muted")
+                              }
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {filtrosAtivos > 0 && (
+                      <button
+                        onClick={limparFiltrosAvancados}
+                        className="text-[10px] text-primary hover:underline"
+                      >
+                        Limpar filtros avançados
+                      </button>
+                    )}
+                  </div>
+                )}
                 {/* Pills com contador. Scroll horizontal em mobile/colunas estreitas. */}
                 <div className="flex gap-1 overflow-x-auto -mx-1 px-1 pb-0.5 scrollbar-thin">
                   {([
@@ -801,9 +924,42 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const { data: tplList } = (trpc as any).templates?.listar?.useQuery?.(undefined, { retry: false }) || { data: [] };
   const conv = convs.find((c: any) => c.id === cid);
   const { data: msgs, refetch } = trpc.crm.listarMensagens.useQuery({ conversaId: cid }, { refetchInterval: 3000 });
+  // Paginação cursor: `msgs` é o LIVE (últimas 50, polling). `older` acumula
+  // pacotes anteriores carregados sob demanda — sem isso, conversa com >50
+  // mensagens mostrava só uma fatia e o resto sumia.
+  const utils = trpc.useUtils();
+  const [older, setOlder] = useState<any[]>([]);
+  const [maybeMore, setMaybeMore] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  useEffect(() => { setOlder([]); setMaybeMore(true); }, [cid]);
+  // Sem msgs ainda, ou já carregou tudo (lote pequeno = chegou no início).
+  useEffect(() => {
+    if (msgs && msgs.length < 50 && older.length === 0) setMaybeMore(false);
+  }, [msgs, older.length]);
+  const carregarMaisAntigas = async () => {
+    const refId = older[0]?.id ?? msgs?.[0]?.id;
+    if (!refId || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const mais = await utils.crm.listarMensagens.fetch({ conversaId: cid, beforeId: refId });
+      if (!mais || mais.length === 0) { setMaybeMore(false); return; }
+      if (mais.length < 50) setMaybeMore(false);
+      // Preserva scroll: o scroll do usuário fica no mesmo conteúdo quando
+      // prependemos. Sem isso, jogar pra cima do tudo cada "carregar mais".
+      const el = ref.current;
+      const prevH = el?.scrollHeight ?? 0;
+      setOlder((prev) => [...mais, ...prev]);
+      requestAnimationFrame(() => {
+        if (el) el.scrollTop = el.scrollHeight - prevH;
+      });
+    } finally { setLoadingOlder(false); }
+  };
   const enviar = trpc.crm.enviarMensagem.useMutation({ onSuccess: () => { setMsg(""); refetch(); onUpdate(); }, onError: (e: any) => toast.error(e.message) });
   const atualizar = trpc.crm.atualizarConversa.useMutation({ onSuccess: () => { onUpdate(); toast.success("Atualizado!"); } });
   const excluir = trpc.crm.excluirConversa.useMutation({ onSuccess: () => { toast.success("Conversa excluída."); onDeleted(); }, onError: (e: any) => toast.error(e.message) });
+  // Auto-scroll só dispara em mudanças do LIVE (polling/envio), não quando
+  // prependemos antigas — senão o "carregar mais" pulava pra fim e o usuário
+  // perdia o que queria ler.
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [msgs]);
   const send = () => { if (msg.trim()) enviar.mutate({ conversaId: cid, conteudo: msg.trim() }); };
 
@@ -972,10 +1128,23 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       </div>
     )}
     <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2 min-h-[360px] max-h-[420px] lg:min-h-0 lg:max-h-none">
-      {!msgs?.length ? (
+      {maybeMore && (msgs?.length ?? 0) > 0 && (
+        <div className="flex justify-center pb-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px]"
+            onClick={carregarMaisAntigas}
+            disabled={loadingOlder}
+          >
+            {loadingOlder ? "Carregando..." : "Carregar mensagens anteriores"}
+          </Button>
+        </div>
+      )}
+      {!msgs?.length && older.length === 0 ? (
         <p className="text-xs text-muted-foreground text-center py-12">Nenhuma mensagem ainda.</p>
       ) : (
-        msgs.map((m: any) => (
+        [...older, ...(msgs || [])].map((m: any) => (
           <div key={m.id} className={"flex " + (m.direcao === "saida" ? "justify-end" : "justify-start")}>
             <div className={"max-w-[70%] rounded-2xl px-3.5 py-2 " + (m.direcao === "saida" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-muted rounded-bl-md") + (m.direcao === "saida" && m.status === "falha" ? " ring-2 ring-destructive/60" : "")}>
               {m.remetenteNome && m.direcao === "saida" && <p className="text-[10px] opacity-60 mb-0.5">{m.remetenteNome}</p>}

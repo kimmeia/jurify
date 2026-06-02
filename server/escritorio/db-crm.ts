@@ -3,7 +3,7 @@
  * Fase 3 — Inclui algoritmo de distribuição inteligente de leads
  */
 
-import { eq, and, desc, asc, or, sql, gte, lte, like } from "drizzle-orm";
+import { eq, and, desc, asc, or, sql, gte, lte, like, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
@@ -428,7 +428,12 @@ export async function criarConversa(dados: {
 }
 
 export async function listarConversas(escritorioId: number, filtros?: {
-  status?: string; atendenteId?: number;
+  status?: string;
+  atendenteId?: number;
+  atendenteIds?: number[];
+  setorId?: number;
+  dataInicio?: string;
+  dataFim?: string;
 }) {
   const db = await getDb();
   if (!db) return [];
@@ -436,7 +441,52 @@ export async function listarConversas(escritorioId: number, filtros?: {
   if (filtros?.status && STATUS_CONV_VALIDOS.has(filtros.status as StatusConv)) {
     conditions.push(eq(conversas.status, filtros.status as StatusConv));
   }
-  if (filtros?.atendenteId) conditions.push(eq(conversas.atendenteId, filtros.atendenteId));
+
+  // Multi-atendente (e compat com atendenteId único legacy).
+  const atendentesFiltro: number[] = [];
+  if (filtros?.atendenteIds && filtros.atendenteIds.length > 0) atendentesFiltro.push(...filtros.atendenteIds);
+  if (filtros?.atendenteId) atendentesFiltro.push(filtros.atendenteId);
+
+  // Setor: traduz pra `atendenteId IN (atendentes do setor)`. Mais barato do
+  // que JOIN, e não precisa expor colaboradores na query principal.
+  if (filtros?.setorId) {
+    const atendsSetor = await db
+      .select({ id: colaboradores.id })
+      .from(colaboradores)
+      .where(and(
+        eq(colaboradores.escritorioId, escritorioId),
+        eq(colaboradores.setorId, filtros.setorId),
+      ));
+    const setorIds = atendsSetor.map((a) => a.id);
+    if (setorIds.length === 0) return [];
+    // Intersecção com atendentes já filtrados (se houver) — usuário pode pedir
+    // "setor X + atendente Y" e Y precisa estar no setor X.
+    if (atendentesFiltro.length > 0) {
+      const inter = atendentesFiltro.filter((id) => setorIds.includes(id));
+      if (inter.length === 0) return [];
+      atendentesFiltro.length = 0;
+      atendentesFiltro.push(...inter);
+    } else {
+      atendentesFiltro.push(...setorIds);
+    }
+  }
+
+  if (atendentesFiltro.length === 1) {
+    conditions.push(eq(conversas.atendenteId, atendentesFiltro[0]));
+  } else if (atendentesFiltro.length > 1) {
+    conditions.push(inArray(conversas.atendenteId, atendentesFiltro));
+  }
+
+  // Período: filtra por ultimaMensagemAt (atividade), não createdAt — usuário
+  // quer ver conversas com mensagem nova no intervalo.
+  if (filtros?.dataInicio) {
+    const dt = new Date(filtros.dataInicio);
+    if (!isNaN(dt.getTime())) conditions.push(gte(conversas.ultimaMensagemAt, dt));
+  }
+  if (filtros?.dataFim) {
+    const dt = new Date(filtros.dataFim);
+    if (!isNaN(dt.getTime())) conditions.push(lte(conversas.ultimaMensagemAt, dt));
+  }
 
   const rows = await db
     .select({
@@ -578,12 +628,21 @@ export async function atualizarStatusMensagem(
   await db.update(mensagens).set({ status }).where(eq(mensagens.id, id));
 }
 
-export async function listarMensagens(conversaId: number, limite = 50) {
+export async function listarMensagens(conversaId: number, limite = 50, beforeId?: number) {
   const db = await getDb();
   if (!db) return [];
+  // Pega as N mais RECENTES (desc) e depois reverte pra ordem cronológica. Sem
+  // isso, conversa com >50 msgs mostrava só as ANTIGAS (limit + asc = bug).
+  // `beforeId` permite paginação cursor: passa o id da msg mais antiga já
+  // carregada e recebe as 50 anteriores a ela (frontend faz "carregar mais").
+  const whereConds = beforeId
+    ? and(eq(mensagens.conversaId, conversaId), sql`${mensagens.id} < ${beforeId}`)
+    : eq(mensagens.conversaId, conversaId);
   const rows = await db.select().from(mensagens)
-    .where(eq(mensagens.conversaId, conversaId))
-    .orderBy(asc(mensagens.createdAt)).limit(limite);
+    .where(whereConds)
+    .orderBy(desc(mensagens.createdAt), desc(mensagens.id))
+    .limit(limite);
+  rows.reverse();
 
   // Buscar nomes dos remetentes
   const remIds = [...new Set(rows.filter(r => r.remetenteId).map(r => r.remetenteId!))];
@@ -790,7 +849,9 @@ export async function distribuirLead(
   }
 
   // ─── 2. Buscar atendentes disponíveis (ativos + recebe leads + online) ─
-  const dezMinAtras = new Date(Date.now() - 10 * 60 * 1000);
+  // Janela "online" = 30min (antes 10min, severo demais — atendente com aba em
+  // segundo plano virava offline rápido e perdia rodízio).
+  const dezMinAtras = new Date(Date.now() - 30 * 60 * 1000);
 
   const atendentes = await db.select()
     .from(colaboradores)
@@ -894,16 +955,19 @@ export async function distribuirLead(
   if (cargas.length === 0) return null; // Todos sobrecarregados
 
   // ─── 5. Ordenação inteligente ──────────────────────────────────────────
-  // Prioridade: online primeiro → menor carga proporcional → quem recebeu há mais tempo
+  // Critério: menor carga proporcional → online (desempate) → ultimaDist (round-robin).
+  // ANTES "online" vinha primeiro absoluto, e quem tinha aba aberta o dia todo
+  // pegava tudo enquanto offline-com-0 ficava ocioso. Agora carga decide e
+  // online só desempata.
   cargas.sort((a, b) => {
-    // Online tem prioridade
-    if (a.estaOnline !== b.estaOnline) return a.estaOnline ? -1 : 1;
-    // Menor carga proporcional
+    // Menor carga proporcional ganha (online ou offline)
     if (Math.abs(a.proporcional - b.proporcional) > 0.1) return a.proporcional - b.proporcional;
-    // Desempate: quem recebeu distribuição há mais tempo (round-robin real)
+    // Empate de carga: online vence offline
+    if (a.estaOnline !== b.estaOnline) return a.estaOnline ? -1 : 1;
+    // Empate total: quem recebeu distribuição há mais tempo (round-robin real)
     const aTime = a.ultimaDist?.getTime() || 0;
     const bTime = b.ultimaDist?.getTime() || 0;
-    return aTime - bTime; // Menor tempo = recebeu há mais tempo = prioridade
+    return aTime - bTime;
   });
 
   const escolhido = cargas[0];
