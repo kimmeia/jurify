@@ -25,6 +25,7 @@ import {
   TIPO_LABELS, TIPO_CORES, PRIORIDADE_LABELS,
   type TipoAgendamento, type PrioridadeAgendamento,
 } from "@shared/agendamento-constants";
+import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -241,16 +242,14 @@ export default function Agendamento() {
         </TabsContent>
       </Tabs>
 
-      {/* Dialog Criar */}
-      <CriarAgendamentoDialog
+      {/* Dialog Criar — usa o componente compartilhado */}
+      <NovoCompromissoDialog
         open={showCriar}
-        onClose={() => setShowCriar(false)}
+        onOpenChange={(o) => { if (!o) setShowCriar(false); }}
         onCreated={() => {
-          setShowCriar(false);
           agendamentosQuery.refetch();
           contadoresQuery.refetch();
           proximosQuery.refetch();
-          toast.success("Compromisso criado!");
         }}
       />
     </div>
@@ -344,74 +343,3 @@ function AgendamentoCard({ agendamento: a, onUpdated }: { agendamento: any; onUp
 
 // ─── Dialog Criar ───────────────────────────────────────────────────────────
 
-function CriarAgendamentoDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
-  const [tipo, setTipo] = useState<TipoAgendamento>("reuniao_comercial");
-  const [titulo, setTitulo] = useState("");
-  const [descricao, setDescricao] = useState("");
-  const [dataInicio, setDataInicio] = useState("");
-  const [horaInicio, setHoraInicio] = useState("09:00");
-  const [prioridade, setPrioridade] = useState<PrioridadeAgendamento>("normal");
-  const [salvando, setSalvando] = useState(false);
-
-  const criarMut = trpc.agendamento.criar.useMutation({
-    onSuccess: () => { setSalvando(false); onCreated(); setTitulo(""); setDescricao(""); setDataInicio(""); },
-    onError: (err: any) => { setSalvando(false); toast.error(err.message); },
-  });
-
-  const handleSubmit = () => {
-    if (!titulo.trim() || !dataInicio) { toast.error("Preencha título e data"); return; }
-    setSalvando(true);
-    criarMut.mutate({
-      tipo, titulo: titulo.trim(), descricao: descricao.trim() || undefined,
-      dataInicio: new Date(`${dataInicio}T${horaInicio}:00`).toISOString(),
-      prioridade, corHex: TIPO_CORES[tipo],
-    });
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Novo Compromisso</DialogTitle></DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label className="text-xs">Tipo</Label>
-            <Select value={tipo} onValueChange={(v) => setTipo(v as TipoAgendamento)}>
-              <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>{Object.entries(TIPO_LABELS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v}</SelectItem>
-              ))}</SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">Título</Label>
-            <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex: Audiência processo 123..." className="text-sm" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">Data</Label><Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="text-sm" /></div>
-            <div><Label className="text-xs">Hora</Label><Input type="time" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} className="text-sm" /></div>
-          </div>
-          <div>
-            <Label className="text-xs">Prioridade</Label>
-            <Select value={prioridade} onValueChange={(v) => setPrioridade(v as PrioridadeAgendamento)}>
-              <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>{Object.entries(PRIORIDADE_LABELS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v}</SelectItem>
-              ))}</SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">Descrição (opcional)</Label>
-            <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} className="text-sm" />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={salvando}>
-            {salvando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-            Criar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}

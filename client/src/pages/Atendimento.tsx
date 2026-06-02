@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
 import { Headphones, MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
@@ -1335,7 +1336,13 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         </DialogContent>
       </Dialog>
     )}
-    {showAgendar && <AgendarFromConversaDialog open={showAgendar} onOpenChange={setShowAgendar} contatoNome={conv?.contatoNome || ""} contatoTelefone={conv?.contatoTelefone || ""} />}
+    {showAgendar && (
+      <NovoCompromissoDialog
+        open={showAgendar}
+        onOpenChange={setShowAgendar}
+        contexto={conv?.contatoId ? { contatoId: conv.contatoId, contatoNome: conv?.contatoNome || "" } : undefined}
+      />
+    )}
 
     <AlertDialog open={confirmExcluirConversa} onOpenChange={setConfirmExcluirConversa}>
       <AlertDialogContent>
@@ -1362,49 +1369,6 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   </>);
 }
 
-/** Dialog para agendar compromisso direto da conversa */
-function AgendarFromConversaDialog({ open, onOpenChange, contatoNome, contatoTelefone }: { open: boolean; onOpenChange: (v: boolean) => void; contatoNome: string; contatoTelefone: string }) {
-  const [titulo, setTitulo] = useState(`Reunião com ${contatoNome}`);
-  const [tipo, setTipo] = useState<string>("reuniao_comercial");
-  const [dataInicio, setDataInicio] = useState("");
-  const [horaInicio, setHoraInicio] = useState("10:00");
-  const [descricao, setDescricao] = useState(contatoTelefone ? `Contato: ${contatoTelefone}` : "");
-
-  const criarAgendamento = trpc.agendamento.criar.useMutation({
-    onSuccess: () => {
-      toast.success("Agendamento criado!");
-      onOpenChange(false);
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  const handleCriar = () => {
-    if (!titulo || !dataInicio) { toast.error("Preencha título e data"); return; }
-    const dtInicio = `${dataInicio}T${horaInicio}:00`;
-    criarAgendamento.mutate({ tipo: tipo as any, titulo, descricao: descricao || undefined, dataInicio: dtInicio });
-  };
-
-  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><Calendar className="h-5 w-5 text-blue-600" /> Agendar Compromisso</DialogTitle></DialogHeader>
-    <div className="space-y-3 py-2">
-      <div className="space-y-1.5"><Label>Título *</Label><Input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Reunião com cliente" /></div>
-      <div className="space-y-1.5"><Label>Tipo</Label>
-        <Select value={tipo} onValueChange={setTipo}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>
-          <SelectItem value="reuniao_comercial">Reunião Comercial</SelectItem>
-          <SelectItem value="audiencia">Audiência</SelectItem>
-          <SelectItem value="follow_up">Follow-up</SelectItem>
-          <SelectItem value="tarefa">Tarefa</SelectItem>
-          <SelectItem value="outro">Outro</SelectItem>
-        </SelectContent></Select>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5"><Label>Data *</Label><Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} /></div>
-        <div className="space-y-1.5"><Label>Hora</Label><Input type="time" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} /></div>
-      </div>
-      <div className="space-y-1.5"><Label>Descrição</Label><Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Observações..." /></div>
-    </div>
-    <DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={handleCriar} disabled={!titulo || !dataInicio || criarAgendamento.isPending}>{criarAgendamento.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Calendar className="h-4 w-4 mr-2" />} Agendar</Button></DialogFooter>
-  </DialogContent></Dialog>);
-}
 
 /**
  * Botão de gravar nota de voz para o atendimento.
