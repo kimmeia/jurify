@@ -732,6 +732,10 @@ export const leads = mysqlTable("leads", {
   probabilidade: int("probabilidade").default(50).notNull(),
   dataFechamentoPrevisto: varchar("dataFechPrevisto", { length: 10 }),
   observacoes: text("observacoesLead"),
+  // Timestamp do MOMENTO em que o lead virou fechado_ganho ou fechado_perdido.
+  // Pra relatórios "deste mês" não dá pra usar updatedAt (muda em qualquer
+  // edição) — esse campo só muda quando o status passa pra fechado.
+  fechadoEm: timestamp("fechadoEmLead"),
   createdAt: timestamp("createdAtLead").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtLead").defaultNow().onUpdateNow().notNull(),
 });
