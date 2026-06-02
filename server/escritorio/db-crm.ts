@@ -790,7 +790,9 @@ export async function distribuirLead(
   }
 
   // ─── 2. Buscar atendentes disponíveis (ativos + recebe leads + online) ─
-  const dezMinAtras = new Date(Date.now() - 10 * 60 * 1000);
+  // Janela "online" = 30min (antes 10min, severo demais — atendente com aba em
+  // segundo plano virava offline rápido e perdia rodízio).
+  const dezMinAtras = new Date(Date.now() - 30 * 60 * 1000);
 
   const atendentes = await db.select()
     .from(colaboradores)
@@ -894,16 +896,19 @@ export async function distribuirLead(
   if (cargas.length === 0) return null; // Todos sobrecarregados
 
   // ─── 5. Ordenação inteligente ──────────────────────────────────────────
-  // Prioridade: online primeiro → menor carga proporcional → quem recebeu há mais tempo
+  // Critério: menor carga proporcional → online (desempate) → ultimaDist (round-robin).
+  // ANTES "online" vinha primeiro absoluto, e quem tinha aba aberta o dia todo
+  // pegava tudo enquanto offline-com-0 ficava ocioso. Agora carga decide e
+  // online só desempata.
   cargas.sort((a, b) => {
-    // Online tem prioridade
-    if (a.estaOnline !== b.estaOnline) return a.estaOnline ? -1 : 1;
-    // Menor carga proporcional
+    // Menor carga proporcional ganha (online ou offline)
     if (Math.abs(a.proporcional - b.proporcional) > 0.1) return a.proporcional - b.proporcional;
-    // Desempate: quem recebeu distribuição há mais tempo (round-robin real)
+    // Empate de carga: online vence offline
+    if (a.estaOnline !== b.estaOnline) return a.estaOnline ? -1 : 1;
+    // Empate total: quem recebeu distribuição há mais tempo (round-robin real)
     const aTime = a.ultimaDist?.getTime() || 0;
     const bTime = b.ultimaDist?.getTime() || 0;
-    return aTime - bTime; // Menor tempo = recebeu há mais tempo = prioridade
+    return aTime - bTime;
   });
 
   const escolhido = cargas[0];
