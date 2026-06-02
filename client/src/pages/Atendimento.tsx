@@ -1605,11 +1605,15 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
 
   // "Ganhos do mês" = leads fechado_ganho cujo updatedAt cai no mês corrente.
   // Sem date picker — sempre o mês atual. Antes mostrava o ACUMULADO de
-  // todos os tempos, o que enganava a leitura ("R$ 196.100 no mês" quando
-  // era acumulado histórico).
-  const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
+  // todos os tempos, o que enganava a leitura.
+  // `inicioMesTs` em useMemo pra não invalidar `itemsByEtapa` a cada render
+  // (Date.now() mudaria toda vez senão).
+  const inicioMesTs = useMemo(() => {
+    const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }, []);
   const totalGanhoMes = leads
-    .filter((l: any) => l.etapaFunil === "fechado_ganho" && l.updatedAt && new Date(l.updatedAt) >= inicioMes)
+    .filter((l: any) => l.etapaFunil === "fechado_ganho" && l.updatedAt && new Date(l.updatedAt).getTime() >= inicioMesTs)
     .reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
   // Mantido pro cálculo de taxa de conversão (que não muda com período)
   const totalGanho = leads
@@ -1678,15 +1682,21 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
     setResponsaveisFiltro([]); setSetorFiltro(null); setPeriodoFiltro("todos"); setValorMin(""); setValorMax("");
   };
 
-  // Cards agrupados por etapa pro board.
+  // Cards agrupados por etapa pro board. A coluna "Ganho" só mostra os
+  // fechamentos do mês corrente (alinhado com o KPI "Ganhos do mês"). Sem
+  // isso, a coluna acumulava o histórico de meses anteriores enquanto o
+  // KPI dizia outra coisa — dado conflitante na mesma tela.
   const itemsByEtapa = useMemo(() => {
     const map: Record<string, any[]> = {};
     for (const e of ETAPAS) map[e] = [];
     for (const l of leadsFiltrados) {
+      if (l.etapaFunil === "fechado_ganho") {
+        if (!l.updatedAt || new Date(l.updatedAt).getTime() < inicioMesTs) continue;
+      }
       if (map[l.etapaFunil]) map[l.etapaFunil].push(l);
     }
     return map;
-  }, [leadsFiltrados]);
+  }, [leadsFiltrados, inicioMesTs]);
 
   // Taxa de conversão = ganhos / (ganhos + perdidos). Métrica honesta porque
   // ignora leads ainda abertos (que ainda podem virar). Se não tem fechamento
