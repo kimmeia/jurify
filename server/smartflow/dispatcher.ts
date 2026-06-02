@@ -1335,9 +1335,21 @@ export async function dispararMensagemCanal(
         }, params.imagem);
         return { executou: true, respostas: r.respostas, execId: r.execId };
       }
-      // Nenhum fluxo casou e não há padrão — não dispara nada.
-      log.debug({ escritorioId }, "SmartFlow: nenhum fluxo casou palavra-chave e sem fluxo padrão");
+      // Nenhum fluxo casou e não há padrão — não dispara nada. Log em info
+      // pra ficar visível: causa comum de "bot não respondeu" é cenário com
+      // palavra-chave restritiva sem fluxo padrão pra capturar o resto.
+      log.info(
+        { escritorioId, canalTipo: params.canalTipo, cenariosAtivos: aceitos.length, msgPreview: params.mensagem.slice(0, 60) },
+        "SmartFlow: nenhum fluxo casou palavra-chave e sem fluxo padrão — bot não responde",
+      );
       return { executou: false, respostas: [] };
+    } else {
+      // Nenhum cenário mensagem_canal ativo aceita esse canal. Pode ser cenário
+      // desligado/sem canal selecionado/cenário só pra outro canal.
+      log.info(
+        { escritorioId, canalTipo: params.canalTipo, totalMensagemCanal: cenariosMC.length },
+        "SmartFlow: nenhum cenário mensagem_canal aceita esse canal",
+      );
     }
 
     // 2. Fallback: cenário antigo `whatsapp_mensagem` só pra WhatsApp QR
