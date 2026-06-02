@@ -19,7 +19,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
-import { Headphones, MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter } from "lucide-react";
+import { Headphones, MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
@@ -1566,6 +1566,19 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [excluirLeadAlvo, setExcluirLeadAlvo] = useState<{ id: number; nome: string } | null>(null);
   const [detalheLeadId, setDetalheLeadId] = useState<number | null>(null);
+  // Bug conhecido do Radix Dialog (1.x): ao fechar o Sheet/Dialog ele às vezes
+  // deixa o body em `pointer-events: none` por um frame extra. Isso captura o
+  // pointerdown do próximo card, e o dnd-kit não consegue iniciar drag. Após
+  // fechar o Sheet, força limpeza. Idempotente — se já estiver limpo, no-op.
+  useEffect(() => {
+    if (detalheLeadId !== null) return;
+    const id = setTimeout(() => {
+      if (document.body.style.pointerEvents === "none") {
+        document.body.style.pointerEvents = "";
+      }
+    }, 100);
+    return () => clearTimeout(id);
+  }, [detalheLeadId]);
   // Filtros avançados
   const [responsaveisFiltro, setResponsaveisFiltro] = useState<number[]>([]);
   const [setorFiltro, setSetorFiltro] = useState<number | null>(null);
@@ -2225,9 +2238,12 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen }: { lead: any; on
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id });
   const v = parseValorBR(lead.valorEstimado);
   const hex = ETAPA_HEX[lead.etapaFunil as EtapaFunil] || ETAPA_HEX.novo;
-  // Click no card abre detalhes/notas. Drag e click coexistem via
-  // activationConstraint: { distance: 5 } no PointerSensor — se mover <5px
-  // dnd-kit não inicia drag, então onClick dispara normal.
+  // ALÇA DEDICADA pra drag: só o ⋮⋮ no canto inicia drag (via {...listeners}).
+  // Card todo é clickable pra abrir o painel. Sem isso, click e drag
+  // competiam pelos mesmos eventos de pointer e às vezes o drag falhava
+  // depois do 1º (em especial quando o Sheet do Radix deixava o body em
+  // pointer-events:none por um frame, capturava o pointerdown e quebrava
+  // o useSortable do próximo card).
   return (
     <div
       ref={setNodeRef}
@@ -2238,10 +2254,20 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen }: { lead: any; on
         borderLeftColor: hex,
       }}
       {...attributes}
-      {...listeners}
       onClick={() => { if (!isDragging) onOpen?.(); }}
-      className="rounded-xl bg-background border border-border border-l-4 px-3 py-2.5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-grab active:cursor-grabbing group"
+      className="relative rounded-xl bg-background border border-border border-l-4 pl-7 pr-3 py-2.5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group"
     >
+      {/* Alça de drag */}
+      <button
+        type="button"
+        {...listeners}
+        onClick={(e) => e.stopPropagation()}
+        className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-5 inline-flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing touch-none"
+        aria-label="Arrastar"
+        title="Arrastar pra outra etapa"
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+      </button>
       <div className="flex items-start gap-2.5">
         <div className={"w-9 h-9 rounded-lg flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 " + gradientFromName(lead.contatoNome || "?")}>
           {initials(lead.contatoNome || "?")}
