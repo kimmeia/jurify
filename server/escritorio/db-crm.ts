@@ -5,7 +5,7 @@
 
 import { eq, and, desc, asc, or, sql, gte, lte, like, inArray } from "drizzle-orm";
 import { getDb } from "../db";
-import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios } from "../../drizzle/schema";
+import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios, setores } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
 import { escapeLikePattern } from "../_core/sql-helpers";
 import { normalizarValorBR } from "../../shared/valor-br";
@@ -718,17 +718,21 @@ export async function listarLeads(escritorioId: number, etapa?: string) {
       contatoNome: contatos.nome, contatoTelefone: contatos.telefone,
       responsavelId: leads.responsavelId,
       responsavelNome: users.name,
+      setorId: colaboradores.setorId,
+      setorTipo: setores.tipo,
       conversaId: leads.conversaId,
       etapaFunil: leads.etapaFunil, valorEstimado: leads.valorEstimado,
       origemLead: leads.origemLead, probabilidade: leads.probabilidade,
       dataFechamentoPrevisto: leads.dataFechamentoPrevisto,
       createdAt: leads.createdAt,
       updatedAt: leads.updatedAt,
+      fechadoEm: leads.fechadoEm,
     })
     .from(leads)
     .innerJoin(contatos, eq(leads.contatoId, contatos.id))
     .leftJoin(colaboradores, eq(leads.responsavelId, colaboradores.id))
     .leftJoin(users, eq(colaboradores.userId, users.id))
+    .leftJoin(setores, eq(colaboradores.setorId, setores.id))
     .where(and(...conditions))
     .orderBy(desc(leads.createdAt)).limit(200);
 
@@ -736,6 +740,7 @@ export async function listarLeads(escritorioId: number, etapa?: string) {
     ...r,
     createdAt: toIsoString(r.createdAt) ?? "",
     updatedAt: toIsoString(r.updatedAt) ?? "",
+    fechadoEm: toIsoString(r.fechadoEm),
   }));
 }
 
@@ -743,7 +748,25 @@ export async function atualizarLead(id: number, escritorioId: number, dados: Rec
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
   const updateData: Record<string, unknown> = {};
-  if (dados.etapaFunil !== undefined) updateData.etapaFunil = dados.etapaFunil;
+  if (dados.etapaFunil !== undefined) {
+    updateData.etapaFunil = dados.etapaFunil;
+    // fechadoEm é setado/limpo conforme a etapa transita pra fechado ou volta
+    // pra fluxo. Pra evitar sobrescrever um fechamento antigo quando o
+    // usuário só edita o valor sem mexer na etapa, só toca aqui dentro do
+    // bloco que detecta mudança DE etapa.
+    const fechadas = new Set(["fechado_ganho", "fechado_perdido"]);
+    const novaEtapaEhFechada = fechadas.has(dados.etapaFunil);
+    // Precisa do estado anterior pra saber se está virando fechado AGORA.
+    const [atual] = await db.select({ etapaFunil: leads.etapaFunil, fechadoEm: leads.fechadoEm })
+      .from(leads).where(and(eq(leads.id, id), eq(leads.escritorioId, escritorioId)))
+      .limit(1);
+    const eraFechada = atual && fechadas.has(atual.etapaFunil as string);
+    if (novaEtapaEhFechada && !eraFechada) {
+      updateData.fechadoEm = new Date();
+    } else if (!novaEtapaEhFechada && eraFechada) {
+      updateData.fechadoEm = null;
+    }
+  }
   if (dados.valorEstimado !== undefined) {
     updateData.valorEstimado = normalizarValorBR(dados.valorEstimado);
   }
