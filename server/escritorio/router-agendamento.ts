@@ -54,6 +54,7 @@ export const agendamentoRouter = router({
       prioridade: z.enum(["baixa", "normal", "alta", "critica"]).optional(),
       responsavelId: z.number().optional(),
       processoId: z.number().optional(),
+      contatoId: z.number().optional(),
       corHex: z.string().max(7).optional(),
       lembretes: z.array(z.object({
         tipo: z.enum(["notificacao_app", "email", "whatsapp"]),
@@ -77,6 +78,7 @@ export const agendamentoRouter = router({
         local: input.local,
         prioridade: input.prioridade,
         processoId: input.processoId,
+        contatoId: input.contatoId,
         corHex: input.corHex,
         lembretes: input.lembretes,
       });
