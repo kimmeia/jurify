@@ -1670,11 +1670,23 @@ async function handleDistribuirAtendimento(
   if (modo === "atendente_fixo") {
     atendenteIdFixo = Number(cfg.atendenteId);
     if (!Number.isInteger(atendenteIdFixo) || atendenteIdFixo <= 0) {
+      console.warn("[distribuir_atendimento] passo inválido (atendente_fixo sem atendenteId)", {
+        passoId: passo.id,
+        clienteId: passo.clienteId,
+        ordem: passo.ordem,
+        cfg,
+      });
       return { sucesso: false, contexto: ctx, mensagemErro: "Distribuir atendimento (atendente fixo): escolha o atendente." };
     }
   } else {
     setorId = Number(cfg.setorId);
     if (!Number.isInteger(setorId) || setorId <= 0) {
+      console.warn("[distribuir_atendimento] passo inválido (setor sem setorId)", {
+        passoId: passo.id,
+        clienteId: passo.clienteId,
+        ordem: passo.ordem,
+        cfg,
+      });
       return { sucesso: false, contexto: ctx, mensagemErro: "Distribuir atendimento (setor): escolha um setor." };
     }
   }

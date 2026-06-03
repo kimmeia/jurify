@@ -37,6 +37,35 @@ const passoInputSchema = z.object({
   proximoSe: z.record(z.string()).optional(),
 });
 
+// Recusa salvar cenário com passos semanticamente inválidos. zod cobre forma,
+// isso cobre conteúdo. Sem essa rede, um passo distribuir_atendimento sem
+// setorId persiste no banco e dispara erro em TODA execução que cai nele —
+// silenciosamente travando o fluxo (engine.ts:1678).
+function validarPassosSemanticamente(passos: z.infer<typeof passoInputSchema>[]): void {
+  const erros: string[] = [];
+  passos.forEach((p, i) => {
+    const ordem = i + 1;
+    if (p.tipo === "distribuir_atendimento") {
+      const cfg = (p.config || {}) as { modo?: string; setorId?: number; atendenteId?: number };
+      const modo = cfg.modo === "atendente_fixo" ? "atendente_fixo" : "setor";
+      if (modo === "setor") {
+        const setorId = Number(cfg.setorId);
+        if (!Number.isInteger(setorId) || setorId <= 0) {
+          erros.push(`Passo ${ordem} (Distribuir atendimento): escolha um setor.`);
+        }
+      } else {
+        const aId = Number(cfg.atendenteId);
+        if (!Number.isInteger(aId) || aId <= 0) {
+          erros.push(`Passo ${ordem} (Distribuir atendimento): escolha o atendente.`);
+        }
+      }
+    }
+  });
+  if (erros.length > 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: erros.join(" ") });
+  }
+}
+
 /**
  * Layout do editor — posições x/y dos nós, keyed por `clienteId` (passos) e
  * "__gatilho__" (gatilho). Só visual; o engine ignora. Persistido pra que o
@@ -305,6 +334,8 @@ export const smartflowRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      validarPassosSemanticamente(input.passos);
+
       const [result] = await db.insert(smartflowCenarios).values({
         escritorioId: perm.escritorioId,
         nome: input.nome,
@@ -357,6 +388,8 @@ export const smartflowRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       await garantirOwnership(db, input.id, perm.escritorioId, ctx.user.id, perm.verTodos, perm.verProprios);
+
+      validarPassosSemanticamente(input.passos);
 
       await db
         .update(smartflowCenarios)
