@@ -12,10 +12,15 @@
 
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "../db";
-import { chamadas, conversas, mensagens } from "../../drizzle/schema";
+import { chamadas, conversas, mensagens, contatos } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
 import { resolverCanalDaMensagem } from "./whatsapp-cloud-webhook";
-import { buscarContatoPorTelefone } from "../escritorio/db-crm";
+import {
+  buscarContatoPorTelefone,
+  criarConversa,
+  criarOuReutilizarContato,
+  distribuirLead,
+} from "../escritorio/db-crm";
 import { obterConfigCanal } from "../escritorio/db-canais";
 import { WhatsAppCloudClient } from "./whatsapp-cloud";
 import { emitirParaEscritorio, emitirParaAtendente } from "../_core/sse-notifications";
@@ -99,6 +104,22 @@ async function registrarEventoChamada(canalInfo: CanalChamada, call: EventoChama
     .from(chamadas)
     .where(eq(chamadas.callIdExterno, ev.callId))
     .limit(1);
+
+  // Chamada recebida nova = interação real: garante conversa, atribui atendente
+  // (mesma distribuição da mensagem) e abre no Inbox com ícone de ligação — sem
+  // isso, ligação direta nunca ganhava responsável (não passa pelo SmartFlow).
+  if (ev.evento === "connect" && ev.direcao === "entrada" && !existente) {
+    const r = await garantirConversaEAtribuir(canalInfo, ev.telefone, {
+      contatoId,
+      contatoNome,
+      conversaId,
+      conversaAtendenteId,
+    });
+    contatoId = r.contatoId;
+    contatoNome = r.contatoNome;
+    conversaId = r.conversaId;
+    conversaAtendenteId = r.conversaAtendenteId;
+  }
 
   if (!existente) {
     await db.insert(chamadas).values({
@@ -232,9 +253,82 @@ async function avisarPerdidaPorWhatsapp(
         status: "enviada",
         idExterno: messageId || null,
       });
+      await db
+        .update(conversas)
+        .set({ ultimaMensagemAt: new Date(), ultimaMensagemPreview: TEXTO_PERDIDA.slice(0, 250) })
+        .where(eq(conversas.id, conversaId));
     }
     log.info({ telefone, conversaId }, "[WA Calling] chamada perdida — WhatsApp automático enviado");
   } catch (err: any) {
     log.warn("[WA Calling] falha ao enviar WhatsApp de chamada perdida:", err?.message);
   }
+}
+
+/**
+ * Chamada recebida = interação real: garante contato + conversa, atribui
+ * atendente por rodízio (MESMA distribuição da mensagem — `distribuirLead`:
+ * carga, online, horário, stickiness) e abre no Inbox com ícone de ligação.
+ * Best-effort: falha aqui não derruba o log da chamada.
+ */
+async function garantirConversaEAtribuir(
+  canalInfo: CanalChamada,
+  telefone: string,
+  atual: {
+    contatoId: number | null;
+    contatoNome: string | null;
+    conversaId: number | null;
+    conversaAtendenteId: number | null;
+  },
+): Promise<typeof atual> {
+  const db = await getDb();
+  if (!db || !telefone) return atual;
+  let { contatoId, contatoNome, conversaId, conversaAtendenteId } = atual;
+  try {
+    if (!contatoId) {
+      const c = await criarOuReutilizarContato({
+        escritorioId: canalInfo.escritorioId,
+        nome: telefone,
+        telefone,
+        origem: "ligacao",
+      });
+      contatoId = c.id;
+      contatoNome = telefone;
+    }
+    if (!conversaId) {
+      conversaId = await criarConversa({
+        escritorioId: canalInfo.escritorioId,
+        contatoId,
+        canalId: canalInfo.canalId,
+        assunto: `Ligação: ${contatoNome || telefone}`,
+      });
+    }
+    // Atribui só se ainda não tem responsável (preserva stickiness).
+    if (!conversaAtendenteId) {
+      const atendente = await distribuirLead(canalInfo.escritorioId, contatoId, canalInfo.canalId);
+      if (atendente) {
+        conversaAtendenteId = atendente;
+        await db.update(contatos).set({ responsavelId: atendente }).where(eq(contatos.id, contatoId));
+      }
+    }
+    // Abre no Inbox: status + preview + mensagem de sistema (ícone 📞).
+    await db
+      .update(conversas)
+      .set({
+        atendenteId: conversaAtendenteId ?? undefined,
+        status: conversaAtendenteId ? "em_atendimento" : "aguardando",
+        ultimaMensagemAt: new Date(),
+        ultimaMensagemPreview: "📞 Chamada recebida",
+      })
+      .where(eq(conversas.id, conversaId));
+    await db.insert(mensagens).values({
+      conversaId,
+      direcao: "entrada",
+      tipo: "sistema",
+      conteudo: "📞 Chamada recebida",
+      status: "enviada",
+    });
+  } catch (err: any) {
+    log.warn("[WA Calling] falha ao abrir conversa/atribuir da chamada:", err?.message);
+  }
+  return { contatoId, contatoNome, conversaId, conversaAtendenteId };
 }

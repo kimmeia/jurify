@@ -68,6 +68,36 @@ function esperarIceCompleto(pc: RTCPeerConnection, timeoutMs = 3000): Promise<vo
   });
 }
 
+// Bipe de notificação (modo discreto). Web Audio — sem asset. Best-effort:
+// navegador pode bloquear AudioContext sem gesto; falha é silenciosa.
+let audioCtx: AudioContext | null = null;
+function tocarBipe() {
+  try {
+    const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    audioCtx = audioCtx || new Ctor();
+    const ctx = audioCtx;
+    if (ctx.state === "suspended") void ctx.resume();
+    const toque = (freq: number, inicio: number, dur: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + inicio;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.start(t);
+      osc.stop(t + dur);
+    };
+    toque(880, 0, 0.18);
+    toque(660, 0.22, 0.2);
+  } catch {
+    /* som é best-effort */
+  }
+}
+
 export function useWhatsappCall() {
   const [estado, setEstado] = useState<EstadoChamada>("idle");
   const [chamada, setChamada] = useState<ChamadaAtiva | null>(null);
@@ -81,6 +111,16 @@ export function useWhatsappCall() {
   // Fila ao vivo (escritório): chamadas tocando que qualquer um pode assumir.
   const [filaAoVivo, setFilaAoVivo] = useState<ChamadaNaFila[]>([]);
   const filaRef = useRef<ChamadaNaFila[]>([]);
+  // Modo da janela (config do escritório): "overlay" pipoca a tela; "discreto"
+  // só pisca o widget + toca um bipe (sem cobrir a tela).
+  const configChamada = trpc.whatsappCalling.configChamada.useQuery(undefined, {
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+  const modoRef = useRef<"overlay" | "discreto">("overlay");
+  useEffect(() => {
+    modoRef.current = configChamada.data?.modoJanela === "discreto" ? "discreto" : "overlay";
+  }, [configChamada.data?.modoJanela]);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -378,6 +418,10 @@ export function useWhatsappCall() {
           const next = [nova, ...filaRef.current.filter((c) => c.callId !== d.callId)];
           filaRef.current = next;
           setFilaAoVivo(next);
+          // Modo discreto toca um bipe — mas NÃO se já estou em chamada (o som
+          // vazaria pro áudio da ligação ativa).
+          const ocupado = estadoRef.current !== "idle" && estadoRef.current !== "encerrada";
+          if (modoRef.current === "discreto" && !ocupado) tocarBipe();
         } else if (d.acao === "removida") {
           const next = filaRef.current.filter((c) => c.callId !== d.callId);
           filaRef.current = next;
@@ -389,6 +433,8 @@ export function useWhatsappCall() {
       if (detail.tipo === "chamada_entrante") {
         // Só toca se estiver livre — não interrompe uma chamada em curso.
         if (estadoRef.current !== "idle" && estadoRef.current !== "encerrada") return;
+        // Modo discreto não pipoca o overlay — o widget (via chamada_fila) cuida.
+        if (modoRef.current === "discreto") return;
         ofertaPendenteRef.current = d.sdpOffer || null;
         definirChamada({
           callId: d.callId,

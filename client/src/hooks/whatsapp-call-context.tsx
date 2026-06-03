@@ -18,7 +18,7 @@ export function ChamadaWhatsappProvider({ children }: { children: ReactNode }) {
     <ChamadaWhatsappContext.Provider value={chamada}>
       {children}
       <ChamadaOverlay chamada={chamada} />
-      <ChamadaFilaWidget total={chamada.filaAoVivo.length} />
+      <ChamadaFilaWidget chamada={chamada} />
     </ChamadaWhatsappContext.Provider>
   );
 }
