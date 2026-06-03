@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useNotificacoes } from "@/hooks/useNotificacoes";
+import { ChamadaWhatsappProvider } from "@/hooks/whatsapp-call-context";
 import NotificacoesSino from "@/components/NotificacoesSino";
 import { trpc } from "@/lib/trpc";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -603,7 +604,9 @@ function AppSidebarContent({
             </div>
           </div>
         )}
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-6">
+          <ChamadaWhatsappProvider>{children}</ChamadaWhatsappProvider>
+        </main>
       </SidebarInset>
     </>
   );
