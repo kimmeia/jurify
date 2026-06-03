@@ -16,7 +16,7 @@ import { chamadas, conversas } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
 import { resolverCanalDaMensagem } from "./whatsapp-cloud-webhook";
 import { buscarContatoPorTelefone } from "../escritorio/db-crm";
-import { emitirParaEscritorio } from "../_core/sse-notifications";
+import { emitirParaEscritorio, emitirParaAtendente } from "../_core/sse-notifications";
 import {
   montarSinalizacaoChamada,
   normalizarEventoChamada,
@@ -66,13 +66,14 @@ async function registrarEventoChamada(canalInfo: CanalChamada, call: EventoChama
   let contatoId: number | null = null;
   let contatoNome: string | null = null;
   let conversaId: number | null = null;
+  let conversaAtendenteId: number | null = null;
   if (ev.telefone) {
     const contato = await buscarContatoPorTelefone(canalInfo.escritorioId, ev.telefone);
     if (contato) {
       contatoId = contato.id;
       contatoNome = contato.nome;
       const [conv] = await db
-        .select({ id: conversas.id })
+        .select({ id: conversas.id, atendenteId: conversas.atendenteId })
         .from(conversas)
         .where(
           and(eq(conversas.escritorioId, canalInfo.escritorioId), eq(conversas.contatoId, contato.id)),
@@ -80,6 +81,7 @@ async function registrarEventoChamada(canalInfo: CanalChamada, call: EventoChama
         .orderBy(desc(conversas.updatedAt))
         .limit(1);
       conversaId = conv?.id ?? null;
+      conversaAtendenteId = conv?.atendenteId ?? null;
     }
   }
 
@@ -129,6 +131,14 @@ async function registrarEventoChamada(canalInfo: CanalChamada, call: EventoChama
   // — a UI de chamada é quem reage. Best-effort: falha aqui não afeta o log.
   const sinal = montarSinalizacaoChamada(ev, { contatoId, contatoNome, conversaId });
   if (sinal) {
-    await emitirParaEscritorio(canalInfo.escritorioId, sinal);
+    // Toca só pro atendente certo: o da chamada (saída/iniciador ou quem
+    // atendeu) ou, na entrada ainda não atendida, o responsável da conversa.
+    // Sem responsável definido, cai pro escritório todo (senão ninguém atende).
+    const alvoAtendente = existente?.atendenteId ?? conversaAtendenteId;
+    if (alvoAtendente) {
+      await emitirParaAtendente(alvoAtendente, sinal);
+    } else {
+      await emitirParaEscritorio(canalInfo.escritorioId, sinal);
+    }
   }
 }

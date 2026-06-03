@@ -176,9 +176,32 @@ export const whatsappCallingRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEsc(ctx.user.id);
       const client = await clientDoCanal(esc.escritorioId, input.canalId);
-      const callId = await comErroMeta("Falha ao iniciar a chamada", () =>
-        client.iniciarChamada(input.telefone, input.sdpOffer, input.bizOpaqueCallbackData),
-      );
+      const telLimpo = input.telefone.replace(/\D/g, "");
+
+      let callId: string;
+      try {
+        callId = await client.iniciarChamada(
+          input.telefone,
+          input.sdpOffer,
+          input.bizOpaqueCallbackData,
+        );
+      } catch (err: any) {
+        const fbError = err?.response?.data?.error;
+        const msg = String(fbError?.message || "").toLowerCase();
+        // Cliente ainda não autorizou → dispara o pedido de permissão na hora.
+        // Ele aprova no WhatsApp (validade 7 dias) e a próxima ligação conecta.
+        if (msg.includes("permission") || msg.includes("consent")) {
+          const texto = "Podemos te ligar pelo WhatsApp para falar sobre o seu atendimento?";
+          const messageId = await comErroMeta("Falha ao enviar o pedido de permissão", () =>
+            client.pedirPermissaoLigacao(input.telefone, texto),
+          );
+          log.info({ telefone: telLimpo }, "[Calling] saída sem permissão — pedido enviado automaticamente");
+          return { status: "permissao_solicitada" as const, messageId };
+        }
+        log.warn({ status: err?.response?.status, fbError }, "[Calling] iniciarChamada falhou");
+        throw new Error(explicarErroFacebook(err, "Falha ao iniciar a chamada"));
+      }
+
       if (!callId) throw new Error("A Meta não retornou o identificador da chamada.");
 
       const db = await getDb();
@@ -192,12 +215,12 @@ export const whatsappCallingRouter = router({
           callIdExterno: callId,
           direcao: "saida",
           status: "conectando",
-          telefone: input.telefone.replace(/\D/g, ""),
+          telefone: telLimpo,
           bizOpaqueCallbackData: input.bizOpaqueCallbackData ?? null,
         });
       }
-      log.info({ callId, telefone: input.telefone.replace(/\D/g, "") }, "[Calling] chamada de saída iniciada");
-      return { callId };
+      log.info({ callId, telefone: telLimpo }, "[Calling] chamada de saída iniciada");
+      return { status: "chamando" as const, callId };
     }),
 
   /** Pre-aceita uma chamada recebida com o SDP answer (prepara mídia). */
