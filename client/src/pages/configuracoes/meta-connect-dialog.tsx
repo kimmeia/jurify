@@ -12,7 +12,7 @@
  *   ✓ Agora: 1 clique. Tudo é resolvido via Embedded Signup / Facebook Login.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -213,6 +213,12 @@ export function MetaConnectDialog({
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Cura a flag `registradoCloudApi`: número via Embedded Signup já vem
+  // registrado, mas o connect não marcava — daí o falso pedido de PIN.
+  const verificarMut = trpc.metaChannels.verificarRegistroCloud.useMutation({
+    onError: (e: any) => toast.error(e.message),
+  });
+
   // ─── Carrega o Facebook SDK ────────────────────────────────────────────────
 
   useEffect(() => {
@@ -389,6 +395,24 @@ export function MetaConnectDialog({
   const mensagemErro = whatsappIncompleto
     ? "Conexão não finalizada — o número WhatsApp não foi selecionado. Clique em Reconectar e complete o Embedded Signup até o fim."
     : canal?.mensagemErro;
+
+  // Quando o card mostra o falso pedido de PIN, verifica na Meta se o número
+  // já está registrado (CLOUD_API) e cura a flag — silencioso, 1x por canal.
+  const autoVerificouRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!open) {
+      autoVerificouRef.current = null;
+      return;
+    }
+    if (whatsappPrecisaRegistrar && canal?.id && autoVerificouRef.current !== canal.id) {
+      autoVerificouRef.current = canal.id;
+      verificarMut.mutate(
+        { canalId: canal.id },
+        { onSuccess: (r) => { if (r.registrado) onRefresh(); } },
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, whatsappPrecisaRegistrar, canal?.id]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -593,6 +617,37 @@ export function MetaConnectDialog({
                 )}
                 Registrar na Cloud API
               </Button>
+
+              <div className="pt-2 border-t border-amber-200">
+                <p className="text-[11px] text-amber-800 leading-relaxed mb-1.5">
+                  Este número <strong>já envia e recebe mensagens</strong> normalmente? Então ele já
+                  está registrado — só a marcação ficou pendente. Pule o PIN:
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full bg-white"
+                  onClick={() =>
+                    verificarMut.mutate(
+                      { canalId: canal.id, forcar: true },
+                      {
+                        onSuccess: () => {
+                          toast.success("Pronto — número marcado como registrado.");
+                          onRefresh();
+                        },
+                      },
+                    )
+                  }
+                  disabled={verificarMut.isPending}
+                >
+                  {verificarMut.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                  )}
+                  Já está funcionando — marcar como registrado
+                </Button>
+              </div>
             </div>
           )}
 
