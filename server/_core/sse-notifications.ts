@@ -38,6 +38,7 @@ export interface Notificacao {
     | "chamada_entrante"
     | "chamada_resposta"
     | "chamada_encerrada"
+    | "chamada_fila"
     | "info";
   titulo: string;
   mensagem: string;
