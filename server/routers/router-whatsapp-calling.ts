@@ -22,9 +22,28 @@ import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { obterConfigCanal } from "../escritorio/db-canais";
 import { checkPermissionAdminOuMatriz } from "../escritorio/check-permission";
 import { WhatsAppCloudClient } from "../integracoes/whatsapp-cloud";
+import { explicarErroFacebook } from "./meta-channels";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("router-whatsapp-calling");
+
+/**
+ * Executa uma chamada à Graph API traduzindo erros 4xx pro motivo REAL da Meta
+ * (`err.response.data.error.message`) em vez do genérico "Request failed with
+ * status code 400" do axios. Loga o envelope completo — erro de integração
+ * externa não pode viver só no response (observabilidade).
+ */
+async function comErroMeta<T>(contexto: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err: any) {
+    log.warn(
+      { status: err?.response?.status, fbError: err?.response?.data?.error },
+      `[Calling] ${contexto} falhou`,
+    );
+    throw new Error(explicarErroFacebook(err, contexto));
+  }
+}
 
 interface EscInfo {
   escritorioId: number;
@@ -88,7 +107,9 @@ export const whatsappCallingRouter = router({
     .query(async ({ ctx, input }) => {
       const esc = await getEsc(ctx.user.id);
       const client = await clientDoCanal(esc.escritorioId, input.canalId);
-      const raw = await client.getCallingSettings();
+      const raw = await comErroMeta("Falha ao ler a configuração de ligação", () =>
+        client.getCallingSettings(),
+      );
       const status = typeof raw.status === "string" ? raw.status : "";
       return { habilitado: status.toUpperCase() === "ENABLED", status, raw };
     }),
@@ -110,7 +131,9 @@ export const whatsappCallingRouter = router({
         input.mostrarIcone === undefined
           ? undefined
           : { call_icon_visibility: input.mostrarIcone ? "DEFAULT" : "DISABLE_ALL" };
-      await client.definirStatusCalling(input.habilitar ? "ENABLED" : "DISABLED", extra);
+      await comErroMeta("Falha ao alterar a ligação", () =>
+        client.definirStatusCalling(input.habilitar ? "ENABLED" : "DISABLED", extra),
+      );
       return { habilitado: input.habilitar };
     }),
 
@@ -129,7 +152,9 @@ export const whatsappCallingRouter = router({
       const texto =
         input.texto ||
         "Podemos te ligar pelo WhatsApp para falar sobre o seu atendimento?";
-      const messageId = await client.pedirPermissaoLigacao(input.telefone, texto);
+      const messageId = await comErroMeta("Falha ao enviar o pedido de permissão", () =>
+        client.pedirPermissaoLigacao(input.telefone, texto),
+      );
       return { messageId };
     }),
 
@@ -151,10 +176,8 @@ export const whatsappCallingRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEsc(ctx.user.id);
       const client = await clientDoCanal(esc.escritorioId, input.canalId);
-      const callId = await client.iniciarChamada(
-        input.telefone,
-        input.sdpOffer,
-        input.bizOpaqueCallbackData,
+      const callId = await comErroMeta("Falha ao iniciar a chamada", () =>
+        client.iniciarChamada(input.telefone, input.sdpOffer, input.bizOpaqueCallbackData),
       );
       if (!callId) throw new Error("A Meta não retornou o identificador da chamada.");
 
@@ -182,7 +205,9 @@ export const whatsappCallingRouter = router({
     .input(z.object({ callId: z.string().min(1), sdpAnswer: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const { client } = await carregarChamada(ctx.user.id, input.callId);
-      await client.preAceitarChamada(input.callId, input.sdpAnswer);
+      await comErroMeta("Falha ao pré-aceitar a chamada", () =>
+        client.preAceitarChamada(input.callId, input.sdpAnswer),
+      );
       const db = await getDb();
       if (db) {
         await db
@@ -198,7 +223,9 @@ export const whatsappCallingRouter = router({
     .input(z.object({ callId: z.string().min(1), sdpAnswer: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const { esc, client } = await carregarChamada(ctx.user.id, input.callId);
-      await client.aceitarChamada(input.callId, input.sdpAnswer);
+      await comErroMeta("Falha ao atender a chamada", () =>
+        client.aceitarChamada(input.callId, input.sdpAnswer),
+      );
       const db = await getDb();
       if (db) {
         await db
@@ -214,7 +241,7 @@ export const whatsappCallingRouter = router({
     .input(z.object({ callId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const { client } = await carregarChamada(ctx.user.id, input.callId);
-      await client.rejeitarChamada(input.callId);
+      await comErroMeta("Falha ao recusar a chamada", () => client.rejeitarChamada(input.callId));
       const db = await getDb();
       if (db) {
         await db
@@ -230,7 +257,7 @@ export const whatsappCallingRouter = router({
     .input(z.object({ callId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const { client } = await carregarChamada(ctx.user.id, input.callId);
-      await client.encerrarChamada(input.callId);
+      await comErroMeta("Falha ao encerrar a chamada", () => client.encerrarChamada(input.callId));
       const db = await getDb();
       if (db) {
         await db
