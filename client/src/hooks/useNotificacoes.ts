@@ -55,12 +55,14 @@ export function useNotificacoes(userId: number | undefined) {
         // Ignorar heartbeats e conexão
         if (data.tipo === "conectado") return;
 
-        // Eventos de "atualizacao_progresso" são puramente informativos
-        // (alimentam o drawer "Atualizando…") — não viram toast nem entram
-        // na contagem de não-lidas. Frontend ouve via `window` event abaixo.
-        const ehProgresso = data.dados?.kind === "atualizacao_progresso";
+        // Eventos silenciosos (progresso de atualização e sinalização de
+        // chamada WhatsApp) não viram toast nem entram na contagem — só
+        // alimentam quem ouve o `window` event abaixo (drawer / UI de chamada).
+        const ehSilencioso =
+          data.dados?.kind === "atualizacao_progresso" ||
+          data.dados?.kind === "sinalizacao_chamada";
 
-        if (!ehProgresso) {
+        if (!ehSilencioso) {
           setNotificacoes(prev => [data, ...prev].slice(0, 50));
           setNaoLidas(prev => prev + 1);
 

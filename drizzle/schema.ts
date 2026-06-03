@@ -740,6 +740,57 @@ export const mensagens = mysqlTable("mensagens", {
 export type Mensagem = typeof mensagens.$inferSelect;
 export type InsertMensagem = typeof mensagens.$inferInsert;
 
+/**
+ * Log de chamadas de voz via WhatsApp Business Calling API (Meta Cloud API).
+ *
+ * Cada linha é uma chamada — recebida (entrada) ou feita pela empresa (saída) —
+ * pelo MESMO número/`phone_number_id` já usado na mensageria. `callIdExterno` é
+ * o id opaco da Meta (único por chamada), usado pra casar o evento `terminate`
+ * com o `connect` e pra rotear os comandos de aceitar/encerrar.
+ *
+ * `conversaId`/`contatoId` são best-effort: a chamada é amarrada à conversa do
+ * mesmo contato quando ela existe, pra aparecer na timeline do atendimento.
+ */
+export const chamadas = mysqlTable(
+  "chamadas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdCham").notNull(),
+    canalId: int("canalIdCham").notNull(),
+    contatoId: int("contatoIdCham"),
+    conversaId: int("conversaIdCham"),
+    atendenteId: int("atendenteIdCham"),
+    callIdExterno: varchar("callIdExternoCham", { length: 128 }).notNull(),
+    direcao: mysqlEnum("direcaoCham", ["entrada", "saida"]).notNull(),
+    status: mysqlEnum("statusCham", [
+      "tocando",
+      "conectando",
+      "em_andamento",
+      "encerrada",
+      "rejeitada",
+      "perdida",
+      "falha",
+    ])
+      .default("tocando")
+      .notNull(),
+    telefone: varchar("telefoneCham", { length: 20 }),
+    duracaoSegundos: int("duracaoSegundosCham"),
+    atendidaEm: timestamp("atendidaEmCham"),
+    encerradaEm: timestamp("encerradaEmCham"),
+    bizOpaqueCallbackData: varchar("bizOpaqueCham", { length: 255 }),
+    createdAt: timestamp("createdAtCham").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAtCham").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    uqCallId: uniqueIndex("chamadas_callid_uq").on(t.callIdExterno),
+    idxEscritorio: index("chamadas_escritorio_idx").on(t.escritorioId, t.createdAt),
+    idxConversa: index("chamadas_conversa_idx").on(t.conversaId),
+  }),
+);
+
+export type Chamada = typeof chamadas.$inferSelect;
+export type InsertChamada = typeof chamadas.$inferInsert;
+
 export const leads = mysqlTable("leads", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioIdLead").notNull(),

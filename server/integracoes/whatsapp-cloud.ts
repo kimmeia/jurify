@@ -19,6 +19,12 @@ import type {
 
 const GRAPH_API = "https://graph.facebook.com/v21.0";
 
+// A Calling API (endpoints /calls, /settings de calling e o interactive
+// call_permission_request) só existe a partir da v23.0. Mantida separada da
+// mensageria (v21.0) de propósito: bumpar a versão global mudaria o
+// comportamento de todo o envio de mensagem, que está estável na v21.0.
+const GRAPH_API_CALLS = "https://graph.facebook.com/v23.0";
+
 export interface WACloudConfig {
   accessToken: string;
   phoneNumberId: string;
@@ -96,6 +102,7 @@ export function montarComponentesEnvio(opts: {
 
 export class WhatsAppCloudClient {
   private api: AxiosInstance;
+  private apiCalls: AxiosInstance;
   private phoneNumberId: string;
   private accessToken: string;
 
@@ -104,6 +111,15 @@ export class WhatsAppCloudClient {
     this.accessToken = config.accessToken;
     this.api = axios.create({
       baseURL: GRAPH_API,
+      headers: {
+        "Authorization": `Bearer ${config.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 15000,
+    });
+    // Instância dedicada à Calling API (v23.0) — ver GRAPH_API_CALLS.
+    this.apiCalls = axios.create({
+      baseURL: GRAPH_API_CALLS,
       headers: {
         "Authorization": `Bearer ${config.accessToken}`,
         "Content-Type": "application/json",
@@ -367,6 +383,113 @@ export class WhatsAppCloudClient {
       to: telefone.replace(/\D/g, ""),
       type: "reaction",
       reaction: { message_id: messageId, emoji },
+    });
+    return res.data?.messages?.[0]?.id || "";
+  }
+
+  // ─── Calling API (ligação de voz no mesmo número) ───────────────────────────
+  // Endpoints na v23.0 (this.apiCalls). Fluxo de entrada: webhook envia o
+  // evento `connect` com o SDP offer → preAceitar (mídia) → aceitar (SDP
+  // answer). Saída: pedir permissão → iniciarChamada (SDP offer) → encerrar.
+
+  /** Lê as configurações de calling do número (status habilitado, ícone, etc). */
+  async getCallingSettings(): Promise<Record<string, unknown>> {
+    const res = await this.apiCalls.get(`/${this.phoneNumberId}/settings`, {
+      params: { fields: "calling" },
+    });
+    const calling = res.data?.calling;
+    return (calling && typeof calling === "object" ? calling : {}) as Record<string, unknown>;
+  }
+
+  /**
+   * Habilita ou desabilita calling no número. `extra` aceita campos opcionais
+   * do objeto `calling` da Meta (call_icon_visibility, call_hours, sip...) sem
+   * precisar de um método novo por config.
+   */
+  async definirStatusCalling(
+    status: "ENABLED" | "DISABLED",
+    extra?: Record<string, unknown>,
+  ): Promise<void> {
+    await this.apiCalls.post(`/${this.phoneNumberId}/settings`, {
+      calling: { status, ...(extra || {}) },
+    });
+  }
+
+  /** POST genérico em /calls. `connect` (saída) não tem call_id ainda. */
+  private async acaoChamada(
+    callId: string,
+    action: "connect" | "pre_accept" | "accept" | "reject" | "terminate",
+    session?: { sdp_type: "offer" | "answer"; sdp: string },
+    extra?: Record<string, unknown>,
+  ): Promise<any> {
+    const payload: Record<string, unknown> = {
+      messaging_product: "whatsapp",
+      action,
+      ...(extra || {}),
+    };
+    if (callId) payload.call_id = callId;
+    if (session) payload.session = session;
+    const res = await this.apiCalls.post(`/${this.phoneNumberId}/calls`, payload);
+    return res.data;
+  }
+
+  /**
+   * Pre-aceita uma chamada recebida com o SDP answer. Estabelece a conexão de
+   * mídia ANTES do accept — a Meta recomenda pra conectar mais rápido e evitar
+   * cortar o começo do áudio. `accept` antes de `pre_accept` é rejeitado.
+   */
+  async preAceitarChamada(callId: string, sdpAnswer: string): Promise<void> {
+    await this.acaoChamada(callId, "pre_accept", { sdp_type: "answer", sdp: sdpAnswer });
+  }
+
+  /** Aceita (atende) uma chamada recebida com o SDP answer. */
+  async aceitarChamada(callId: string, sdpAnswer: string): Promise<void> {
+    await this.acaoChamada(callId, "accept", { sdp_type: "answer", sdp: sdpAnswer });
+  }
+
+  /** Recusa uma chamada recebida. */
+  async rejeitarChamada(callId: string): Promise<void> {
+    await this.acaoChamada(callId, "reject");
+  }
+
+  /** Encerra uma chamada em andamento (de qualquer direção). */
+  async encerrarChamada(callId: string): Promise<void> {
+    await this.acaoChamada(callId, "terminate");
+  }
+
+  /**
+   * Inicia uma chamada da empresa pro cliente (business-initiated) com o SDP
+   * offer gerado no navegador do atendente. Exige permissão de ligação já
+   * concedida pelo cliente. Retorna o call_id criado pela Meta.
+   */
+  async iniciarChamada(
+    telefone: string,
+    sdpOffer: string,
+    bizOpaqueCallbackData?: string,
+  ): Promise<string> {
+    const data = await this.acaoChamada("", "connect", { sdp_type: "offer", sdp: sdpOffer }, {
+      to: telefone.replace(/\D/g, ""),
+      ...(bizOpaqueCallbackData ? { biz_opaque_callback_data: bizOpaqueCallbackData } : {}),
+    });
+    return data?.calls?.[0]?.id || "";
+  }
+
+  /**
+   * Envia o pedido de permissão de ligação (interactive call_permission_request).
+   * O cliente precisa aprovar antes da empresa poder ligar (validade de 7 dias).
+   * Retorna o message_id.
+   */
+  async pedirPermissaoLigacao(telefone: string, texto: string): Promise<string> {
+    const res = await this.apiCalls.post(`/${this.phoneNumberId}/messages`, {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: telefone.replace(/\D/g, ""),
+      type: "interactive",
+      interactive: {
+        type: "call_permission_request",
+        action: { name: "call_permission_request" },
+        body: { text: texto },
+      },
     });
     return res.data?.messages?.[0]?.id || "";
   }
