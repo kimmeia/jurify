@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 
 export type EstadoChamada = "idle" | "tocando" | "conectando" | "em_chamada" | "encerrada";
@@ -291,8 +292,11 @@ export function useWhatsappCall() {
     try {
       await permissao.mutateAsync({ canalId: opts.canalId, telefone: opts.telefone });
       setPermissaoEnviada(true);
+      toast.success("Pedido de permissão enviado ao cliente.");
     } catch (e: any) {
-      setErro(e?.message || "Falha ao enviar o pedido de permissão");
+      const msg = e?.message || "Falha ao enviar o pedido de permissão";
+      setErro(msg);
+      toast.error(msg);
     }
   }, [permissao]);
 
