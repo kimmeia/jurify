@@ -130,6 +130,33 @@ export interface SinalizacaoChamada {
 }
 
 /**
+ * Monta o sinal `chamada_entrante` (toque com overlay) a partir do offer + ctx.
+ * Pura. Usado tanto no evento inicial (responsável) quanto no overlay do
+ * overflow (atendentes disponíveis, após N segundos sem atender).
+ */
+export function montarSinalEntrante(
+  callId: string,
+  sdpOffer: string,
+  ctx: ContextoChamadaSSE & { telefone?: string | null },
+): SinalizacaoChamada {
+  return {
+    tipo: "chamada_entrante",
+    titulo: "Chamada recebida",
+    mensagem: ctx.contatoNome || ctx.telefone || "Contato",
+    dados: {
+      kind: "sinalizacao_chamada",
+      callId,
+      direcao: "entrada",
+      telefone: ctx.telefone ?? null,
+      contatoId: ctx.contatoId ?? null,
+      contatoNome: ctx.contatoNome ?? null,
+      conversaId: ctx.conversaId ?? null,
+      sdpOffer,
+    },
+  };
+}
+
+/**
  * Monta o payload SSE de um evento de chamada (ou null quando o evento não
  * gera sinal — ex.: connect sem SDP). Pura.
  *
@@ -171,12 +198,12 @@ export function montarSinalizacaoChamada(
       };
     }
     if (ev.sdpType === "offer") {
-      return {
-        tipo: "chamada_entrante",
-        titulo: "Chamada recebida",
-        mensagem: nome,
-        dados: { ...baseDados, sdpOffer: ev.sdp },
-      };
+      return montarSinalEntrante(ev.callId, ev.sdp, {
+        contatoId: ctx?.contatoId,
+        contatoNome: ctx?.contatoNome,
+        conversaId: ctx?.conversaId,
+        telefone: ev.telefone,
+      });
     }
   }
 
