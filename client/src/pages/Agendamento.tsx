@@ -3,7 +3,7 @@
  * Etapa 2 + 4: Calendário com integrações
  */
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,12 +14,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
 import {
   CalendarDays, Plus, Loader2, Clock,
-  CheckCircle, ChevronLeft, ChevronRight, Trash2, Ban, CalendarOff, Download,
+  CheckCircle, ChevronLeft, ChevronRight, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -72,7 +71,6 @@ export default function Agendamento() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [bloquearDialog, setBloquearDialog] = useState<{ ano: number; mes: number; dia: number } | null>(null);
 
   // Queries
   const agendamentosQuery = trpc.agendamento.listar.useQuery({
@@ -81,41 +79,8 @@ export default function Agendamento() {
   });
   const contadoresQuery = trpc.agendamento.contadores.useQuery();
   const proximosQuery = trpc.agendamento.proximos.useQuery({ limite: 5 });
-  const bloqueiosQuery = trpc.agendamento.bloqueiosListar.useQuery();
 
   const agendamentos = agendamentosQuery.data || [];
-  const bloqueios = bloqueiosQuery.data || [];
-
-  // Resolve quais dias do MÊS visível estão bloqueados, expandindo
-  // recorrência anual (feriado fixo bate todo ano nessa data/mês).
-  // Map: dia → bloqueios aplicáveis (1+ pode existir).
-  const bloqueiosPorDia = useMemo(() => {
-    const map: Record<number, typeof bloqueios> = {};
-    const mes2 = String(currentMonth + 1).padStart(2, "0");
-    for (const b of bloqueios) {
-      const [bAno, bMes, bDia] = b.data.split("-");
-      const bate = b.recorrenteAnual ? bMes === mes2 : (bMes === mes2 && Number(bAno) === currentYear);
-      if (!bate) continue;
-      const dia = Number(bDia);
-      if (!map[dia]) map[dia] = [];
-      map[dia].push(b);
-    }
-    return map;
-  }, [bloqueios, currentMonth, currentYear]);
-
-  const importarMut = trpc.agendamento.bloqueioImportarFeriadosNacionais.useMutation({
-    onSuccess: (r) => {
-      bloqueiosQuery.refetch();
-      toast.success(r.criados > 0
-        ? `${r.criados} feriado(s) importado(s)${r.jaExistiam ? ` (${r.jaExistiam} já existiam)` : ""}`
-        : "Todos os feriados nacionais já estavam cadastrados.");
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-  const removerBloqueioMut = trpc.agendamento.bloqueioExcluir.useMutation({
-    onSuccess: () => { bloqueiosQuery.refetch(); toast.success("Bloqueio removido"); },
-    onError: (e: any) => toast.error(e.message),
-  });
 
   // Agrupar por dia
   const agendamentosPorDia = useMemo(() => {
@@ -156,15 +121,6 @@ export default function Agendamento() {
           <h1 className="text-2xl font-bold tracking-tight">Agendamento</h1>
           <p className="text-sm text-muted-foreground">Compromissos, prazos e tarefas do escritório</p>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => importarMut.mutate({ ano: currentYear })}
-          disabled={importarMut.isPending}
-          title={`Cria os 12 feriados federais de ${currentYear} como bloqueios anuais recorrentes. Idempotente — não duplica se já existirem.`}
-        >
-          {importarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
-          Feriados {currentYear}
-        </Button>
         <Button onClick={() => setShowCriar(true)}>
           <Plus className="h-4 w-4 mr-2" /> Novo
         </Button>
@@ -212,49 +168,21 @@ export default function Agendamento() {
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-px">
-                {renderCalendarDays(currentYear, currentMonth, agendamentosPorDia, bloqueiosPorDia, selectedDay, (day) => setSelectedDay(day === selectedDay ? null : day))}
+                {renderCalendarDays(currentYear, currentMonth, agendamentosPorDia, selectedDay, (day) => setSelectedDay(day === selectedDay ? null : day))}
               </div>
 
               {selectedDay && (
                 <div className="mt-4 pt-4 border-t">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold">{selectedDay} de {MESES[currentMonth]}</h4>
-                    <Button size="sm" variant="outline"
-                      onClick={() => setBloquearDialog({ ano: currentYear, mes: currentMonth, dia: selectedDay })}
-                    >
-                      <Ban className="h-3.5 w-3.5 mr-1.5" /> Bloquear
-                    </Button>
-                  </div>
-                  {bloqueiosPorDia[selectedDay]?.length ? (
-                    <div className="space-y-1.5 mb-3">
-                      {bloqueiosPorDia[selectedDay].map((b) => (
-                        <div key={b.id} className="flex items-center gap-2 text-xs bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 rounded-md px-2.5 py-1.5">
-                          <CalendarOff className="h-3.5 w-3.5 text-red-600 shrink-0" />
-                          <span className="font-medium text-red-700 dark:text-red-300">
-                            {b.horaInicio && b.horaFim ? `${b.horaInicio}–${b.horaFim}` : "Dia inteiro"}
-                          </span>
-                          {b.motivo && <span className="text-red-600/80 dark:text-red-400/80 truncate">· {b.motivo}</span>}
-                          {b.recorrenteAnual && <Badge variant="outline" className="ml-1 text-[10px] h-4 px-1 border-red-300 text-red-700">anual</Badge>}
-                          <button
-                            className="ml-auto text-red-600 hover:text-red-800"
-                            onClick={() => removerBloqueioMut.mutate({ id: b.id })}
-                            title="Remover bloqueio"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
+                  <h4 className="text-sm font-semibold mb-3">{selectedDay} de {MESES[currentMonth]}</h4>
                   {agendamentosPorDia[selectedDay]?.length ? (
                     <div className="space-y-2">
                       {agendamentosPorDia[selectedDay].map((a) => (
                         <AgendamentoCard key={a.id} agendamento={a} onUpdated={() => agendamentosQuery.refetch()} />
                       ))}
                     </div>
-                  ) : (!bloqueiosPorDia[selectedDay]?.length && (
+                  ) : (
                     <p className="text-sm text-muted-foreground">Nenhum compromisso neste dia.</p>
-                  ))}
+                  )}
                 </div>
               )}
             </CardContent>
@@ -324,120 +252,7 @@ export default function Agendamento() {
           proximosQuery.refetch();
         }}
       />
-
-      <BloquearDiaDialog
-        ctx={bloquearDialog}
-        onOpenChange={(o) => { if (!o) setBloquearDialog(null); }}
-        onCreated={() => bloqueiosQuery.refetch()}
-      />
     </div>
-  );
-}
-
-// ─── Bloquear Dia Dialog ────────────────────────────────────────────────────
-
-function BloquearDiaDialog({
-  ctx, onOpenChange, onCreated,
-}: {
-  ctx: { ano: number; mes: number; dia: number } | null;
-  onOpenChange: (open: boolean) => void;
-  onCreated: () => void;
-}) {
-  const [modo, setModo] = useState<"dia" | "horario">("dia");
-  const [horaInicio, setHoraInicio] = useState("12:00");
-  const [horaFim, setHoraFim] = useState("14:00");
-  const [motivo, setMotivo] = useState("");
-  const [recorrenteAnual, setRecorrenteAnual] = useState(false);
-
-  // Reset ao abrir/trocar de dia
-  useEffect(() => {
-    if (ctx) {
-      setModo("dia"); setHoraInicio("12:00"); setHoraFim("14:00");
-      setMotivo(""); setRecorrenteAnual(false);
-    }
-  }, [ctx]);
-
-  const criarMut = trpc.agendamento.bloqueioCriar.useMutation({
-    onSuccess: () => { onCreated(); onOpenChange(false); toast.success("Bloqueio criado"); },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  if (!ctx) return null;
-  const dataISO = `${ctx.ano}-${String(ctx.mes + 1).padStart(2, "0")}-${String(ctx.dia).padStart(2, "0")}`;
-
-  return (
-    <Dialog open={!!ctx} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Bloquear {ctx.dia} de {MESES[ctx.mes]} de {ctx.ano}</DialogTitle>
-          <DialogDescription>
-            Dias e horários bloqueados não aparecem na agenda do cliente — a IA não oferece.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-2">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setModo("dia")}
-              className={`flex-1 px-3 py-2 text-sm rounded-md border ${modo === "dia" ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20 font-medium" : "border-muted"}`}
-            >
-              Dia inteiro
-            </button>
-            <button
-              type="button"
-              onClick={() => setModo("horario")}
-              className={`flex-1 px-3 py-2 text-sm rounded-md border ${modo === "horario" ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20 font-medium" : "border-muted"}`}
-            >
-              Horário específico
-            </button>
-          </div>
-
-          {modo === "horario" && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="bloq-ini">Início</Label>
-                <Input id="bloq-ini" type="time" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} />
-              </div>
-              <div>
-                <Label htmlFor="bloq-fim">Fim</Label>
-                <Input id="bloq-fim" type="time" value={horaFim} onChange={(e) => setHoraFim(e.target.value)} />
-              </div>
-            </div>
-          )}
-
-          <div>
-            <Label htmlFor="bloq-motivo">Motivo (opcional)</Label>
-            <Input id="bloq-motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ex: Feriado municipal, evento interno..." maxLength={200} />
-          </div>
-
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="bloq-anual" className="cursor-pointer">Repetir todo ano nessa data</Label>
-              <p className="text-xs text-muted-foreground">Use pra feriados fixos (ex: 25/12, 01/01).</p>
-            </div>
-            <Switch id="bloq-anual" checked={recorrenteAnual} onCheckedChange={setRecorrenteAnual} />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button
-            onClick={() => criarMut.mutate({
-              data: dataISO,
-              horaInicio: modo === "horario" ? horaInicio : null,
-              horaFim: modo === "horario" ? horaFim : null,
-              motivo: motivo.trim() || null,
-              recorrenteAnual,
-            })}
-            disabled={criarMut.isPending}
-          >
-            {criarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-            Bloquear
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -445,7 +260,6 @@ function BloquearDiaDialog({
 
 function renderCalendarDays(
   year: number, month: number, eventos: Record<number, any[]>,
-  bloqueiosPorDia: Record<number, Array<{ horaInicio: string | null; motivo: string | null }>>,
   selectedDay: number | null, onSelect: (day: number) => void,
 ) {
   const daysInMonth = getDaysInMonth(year, month);
@@ -458,43 +272,21 @@ function renderCalendarDays(
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dayEvents = eventos[day] || [];
-    const dayBloqueios = bloqueiosPorDia[day] || [];
-    const diaInteiroBloqueado = dayBloqueios.some((b) => !b.horaInicio);
     const isToday = isCurrentMonth && today.getDate() === day;
     const isSelected = selectedDay === day;
 
     cells.push(
       <button key={day} onClick={() => onSelect(day)}
         className={`h-20 p-1 text-left border rounded-md transition-colors hover:bg-muted/50 ${
-          isSelected
-            ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20"
-            : diaInteiroBloqueado
-              ? "border-red-200 bg-red-50/60 dark:bg-red-900/10"
-              : "border-transparent"
-        } ${isToday ? "ring-2 ring-blue-300" : ""}`}
-        title={diaInteiroBloqueado ? dayBloqueios.find((b) => !b.horaInicio)?.motivo || "Dia bloqueado" : undefined}
-      >
-        <span className={`text-xs font-medium ${isToday ? "bg-blue-600 text-white px-1.5 py-0.5 rounded-full" : diaInteiroBloqueado ? "text-red-700 dark:text-red-300" : "text-muted-foreground"}`}>
-          {day}
-        </span>
+          isSelected ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20" : "border-transparent"
+        } ${isToday ? "ring-2 ring-blue-300" : ""}`}>
+        <span className={`text-xs font-medium ${isToday ? "bg-blue-600 text-white px-1.5 py-0.5 rounded-full" : "text-muted-foreground"}`}>{day}</span>
         <div className="mt-0.5 space-y-0.5 overflow-hidden">
-          {diaInteiroBloqueado ? (
-            <div className="text-[10px] leading-tight truncate px-1 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 flex items-center gap-1">
-              <CalendarOff className="h-2.5 w-2.5" />
-              <span className="truncate">{dayBloqueios.find((b) => !b.horaInicio)?.motivo || "Bloqueado"}</span>
-            </div>
-          ) : (
-            <>
-              {dayEvents.slice(0, 3).map((e: any, i: number) => (
-                <div key={i} className="text-[10px] leading-tight truncate px-1 py-0.5 rounded"
-                  style={{ backgroundColor: `${e.corHex}20`, color: e.corHex }}>{e.titulo}</div>
-              ))}
-              {dayEvents.length > 3 && <span className="text-[10px] text-muted-foreground">+{dayEvents.length - 3}</span>}
-              {dayBloqueios.length > 0 && (
-                <div className="text-[10px] text-red-600 dark:text-red-400">{dayBloqueios.length} bloqueio(s)</div>
-              )}
-            </>
-          )}
+          {dayEvents.slice(0, 3).map((e: any, i: number) => (
+            <div key={i} className="text-[10px] leading-tight truncate px-1 py-0.5 rounded"
+              style={{ backgroundColor: `${e.corHex}20`, color: e.corHex }}>{e.titulo}</div>
+          ))}
+          {dayEvents.length > 3 && <span className="text-[10px] text-muted-foreground">+{dayEvents.length - 3}</span>}
         </div>
       </button>
     );
