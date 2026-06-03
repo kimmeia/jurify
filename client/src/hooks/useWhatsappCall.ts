@@ -140,22 +140,6 @@ export function useWhatsappCall() {
     }, 2500);
   }, [limparMidia, definirChamada]);
 
-  /**
-   * Encerra uma ligação de saída que a API recusou, mantendo a UI aberta com a
-   * opção de pedir permissão (causa mais comum de recusa). Sem auto-reset.
-   */
-  const encerrarComPermissao = useCallback(
-    (msg: string) => {
-      limparMidia();
-      ofertaPendenteRef.current = null;
-      setMudo(false);
-      setErro(msg);
-      setPrecisaPermissao(true);
-      setEstado("encerrada");
-    },
-    [limparMidia],
-  );
-
   const iniciarTimer = useCallback(() => {
     if (timerRef.current) return;
     setDuracao(0);
@@ -262,27 +246,44 @@ export function useWhatsappCall() {
         await esperarIceCompleto(pc);
         const sdpOffer = pc.localDescription?.sdp || offer.sdp || "";
         chegouNaApi = true;
-        const { callId } = await iniciar.mutateAsync({
+        const res = await iniciar.mutateAsync({
           canalId: opts.canalId,
           telefone: opts.telefone,
           sdpOffer,
           contatoId: opts.contatoId,
           conversaId: opts.conversaId,
         });
-        // Guarda o callId e espera o answer da Meta via SSE (chamada_resposta).
-        if (chamadaRef.current) definirChamada({ ...chamadaRef.current, callId });
+        if (res.status === "permissao_solicitada") {
+          // Cliente ainda não autorizou — o backend já disparou o pedido.
+          limparMidia();
+          ofertaPendenteRef.current = null;
+          setMudo(false);
+          setErro("");
+          setPrecisaPermissao(true);
+          setPermissaoEnviada(true);
+          setEstado("encerrada");
+          toast.success("Pedido de permissão enviado ao cliente. Quando ele aprovar, é só ligar de novo.");
+          return;
+        }
+        // status "chamando": guarda o callId e espera o answer via SSE.
+        if (chamadaRef.current) definirChamada({ ...chamadaRef.current, callId: res.callId });
       } catch (e: any) {
         const msg = e?.message || "Falha ao iniciar a chamada";
-        // Erro na chamada à Meta (não na mídia local) → provável falta de
-        // permissão. Mantém a UI com a opção de pedir permissão.
-        if (chegouNaApi) encerrarComPermissao(msg);
-        else {
+        if (chegouNaApi) {
+          // Erro da API (ex.: ligação não habilitada) — mantém a UI com o motivo.
+          limparMidia();
+          ofertaPendenteRef.current = null;
+          setMudo(false);
+          setErro(msg);
+          setEstado("encerrada");
+        } else {
+          // Erro de mídia local (microfone).
           setErro(msg);
           finalizar();
         }
       }
     },
-    [montarPeer, iniciar, definirChamada, finalizar, encerrarComPermissao],
+    [montarPeer, iniciar, definirChamada, finalizar, limparMidia],
   );
 
   /** Envia o pedido de permissão de ligação ao cliente (reusa a última ligação). */

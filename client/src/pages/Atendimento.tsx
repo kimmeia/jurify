@@ -29,8 +29,7 @@ import { ComplianceGuard, ComplianceGuardBadge } from "./atendimento/compliance-
 import { LinhaTempoUnificada } from "./atendimento/linha-tempo-unificada";
 import { AIRail } from "./atendimento/ai-rail";
 import { CentroDeComando } from "./atendimento/centro-de-comando";
-import { ChamadaOverlay } from "./atendimento/chamada-overlay";
-import { useWhatsappCall } from "@/hooks/useWhatsappCall";
+import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { Sparkles, ScrollText, Bot } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
@@ -350,9 +349,9 @@ export default function Atendimento() {
   const [periodoFiltro, setPeriodoFiltro] = useState<"todos" | "7d" | "30d" | "90d">("todos");
   const [showFiltros, setShowFiltros] = useState(false);
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
-  // Ligação de voz via WhatsApp (Calling API). O hook escuta o SSE global, então
-  // chamadas recebidas tocam aqui enquanto o atendente estiver nesta página.
-  const chamadaWa = useWhatsappCall();
+  // Ligação de voz via WhatsApp (Calling API). Instância global (montada no
+  // AppLayout) — a chamada toca em qualquer tela; aqui só usamos pra ligar.
+  const chamadaWa = useChamadaWhatsapp();
   const [showLinhaTempo, setShowLinhaTempo] = useState<number | null>(null);
 
   // Deep link vindo do CRM (ex.: botão "Inbox" na ficha do cliente):
@@ -815,7 +814,6 @@ export default function Atendimento() {
       </Tabs>
       {waPopup && <WhatsAppCallPopup phone={waPopup} onClose={() => setWaPopup(null)} />}
       {telPopup && <TwilioCallPopup phone={telPopup} onClose={() => setTelPopup(null)} />}
-      <ChamadaOverlay chamada={chamadaWa} />
       <IniciarConversaDialog
         open={showIniciar}
         onOpenChange={(v) => { setShowIniciar(v); if (!v) setPreencherConversa(null); }}
