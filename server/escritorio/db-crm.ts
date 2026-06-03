@@ -685,6 +685,13 @@ export async function criarLead(dados: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
+  // Quando o lead já nasce como fechado_ganho/fechado_perdido (via "Cliente
+  // já fechou" no cadastro novo ou via botão "Registrar Fechamento"), o
+  // momento real do fechamento É o createdAt — pode até ser uma data
+  // retroativa informada pelo operador. fechadoEm acompanha o createdAt
+  // pra ficar fiel a essa intenção.
+  const ehFechadaInicial = dados.etapaFunil === "fechado_ganho" || dados.etapaFunil === "fechado_perdido";
+  const fechadoEmInicial = ehFechadaInicial ? (dados.createdAt ?? new Date()) : null;
   const [result] = await db.insert(leads).values({
     escritorioId: dados.escritorioId,
     contatoId: dados.contatoId,
@@ -696,6 +703,7 @@ export async function criarLead(dados: {
     valorEstimado: normalizarValorBR(dados.valorEstimado),
     origemLead: dados.origemLead || null,
     etapaFunil: dados.etapaFunil || "novo",
+    fechadoEm: fechadoEmInicial,
     ...(dados.createdAt ? { createdAt: dados.createdAt } : {}),
   });
   return (result as { insertId: number }).insertId;
