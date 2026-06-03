@@ -33,7 +33,7 @@ import {
 import {
   User, Star, DollarSign, Gavel, TrendingUp, CheckSquare, Calendar,
   StickyNote, PenLine, Plus, Phone, Mail, Loader2, ChevronDown, ChevronRight,
-  AlertTriangle, ExternalLink, Copy, Sparkles, RefreshCw, Pencil, X, Check,
+  AlertTriangle, ExternalLink, Copy, Sparkles, RefreshCw, Pencil, X, Check, Bot,
 } from "lucide-react";
 import { toast } from "sonner";
 import { parseValorBR } from "@shared/valor-br";
@@ -77,12 +77,20 @@ export function CustomerPanel({
   onOpenFinanceiro,
   onOpenAgendar,
   onOpenWhatsapp,
+  botManaged,
+  botPausado,
+  togglingBot,
+  onToggleBot,
 }: {
   contatoId: number;
   conversaId?: number;
   onOpenFinanceiro?: () => void;
   onOpenAgendar?: () => void;
   onOpenWhatsapp?: (phone: string) => void;
+  botManaged?: boolean;
+  botPausado?: boolean;
+  togglingBot?: boolean;
+  onToggleBot?: () => void;
 }) {
   const { data, isLoading, refetch } = trpc.customer360.getContext.useQuery(
     { contatoId },
@@ -119,6 +127,93 @@ export function CustomerPanel({
 
   return (
     <div className="h-full overflow-y-auto space-y-3 pb-4">
+      {/* ─── Controle do bot (pausar/reativar atendimento automático) ─── */}
+      {botManaged && onToggleBot && (
+        <div className="px-4 pt-4">
+          <div
+            className={
+              "rounded-xl border p-3 " +
+              (botPausado
+                ? "bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900"
+                : "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900")
+            }
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div
+                  className={
+                    "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 " +
+                    (botPausado
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
+                      : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300")
+                  }
+                >
+                  <Bot className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p
+                    className={
+                      "text-xs font-bold leading-tight " +
+                      (botPausado ? "text-amber-800 dark:text-amber-200" : "text-emerald-800 dark:text-emerald-200")
+                    }
+                  >
+                    {botPausado ? "Bot pausado" : "Bot ativo"}
+                  </p>
+                  <p
+                    className={
+                      "text-[10px] leading-tight " +
+                      (botPausado ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")
+                    }
+                  >
+                    {botPausado ? "Você conduz o atendimento" : "Fluxo responde automaticamente"}
+                  </p>
+                </div>
+              </div>
+              {/* switch (ligado = bot ativo) */}
+              <button
+                onClick={onToggleBot}
+                disabled={togglingBot}
+                title="Pausar / reativar o bot"
+                className={
+                  "relative w-11 h-6 rounded-full transition shrink-0 disabled:opacity-50 " +
+                  (botPausado ? "bg-slate-300 dark:bg-slate-700" : "bg-emerald-500")
+                }
+              >
+                <span
+                  className={
+                    "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all " +
+                    (botPausado ? "left-0.5" : "left-[22px]")
+                  }
+                />
+              </button>
+            </div>
+            <p
+              className={
+                "text-[10px] mt-2 leading-snug " +
+                (botPausado ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300")
+              }
+            >
+              {botPausado
+                ? "O fluxo não responde enquanto você está no comando. Reative para devolver o atendimento ao bot na próxima mensagem."
+                : "O bot responde sozinho. Pause para assumir você mesmo — também pausa automaticamente quando você envia uma mensagem."}
+            </p>
+            <button
+              onClick={onToggleBot}
+              disabled={togglingBot}
+              className={
+                "w-full mt-2 h-8 rounded-lg text-[11px] font-semibold border transition disabled:opacity-50 inline-flex items-center justify-center gap-1 " +
+                (botPausado
+                  ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
+                  : "bg-transparent text-amber-700 border-amber-300 hover:bg-amber-100 dark:text-amber-200 dark:border-amber-800 dark:hover:bg-amber-900/40")
+              }
+            >
+              {togglingBot && <Loader2 className="h-3 w-3 animate-spin" />}
+              {botPausado ? "Reativar bot" : "Pausar bot (assumir)"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ─── Card 1: Resumo (sempre aberto) ─── */}
       <div className="px-4 pt-4">
         <div className="flex items-start gap-3 mb-3">
