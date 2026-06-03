@@ -29,6 +29,7 @@ import { ComplianceGuard, ComplianceGuardBadge } from "./atendimento/compliance-
 import { LinhaTempoUnificada } from "./atendimento/linha-tempo-unificada";
 import { AIRail } from "./atendimento/ai-rail";
 import { CentroDeComando } from "./atendimento/centro-de-comando";
+import { FilaChamadas } from "./atendimento/fila-chamadas";
 import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { Sparkles, ScrollText, Bot } from "lucide-react";
 
@@ -452,6 +453,18 @@ export default function Atendimento() {
     setTab("inbox");
   }, []);
 
+  // Abre a aba "Chamadas" quando o widget flutuante pede (mesma página via
+  // evento; vindo de outra página via flag no sessionStorage).
+  useEffect(() => {
+    if (sessionStorage.getItem("jurify_abrir_chamadas")) {
+      sessionStorage.removeItem("jurify_abrir_chamadas");
+      setTab("chamadas");
+    }
+    const abrir = () => setTab("chamadas");
+    window.addEventListener("jurify:abrir-chamadas", abrir);
+    return () => window.removeEventListener("jurify:abrir-chamadas", abrir);
+  }, []);
+
   // Sem `max-w-7xl mx-auto` no wrapper: o Atendimento é dashboard-style e a
   // inbox ganha mais espaço útil pro chat (coluna do meio = `1fr`) quanto
   // mais largo for o viewport — o operador reclamava do canto vazio.
@@ -465,6 +478,14 @@ export default function Atendimento() {
           <TabsList className="h-10 w-auto">
             <TabsTrigger value="inbox" className="text-xs sm:text-sm gap-1.5 px-4"><Inbox className="h-3.5 w-3.5" /> Inbox</TabsTrigger>
             <TabsTrigger value="pipeline" className="text-xs sm:text-sm gap-1.5 px-4"><TrendingUp className="h-3.5 w-3.5" /> Pipeline</TabsTrigger>
+            <TabsTrigger value="chamadas" className="text-xs sm:text-sm gap-1.5 px-4">
+              <Phone className="h-3.5 w-3.5" /> Chamadas
+              {chamadaWa.filaAoVivo.length > 0 && (
+                <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
+                  {chamadaWa.filaAoVivo.length}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
           <div className="flex-1" />
           <Button
@@ -811,6 +832,7 @@ export default function Atendimento() {
           </div>
         </TabsContent>
         <TabsContent value="pipeline" className="mt-4"><PipelineKanban leads={leads || []} onUpdate={rL} onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined} onAddLead={() => setShowNovoLead(true)} onGoToConversa={goToConversaFromLead} onDragChange={setPipelineDragAtivo} /></TabsContent>
+        <TabsContent value="chamadas"><FilaChamadas chamada={chamadaWa} /></TabsContent>
       </Tabs>
       {waPopup && <WhatsAppCallPopup phone={waPopup} onClose={() => setWaPopup(null)} />}
       {telPopup && <TwilioCallPopup phone={telPopup} onClose={() => setTelPopup(null)} />}

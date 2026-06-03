@@ -12,16 +12,23 @@
 
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "../db";
-import { chamadas, conversas } from "../../drizzle/schema";
+import { chamadas, conversas, mensagens } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
 import { resolverCanalDaMensagem } from "./whatsapp-cloud-webhook";
 import { buscarContatoPorTelefone } from "../escritorio/db-crm";
+import { obterConfigCanal } from "../escritorio/db-canais";
+import { WhatsAppCloudClient } from "./whatsapp-cloud";
 import { emitirParaEscritorio, emitirParaAtendente } from "../_core/sse-notifications";
 import {
   montarSinalizacaoChamada,
+  montarSinalFila,
   normalizarEventoChamada,
   type EventoChamadaMeta,
 } from "../../shared/whatsapp-calling-types";
+
+/** Mensagem automática enviada quando uma chamada recebida é perdida. */
+const TEXTO_PERDIDA =
+  "Olá! Vimos que você tentou nos ligar e não conseguimos atender. Já vamos te retornar. Se preferir, pode escrever sua dúvida por aqui. 🙏";
 
 const log = createLogger("integracoes-whatsapp-calling");
 
@@ -140,5 +147,72 @@ async function registrarEventoChamada(canalInfo: CanalChamada, call: EventoChama
     } else {
       await emitirParaEscritorio(canalInfo.escritorioId, sinal);
     }
+  }
+
+  // ── Fila (escritório-wide): qualquer atendente vê e pode assumir ──────────
+  const ctxFila = {
+    contatoId,
+    contatoNome,
+    telefone: ev.telefone || null,
+    conversaId,
+    responsavelId: conversaAtendenteId,
+  };
+  if (ev.evento === "connect" && ev.direcao === "entrada" && ev.sdp) {
+    // Entra na fila de todos — carrega o offer pra quem assumir responder.
+    await emitirParaEscritorio(
+      canalInfo.escritorioId,
+      montarSinalFila(ev.callId, "tocando", ctxFila, ev.sdp),
+    );
+  } else if (ev.evento === "terminate") {
+    // Sai da fila de todos.
+    await emitirParaEscritorio(canalInfo.escritorioId, montarSinalFila(ev.callId, "removida", ctxFila));
+  }
+
+  // ── Chamada recebida perdida (ninguém atendeu, não foi recusa) → WhatsApp ──
+  if (
+    ev.evento === "terminate" &&
+    ev.direcao === "entrada" &&
+    existente &&
+    !existente.atendidaEm &&
+    existente.status !== "rejeitada"
+  ) {
+    await avisarPerdidaPorWhatsapp(canalInfo, ev.telefone, conversaId);
+  }
+}
+
+/**
+ * Manda o WhatsApp automático de "já te retornamos" quando a chamada recebida
+ * é perdida, e registra na conversa pra o atendente ver. Best-effort.
+ */
+async function avisarPerdidaPorWhatsapp(
+  canalInfo: CanalChamada,
+  telefone: string,
+  conversaId: number | null,
+): Promise<void> {
+  if (!telefone) return;
+  try {
+    const cfg = await obterConfigCanal(canalInfo.canalId, canalInfo.escritorioId);
+    if (!cfg?.accessToken || !cfg?.phoneNumberId) return;
+    const client = new WhatsAppCloudClient({
+      accessToken: cfg.accessToken,
+      phoneNumberId: cfg.phoneNumberId,
+      wabaId: cfg.wabaId,
+    });
+    const messageId = await client.enviarTexto(telefone, TEXTO_PERDIDA);
+
+    const db = await getDb();
+    if (db && conversaId) {
+      await db.insert(mensagens).values({
+        conversaId,
+        direcao: "saida",
+        tipo: "texto",
+        conteudo: TEXTO_PERDIDA,
+        status: "enviada",
+        idExterno: messageId || null,
+      });
+    }
+    log.info({ telefone, conversaId }, "[WA Calling] chamada perdida — WhatsApp automático enviado");
+  } catch (err: any) {
+    log.warn("[WA Calling] falha ao enviar WhatsApp de chamada perdida:", err?.message);
   }
 }

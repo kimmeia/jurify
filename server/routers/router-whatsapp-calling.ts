@@ -14,14 +14,16 @@
  */
 
 import { z } from "zod";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { chamadas } from "../../drizzle/schema";
+import { chamadas, contatos, colaboradores, users } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { obterConfigCanal } from "../escritorio/db-canais";
 import { checkPermissionAdminOuMatriz } from "../escritorio/check-permission";
 import { WhatsAppCloudClient } from "../integracoes/whatsapp-cloud";
+import { emitirParaEscritorio } from "../_core/sse-notifications";
+import { montarSinalFila } from "../../shared/whatsapp-calling-types";
 import { explicarErroFacebook } from "./meta-channels";
 import { createLogger } from "../_core/logger";
 
@@ -245,7 +247,7 @@ export const whatsappCallingRouter = router({
   aceitar: protectedProcedure
     .input(z.object({ callId: z.string().min(1), sdpAnswer: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const { esc, client } = await carregarChamada(ctx.user.id, input.callId);
+      const { esc, cham, client } = await carregarChamada(ctx.user.id, input.callId);
       await comErroMeta("Falha ao atender a chamada", () =>
         client.aceitarChamada(input.callId, input.sdpAnswer),
       );
@@ -256,6 +258,16 @@ export const whatsappCallingRouter = router({
           .set({ status: "em_andamento", atendenteId: esc.colaboradorId, atendidaEm: new Date() })
           .where(eq(chamadas.callIdExterno, input.callId));
       }
+      // Sai da fila de todos (quem assumiu pegou) e some o card de "tocando".
+      await emitirParaEscritorio(
+        esc.escritorioId,
+        montarSinalFila(input.callId, "removida", {
+          contatoId: cham.contatoId,
+          conversaId: cham.conversaId,
+          telefone: cham.telefone,
+          responsavelId: esc.colaboradorId,
+        }),
+      );
       return { ok: true };
     }),
 
@@ -290,6 +302,49 @@ export const whatsappCallingRouter = router({
       }
       return { ok: true };
     }),
+
+  /**
+   * Fila de chamadas do escritório: ativas (tocando/conectando/em atendimento)
+   * + perdidas recentes (últimas 24h). Alimenta o painel "Chamadas" + o widget.
+   * Nomes (contato/atendente) vêm do join; o SDP pra "assumir" vem via SSE.
+   */
+  fila: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEsc(ctx.user.id);
+    const db = await getDb();
+    if (!db) return { ativas: [], perdidas: [] };
+    const desde = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        id: chamadas.id,
+        callId: chamadas.callIdExterno,
+        direcao: chamadas.direcao,
+        status: chamadas.status,
+        telefone: chamadas.telefone,
+        contatoId: chamadas.contatoId,
+        conversaId: chamadas.conversaId,
+        canalId: chamadas.canalId,
+        atendenteId: chamadas.atendenteId,
+        duracaoSegundos: chamadas.duracaoSegundos,
+        atendidaEm: chamadas.atendidaEm,
+        createdAt: chamadas.createdAt,
+        contatoNome: contatos.nome,
+        atendenteNome: users.name,
+      })
+      .from(chamadas)
+      .leftJoin(contatos, eq(chamadas.contatoId, contatos.id))
+      .leftJoin(colaboradores, eq(chamadas.atendenteId, colaboradores.id))
+      .leftJoin(users, eq(colaboradores.userId, users.id))
+      .where(and(eq(chamadas.escritorioId, esc.escritorioId), gte(chamadas.createdAt, desde)))
+      .orderBy(desc(chamadas.createdAt))
+      .limit(60);
+
+    const ativasStatus = new Set(["tocando", "conectando", "em_andamento"]);
+    const perdidasStatus = new Set(["perdida", "falha"]);
+    return {
+      ativas: rows.filter((r) => ativasStatus.has(r.status)),
+      perdidas: rows.filter((r) => perdidasStatus.has(r.status)),
+    };
+  }),
 
   /** Histórico de chamadas do escritório (opcionalmente filtrado por contato). */
   historico: protectedProcedure
