@@ -15,7 +15,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
-import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter } from "lucide-react";
+import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
@@ -29,6 +29,7 @@ import { ComplianceGuard, ComplianceGuardBadge } from "./atendimento/compliance-
 import { LinhaTempoUnificada } from "./atendimento/linha-tempo-unificada";
 import { AIRail } from "./atendimento/ai-rail";
 import { CentroDeComando } from "./atendimento/centro-de-comando";
+import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
 import { Sparkles, ScrollText, Bot } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
@@ -794,6 +795,8 @@ export default function Atendimento() {
                 <AIRail
                   conversaId={selId}
                   contatoId={convAtual?.contatoId || null}
+                  conversaStatus={convAtual?.status}
+                  onUpdate={rC}
                   onAbrirLinhaTempo={() => convAtual?.contatoId && setShowLinhaTempo(convAtual.contatoId)}
                   onOpenWhatsapp={
                     hasWhatsapp
@@ -827,49 +830,6 @@ export default function Atendimento() {
           />
         );
       })()}
-    </div>
-  );
-}
-
-/** Alerta financeiro no chat — verifica CPF do contato no Asaas */
-function AlertaFinanceiroChat({ contatoId, contatoNome }: { contatoId: number; contatoNome: string }) {
-  const { data: asaasStatus } = trpc.asaas.status.useQuery(undefined, { retry: false });
-  const { data: resumo } = trpc.asaas.resumoContato.useQuery(
-    { contatoId },
-    { retry: false, enabled: !!asaasStatus?.conectado && !!contatoId }
-  );
-
-  if (!asaasStatus?.conectado || !resumo?.vinculado) return null;
-
-  const vencido = resumo.vencido || 0;
-  const pendente = resumo.pendente || 0;
-  const total = vencido + pendente;
-
-  if (total <= 0) return null;
-
-  const formatBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-
-  if (vencido > 0) {
-    return (
-      <div className="mx-4 mt-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2">
-        <DollarSign className="h-4 w-4 text-red-500 shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium text-red-700">{contatoNome} tem {formatBRL(vencido)} vencido{pendente > 0 ? ` + ${formatBRL(pendente)} pendente` : ""}</p>
-          {resumo.cobrancas && resumo.cobrancas.length > 0 && (
-            <p className="text-[10px] text-red-600 mt-0.5">
-              {resumo.cobrancas.filter((c: any) => c.status === "OVERDUE").length} cobranca(s) vencida(s)
-              {resumo.cobrancas.filter((c: any) => c.status === "PENDING").length > 0 && `, ${resumo.cobrancas.filter((c: any) => c.status === "PENDING").length} pendente(s)`}
-            </p>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mx-4 mt-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 flex items-center gap-2">
-      <DollarSign className="h-4 w-4 text-amber-500 shrink-0" />
-      <p className="text-xs font-medium text-amber-700 flex-1">{contatoNome} tem {formatBRL(pendente)} pendente</p>
     </div>
   );
 }
@@ -910,6 +870,8 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   });
   const { data: tplList } = (trpc as any).templates?.listar?.useQuery?.(undefined, { retry: false }) || { data: [] };
   const conv = convs.find((c: any) => c.id === cid);
+  const bot = botStatusInfo(conv?.status);
+  const botToggle = useBotToggle(onUpdate);
   const { data: msgs, refetch } = trpc.crm.listarMensagens.useQuery({ conversaId: cid }, { refetchInterval: 3000 });
   // Paginação cursor: `msgs` é o LIVE (últimas 50, polling). `older` acumula
   // pacotes anteriores carregados sob demanda — sem isso, conversa com >50
@@ -1044,6 +1006,26 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 {(conv as any).canalTelefone || (conv as any).canalNome}
               </Badge>
             )}
+            {/* Pill do bot: indicador + toggle rápido. O controle completo vive no
+                Customer 360, mas este atalho garante visibilidade com o painel colapsado. */}
+            {bot.managed && conv && (
+              <button
+                type="button"
+                onClick={() => botToggle.toggle(conv.id, bot.pausado)}
+                disabled={botToggle.pending}
+                title={bot.pausado ? "Bot pausado — clique para reativar" : "Bot ativo — clique para pausar e assumir"}
+                className={
+                  "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold transition disabled:opacity-50 " +
+                  (bot.pausado
+                    ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800"
+                    : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800")
+                }
+              >
+                <span className={"w-1.5 h-1.5 rounded-full " + (bot.pausado ? "bg-amber-500" : "bg-emerald-500")} />
+                <Bot className="h-3 w-3" />
+                {bot.pausado ? "Bot pausado" : "Bot ativo"}
+              </button>
+            )}
           </div>
           {(conv?.contatoTelefone || conv?.chatIdExterno) && (
             <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -1085,8 +1067,6 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" title="Excluir" onClick={handleDelete}><Trash2 className="h-3 w-3" /></Button>
       </div>
     </div>
-    {/* Alerta financeiro */}
-    {conv?.contatoId && <AlertaFinanceiroChat contatoId={conv.contatoId} contatoNome={conv.contatoNome} />}
     {/* 🌟 Killer feature: Magic Brief Instantâneo (IA prevê motivo da conversa) */}
     <MagicBrief conversaId={cid} />
     {/* 🌟 Killer feature: Conversation Diff (o que mudou desde sua última resposta) */}
@@ -1097,23 +1077,6 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       contatoNome={conv?.contatoNome || "Cliente"}
       onEnviarMensagem={(texto) => setMsg(texto)}
     />
-    {conv?.status === "em_atendimento" && (
-      <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300">
-          <Bot className="h-3.5 w-3.5 shrink-0" />
-          <span><strong>Bot pausado</strong> — você está conduzindo o atendimento. O fluxo não responde enquanto isso.</span>
-        </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-[11px] shrink-0 border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/40"
-          onClick={() => atualizar.mutate({ id: cid, status: "aguardando" })}
-          title="Devolve o controle pro bot — o fluxo volta a responder na próxima mensagem do cliente"
-        >
-          Reativar bot
-        </Button>
-      </div>
-    )}
     <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2 min-h-[360px] max-h-[420px] lg:min-h-0 lg:max-h-none">
       {maybeMore && (msgs?.length ?? 0) > 0 && (
         <div className="flex justify-center pb-2">
