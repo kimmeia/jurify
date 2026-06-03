@@ -1252,6 +1252,30 @@ describe("SmartFlow Engine", () => {
       });
       expect(slots).toHaveLength(10);
     });
+
+    it("dia inteiro bloqueado: zero slots no dia (ex: feriado)", () => {
+      const slots = gerarSlotsLivres({
+        agora: meiaNoiteBRT, dias: 1, incluirFimDeSemana: true,
+        duracaoMin: 60, horaInicio: 9, horaFim: 18, ocupados: [], maxSlots: 1000,
+        diasInteirosBloqueados: new Set(["2026-05-25"]),
+      });
+      expect(slots).toHaveLength(0);
+    });
+
+    it("intervalo bloqueado: pula slots dentro da janela, mantém os demais", () => {
+      const slots = gerarSlotsLivres({
+        agora: meiaNoiteBRT, dias: 1, incluirFimDeSemana: true,
+        duracaoMin: 60, horaInicio: 9, horaFim: 18, ocupados: [], maxSlots: 1000,
+        // Almoço estendido das 12 às 14h bloqueado
+        intervalosBloqueados: [{ data: "2026-05-25", horaIni: "12:00", horaFim: "14:00" }],
+      });
+      // 9 slots de 1h - 2 dentro do bloqueio (12-13, 13-14) = 7
+      expect(slots).toHaveLength(7);
+      expect(slots.some((s) => s.inicioISO === "2026-05-25T12:00:00-03:00")).toBe(false);
+      expect(slots.some((s) => s.inicioISO === "2026-05-25T13:00:00-03:00")).toBe(false);
+      expect(slots.some((s) => s.inicioISO === "2026-05-25T11:00:00-03:00")).toBe(true);
+      expect(slots.some((s) => s.inicioISO === "2026-05-25T14:00:00-03:00")).toBe(true);
+    });
   });
 
   describe("formatarHorariosLivres (lista COMPLETA pro agente — regressão do corte por dia)", () => {

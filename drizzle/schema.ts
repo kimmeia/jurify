@@ -464,6 +464,27 @@ export const agendamentoAnexos = mysqlTable("agendamento_anexos", {
 export type AgendamentoAnexo = typeof agendamentoAnexos.$inferSelect;
 export type InsertAgendamentoAnexo = typeof agendamentoAnexos.$inferInsert;
 
+// Bloqueios da agenda: dias OU intervalos horários em que o escritório não
+// recebe agendamento. Cobre feriados (recorrenteAnual=true → todo ano nessa
+// data) e indisponibilidades pontuais (recorrenteAnual=false). horaInicio
+// NULL = dia inteiro bloqueado. O gerador de slots livres da IA
+// (server/smartflow/engine.ts) consulta essa tabela e pula dias/intervalos
+// bloqueados.
+export const agendaBloqueios = mysqlTable("agenda_bloqueios", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioId").notNull(),
+  data: varchar("data", { length: 10 }).notNull(), // YYYY-MM-DD no fuso do escritório
+  horaInicio: varchar("horaInicio", { length: 5 }), // "HH:MM" — NULL = dia inteiro
+  horaFim: varchar("horaFim", { length: 5 }),       // "HH:MM" — exigido se horaInicio !== NULL
+  motivo: varchar("motivo", { length: 200 }),
+  recorrenteAnual: boolean("recorrenteAnual").default(false).notNull(),
+  criadoPorId: int("criadoPorId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AgendaBloqueio = typeof agendaBloqueios.$inferSelect;
+export type InsertAgendaBloqueio = typeof agendaBloqueios.$inferInsert;
+
 /**
  * Sugestões de prazos/audiências detectadas automaticamente em
  * movimentações processuais. O cron de monitoramento roda um detector

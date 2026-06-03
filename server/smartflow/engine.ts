@@ -2379,16 +2379,29 @@ export function gerarSlotsLivres(params: {
   ocupados: Array<{ inicio: string; fim: string }>;
   offsetHoras?: number;
   maxSlots?: number;
+  // Bloqueios da agenda do escritório (feriados + indisponibilidades).
+  // diasInteiros: Set de YYYY-MM-DD que devem ser pulados completamente.
+  // intervalos: lista de janelas {data, horaIni HH:MM, horaFim HH:MM} a
+  // remover do dia. Já vem com recorrência anual expandida pelo caller.
+  diasInteirosBloqueados?: Set<string>;
+  intervalosBloqueados?: Array<{ data: string; horaIni: string; horaFim: string }>;
 }): SlotLivre[] {
   const offset = params.offsetHoras ?? -3;
   const maxSlots = params.maxSlots ?? 60;
   const dur = params.duracaoMin;
   const agoraMs = params.agora.getTime();
   const ocup = params.ocupados.map((o) => [new Date(o.inicio).getTime(), new Date(o.fim).getTime()] as const);
+  const diasBloq = params.diasInteirosBloqueados ?? new Set<string>();
+  const intervBloq = params.intervalosBloqueados ?? [];
 
   // "Hoje" no relógio local: desloca `agora` pelo offset e lê componentes UTC.
   const baseLocal = new Date(agoraMs + offset * 3600 * 1000);
   const out: SlotLivre[] = [];
+
+  const hhmmParaMin = (s: string) => {
+    const [h, m] = s.split(":").map(Number);
+    return h * 60 + m;
+  };
 
   for (let d = 0; d < params.dias && out.length < maxSlots; d++) {
     const diaLocal = new Date(baseLocal.getTime() + d * 86400000);
@@ -2397,6 +2410,11 @@ export function gerarSlotsLivres(params: {
     const dom = diaLocal.getUTCDate();
     const weekday = diaLocal.getUTCDay(); // 0=Dom, 6=Sáb
     if (!params.incluirFimDeSemana && (weekday === 0 || weekday === 6)) continue;
+    const dataISO = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(dom).padStart(2, "0")}`;
+    if (diasBloq.has(dataISO)) continue;
+    const intervDoDia = intervBloq
+      .filter((b) => b.data === dataISO)
+      .map((b) => [hhmmParaMin(b.horaIni), hhmmParaMin(b.horaFim)] as const);
 
     for (let min = params.horaInicio * 60; min + dur <= params.horaFim * 60 && out.length < maxSlots; min += dur) {
       const hh = Math.floor(min / 60);
@@ -2406,6 +2424,9 @@ export function gerarSlotsLivres(params: {
       if (startMs < agoraMs) continue; // passado
       const ocupado = ocup.some(([os, oe]) => os < endMs && oe > startMs);
       if (ocupado) continue;
+      const minFim = min + dur;
+      const dentroDeBloqueio = intervDoDia.some(([bi, bf]) => bi < minFim && bf > min);
+      if (dentroDeBloqueio) continue;
       out.push({
         inicioISO: formatarISOComOffset(startMs, offset),
         fimISO: formatarISOComOffset(endMs, offset),
