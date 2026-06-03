@@ -14,10 +14,10 @@
  */
 
 import { z } from "zod";
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, or, isNull } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { chamadas, contatos, colaboradores, users } from "../../drizzle/schema";
+import { chamadas, contatos, colaboradores, users, conversas } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { obterConfigCanal } from "../escritorio/db-canais";
 import { checkPermissionAdminOuMatriz } from "../escritorio/check-permission";
@@ -29,6 +29,7 @@ import {
   estaDisponivel,
   cancelarOverflow,
 } from "../integracoes/whatsapp-calling-overflow";
+import { obterConfigChamada, salvarConfigChamada } from "../integracoes/whatsapp-calling-config";
 import { explicarErroFacebook } from "./meta-channels";
 import { createLogger } from "../_core/logger";
 
@@ -341,7 +342,20 @@ export const whatsappCallingRouter = router({
       .leftJoin(contatos, eq(chamadas.contatoId, contatos.id))
       .leftJoin(colaboradores, eq(chamadas.atendenteId, colaboradores.id))
       .leftJoin(users, eq(colaboradores.userId, users.id))
-      .where(and(eq(chamadas.escritorioId, esc.escritorioId), gte(chamadas.createdAt, desde)))
+      .leftJoin(conversas, eq(chamadas.conversaId, conversas.id))
+      .where(
+        and(
+          eq(chamadas.escritorioId, esc.escritorioId),
+          gte(chamadas.createdAt, desde),
+          // Só MINHAS chamadas (sou responsável da conversa ou atendi) ou as
+          // sem responsável (fila do escritório). Não vaza chamada alheia.
+          or(
+            eq(conversas.atendenteId, esc.colaboradorId),
+            eq(chamadas.atendenteId, esc.colaboradorId),
+            isNull(conversas.atendenteId),
+          ),
+        ),
+      )
       .orderBy(desc(chamadas.createdAt))
       .limit(60);
 
@@ -391,5 +405,25 @@ export const whatsappCallingRouter = router({
       const esc = await getEsc(ctx.user.id);
       definirPresenca(esc.colaboradorId, input.disponivel);
       return { disponivel: input.disponivel };
+    }),
+
+  /** Config de ligação do escritório (modo da janela + transbordo). */
+  configChamada: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEsc(ctx.user.id);
+    return obterConfigChamada(esc.escritorioId);
+  }),
+
+  /** Atualiza a config de ligação (dono/gestor). */
+  atualizarConfigChamada: protectedProcedure
+    .input(
+      z.object({
+        transbordoAtivo: z.boolean().optional(),
+        modoJanela: z.enum(["overlay", "discreto"]).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await exigirGestao(ctx.user.id);
+      const esc = await getEsc(ctx.user.id);
+      return salvarConfigChamada(esc.escritorioId, input);
     }),
 });
