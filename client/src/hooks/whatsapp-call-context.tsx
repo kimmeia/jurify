@@ -8,6 +8,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useWhatsappCall, type UseWhatsappCall } from "./useWhatsappCall";
 import { ChamadaOverlay } from "@/pages/atendimento/chamada-overlay";
+import { ChamadaFilaWidget } from "@/pages/atendimento/chamada-widget";
 
 const ChamadaWhatsappContext = createContext<UseWhatsappCall | null>(null);
 
@@ -17,6 +18,7 @@ export function ChamadaWhatsappProvider({ children }: { children: ReactNode }) {
     <ChamadaWhatsappContext.Provider value={chamada}>
       {children}
       <ChamadaOverlay chamada={chamada} />
+      <ChamadaFilaWidget total={chamada.filaAoVivo.length} />
     </ChamadaWhatsappContext.Provider>
   );
 }

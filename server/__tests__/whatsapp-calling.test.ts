@@ -13,6 +13,7 @@ import {
   statusChamadaDeTerminate,
   normalizarEventoChamada,
   montarSinalizacaoChamada,
+  montarSinalFila,
 } from "../../shared/whatsapp-calling-types";
 
 // ─── Helpers puros ───────────────────────────────────────────────────────────
@@ -136,6 +137,29 @@ describe("montarSinalizacaoChamada", () => {
   it("connect sem SDP não gera sinal", () => {
     const ev = normalizarEventoChamada({ id: "C4", event: "connect", direction: "USER_INITIATED" });
     expect(montarSinalizacaoChamada(ev)).toBeNull();
+  });
+});
+
+describe("montarSinalFila", () => {
+  it("tocando carrega o sdpOffer e os dados do contato", () => {
+    const sinal = montarSinalFila(
+      "C9",
+      "tocando",
+      { contatoId: 5, contatoNome: "Rafael", telefone: "5511999", conversaId: 2, responsavelId: 7 },
+      "OFFER_SDP",
+    );
+    expect(sinal.tipo).toBe("chamada_fila");
+    expect(sinal.dados.kind).toBe("sinalizacao_chamada");
+    expect(sinal.dados.acao).toBe("tocando");
+    expect(sinal.dados.callId).toBe("C9");
+    expect(sinal.dados.sdpOffer).toBe("OFFER_SDP");
+    expect(sinal.dados.responsavelId).toBe(7);
+  });
+
+  it("removida não vaza o sdpOffer", () => {
+    const sinal = montarSinalFila("C9", "removida", { contatoNome: "Rafael" }, "OFFER_SDP");
+    expect(sinal.dados.acao).toBe("removida");
+    expect(sinal.dados.sdpOffer).toBeNull();
   });
 });
 

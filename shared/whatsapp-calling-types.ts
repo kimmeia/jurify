@@ -115,7 +115,11 @@ export interface ContextoChamadaSSE {
   conversaId?: number | null;
 }
 
-export type TipoSinalChamada = "chamada_entrante" | "chamada_resposta" | "chamada_encerrada";
+export type TipoSinalChamada =
+  | "chamada_entrante"
+  | "chamada_resposta"
+  | "chamada_encerrada"
+  | "chamada_fila";
 
 export interface SinalizacaoChamada {
   tipo: TipoSinalChamada;
@@ -177,4 +181,48 @@ export function montarSinalizacaoChamada(
   }
 
   return null;
+}
+
+// ─── Fila de chamadas (painel + widget app-wide) ─────────────────────────────
+// Além do toque pro responsável (chamada_entrante), a chamada recebida é
+// transmitida pro escritório todo como evento de FILA — pra qualquer atendente
+// ver e "assumir" se o responsável não pegar. Carrega o SDP offer pra quem
+// assumir conseguir responder sem round-trip extra.
+
+export type AcaoFila = "tocando" | "removida";
+
+export interface ContextoFila {
+  contatoId?: number | null;
+  contatoNome?: string | null;
+  telefone?: string | null;
+  conversaId?: number | null;
+  responsavelId?: number | null;
+  responsavelNome?: string | null;
+}
+
+/** Monta o evento SSE de fila (escritório-wide). Pura. */
+export function montarSinalFila(
+  callId: string,
+  acao: AcaoFila,
+  ctx: ContextoFila,
+  sdpOffer?: string | null,
+): SinalizacaoChamada {
+  const nome = ctx.contatoNome || ctx.telefone || "Contato";
+  return {
+    tipo: "chamada_fila",
+    titulo: acao === "tocando" ? "Chamada na fila" : "Chamada saiu da fila",
+    mensagem: nome,
+    dados: {
+      kind: "sinalizacao_chamada",
+      acao,
+      callId,
+      sdpOffer: acao === "tocando" ? sdpOffer || null : null,
+      contatoId: ctx.contatoId ?? null,
+      contatoNome: ctx.contatoNome ?? null,
+      telefone: ctx.telefone ?? null,
+      conversaId: ctx.conversaId ?? null,
+      responsavelId: ctx.responsavelId ?? null,
+      responsavelNome: ctx.responsavelNome ?? null,
+    },
+  };
 }

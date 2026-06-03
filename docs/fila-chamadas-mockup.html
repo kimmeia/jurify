@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JuridFlow — Central de Chamadas (fila) · proposta</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: { sans: ['Inter','ui-sans-serif','system-ui','sans-serif'] },
+    colors: { primary: '#4f46e5', violetx: '#7c3aed' },
+  } } };
+</script>
+<style>
+  body { font-family:'Inter',ui-sans-serif,system-ui,sans-serif; background:#f6f7fb; color:#0f172a; margin:0; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  ::-webkit-scrollbar { width:8px;height:8px; } ::-webkit-scrollbar-thumb{ background:#cbd5e1;border-radius:9999px; }
+  @keyframes pulsering { 0%,100%{ box-shadow:0 0 0 0 rgba(16,185,129,.45);} 50%{ box-shadow:0 0 0 8px rgba(16,185,129,0);} }
+  .ring-pulse { animation: pulsering 1.6s infinite; }
+  .dot { height:8px;width:8px;border-radius:9999px;display:inline-block; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ─── Cabeçalho da proposta ─────────────────────────────────────── -->
+<div class="max-w-[1180px] mx-auto px-6 pt-8 pb-4">
+  <div class="flex items-center gap-3">
+    <div class="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center">
+      <i data-lucide="phone-call" class="text-primary"></i>
+    </div>
+    <div>
+      <h1 class="text-xl font-extrabold tracking-tight">Central de Chamadas — fila de atendimento</h1>
+      <p class="text-sm text-slate-500">Proposta visual para aprovação · ligação oficial WhatsApp (Meta)</p>
+    </div>
+  </div>
+</div>
+
+<div class="max-w-[1180px] mx-auto px-6 pb-16 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+
+  <!-- ═══════════════ COLUNA 1: o produto (Central de Chamadas) ═══════════════ -->
+  <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+
+    <!-- Top bar: presença + contadores -->
+    <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+      <div class="flex items-center gap-2">
+        <i data-lucide="headphones" class="h-4 w-4 text-slate-500"></i>
+        <span class="font-bold text-sm">Chamadas</span>
+      </div>
+      <div class="flex items-center gap-2 text-xs">
+        <span class="px-2 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 font-semibold">2 tocando</span>
+        <span class="px-2 py-1 rounded-lg bg-green-50 text-green-700 border border-green-200 font-semibold">1 em atendimento</span>
+        <span class="px-2 py-1 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 font-semibold">3 perdidas hoje</span>
+      </div>
+      <!-- Presença do atendente -->
+      <button class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-semibold">
+        <span class="dot bg-white"></span> Disponível
+        <i data-lucide="chevron-down" class="h-3.5 w-3.5 opacity-80"></i>
+      </button>
+    </div>
+
+    <!-- ── TOCANDO AGORA ───────────────────────────────────────────── -->
+    <div class="px-5 pt-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="dot bg-emerald-500 ring-pulse"></span>
+        <h2 class="text-xs font-bold uppercase tracking-wide text-slate-500">Tocando agora</h2>
+      </div>
+
+      <!-- Chamada 1: é SUA (você é o responsável) -->
+      <div class="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 mb-2 flex items-center gap-3">
+        <div class="h-11 w-11 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center font-bold ring-pulse">RR</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <p class="font-semibold text-sm truncate">Rafael Rocha</p>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold">Resp.: Você</span>
+          </div>
+          <p class="text-[11px] text-slate-500">+55 85 9604-2189 · cliente desde 2023</p>
+        </div>
+        <div class="text-center mr-1">
+          <p class="text-lg font-extrabold text-emerald-700 tabular-nums leading-none">0:23</p>
+          <p class="text-[9px] text-slate-400 uppercase">p/ atender</p>
+        </div>
+        <button class="h-10 w-10 rounded-full bg-green-600 text-white flex items-center justify-center shadow"><i data-lucide="phone"></i></button>
+        <button class="h-10 w-10 rounded-full bg-red-500 text-white flex items-center justify-center"><i data-lucide="phone-off"></i></button>
+      </div>
+
+      <!-- Chamada 2: de OUTRO atendente, que você pode assumir -->
+      <div class="rounded-xl border border-slate-200 bg-white p-3 mb-3 flex items-center gap-3">
+        <div class="h-11 w-11 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 text-white flex items-center justify-center font-bold">MS</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <p class="font-semibold text-sm truncate">Maria Silva</p>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-semibold">Resp.: Beatriz</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">Beatriz não atendeu</span>
+          </div>
+          <p class="text-[11px] text-slate-500">+55 85 9988-7766</p>
+        </div>
+        <div class="text-center mr-1">
+          <p class="text-lg font-extrabold text-amber-600 tabular-nums leading-none">0:08</p>
+          <p class="text-[9px] text-slate-400 uppercase">p/ atender</p>
+        </div>
+        <button class="px-3 h-9 rounded-lg bg-slate-900 text-white text-xs font-semibold flex items-center gap-1.5"><i data-lucide="hand" class="h-3.5 w-3.5"></i> Assumir</button>
+      </div>
+    </div>
+
+    <!-- ── EM ATENDIMENTO ──────────────────────────────────────────── -->
+    <div class="px-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="dot bg-green-500"></span>
+        <h2 class="text-xs font-bold uppercase tracking-wide text-slate-500">Em atendimento</h2>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-3 mb-3 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 text-white flex items-center justify-center font-bold text-sm">JP</div>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-sm truncate">João Pereira <span class="text-[11px] font-normal text-slate-400">· atendido por Carlos</span></p>
+          <p class="text-[11px] text-green-600 font-semibold flex items-center gap-1"><i data-lucide="audio-lines" class="h-3 w-3"></i> ao vivo · 02:14</p>
+        </div>
+        <span class="text-[10px] text-slate-400">não interromper</span>
+      </div>
+    </div>
+
+    <!-- ── NA FILA (concorrência) ──────────────────────────────────── -->
+    <div class="px-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="dot bg-indigo-500"></span>
+        <h2 class="text-xs font-bold uppercase tracking-wide text-slate-500">Na fila — aguardando atendente</h2>
+        <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">1</span>
+      </div>
+      <div class="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/30 p-3 mb-3 flex items-center gap-3">
+        <div class="h-9 w-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">AL</div>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-sm truncate">Ana Lima</p>
+          <p class="text-[11px] text-slate-500">aguardando há 0:12 · todos ocupados</p>
+        </div>
+        <span class="text-[10px] text-indigo-600 bg-white border border-indigo-200 rounded px-1.5 py-0.5 font-semibold">WhatsApp "já te retornamos" enviado</span>
+      </div>
+    </div>
+
+    <!-- ── PERDIDAS / RETORNAR ─────────────────────────────────────── -->
+    <div class="px-5 pb-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="dot bg-red-500"></span>
+        <h2 class="text-xs font-bold uppercase tracking-wide text-slate-500">Perdidas — retornar</h2>
+      </div>
+      <div class="rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+        <div class="p-3 flex items-center gap-3">
+          <i data-lucide="phone-missed" class="h-4 w-4 text-red-500"></i>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-sm truncate">Pedro Costa <span class="text-[11px] font-normal text-slate-400">· Resp.: Você</span></p>
+            <p class="text-[11px] text-slate-500">perdida às 11:32 · ninguém atendeu</p>
+          </div>
+          <button class="px-2.5 h-8 rounded-lg bg-green-600 text-white text-xs font-semibold flex items-center gap-1"><i data-lucide="phone" class="h-3.5 w-3.5"></i> Ligar de volta</button>
+          <button class="px-2.5 h-8 rounded-lg border border-slate-200 text-slate-600 text-xs font-semibold flex items-center gap-1"><i data-lucide="message-circle" class="h-3.5 w-3.5"></i> WhatsApp</button>
+        </div>
+        <div class="p-3 flex items-center gap-3">
+          <i data-lucide="phone-missed" class="h-4 w-4 text-red-500"></i>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-sm truncate">Luiza Mendes</p>
+            <p class="text-[11px] text-slate-500">perdida às 10:05 · fora do horário</p>
+          </div>
+          <button class="px-2.5 h-8 rounded-lg bg-green-600 text-white text-xs font-semibold flex items-center gap-1"><i data-lucide="phone" class="h-3.5 w-3.5"></i> Ligar de volta</button>
+          <button class="px-2.5 h-8 rounded-lg border border-slate-200 text-slate-600 text-xs font-semibold flex items-center gap-1"><i data-lucide="message-circle" class="h-3.5 w-3.5"></i> WhatsApp</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ COLUNA 2: como funciona + soluções ═══════════════ -->
+  <div class="space-y-4">
+
+    <!-- Widget flutuante (estado colapsado, app-wide) -->
+    <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+      <p class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">Acesso em qualquer tela</p>
+      <div class="flex items-center justify-between rounded-xl bg-slate-900 text-white px-3.5 py-2.5">
+        <div class="flex items-center gap-2.5">
+          <div class="relative">
+            <i data-lucide="phone-call" class="h-5 w-5"></i>
+            <span class="absolute -top-2 -right-2 h-4 w-4 rounded-full bg-red-500 text-[10px] font-bold flex items-center justify-center ring-pulse">2</span>
+          </div>
+          <span class="text-sm font-semibold">Chamadas</span>
+        </div>
+        <span class="text-[11px] text-slate-300">2 tocando · clique p/ abrir</span>
+      </div>
+      <p class="text-[11px] text-slate-500 mt-2">Pílula fixa no rodapé — toca e mostra a fila esteja o atendente em que tela estiver (Processos, Financeiro, etc).</p>
+    </div>
+
+    <!-- A restrição que molda tudo -->
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+      <div class="flex items-center gap-2 mb-1.5">
+        <i data-lucide="alarm-clock" class="h-4 w-4 text-amber-600"></i>
+        <p class="text-sm font-bold text-amber-900">A regra da Meta que define a fila</p>
+      </div>
+      <p class="text-[12px] text-amber-800 leading-relaxed">A chamada tem só <b>~30–60s</b> pra ser atendida (o cliente ouve chamando). Não dá pra "segurar" com música de espera sem servidor de mídia. Então a fila é: <b>distribuir rápido</b> dentro da janela → e o que não atender vira <b>retorno</b>.</p>
+    </div>
+
+    <!-- Fases -->
+    <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+      <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Como desenvolver — em fases</p>
+
+      <div class="flex gap-3">
+        <span class="h-6 w-6 shrink-0 rounded-full bg-green-100 text-green-700 text-xs font-bold flex items-center justify-center">1</span>
+        <div>
+          <p class="text-sm font-semibold">Fila ao vivo + perdidas</p>
+          <p class="text-[12px] text-slate-500 leading-relaxed">Painel com "tocando agora / em atendimento / perdidas". Qualquer atendente <b>assume</b> a chamada que o responsável não pegou. Já temos a tabela <code class="bg-slate-100 px-1 rounded">chamadas</code> + SSE — falta o painel e o "assumir".</p>
+        </div>
+      </div>
+
+      <div class="flex gap-3">
+        <span class="h-6 w-6 shrink-0 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">2</span>
+        <div>
+          <p class="text-sm font-semibold">Presença + overflow (ACD-lite)</p>
+          <p class="text-[12px] text-slate-500 leading-relaxed">Atendente marca <b>Disponível/Ocupado</b>. Toca pro responsável → se não atende em <i>N</i>s, <b>transborda</b> pros disponíveis → fila. Quem está em chamada não recebe outra.</p>
+        </div>
+      </div>
+
+      <div class="flex gap-3">
+        <span class="h-6 w-6 shrink-0 rounded-full bg-violetx/10 text-violetx text-xs font-bold flex items-center justify-center" style="color:#7c3aed;background:#f3e8ff">3</span>
+        <div>
+          <p class="text-sm font-semibold">Experiência do cliente</p>
+          <p class="text-[12px] text-slate-500 leading-relaxed"><b>Sem mídia extra:</b> ao perder/encher, manda WhatsApp automático "já te retornamos". <b>Avançado:</b> áudio de espera (precisa servidor de mídia).</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legenda -->
+    <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+      <p class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">Legenda</p>
+      <ul class="space-y-1.5 text-[12px] text-slate-600">
+        <li class="flex items-center gap-2"><span class="dot bg-emerald-500"></span> Tocando — dentro da janela, pode atender</li>
+        <li class="flex items-center gap-2"><span class="dot bg-green-500"></span> Em atendimento — conectada</li>
+        <li class="flex items-center gap-2"><span class="dot bg-indigo-500"></span> Na fila — todos ocupados, aguardando</li>
+        <li class="flex items-center gap-2"><span class="dot bg-red-500"></span> Perdida — virou retorno</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>

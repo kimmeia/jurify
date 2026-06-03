@@ -34,6 +34,17 @@ export interface IniciarLigacaoOpts {
   conversaId?: number;
 }
 
+/** Chamada tocando na fila do escritório — qualquer atendente pode assumir. */
+export interface ChamadaNaFila {
+  callId: string;
+  sdpOffer: string | null;
+  contatoId: number | null;
+  contatoNome: string | null;
+  telefone: string | null;
+  conversaId: number | null;
+  recebidaEm: number;
+}
+
 // STUN público pra descoberta de candidatos. A própria oferta da Meta traz os
 // candidatos de relay dela; isso cobre o lado do navegador. Pode precisar de
 // ajuste/TURN em staging dependendo da rede.
@@ -67,6 +78,9 @@ export function useWhatsappCall() {
   // pedido de permissão na própria UI.
   const [precisaPermissao, setPrecisaPermissao] = useState(false);
   const [permissaoEnviada, setPermissaoEnviada] = useState(false);
+  // Fila ao vivo (escritório): chamadas tocando que qualquer um pode assumir.
+  const [filaAoVivo, setFilaAoVivo] = useState<ChamadaNaFila[]>([]);
+  const filaRef = useRef<ChamadaNaFila[]>([]);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -301,6 +315,25 @@ export function useWhatsappCall() {
     }
   }, [permissao]);
 
+  /** Assume uma chamada da fila (de outro responsável) e atende com o offer dela. */
+  const assumir = useCallback(
+    async (callId: string) => {
+      if (estadoRef.current !== "idle" && estadoRef.current !== "encerrada") return;
+      const item = filaRef.current.find((c) => c.callId === callId);
+      if (!item || !item.sdpOffer) return;
+      ofertaPendenteRef.current = item.sdpOffer;
+      definirChamada({
+        callId: item.callId,
+        direcao: "entrada",
+        contatoNome: item.contatoNome || item.telefone || "Contato",
+        telefone: item.telefone || "",
+      });
+      setEstado("tocando");
+      await atender();
+    },
+    [atender, definirChamada],
+  );
+
   /** Liga/desliga o microfone. */
   const alternarMudo = useCallback(() => {
     const stream = localStreamRef.current;
@@ -329,6 +362,29 @@ export function useWhatsappCall() {
       const detail = (e as CustomEvent).detail;
       if (!detail || detail.dados?.kind !== "sinalizacao_chamada") return;
       const d = detail.dados as Record<string, any>;
+
+      if (detail.tipo === "chamada_fila") {
+        // Fila do escritório (não interfere no toque do responsável).
+        if (d.acao === "tocando") {
+          const nova: ChamadaNaFila = {
+            callId: d.callId,
+            sdpOffer: d.sdpOffer || null,
+            contatoId: d.contatoId ?? null,
+            contatoNome: d.contatoNome ?? null,
+            telefone: d.telefone ?? null,
+            conversaId: d.conversaId ?? null,
+            recebidaEm: Date.now(),
+          };
+          const next = [nova, ...filaRef.current.filter((c) => c.callId !== d.callId)];
+          filaRef.current = next;
+          setFilaAoVivo(next);
+        } else if (d.acao === "removida") {
+          const next = filaRef.current.filter((c) => c.callId !== d.callId);
+          filaRef.current = next;
+          setFilaAoVivo(next);
+        }
+        return;
+      }
 
       if (detail.tipo === "chamada_entrante") {
         // Só toca se estiver livre — não interrompe uma chamada em curso.
@@ -375,10 +431,12 @@ export function useWhatsappCall() {
     precisaPermissao,
     permissaoEnviada,
     enviandoPermissao: permissao.isPending,
+    filaAoVivo,
     atender,
     recusar,
     desligar,
     ligar,
+    assumir,
     pedirPermissao,
     alternarMudo,
     fechar,
