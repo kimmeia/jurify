@@ -1,7 +1,8 @@
 import { trpc } from "@/lib/trpc";
-import { Sparkles, ChevronRight, ScrollText, Heart } from "lucide-react";
+import { Sparkles, ChevronRight, ScrollText, Heart, Bot } from "lucide-react";
 import { useState } from "react";
 import { CustomerPanel } from "./customer-panel";
+import { useBotToggle, botStatusInfo } from "./use-bot-toggle";
 
 /**
  * AI Rail — barra lateral direita do Atendimento.
@@ -18,15 +19,22 @@ type Modo = "rail" | "panel";
 export function AIRail({
   conversaId,
   contatoId,
+  conversaStatus,
+  onUpdate,
   onAbrirLinhaTempo,
   onOpenWhatsapp,
 }: {
   conversaId: number | null;
   contatoId: number | null;
+  conversaStatus?: string;
+  onUpdate?: () => void;
   onAbrirLinhaTempo: () => void;
   onOpenWhatsapp?: (p?: string) => void;
 }) {
   const [modo, setModo] = useState<Modo>("rail");
+  const bot = botStatusInfo(conversaStatus);
+  const botToggle = useBotToggle(onUpdate);
+  const handleToggleBot = () => conversaId && botToggle.toggle(conversaId, bot.pausado);
 
   if (modo === "panel" && contatoId) {
     return (
@@ -54,6 +62,10 @@ export function AIRail({
             contatoId={contatoId}
             conversaId={conversaId ?? undefined}
             onOpenWhatsapp={onOpenWhatsapp}
+            botManaged={bot.managed}
+            botPausado={bot.pausado}
+            togglingBot={botToggle.pending}
+            onToggleBot={handleToggleBot}
           />
         </div>
       </div>
@@ -75,6 +87,30 @@ export function AIRail({
         <Sparkles className="h-4 w-4 text-white" />
       </button>
       <div className="w-8 h-px bg-border mb-3" />
+
+      {/* Toggle do bot — visível mesmo com o painel colapsado (o controle
+          completo, com texto, vive no Customer 360 expandido). */}
+      {bot.managed && conversaId && (
+        <button
+          onClick={handleToggleBot}
+          disabled={botToggle.pending}
+          title={bot.pausado ? "Bot pausado — clique para reativar" : "Bot ativo — clique para pausar e assumir"}
+          className={
+            "relative w-10 h-10 rounded-xl border flex items-center justify-center mb-2 transition disabled:opacity-50 " +
+            (bot.pausado
+              ? "bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200"
+              : "bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-200")
+          }
+        >
+          <Bot className="h-4 w-4" />
+          <span
+            className={
+              "absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card " +
+              (bot.pausado ? "bg-amber-500" : "bg-emerald-500")
+            }
+          />
+        </button>
+      )}
 
       <RailButton
         icon={<ScrollText className="h-4 w-4 text-violet-600" />}
