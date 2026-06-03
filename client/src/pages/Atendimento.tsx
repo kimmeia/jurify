@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
 import type { StatusConversa, EtapaFunil } from "@shared/crm-types";
 import { parseValorBR } from "@shared/valor-br";
+import { FUSO_HORARIO_PADRAO, dataHojeBR, rotuloDataConversa } from "@shared/escritorio-types";
 import { RespostaRapidaAutocomplete } from "@/components/atendimento/RespostaRapidaAutocomplete";
 import { MagicBrief } from "./atendimento/magic-brief";
 import { ConversationDiff } from "./atendimento/conversation-diff";
@@ -799,6 +800,10 @@ export default function Atendimento() {
                     setSelId(null);
                     rC();
                   }}
+                  onTransferido={() => {
+                    setSelId(null);
+                    rC();
+                  }}
                   onAbrirLinhaTempo={() => {
                     const conv = (convs || []).find((c: any) => c.id === selId);
                     if (conv?.contatoId) setShowLinhaTempo(conv.contatoId);
@@ -861,7 +866,7 @@ export default function Atendimento() {
   );
 }
 
-function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onAbrirLinhaTempo, onLigarWhatsApp }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onAbrirLinhaTempo?: () => void; onLigarWhatsApp?: (info: { canalId: number; telefone: string; contatoId?: number; contatoNome?: string; conversaId: number }) => void }) {
+function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onTransferido, onAbrirLinhaTempo, onLigarWhatsApp }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onTransferido?: () => void; onAbrirLinhaTempo?: () => void; onLigarWhatsApp?: (info: { canalId: number; telefone: string; contatoId?: number; contatoNome?: string; conversaId: number }) => void }) {
   const [msg, setMsg] = useState(""); const ref = useRef<HTMLDivElement>(null);
   const [showAddLead, setShowAddLead] = useState(false);
   const [showAgendar, setShowAgendar] = useState(false);
@@ -886,7 +891,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   // Atendentes pra transferência
   const { data: atendentes } = trpc.crm.listarAtendentes.useQuery();
   const transferirMut = trpc.crm.transferirConversa.useMutation({
-    onSuccess: () => { toast.success("Conversa transferida!"); setShowTransferir(false); onUpdate(); },
+    onSuccess: () => { toast.success("Conversa transferida!"); setShowTransferir(false); (onTransferido ?? onUpdate)(); },
     onError: (e: any) => toast.error(e.message),
   });
   // Clientes pra vincular
@@ -900,6 +905,10 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const bot = botStatusInfo(conv?.status);
   const botToggle = useBotToggle(onUpdate);
   const { data: msgs, refetch } = trpc.crm.listarMensagens.useQuery({ conversaId: cid }, { refetchInterval: 3000 });
+  // Fuso do escritório (Configurações → Escritório) — datas/horas do chat
+  // seguem o relógio do operador, não o UTC do server.
+  const { data: meuEscr } = trpc.configuracoes.meuEscritorio.useQuery();
+  const tz = meuEscr?.escritorio?.fusoHorario || FUSO_HORARIO_PADRAO;
   // Paginação cursor: `msgs` é o LIVE (últimas 50, polling). `older` acumula
   // pacotes anteriores carregados sob demanda — sem isso, conversa com >50
   // mensagens mostrava só uma fatia e o resto sumia.
@@ -1123,24 +1132,40 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       {!msgs?.length && older.length === 0 ? (
         <p className="text-xs text-muted-foreground text-center py-12">Nenhuma mensagem ainda.</p>
       ) : (
-        [...older, ...(msgs || [])].map((m: any) => (
-          <div key={m.id} className={"flex " + (m.direcao === "saida" ? "justify-end" : "justify-start")}>
-            <div className={"max-w-[70%] rounded-2xl px-3.5 py-2 " + (m.direcao === "saida" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-muted rounded-bl-md") + (m.direcao === "saida" && m.status === "falha" ? " ring-2 ring-destructive/60" : "")}>
-              {m.remetenteNome && m.direcao === "saida" && <p className="text-[10px] opacity-60 mb-0.5">{m.remetenteNome}</p>}
-              {renderMsgContent(m)}
-              <div className={"flex items-center gap-1 justify-end mt-1 text-[10px] " + (m.direcao === "saida" ? "opacity-70" : "text-muted-foreground")}>
-                <span>{new Date(m.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
-                {m.direcao === "saida" && m.status === "pendente" && <Loader2 className="h-3 w-3 animate-spin" aria-label="Enviando" />}
-                {m.direcao === "saida" && (m.status === "enviada" || m.status === "entregue" || m.status === "lida") && <Check className="h-3 w-3" aria-label="Enviada" />}
-                {m.direcao === "saida" && m.status === "falha" && (
-                  <span title="Falha no envio — veja logs do WhatsApp">
-                    <AlertTriangle className="h-3 w-3 text-red-200" aria-label="Falha no envio" />
-                  </span>
+        (() => {
+          const todas = [...older, ...(msgs || [])];
+          return todas.map((m: any, i: number) => {
+            const anterior = i > 0 ? todas[i - 1] : null;
+            const novaData = !anterior || dataHojeBR(tz, new Date(anterior.createdAt)) !== dataHojeBR(tz, new Date(m.createdAt));
+            return (
+              <Fragment key={m.id}>
+                {novaData && (
+                  <div className="flex justify-center">
+                    <span className="bg-muted text-muted-foreground text-[11px] font-medium px-3 py-1 rounded-full">
+                      {rotuloDataConversa(m.createdAt, tz)}
+                    </span>
+                  </div>
                 )}
-              </div>
-            </div>
-          </div>
-        ))
+                <div className={"flex " + (m.direcao === "saida" ? "justify-end" : "justify-start")}>
+                  <div className={"max-w-[70%] rounded-2xl px-3.5 py-2 " + (m.direcao === "saida" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-muted rounded-bl-md") + (m.direcao === "saida" && m.status === "falha" ? " ring-2 ring-destructive/60" : "")}>
+                    {m.remetenteNome && m.direcao === "saida" && <p className="text-[10px] opacity-60 mb-0.5">{m.remetenteNome}</p>}
+                    {renderMsgContent(m)}
+                    <div className={"flex items-center gap-1 justify-end mt-1 text-[10px] " + (m.direcao === "saida" ? "opacity-70" : "text-muted-foreground")}>
+                      <span>{new Date(m.createdAt).toLocaleTimeString("pt-BR", { timeZone: tz, hour: "2-digit", minute: "2-digit" })}</span>
+                      {m.direcao === "saida" && m.status === "pendente" && <Loader2 className="h-3 w-3 animate-spin" aria-label="Enviando" />}
+                      {m.direcao === "saida" && (m.status === "enviada" || m.status === "entregue" || m.status === "lida") && <Check className="h-3 w-3" aria-label="Enviada" />}
+                      {m.direcao === "saida" && m.status === "falha" && (
+                        <span title="Falha no envio — veja logs do WhatsApp">
+                          <AlertTriangle className="h-3 w-3 text-red-200" aria-label="Falha no envio" />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Fragment>
+            );
+          });
+        })()
       )}
     </div>
     {/* 🌟 Killer feature: Compliance Guard (verifica rascunho contra ética OAB) */}
