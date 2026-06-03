@@ -589,9 +589,28 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
           const agora = new Date();
           const fim = new Date(agora.getTime() + dias * 24 * 60 * 60 * 1000);
           const ocupados = await this.listarAgendaResponsavel({ responsavelId: respId, dataInicio: agora.toISOString(), dataFim: fim.toISOString() });
+          // Bloqueios da agenda do escritório (feriados + indisponibilidades).
+          // Expande recorrência anual pros próximos `dias` antes de passar
+          // pro gerador — o gerador só lida com datas concretas.
+          const { listarBloqueios, bloqueiosAplicaveis } = await import("../escritorio/db-agenda-bloqueios");
+          const todosBloqueios = await listarBloqueios(escritorioId);
+          const diasInteirosBloqueados = new Set<string>();
+          const intervalosBloqueados: Array<{ data: string; horaIni: string; horaFim: string }> = [];
+          // -3 = offset Brasília. Usa mesma lógica do gerador (baseLocal)
+          // pra garantir que dataISO bate com a string que o gerador
+          // compara internamente.
+          const baseLocalMs = agora.getTime() + -3 * 3600 * 1000;
+          for (let d = 0; d < dias; d++) {
+            const dia = new Date(baseLocalMs + d * 86400000);
+            const dataISO = `${dia.getUTCFullYear()}-${String(dia.getUTCMonth() + 1).padStart(2, "0")}-${String(dia.getUTCDate()).padStart(2, "0")}`;
+            for (const b of bloqueiosAplicaveis(dataISO, todosBloqueios)) {
+              if (!b.horaInicio || !b.horaFim) diasInteirosBloqueados.add(dataISO);
+              else intervalosBloqueados.push({ data: dataISO, horaIni: b.horaInicio, horaFim: b.horaFim });
+            }
+          }
           // maxSlots alto: a lista precisa ser COMPLETA pra o agente confirmar/negar
           // um horário específico (antes truncava em 4/dia e ele negava o 5º+ livre).
-          const livres = gerarSlotsLivres({ agora, dias, incluirFimDeSemana: false, duracaoMin: dur, horaInicio: 9, horaFim: 18, ocupados, maxSlots: 120 });
+          const livres = gerarSlotsLivres({ agora, dias, incluirFimDeSemana: false, duracaoMin: dur, horaInicio: 9, horaFim: 18, ocupados, maxSlots: 120, diasInteirosBloqueados, intervalosBloqueados });
           return formatarHorariosLivres(livres);
         }
         if (nome === "ver_acoes_cliente") {
