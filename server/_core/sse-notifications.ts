@@ -33,6 +33,11 @@ export interface Notificacao {
     | "nova_acao"
     | "credencial_erro"
     | "credencial_recuperada"
+    // Sinalização da ligação WhatsApp (Calling API). Carregam SDP/callId em
+    // `dados` e são silenciosas no hook (kind: "sinalizacao_chamada").
+    | "chamada_entrante"
+    | "chamada_resposta"
+    | "chamada_encerrada"
     | "info";
   titulo: string;
   mensagem: string;

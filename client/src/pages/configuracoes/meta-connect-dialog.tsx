@@ -19,10 +19,11 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, CheckCircle, AlertTriangle, Wifi, Unlink, KeyRound, FileText, UserCircle } from "lucide-react";
+import { Loader2, CheckCircle, AlertTriangle, Wifi, Unlink, KeyRound, FileText, UserCircle, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { WhatsAppTemplatesDialog } from "./whatsapp-templates-dialog";
 import { WhatsAppProfileDialog } from "./whatsapp-profile-dialog";
+import { WhatsAppCallingDialog } from "./whatsapp-calling-dialog";
 
 export type MetaChannelType = "whatsapp" | "instagram" | "messenger";
 
@@ -93,7 +94,7 @@ export function MetaConnectDialog({
   const [conectando, setConectando] = useState(false);
   const [sdkLoaded, setSdkLoaded] = useState(false);
   const [pin, setPin] = useState("");
-  const [subDialog, setSubDialog] = useState<"templates" | "perfil" | null>(null);
+  const [subDialog, setSubDialog] = useState<"templates" | "perfil" | "ligacao" | null>(null);
 
   const { data: metaConfig } = trpc.metaChannels.getConfig.useQuery(undefined, {
     enabled: open,
@@ -495,6 +496,15 @@ export function MetaConnectDialog({
                       <UserCircle className="h-3.5 w-3.5 mr-1" />
                       Perfil do número
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setSubDialog("ligacao")}
+                    >
+                      <Phone className="h-3.5 w-3.5 mr-1" />
+                      Ligação
+                    </Button>
                   </div>
                   <Button
                     variant="ghost"
@@ -645,6 +655,12 @@ export function MetaConnectDialog({
           />
           <WhatsAppProfileDialog
             open={subDialog === "perfil"}
+            onClose={() => setSubDialog(null)}
+            canalId={canal.id}
+            canEdit={canEdit}
+          />
+          <WhatsAppCallingDialog
+            open={subDialog === "ligacao"}
             onClose={() => setSubDialog(null)}
             canalId={canal.id}
             canEdit={canEdit}
