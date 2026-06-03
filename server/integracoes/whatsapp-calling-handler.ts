@@ -289,7 +289,9 @@ async function garantirConversaEAtribuir(
         escritorioId: canalInfo.escritorioId,
         nome: telefone,
         telefone,
-        origem: "ligacao",
+        // "telefone" é o valor válido do enum de origem (ligação de voz);
+        // "ligacao" cairia no fallback "manual" do validarOrigem.
+        origem: "telefone",
       });
       contatoId = c.id;
       contatoNome = telefone;
