@@ -45,6 +45,7 @@ import { CamposClienteTab } from "./configuracoes/campos-cliente-tab";
 import { MetaConnectDialog } from "./configuracoes/meta-connect-dialog";
 import { WhatsappManualDialog } from "./configuracoes/whatsapp-manual-dialog";
 import { FinanceiroTab } from "./configuracoes/financeiro-tab";
+import { LigacaoConfigCard } from "./atendimento/ligacao-config-card";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -1182,6 +1183,7 @@ export default function Configuracoes() {
         {/* ─── Canais de Comunicação ──────────────────────────── */}
         <TabsContent value="canais" className="space-y-4">
           <CanaisTab canEdit={canEdit} isDono={isDono} />
+          <LigacaoConfigCard canEdit={canEdit} />
           <TemplatesSection canEdit={canEdit} />
         </TabsContent>
 
