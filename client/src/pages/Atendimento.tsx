@@ -29,6 +29,8 @@ import { ComplianceGuard, ComplianceGuardBadge } from "./atendimento/compliance-
 import { LinhaTempoUnificada } from "./atendimento/linha-tempo-unificada";
 import { AIRail } from "./atendimento/ai-rail";
 import { CentroDeComando } from "./atendimento/centro-de-comando";
+import { ChamadaOverlay } from "./atendimento/chamada-overlay";
+import { useWhatsappCall } from "@/hooks/useWhatsappCall";
 import { Sparkles, ScrollText, Bot } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
@@ -348,6 +350,9 @@ export default function Atendimento() {
   const [periodoFiltro, setPeriodoFiltro] = useState<"todos" | "7d" | "30d" | "90d">("todos");
   const [showFiltros, setShowFiltros] = useState(false);
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
+  // Ligação de voz via WhatsApp (Calling API). O hook escuta o SSE global, então
+  // chamadas recebidas tocam aqui enquanto o atendente estiver nesta página.
+  const chamadaWa = useWhatsappCall();
   const [showLinhaTempo, setShowLinhaTempo] = useState<number | null>(null);
 
   // Deep link vindo do CRM (ex.: botão "Inbox" na ficha do cliente):
@@ -777,6 +782,7 @@ export default function Atendimento() {
                     const conv = (convs || []).find((c: any) => c.id === selId);
                     if (conv?.contatoId) setShowLinhaTempo(conv.contatoId);
                   }}
+                  onLigarWhatsApp={(info) => chamadaWa.ligar(info)}
                 />
               ) : (
                 <CentroDeComando
@@ -809,6 +815,7 @@ export default function Atendimento() {
       </Tabs>
       {waPopup && <WhatsAppCallPopup phone={waPopup} onClose={() => setWaPopup(null)} />}
       {telPopup && <TwilioCallPopup phone={telPopup} onClose={() => setTelPopup(null)} />}
+      <ChamadaOverlay chamada={chamadaWa} />
       <IniciarConversaDialog
         open={showIniciar}
         onOpenChange={(v) => { setShowIniciar(v); if (!v) setPreencherConversa(null); }}
@@ -874,7 +881,7 @@ function AlertaFinanceiroChat({ contatoId, contatoNome }: { contatoId: number; c
   );
 }
 
-function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onAbrirLinhaTempo }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onAbrirLinhaTempo?: () => void }) {
+function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onAbrirLinhaTempo, onLigarWhatsApp }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onAbrirLinhaTempo?: () => void; onLigarWhatsApp?: (info: { canalId: number; telefone: string; contatoId?: number; contatoNome?: string; conversaId: number }) => void }) {
   const [msg, setMsg] = useState(""); const ref = useRef<HTMLDivElement>(null);
   const [showAddLead, setShowAddLead] = useState(false);
   const [showAgendar, setShowAgendar] = useState(false);
@@ -1051,12 +1058,14 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             </p>
           )}
         </div>
-        {(conv?.contatoTelefone || conv?.chatIdExterno) && (onWA || onTel) && (() => {
+        {(conv?.contatoTelefone || conv?.chatIdExterno) && (onWA || onTel || onLigarWhatsApp) && (() => {
           const tel = conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "") || "";
+          const podeLigarWa = !!onLigarWhatsApp && conv?.canalTipo === "whatsapp_api" && !!conv?.canalId && !!tel;
           return (
             <div className="flex items-center gap-1 shrink-0">
-              {onWA && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-3.5 w-3.5" /></Button>}
-              {onTel && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Ligar" onClick={() => onTel(tel)}><Phone className="h-3.5 w-3.5" /></Button>}
+              {onWA && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Abrir conversa no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-3.5 w-3.5" /></Button>}
+              {podeLigarWa && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-green-600" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-3.5 w-3.5" /></Button>}
+              {onTel && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Ligar (Twilio)" onClick={() => onTel(tel)}><Phone className="h-3.5 w-3.5" /></Button>}
             </div>
           );
         })()}

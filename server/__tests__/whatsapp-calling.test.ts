@@ -12,6 +12,7 @@ import {
   direcaoChamadaDeMeta,
   statusChamadaDeTerminate,
   normalizarEventoChamada,
+  montarSinalizacaoChamada,
 } from "../../shared/whatsapp-calling-types";
 
 // ─── Helpers puros ───────────────────────────────────────────────────────────
@@ -91,6 +92,50 @@ describe("normalizarEventoChamada", () => {
   it("evento sem id é normalizado mas com callId vazio (handler descarta)", () => {
     const ev = normalizarEventoChamada({ event: "connect", from: "55119" });
     expect(ev.callId).toBe("");
+  });
+});
+
+describe("montarSinalizacaoChamada", () => {
+  it("connect de entrada com offer vira chamada_entrante carregando o offer", () => {
+    const ev = normalizarEventoChamada({
+      id: "C1",
+      from: "5511988887777",
+      event: "connect",
+      direction: "USER_INITIATED",
+      session: { sdp: "OFFER_SDP", sdp_type: "offer" },
+    });
+    const sinal = montarSinalizacaoChamada(ev, { contatoId: 7, contatoNome: "Maria", conversaId: 3 });
+    expect(sinal?.tipo).toBe("chamada_entrante");
+    expect(sinal?.dados.kind).toBe("sinalizacao_chamada");
+    expect(sinal?.dados.sdpOffer).toBe("OFFER_SDP");
+    expect(sinal?.dados.callId).toBe("C1");
+    expect(sinal?.dados.contatoId).toBe(7);
+    expect(sinal?.mensagem).toBe("Maria");
+  });
+
+  it("connect de saída com answer vira chamada_resposta carregando o answer", () => {
+    const ev = normalizarEventoChamada({
+      id: "C2",
+      to: "5511988887777",
+      event: "connect",
+      direction: "BUSINESS_INITIATED",
+      session: { sdp: "ANSWER_SDP", sdp_type: "answer" },
+    });
+    const sinal = montarSinalizacaoChamada(ev);
+    expect(sinal?.tipo).toBe("chamada_resposta");
+    expect(sinal?.dados.sdpAnswer).toBe("ANSWER_SDP");
+  });
+
+  it("terminate vira chamada_encerrada com o motivo", () => {
+    const ev = normalizarEventoChamada({ id: "C3", event: "terminate", status: "COMPLETED" });
+    const sinal = montarSinalizacaoChamada(ev);
+    expect(sinal?.tipo).toBe("chamada_encerrada");
+    expect(sinal?.dados.motivo).toBe("encerrada");
+  });
+
+  it("connect sem SDP não gera sinal", () => {
+    const ev = normalizarEventoChamada({ id: "C4", event: "connect", direction: "USER_INITIATED" });
+    expect(montarSinalizacaoChamada(ev)).toBeNull();
   });
 });
 

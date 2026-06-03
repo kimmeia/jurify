@@ -102,3 +102,79 @@ export function normalizarEventoChamada(call: EventoChamadaMeta): EventoChamadaN
     timestamp: Number.isFinite(ts) ? ts : null,
   };
 }
+
+// ─── Sinalização em tempo real (SSE) ─────────────────────────────────────────
+// O servidor empurra o evento de chamada pro navegador do atendente pelo MESMO
+// canal SSE das notificações. O sentido oposto (SDP answer/offer, desligar) vai
+// pelas mutations tRPC. Trickle ICE não é usado: o SDP vai completo de uma vez,
+// então não precisa de canal de candidatos.
+
+export interface ContextoChamadaSSE {
+  contatoId?: number | null;
+  contatoNome?: string | null;
+  conversaId?: number | null;
+}
+
+export type TipoSinalChamada = "chamada_entrante" | "chamada_resposta" | "chamada_encerrada";
+
+export interface SinalizacaoChamada {
+  tipo: TipoSinalChamada;
+  titulo: string;
+  mensagem: string;
+  /** `kind: "sinalizacao_chamada"` faz o hook de SSE pular toast/contador. */
+  dados: Record<string, unknown>;
+}
+
+/**
+ * Monta o payload SSE de um evento de chamada (ou null quando o evento não
+ * gera sinal — ex.: connect sem SDP). Pura.
+ *
+ * - entrada + offer  → `chamada_entrante` (toca pro atendente, carrega o offer)
+ * - saída   + answer → `chamada_resposta` (resposta da Meta com o answer)
+ * - terminate        → `chamada_encerrada`
+ */
+export function montarSinalizacaoChamada(
+  ev: EventoChamadaNormalizado,
+  ctx?: ContextoChamadaSSE,
+): SinalizacaoChamada | null {
+  const baseDados = {
+    kind: "sinalizacao_chamada" as const,
+    callId: ev.callId,
+    telefone: ev.telefone,
+    direcao: ev.direcao,
+    contatoId: ctx?.contatoId ?? null,
+    contatoNome: ctx?.contatoNome ?? null,
+    conversaId: ctx?.conversaId ?? null,
+  };
+  const nome = ctx?.contatoNome || ev.telefone || "Contato";
+
+  if (ev.evento === "terminate") {
+    return {
+      tipo: "chamada_encerrada",
+      titulo: "Chamada encerrada",
+      mensagem: nome,
+      dados: { ...baseDados, motivo: ev.status },
+    };
+  }
+
+  if (ev.evento === "connect" && ev.sdp) {
+    if (ev.sdpType === "answer") {
+      return {
+        tipo: "chamada_resposta",
+        titulo: "Chamada atendida",
+        mensagem: nome,
+        dados: { ...baseDados, sdpAnswer: ev.sdp },
+      };
+    }
+    if (ev.sdpType === "offer") {
+      return {
+        tipo: "chamada_entrante",
+        titulo: "Chamada recebida",
+        mensagem: nome,
+        dados: { ...baseDados, sdpOffer: ev.sdp },
+      };
+    }
+  }
+
+  return null;
+}

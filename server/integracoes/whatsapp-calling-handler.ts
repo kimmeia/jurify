@@ -16,7 +16,9 @@ import { chamadas, conversas } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
 import { resolverCanalDaMensagem } from "./whatsapp-cloud-webhook";
 import { buscarContatoPorTelefone } from "../escritorio/db-crm";
+import { emitirParaEscritorio } from "../_core/sse-notifications";
 import {
+  montarSinalizacaoChamada,
   normalizarEventoChamada,
   type EventoChamadaMeta,
 } from "../../shared/whatsapp-calling-types";
@@ -62,11 +64,13 @@ async function registrarEventoChamada(canalInfo: CanalChamada, call: EventoChama
   // dele — pra chamada aparecer na timeline. Ausência não é erro: chamada de
   // número desconhecido ainda é logada (sem vínculo).
   let contatoId: number | null = null;
+  let contatoNome: string | null = null;
   let conversaId: number | null = null;
   if (ev.telefone) {
     const contato = await buscarContatoPorTelefone(canalInfo.escritorioId, ev.telefone);
     if (contato) {
       contatoId = contato.id;
+      contatoNome = contato.nome;
       const [conv] = await db
         .select({ id: conversas.id })
         .from(conversas)
@@ -103,21 +107,28 @@ async function registrarEventoChamada(canalInfo: CanalChamada, call: EventoChama
       { callId: ev.callId, evento: ev.evento, direcao: ev.direcao, status: ev.status },
       "[WA Calling] chamada registrada",
     );
-    return;
+  } else {
+    // Já existe (ex.: connect inserido antes, agora chegou o terminate).
+    // Atualiza status/duração e preenche vínculos que faltavam, sem sobrescrever
+    // os já resolvidos por um comando do atendente (accept seta atendenteId).
+    const patch: Record<string, unknown> = { status: ev.status };
+    if (ev.duracaoSegundos != null) patch.duracaoSegundos = ev.duracaoSegundos;
+    if (ev.bizOpaqueCallbackData && !existente.bizOpaqueCallbackData) {
+      patch.bizOpaqueCallbackData = ev.bizOpaqueCallbackData;
+    }
+    if (contatoId && !existente.contatoId) patch.contatoId = contatoId;
+    if (conversaId && !existente.conversaId) patch.conversaId = conversaId;
+    if (ev.evento === "terminate" && !existente.encerradaEm) patch.encerradaEm = new Date();
+
+    await db.update(chamadas).set(patch).where(eq(chamadas.id, existente.id));
+    log.info({ callId: ev.callId, evento: ev.evento, status: ev.status }, "[WA Calling] chamada atualizada");
   }
 
-  // Já existe (ex.: connect inserido antes, agora chegou o terminate). Atualiza
-  // status/duração e preenche vínculos que faltavam, sem sobrescrever os já
-  // resolvidos por um comando do atendente (accept seta atendenteId/atendidaEm).
-  const patch: Record<string, unknown> = { status: ev.status };
-  if (ev.duracaoSegundos != null) patch.duracaoSegundos = ev.duracaoSegundos;
-  if (ev.bizOpaqueCallbackData && !existente.bizOpaqueCallbackData) {
-    patch.bizOpaqueCallbackData = ev.bizOpaqueCallbackData;
+  // Empurra o evento pro navegador do atendente (toca a chamada, repassa o SDP
+  // answer da Meta, ou avisa o encerramento). Silencioso no sino de notificações
+  // — a UI de chamada é quem reage. Best-effort: falha aqui não afeta o log.
+  const sinal = montarSinalizacaoChamada(ev, { contatoId, contatoNome, conversaId });
+  if (sinal) {
+    await emitirParaEscritorio(canalInfo.escritorioId, sinal);
   }
-  if (contatoId && !existente.contatoId) patch.contatoId = contatoId;
-  if (conversaId && !existente.conversaId) patch.conversaId = conversaId;
-  if (ev.evento === "terminate" && !existente.encerradaEm) patch.encerradaEm = new Date();
-
-  await db.update(chamadas).set(patch).where(eq(chamadas.id, existente.id));
-  log.info({ callId: ev.callId, evento: ev.evento, status: ev.status }, "[WA Calling] chamada atualizada");
 }
