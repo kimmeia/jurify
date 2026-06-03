@@ -12,7 +12,8 @@ function fmtDuracao(s: number): string {
 }
 
 export function ChamadaOverlay({ chamada }: { chamada: UseWhatsappCall }) {
-  const { estado, chamada: ativa, duracaoSegundos, erro, mudo } = chamada;
+  const { estado, chamada: ativa, duracaoSegundos, erro, mudo, precisaPermissao, permissaoEnviada, enviandoPermissao } =
+    chamada;
 
   if (estado === "idle" || !ativa) return null;
 
@@ -116,9 +117,30 @@ export function ChamadaOverlay({ chamada }: { chamada: UseWhatsappCall }) {
         )}
 
         {estado === "encerrada" && (
-          <Button variant="outline" onClick={chamada.fechar}>
-            Fechar
-          </Button>
+          <div className="space-y-3">
+            {/* Saída barrada por falta de permissão: oferece o pedido. */}
+            {precisaPermissao && !permissaoEnviada && (
+              <p className="text-xs text-muted-foreground">
+                Para ligar, o cliente precisa autorizar. Envie o pedido de permissão pelo WhatsApp.
+              </p>
+            )}
+            {permissaoEnviada && (
+              <p className="text-xs text-emerald-600">
+                Pedido enviado! Quando o cliente aprovar, você poderá ligar (válido por 7 dias).
+              </p>
+            )}
+            <div className="flex justify-center gap-2">
+              {precisaPermissao && !permissaoEnviada && (
+                <Button onClick={() => void chamada.pedirPermissao()} disabled={enviandoPermissao}>
+                  {enviandoPermissao && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Pedir permissão
+                </Button>
+              )}
+              <Button variant="outline" onClick={chamada.fechar}>
+                Fechar
+              </Button>
+            </div>
+          </div>
         )}
 
         <p className="text-[10px] text-muted-foreground">WhatsApp · Ligação oficial via Meta</p>

@@ -62,12 +62,17 @@ export function useWhatsappCall() {
   const [duracaoSegundos, setDuracao] = useState(0);
   const [erro, setErro] = useState("");
   const [mudo, setMudo] = useState(false);
+  // Ligação de saída barrada por falta de permissão do cliente → oferece o
+  // pedido de permissão na própria UI.
+  const [precisaPermissao, setPrecisaPermissao] = useState(false);
+  const [permissaoEnviada, setPermissaoEnviada] = useState(false);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ofertaPendenteRef = useRef<string | null>(null); // offer do connect de entrada
+  const ultimaLigacaoRef = useRef<IniciarLigacaoOpts | null>(null); // pra reusar no pedido de permissão
   const estadoRef = useRef(estado);
   const chamadaRef = useRef<ChamadaAtiva | null>(null);
   estadoRef.current = estado;
@@ -77,6 +82,7 @@ export function useWhatsappCall() {
   const rejeitar = trpc.whatsappCalling.rejeitar.useMutation();
   const encerrar = trpc.whatsappCalling.encerrar.useMutation();
   const iniciar = trpc.whatsappCalling.iniciarChamada.useMutation();
+  const permissao = trpc.whatsappCalling.pedirPermissao.useMutation();
 
   // Elemento de áudio (destacado do DOM) pra tocar a voz do cliente.
   useEffect(() => {
@@ -120,6 +126,8 @@ export function useWhatsappCall() {
     limparMidia();
     ofertaPendenteRef.current = null;
     setMudo(false);
+    setPrecisaPermissao(false);
+    setPermissaoEnviada(false);
     setEstado("encerrada");
     setTimeout(() => {
       if (estadoRef.current === "encerrada") {
@@ -130,6 +138,22 @@ export function useWhatsappCall() {
       }
     }, 2500);
   }, [limparMidia, definirChamada]);
+
+  /**
+   * Encerra uma ligação de saída que a API recusou, mantendo a UI aberta com a
+   * opção de pedir permissão (causa mais comum de recusa). Sem auto-reset.
+   */
+  const encerrarComPermissao = useCallback(
+    (msg: string) => {
+      limparMidia();
+      ofertaPendenteRef.current = null;
+      setMudo(false);
+      setErro(msg);
+      setPrecisaPermissao(true);
+      setEstado("encerrada");
+    },
+    [limparMidia],
+  );
 
   const iniciarTimer = useCallback(() => {
     if (timerRef.current) return;
@@ -218,6 +242,10 @@ export function useWhatsappCall() {
   const ligar = useCallback(
     async (opts: IniciarLigacaoOpts) => {
       if (estadoRef.current !== "idle" && estadoRef.current !== "encerrada") return;
+      ultimaLigacaoRef.current = opts;
+      setPrecisaPermissao(false);
+      setPermissaoEnviada(false);
+      let chegouNaApi = false;
       try {
         setErro("");
         setEstado("conectando");
@@ -232,6 +260,7 @@ export function useWhatsappCall() {
         await pc.setLocalDescription(offer);
         await esperarIceCompleto(pc);
         const sdpOffer = pc.localDescription?.sdp || offer.sdp || "";
+        chegouNaApi = true;
         const { callId } = await iniciar.mutateAsync({
           canalId: opts.canalId,
           telefone: opts.telefone,
@@ -242,12 +271,30 @@ export function useWhatsappCall() {
         // Guarda o callId e espera o answer da Meta via SSE (chamada_resposta).
         if (chamadaRef.current) definirChamada({ ...chamadaRef.current, callId });
       } catch (e: any) {
-        setErro(e?.message || "Falha ao iniciar a chamada");
-        finalizar();
+        const msg = e?.message || "Falha ao iniciar a chamada";
+        // Erro na chamada à Meta (não na mídia local) → provável falta de
+        // permissão. Mantém a UI com a opção de pedir permissão.
+        if (chegouNaApi) encerrarComPermissao(msg);
+        else {
+          setErro(msg);
+          finalizar();
+        }
       }
     },
-    [montarPeer, iniciar, definirChamada, finalizar],
+    [montarPeer, iniciar, definirChamada, finalizar, encerrarComPermissao],
   );
+
+  /** Envia o pedido de permissão de ligação ao cliente (reusa a última ligação). */
+  const pedirPermissao = useCallback(async () => {
+    const opts = ultimaLigacaoRef.current;
+    if (!opts) return;
+    try {
+      await permissao.mutateAsync({ canalId: opts.canalId, telefone: opts.telefone });
+      setPermissaoEnviada(true);
+    } catch (e: any) {
+      setErro(e?.message || "Falha ao enviar o pedido de permissão");
+    }
+  }, [permissao]);
 
   /** Liga/desliga o microfone. */
   const alternarMudo = useCallback(() => {
@@ -267,6 +314,8 @@ export function useWhatsappCall() {
     definirChamada(null);
     setDuracao(0);
     setErro("");
+    setPrecisaPermissao(false);
+    setPermissaoEnviada(false);
   }, [limparMidia, definirChamada]);
 
   // ─── Recepção dos sinais SSE ────────────────────────────────────────────────
@@ -318,10 +367,14 @@ export function useWhatsappCall() {
     duracaoSegundos,
     erro,
     mudo,
+    precisaPermissao,
+    permissaoEnviada,
+    enviandoPermissao: permissao.isPending,
     atender,
     recusar,
     desligar,
     ligar,
+    pedirPermissao,
     alternarMudo,
     fechar,
   };
