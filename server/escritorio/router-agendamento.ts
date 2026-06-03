@@ -15,12 +15,6 @@ import {
   listarProximosCompromissos,
   contarAgendamentosPorStatus,
 } from "./db-agendamento";
-import {
-  listarBloqueios,
-  criarBloqueio,
-  excluirBloqueio,
-  importarFeriadosNacionais,
-} from "./db-agenda-bloqueios";
 
 export const agendamentoRouter = router({
   /** Lista agendamentos com filtros */
@@ -141,64 +135,4 @@ export const agendamentoRouter = router({
     if (!esc) return { pendente: 0, em_andamento: 0, concluido: 0, atrasado: 0 };
     return contarAgendamentosPorStatus(esc.escritorio.id);
   }),
-
-  // ─── Bloqueios da agenda (feriados + indisponibilidades) ──────────────
-  // O gerador de slots livres da IA (smartflow) consulta esses bloqueios
-  // pra não oferecer dias/horários indisponíveis ao cliente.
-
-  bloqueiosListar: protectedProcedure.query(async ({ ctx }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id);
-    if (!esc) return [];
-    return listarBloqueios(esc.escritorio.id);
-  }),
-
-  bloqueioCriar: protectedProcedure
-    .input(z.object({
-      data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve ser YYYY-MM-DD"),
-      horaInicio: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
-      horaFim: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
-      motivo: z.string().max(200).optional().nullable(),
-      recorrenteAnual: z.boolean().optional(),
-    }).refine(
-      (d) => (!d.horaInicio && !d.horaFim) || (!!d.horaInicio && !!d.horaFim),
-      { message: "Informe horaInicio E horaFim juntos, ou nenhum (= dia inteiro)" },
-    ).refine(
-      (d) => !d.horaInicio || !d.horaFim || d.horaInicio < d.horaFim,
-      { message: "horaFim deve ser maior que horaInicio" },
-    ))
-    .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado");
-      const id = await criarBloqueio({
-        escritorioId: esc.escritorio.id,
-        data: input.data,
-        horaInicio: input.horaInicio ?? null,
-        horaFim: input.horaFim ?? null,
-        motivo: input.motivo ?? null,
-        recorrenteAnual: input.recorrenteAnual ?? false,
-        criadoPorId: esc.colaborador.id,
-      });
-      return { id };
-    }),
-
-  bloqueioExcluir: protectedProcedure
-    .input(z.object({ id: z.number() }))
-    .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado");
-      await excluirBloqueio(esc.escritorio.id, input.id);
-      return { ok: true };
-    }),
-
-  bloqueioImportarFeriadosNacionais: protectedProcedure
-    .input(z.object({ ano: z.number().int().min(2020).max(2100) }))
-    .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado");
-      return importarFeriadosNacionais({
-        escritorioId: esc.escritorio.id,
-        ano: input.ano,
-        criadoPorId: esc.colaborador.id,
-      });
-    }),
 });
