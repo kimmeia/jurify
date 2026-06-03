@@ -85,6 +85,7 @@ export const TABELAS_INCLUIR: TabelaBackup[] = [
   },
   { nomeBanco: "agente_ia_documentos", colunaEscritorio: "escritorioIdIaDoc", categoria: "configs" },
   { nomeBanco: "agente_chat_threads", colunaEscritorio: "escritorioIdThread", categoria: "configs" },
+  { nomeBanco: "chamada_config", colunaEscritorio: "escritorioIdChamCfg", categoria: "configs" },
 ];
 
 /**
@@ -212,6 +213,7 @@ export const ORDEM_TOPOLOGICA: ReadonlyArray<string> = [
   "comissoes_agenda",
   "motor_monitoramentos",
   "atendimento_metricas_diarias",
+  "chamada_config",
 
   // NÍVEL 1 — depende só de raízes:
   "cliente_pastas", // self-ref OK com FK_CHECKS=0

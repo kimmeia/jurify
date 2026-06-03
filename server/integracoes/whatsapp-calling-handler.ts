@@ -20,6 +20,7 @@ import { obterConfigCanal } from "../escritorio/db-canais";
 import { WhatsAppCloudClient } from "./whatsapp-cloud";
 import { emitirParaEscritorio, emitirParaAtendente } from "../_core/sse-notifications";
 import { agendarOverflow, cancelarOverflow } from "./whatsapp-calling-overflow";
+import { obterConfigChamada } from "./whatsapp-calling-config";
 import {
   montarSinalizacaoChamada,
   montarSinalFila,
@@ -139,18 +140,20 @@ async function registrarEventoChamada(canalInfo: CanalChamada, call: EventoChama
   // — a UI de chamada é quem reage. Best-effort: falha aqui não afeta o log.
   const sinal = montarSinalizacaoChamada(ev, { contatoId, contatoNome, conversaId });
   if (sinal) {
-    // Toca só pro atendente certo: o da chamada (saída/iniciador ou quem
-    // atendeu) ou, na entrada ainda não atendida, o responsável da conversa.
-    // Sem responsável definido, cai pro escritório todo (senão ninguém atende).
     const alvoAtendente = existente?.atendenteId ?? conversaAtendenteId;
     if (alvoAtendente) {
+      // Toca só pro atendente certo: o da chamada (saída/iniciador ou quem
+      // atendeu) ou, na entrada ainda não atendida, o responsável da conversa.
       await emitirParaAtendente(alvoAtendente, sinal);
-    } else {
+    } else if (sinal.tipo !== "chamada_entrante") {
+      // resposta/encerrada sem atendente resolvido → escritório (raro).
       await emitirParaEscritorio(canalInfo.escritorioId, sinal);
     }
+    // Chamada recebida SEM responsável não dá overlay pra todos — vai só pra
+    // fila do escritório (abaixo), pra alguém assumir.
   }
 
-  // ── Fila (escritório-wide): qualquer atendente vê e pode assumir ──────────
+  // ── Fila / transbordo ─────────────────────────────────────────────────────
   const ctxFila = {
     contatoId,
     contatoNome,
@@ -159,25 +162,31 @@ async function registrarEventoChamada(canalInfo: CanalChamada, call: EventoChama
     responsavelId: conversaAtendenteId,
   };
   if (ev.evento === "connect" && ev.direcao === "entrada" && ev.sdp) {
-    // Entra na fila de todos — carrega o offer pra quem assumir responder.
-    await emitirParaEscritorio(
-      canalInfo.escritorioId,
-      montarSinalFila(ev.callId, "tocando", ctxFila, ev.sdp),
-    );
-    // Transbordo: se o responsável não atender em N s, toca pros disponíveis.
-    agendarOverflow({
-      callId: ev.callId,
-      escritorioId: canalInfo.escritorioId,
-      responsavelId: conversaAtendenteId,
-      sdpOffer: ev.sdp,
-      contatoId,
-      contatoNome,
-      telefone: ev.telefone || null,
-      conversaId,
-    });
+    const filaSinal = montarSinalFila(ev.callId, "tocando", ctxFila, ev.sdp);
+    if (conversaAtendenteId) {
+      // Cliente que já tem atendente: a chamada fica só na fila DELE.
+      await emitirParaAtendente(conversaAtendenteId, filaSinal);
+    } else {
+      // Sem responsável: cai na fila do escritório (qualquer um assume).
+      await emitirParaEscritorio(canalInfo.escritorioId, filaSinal);
+    }
+    // Transbordo: só se ligado na config do escritório e houver responsável.
+    const cfg = await obterConfigChamada(canalInfo.escritorioId);
+    if (cfg.transbordoAtivo && conversaAtendenteId) {
+      agendarOverflow({
+        callId: ev.callId,
+        escritorioId: canalInfo.escritorioId,
+        responsavelId: conversaAtendenteId,
+        sdpOffer: ev.sdp,
+        contatoId,
+        contatoNome,
+        telefone: ev.telefone || null,
+        conversaId,
+      });
+    }
   } else if (ev.evento === "terminate") {
     cancelarOverflow(ev.callId);
-    // Sai da fila de todos.
+    // Remove de qualquer fila (responsável ou escritório).
     await emitirParaEscritorio(canalInfo.escritorioId, montarSinalFila(ev.callId, "removida", ctxFila));
   }
 

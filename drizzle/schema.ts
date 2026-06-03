@@ -770,6 +770,22 @@ export const chamadas = mysqlTable(
 export type Chamada = typeof chamadas.$inferSelect;
 export type InsertChamada = typeof chamadas.$inferInsert;
 
+export const chamadaConfig = mysqlTable(
+  "chamada_config",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdChamCfg").notNull(),
+    transbordoAtivo: boolean("transbordoAtivoChamCfg").default(false).notNull(),
+    modoJanela: varchar("modoJanelaChamCfg", { length: 20 }).default("overlay").notNull(),
+    atualizadoEm: timestamp("atualizadoEmChamCfg").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    uqEsc: uniqueIndex("chamada_config_esc_uq").on(t.escritorioId),
+  }),
+);
+
+export type ChamadaConfig = typeof chamadaConfig.$inferSelect;
+
 export const leads = mysqlTable("leads", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioIdLead").notNull(),
