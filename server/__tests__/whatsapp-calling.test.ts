@@ -14,6 +14,7 @@ import {
   normalizarEventoChamada,
   montarSinalizacaoChamada,
   montarSinalFila,
+  montarSinalEntrante,
 } from "../../shared/whatsapp-calling-types";
 
 // ─── Helpers puros ───────────────────────────────────────────────────────────
@@ -160,6 +161,23 @@ describe("montarSinalFila", () => {
     const sinal = montarSinalFila("C9", "removida", { contatoNome: "Rafael" }, "OFFER_SDP");
     expect(sinal.dados.acao).toBe("removida");
     expect(sinal.dados.sdpOffer).toBeNull();
+  });
+});
+
+describe("montarSinalEntrante", () => {
+  it("monta chamada_entrante com offer e dados do contato", () => {
+    const s = montarSinalEntrante("C1", "OFFER", {
+      contatoId: 3,
+      contatoNome: "Rafael",
+      conversaId: 9,
+      telefone: "5585999",
+    });
+    expect(s.tipo).toBe("chamada_entrante");
+    expect(s.dados.kind).toBe("sinalizacao_chamada");
+    expect(s.dados.sdpOffer).toBe("OFFER");
+    expect(s.dados.callId).toBe("C1");
+    expect(s.dados.direcao).toBe("entrada");
+    expect(s.mensagem).toBe("Rafael");
   });
 });
 

@@ -24,6 +24,11 @@ import { checkPermissionAdminOuMatriz } from "../escritorio/check-permission";
 import { WhatsAppCloudClient } from "../integracoes/whatsapp-cloud";
 import { emitirParaEscritorio } from "../_core/sse-notifications";
 import { montarSinalFila } from "../../shared/whatsapp-calling-types";
+import {
+  definirPresenca,
+  estaDisponivel,
+  cancelarOverflow,
+} from "../integracoes/whatsapp-calling-overflow";
 import { explicarErroFacebook } from "./meta-channels";
 import { createLogger } from "../_core/logger";
 
@@ -248,6 +253,7 @@ export const whatsappCallingRouter = router({
     .input(z.object({ callId: z.string().min(1), sdpAnswer: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const { esc, cham, client } = await carregarChamada(ctx.user.id, input.callId);
+      cancelarOverflow(input.callId); // atendida → não transborda mais
       await comErroMeta("Falha ao atender a chamada", () =>
         client.aceitarChamada(input.callId, input.sdpAnswer),
       );
@@ -276,6 +282,7 @@ export const whatsappCallingRouter = router({
     .input(z.object({ callId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const { client } = await carregarChamada(ctx.user.id, input.callId);
+      cancelarOverflow(input.callId); // recusada → não transborda
       await comErroMeta("Falha ao recusar a chamada", () => client.rejeitarChamada(input.callId));
       const db = await getDb();
       if (db) {
@@ -369,5 +376,20 @@ export const whatsappCallingRouter = router({
         .where(cond)
         .orderBy(desc(chamadas.createdAt))
         .limit(input?.limit ?? 50);
+    }),
+
+  /** Minha presença (Disponível/Ausente) pra fila de chamadas. */
+  minhaPresenca: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEsc(ctx.user.id);
+    return { disponivel: estaDisponivel(esc.colaboradorId) };
+  }),
+
+  /** Define minha presença (recebe transbordo de chamada só quando disponível). */
+  definirPresenca: protectedProcedure
+    .input(z.object({ disponivel: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEsc(ctx.user.id);
+      definirPresenca(esc.colaboradorId, input.disponivel);
+      return { disponivel: input.disponivel };
     }),
 });
