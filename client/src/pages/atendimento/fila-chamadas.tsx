@@ -17,6 +17,7 @@ import {
   Loader2,
   MessageCircle,
   Inbox,
+  Headphones,
 } from "lucide-react";
 import type { UseWhatsappCall } from "@/hooks/useWhatsappCall";
 
@@ -39,6 +40,11 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
     refetchInterval: 4000,
     refetchOnWindowFocus: true,
   });
+  const presencaQ = trpc.whatsappCalling.minhaPresenca.useQuery(undefined, { refetchInterval: 30000 });
+  const presencaMut = trpc.whatsappCalling.definirPresenca.useMutation({
+    onSuccess: () => presencaQ.refetch(),
+  });
+  const disponivel = presencaQ.data?.disponivel ?? true;
 
   const tocando = (data?.ativas || []).filter((c) => c.status === "tocando" || c.status === "conectando");
   const emAtendimento = (data?.ativas || []).filter((c) => c.status === "em_andamento");
@@ -50,6 +56,27 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
 
   return (
     <div className="mt-4 max-w-3xl mx-auto space-y-5">
+
+      {/* ── Header: presença ──────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-sm font-bold flex items-center gap-1.5">
+          <Headphones className="h-4 w-4 text-muted-foreground" /> Central de Chamadas
+        </h1>
+        <button
+          onClick={() => presencaMut.mutate({ disponivel: !disponivel })}
+          disabled={presencaMut.isPending}
+          title={disponivel ? "Você recebe chamadas que transbordam" : "Você não recebe transbordo de chamadas"}
+          className={
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors " +
+            (disponivel
+              ? "bg-green-600 text-white hover:bg-green-700"
+              : "bg-muted text-muted-foreground hover:bg-muted/80")
+          }
+        >
+          <span className={"h-2 w-2 rounded-full " + (disponivel ? "bg-white" : "bg-slate-400")}></span>
+          {disponivel ? "Disponível" : "Ausente"}
+        </button>
+      </div>
 
       {/* ── TOCANDO AGORA ─────────────────────────────────────────── */}
       <section>

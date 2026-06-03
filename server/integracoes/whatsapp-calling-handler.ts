@@ -19,6 +19,7 @@ import { buscarContatoPorTelefone } from "../escritorio/db-crm";
 import { obterConfigCanal } from "../escritorio/db-canais";
 import { WhatsAppCloudClient } from "./whatsapp-cloud";
 import { emitirParaEscritorio, emitirParaAtendente } from "../_core/sse-notifications";
+import { agendarOverflow, cancelarOverflow } from "./whatsapp-calling-overflow";
 import {
   montarSinalizacaoChamada,
   montarSinalFila,
@@ -163,7 +164,19 @@ async function registrarEventoChamada(canalInfo: CanalChamada, call: EventoChama
       canalInfo.escritorioId,
       montarSinalFila(ev.callId, "tocando", ctxFila, ev.sdp),
     );
+    // Transbordo: se o responsável não atender em N s, toca pros disponíveis.
+    agendarOverflow({
+      callId: ev.callId,
+      escritorioId: canalInfo.escritorioId,
+      responsavelId: conversaAtendenteId,
+      sdpOffer: ev.sdp,
+      contatoId,
+      contatoNome,
+      telefone: ev.telefone || null,
+      conversaId,
+    });
   } else if (ev.evento === "terminate") {
+    cancelarOverflow(ev.callId);
     // Sai da fila de todos.
     await emitirParaEscritorio(canalInfo.escritorioId, montarSinalFila(ev.callId, "removida", ctxFila));
   }

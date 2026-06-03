@@ -220,6 +220,11 @@ export async function emitirParaResponsaveisEMaster(
   }
 }
 
+/** Conjunto de userIds com pelo menos uma conexão SSE ativa (online agora). */
+export function usuariosConectados(): Set<number> {
+  return new Set(conexoes.keys());
+}
+
 /** Retorna total de conexões ativas (para debug) */
 export function totalConexoesSSE(): number {
   let total = 0;
