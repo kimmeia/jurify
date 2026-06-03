@@ -191,6 +191,18 @@ export function registerWhatsAppCloudWebhook(app: Express) {
         const wabaId = entry.id;
 
         for (const change of entry.changes || []) {
+          // Eventos da Calling API chegam no MESMO webhook, em field "calls"
+          // (HMAC já validado acima). Import dinâmico evita ciclo com o handler,
+          // que importa resolverCanalDaMensagem deste arquivo.
+          if (change.field === "calls") {
+            try {
+              const { processarEventoChamada } = await import("./whatsapp-calling-handler");
+              await processarEventoChamada(change.value);
+            } catch (callErr: any) {
+              log.error("[WhatsApp Cloud] Erro ao processar evento de chamada:", callErr.message);
+            }
+            continue;
+          }
           if (change.field !== "messages") continue;
 
           const value = change.value;
