@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Datas no chat — opções</title>
+<style>
+  :root{
+    --blue:#2f6fed;
+    --blue-grad:linear-gradient(135deg,#3b7bf0,#2b5fe0);
+    --gray:#eceef1;
+    --ink:#1f2430;
+    --muted:#6b7280;
+    --pill-bg:#e4e7ec;
+    --pill-ink:#5b6573;
+    --brief-bg:#f3f0ff;
+    --brief-accent:#7c3aed;
+    --bg:#f4f6f8;
+    --panel:#ffffff;
+    --border:#e6e8ec;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;
+    line-height:1.5;padding:32px 16px 80px;
+  }
+  .wrap{max-width:860px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 6px}
+  .sub{color:var(--muted);margin:0 0 28px;font-size:15px}
+  h2{font-size:18px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+  .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
+  .b-rec{background:#dcfce7;color:#15803d}
+  .b-easy{background:#dbeafe;color:#1d4ed8}
+  .b-extra{background:#fef3c7;color:#b45309}
+  .b-now{background:#fee2e2;color:#b91c1c}
+  .section{margin:0 0 34px}
+  .note{color:var(--muted);font-size:13.5px;margin:6px 0 14px}
+  .note code{background:#eef0f3;padding:1px 6px;border-radius:5px;font-size:12.5px}
+
+  /* chat panel mimicking the real app */
+  .panel{
+    background:var(--panel);border:1px solid var(--border);border-radius:16px;
+    box-shadow:0 1px 3px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.04);
+    overflow:hidden;
+  }
+  .topbar{
+    display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);
+    background:#fff;
+  }
+  .avatar{width:30px;height:30px;border-radius:50%;background:#22b8cf;color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
+  .topname{font-weight:600;font-size:14px}
+  .tag{font-size:11px;background:#e0f2fe;color:#0369a1;padding:1px 8px;border-radius:999px}
+  .thread{
+    padding:16px;display:flex;flex-direction:column;gap:8px;
+    background:#fbfcfd;max-height:430px;overflow-y:auto;position:relative;
+  }
+  .row{display:flex}
+  .row.out{justify-content:flex-end}
+  .row.in{justify-content:flex-start}
+  .bubble{max-width:74%;border-radius:18px;padding:9px 13px;font-size:13.5px}
+  .in .bubble{background:var(--gray);color:var(--ink);border-bottom-left-radius:6px}
+  .out .bubble{background:var(--blue-grad);color:#fff;border-bottom-right-radius:6px}
+  .sender{font-size:10.5px;opacity:.7;margin:0 0 2px;font-weight:600}
+  .meta{display:flex;align-items:center;gap:4px;justify-content:flex-end;margin-top:3px;font-size:10.5px}
+  .in .meta{color:var(--muted)}
+  .out .meta{color:rgba(255,255,255,.8)}
+  .tick{font-size:11px}
+  .brief{
+    background:var(--brief-bg);border-radius:12px;padding:11px 13px;margin-bottom:4px;
+  }
+  .brief .lbl{font-size:10px;font-weight:800;color:var(--brief-accent);letter-spacing:.06em;margin-bottom:2px}
+  .brief .txt{font-size:13px;color:#4b3f6b}
+
+  /* ===== Opção 1: separador de data centralizado ===== */
+  .daysep{display:flex;justify-content:center;margin:6px 0}
+  .daysep span{
+    background:var(--pill-bg);color:var(--pill-ink);font-size:11.5px;font-weight:600;
+    padding:4px 12px;border-radius:999px;
+  }
+
+  /* ===== Opção 2: pílula flutuante (sticky) ===== */
+  .floatpill{position:sticky;top:6px;z-index:5;display:flex;justify-content:center;pointer-events:none;margin-bottom:2px}
+  .floatpill span{
+    background:#fff;color:var(--pill-ink);font-size:11.5px;font-weight:700;
+    padding:5px 14px;border-radius:999px;border:1px solid var(--border);
+    box-shadow:0 4px 12px rgba(16,24,40,.12);
+  }
+
+  /* ===== Opção 4: tooltip no hover ===== */
+  .ttwrap{position:relative;cursor:help;border-bottom:1px dotted rgba(255,255,255,.5)}
+  .ttwrap .tip{
+    position:absolute;bottom:135%;right:0;white-space:nowrap;background:#111827;color:#fff;
+    font-size:11px;padding:5px 9px;border-radius:7px;opacity:0;pointer-events:none;transition:.15s;
+    box-shadow:0 6px 16px rgba(0,0,0,.25);
+  }
+  .ttwrap:hover .tip{opacity:1}
+
+  .legend{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:22px 0 36px}
+  @media(max-width:640px){.legend{grid-template-columns:1fr}}
+  .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+  .card h3{margin:0 0 4px;font-size:14px}
+  .card p{margin:0;font-size:12.5px;color:var(--muted)}
+  .rec{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:18px 20px;margin-top:8px}
+  .rec h2{color:#15803d}
+  .rec ul{margin:8px 0 0;padding-left:18px;font-size:14px}
+  .rec li{margin:4px 0}
+  .arrow{color:#9aa3af;text-align:center;font-size:22px;margin:4px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Datas no chat — comparação de opções</h1>
+  <p class="sub">Hoje a área de conversa mostra <strong>só o horário</strong> (ex.: 22:07). Quando o atendimento atravessa dias, não dá pra saber se a transferência foi “ontem à noite” ou “hoje de manhã”. Abaixo, 4 abordagens (combináveis).</p>
+
+  <div class="legend">
+    <div class="card"><h3>1 · Separador de data</h3><p>Pílula centralizada entre os grupos de mensagens. Padrão WhatsApp / Telegram / iMessage.</p></div>
+    <div class="card"><h3>2 · Pílula flutuante</h3><p>Data fixa no topo enquanto rola a conversa. Sempre se sabe “onde está no tempo”.</p></div>
+    <div class="card"><h3>3 · Data no horário</h3><p>Prefixo no próprio carimbo (“ontem · 22:07”), só quando o dia muda. Mínima mudança.</p></div>
+    <div class="card"><h3>4 · Tooltip no hover</h3><p>Mantém só o horário; ao passar o mouse, mostra a data completa. Complemento.</p></div>
+  </div>
+
+  <!-- ===================== AGORA ===================== -->
+  <div class="section">
+    <h2>Como está hoje <span class="badge b-now">atual</span></h2>
+    <p class="note">Só horário. As 4 mensagens parecem do mesmo momento, mas as duas últimas são do dia seguinte.</p>
+    <div class="panel">
+      <div class="topbar"><div class="avatar">E</div><div><div class="topname">Eleneide</div></div><span class="tag">Em atendimento</span></div>
+      <div class="thread">
+        <div class="brief"><div class="lbl">BRIEF INSTANTÂNEO</div><div class="txt">Cliente busca orientação sobre financiamento com parcelas abusivas.</div></div>
+        <div class="row in"><div class="bubble">Quero falar com um advogado especialista em parcela abusiva<div class="meta">22:07</div></div></div>
+        <div class="row in"><div class="bubble">Antonia Eleneide Silva de Sousa<div class="meta">22:07</div></div></div>
+        <div class="row out"><div class="bubble">Olá, me chamo Beatriz Vieira Ferreira Gomes, vou dar prosseguimento ao seu atendimento. Poderia me informar seu nome?<div class="meta">22:07 <span class="tick">✓</span></div></div></div>
+        <div class="row out"><div class="bubble"><div class="sender">Dayane Rios</div>[Sistema] Conversa transferida para outro atendente.<div class="meta">08:40 <span class="tick">✓</span></div></div></div>
+        <div class="row out"><div class="bubble"><div class="sender">Pablo Sousa Silva</div>Olá! Vou dar prosseguimento ao seu atendimento através do número (85) 99108-8678<div class="meta">08:53 <span class="tick">✓</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- ===================== OPÇÃO 1 ===================== -->
+  <div class="section">
+    <h2>Opção 1 — Separador de data <span class="badge b-rec">recomendada</span></h2>
+    <p class="note">Agrupa por dia com uma pílula central. Rótulos inteligentes: <code>Hoje</code>, <code>Ontem</code>, dia da semana na última semana e data cheia depois. Fica claro que a transferência aconteceu na manhã seguinte.</p>
+    <div class="panel">
+      <div class="topbar"><div class="avatar">E</div><div><div class="topname">Eleneide</div></div><span class="tag">Em atendimento</span></div>
+      <div class="thread">
+        <div class="brief"><div class="lbl">BRIEF INSTANTÂNEO</div><div class="txt">Cliente busca orientação sobre financiamento com parcelas abusivas.</div></div>
+        <div class="daysep"><span>Ontem</span></div>
+        <div class="row in"><div class="bubble">Quero falar com um advogado especialista em parcela abusiva<div class="meta">22:07</div></div></div>
+        <div class="row in"><div class="bubble">Antonia Eleneide Silva de Sousa<div class="meta">22:07</div></div></div>
+        <div class="row out"><div class="bubble">Olá, me chamo Beatriz Vieira Ferreira Gomes, vou dar prosseguimento ao seu atendimento. Poderia me informar seu nome?<div class="meta">22:07 <span class="tick">✓</span></div></div></div>
+        <div class="daysep"><span>Hoje · terça, 3 jun</span></div>
+        <div class="row out"><div class="bubble"><div class="sender">Dayane Rios</div>[Sistema] Conversa transferida para outro atendente.<div class="meta">08:40 <span class="tick">✓</span></div></div></div>
+        <div class="row out"><div class="bubble"><div class="sender">Pablo Sousa Silva</div>Olá! Vou dar prosseguimento ao seu atendimento através do número (85) 99108-8678<div class="meta">08:53 <span class="tick">✓</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== OPÇÃO 2 ===================== -->
+  <div class="section">
+    <h2>Opção 2 — Pílula de data flutuante <span class="badge b-extra">extra polish</span></h2>
+    <p class="note">A pílula gruda no topo enquanto você rola (role a conversa abaixo). Combina muito bem com a Opção 1 em históricos longos. Padrão Telegram.</p>
+    <div class="panel">
+      <div class="topbar"><div class="avatar">E</div><div><div class="topname">Eleneide</div></div><span class="tag">Em atendimento</span></div>
+      <div class="thread" style="max-height:300px">
+        <div class="floatpill"><span>Ontem</span></div>
+        <div class="row in"><div class="bubble">Quero falar com um advogado especialista em parcela abusiva<div class="meta">22:07</div></div></div>
+        <div class="row in"><div class="bubble">Antonia Eleneide Silva de Sousa<div class="meta">22:07</div></div></div>
+        <div class="row out"><div class="bubble">Olá, me chamo Beatriz Vieira Ferreira Gomes, vou dar prosseguimento ao seu atendimento. Poderia me informar seu nome?<div class="meta">22:07 <span class="tick">✓</span></div></div></div>
+        <div class="row out"><div class="bubble">Entendi, Antonia. Pode me contar mais sobre sua situação? O financiamento é de veículo, imóvel ou outro bem?<div class="meta">22:08 <span class="tick">✓</span></div></div></div>
+        <div class="row out"><div class="bubble"><div class="sender">Dayane Rios</div>[Sistema] Conversa transferida para outro atendente.<div class="meta">08:40 <span class="tick">✓</span></div></div></div>
+        <div class="row out"><div class="bubble"><div class="sender">Pablo Sousa Silva</div>Olá! Vou dar prosseguimento ao seu atendimento através do número (85) 99108-8678<div class="meta">08:53 <span class="tick">✓</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== OPÇÃO 3 ===================== -->
+  <div class="section">
+    <h2>Opção 3 — Data no carimbo do horário <span class="badge b-easy">menor esforço</span></h2>
+    <p class="note">Sem separadores: o próprio horário ganha um prefixo de dia <strong>só quando muda</strong>. É 1 linha de código (edita só o <code>&lt;span&gt;</code> do timestamp). Bom se você quiser o mínimo de mudança visual.</p>
+    <div class="panel">
+      <div class="topbar"><div class="avatar">E</div><div><div class="topname">Eleneide</div></div><span class="tag">Em atendimento</span></div>
+      <div class="thread">
+        <div class="brief"><div class="lbl">BRIEF INSTANTÂNEO</div><div class="txt">Cliente busca orientação sobre financiamento com parcelas abusivas.</div></div>
+        <div class="row in"><div class="bubble">Quero falar com um advogado especialista em parcela abusiva<div class="meta">ontem · 22:07</div></div></div>
+        <div class="row in"><div class="bubble">Antonia Eleneide Silva de Sousa<div class="meta">22:07</div></div></div>
+        <div class="row out"><div class="bubble">Olá, me chamo Beatriz Vieira Ferreira Gomes, vou dar prosseguimento ao seu atendimento. Poderia me informar seu nome?<div class="meta">22:07 <span class="tick">✓</span></div></div></div>
+        <div class="row out"><div class="bubble"><div class="sender">Dayane Rios</div>[Sistema] Conversa transferida para outro atendente.<div class="meta">hoje · 08:40 <span class="tick">✓</span></div></div></div>
+        <div class="row out"><div class="bubble"><div class="sender">Pablo Sousa Silva</div>Olá! Vou dar prosseguimento ao seu atendimento através do número (85) 99108-8678<div class="meta">08:53 <span class="tick">✓</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== OPÇÃO 4 ===================== -->
+  <div class="section">
+    <h2>Opção 4 — Tooltip com data completa <span class="badge b-extra">complemento</span></h2>
+    <p class="note">Mantém só o horário, mas ao passar o mouse mostra a data por extenso. <strong>Passe o mouse</strong> sobre os horários abaixo. Sozinho não resolve (a data fica escondida), mas é ótimo somado às opções 1 ou 3.</p>
+    <div class="panel">
+      <div class="topbar"><div class="avatar">E</div><div><div class="topname">Eleneide</div></div><span class="tag">Em atendimento</span></div>
+      <div class="thread">
+        <div class="row out"><div class="bubble">Olá, me chamo Beatriz Vieira Ferreira Gomes, vou dar prosseguimento ao seu atendimento. Poderia me informar seu nome?<div class="meta"><span class="ttwrap">22:07<span class="tip">segunda, 2 de junho de 2026 às 22:07</span></span> <span class="tick">✓</span></div></div></div>
+        <div class="row out"><div class="bubble"><div class="sender">Pablo Sousa Silva</div>Olá! Vou dar prosseguimento ao seu atendimento através do número (85) 99108-8678<div class="meta"><span class="ttwrap">08:53<span class="tip">terça, 3 de junho de 2026 às 08:53</span></span> <span class="tick">✓</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== RECOMENDAÇÃO ===================== -->
+  <div class="rec">
+    <h2>Recomendação</h2>
+    <ul>
+      <li><strong>Opção 1 (separador de data)</strong> como base — é o padrão que todo mundo já reconhece de apps de mensagem e resolve o problema de forma óbvia.</li>
+      <li>Somar a <strong>Opção 2 (pílula flutuante)</strong> e a <strong>Opção 4 (tooltip)</strong> como refinamento — baixo custo, ajuda em históricos longos.</li>
+      <li>O código já tem um helper <code>dataLabel()</code> em <code>linha-tempo-unificada.tsx</code> (Hoje / Ontem / DD/MM) que dá pra reaproveitar — então a Opção 1 é uma mudança pequena e contida em <code>Atendimento.tsx</code>.</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

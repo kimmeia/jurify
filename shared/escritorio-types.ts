@@ -89,6 +89,36 @@ export function dataHojeBR(
 }
 
 /**
+ * Rótulo de separador de data no chat/timeline, observado no fuso `tz`.
+ *
+ * "Hoje" / "Ontem" pros dois dias mais recentes; senão a data por extenso
+ * ("Terça-feira, 3 de junho"), com o ano só quando difere do corrente. A
+ * virada de dia segue o relógio do operador no fuso do escritório — uma
+ * mensagem das 23h BRT não pode cair no "dia seguinte" só porque já passou
+ * da meia-noite no UTC do server. `agora` é injetável pra teste determinístico.
+ */
+export function rotuloDataConversa(
+  iso: string | Date,
+  tz: string = FUSO_HORARIO_PADRAO,
+  agora: Date = new Date(),
+): string {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  const diaMsg = dataHojeBR(tz, d);
+  const hoje = dataHojeBR(tz, agora);
+  const ontem = dataHojeBR(tz, new Date(agora.getTime() - 86_400_000));
+  if (diaMsg === hoje) return "Hoje";
+  if (diaMsg === ontem) return "Ontem";
+  const txt = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: tz,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    ...(diaMsg.slice(0, 4) === hoje.slice(0, 4) ? {} : { year: "numeric" }),
+  }).format(d);
+  return txt.charAt(0).toUpperCase() + txt.slice(1);
+}
+
+/**
  * Retorna o offset (em ms) do fuso `tz` no instante `instante`.
  * Ex: para America/Sao_Paulo (BRT, sem horário de verão desde 2019),
  *     offset = -3h × 3600 × 1000 = -10800000 (UTC-3).
