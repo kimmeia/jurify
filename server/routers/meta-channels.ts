@@ -838,6 +838,82 @@ export const metaChannelsRouter = router({
     }),
 
   /**
+   * Detecta se o número já está registrado na Cloud API e cura a flag
+   * `registradoCloudApi`. Número conectado via Embedded Signup já vem
+   * registrado, mas o connect não marcava a flag — daí o card pedia PIN à toa,
+   * mesmo o número já enviando/recebendo.
+   *
+   * `forcar: true` marca como registrado sem checar a Meta (o dono confirma que
+   * o número já funciona). Sem forçar, só cura se a Meta reportar
+   * platform_type === "CLOUD_API".
+   */
+  verificarRegistroCloud: protectedProcedure
+    .input(z.object({ canalId: z.number(), forcar: z.boolean().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      const [canal] = await db
+        .select()
+        .from(canaisIntegrados)
+        .where(
+          and(
+            eq(canaisIntegrados.id, input.canalId),
+            eq(canaisIntegrados.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!canal) throw new Error("Canal não encontrado.");
+
+      const marcar = async () => {
+        if (!canal.registradoCloudApi) {
+          await db
+            .update(canaisIntegrados)
+            .set({ registradoCloudApi: true })
+            .where(eq(canaisIntegrados.id, canal.id));
+        }
+      };
+
+      if (input.forcar) {
+        await marcar();
+        return { registrado: true, forcado: true, platformType: null as string | null };
+      }
+
+      if (!canal.configEncrypted || !canal.configIv || !canal.configTag) {
+        throw new Error("Canal sem configuração.");
+      }
+      const { decryptConfig } = await import("../escritorio/crypto-utils");
+      const cfg = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag) as {
+        accessToken?: string;
+        phoneNumberId?: string;
+      };
+      if (!cfg.accessToken || !cfg.phoneNumberId) {
+        throw new Error("Canal sem credenciais (access_token/phone_number_id).");
+      }
+
+      const axios = (await import("axios")).default;
+      try {
+        const res = await axios.get(`https://graph.facebook.com/v21.0/${cfg.phoneNumberId}`, {
+          params: { fields: "platform_type,code_verification_status,display_phone_number,name_status" },
+          headers: { Authorization: `Bearer ${cfg.accessToken}` },
+          timeout: 10000,
+        });
+        const platformType: string = res.data?.platform_type || "";
+        const registrado = platformType === "CLOUD_API";
+        if (registrado) await marcar();
+        return { registrado, forcado: false, platformType: platformType || null };
+      } catch (err: any) {
+        log.warn(
+          { status: err?.response?.status, fbError: err?.response?.data?.error },
+          "[metaChannels] verificarRegistroCloud falhou",
+        );
+        throw new Error(explicarErroFacebook(err, "Falha ao verificar o registro do número"));
+      }
+    }),
+
+  /**
    * Testa a conexão do canal atualizando info do provedor.
    * Útil para o indicador de saúde no card de integrações.
    */
