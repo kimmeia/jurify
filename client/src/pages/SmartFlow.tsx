@@ -193,7 +193,7 @@ export default function SmartFlow() {
   }, [lista]);
 
   return (
-    <div className="space-y-5 max-w-7xl mx-auto">
+    <div className="space-y-5">
       <SmartFlowHero onNovoCenario={() => setGaleriaOpen(true)} />
 
       <GaleriaTemplatesDialog open={galeriaOpen} onOpenChange={setGaleriaOpen} />
