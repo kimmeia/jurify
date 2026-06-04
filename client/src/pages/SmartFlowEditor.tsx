@@ -46,7 +46,7 @@ import "@xyflow/react/dist/style.css";
 import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Banknote, BookOpen, Brain, Bot, Calendar, CheckCircle2, ChevronDown, Circle,
-  CircleDollarSign, Clock, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle,
+  CircleDollarSign, Clock, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle, MessageCircleQuestion,
   Move, Pause, PhoneCall, Play, Plus, Repeat, Save, Search, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, Zap,
   CalendarCheck, CalendarX, CalendarClock, CalendarSearch, Trash2, XCircle,
   Variable as VariableIcon,
@@ -132,6 +132,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   agenda_criar: CalendarCheck,
   whatsapp_enviar: MessageCircle,
   whatsapp_aguardar_resposta: Pause,
+  whatsapp_pergunta_opcoes: MessageCircleQuestion,
   transferir: PhoneCall,
   distribuir_atendimento: Users,
   condicional: GitBranch,
@@ -252,6 +253,7 @@ const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
   agenda_criar: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
   whatsapp_enviar: { grad: "from-teal-500 to-cyan-600", border: "border-teal-300 dark:border-teal-800" },
   whatsapp_aguardar_resposta: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
+  whatsapp_pergunta_opcoes: { grad: "from-cyan-500 to-teal-500", border: "border-cyan-300 dark:border-cyan-800" },
   transferir: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
   distribuir_atendimento: { grad: "from-teal-500 to-emerald-600", border: "border-teal-300 dark:border-teal-800" },
   condicional: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
@@ -401,6 +403,27 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
         <div className="border-t bg-muted/20 pt-1 pb-3">
           <HandleRow handleId="default" label="respondeu →" cor="#22c55e" />
           <HandleRow handleId="timeout" label="não respondeu (tempo)" italic cor="#f59e0b" />
+        </div>
+      ) : data.tipo === "whatsapp_pergunta_opcoes" ? (
+        // Pergunta com opções: 1 saída por opção (cond_<id>) + 2 universais
+        // (outra_resposta = texto livre sem match; sem_resposta = timeout).
+        <div className="border-t bg-muted/20 pt-1 pb-3">
+          {(() => {
+            const cfg = (data.config || {}) as { modo?: "botoes" | "lista"; opcoes?: Array<{ id: string; titulo: string }>; secoes?: Array<{ itens: Array<{ id: string; titulo: string }> }> };
+            const itens: Array<{ id: string; titulo: string }> =
+              cfg.modo === "lista"
+                ? (cfg.secoes || []).flatMap((s) => s.itens || [])
+                : (cfg.opcoes || []);
+            return (
+              <>
+                {itens.map((o) => (
+                  <HandleRow key={o.id} handleId={`cond_${o.id}`} label={o.titulo || o.id} cor="#06b6d4" />
+                ))}
+                <HandleRow handleId="outra_resposta" label="texto livre (sem match)" italic cor="#a16207" />
+                <HandleRow handleId="sem_resposta" label="não respondeu (tempo)" italic cor="#f59e0b" />
+              </>
+            );
+          })()}
         </div>
       ) : data.tipo === "ia_atendente" ? (
         // Atendente IA: uma saída por ferramenta habilitada. O agente decide
@@ -3931,6 +3954,314 @@ function ConfigWhatsappAguardarRespostaFields({
 }
 
 /**
+ * Config do passo `whatsapp_pergunta_opcoes`. Envia botões clicáveis (até 3)
+ * ou lista suspensa (até 10 seções × 10 itens) via WhatsApp Cloud API e
+ * pausa o fluxo até o cliente escolher. Cada opção vira saída `cond_<id>`;
+ * saídas universais `outra_resposta` e `sem_resposta` cobrem texto livre
+ * sem match e timeout.
+ */
+function ConfigWhatsappPerguntaOpcoesFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const modo: "botoes" | "lista" = cfg.modo === "lista" ? "lista" : "botoes";
+  const opcoes: Array<{ id: string; titulo: string }> = Array.isArray(cfg.opcoes) ? (cfg.opcoes as any) : [];
+  const secoes: Array<{ titulo: string; itens: Array<{ id: string; titulo: string; descricao?: string }> }> =
+    Array.isArray(cfg.secoes) ? (cfg.secoes as any) : [];
+
+  // ID auto-gerado a partir do label (snake_case ASCII). Operador raramente
+  // precisa editar, mas pode bater com chave de proximoSe pra roteamento.
+  const slug = (s: string) =>
+    (s || "")
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 32) || "opt";
+
+  const trocarModo = (novoModo: "botoes" | "lista") => onChange({ modo: novoModo });
+
+  // ── Botões ──────────────────────────────────────────────────────────
+  const addBotao = () => {
+    if (opcoes.length >= 3) return;
+    const titulo = "";
+    onChange({ opcoes: [...opcoes, { id: slug(`opcao_${opcoes.length + 1}`), titulo }] });
+  };
+  const atualizarBotao = (i: number, patch: Partial<{ id: string; titulo: string }>) => {
+    const novo = opcoes.slice();
+    novo[i] = { ...novo[i], ...patch };
+    // Se id ainda parece auto-gerado E o título mudou, regenera a partir do título.
+    if (patch.titulo !== undefined && (!opcoes[i].id || opcoes[i].id === slug(opcoes[i].titulo))) {
+      novo[i].id = slug(patch.titulo);
+    }
+    onChange({ opcoes: novo });
+  };
+  const removerBotao = (i: number) => onChange({ opcoes: opcoes.filter((_, j) => j !== i) });
+
+  // ── Lista (seções) ──────────────────────────────────────────────────
+  const addSecao = () => {
+    if (secoes.length >= 10) return;
+    onChange({ secoes: [...secoes, { titulo: `Seção ${secoes.length + 1}`, itens: [] }] });
+  };
+  const atualizarSecao = (i: number, patch: Partial<{ titulo: string }>) => {
+    const novo = secoes.slice();
+    novo[i] = { ...novo[i], ...patch };
+    onChange({ secoes: novo });
+  };
+  const removerSecao = (i: number) => onChange({ secoes: secoes.filter((_, j) => j !== i) });
+  const addItem = (si: number) => {
+    if (secoes[si].itens.length >= 10) return;
+    const novo = secoes.slice();
+    novo[si] = { ...novo[si], itens: [...novo[si].itens, { id: slug(`item_${si}_${novo[si].itens.length}`), titulo: "" }] };
+    onChange({ secoes: novo });
+  };
+  const atualizarItem = (si: number, ii: number, patch: Partial<{ id: string; titulo: string; descricao: string }>) => {
+    const novo = secoes.slice();
+    const itens = novo[si].itens.slice();
+    itens[ii] = { ...itens[ii], ...patch };
+    if (patch.titulo !== undefined && (!secoes[si].itens[ii].id || secoes[si].itens[ii].id === slug(secoes[si].itens[ii].titulo))) {
+      itens[ii].id = slug(patch.titulo);
+    }
+    novo[si] = { ...novo[si], itens };
+    onChange({ secoes: novo });
+  };
+  const removerItem = (si: number, ii: number) => {
+    const novo = secoes.slice();
+    novo[si] = { ...novo[si], itens: novo[si].itens.filter((_, j) => j !== ii) };
+    onChange({ secoes: novo });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md border border-cyan-200 bg-cyan-50 dark:bg-cyan-950/30 dark:border-cyan-900 p-2.5 text-[10px] text-cyan-900 dark:text-cyan-200 leading-snug">
+        ℹ️ Cada opção vira uma <strong>saída</strong> do bloco (<code>cond_&lt;id&gt;</code>) — ligue uma seta pra cada caminho. Saídas extras: <code>outra_resposta</code> (texto livre sem match) e <code>sem_resposta</code> (timeout). <strong>Só funciona em canal WhatsApp Cloud API</strong>.
+      </div>
+
+      <div>
+        <Label className="text-xs">Modo</Label>
+        <div className="flex gap-2 mt-1">
+          <button
+            type="button"
+            onClick={() => trocarModo("botoes")}
+            className={`flex-1 px-3 py-2 text-xs rounded-md border ${modo === "botoes" ? "border-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 font-medium" : "border-slate-200 dark:border-slate-800"}`}
+          >
+            📌 Botões <span className="text-[10px] opacity-70">(até 3)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => trocarModo("lista")}
+            className={`flex-1 px-3 py-2 text-xs rounded-md border ${modo === "lista" ? "border-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 font-medium" : "border-slate-200 dark:border-slate-800"}`}
+          >
+            📋 Lista <span className="text-[10px] opacity-70">(até 10)</span>
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <Label className="text-xs">Cabeçalho <span className="text-muted-foreground">(opcional, ≤ 60 chars)</span></Label>
+        <Input
+          maxLength={60}
+          value={String(cfg.header || "")}
+          onChange={(e) => onChange({ header: e.target.value })}
+          placeholder="Como posso te ajudar?"
+          className="text-xs h-8"
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Mensagem * <span className="text-muted-foreground">(≤ 1024 chars)</span></Label>
+          <VariableTrigger
+            inputId="cfg-perg-body"
+            variaveis={variaveis}
+            onInsert={(p) => onChange({ body: String(cfg.body || "") + (cfg.body ? " " : "") + `{{${p}}}` })}
+          />
+        </div>
+        <VariableInput
+          id="cfg-perg-body"
+          as="textarea"
+          rows={3}
+          highlight
+          preview
+          value={String(cfg.body || "")}
+          onChange={(v) => onChange({ body: v })}
+          variaveis={variaveis}
+          placeholder="Olá {{nome}}, escolha uma das opções abaixo:"
+        />
+      </div>
+
+      <div>
+        <Label className="text-xs">Rodapé <span className="text-muted-foreground">(opcional, ≤ 60 chars)</span></Label>
+        <Input
+          maxLength={60}
+          value={String(cfg.footer || "")}
+          onChange={(e) => onChange({ footer: e.target.value })}
+          placeholder="Atendimento 9h às 18h"
+          className="text-xs h-8"
+        />
+      </div>
+
+      {modo === "botoes" ? (
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <Label className="text-xs">Botões ({opcoes.length}/3)</Label>
+            <Button variant="outline" size="sm" onClick={addBotao} disabled={opcoes.length >= 3} className="h-7 text-xs gap-1">
+              <Plus className="h-3 w-3" /> Adicionar
+            </Button>
+          </div>
+          <div className="space-y-1.5">
+            {opcoes.map((o, i) => (
+              <div key={i} className="rounded-md border border-slate-200 dark:border-slate-800 p-2 bg-slate-50/50 dark:bg-slate-900/30">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-muted-foreground w-4">{i + 1}</span>
+                  <Input
+                    value={o.titulo}
+                    maxLength={20}
+                    onChange={(e) => atualizarBotao(i, { titulo: e.target.value })}
+                    placeholder="Texto do botão"
+                    className="text-xs h-7"
+                  />
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => removerBotao(i)} title="Remover">
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-[9px] text-muted-foreground w-4 text-right">id:</span>
+                  <Input
+                    value={o.id}
+                    onChange={(e) => atualizarBotao(i, { id: slug(e.target.value) })}
+                    className="text-[10px] h-6 font-mono"
+                    placeholder="snake_case"
+                  />
+                </div>
+              </div>
+            ))}
+            {opcoes.length === 0 && (
+              <p className="text-[10px] text-muted-foreground italic text-center py-2">Adicione de 1 a 3 botões.</p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <Label className="text-xs">Texto do botão drawer</Label>
+          </div>
+          <Input
+            maxLength={20}
+            value={String(cfg.drawerLabel || "")}
+            onChange={(e) => onChange({ drawerLabel: e.target.value })}
+            placeholder="Ver opções"
+            className="text-xs h-8"
+          />
+          <p className="text-[10px] text-muted-foreground mt-0.5">Texto do botão que abre o menu suspenso (default "Ver opções", ≤ 20 chars).</p>
+
+          <div className="flex items-center justify-between mt-3 mb-1">
+            <Label className="text-xs">Seções ({secoes.length}/10)</Label>
+            <Button variant="outline" size="sm" onClick={addSecao} disabled={secoes.length >= 10} className="h-7 text-xs gap-1">
+              <Plus className="h-3 w-3" /> Adicionar seção
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {secoes.map((s, si) => (
+              <div key={si} className="rounded-md border border-slate-200 dark:border-slate-800 p-2 bg-slate-50/50 dark:bg-slate-900/30">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Input
+                    value={s.titulo}
+                    maxLength={24}
+                    onChange={(e) => atualizarSecao(si, { titulo: e.target.value })}
+                    placeholder="Nome da seção"
+                    className="text-xs h-7 font-medium"
+                  />
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => removerSecao(si)} title="Remover seção">
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="space-y-1 pl-2 border-l-2 border-slate-200 dark:border-slate-800">
+                  {s.itens.map((it, ii) => (
+                    <div key={ii} className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          value={it.titulo}
+                          maxLength={24}
+                          onChange={(e) => atualizarItem(si, ii, { titulo: e.target.value })}
+                          placeholder="Título do item"
+                          className="text-xs h-7"
+                        />
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => removerItem(si, ii)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-1.5 pl-1">
+                        <Input
+                          value={it.descricao || ""}
+                          maxLength={72}
+                          onChange={(e) => atualizarItem(si, ii, { descricao: e.target.value })}
+                          placeholder="Descrição (opcional, ≤ 72)"
+                          className="text-[10px] h-6"
+                        />
+                        <Input
+                          value={it.id}
+                          onChange={(e) => atualizarItem(si, ii, { id: slug(e.target.value) })}
+                          className="text-[10px] h-6 font-mono w-32"
+                          placeholder="id"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <Button variant="outline" size="sm" onClick={() => addItem(si)} disabled={s.itens.length >= 10} className="h-6 text-[10px] gap-1 w-full">
+                    <Plus className="h-2.5 w-2.5" /> Item ({s.itens.length}/10)
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {secoes.length === 0 && (
+              <p className="text-[10px] text-muted-foreground italic text-center py-2">Adicione de 1 a 10 seções.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <Label className="text-xs">Timeout (minutos)</Label>
+        <Input
+          type="number"
+          min={1}
+          max={7 * 24 * 60}
+          value={Number(cfg.timeoutMinutos ?? 60)}
+          onChange={(e) => onChange({ timeoutMinutos: Math.max(1, Math.min(7 * 24 * 60, Number(e.target.value) || 60)) })}
+          className="text-xs h-8"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">Se o cliente não clicar/digitar nesse tempo, sai pela saída <code>sem_resposta</code>.</p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Se cliente digitar texto livre</Label>
+        <div className="flex gap-2 mt-1">
+          <button
+            type="button"
+            onClick={() => onChange({ fallbackTexto: "fuzzy" })}
+            className={`flex-1 px-2 py-1.5 text-[11px] rounded-md border ${(cfg.fallbackTexto ?? "fuzzy") === "fuzzy" ? "border-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 font-medium" : "border-slate-200 dark:border-slate-800"}`}
+          >
+            Tentar match por título
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ fallbackTexto: "ignorar" })}
+            className={`flex-1 px-2 py-1.5 text-[11px] rounded-md border ${cfg.fallbackTexto === "ignorar" ? "border-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 font-medium" : "border-slate-200 dark:border-slate-800"}`}
+          >
+            Ir pra "outra_resposta"
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Config do passo `para_cada_item` — loop sobre lista do contexto.
  *  - caminhoLista: ex "acoes", "movimentacoes", "cliente.processos"
  *  - nomeVarItem: nome da variável dentro da iteração (default "item")
@@ -5205,6 +5536,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigIaExtrairCamposFields cfg={cfg} onChange={onChange} />;
     case "whatsapp_aguardar_resposta":
       return <ConfigWhatsappAguardarRespostaFields cfg={cfg} onChange={onChange} />;
+    case "whatsapp_pergunta_opcoes":
+      return <ConfigWhatsappPerguntaOpcoesFields cfg={cfg} onChange={onChange} />;
     case "para_cada_item":
       return <ConfigParaCadaItemFields cfg={cfg} onChange={onChange} />;
     case "crm_buscar_contato":

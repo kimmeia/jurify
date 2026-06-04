@@ -83,6 +83,7 @@ export type TipoPasso =
   | "agenda_criar"
   | "whatsapp_enviar"
   | "whatsapp_aguardar_resposta"
+  | "whatsapp_pergunta_opcoes"
   | "transferir"
   | "distribuir_atendimento"
   | "condicional"
@@ -469,6 +470,51 @@ export interface ConfigWhatsappAguardarResposta {
    */
   opcoes?: string[];
 }
+
+/**
+ * Config do passo `whatsapp_pergunta_opcoes` — envia mensagem interativa
+ * (botões clicáveis ou menu suspenso) e pausa o fluxo até o contato escolher.
+ *
+ * Cada opção vira uma saída do nó (`cond_<id>` em `proximoSe`), mais 2
+ * saídas universais: `outra_resposta` (cliente digitou texto fora das opções)
+ * e `sem_resposta` (timeout).
+ *
+ * SÓ funciona em canal `whatsapp_api` (Meta Cloud) — o passo falha cedo se
+ * o contato está num canal QR (Baileys), com mensagem clara pro operador.
+ *
+ * Limites Meta:
+ *   - Botões: até 3, label ≤ 20 chars
+ *   - Lista: até 10 seções × 10 itens, título ≤ 24 chars, descrição ≤ 72
+ *   - Header/Footer ≤ 60 chars, Body ≤ 1024 chars
+ */
+export interface ConfigWhatsappPerguntaOpcoes {
+  /** "botoes" = até 3 quick-reply buttons; "lista" = menu suspenso */
+  modo: "botoes" | "lista";
+  /** Cabeçalho em negrito acima da mensagem (opcional, máx 60 chars) */
+  header?: string;
+  /** Corpo principal (obrigatório, suporta interpolação `{{...}}`, máx 1024 chars) */
+  body: string;
+  /** Rodapé em cinza (opcional, máx 60 chars) */
+  footer?: string;
+  /** Opções pro modo "botoes" (1 a 3). ID auto-gerado a partir do label se não informado. */
+  opcoes?: Array<{ id: string; titulo: string }>;
+  /** Texto do botão que abre o drawer no modo "lista" (default "Ver opções", máx 20 chars) */
+  drawerLabel?: string;
+  /** Seções pro modo "lista" (1 a 10 seções, 1 a 10 itens cada). */
+  secoes?: Array<{
+    titulo: string;
+    itens: Array<{ id: string; titulo: string; descricao?: string }>;
+  }>;
+  /** Quanto tempo aguardar antes do timeout. Default 60 (1h). Range 1min~7d. */
+  timeoutMinutos?: number;
+  /**
+   * Como tratar texto livre digitado em vez de clicar:
+   *   - "fuzzy" (default): tenta match por título (case-insensitive substring)
+   *   - "ignorar": vai direto pra saída "outra_resposta"
+   */
+  fallbackTexto?: "fuzzy" | "ignorar";
+}
+
 export interface ConfigTransferir {
   /** reservado */
 }
@@ -701,6 +747,7 @@ export type PassoConfigByTipo =
   | { tipo: "calcom_remarcar"; config: ConfigCalcomRemarcar }
   | { tipo: "whatsapp_enviar"; config: ConfigWhatsappEnviar }
   | { tipo: "whatsapp_aguardar_resposta"; config: ConfigWhatsappAguardarResposta }
+  | { tipo: "whatsapp_pergunta_opcoes"; config: ConfigWhatsappPerguntaOpcoes }
   | { tipo: "transferir"; config: ConfigTransferir }
   | { tipo: "distribuir_atendimento"; config: ConfigDistribuirAtendimento }
   | { tipo: "condicional"; config: ConfigCondicional }
@@ -869,6 +916,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "agenda_criar", label: "Agendamento", descricao: "Mexe na Agenda do escritório: marcar consulta, ver horários livres, editar/remarcar e cancelar. Atribui a um responsável e vincula ao cliente.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "acoes" },
   { id: "whatsapp_enviar", label: "Enviar mensagem", descricao: "Envia mensagem pelo WhatsApp.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
   { id: "whatsapp_aguardar_resposta", label: "Aguardar resposta", descricao: "Pausa o fluxo até o cliente responder (com timeout). Use pra menus ('digite 1'), confirmações e coletar UMA resposta. Não precisa dele depois do Atendente IA — esse já espera o cliente sozinho.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
+  { id: "whatsapp_pergunta_opcoes", label: "Pergunta com opções", descricao: "Envia BOTÕES clicáveis (até 3) ou LISTA suspensa (até 10) pelo WhatsApp oficial. Cliente clica em vez de digitar — cada opção vira uma saída do bloco. Saídas extras: 'outra_resposta' (digitou texto) e 'sem_resposta' (timeout). SÓ funciona em canal Cloud API (não Baileys QR).", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
   { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e PARA o bot de responder (conversa fica 'em atendimento'). Use no fim de um caminho pra passar pro atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
   { id: "distribuir_atendimento", label: "Distribuir atendimento", descricao: "Atribui um atendente à conversa. Dois modos: SETOR (rotação dentro de um setor — Comercial, Financeiro… — menor carga / online primeiro) ou ATENDENTE FIXO (atribui sempre a pessoa escolhida). O bot SEGUE o fluxo — só para quando o atendente responder no inbox. Saídas: atribuído / sem atendente.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
   { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },

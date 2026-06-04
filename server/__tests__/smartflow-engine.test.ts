@@ -50,6 +50,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     cancelarBooking: vi.fn().mockResolvedValue(true),
     reagendarBooking: vi.fn().mockResolvedValue(true),
     enviarWhatsApp: vi.fn().mockResolvedValue(true),
+    enviarWhatsAppInteractive: vi.fn().mockResolvedValue(true),
     chamarWebhook: vi.fn().mockResolvedValue({ ok: true }),
     criarCardKanban: vi.fn().mockResolvedValue(42),
     moverCardKanban: vi.fn().mockResolvedValue(true),
@@ -3819,6 +3820,159 @@ describe("SmartFlow Engine", () => {
       ];
       const resultado = await executarCenario(passos, {}, exec);
       expect(resultado.sucesso).toBe(false);
+    });
+  });
+
+  describe("whatsapp_pergunta_opcoes (botões/lista clicáveis)", () => {
+    const cfgBotoes = {
+      modo: "botoes" as const,
+      body: "Como ajudar?",
+      opcoes: [
+        { id: "agendar", titulo: "📅 Agendar" },
+        { id: "duvida", titulo: "💬 Dúvida" },
+      ],
+      timeoutMinutos: 60,
+    };
+
+    it("envia mensagem interativa e pausa execução na primeira passagem", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_pergunta_opcoes", config: cfgBotoes, clienteId: "n1" },
+      ];
+      const r = await executarCenario(passos, { contatoId: 7, telefoneCliente: "5511999999999" }, exec);
+      expect(r.sucesso).toBe(true);
+      expect((r.contexto as any).aguardandoMensagem).toBe(true);
+      expect((r.contexto as any).aguardandoContatoId).toBe(7);
+      expect(exec.enviarWhatsAppInteractive).toHaveBeenCalledWith(expect.objectContaining({
+        modo: "botoes",
+        body: "Como ajudar?",
+      }));
+    });
+
+    it("falha cedo sem opções configuradas (cfg inválida)", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_pergunta_opcoes",
+          config: { modo: "botoes", body: "oi", opcoes: [] }, clienteId: "n1" },
+      ];
+      const r = await executarCenario(passos, { contatoId: 7, telefoneCliente: "5511..." }, exec);
+      expect(r.sucesso).toBe(false);
+      expect(exec.enviarWhatsAppInteractive).not.toHaveBeenCalled();
+    });
+
+    it("falha quando enviarWhatsAppInteractive não está disponível no executor", async () => {
+      const exec = criarMockExecutores({ enviarWhatsAppInteractive: undefined });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_pergunta_opcoes", config: cfgBotoes, clienteId: "n1" },
+      ];
+      const r = await executarCenario(passos, { contatoId: 7, telefoneCliente: "5511..." }, exec);
+      expect(r.sucesso).toBe(false);
+      expect(r.erro).toMatch(/Cloud API/);
+    });
+
+    it("retomada com respostaOpcao roteia por cond_<id> (clique no botão)", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "whatsapp_pergunta_opcoes", config: cfgBotoes, clienteId: "n1",
+          proximoSe: { cond_agendar: "fim_agendar", cond_duvida: "fim_duvida" },
+        },
+        { id: 2, ordem: 2, tipo: "definir_variavel", config: { chave: "ramo", valor: "agendou" }, clienteId: "fim_agendar" },
+        { id: 3, ordem: 3, tipo: "definir_variavel", config: { chave: "ramo", valor: "duvida" }, clienteId: "fim_duvida" },
+      ];
+      const ctx = {
+        contatoId: 7,
+        telefoneCliente: "5511...",
+        __resumindoWaitClienteId: "n1",
+        respostaUsuario: "📅 Agendar",
+        respostaOpcao: { tipo: "button", id: "agendar", titulo: "📅 Agendar" },
+      };
+      const r = await executarCenario(passos, ctx, exec);
+      expect(r.sucesso).toBe(true);
+      expect((r.contexto as any).ramo).toBe("agendou");
+      // Não chamou enviarWhatsAppInteractive — retomada, não envio.
+      expect(exec.enviarWhatsAppInteractive).not.toHaveBeenCalled();
+    });
+
+    it("retomada com texto livre e fallback=fuzzy bate por título e roteia", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "whatsapp_pergunta_opcoes", config: { ...cfgBotoes, fallbackTexto: "fuzzy" }, clienteId: "n1",
+          proximoSe: { cond_duvida: "fim_duvida", outra_resposta: "fim_outra" },
+        },
+        { id: 2, ordem: 2, tipo: "definir_variavel", config: { chave: "ramo", valor: "duvida" }, clienteId: "fim_duvida" },
+        { id: 3, ordem: 3, tipo: "definir_variavel", config: { chave: "ramo", valor: "outra" }, clienteId: "fim_outra" },
+      ];
+      const ctx = {
+        contatoId: 7,
+        telefoneCliente: "5511...",
+        __resumindoWaitClienteId: "n1",
+        respostaUsuario: "tenho dúvida",
+      };
+      const r = await executarCenario(passos, ctx, exec);
+      expect(r.sucesso).toBe(true);
+      expect((r.contexto as any).ramo).toBe("duvida");
+    });
+
+    it("retomada com texto livre sem match cai em outra_resposta", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "whatsapp_pergunta_opcoes", config: cfgBotoes, clienteId: "n1",
+          proximoSe: { cond_agendar: "fim_agendar", outra_resposta: "fim_outra" },
+        },
+        { id: 2, ordem: 2, tipo: "definir_variavel", config: { chave: "ramo", valor: "agendou" }, clienteId: "fim_agendar" },
+        { id: 3, ordem: 3, tipo: "definir_variavel", config: { chave: "ramo", valor: "outra" }, clienteId: "fim_outra" },
+      ];
+      const ctx = {
+        contatoId: 7,
+        telefoneCliente: "5511...",
+        __resumindoWaitClienteId: "n1",
+        respostaUsuario: "asdfg banana qwerty",
+      };
+      const r = await executarCenario(passos, ctx, exec);
+      expect((r.contexto as any).ramo).toBe("outra");
+    });
+
+    it("timeout cai em sem_resposta", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "whatsapp_pergunta_opcoes", config: cfgBotoes, clienteId: "n1",
+          proximoSe: { sem_resposta: "fim_timeout" },
+        },
+        { id: 2, ordem: 2, tipo: "definir_variavel", config: { chave: "ramo", valor: "timeout" }, clienteId: "fim_timeout" },
+      ];
+      const ctx = {
+        contatoId: 7,
+        telefoneCliente: "5511...",
+        __resumindoWaitClienteId: "n1",
+        __resumindoWaitMotivo: "timeout",
+      };
+      const r = await executarCenario(passos, ctx, exec);
+      expect((r.contexto as any).ramo).toBe("timeout");
+    });
+
+    it("fallback=ignorar não tenta fuzzy match — vai direto pra outra_resposta", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "whatsapp_pergunta_opcoes",
+          config: { ...cfgBotoes, fallbackTexto: "ignorar" }, clienteId: "n1",
+          proximoSe: { cond_duvida: "fim_duvida", outra_resposta: "fim_outra" },
+        },
+        { id: 2, ordem: 2, tipo: "definir_variavel", config: { chave: "ramo", valor: "duvida" }, clienteId: "fim_duvida" },
+        { id: 3, ordem: 3, tipo: "definir_variavel", config: { chave: "ramo", valor: "outra" }, clienteId: "fim_outra" },
+      ];
+      const ctx = {
+        contatoId: 7,
+        telefoneCliente: "5511...",
+        __resumindoWaitClienteId: "n1",
+        respostaUsuario: "tenho dúvida",
+      };
+      const r = await executarCenario(passos, ctx, exec);
+      expect((r.contexto as any).ramo).toBe("outra");
     });
   });
 });

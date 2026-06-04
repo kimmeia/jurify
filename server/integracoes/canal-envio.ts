@@ -149,6 +149,62 @@ export async function enviarTemplatePeloCanalApi(opts: {
   }
 }
 
+/**
+ * Envia mensagem interativa (botões reply ou lista) pelo canal WhatsApp
+ * oficial. Mesmo padrão de retorno de `enviarTemplatePeloCanalApi`. Baileys
+ * NÃO suporta — chamadas de canal QR retornam erro claro pra UX.
+ */
+export async function enviarInterativoPeloCanalApi(opts: {
+  escritorioId: number;
+  telefone: string;
+  modo: "botoes" | "lista";
+  body: string;
+  header?: string;
+  footer?: string;
+  botoes?: Array<{ id: string; titulo: string }>;
+  drawerLabel?: string;
+  secoes?: Array<{ titulo: string; itens: Array<{ id: string; titulo: string; descricao?: string }> }>;
+}): Promise<EnvioResultado> {
+  const cred = await getCanalCloudApi(opts.escritorioId);
+  if (!cred) {
+    return {
+      ok: false,
+      erro: "Nenhum canal WhatsApp oficial (API Meta) conectado — mensagens interativas exigem a API oficial.",
+      provider: "whatsapp_api",
+    };
+  }
+  const telefone = (opts.telefone || "").replace(/\D/g, "");
+  if (!telefone || telefone.length < 10) {
+    return { ok: false, erro: "Telefone inválido pra Cloud API", provider: "whatsapp_api" };
+  }
+  try {
+    const { WhatsAppCloudClient } = await import("./whatsapp-cloud");
+    const client = new WhatsAppCloudClient({ accessToken: cred.accessToken, phoneNumberId: cred.phoneNumberId });
+    let msgId = "";
+    if (opts.modo === "botoes") {
+      if (!opts.botoes || opts.botoes.length === 0) {
+        return { ok: false, erro: "Sem botões configurados", provider: "whatsapp_api" };
+      }
+      msgId = await client.enviarBotoes(telefone, opts.body, opts.botoes, {
+        cabecalho: opts.header,
+        rodape: opts.footer,
+      });
+    } else {
+      if (!opts.secoes || opts.secoes.length === 0) {
+        return { ok: false, erro: "Sem seções configuradas", provider: "whatsapp_api" };
+      }
+      msgId = await client.enviarLista(telefone, opts.body, opts.drawerLabel || "Ver opções", opts.secoes, {
+        cabecalho: opts.header,
+        rodape: opts.footer,
+      });
+    }
+    return { ok: true, idExterno: msgId, provider: "whatsapp_api" };
+  } catch (e: any) {
+    const apiMsg = e?.response?.data?.error?.message;
+    return { ok: false, erro: apiMsg || e?.message || "Falha ao enviar mensagem interativa", provider: "whatsapp_api" };
+  }
+}
+
 async function enviarViaBaileys(opts: EnvioMensagemOpts): Promise<EnvioResultado> {
   try {
     const { getWhatsappManager } = await import("./whatsapp-baileys");
