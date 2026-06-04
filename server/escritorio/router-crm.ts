@@ -11,7 +11,7 @@ import { checkPermission, checkPermissionAdminOuMatriz } from "./check-permissio
 import {
   criarContato, criarOuReutilizarContato, listarContatos, atualizarContato, unificarContatos,
   buscarContatoPorTelefone,
-  criarConversa, listarConversas, atualizarConversa, excluirConversa,
+  criarConversa, listarConversas, contarConversasPorStatus, atualizarConversa, excluirConversa,
   enviarMensagem, listarMensagens,
   criarLead, listarLeads, atualizarLead, excluirLead,
   obterMetricasDashboard, distribuirLead, obterMetricasDetalhadas,
@@ -172,7 +172,7 @@ export const crmRouter = router({
       if (!esc) throw new Error("Escritório não encontrado.");
 
       // Distribuir automaticamente
-      const atendenteId = await distribuirLead(esc.escritorio.id, input.contatoId) ?? esc.colaborador.id;
+      const atendenteId = (await distribuirLead(esc.escritorio.id, input.contatoId).catch(() => null)) ?? esc.colaborador.id;
       const id = await criarConversa({
         escritorioId: esc.escritorio.id,
         contatoId: input.contatoId,
@@ -192,6 +192,7 @@ export const crmRouter = router({
       setorId: z.number().optional(),
       dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
+      limite: z.number().int().min(1).max(1000).optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
@@ -205,6 +206,27 @@ export const crmRouter = router({
         delete filtros.setorId;
       }
       return listarConversas(perm.escritorioId, filtros);
+    }),
+
+  /** Contagem real por status (pros pills do Inbox baterem com >100 conversas). */
+  contarConversas: protectedProcedure
+    .input(z.object({
+      atendenteId: z.number().optional(),
+      atendenteIds: z.array(z.number()).optional(),
+      setorId: z.number().optional(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+      if (!perm.allowed) return { todos: 0, aguardando: 0, em_atendimento: 0, resolvido: 0 };
+      const filtros: any = { ...(input ?? {}) };
+      if (!perm.verTodos && perm.verProprios) {
+        filtros.atendenteId = perm.colaboradorId;
+        delete filtros.atendenteIds;
+        delete filtros.setorId;
+      }
+      return contarConversasPorStatus(perm.escritorioId, filtros);
     }),
 
   atualizarConversa: protectedProcedure
@@ -509,7 +531,7 @@ export const crmRouter = router({
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "pipeline", "criar");
       if (!perm.allowed) throw new Error("Sem permissão para criar leads.");
-      const responsavelId = await distribuirLead(perm.escritorioId, input.contatoId) ?? perm.colaboradorId;
+      const responsavelId = (await distribuirLead(perm.escritorioId, input.contatoId).catch(() => null)) ?? perm.colaboradorId;
       const id = await criarLead({ escritorioId: perm.escritorioId, responsavelId, ...input });
       return { id, responsavelId };
     }),
@@ -585,12 +607,18 @@ export const crmRouter = router({
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
 
-      // Buscar a conversa para pegar contatoId
-      const convs = await listarConversas(esc.escritorio.id, {});
-      const conv = convs.find(c => c.id === input.conversaId);
+      // Busca a conversa direto por id (NÃO via listarConversas, que é capada —
+      // conversa além do limite dava "não encontrada" e quebrava o botão).
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const [conv] = await db
+        .select({ contatoId: conversas.contatoId })
+        .from(conversas)
+        .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)))
+        .limit(1);
       if (!conv) throw new Error("Conversa não encontrada.");
 
-      const responsavelId = await distribuirLead(esc.escritorio.id, conv.contatoId) ?? esc.colaborador.id;
+      const responsavelId = (await distribuirLead(esc.escritorio.id, conv.contatoId).catch(() => null)) ?? esc.colaborador.id;
       const id = await criarLead({
         escritorioId: esc.escritorio.id,
         contatoId: conv.contatoId,

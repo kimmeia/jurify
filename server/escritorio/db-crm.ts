@@ -3,7 +3,7 @@
  * Fase 3 — Inclui algoritmo de distribuição inteligente de leads
  */
 
-import { eq, and, desc, asc, or, sql, gte, lte, like, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, or, sql, gte, lte, like, inArray, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios, setores } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
@@ -427,20 +427,16 @@ export async function criarConversa(dados: {
   return (result as { insertId: number }).insertId;
 }
 
-export async function listarConversas(escritorioId: number, filtros?: {
-  status?: string;
-  atendenteId?: number;
-  atendenteIds?: number[];
-  setorId?: number;
-  dataInicio?: string;
-  dataFim?: string;
-}) {
-  const db = await getDb();
-  if (!db) return [];
-  const conditions = [eq(conversas.escritorioId, escritorioId)];
-  if (filtros?.status && STATUS_CONV_VALIDOS.has(filtros.status as StatusConv)) {
-    conditions.push(eq(conversas.status, filtros.status as StatusConv));
-  }
+// Condições comuns (escritório/atendente/setor/período) das queries de
+// conversa — reusadas pela listagem E pela contagem por status, pra os dois
+// baterem. Retorna null quando o filtro é impossível (setor sem atendentes ou
+// interseção vazia): o caller devolve vazio/zeros sem rodar a query.
+async function condicoesConversa(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  escritorioId: number,
+  filtros?: { atendenteId?: number; atendenteIds?: number[]; setorId?: number; dataInicio?: string; dataFim?: string },
+): Promise<SQL[] | null> {
+  const conditions: SQL[] = [eq(conversas.escritorioId, escritorioId)];
 
   // Multi-atendente (e compat com atendenteId único legacy).
   const atendentesFiltro: number[] = [];
@@ -458,12 +454,12 @@ export async function listarConversas(escritorioId: number, filtros?: {
         eq(colaboradores.setorId, filtros.setorId),
       ));
     const setorIds = atendsSetor.map((a) => a.id);
-    if (setorIds.length === 0) return [];
+    if (setorIds.length === 0) return null;
     // Intersecção com atendentes já filtrados (se houver) — usuário pode pedir
     // "setor X + atendente Y" e Y precisa estar no setor X.
     if (atendentesFiltro.length > 0) {
       const inter = atendentesFiltro.filter((id) => setorIds.includes(id));
-      if (inter.length === 0) return [];
+      if (inter.length === 0) return null;
       atendentesFiltro.length = 0;
       atendentesFiltro.push(...inter);
     } else {
@@ -487,6 +483,60 @@ export async function listarConversas(escritorioId: number, filtros?: {
     const dt = new Date(filtros.dataFim);
     if (!isNaN(dt.getTime())) conditions.push(lte(conversas.ultimaMensagemAt, dt));
   }
+  return conditions;
+}
+
+/**
+ * Contagem REAL de conversas por status (respeita atendente/setor/período).
+ * Os pills do Inbox usavam `array.length` da lista — que é capada — então
+ * "Todas 100" mentia com mais de 100 conversas. Aqui conta no banco.
+ */
+export async function contarConversasPorStatus(escritorioId: number, filtros?: {
+  atendenteId?: number;
+  atendenteIds?: number[];
+  setorId?: number;
+  dataInicio?: string;
+  dataFim?: string;
+}): Promise<{ todos: number; aguardando: number; em_atendimento: number; resolvido: number }> {
+  const zero = { todos: 0, aguardando: 0, em_atendimento: 0, resolvido: 0 };
+  const db = await getDb();
+  if (!db) return zero;
+  const base = await condicoesConversa(db, escritorioId, filtros);
+  if (!base) return zero;
+  const rows = await db
+    .select({ status: conversas.status, n: sql<number>`COUNT(*)` })
+    .from(conversas)
+    .where(and(...base))
+    .groupBy(conversas.status);
+  const out = { ...zero };
+  for (const r of rows) {
+    const n = Number(r.n);
+    out.todos += n;
+    if (r.status === "aguardando") out.aguardando = n;
+    else if (r.status === "em_atendimento") out.em_atendimento = n;
+    else if (r.status === "resolvido") out.resolvido = n;
+  }
+  return out;
+}
+
+export async function listarConversas(escritorioId: number, filtros?: {
+  status?: string;
+  atendenteId?: number;
+  atendenteIds?: number[];
+  setorId?: number;
+  dataInicio?: string;
+  dataFim?: string;
+  limite?: number;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  const base = await condicoesConversa(db, escritorioId, filtros);
+  if (!base) return [];
+  const conditions = [...base];
+  if (filtros?.status && STATUS_CONV_VALIDOS.has(filtros.status as StatusConv)) {
+    conditions.push(eq(conversas.status, filtros.status as StatusConv));
+  }
+  const limite = Math.min(Math.max(filtros?.limite ?? 300, 1), 1000);
 
   const rows = await db
     .select({
@@ -506,7 +556,7 @@ export async function listarConversas(escritorioId: number, filtros?: {
     .innerJoin(canaisIntegrados, eq(conversas.canalId, canaisIntegrados.id))
     .where(and(...conditions))
     .orderBy(desc(conversas.ultimaMensagemAt))
-    .limit(100);
+    .limit(limite);
 
   // Buscar nomes dos atendentes
   const atendenteIds = [...new Set(rows.filter(r => r.atendenteId).map(r => r.atendenteId!))];
@@ -864,9 +914,17 @@ export async function distribuirLead(
     const agora = new Date();
     const diasSemana = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
     const diaHoje = diasSemana[agora.getDay()];
-    const diasFuncionamento = esc.diasFuncionamento 
-      ? (typeof esc.diasFuncionamento === "string" ? JSON.parse(esc.diasFuncionamento) : esc.diasFuncionamento) 
-      : ["seg", "ter", "qua", "qui", "sex"];
+    // diasFuncionamento é text (JSON). Se vier malformado, NÃO pode derrubar a
+    // distribuição (isso quebrava todos os botões de criar lead) — cai no padrão.
+    let diasFuncionamento: string[];
+    try {
+      diasFuncionamento = esc.diasFuncionamento
+        ? (typeof esc.diasFuncionamento === "string" ? JSON.parse(esc.diasFuncionamento) : esc.diasFuncionamento)
+        : ["seg", "ter", "qua", "qui", "sex"];
+      if (!Array.isArray(diasFuncionamento)) diasFuncionamento = ["seg", "ter", "qua", "qui", "sex"];
+    } catch {
+      diasFuncionamento = ["seg", "ter", "qua", "qui", "sex"];
+    }
 
     if (!diasFuncionamento.includes(diaHoje)) {
       log.debug({ diaHoje }, "Distribuição: escritório fechado hoje");
