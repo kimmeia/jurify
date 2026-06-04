@@ -1,7 +1,7 @@
 import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
 import { isLidJid } from "../../shared/whatsapp-types";
 import type { TipoCanalMensagem, ImagemAnexa } from "../../shared/smartflow-types";
-import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, listarConversas, enviarMensagem as salvarMensagem, atualizarStatusMensagem, atualizarConversa } from "../escritorio/db-crm";
+import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, enviarMensagem as salvarMensagem, atualizarStatusMensagem, atualizarConversa } from "../escritorio/db-crm";
 import { obterAutoReplyCanal } from "../escritorio/db-canais";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-whatsapp-handler");
@@ -337,38 +337,59 @@ async function buscarTelefonePNdaConversa(conversaId: number): Promise<string | 
 // Faz query SQL exata em vez de loop JS com .endsWith().
 
 async function buscarConversaExistente(escritorioId: number, contatoId: number, canalId: number, chatIdExterno?: string) {
-  const all = await listarConversas(escritorioId, {});
-  if (chatIdExterno) { for (const c of all) if ((c as any).chatIdExterno === chatIdExterno && c.canalId === canalId) return c.id; }
-  for (const c of all) if (c.contatoId === contatoId && c.canalId === canalId && (c.status === "aguardando" || c.status === "em_atendimento")) return c.id;
-  for (const c of all) if (c.contatoId === contatoId && c.canalId === canalId && c.status === "resolvido") return c.id;
-  return null;
+  // Query direta por SQL — NÃO via listarConversas (que é capada): conversa
+  // antiga além do limite não era achada e a mensagem criava conversa DUPLICADA.
+  const { getDb } = await import("../db");
+  const { conversas } = await import("../../drizzle/schema");
+  const { eq, and, or, desc } = await import("drizzle-orm");
+  const db = await getDb();
+  if (!db) return null;
+  if (chatIdExterno) {
+    const [row] = await db.select({ id: conversas.id }).from(conversas)
+      .where(and(eq(conversas.escritorioId, escritorioId), eq(conversas.canalId, canalId), eq(conversas.chatIdExterno, chatIdExterno)))
+      .limit(1);
+    if (row) return row.id;
+  }
+  // Conversa aberta (mais recente) do contato nesse canal.
+  const [aberta] = await db.select({ id: conversas.id }).from(conversas)
+    .where(and(
+      eq(conversas.escritorioId, escritorioId), eq(conversas.canalId, canalId), eq(conversas.contatoId, contatoId),
+      or(eq(conversas.status, "aguardando"), eq(conversas.status, "em_atendimento")),
+    ))
+    .orderBy(desc(conversas.ultimaMensagemAt)).limit(1);
+  if (aberta) return aberta.id;
+  // Senão, reabre a resolvida mais recente.
+  const [resolvida] = await db.select({ id: conversas.id }).from(conversas)
+    .where(and(
+      eq(conversas.escritorioId, escritorioId), eq(conversas.canalId, canalId),
+      eq(conversas.contatoId, contatoId), eq(conversas.status, "resolvido"),
+    ))
+    .orderBy(desc(conversas.ultimaMensagemAt)).limit(1);
+  return resolvida?.id ?? null;
 }
 
 /**
- * Busca uma conversa existente pelo chatIdExterno (JID).
- *
- * Inclui matching tolerante: se o JID recebido é LID (@lid) ou PN
- * (@s.whatsapp.net), tentamos casar com o exato OU com a "variante" — caso
- * o WhatsApp tenha alternado o formato entre o envio inicial e a resposta.
- * Para isso comparamos a parte numérica do JID, se o lado armazenado for
- * do tipo PN.
+ * Busca uma conversa existente pelo chatIdExterno (JID) — match exato por SQL.
+ * (LIDs são opacos; sem fallback confiável por variante. PN antigo cai no
+ * caminho padrão de buscarContatoPorTelefone.)
  */
 async function buscarConversaPorChatId(escritorioId: number, canalId: number, chatId: string): Promise<number | null> {
   if (!chatId) return null;
-  const all = await listarConversas(escritorioId, {});
-
-  // 1. Match exato pelo chatId
-  for (const c of all) {
-    if ((c as any).chatIdExterno === chatId && c.canalId === canalId) return c.id;
-  }
-
-  // 2. Se chatId é LID, não tem match direto — não há fallback confiável
-  // (LIDs são opacos). Quem chamou vai criar um contato novo se necessário.
-  // Mas se chatId é PN, pode existir uma conversa antiga que armazenou LID
-  // — nesse caso só conseguimos casar via número, o que já é o caminho
-  // padrão (buscarContatoPorTelefone).
-
-  return null;
+  // Query direta — NÃO via listarConversas (capada): senão conversa além do
+  // limite não casava o chatId e a mensagem duplicava a conversa.
+  const { getDb } = await import("../db");
+  const { conversas } = await import("../../drizzle/schema");
+  const { eq, and } = await import("drizzle-orm");
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db.select({ id: conversas.id }).from(conversas)
+    .where(and(
+      eq(conversas.escritorioId, escritorioId),
+      eq(conversas.canalId, canalId),
+      eq(conversas.chatIdExterno, chatId),
+    ))
+    .limit(1);
+  return row?.id ?? null;
 }
 
 /** Lê responsavelId do contato — usado pra "stickiness" de atendimento.
