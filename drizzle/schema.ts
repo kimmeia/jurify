@@ -734,6 +734,11 @@ export const mensagens = mysqlTable("mensagens", {
   status: mysqlEnum("statusMsg", ["pendente", "enviada", "entregue", "lida", "falha"]).default("pendente").notNull(),
   idExterno: varchar("idExterno", { length: 128 }),
   replyToId: int("replyToId"),
+  // JSON com metadados estruturados que não cabem em conteudo (texto puro).
+  // Hoje: respostas a mensagens interativas WhatsApp (button_reply/list_reply
+  // = { interactiveReply: { tipo, id, titulo } }). Extensível pra reactions,
+  // location estruturada, contacts etc sem migration nova.
+  payload: text("payloadMsg"),
   createdAt: timestamp("createdAtMsg").defaultNow().notNull(),
 });
 
@@ -2169,6 +2174,7 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "agenda_criar",                  // cria compromisso na Agenda nativa do escritório
     "whatsapp_enviar",               // envia mensagem no WhatsApp
     "whatsapp_aguardar_resposta",    // envia mensagem e pausa esperando resposta
+    "whatsapp_pergunta_opcoes",      // botões/lista interativa Cloud API + pausa
     "transferir",                    // transfere pra humano
     "distribuir_atendimento",        // escolhe atendente de um setor e seta dono da conversa
     "condicional",                   // if/else baseado em condição

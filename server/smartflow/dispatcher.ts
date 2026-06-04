@@ -1235,6 +1235,11 @@ export async function dispararMensagemCanal(
     nomeCliente: string;
     imagem?: ImagemAnexa;
     tipoMensagem?: "texto" | "audio" | "imagem" | "documento" | "video" | "sticker" | "localizacao" | "contato";
+    // Reply a botão/lista interativa (preenchido só quando webhook recebe
+    // type=interactive). O dispatcher injeta no contexto da execução
+    // retomada como `respostaOpcao`, e o handler do passo
+    // `whatsapp_pergunta_opcoes` roteia por `cond_<id>` sem fuzzy match.
+    interactiveReply?: { tipo: "button" | "list"; id: string; titulo: string };
   },
 ): Promise<{ executou: boolean; respostas: string[]; execId?: number }> {
   const db = await getDb();
@@ -1266,7 +1271,7 @@ export async function dispararMensagemCanal(
     const pendente = await acharExecucaoAguardando(escritorioId, params.contatoId);
     if (pendente) {
       log.info({ execId: pendente.id, contatoId: params.contatoId }, "SmartFlow: retomando execução aguardando");
-      const respostas = await retomarComResposta(pendente.id, params.mensagem, params.imagem);
+      const respostas = await retomarComResposta(pendente.id, params.mensagem, params.imagem, params.interactiveReply);
       return { executou: true, respostas, execId: pendente.id };
     }
 
@@ -1740,6 +1745,7 @@ async function retomarComResposta(
   execId: number,
   respostaTexto: string,
   imagem?: ImagemAnexa,
+  interactiveReply?: { tipo: "button" | "list"; id: string; titulo: string },
 ): Promise<string[]> {
   const db = await getDb();
   if (!db) return [];
@@ -1767,6 +1773,11 @@ async function retomarComResposta(
   delete (contextoBase as any).aguardandoTimeoutMinutos;
   delete (contextoBase as any).aguardandoOpcoes;
   contextoBase.respostaUsuario = respostaTexto;
+  // Resposta a botão/lista vai como objeto separado — o handler de
+  // `whatsapp_pergunta_opcoes` roteia por `cond_<id>` sem ambiguidade.
+  if (interactiveReply && interactiveReply.id) {
+    (contextoBase as any).respostaOpcao = interactiveReply;
+  }
 
   // Parseia opção se aplicável
   if (opcoes.length > 0) {

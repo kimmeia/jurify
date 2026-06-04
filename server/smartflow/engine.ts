@@ -397,6 +397,22 @@ export interface SmartflowExecutores {
   /** Envia mensagem WhatsApp */
   enviarWhatsApp: (telefone: string, mensagem: string) => Promise<boolean>;
   /**
+   * Envia mensagem interativa WhatsApp (botões ou lista) via Cloud API.
+   * Opcional — ambientes sem Cloud API conectada não implementam, e o
+   * handler do passo `whatsapp_pergunta_opcoes` reporta erro claro.
+   * Retorna true em sucesso (mensagem aceita pela Meta).
+   */
+  enviarWhatsAppInteractive?: (params: {
+    telefone: string;
+    modo: "botoes" | "lista";
+    body: string;
+    header?: string;
+    footer?: string;
+    botoes?: Array<{ id: string; titulo: string }>;
+    drawerLabel?: string;
+    secoes?: Array<{ titulo: string; itens: Array<{ id: string; titulo: string; descricao?: string }> }>;
+  }) => Promise<boolean>;
+  /**
    * Envia um template (HSM) WhatsApp aprovado da Meta pelo canal oficial
    * (Cloud API). Opcional: ambientes/mocks sem Cloud API não implementam —
    * o handler do passo reporta erro claro nesse caso.
@@ -1578,6 +1594,182 @@ async function handleWhatsappAguardarResposta(
 }
 
 /**
+ * Handler do passo `whatsapp_pergunta_opcoes` — envia mensagem interativa
+ * (botões ou lista) e pausa execução. Quando retomado (cliente clicou ou
+ * digitou), roteia pelo ramo correspondente:
+ *   - `cond_<id>` se cliente clicou um botão/item específico
+ *   - `cond_<id>` se cliente digitou texto e fallback=fuzzy bateu
+ *   - `outra_resposta` se texto digitado não bateu (ou fallback=ignorar)
+ *   - `sem_resposta` se timeout (scheduler chama com __resumindoWaitMotivo="timeout")
+ *
+ * SÓ funciona em canal Cloud API. Em Baileys QR, falha cedo com erro claro
+ * pra operador entender por que a mensagem interativa não chegou.
+ */
+async function handleWhatsappPerguntaOpcoes(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    modo?: "botoes" | "lista";
+    header?: string;
+    body?: string;
+    footer?: string;
+    opcoes?: Array<{ id: string; titulo: string }>;
+    drawerLabel?: string;
+    secoes?: Array<{ titulo: string; itens: Array<{ id: string; titulo: string; descricao?: string }> }>;
+    timeoutMinutos?: number;
+    fallbackTexto?: "fuzzy" | "ignorar";
+  };
+
+  // MODO RETOMADA: contexto traz a marca de re-entrada nesse nó. Decide o ramo
+  // baseado em respostaOpcao (clique), respostaUsuario (texto livre) ou motivo
+  // de retomada (timeout do scheduler).
+  const resumindoEsseNo = (ctx as any).__resumindoWaitClienteId === passo.clienteId;
+  if (resumindoEsseNo) {
+    const motivo = (ctx as any).__resumindoWaitMotivo as string | undefined;
+    const novoCtx: SmartflowContexto = { ...ctx };
+    delete (novoCtx as any).__resumindoWaitClienteId;
+    delete (novoCtx as any).__resumindoWaitMotivo;
+    delete (novoCtx as any).aguardandoNodeClienteId;
+
+    if (motivo === "timeout") {
+      return { sucesso: true, contexto: novoCtx, proximoRamoId: "sem_resposta" };
+    }
+
+    // Clique tem prioridade — ID veio direto da Meta, sem ambiguidade.
+    const reply = (novoCtx as any).respostaOpcao as { id?: string; titulo?: string } | undefined;
+    if (reply && typeof reply.id === "string" && reply.id) {
+      return { sucesso: true, contexto: novoCtx, proximoRamoId: `cond_${reply.id}` };
+    }
+
+    // Texto livre: tenta fuzzy match contra todos os títulos disponíveis,
+    // ou cai direto em "outra_resposta" se fallback=ignorar.
+    const fallback = cfg.fallbackTexto ?? "fuzzy";
+    if (fallback === "fuzzy") {
+      const texto = String((novoCtx as any).respostaUsuario || "").trim();
+      const todasOpcoes = listarOpcoesParaMatch(cfg);
+      const match = encontrarMatchPorTitulo(texto, todasOpcoes);
+      if (match) return { sucesso: true, contexto: novoCtx, proximoRamoId: `cond_${match.id}` };
+    }
+    return { sucesso: true, contexto: novoCtx, proximoRamoId: "outra_resposta" };
+  }
+
+  // MODO ENVIO: primeira execução desse passo.
+  const contatoId = ctx.contatoId;
+  if (typeof contatoId !== "number") {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Sem contatoId no contexto — não dá pra perguntar com opções." };
+  }
+  const modo: "botoes" | "lista" = cfg.modo === "lista" ? "lista" : "botoes";
+  const body = String(cfg.body ?? "").trim();
+  if (!body) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Pergunta com opções: preencha o corpo da mensagem." };
+  }
+
+  // Valida cardinalidade conforme limites da API Meta.
+  if (modo === "botoes") {
+    const opcoes = Array.isArray(cfg.opcoes) ? cfg.opcoes : [];
+    if (opcoes.length === 0 || opcoes.length > 3) {
+      return { sucesso: false, contexto: ctx, mensagemErro: "Pergunta com opções: configure de 1 a 3 botões." };
+    }
+    for (const o of opcoes) {
+      if (!o?.id || !o?.titulo) {
+        return { sucesso: false, contexto: ctx, mensagemErro: "Pergunta com opções: cada botão precisa de id e título." };
+      }
+    }
+  } else {
+    const secoes = Array.isArray(cfg.secoes) ? cfg.secoes : [];
+    if (secoes.length === 0 || secoes.length > 10) {
+      return { sucesso: false, contexto: ctx, mensagemErro: "Pergunta com opções (lista): configure de 1 a 10 seções." };
+    }
+    for (const s of secoes) {
+      if (!Array.isArray(s.itens) || s.itens.length === 0 || s.itens.length > 10) {
+        return { sucesso: false, contexto: ctx, mensagemErro: "Pergunta com opções (lista): cada seção precisa de 1 a 10 itens." };
+      }
+    }
+  }
+
+  if (!exec.enviarWhatsAppInteractive) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Canal WhatsApp não suporta mensagens interativas (precisa ser Cloud API oficial)." };
+  }
+
+  const telefone = typeof ctx.telefoneCliente === "string" ? ctx.telefoneCliente.trim() : "";
+  if (!telefone) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Sem telefone no contexto — não dá pra enviar mensagem interativa." };
+  }
+
+  const { interpolarVariaveis } = await import("./interpolar");
+  const bodyInterp = interpolarVariaveis(body, ctx as any);
+  const headerInterp = cfg.header ? interpolarVariaveis(cfg.header, ctx as any) : undefined;
+  const footerInterp = cfg.footer ? interpolarVariaveis(cfg.footer, ctx as any) : undefined;
+
+  let ok = false;
+  try {
+    ok = await exec.enviarWhatsAppInteractive({
+      telefone,
+      modo,
+      body: bodyInterp,
+      header: headerInterp,
+      footer: footerInterp,
+      botoes: modo === "botoes" ? cfg.opcoes : undefined,
+      drawerLabel: cfg.drawerLabel,
+      secoes: modo === "lista" ? cfg.secoes : undefined,
+    });
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `WhatsApp interativo: ${err?.message || String(err)}` };
+  }
+  if (!ok) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Falha ao enviar mensagem interativa (verifique canal Cloud API conectado)." };
+  }
+
+  const timeoutMinutos = Math.max(1, Math.min(7 * 24 * 60, Number(cfg.timeoutMinutos) || 60));
+  const enviadas = ctx.mensagensEnviadas || [];
+  return {
+    sucesso: true,
+    parar: true,
+    resposta: bodyInterp,
+    contexto: {
+      ...ctx,
+      mensagensEnviadas: [...enviadas, bodyInterp],
+      aguardandoMensagem: true,
+      aguardandoContatoId: contatoId,
+      aguardandoTimeoutMinutos: timeoutMinutos,
+      aguardandoNodeClienteId: passo.clienteId ?? null,
+    },
+  };
+}
+
+function listarOpcoesParaMatch(cfg: {
+  modo?: "botoes" | "lista";
+  opcoes?: Array<{ id: string; titulo: string }>;
+  secoes?: Array<{ itens: Array<{ id: string; titulo: string; descricao?: string }> }>;
+}): Array<{ id: string; titulo: string }> {
+  if (cfg.modo === "lista") {
+    const out: Array<{ id: string; titulo: string }> = [];
+    for (const s of cfg.secoes || []) for (const i of s.itens || []) out.push({ id: i.id, titulo: i.titulo });
+    return out;
+  }
+  return cfg.opcoes || [];
+}
+
+function encontrarMatchPorTitulo(
+  texto: string,
+  opcoes: Array<{ id: string; titulo: string }>,
+): { id: string; titulo: string } | null {
+  const t = texto.trim().toLowerCase();
+  if (!t) return null;
+  // Match exato primeiro (case-insensitive, ignora emoji/pontuação no início)
+  const normalizar = (s: string) => s.toLowerCase().replace(/^[^\p{L}\p{N}]+/u, "").trim();
+  for (const o of opcoes) if (normalizar(o.titulo) === t) return o;
+  // Substring — só se o título normalizado tem 3+ chars pra evitar match espúrio
+  for (const o of opcoes) {
+    const n = normalizar(o.titulo);
+    if (n.length >= 3 && (t.includes(n) || n.includes(t))) return o;
+  }
+  return null;
+}
+
+/**
  * Helper: parseia a resposta do cliente contra a lista de opções configurada.
  * Tenta primeiro como número (1, 2, 3...), depois como substring case-insensitive
  * contra cada opção. Retorna a opção escolhida ou `null` se nenhuma bate
@@ -2730,6 +2922,7 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   agenda_criar: handleAgendaCriar,
   whatsapp_enviar: handleWhatsAppEnviar,
   whatsapp_aguardar_resposta: handleWhatsappAguardarResposta,
+  whatsapp_pergunta_opcoes: handleWhatsappPerguntaOpcoes,
   transferir: handleTransferir,
   distribuir_atendimento: handleDistribuirAtendimento,
   condicional: handleCondicional,

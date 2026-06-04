@@ -33,6 +33,16 @@ export interface WhatsappMensagemRecebida {
   messageId: string;
   isGroup: boolean;
   quotedMessageId?: string;
+  // Resposta a mensagem interativa (botão clicado ou item de lista selecionado).
+  // Preenchido SÓ quando o webhook recebe `type=interactive` da Cloud API.
+  // O ID é o que foi definido no envio (`buttonReply.id` / `listReply.id`) —
+  // usado pelo engine SmartFlow pra rotear sem ambiguidade (sem regex de
+  // título/número, que erra com emoji ou typo).
+  interactiveReply?: {
+    tipo: "button" | "list";
+    id: string;
+    titulo: string;
+  };
 }
 
 export interface WhatsappMensagemEnviar {

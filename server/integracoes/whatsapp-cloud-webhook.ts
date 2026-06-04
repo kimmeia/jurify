@@ -235,12 +235,38 @@ export function registerWhatsAppCloudWebhook(app: Express) {
               let mediaId = "";
               let mediaUrl = "";
               let nomeOriginalArquivo: string | undefined;
+              // Preenchido SÓ pra type=interactive (resposta a botão/lista
+              // enviada via `enviarBotoes`/`enviarLista`). Vai pro contexto
+              // SmartFlow pra roteamento por id (sem ambiguidade de texto).
+              let interactiveReply: { tipo: "button" | "list"; id: string; titulo: string } | undefined;
 
               switch (message.type) {
                 case "text":
                   conteudo = message.text?.body || "";
                   tipo = "texto";
                   break;
+                case "interactive": {
+                  const inter = (message as any).interactive;
+                  if (inter?.type === "button_reply" && inter.button_reply) {
+                    interactiveReply = {
+                      tipo: "button",
+                      id: String(inter.button_reply.id || ""),
+                      titulo: String(inter.button_reply.title || ""),
+                    };
+                  } else if (inter?.type === "list_reply" && inter.list_reply) {
+                    interactiveReply = {
+                      tipo: "list",
+                      id: String(inter.list_reply.id || ""),
+                      titulo: String(inter.list_reply.title || ""),
+                    };
+                  }
+                  // Conteúdo da mensagem persistida = título do que foi clicado,
+                  // pra UI do inbox mostrar de forma humana o que o cliente
+                  // escolheu (ex: "📅 Quero agendar") em vez de "[interactive]".
+                  conteudo = interactiveReply?.titulo || "[interactive]";
+                  tipo = "texto";
+                  break;
+                }
                 case "image":
                   conteudo = message.image?.caption || "Imagem";
                   mediaId = message.image?.id || "";
@@ -302,6 +328,7 @@ export function registerWhatsAppCloudWebhook(app: Express) {
                 conteudo,
                 tipo,
                 mediaUrl,
+                interactiveReply,
                 timestamp: parseInt(message.timestamp) || Math.floor(Date.now() / 1000),
                 messageId: message.id,
                 isGroup: false,

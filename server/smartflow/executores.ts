@@ -1154,6 +1154,30 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
       }
     },
 
+    async enviarWhatsAppInteractive(p): Promise<boolean> {
+      try {
+        const { enviarInterativoPeloCanalApi } = await import("../integracoes/canal-envio");
+        const r = await enviarInterativoPeloCanalApi({
+          escritorioId,
+          telefone: p.telefone,
+          modo: p.modo,
+          body: p.body,
+          header: p.header,
+          footer: p.footer,
+          botoes: p.botoes,
+          drawerLabel: p.drawerLabel,
+          secoes: p.secoes,
+        });
+        if (!r.ok) {
+          log.warn({ erro: r.erro, provider: r.provider, modo: p.modo }, "SmartFlow: envio WhatsApp interativo falhou");
+        }
+        return r.ok;
+      } catch (err: any) {
+        log.error({ err: err.message }, "SmartFlow: erro ao enviar WhatsApp interativo");
+        return false;
+      }
+    },
+
     async enviarWhatsAppTemplate(telefone, template): Promise<boolean> {
       // Template (HSM) só vai pelo canal oficial Meta (Cloud API). O helper
       // resolve o canal whatsapp_api conectado, decripta as credenciais e
