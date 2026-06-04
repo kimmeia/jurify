@@ -586,6 +586,7 @@ export async function enviarMensagem(dados: {
   conversaId: number; remetenteId?: number; direcao: string;
   tipo?: string; conteudo: string; mediaUrl?: string;
   status?: "pendente" | "enviada" | "entregue" | "lida" | "falha";
+  payload?: Record<string, unknown> | null;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
@@ -601,6 +602,7 @@ export async function enviarMensagem(dados: {
     conteudo: dados.conteudo,
     mediaUrl: dados.mediaUrl || null,
     status: dados.status ?? "enviada",
+    payload: dados.payload ? JSON.stringify(dados.payload) : null,
   });
 
   // Atualizar preview da conversa

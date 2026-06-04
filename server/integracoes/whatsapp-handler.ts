@@ -106,7 +106,11 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
   const conteudo = transcricaoAudio
     ? `🎤 ${transcricaoAudio}`
     : msg.mediaUrl ? `${msg.conteudo}\n[media:${msg.mediaUrl}]` : msg.conteudo;
-  const mensagemId = await salvarMensagem({ conversaId, remetenteId: undefined, direcao: "entrada", tipo: tipoMsg, conteudo, mediaUrl: msg.mediaUrl || undefined });
+  const mensagemId = await salvarMensagem({
+    conversaId, remetenteId: undefined, direcao: "entrada", tipo: tipoMsg, conteudo,
+    mediaUrl: msg.mediaUrl || undefined,
+    payload: msg.interactiveReply ? { interactiveReply: msg.interactiveReply } : null,
+  });
   // Marca aguardando — MAS preserva em_atendimento (atendente assumiu, mantém
   // o controle; sobrescrever fazia o bot voltar a responder na próxima msg do
   // cliente, mesmo depois do atendente ter intervindo).
@@ -207,6 +211,7 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
           nomeCliente: msg.nome || "",
           imagem: imagemVision,
           tipoMensagem: msg.tipo,
+          interactiveReply: msg.interactiveReply,
         });
         if (sf.executou) {
           // SmartFlow assumiu — envia respostas geradas.
