@@ -178,6 +178,11 @@ function Router() {
           <Roadmap />
         </ClientAreaNoGuard>
       </Route>
+      <Route path="/admin/roadmap">
+        <AdminArea>
+          <Roadmap />
+        </AdminArea>
+      </Route>
       <Route path="/admin/settings">
         <AdminArea>
           <AdminSettings />
