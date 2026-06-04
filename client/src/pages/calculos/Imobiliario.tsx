@@ -409,7 +409,7 @@ export default function Imobiliario() {
     : "";
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6">
       <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-emerald-50/20 p-6 space-y-5">
         {step !== 4 && <StepIndicator steps={stepLabels} current={step} />}
         {step !== 4 && (

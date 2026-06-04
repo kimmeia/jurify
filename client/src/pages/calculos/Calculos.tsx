@@ -188,7 +188,7 @@ export default function Calculos() {
   }, [credits?.resetAt]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6">
       <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-amber-50/20 p-6 space-y-5">
         {/* ═══════════ HERO ═══════════ */}
         <div className="rounded-2xl bg-gradient-to-br from-amber-600 via-orange-600 to-rose-700 p-7 text-white relative overflow-hidden shadow-lg">

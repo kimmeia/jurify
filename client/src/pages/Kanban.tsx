@@ -434,7 +434,7 @@ export default function Kanban() {
     ).length;
 
     return (
-      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-indigo-50/20 p-6 space-y-5 max-w-7xl mx-auto">
+      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-indigo-50/20 p-6 space-y-5">
         {/* ═══════════ HERO ═══════════ */}
         <div className="rounded-2xl bg-gradient-to-br from-indigo-700 via-blue-700 to-cyan-700 p-7 text-white relative overflow-hidden shadow-lg">
           <LayoutGrid className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />

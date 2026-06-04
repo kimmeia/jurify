@@ -94,7 +94,7 @@ function PrevHero({ titulo, descricao, passoAtual, totalPassos }: {
 export default function Previdenciario() {
   const [ferramenta, setFerramenta] = useState<"simulador" | "rmi" | "gps" | null>(null);
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6">
       <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-violet-50/20 p-6 space-y-5">
         {!ferramenta && (
           <>

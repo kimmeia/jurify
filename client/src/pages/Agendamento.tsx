@@ -111,7 +111,7 @@ export default function Agendamento() {
   const c = contadoresQuery.data || { pendente: 0, em_andamento: 0, concluido: 0, atrasado: 0 };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="p-2.5 rounded-xl bg-orange-100 dark:bg-orange-900/30">

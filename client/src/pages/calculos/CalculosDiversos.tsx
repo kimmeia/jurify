@@ -1065,7 +1065,7 @@ function PrazosTab() {
 
 export default function CalculosDiversos() {
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6">
       <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-teal-50/20 p-6 space-y-5">
         {/* HERO teal/cyan — distinto dos outros submódulos */}
         <div className="rounded-2xl bg-gradient-to-br from-teal-600 via-cyan-700 to-blue-800 p-6 text-white relative overflow-hidden shadow-lg">

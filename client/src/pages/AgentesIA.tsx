@@ -1592,7 +1592,7 @@ export default function AgentesIA() {
   const totalAgentes = (agentes || []).length;
 
   return (
-    <div className="space-y-5 max-w-7xl mx-auto">
+    <div className="space-y-5">
       <AgentesHero onNovo={() => { setEditandoId(null); setFormOpen(true); }} />
 
       {/* Tabs Templates · Escritório · Meus */}
