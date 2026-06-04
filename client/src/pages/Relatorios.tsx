@@ -213,7 +213,7 @@ export default function Relatorios() {
   ].filter(Boolean) as string[];
 
   return (
-    <div className="space-y-5 max-w-7xl mx-auto">
+    <div className="space-y-5">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40">
           <BarChart3 className="h-6 w-6 text-amber-600" />

@@ -397,7 +397,7 @@ export default function Bancario() {
 
   if (step === 1) {
     return (
-      <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="space-y-6">
         <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-blue-50/20 p-6 space-y-5">
           <StepBar current={1} />
 
@@ -578,7 +578,7 @@ export default function Bancario() {
 
   if (step === 2) {
     return (
-      <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="space-y-6">
         <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-blue-50/20 p-6 space-y-5">
           <StepBar current={2} />
           <BancarioHero
@@ -823,7 +823,7 @@ export default function Bancario() {
     const temProblema = (resumo?.diferencaTotal ?? 0) > 0;
 
     return (
-      <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="space-y-6">
         <div className={`rounded-2xl p-6 space-y-5 ${
           temProblema
             ? "bg-gradient-to-br from-slate-50/40 via-white to-rose-50/20"
