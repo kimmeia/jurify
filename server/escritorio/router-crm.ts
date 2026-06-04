@@ -529,7 +529,7 @@ export const crmRouter = router({
       origemLead: z.string().max(128).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const perm = await checkPermission(ctx.user.id, "pipeline", "criar");
+      const perm = await checkPermission(ctx.user.id, "pipeline", "criar", { fallbackModulo: "kanban" });
       if (!perm.allowed) throw new Error("Sem permissão para criar leads.");
       const responsavelId = (await distribuirLead(perm.escritorioId, input.contatoId).catch(() => null)) ?? perm.colaboradorId;
       const id = await criarLead({ escritorioId: perm.escritorioId, responsavelId, ...input });
@@ -539,7 +539,7 @@ export const crmRouter = router({
   listarLeads: protectedProcedure
     .input(z.object({ etapa: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      const perm = await checkPermission(ctx.user.id, "pipeline", "ver");
+      const perm = await checkPermission(ctx.user.id, "pipeline", "ver", { fallbackModulo: "kanban" });
       if (!perm.allowed) return [];
       const todos = await listarLeads(perm.escritorioId, input?.etapa);
       // verProprios: filtra in-memory (lista de leads é pequena por escritório)
@@ -561,7 +561,7 @@ export const crmRouter = router({
       origemLead: z.string().max(128).nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const perm = await checkPermission(ctx.user.id, "pipeline", "editar");
+      const perm = await checkPermission(ctx.user.id, "pipeline", "editar", { fallbackModulo: "kanban" });
       if (!perm.allowed) throw new Error("Sem permissão para editar leads.");
       const { id, ...dados } = input;
       await atualizarLead(id, perm.escritorioId, dados);
@@ -591,7 +591,7 @@ export const crmRouter = router({
   excluirLead: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const perm = await checkPermission(ctx.user.id, "pipeline", "excluir");
+      const perm = await checkPermission(ctx.user.id, "pipeline", "excluir", { fallbackModulo: "kanban" });
       if (!perm.allowed) throw new Error("Sem permissão para excluir leads.");
       await excluirLead(input.id, perm.escritorioId);
       return { success: true };
