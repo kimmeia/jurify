@@ -350,6 +350,10 @@ export default function Atendimento() {
   const [atendentesFiltro, setAtendentesFiltro] = useState<number[]>([]);
   const [setorFiltro, setSetorFiltro] = useState<number | null>(null);
   const [periodoFiltro, setPeriodoFiltro] = useState<"todos" | "7d" | "30d" | "90d">("todos");
+  // Período customizado (datas escolhidas pelo usuário). Quando preenchido,
+  // tem prioridade sobre os presets acima.
+  const [dataIni, setDataIni] = useState(""); // "YYYY-MM-DD"
+  const [dataFim, setDataFim] = useState("");
   const [showFiltros, setShowFiltros] = useState(false);
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
   // Ligação de voz via WhatsApp (Calling API). Instância global (montada no
@@ -378,13 +382,22 @@ export default function Atendimento() {
     const f: any = {};
     if (atendentesFiltro.length > 0) f.atendenteIds = atendentesFiltro;
     if (setorFiltro) f.setorId = setorFiltro;
-    if (periodoFiltro !== "todos") {
+    // Range customizado tem prioridade; senão, preset relativo.
+    if (dataIni) f.dataInicio = new Date(dataIni + "T00:00:00").toISOString();
+    if (dataFim) f.dataFim = new Date(dataFim + "T23:59:59").toISOString();
+    if (!dataIni && !dataFim && periodoFiltro !== "todos") {
       const dias = periodoFiltro === "7d" ? 7 : periodoFiltro === "30d" ? 30 : 90;
       f.dataInicio = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
     }
     return Object.keys(f).length > 0 ? f : undefined;
   })();
-  const { data: convsAll, refetch: rC } = trpc.crm.listarConversas.useQuery(filtrosBackend, { refetchInterval: 5000 });
+  // Limite alto: o Inbox precisa enxergar além de 100 (escritório com muitos
+  // contatos). Os contadores reais vêm de contarConversas (não do array).
+  const { data: convsAll, refetch: rC } = trpc.crm.listarConversas.useQuery(
+    { ...(filtrosBackend ?? {}), limite: 300 },
+    { refetchInterval: 5000 },
+  );
+  const { data: countsData } = trpc.crm.contarConversas.useQuery(filtrosBackend, { refetchInterval: 5000 });
   // Listas pros dropdowns de filtro. listarAtendentes já é usado no detalhe;
   // listarSetores entra novo no escopo principal pra alimentar o filtro.
   const { data: atendentesPrincipal } = trpc.crm.listarAtendentes.useQuery();
@@ -392,11 +405,14 @@ export default function Atendimento() {
   const filtrosAtivos =
     (atendentesFiltro.length > 0 ? 1 : 0) +
     (setorFiltro ? 1 : 0) +
-    (periodoFiltro !== "todos" ? 1 : 0);
+    (periodoFiltro !== "todos" ? 1 : 0) +
+    (dataIni || dataFim ? 1 : 0);
   const limparFiltrosAvancados = () => {
     setAtendentesFiltro([]);
     setSetorFiltro(null);
     setPeriodoFiltro("todos");
+    setDataIni("");
+    setDataFim("");
   };
   const convs = (() => {
     const todas = convsAll || [];
@@ -411,11 +427,13 @@ export default function Atendimento() {
       return false;
     });
   })();
+  // Contadores REAIS (do banco), não o length da lista capada — senão "Todas
+  // 100" mentia com mais de 100 conversas.
   const counts = {
-    todos: (convsAll || []).length,
-    aguardando: (convsAll || []).filter((c: any) => c.status === "aguardando").length,
-    em_atendimento: (convsAll || []).filter((c: any) => c.status === "em_atendimento").length,
-    resolvido: (convsAll || []).filter((c: any) => c.status === "resolvido").length,
+    todos: countsData?.todos ?? 0,
+    aguardando: countsData?.aguardando ?? 0,
+    em_atendimento: countsData?.em_atendimento ?? 0,
+    resolvido: countsData?.resolvido ?? 0,
   };
   const { data: contatos, refetch: rCt } = trpc.crm.listarContatos.useQuery(busca ? { busca } : undefined);
   // Pausa o polling enquanto há drag em curso no Pipeline (senão refetch
@@ -611,6 +629,32 @@ export default function Atendimento() {
                           );
                         })}
                       </div>
+                      {/* Período exato — escolhe as datas que quiser (sobrepõe os presets). */}
+                      <div className="grid grid-cols-2 gap-1 mt-1">
+                        <div className="space-y-0.5">
+                          <label className="text-[9px] text-muted-foreground">De</label>
+                          <input
+                            type="date"
+                            value={dataIni}
+                            max={dataFim || undefined}
+                            onChange={(e) => setDataIni(e.target.value)}
+                            className="w-full h-7 rounded-md border bg-background px-2 text-[11px]"
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <label className="text-[9px] text-muted-foreground">Até</label>
+                          <input
+                            type="date"
+                            value={dataFim}
+                            min={dataIni || undefined}
+                            onChange={(e) => setDataFim(e.target.value)}
+                            className="w-full h-7 rounded-md border bg-background px-2 text-[11px]"
+                          />
+                        </div>
+                      </div>
+                      {(dataIni || dataFim) && (
+                        <p className="text-[9px] text-muted-foreground">Período exato ativo — os presets acima ficam ignorados.</p>
+                      )}
                     </div>
                     {filtrosAtivos > 0 && (
                       <button
