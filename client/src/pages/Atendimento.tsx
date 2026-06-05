@@ -15,7 +15,29 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
-import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter } from "lucide-react";
+import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+
+// Interpola placeholders `{{nome}}`, `{{telefone}}`, `{{email}}`,
+// `{{atendente}}`, `{{escritorio}}` no conteúdo do template. Variáveis
+// vazias viram string vazia em vez de manter o placeholder, pra não enviar
+// "Olá {{nome}}" pro cliente se ele não tiver nome cadastrado.
+function interpolarTemplate(
+  texto: string,
+  ctx: { nome?: string | null; telefone?: string | null; email?: string | null; atendente?: string | null; escritorio?: string | null },
+): string {
+  const map: Record<string, string> = {
+    nome: ctx.nome || "",
+    telefone: ctx.telefone || "",
+    email: ctx.email || "",
+    atendente: ctx.atendente || "",
+    escritorio: ctx.escritorio || "",
+  };
+  return texto.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_m, key) => {
+    const k = String(key).toLowerCase();
+    return Object.prototype.hasOwnProperty.call(map, k) ? map[k] : `{{${key}}}`;
+  });
+}
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
@@ -912,6 +934,11 @@ export default function Atendimento() {
 
 function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onTransferido, onAbrirLinhaTempo, onLigarWhatsApp }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onTransferido?: () => void; onAbrirLinhaTempo?: () => void; onLigarWhatsApp?: (info: { canalId: number; telefone: string; contatoId?: number; contatoNome?: string; conversaId: number }) => void }) {
   const [msg, setMsg] = useState(""); const ref = useRef<HTMLDivElement>(null);
+  // Mídia "pendente": foi anexada via template (ou upload manual no futuro)
+  // mas ainda não foi enviada. Renderiza preview acima do composer e é
+  // limpa após o send. Sem isso, escolher template com PDF só substituía o
+  // texto e perdia a mídia.
+  const [pendingMedia, setPendingMedia] = useState<{ url: string; tipo: "imagem" | "video" | "audio" | "documento"; nome?: string } | null>(null);
   const [showAddLead, setShowAddLead] = useState(false);
   const [showAgendar, setShowAgendar] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -983,14 +1010,47 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       });
     } finally { setLoadingOlder(false); }
   };
-  const enviar = trpc.crm.enviarMensagem.useMutation({ onSuccess: () => { setMsg(""); refetch(); onUpdate(); }, onError: (e: any) => toast.error(e.message) });
+  const enviar = trpc.crm.enviarMensagem.useMutation({
+    onSuccess: () => { setMsg(""); setPendingMedia(null); refetch(); onUpdate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const atualizar = trpc.crm.atualizarConversa.useMutation({ onSuccess: () => { onUpdate(); toast.success("Atualizado!"); } });
   const excluir = trpc.crm.excluirConversa.useMutation({ onSuccess: () => { toast.success("Conversa excluída."); onDeleted(); }, onError: (e: any) => toast.error(e.message) });
   // Auto-scroll só dispara em mudanças do LIVE (polling/envio), não quando
   // prependemos antigas — senão o "carregar mais" pulava pra fim e o usuário
   // perdia o que queria ler.
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [msgs]);
-  const send = () => { if (msg.trim()) enviar.mutate({ conversaId: cid, conteudo: msg.trim() }); };
+  const send = () => {
+    const texto = msg.trim();
+    if (!texto && !pendingMedia) return;
+    enviar.mutate({
+      conversaId: cid,
+      conteudo: texto || (pendingMedia?.nome ?? ""),
+      tipo: pendingMedia?.tipo,
+      mediaUrl: pendingMedia?.url,
+    });
+  };
+  // Aplica template: interpola {{nome}}, {{telefone}}, {{email}}, {{atendente}},
+  // {{escritorio}} contra o contato atual e o usuário logado. Mídia anexada
+  // ao template vai pra `pendingMedia` e é incluída no próximo envio.
+  const { user: usuarioLogado } = useAuth();
+  const aplicarTemplate = (t: any) => {
+    const c = convs.find((x: any) => x.id === cid);
+    const interpolado = interpolarTemplate(String(t.conteudo || ""), {
+      nome: c?.contatoNome,
+      telefone: c?.contatoTelefone,
+      email: c?.contatoEmail,
+      atendente: usuarioLogado?.name,
+      escritorio: (usuarioLogado as any)?.escritorioNome,
+    });
+    setMsg(interpolado);
+    if (t.midiaUrl && t.midiaTipo) {
+      setPendingMedia({ url: String(t.midiaUrl), tipo: t.midiaTipo, nome: t.titulo });
+    } else {
+      setPendingMedia(null);
+    }
+    setShowTemplates(false);
+  };
 
   const handleDelete = () => setConfirmExcluirConversa(true);
 
@@ -1258,6 +1318,28 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         <ComplianceGuardBadge />
       </div>
 
+      {/* Preview de mídia anexada (vinda do template). Some ao enviar. */}
+      {pendingMedia && (
+        <div className="mx-3 mb-1 flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-md px-2.5 py-1.5">
+          {pendingMedia.tipo === "imagem" ? <ImageIcon className="h-3.5 w-3.5 text-emerald-700 shrink-0" /> :
+           pendingMedia.tipo === "documento" ? <FileText className="h-3.5 w-3.5 text-emerald-700 shrink-0" /> :
+           <Paperclip className="h-3.5 w-3.5 text-emerald-700 shrink-0" />}
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200 truncate">
+              {pendingMedia.nome || pendingMedia.tipo}
+            </p>
+            <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 truncate">{pendingMedia.url}</p>
+          </div>
+          <button
+            onClick={() => setPendingMedia(null)}
+            className="text-emerald-700 hover:text-emerald-900 shrink-0"
+            title="Remover anexo"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Linha 2: Composer */}
       <div className="p-3 pt-2 flex gap-2">
         <Popover open={showTemplates} onOpenChange={setShowTemplates}>
@@ -1272,18 +1354,26 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               Dica: digite <span className="font-mono bg-muted px-1 rounded">/</span> no campo de mensagem para autocompletar.
             </p>
             {tplList && tplList.length > 0 ? (
-              <div className="max-h-56 overflow-y-auto space-y-0.5">
+              <div className="max-h-72 overflow-y-auto space-y-0.5">
                 {tplList.map((t: any) => (
                   <div
                     key={t.id}
                     className="rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted text-sm transition-colors"
-                    onClick={() => { setMsg(t.conteudo); setShowTemplates(false); }}
+                    onClick={() => aplicarTemplate(t)}
                   >
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-xs">{t.titulo}</p>
                       {t.atalho && (
                         <span className="font-mono text-[10px] bg-violet-100 text-violet-700 px-1 py-0.5 rounded">
                           /{t.atalho}
+                        </span>
+                      )}
+                      {t.midiaTipo && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded">
+                          {t.midiaTipo === "imagem" ? <ImageIcon className="h-2.5 w-2.5" /> :
+                           t.midiaTipo === "documento" ? <FileText className="h-2.5 w-2.5" /> :
+                           <Paperclip className="h-2.5 w-2.5" />}
+                          {t.midiaTipo}
                         </span>
                       )}
                     </div>
@@ -1303,6 +1393,21 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           onEnter={send}
           placeholder="Digite sua mensagem… ou clique em ✨ Compor com IA"
           className="bg-background"
+          interpolar={(c) => {
+            const conv = convs.find((x: any) => x.id === cid);
+            return interpolarTemplate(c, {
+              nome: conv?.contatoNome,
+              telefone: conv?.contatoTelefone,
+              email: conv?.contatoEmail,
+              atendente: usuarioLogado?.name,
+              escritorio: (usuarioLogado as any)?.escritorioNome,
+            });
+          }}
+          onTemplateConfirmado={(tpl) => {
+            if (tpl.midiaUrl && tpl.midiaTipo) {
+              setPendingMedia({ url: String(tpl.midiaUrl), tipo: tpl.midiaTipo, nome: tpl.titulo });
+            }
+          }}
         />
         <AudioRecordButton
           onSend={(args) => enviar.mutate({ conversaId: cid, conteudo: args.conteudo, tipo: args.tipo, mediaUrl: args.mediaUrl })}
