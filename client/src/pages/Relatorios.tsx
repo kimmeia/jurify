@@ -795,7 +795,7 @@ function AbaAtendimento() {
                 <SelectTrigger className="text-xs h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">Todos os canais</SelectItem>
-                  {((canaisList || []) as any[])
+                  {(((canaisList as any)?.canais || []) as any[])
                     .filter((c) => c.status !== "removido")
                     .map((c) => {
                       const tel = c.telefone ? ` · ${c.telefone}` : "";
