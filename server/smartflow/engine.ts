@@ -2077,6 +2077,52 @@ function handleCondicional(
   return { sucesso: true, contexto: ctx, parar: true };
 }
 
+/**
+ * Handler do passo `randomizar` — split aleatório do fluxo. Sorteia uma das
+ * opções (com pesos opcionais) e retorna `proximoRamoId: cond_<id>` que o
+ * walker usa pra rotear via `proximoSe[cond_<id>]`. Cada execução do mesmo
+ * lead pode cair numa saída diferente (não é determinístico).
+ *
+ * Pesos: default 1 cada (uniforme). Pesos relativos = [1,1,2] → 25/25/50.
+ * Peso ≤ 0 é ignorado (opção não pode ser sorteada). Se nenhuma opção tem
+ * peso válido, o passo falha cedo com erro claro.
+ *
+ * A escolha é registrada no contexto como `ramoSorteado = { id, label }`
+ * pra debugging/telemetria (ex: relatório de A/B testing por execucao).
+ */
+function handleRandomizar(
+  passo: Passo,
+  ctx: SmartflowContexto,
+): PassoResultado {
+  const cfg = passo.config as { opcoes?: Array<{ id: string; label?: string; peso?: number }> };
+  const opcoes = Array.isArray(cfg.opcoes) ? cfg.opcoes : [];
+  if (opcoes.length < 2) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Randomizador precisa de pelo menos 2 opções." };
+  }
+  const validos = opcoes
+    .map((o) => ({ id: String(o.id || ""), label: o.label, peso: Math.max(0, Number(o.peso ?? 1)) }))
+    .filter((o) => o.id && o.peso > 0);
+  if (validos.length === 0) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Randomizador: nenhuma opção com peso > 0 e id válido." };
+  }
+  const total = validos.reduce((s, o) => s + o.peso, 0);
+  const sorteio = Math.random() * total;
+  let acumulado = 0;
+  let escolhido = validos[validos.length - 1];
+  for (const o of validos) {
+    acumulado += o.peso;
+    if (sorteio <= acumulado) { escolhido = o; break; }
+  }
+  return {
+    sucesso: true,
+    contexto: {
+      ...ctx,
+      ramoSorteado: { id: escolhido.id, label: escolhido.label ?? null },
+    },
+    proximoRamoId: `cond_${escolhido.id}`,
+  };
+}
+
 function handleEsperar(
   passo: Passo,
   ctx: SmartflowContexto,
@@ -2926,6 +2972,7 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   transferir: handleTransferir,
   distribuir_atendimento: handleDistribuirAtendimento,
   condicional: handleCondicional,
+  randomizar: handleRandomizar,
   esperar: handleEsperar,
   webhook: handleWebhook,
   kanban_criar_card: handleKanbanCriarCard,

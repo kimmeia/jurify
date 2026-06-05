@@ -3975,4 +3975,82 @@ describe("SmartFlow Engine", () => {
       expect((r.contexto as any).ramo).toBe("outra");
     });
   });
+
+  describe("randomizar (split aleatório do fluxo)", () => {
+    const montarPassos = (cfg: any): Passo[] => [
+      {
+        id: 1, ordem: 1, tipo: "randomizar", config: cfg, clienteId: "n1",
+        proximoSe: { cond_a: "fim_a", cond_b: "fim_b", cond_c: "fim_c" },
+      },
+      { id: 2, ordem: 2, tipo: "definir_variavel", config: { chave: "ramo", valor: "a" }, clienteId: "fim_a" },
+      { id: 3, ordem: 3, tipo: "definir_variavel", config: { chave: "ramo", valor: "b" }, clienteId: "fim_b" },
+      { id: 4, ordem: 4, tipo: "definir_variavel", config: { chave: "ramo", valor: "c" }, clienteId: "fim_c" },
+    ];
+
+    it("falha quando há menos de 2 opções configuradas", async () => {
+      const exec = criarMockExecutores();
+      const passos = montarPassos({ opcoes: [{ id: "a", label: "Único", peso: 1 }] });
+      const r = await executarCenario(passos, {}, exec);
+      expect(r.sucesso).toBe(false);
+      expect(r.erro).toMatch(/pelo menos 2/);
+    });
+
+    it("falha quando nenhuma opção tem peso > 0", async () => {
+      const exec = criarMockExecutores();
+      const passos = montarPassos({ opcoes: [{ id: "a", peso: 0 }, { id: "b", peso: 0 }] });
+      const r = await executarCenario(passos, {}, exec);
+      expect(r.sucesso).toBe(false);
+    });
+
+    it("opção determinística: peso 0 nunca é sorteada (peso > 0 é único válido)", async () => {
+      const exec = criarMockExecutores();
+      const passos = montarPassos({ opcoes: [
+        { id: "a", label: "A", peso: 0 },
+        { id: "b", label: "B", peso: 1 },
+        { id: "c", label: "C", peso: 0 },
+      ]});
+      const r = await executarCenario(passos, {}, exec);
+      expect((r.contexto as any).ramo).toBe("b");
+      expect((r.contexto as any).ramoSorteado).toEqual({ id: "b", label: "B" });
+    });
+
+    it("distribuição respeita pesos: pesos [1, 1, 8] dão ~10/10/80% em N execuções", async () => {
+      const exec = criarMockExecutores();
+      const cfg = { opcoes: [
+        { id: "a", peso: 1 }, { id: "b", peso: 1 }, { id: "c", peso: 8 },
+      ]};
+      const contagem = { a: 0, b: 0, c: 0 };
+      const N = 2000;
+      for (let i = 0; i < N; i++) {
+        const r = await executarCenario(montarPassos(cfg), {}, exec);
+        const ramo = (r.contexto as any).ramo as "a" | "b" | "c";
+        contagem[ramo]++;
+      }
+      // Tolerância: ±3 pontos percentuais com N=2000 cobre variância natural
+      // do random sem flakiness. C (80%) deve dominar.
+      expect(contagem.c / N).toBeGreaterThan(0.77);
+      expect(contagem.c / N).toBeLessThan(0.83);
+      expect(contagem.a / N).toBeGreaterThan(0.07);
+      expect(contagem.a / N).toBeLessThan(0.13);
+      expect(contagem.b / N).toBeGreaterThan(0.07);
+      expect(contagem.b / N).toBeLessThan(0.13);
+    });
+
+    it("sem pesos: distribui uniformemente (cada opção ~33%)", async () => {
+      const exec = criarMockExecutores();
+      const cfg = { opcoes: [
+        { id: "a" }, { id: "b" }, { id: "c" },
+      ]};
+      const contagem = { a: 0, b: 0, c: 0 };
+      const N = 2000;
+      for (let i = 0; i < N; i++) {
+        const r = await executarCenario(montarPassos(cfg), {}, exec);
+        contagem[(r.contexto as any).ramo as "a" | "b" | "c"]++;
+      }
+      for (const v of Object.values(contagem)) {
+        expect(v / N).toBeGreaterThan(0.29);
+        expect(v / N).toBeLessThan(0.37);
+      }
+    });
+  });
 });

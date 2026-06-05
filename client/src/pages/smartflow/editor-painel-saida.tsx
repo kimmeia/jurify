@@ -94,6 +94,9 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
     { path: "atendenteEscolhidoId", label: "ID do atendente escolhido", tipo: "número" },
   ],
   condicional: [],
+  randomizar: [
+    { path: "ramoSorteado", label: "{id, label} da opção sorteada — preenchido após o passo", tipo: "objeto" },
+  ],
   // para_cada_item publica `item` e `indice` DENTRO do corpo do loop —
   // resolução dinâmica em `variaveisPublicadasPorPasso`.
   para_cada_item: [],
