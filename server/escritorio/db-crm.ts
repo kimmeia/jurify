@@ -432,6 +432,7 @@ export async function listarConversas(escritorioId: number, filtros?: {
   atendenteId?: number;
   atendenteIds?: number[];
   setorId?: number;
+  canalId?: number;
   dataInicio?: string;
   dataFim?: string;
 }) {
@@ -440,6 +441,9 @@ export async function listarConversas(escritorioId: number, filtros?: {
   const conditions = [eq(conversas.escritorioId, escritorioId)];
   if (filtros?.status && STATUS_CONV_VALIDOS.has(filtros.status as StatusConv)) {
     conditions.push(eq(conversas.status, filtros.status as StatusConv));
+  }
+  if (filtros?.canalId) {
+    conditions.push(eq(conversas.canalId, filtros.canalId));
   }
 
   // Multi-atendente (e compat com atendenteId único legacy).
