@@ -521,8 +521,8 @@ function TabelaAtendentesCard({
                   <TableCell className="text-center">
                     {a.taxaConversao !== null ? (
                       <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        a.taxaConversao >= 60 ? "bg-emerald-100 text-emerald-800" :
-                        a.taxaConversao >= 40 ? "bg-amber-100 text-amber-800" :
+                        a.taxaConversao >= 30 ? "bg-emerald-100 text-emerald-800" :
+                        a.taxaConversao >= 15 ? "bg-amber-100 text-amber-800" :
                         "bg-rose-100 text-rose-800"
                       }`}>{a.taxaConversao}%</span>
                     ) : <span className="text-muted-foreground">—</span>}
@@ -949,7 +949,7 @@ function AbaAtendimentoConteudo({ data }: { data: any }) {
           icon={<Percent className="h-4 w-4" />}
           label="Taxa de conversão"
           value={data.taxaConversao !== null ? `${data.taxaConversao}%` : "—"}
-          hint={data.taxaConversao !== null ? `${data.leadsGanhos} ganhos / ${data.leadsGanhos + data.leadsPerdidos} fechamentos` : "Sem fechamentos"}
+          hint={data.taxaConversao !== null ? `${data.leadsGanhos} ganhos de ${data.totalConversas} atendimentos` : "Sem atendimentos"}
         />
         <KpiBlock
           accent="indigo"
