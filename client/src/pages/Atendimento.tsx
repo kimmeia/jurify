@@ -371,6 +371,7 @@ export default function Atendimento() {
   // continua client-side pra contadores baterem.
   const [atendentesFiltro, setAtendentesFiltro] = useState<number[]>([]);
   const [setorFiltro, setSetorFiltro] = useState<number | null>(null);
+  const [canalFiltro, setCanalFiltro] = useState<number | null>(null);
   const [periodoFiltro, setPeriodoFiltro] = useState<"todos" | "7d" | "30d" | "90d">("todos");
   // Período customizado (datas escolhidas pelo usuário). Quando preenchido,
   // tem prioridade sobre os presets acima.
@@ -404,6 +405,7 @@ export default function Atendimento() {
     const f: any = {};
     if (atendentesFiltro.length > 0) f.atendenteIds = atendentesFiltro;
     if (setorFiltro) f.setorId = setorFiltro;
+    if (canalFiltro) f.canalId = canalFiltro;
     // Range customizado tem prioridade; senão, preset relativo.
     if (dataIni) f.dataInicio = new Date(dataIni + "T00:00:00").toISOString();
     if (dataFim) f.dataFim = new Date(dataFim + "T23:59:59").toISOString();
@@ -424,14 +426,17 @@ export default function Atendimento() {
   // listarSetores entra novo no escopo principal pra alimentar o filtro.
   const { data: atendentesPrincipal } = trpc.crm.listarAtendentes.useQuery();
   const { data: setoresLista } = trpc.configuracoes.listarSetores.useQuery();
+  const { data: canaisInboxLista } = trpc.configuracoes.listarCanais.useQuery();
   const filtrosAtivos =
     (atendentesFiltro.length > 0 ? 1 : 0) +
     (setorFiltro ? 1 : 0) +
+    (canalFiltro ? 1 : 0) +
     (periodoFiltro !== "todos" ? 1 : 0) +
     (dataIni || dataFim ? 1 : 0);
   const limparFiltrosAvancados = () => {
     setAtendentesFiltro([]);
     setSetorFiltro(null);
+    setCanalFiltro(null);
     setPeriodoFiltro("todos");
     setDataIni("");
     setDataFim("");
@@ -627,6 +632,22 @@ export default function Atendimento() {
                         {(setoresLista || []).map((s: any) => (
                           <option key={s.id} value={s.id}>{s.nome}</option>
                         ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-medium text-muted-foreground">Canal</p>
+                      <select
+                        value={canalFiltro ?? ""}
+                        onChange={(e) => setCanalFiltro(e.target.value ? Number(e.target.value) : null)}
+                        className="w-full h-7 rounded-md border bg-background px-2 text-[11px]"
+                      >
+                        <option value="">Todos os canais</option>
+                        {(((canaisInboxLista as any)?.canais || []) as any[])
+                          .filter((c) => c.status !== "removido")
+                          .map((c) => {
+                            const tel = c.telefone ? ` · ${c.telefone}` : "";
+                            return <option key={c.id} value={c.id}>{c.nome || c.tipo}{tel}</option>;
+                          })}
                       </select>
                     </div>
                     <div className="space-y-1">
@@ -971,7 +992,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
     onSuccess: () => { toast.success("Conversa vinculada ao cliente!"); setShowVincular(false); onUpdate(); },
     onError: (e: any) => toast.error(e.message),
   });
-  const { data: tplList } = (trpc as any).templates?.listar?.useQuery?.(undefined, { retry: false }) || { data: [] };
+  const { data: tplList } = trpc.templates.listar.useQuery(undefined, { retry: false });
   const conv = convs.find((c: any) => c.id === cid);
   const bot = botStatusInfo(conv?.status);
   const botToggle = useBotToggle(onUpdate);

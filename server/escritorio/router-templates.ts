@@ -29,7 +29,10 @@ const categoriaEnum = z.enum([
 const midiaTipoEnum = z.enum(["imagem", "video", "audio", "documento"]);
 
 export const templatesRouter = router({
-  /** Lista todos os templates do escritório — disponível pra todo atendente. */
+  /** Lista todos os templates do escritório — disponível pra todo atendente.
+   *  Resiliente à ausência das colunas de mídia (migration 0139): se ainda
+   *  não rodou em produção, a query com schema novo lança "Unknown column",
+   *  e o fallback abaixo retorna só campos básicos com midia=null. */
   listar: protectedProcedure
     .input(z.object({ categoria: z.string().optional(), busca: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
@@ -46,8 +49,26 @@ export const templatesRouter = router({
         }
         return await db.select().from(mensagemTemplates).where(and(...conditions));
       } catch (err: any) {
-        log.error("[Templates] Erro ao listar:", err.message);
-        return [];
+        // Fallback resiliente — provavelmente "Unknown column midiaUrlTpl"
+        // porque migration 0139 ainda não rodou. Retorna shape compatível
+        // com midia null em vez de quebrar a UX.
+        log.warn("[Templates] listar com schema novo falhou, fallback básico:", err.message);
+        try {
+          const cats = input?.categoria ? sql`AND categoriaTpl = ${input.categoria}` : sql``;
+          const busca = input?.busca ? sql`AND (tituloTpl LIKE ${`%${input.busca}%`} OR conteudoTpl LIKE ${`%${input.busca}%`})` : sql``;
+          const rows = await db.execute(sql`
+            SELECT id, escritorioIdTpl AS escritorioId, tituloTpl AS titulo, conteudoTpl AS conteudo,
+                   categoriaTpl AS categoria, atalhoTpl AS atalho, criadoPorTpl AS criadoPor,
+                   createdAtTpl AS createdAt
+            FROM mensagem_templates
+            WHERE escritorioIdTpl = ${esc.escritorio.id} ${cats} ${busca}
+          `);
+          const list = Array.isArray(rows) && Array.isArray(rows[0]) ? rows[0] : (rows as any).rows ?? [];
+          return (list as any[]).map((r) => ({ ...r, midiaUrl: null, midiaTipo: null }));
+        } catch (err2: any) {
+          log.error("[Templates] fallback também falhou:", err2.message);
+          return [];
+        }
       }
     }),
 
@@ -75,11 +96,28 @@ export const templatesRouter = router({
       const midiaUrl = input.midiaUrl || null;
       const midiaTipo = input.midiaTipo || null;
 
-      const result = await db.execute(
-        sql`INSERT INTO mensagem_templates
-          (escritorioIdTpl, tituloTpl, conteudoTpl, categoriaTpl, atalhoTpl, midiaUrlTpl, midiaTipoTpl, criadoPorTpl)
-          VALUES (${esc.escritorio.id}, ${input.titulo}, ${input.conteudo}, ${cat}, ${atalho}, ${midiaUrl}, ${midiaTipo}, ${esc.colaborador.id})`
-      );
+      let result;
+      try {
+        result = await db.execute(
+          sql`INSERT INTO mensagem_templates
+            (escritorioIdTpl, tituloTpl, conteudoTpl, categoriaTpl, atalhoTpl, midiaUrlTpl, midiaTipoTpl, criadoPorTpl)
+            VALUES (${esc.escritorio.id}, ${input.titulo}, ${input.conteudo}, ${cat}, ${atalho}, ${midiaUrl}, ${midiaTipo}, ${esc.colaborador.id})`
+        );
+      } catch (err: any) {
+        // Migration 0139 ainda não rodou em produção — INSERT cita
+        // colunas inexistentes. Fallback sem mídia. Se o operador tinha
+        // anexado mídia, ela é ignorada (warning no log).
+        if (/Unknown column/i.test(err?.message || "")) {
+          log.warn("[Templates] colunas de mídia ausentes — INSERT sem mídia (rode migration 0139)");
+          result = await db.execute(
+            sql`INSERT INTO mensagem_templates
+              (escritorioIdTpl, tituloTpl, conteudoTpl, categoriaTpl, atalhoTpl, criadoPorTpl)
+              VALUES (${esc.escritorio.id}, ${input.titulo}, ${input.conteudo}, ${cat}, ${atalho}, ${esc.colaborador.id})`
+          );
+        } else {
+          throw err;
+        }
+      }
 
       const header = Array.isArray(result) ? (result[0] as { insertId?: number }) : (result as { insertId?: number });
       const insertId = header?.insertId ?? 0;
