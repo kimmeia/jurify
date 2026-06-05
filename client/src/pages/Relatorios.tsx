@@ -36,6 +36,7 @@ import {
 import {
   formatBRLShort, formatDiaCurto, formatDiaCompleto, baixarBlob, base64ToBlob,
 } from "./financeiro/helpers";
+import { TIPOS_CANAL_COMUNICACAO } from "@shared/canal-types";
 
 // ───────────────────────── helpers ─────────────────────────
 
@@ -796,7 +797,7 @@ function AbaAtendimento() {
                 <SelectContent>
                   <SelectItem value="__all__">Todos os canais</SelectItem>
                   {(((canaisList as any)?.canais || []) as any[])
-                    .filter((c) => c.status !== "removido")
+                    .filter((c) => c.status !== "removido" && TIPOS_CANAL_COMUNICACAO.includes(c.tipo))
                     .map((c) => {
                       const tel = c.telefone ? ` · ${c.telefone}` : "";
                       return <SelectItem key={c.id} value={String(c.id)}>{c.nome || c.tipo}{tel}</SelectItem>;
