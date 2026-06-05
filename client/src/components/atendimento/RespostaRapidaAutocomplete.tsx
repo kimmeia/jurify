@@ -25,6 +25,8 @@ export interface TemplateRespostaRapida {
   conteudo: string;
   atalho: string | null;
   categoria?: string | null;
+  midiaUrl?: string | null;
+  midiaTipo?: "imagem" | "video" | "audio" | "documento" | null;
 }
 
 interface Props {
@@ -35,6 +37,13 @@ interface Props {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /** Aplica interpolação de `{{nome}}` etc no conteúdo do template antes de
+   *  substituir no input. Mantém o autocomplete ignorante do contato — o
+   *  caller é quem sabe os valores. */
+  interpolar?: (conteudo: string) => string;
+  /** Disparado após o template ser confirmado via atalho `/`. Usado pra
+   *  anexar mídia do template à próxima mensagem. */
+  onTemplateConfirmado?: (tpl: TemplateRespostaRapida) => void;
 }
 
 export function RespostaRapidaAutocomplete({
@@ -45,6 +54,8 @@ export function RespostaRapidaAutocomplete({
   placeholder,
   disabled,
   className,
+  interpolar,
+  onTemplateConfirmado,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [cursor, setCursor] = useState(0);
@@ -92,14 +103,16 @@ export function RespostaRapidaAutocomplete({
 
   const confirmarSelecao = (tpl: TemplateRespostaRapida) => {
     if (!atalhoAtivo) return;
+    const conteudo = interpolar ? interpolar(tpl.conteudo) : tpl.conteudo;
     const { valor: novo, cursor: novoCursor } = aplicarAtalho(
       value,
       atalhoAtivo.inicio,
       cursor,
-      tpl.conteudo,
+      conteudo,
     );
     onChange(novo);
     setCursorPendente(novoCursor);
+    onTemplateConfirmado?.(tpl);
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

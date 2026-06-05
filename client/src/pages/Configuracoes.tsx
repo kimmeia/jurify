@@ -16,7 +16,7 @@ import {
   Copy, CheckCircle, AlertTriangle, Shield, UserPlus, Clock, Link2,
   MessageCircle, Instagram, Phone, Facebook, Wifi, WifiOff, Eye, X,
   ChevronDown, ChevronUp, Calendar, DollarSign, Plug, Tag as TagIcon, Sparkles,
-  Database, CreditCard as CreditCardIcon, Megaphone, Pencil, Stethoscope,
+  Database, CreditCard as CreditCardIcon, Megaphone, Pencil, Stethoscope, MessageSquare,
 } from "lucide-react";
 import { BackupDialog } from "./configuracoes/backup-dialog";
 import Plans from "./Plans";
@@ -38,6 +38,7 @@ import {
 } from "./configuracoes/dialogs";
 import { PermissoesTab } from "./configuracoes/tabs";
 import { TagsTab } from "./configuracoes/tags-tab";
+import { TemplatesTab } from "./configuracoes/templates-tab";
 import { gradientAvatar, gerarIniciais } from "./dashboards/common";
 import { Search as SearchIcon } from "lucide-react";
 import { OrigensLeadTab } from "./configuracoes/OrigensLeadTab";
@@ -449,6 +450,12 @@ export default function Configuracoes() {
                   className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <Sparkles className="h-4 w-4" /> <span className="flex-1 text-left">Campos de cliente</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="templates"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <MessageSquare className="h-4 w-4" /> <span className="flex-1 text-left">Templates</span>
                 </TabsTrigger>
 
                 <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Integrações</p>
@@ -1208,6 +1215,10 @@ export default function Configuracoes() {
 
         <TabsContent value="campos" className="space-y-4">
           <CamposClienteTab canEdit={canEdit} />
+        </TabsContent>
+
+        <TabsContent value="templates" className="space-y-4">
+          <TemplatesTab />
         </TabsContent>
 
         {podeVerMeuPlano && (
