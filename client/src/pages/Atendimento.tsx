@@ -1719,6 +1719,12 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
   const fechouNoMes = (l: any) =>
     l.fechadoEm && new Date(l.fechadoEm).getTime() >= inicioMesTs;
 
+  // Quando move um lead pra "Perdido", abre dialog perguntando o motivo
+  // antes de confirmar — assim o relatório (top motivos de perda) sempre
+  // tem dado e o operador é forçado a pensar "por que perdi". State é
+  // { id, nomeAtual } pra mostrar pra confirmação visual no dialog.
+  const [perdaDialog, setPerdaDialog] = useState<{ id: number; nome: string } | null>(null);
+
   // Handler único de drop: move lead pra etapa destino com optimistic update.
   // Cobre tanto drop na coluna (id da etapa) quanto drop sobre outro card
   // (pega a etapa do card-alvo).
@@ -1730,6 +1736,10 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
     onDragChange?.(false);
     const ld = leads.find((l: any) => l.id === id);
     if (!ld || ld.etapaFunil === etapaDestino) return;
+    if (etapaDestino === "fechado_perdido") {
+      setPerdaDialog({ id, nome: ld.contatoNome || `Lead #${id}` });
+      return;
+    }
     mut.mutate({ id, etapaFunil: etapaDestino });
   };
 
@@ -2152,6 +2162,17 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <MotivoPerdaDialog
+      alvo={perdaDialog}
+      onCancel={() => setPerdaDialog(null)}
+      onConfirm={(motivo) => {
+        if (perdaDialog) {
+          mut.mutate({ id: perdaDialog.id, etapaFunil: "fechado_perdido", motivoPerda: motivo });
+        }
+        setPerdaDialog(null);
+      }}
+    />
   </div>);
 }
 
@@ -2683,5 +2704,107 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Dialog Motivo da Perda ─────────────────────────────────────────────────
+// Aparece quando o operador arrasta um lead pra coluna "Perdido". Força
+// preencher o motivo (mesmo curto) — alimenta o painel "Motivos de perda"
+// do relatório de Atendimento. Os atalhos dos motivos comuns aceleram
+// (1 clique vs digitar texto). "Outro" libera campo livre.
+
+const MOTIVOS_COMUNS = [
+  { id: "sem_condicoes", emoji: "💸", label: "Sem condições financeiras" },
+  { id: "sumiu", emoji: "🔄", label: "Sumiu / não respondeu" },
+  { id: "ja_tem_advogado", emoji: "⚖️", label: "Já tinha advogado" },
+  { id: "fora_atuacao", emoji: "📍", label: "Caso fora da nossa atuação" },
+  { id: "prescrito", emoji: "⏰", label: "Prazo prescrito" },
+  { id: "valor", emoji: "💰", label: "Valor acima do esperado" },
+];
+
+function MotivoPerdaDialog({
+  alvo, onCancel, onConfirm,
+}: {
+  alvo: { id: number; nome: string } | null;
+  onCancel: () => void;
+  onConfirm: (motivo: string) => void;
+}) {
+  const [escolha, setEscolha] = useState<string>("");
+  const [textoLivre, setTextoLivre] = useState<string>("");
+
+  useEffect(() => {
+    if (alvo) { setEscolha(""); setTextoLivre(""); }
+  }, [alvo]);
+
+  if (!alvo) return null;
+  const motivoFinal = escolha === "outro"
+    ? textoLivre.trim()
+    : MOTIVOS_COMUNS.find((m) => m.id === escolha)?.label || "";
+  const podeConfirmar = motivoFinal.length > 0;
+
+  return (
+    <AlertDialog open={!!alvo} onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <AlertDialogContent className="max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Marcar lead como perdido</AlertDialogTitle>
+          <AlertDialogDescription>
+            <strong>{alvo.nome}</strong> — qual foi o motivo? (vai pro relatório de atendimento)
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="space-y-2 py-2">
+          {MOTIVOS_COMUNS.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setEscolha(m.id)}
+              className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-md border text-sm transition-colors ${
+                escolha === m.id
+                  ? "border-rose-400 bg-rose-50 dark:bg-rose-950/30 font-medium"
+                  : "border-slate-200 dark:border-slate-800 hover:bg-muted/40"
+              }`}
+            >
+              <span className="text-lg">{m.emoji}</span>
+              <span className="flex-1">{m.label}</span>
+              {escolha === m.id && <Check className="h-4 w-4 text-rose-600" />}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setEscolha("outro")}
+            className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-md border text-sm transition-colors ${
+              escolha === "outro"
+                ? "border-rose-400 bg-rose-50 dark:bg-rose-950/30 font-medium"
+                : "border-slate-200 dark:border-slate-800 hover:bg-muted/40"
+            }`}
+          >
+            <span className="text-lg">✏️</span>
+            <span className="flex-1">Outro motivo</span>
+            {escolha === "outro" && <Check className="h-4 w-4 text-rose-600" />}
+          </button>
+          {escolha === "outro" && (
+            <Input
+              autoFocus
+              value={textoLivre}
+              onChange={(e) => setTextoLivre(e.target.value)}
+              placeholder="Descreva brevemente o motivo"
+              maxLength={120}
+              className="mt-1"
+            />
+          )}
+        </div>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!podeConfirmar}
+            onClick={(e) => { e.preventDefault(); if (podeConfirmar) onConfirm(motivoFinal); }}
+            className="bg-rose-600 text-white hover:bg-rose-700"
+          >
+            Marcar como perdido
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

@@ -476,8 +476,12 @@ export const relatoriosRouter = router({
     const tabelaAtendentes = [...porAtendente.values()]
       .map((a) => ({
         ...a,
-        taxaConversao: a.ganhos + a.perdidos > 0
-          ? Math.round((a.ganhos / (a.ganhos + a.perdidos)) * 100)
+        // Taxa = ganhos / atendimentos. Mostra "% dos contatos atendidos
+        // que viraram contrato" — mais útil pro escritório que
+        // ganhos/(ganhos+perdidos), que ignorava leads em aberto e dava
+        // 100% pra quem só fechou um e não perdeu nenhum.
+        taxaConversao: a.atendimentos > 0
+          ? Math.round((a.ganhos / a.atendimentos) * 100)
           : null,
       }))
       // Recomendação aprovada: ordena por valor fechado decrescente.
@@ -512,8 +516,12 @@ export const relatoriosRouter = router({
     }));
 
     // ─── Derivados ──────────────────────────────────────────────────────
-    const taxaConversao = leadsGanhos + leadsPerdidos > 0
-      ? Math.round((leadsGanhos / (leadsGanhos + leadsPerdidos)) * 100)
+    // Taxa de conversão = ganhos / atendimentos do período. Reflete "do
+    // total de pessoas atendidas, qual % virou contrato". Antes era
+    // ganhos/(ganhos+perdidos) — ignorava leads em aberto e dava 100% pra
+    // quem só fechou poucos sem perder nenhum.
+    const taxaConversao = totalConversas > 0
+      ? Math.round((leadsGanhos / totalConversas) * 100)
       : null;
     const ticketMedio = leadsGanhos > 0 ? valorGanho / leadsGanhos : null;
     const cicloMedioDias = Number((cicloRows as any[])[0]?.diasMedio || 0);
