@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
 import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { TIPOS_CANAL_COMUNICACAO } from "@shared/canal-types";
 
 // Interpola placeholders `{{nome}}`, `{{telefone}}`, `{{email}}`,
 // `{{atendente}}`, `{{escritorio}}` no conteúdo do template. Variáveis
@@ -643,7 +644,7 @@ export default function Atendimento() {
                       >
                         <option value="">Todos os canais</option>
                         {(((canaisInboxLista as any)?.canais || []) as any[])
-                          .filter((c) => c.status !== "removido")
+                          .filter((c) => c.status !== "removido" && TIPOS_CANAL_COMUNICACAO.includes(c.tipo))
                           .map((c) => {
                             const tel = c.telefone ? ` · ${c.telefone}` : "";
                             return <option key={c.id} value={c.id}>{c.nome || c.tipo}{tel}</option>;
@@ -2070,7 +2071,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           >
             <option value="">Todos os canais</option>
             {(((canaisFiltroLista as any)?.canais || []) as any[])
-              .filter((c) => c.status !== "removido")
+              .filter((c) => c.status !== "removido" && TIPOS_CANAL_COMUNICACAO.includes(c.tipo))
               .map((c) => {
                 const telLabel = c.telefone ? ` · ${c.telefone}` : "";
                 return (

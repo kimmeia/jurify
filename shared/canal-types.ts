@@ -6,6 +6,16 @@
 export type TipoCanal = "whatsapp_qr" | "whatsapp_api" | "instagram" | "facebook" | "telefone_voip" | "calcom" | "chatgpt" | "claude";
 export type StatusCanal = "conectado" | "desconectado" | "pendente" | "erro" | "banido";
 
+/**
+ * Tipos de canal que representam um canal de COMUNICAÇÃO direta com o
+ * cliente (recebe/envia mensagens). Filtros de "Canal" em Inbox, Pipeline,
+ * Relatórios usam essa lista pra excluir integrações de IA/agendamento
+ * (chatgpt, claude, calcom) que não fazem sentido como filtro de mensagem.
+ */
+export const TIPOS_CANAL_COMUNICACAO: TipoCanal[] = [
+  "whatsapp_qr", "whatsapp_api", "instagram", "facebook", "telefone_voip",
+];
+
 export const TIPO_CANAL_LABELS: Record<TipoCanal, string> = {
   whatsapp_qr: "WhatsApp (QR Code)",
   whatsapp_api: "WhatsApp (API Oficial)",
