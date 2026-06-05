@@ -190,6 +190,7 @@ export const crmRouter = router({
       atendenteId: z.number().optional(),
       atendenteIds: z.array(z.number()).optional(),
       setorId: z.number().optional(),
+      canalId: z.number().optional(),
       dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
       limite: z.number().int().min(1).max(1000).optional(),

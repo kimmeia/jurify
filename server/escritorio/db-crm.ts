@@ -427,16 +427,19 @@ export async function criarConversa(dados: {
   return (result as { insertId: number }).insertId;
 }
 
-// Condições comuns (escritório/atendente/setor/período) das queries de
+// Condições comuns (escritório/atendente/setor/canal/período) das queries de
 // conversa — reusadas pela listagem E pela contagem por status, pra os dois
 // baterem. Retorna null quando o filtro é impossível (setor sem atendentes ou
 // interseção vazia): o caller devolve vazio/zeros sem rodar a query.
 async function condicoesConversa(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   escritorioId: number,
-  filtros?: { atendenteId?: number; atendenteIds?: number[]; setorId?: number; dataInicio?: string; dataFim?: string },
+  filtros?: { atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number; dataInicio?: string; dataFim?: string },
 ): Promise<SQL[] | null> {
   const conditions: SQL[] = [eq(conversas.escritorioId, escritorioId)];
+  if (filtros?.canalId) {
+    conditions.push(eq(conversas.canalId, filtros.canalId));
+  }
 
   // Multi-atendente (e compat com atendenteId único legacy).
   const atendentesFiltro: number[] = [];
@@ -495,6 +498,7 @@ export async function contarConversasPorStatus(escritorioId: number, filtros?: {
   atendenteId?: number;
   atendenteIds?: number[];
   setorId?: number;
+  canalId?: number;
   dataInicio?: string;
   dataFim?: string;
 }): Promise<{ todos: number; aguardando: number; em_atendimento: number; resolvido: number }> {
@@ -524,6 +528,7 @@ export async function listarConversas(escritorioId: number, filtros?: {
   atendenteId?: number;
   atendenteIds?: number[];
   setorId?: number;
+  canalId?: number;
   dataInicio?: string;
   dataFim?: string;
   limite?: number;
