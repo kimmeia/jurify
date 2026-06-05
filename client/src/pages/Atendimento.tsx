@@ -969,6 +969,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const [buscaVincular, setBuscaVincular] = useState("");
   const [tom, setTom] = useState<"formal" | "direto" | "empatico" | "amigavel">("empatico");
   const [confirmExcluirConversa, setConfirmExcluirConversa] = useState(false);
+  const [metaParamsDialog, setMetaParamsDialog] = useState<{ template: any; preview: string } | null>(null);
 
   // Compor com IA — gera sugestão no tom escolhido
   const composerSugestao = trpc.atendimentoIa.composerSugestao.useMutation({
@@ -997,6 +998,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const conv = convs.find((c: any) => c.id === cid);
   const bot = botStatusInfo(conv?.status);
   const botToggle = useBotToggle(onUpdate);
+  // Templates Meta (HSM) — só faz query quando o canal da conversa é
+  // Cloud API. Pra outros canais não há suporte a templates oficiais
+  // e a chamada falharia com erro "Canal sem WABA ID".
+  const ehCanalCloud = conv?.canalTipo === "whatsapp_api";
+  const { data: metaTplsRaw } = (trpc as any).whatsappCloud.listarTemplates.useQuery(
+    { canalId: conv?.canalId },
+    { enabled: !!ehCanalCloud && !!conv?.canalId, retry: false, staleTime: 5 * 60 * 1000 },
+  );
+  // Só APPROVED — PENDING/REJECTED não dá pra usar.
+  const metaTpls = ((metaTplsRaw || []) as any[]).filter((t) => t.status === "APPROVED");
   const { data: msgs, refetch } = trpc.crm.listarMensagens.useQuery({ conversaId: cid }, { refetchInterval: 3000 });
   // Fuso do escritório (Configurações → Escritório) — datas/horas do chat
   // seguem o relógio do operador, não o UTC do server.
@@ -1072,6 +1083,29 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       setPendingMedia(null);
     }
     setShowTemplates(false);
+  };
+
+  // Aplica template Meta (HSM). Extrai o body do component "BODY" e detecta
+  // se tem placeholders {{N}}. Se não tem → envia direto via API oficial.
+  // Se tem → abre dialog perguntando os valores. Templates Meta NÃO passam
+  // pelo composer porque o envio é estruturado (não é texto livre).
+  const aplicarTemplateMeta = (t: any) => {
+    const bodyComp = (t.components || []).find((c: any) => c.type === "BODY");
+    const body = String(bodyComp?.text || "");
+    const matches = body.match(/\{\{\d+\}\}/g) || [];
+    const totalVars = new Set(matches.map((m: string) => m.match(/\d+/)![0])).size;
+    setShowTemplates(false);
+    if (totalVars === 0) {
+      // Sem variáveis → envia direto. Conteúdo persistido = body (pra histórico).
+      enviar.mutate({
+        conversaId: cid,
+        conteudo: body || `[template ${t.name}]`,
+        metaTemplate: { nome: t.name, idioma: t.language },
+      });
+    } else {
+      // Com variáveis → dialog pede valor de cada {{N}}.
+      setMetaParamsDialog({ template: t, preview: body });
+    }
   };
 
   const handleDelete = () => setConfirmExcluirConversa(true);
@@ -1370,42 +1404,94 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <Zap className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-80 p-2" align="start" side="top">
-            <p className="text-xs font-medium px-2 pb-0.5 text-muted-foreground">Respostas rápidas</p>
-            <p className="text-[10px] px-2 pb-1.5 text-muted-foreground/80">
-              Dica: digite <span className="font-mono bg-muted px-1 rounded">/</span> no campo de mensagem para autocompletar.
-            </p>
-            {tplList && tplList.length > 0 ? (
-              <div className="max-h-72 overflow-y-auto space-y-0.5">
-                {tplList.map((t: any) => (
-                  <div
-                    key={t.id}
-                    className="rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted text-sm transition-colors"
-                    onClick={() => aplicarTemplate(t)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-xs">{t.titulo}</p>
-                      {t.atalho && (
-                        <span className="font-mono text-[10px] bg-violet-100 text-violet-700 px-1 py-0.5 rounded">
-                          /{t.atalho}
-                        </span>
-                      )}
-                      {t.midiaTipo && (
-                        <span className="inline-flex items-center gap-0.5 text-[10px] bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded">
-                          {t.midiaTipo === "imagem" ? <ImageIcon className="h-2.5 w-2.5" /> :
-                           t.midiaTipo === "documento" ? <FileText className="h-2.5 w-2.5" /> :
-                           <Paperclip className="h-2.5 w-2.5" />}
-                          {t.midiaTipo}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-muted-foreground truncate">{t.conteudo}</p>
+          <PopoverContent className="w-96 p-2" align="start" side="top">
+            <div className="max-h-96 overflow-y-auto space-y-3">
+
+              {/* ─── Respostas rápidas locais ─── */}
+              <div>
+                <div className="flex items-center justify-between px-2 pb-1">
+                  <p className="text-xs font-medium text-muted-foreground">📝 Respostas rápidas</p>
+                  <span className="text-[10px] text-muted-foreground/70">{tplList?.length || 0}</span>
+                </div>
+                <p className="text-[10px] px-2 pb-1 text-muted-foreground/70">
+                  Digite <span className="font-mono bg-muted px-1 rounded">/</span> no chat pra autocompletar
+                </p>
+                {tplList && tplList.length > 0 ? (
+                  <div className="space-y-0.5">
+                    {tplList.map((t: any) => (
+                      <div
+                        key={t.id}
+                        className="rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted text-sm transition-colors"
+                        onClick={() => aplicarTemplate(t)}
+                      >
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-xs">{t.titulo}</p>
+                          {t.atalho && (
+                            <span className="font-mono text-[10px] bg-violet-100 text-violet-700 px-1 py-0.5 rounded">
+                              /{t.atalho}
+                            </span>
+                          )}
+                          {t.midiaTipo && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded">
+                              {t.midiaTipo === "imagem" ? <ImageIcon className="h-2.5 w-2.5" /> :
+                               t.midiaTipo === "documento" ? <FileText className="h-2.5 w-2.5" /> :
+                               <Paperclip className="h-2.5 w-2.5" />}
+                              {t.midiaTipo}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground truncate">{t.conteudo}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  <p className="text-[10px] text-muted-foreground/80 text-center py-1.5 italic">Nenhum. Crie em Configurações → Templates.</p>
+                )}
               </div>
-            ) : (
-              <p className="text-xs text-muted-foreground text-center py-3">Nenhum template. Crie em Configurações.</p>
-            )}
+
+              {/* ─── Templates Meta (HSM) ─── */}
+              {ehCanalCloud && (
+                <div className="border-t pt-2">
+                  <div className="flex items-center justify-between px-2 pb-1">
+                    <p className="text-xs font-medium text-muted-foreground">✅ Templates Meta aprovados</p>
+                    <span className="text-[10px] text-muted-foreground/70">{metaTpls.length}</span>
+                  </div>
+                  <p className="text-[10px] px-2 pb-1 text-muted-foreground/70">
+                    Enviam via API oficial (com custo). Bom pra avisos fora da janela 24h.
+                  </p>
+                  {metaTpls.length > 0 ? (
+                    <div className="space-y-0.5">
+                      {metaTpls.map((t: any) => {
+                        const body = (t.components || []).find((c: any) => c.type === "BODY")?.text || "";
+                        const totalVars = new Set((body.match(/\{\{\d+\}\}/g) || []).map((m: string) => m.match(/\d+/)![0])).size;
+                        return (
+                          <div
+                            key={t.id || t.name}
+                            className="rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted text-sm transition-colors"
+                            onClick={() => aplicarTemplateMeta(t)}
+                          >
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-mono text-xs">{t.name}</p>
+                              <span className="text-[10px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded">{t.language}</span>
+                              {totalVars > 0 && (
+                                <span className="text-[10px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded">
+                                  {totalVars} {totalVars === 1 ? "var" : "vars"}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-muted-foreground line-clamp-2">{body}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground/80 text-center py-1.5 italic">
+                      Nenhum aprovado. Cadastre em Configurações → Canais → WhatsApp → Templates.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </PopoverContent>
         </Popover>
         <RespostaRapidaAutocomplete
@@ -1535,6 +1621,20 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <MetaTemplateParamsDialog
+      ctx={metaParamsDialog}
+      onCancel={() => setMetaParamsDialog(null)}
+      onConfirm={(params, bodyInterpolado) => {
+        if (!metaParamsDialog) return;
+        enviar.mutate({
+          conversaId: cid,
+          conteudo: bodyInterpolado,
+          metaTemplate: { nome: metaParamsDialog.template.name, idioma: metaParamsDialog.template.language, params },
+        });
+        setMetaParamsDialog(null);
+      }}
+    />
   </>);
 }
 
@@ -2889,5 +2989,86 @@ function MotivoPerdaDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+// ─── Dialog Variáveis Template Meta ─────────────────────────────────────────
+// Quando o operador clica num template Meta que tem {{1}}, {{2}}... no body,
+// este dialog pergunta o valor de cada variável. Mostra preview interpolado
+// em tempo real pra ele ver como vai chegar pro cliente. Confirma → envia
+// como template HSM via Cloud API (cobrança Meta por mensagem).
+
+function MetaTemplateParamsDialog({
+  ctx, onCancel, onConfirm,
+}: {
+  ctx: { template: any; preview: string } | null;
+  onCancel: () => void;
+  onConfirm: (params: string[], bodyInterpolado: string) => void;
+}) {
+  const [valores, setValores] = useState<string[]>([]);
+
+  // Detecta os índices únicos de variáveis no body. Ex: "Oi {{1}}, sua
+  // fatura {{2}} vence em {{3}}" → [1, 2, 3].
+  const indices = (() => {
+    const body = ctx?.preview || "";
+    const matches = body.match(/\{\{(\d+)\}\}/g) || [];
+    const nums = matches.map((m) => Number(m.match(/\d+/)![0]));
+    return [...new Set(nums)].sort((a, b) => a - b);
+  })();
+
+  useEffect(() => {
+    if (ctx) setValores(new Array(indices.length).fill(""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx?.template?.name]);
+
+  if (!ctx) return null;
+
+  const bodyInterpolado = indices.reduce((acc, idx, i) => {
+    return acc.replaceAll(`{{${idx}}}`, valores[i] || `{{${idx}}}`);
+  }, ctx.preview);
+
+  const todosPreenchidos = valores.length === indices.length && valores.every((v) => v.trim().length > 0);
+
+  return (
+    <Dialog open={!!ctx} onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="font-mono text-sm">{ctx.template.name}</DialogTitle>
+          <p className="text-xs text-muted-foreground">
+            Preencha as variáveis. Vai ser enviado via API oficial WhatsApp (Meta cobra por envio).
+          </p>
+        </DialogHeader>
+
+        <div className="space-y-3 py-2">
+          {indices.map((idx, i) => (
+            <div key={idx} className="space-y-1">
+              <Label className="text-xs font-mono">{`{{${idx}}}`}</Label>
+              <Input
+                value={valores[i] || ""}
+                onChange={(e) => setValores((prev) => {
+                  const novo = prev.slice();
+                  novo[i] = e.target.value;
+                  return novo;
+                })}
+                placeholder={`Valor da variável ${idx}`}
+                maxLength={200}
+              />
+            </div>
+          ))}
+
+          <div className="rounded-md border bg-muted/30 p-3 mt-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1">Preview</p>
+            <p className="text-sm whitespace-pre-wrap">{bodyInterpolado}</p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+          <Button disabled={!todosPreenchidos} onClick={() => onConfirm(valores, bodyInterpolado)}>
+            Enviar template
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
