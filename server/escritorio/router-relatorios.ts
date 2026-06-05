@@ -20,7 +20,7 @@ import {
   conversas, mensagens, leads, contatos, calculosHistorico,
   kanbanCards, kanbanColunas, kanbanMovimentacoes,
   colaboradores, setores, asaasCobrancas, categoriasCobranca,
-  comissoesFechadas, users,
+  comissoesFechadas, users, canaisIntegrados,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
@@ -53,6 +53,7 @@ const AtendimentoInput = z
     dataFim: z.string().optional(),    // YYYY-MM-DD
     setorId: z.number().int().positive().optional(),
     atendenteId: z.number().int().positive().optional(),
+    canalId: z.number().int().positive().optional(),
   })
   .optional();
 
@@ -174,6 +175,11 @@ export const relatoriosRouter = router({
       dataInicio = p.dataInicio;
       dataFim = p.dataFim;
     }
+    // Período anterior pra cálculo de deltas (mesmo número de dias antes).
+    // Ex: período 01-30/Maio (30d) → anterior 01-31/Abril (30d).
+    const dur = dataFim.getTime() - dataInicio.getTime();
+    const dataInicioAnt = new Date(dataInicio.getTime() - dur);
+    const dataFimAnt = new Date(dataInicio.getTime() - 1);
 
     const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
     if (!perm.allowed) {
@@ -194,60 +200,335 @@ export const relatoriosRouter = router({
       proprioColabId: colabId,
     });
 
-    const filtroResp = colaboradorIds
+    const filtroAtendConv = colaboradorIds
       ? [inArray(conversas.atendenteId, colaboradorIds)]
+      : [];
+    const filtroRespLead = colaboradorIds
+      ? [inArray(leads.responsavelId, colaboradorIds)]
+      : [];
+    const filtroCanal = input?.canalId
+      ? [eq(conversas.canalId, input.canalId)]
       : [];
 
     const baseConv = and(
       eq(conversas.escritorioId, eid),
       gte(conversas.createdAt, dataInicio),
       lte(conversas.createdAt, dataFim),
-      ...filtroResp,
+      ...filtroAtendConv,
+      ...filtroCanal,
+    );
+    // Pra contar leads filtrados por canal, precisa join com conversas.
+    // Conditions reusados em vários querys de leads.
+    const baseLeadCriacao = (di: Date, df: Date) => and(
+      eq(leads.escritorioId, eid),
+      gte(leads.createdAt, di),
+      lte(leads.createdAt, df),
+      ...filtroRespLead,
+    );
+    const baseLeadFechado = (di: Date, df: Date, etapa: "fechado_ganho" | "fechado_perdido") => and(
+      eq(leads.escritorioId, eid),
+      eq(leads.etapaFunil, etapa),
+      sql`${leads.fechadoEm} IS NOT NULL`,
+      gte(leads.fechadoEm, di),
+      lte(leads.fechadoEm, df),
+      ...filtroRespLead,
     );
 
-    const statusRows = await db
-      .select({ status: conversas.status, total: sql<number>`COUNT(*)` })
-      .from(conversas)
-      .where(baseConv)
-      .groupBy(conversas.status);
-
-    const msgRows = await db
-      .select({ direcao: mensagens.direcao, total: sql<number>`COUNT(*)` })
-      .from(mensagens)
-      .innerJoin(conversas, eq(mensagens.conversaId, conversas.id))
-      .where(and(
-        eq(conversas.escritorioId, eid),
-        gte(mensagens.createdAt, dataInicio),
-        lte(mensagens.createdAt, dataFim),
-        ...filtroResp,
-      ))
-      .groupBy(mensagens.direcao);
-
-    const convsPorDia = await db
-      .select({ dia: sql<string>`DATE(createdAtConv)`, total: sql<number>`COUNT(*)` })
-      .from(conversas)
-      .where(baseConv)
-      .groupBy(sql`DATE(createdAtConv)`)
-      .orderBy(sql`DATE(createdAtConv)`);
-
-    const msgsPorDia = await db
-      .select({ dia: sql<string>`DATE(createdAtMsg)`, total: sql<number>`COUNT(*)` })
-      .from(mensagens)
-      .innerJoin(conversas, eq(mensagens.conversaId, conversas.id))
-      .where(and(
-        eq(conversas.escritorioId, eid),
-        gte(mensagens.createdAt, dataInicio),
-        lte(mensagens.createdAt, dataFim),
-        ...filtroResp,
-      ))
-      .groupBy(sql`DATE(createdAtMsg)`)
-      .orderBy(sql`DATE(createdAtMsg)`);
+    // ─── Conversas: status, mensagens, por dia ──────────────────────────
+    const [statusRows, msgRows, convsPorDia] = await Promise.all([
+      db.select({ status: conversas.status, total: sql<number>`COUNT(*)` })
+        .from(conversas).where(baseConv).groupBy(conversas.status),
+      db.select({ direcao: mensagens.direcao, total: sql<number>`COUNT(*)` })
+        .from(mensagens)
+        .innerJoin(conversas, eq(mensagens.conversaId, conversas.id))
+        .where(and(
+          eq(conversas.escritorioId, eid),
+          gte(mensagens.createdAt, dataInicio),
+          lte(mensagens.createdAt, dataFim),
+          ...filtroAtendConv,
+          ...filtroCanal,
+        ))
+        .groupBy(mensagens.direcao),
+      db.select({ dia: sql<string>`DATE(createdAtConv)`, total: sql<number>`COUNT(*)` })
+        .from(conversas).where(baseConv)
+        .groupBy(sql`DATE(createdAtConv)`)
+        .orderBy(sql`DATE(createdAtConv)`),
+    ]);
 
     const conversasPorStatus: Record<string, number> = {};
     for (const r of statusRows) conversasPorStatus[r.status as string] = Number(r.total);
-
     const msgsDirecao: Record<string, number> = {};
     for (const r of msgRows) msgsDirecao[r.direcao as string] = Number(r.total);
+    const totalConversas = Object.values(conversasPorStatus).reduce((a, b) => a + b, 0);
+
+    // ─── Leads: funil, agregados, por dia, motivos de perda ────────────
+    // Canal filtra via join com conversas (NULL → fora se filtroCanal ativo).
+    const joinCanalLead = (q: any) => input?.canalId
+      ? q.innerJoin(conversas, eq(leads.conversaId, conversas.id))
+      : q;
+
+    const [
+      leadsRecebidosRow,
+      leadsRecebidosAntRow,
+      leadsGanhosRow,
+      leadsGanhosAntRow,
+      leadsPerdidosRow,
+      leadsPerdidosAntRow,
+      leadsEmPipelineRow,
+      funilRows,
+      motivosRows,
+      cicloRows,
+    ] = await Promise.all([
+      joinCanalLead(
+        db.select({ total: sql<number>`COUNT(*)` }).from(leads)
+      ).where(baseLeadCriacao(dataInicio, dataFim)),
+      joinCanalLead(
+        db.select({ total: sql<number>`COUNT(*)` }).from(leads)
+      ).where(baseLeadCriacao(dataInicioAnt, dataFimAnt)),
+      joinCanalLead(
+        db.select({
+          total: sql<number>`COUNT(*)`,
+          // CAST com fallback porque valorEstimado é varchar (texto BR
+          // sempre normalizado pra "9999.99" em criarLead/atualizarLead).
+          valor: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(15,2))), 0)`,
+        }).from(leads)
+      ).where(baseLeadFechado(dataInicio, dataFim, "fechado_ganho")),
+      joinCanalLead(
+        db.select({
+          total: sql<number>`COUNT(*)`,
+          valor: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(15,2))), 0)`,
+        }).from(leads)
+      ).where(baseLeadFechado(dataInicioAnt, dataFimAnt, "fechado_ganho")),
+      joinCanalLead(
+        db.select({
+          total: sql<number>`COUNT(*)`,
+          valor: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(15,2))), 0)`,
+        }).from(leads)
+      ).where(baseLeadFechado(dataInicio, dataFim, "fechado_perdido")),
+      joinCanalLead(
+        db.select({
+          total: sql<number>`COUNT(*)`,
+        }).from(leads)
+      ).where(baseLeadFechado(dataInicioAnt, dataFimAnt, "fechado_perdido")),
+      // "Em pipeline" = leads abertos no momento (etapa ≠ fechado_*), criados
+      // dentro do range — ou seja, leads recebidos no período que ainda não
+      // foram resolvidos. Sem janela = todos pipeline atual do escritório.
+      joinCanalLead(
+        db.select({
+          total: sql<number>`COUNT(*)`,
+          valor: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(15,2))), 0)`,
+        }).from(leads)
+      ).where(and(
+        eq(leads.escritorioId, eid),
+        sql`${leads.etapaFunil} NOT IN ('fechado_ganho', 'fechado_perdido')`,
+        ...filtroRespLead,
+      )),
+      // Funil completo: todos leads CRIADOS no período por etapa atual.
+      // Mostra a foto: "dos N que entraram, X estão em proposta, Y ganhou, Z perdeu".
+      joinCanalLead(
+        db.select({
+          etapa: leads.etapaFunil,
+          total: sql<number>`COUNT(*)`,
+          valor: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(15,2))), 0)`,
+        }).from(leads)
+      ).where(baseLeadCriacao(dataInicio, dataFim))
+        .groupBy(leads.etapaFunil),
+      // Motivos de perda dos leads FECHADOS NO PERÍODO.
+      joinCanalLead(
+        db.select({
+          motivo: leads.motivoPerda,
+          total: sql<number>`COUNT(*)`,
+        }).from(leads)
+      ).where(baseLeadFechado(dataInicio, dataFim, "fechado_perdido"))
+        .groupBy(leads.motivoPerda)
+        .orderBy(sql`COUNT(*) DESC`),
+      // Ciclo médio = dias entre createdAt e fechadoEm dos ganhos do período.
+      joinCanalLead(
+        db.select({
+          diasMedio: sql<number>`AVG(DATEDIFF(${leads.fechadoEm}, ${leads.createdAt}))`,
+        }).from(leads)
+      ).where(baseLeadFechado(dataInicio, dataFim, "fechado_ganho")),
+    ]);
+
+    const leadsRecebidos = Number(leadsRecebidosRow[0]?.total || 0);
+    const leadsRecebidosAnt = Number(leadsRecebidosAntRow[0]?.total || 0);
+    const leadsGanhos = Number(leadsGanhosRow[0]?.total || 0);
+    const valorGanho = Number(leadsGanhosRow[0]?.valor || 0);
+    const leadsGanhosAnt = Number(leadsGanhosAntRow[0]?.total || 0);
+    const valorGanhoAnt = Number(leadsGanhosAntRow[0]?.valor || 0);
+    const leadsPerdidos = Number(leadsPerdidosRow[0]?.total || 0);
+    const valorPerdido = Number(leadsPerdidosRow[0]?.valor || 0);
+    const leadsPerdidosAnt = Number(leadsPerdidosAntRow[0]?.total || 0);
+    const leadsEmPipeline = Number(leadsEmPipelineRow[0]?.total || 0);
+    const valorEmPipeline = Number(leadsEmPipelineRow[0]?.valor || 0);
+
+    // ─── Tempo médio de primeira resposta ───────────────────────────────
+    // Média do delta entre createdAt da conversa e primeira mensagem de SAÍDA.
+    // Conversas que ninguém respondeu ainda são EXCLUÍDAS do cálculo (não
+    // distorce a média com NULL/uma resposta hipotética).
+    const tempoPriRespRow = await db.execute(sql`
+      SELECT AVG(TIMESTAMPDIFF(SECOND, c.createdAtConv, m.primeiraSaida)) AS segMedio
+      FROM ${conversas} c
+      INNER JOIN (
+        SELECT conversaIdMsg, MIN(createdAtMsg) AS primeiraSaida
+        FROM ${mensagens}
+        WHERE direcaoMsg = 'saida'
+        GROUP BY conversaIdMsg
+      ) m ON m.conversaIdMsg = c.id
+      WHERE c.escritorioIdConv = ${eid}
+        AND c.createdAtConv >= ${dataInicio}
+        AND c.createdAtConv <= ${dataFim}
+        ${input?.canalId ? sql`AND c.canalIdConv = ${input.canalId}` : sql``}
+    `);
+    const segMedioPriResp = Number((tempoPriRespRow as any)[0]?.[0]?.segMedio ?? (tempoPriRespRow as any).rows?.[0]?.segMedio ?? 0);
+
+    // ─── Por canal: agrupa conversas no período ─────────────────────────
+    const porCanalRows = await db
+      .select({
+        canalId: conversas.canalId,
+        canalNome: canaisIntegrados.nome,
+        canalTelefone: canaisIntegrados.telefone,
+        canalTipo: canaisIntegrados.tipo,
+        total: sql<number>`COUNT(*)`,
+      })
+      .from(conversas)
+      .leftJoin(canaisIntegrados, eq(conversas.canalId, canaisIntegrados.id))
+      .where(baseConv)
+      .groupBy(conversas.canalId, canaisIntegrados.nome, canaisIntegrados.telefone, canaisIntegrados.tipo)
+      .orderBy(sql`COUNT(*) DESC`);
+
+    // ─── Ranking + tabela detalhada por atendente ───────────────────────
+    // Combina 2 fontes: leads (responsavelId) pra valor/ganhos/perdidos +
+    // conversas (atendenteId) pra atendimentos. Atendente pode ter um sem
+    // ter o outro. Resolvemos via UNION + agregação no app.
+    const filtroColabIdsArr = colaboradorIds && colaboradorIds.length > 0 ? colaboradorIds : null;
+    const [leadsPorResp, atendPorAtend] = await Promise.all([
+      joinCanalLead(
+        db.select({
+          colabId: leads.responsavelId,
+          etapa: leads.etapaFunil,
+          valor: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(15,2))), 0)`,
+          total: sql<number>`COUNT(*)`,
+        }).from(leads)
+      ).where(and(
+        eq(leads.escritorioId, eid),
+        // Para o ranking, considera leads criados OU fechados no período
+        // pra cobrir "leads que entraram" e "leads que saíram".
+        or(
+          and(gte(leads.createdAt, dataInicio), lte(leads.createdAt, dataFim)),
+          and(sql`${leads.fechadoEm} IS NOT NULL`, gte(leads.fechadoEm, dataInicio), lte(leads.fechadoEm, dataFim)),
+        ),
+        filtroColabIdsArr ? inArray(leads.responsavelId, filtroColabIdsArr) : sql`1=1`,
+      ))
+        .groupBy(leads.responsavelId, leads.etapaFunil),
+      db.select({
+        colabId: conversas.atendenteId,
+        atendimentos: sql<number>`COUNT(*)`,
+      })
+        .from(conversas)
+        .where(baseConv)
+        .groupBy(conversas.atendenteId),
+    ]);
+
+    // Lista master de colaboradores (nome + email) pra hidratar a tabela.
+    const todosColabRows = await db
+      .select({ id: colaboradores.id, nome: users.name, email: users.email })
+      .from(colaboradores)
+      .innerJoin(users, eq(colaboradores.userId, users.id))
+      .where(eq(colaboradores.escritorioId, eid));
+    const nomePorColab = new Map<number, { nome: string; email: string }>();
+    for (const c of todosColabRows) nomePorColab.set(c.id, { nome: c.nome || c.email || `#${c.id}`, email: c.email || "" });
+
+    const porAtendente = new Map<number, {
+      colabId: number;
+      nome: string;
+      atendimentos: number;
+      leadsTotal: number;
+      ganhos: number;
+      perdidos: number;
+      emAberto: number;
+      valorFechado: number;
+    }>();
+    const garantir = (id: number) => {
+      if (!porAtendente.has(id)) {
+        porAtendente.set(id, {
+          colabId: id, nome: nomePorColab.get(id)?.nome || `#${id}`,
+          atendimentos: 0, leadsTotal: 0, ganhos: 0, perdidos: 0, emAberto: 0, valorFechado: 0,
+        });
+      }
+      return porAtendente.get(id)!;
+    };
+    for (const r of leadsPorResp) {
+      if (!r.colabId) continue;
+      const x = garantir(r.colabId);
+      const t = Number(r.total);
+      const v = Number(r.valor || 0);
+      x.leadsTotal += t;
+      if (r.etapa === "fechado_ganho") { x.ganhos += t; x.valorFechado += v; }
+      else if (r.etapa === "fechado_perdido") { x.perdidos += t; }
+      else { x.emAberto += t; }
+    }
+    for (const r of atendPorAtend) {
+      if (!r.colabId) continue;
+      const x = garantir(r.colabId);
+      x.atendimentos += Number(r.atendimentos);
+    }
+    const tabelaAtendentes = [...porAtendente.values()]
+      .map((a) => ({
+        ...a,
+        taxaConversao: a.ganhos + a.perdidos > 0
+          ? Math.round((a.ganhos / (a.ganhos + a.perdidos)) * 100)
+          : null,
+      }))
+      // Recomendação aprovada: ordena por valor fechado decrescente.
+      .sort((a, b) => b.valorFechado - a.valorFechado);
+
+    // ─── Volume diário (leads recebidos × ganhos × perdidos) ────────────
+    const [recebidosPorDia, ganhosPorDia, perdidosPorDia] = await Promise.all([
+      joinCanalLead(
+        db.select({ dia: sql<string>`DATE(${leads.createdAt})`, total: sql<number>`COUNT(*)` }).from(leads)
+      ).where(baseLeadCriacao(dataInicio, dataFim))
+        .groupBy(sql`DATE(${leads.createdAt})`).orderBy(sql`DATE(${leads.createdAt})`),
+      joinCanalLead(
+        db.select({ dia: sql<string>`DATE(${leads.fechadoEm})`, total: sql<number>`COUNT(*)` }).from(leads)
+      ).where(baseLeadFechado(dataInicio, dataFim, "fechado_ganho"))
+        .groupBy(sql`DATE(${leads.fechadoEm})`).orderBy(sql`DATE(${leads.fechadoEm})`),
+      joinCanalLead(
+        db.select({ dia: sql<string>`DATE(${leads.fechadoEm})`, total: sql<number>`COUNT(*)` }).from(leads)
+      ).where(baseLeadFechado(dataInicio, dataFim, "fechado_perdido"))
+        .groupBy(sql`DATE(${leads.fechadoEm})`).orderBy(sql`DATE(${leads.fechadoEm})`),
+    ]);
+
+    // ─── Funil: hidrata todas as etapas mesmo zeradas pra UI ────────────
+    const ETAPAS_ORDEM: Array<"novo" | "qualificado" | "proposta" | "negociacao" | "fechado_ganho" | "fechado_perdido"> = [
+      "novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido",
+    ];
+    const funilMap = new Map<string, { total: number; valor: number }>();
+    for (const r of funilRows) funilMap.set(r.etapa as string, { total: Number(r.total), valor: Number(r.valor || 0) });
+    const funil = ETAPAS_ORDEM.map((etapa) => ({
+      etapa,
+      total: funilMap.get(etapa)?.total || 0,
+      valor: funilMap.get(etapa)?.valor || 0,
+    }));
+
+    // ─── Derivados ──────────────────────────────────────────────────────
+    const taxaConversao = leadsGanhos + leadsPerdidos > 0
+      ? Math.round((leadsGanhos / (leadsGanhos + leadsPerdidos)) * 100)
+      : null;
+    const ticketMedio = leadsGanhos > 0 ? valorGanho / leadsGanhos : null;
+    const cicloMedioDias = Number((cicloRows as any[])[0]?.diasMedio || 0);
+    // Conversa → Lead: das conversas iniciadas, quantas geraram lead.
+    const convsComLeadRow = await db.execute(sql`
+      SELECT COUNT(DISTINCT c.id) AS total
+      FROM ${conversas} c
+      INNER JOIN ${leads} l ON l.conversaIdLead = c.id
+      WHERE c.escritorioIdConv = ${eid}
+        AND c.createdAtConv >= ${dataInicio}
+        AND c.createdAtConv <= ${dataFim}
+        ${input?.canalId ? sql`AND c.canalIdConv = ${input.canalId}` : sql``}
+    `);
+    const convsComLead = Number((convsComLeadRow as any)[0]?.[0]?.total ?? (convsComLeadRow as any).rows?.[0]?.total ?? 0);
+    const conversaParaLead = totalConversas > 0 ? Math.round((convsComLead / totalConversas) * 100) : null;
 
     return {
       periodo: {
@@ -257,14 +538,59 @@ export const relatoriosRouter = router({
       filtros: {
         setorId: input?.setorId ?? null,
         atendenteId: input?.atendenteId ?? null,
+        canalId: input?.canalId ?? null,
       },
+      // KPIs Funil
+      leadsRecebidos,
+      leadsRecebidosAnt,
+      leadsEmPipeline,
+      valorEmPipeline,
+      leadsGanhos,
+      valorGanho,
+      leadsGanhosAnt,
+      valorGanhoAnt,
+      leadsPerdidos,
+      valorPerdido,
+      leadsPerdidosAnt,
+      // KPIs Operação (mantém compat com nomes antigos)
       conversasPorStatus,
-      totalConversas: Object.values(conversasPorStatus).reduce((a, b) => a + b, 0),
+      totalConversas,
       mensagensEnviadas: msgsDirecao["saida"] || 0,
       mensagensRecebidas: msgsDirecao["entrada"] || 0,
       totalMensagens: (msgsDirecao["saida"] || 0) + (msgsDirecao["entrada"] || 0),
+      segMedioPriResp,
+      // KPIs Desempenho
+      taxaConversao,
+      ticketMedio,
+      conversaParaLead,
+      cicloMedioDias,
+      // Visualizações
+      funil,
+      porCanal: porCanalRows.map((r) => ({
+        canalId: r.canalId,
+        nome: r.canalNome || (r.canalTipo as string) || "Sem canal",
+        telefone: r.canalTelefone,
+        tipo: r.canalTipo,
+        total: Number(r.total),
+      })),
+      tabelaAtendentes,
+      motivosPerda: (motivosRows as Array<{ motivo: string | null; total: number }>)
+        .filter((r) => r.motivo)
+        .map((r) => ({ motivo: r.motivo as string, total: Number(r.total) })),
+      // Volume diário — fusiona as 3 séries por dia pra UI plotar fácil.
+      volumeDiario: (() => {
+        const map = new Map<string, { dia: string; recebidos: number; ganhos: number; perdidos: number }>();
+        const garantirDia = (d: string) => {
+          if (!map.has(d)) map.set(d, { dia: d, recebidos: 0, ganhos: 0, perdidos: 0 });
+          return map.get(d)!;
+        };
+        for (const r of recebidosPorDia) garantirDia(String(r.dia)).recebidos = Number(r.total);
+        for (const r of ganhosPorDia) garantirDia(String(r.dia)).ganhos = Number(r.total);
+        for (const r of perdidosPorDia) garantirDia(String(r.dia)).perdidos = Number(r.total);
+        return [...map.values()].sort((a, b) => a.dia.localeCompare(b.dia));
+      })(),
+      // Mantém retrocompatibilidade pra UI antiga não quebrar enquanto migra.
       conversasPorDia: convsPorDia.map((r: any) => ({ dia: String(r.dia), total: Number(r.total) })),
-      mensagensPorDia: msgsPorDia.map((r: any) => ({ dia: String(r.dia), total: Number(r.total) })),
     };
   }),
 

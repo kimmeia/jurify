@@ -25,6 +25,7 @@ import {
   BarChart3, MessageCircle, TrendingUp, DollarSign, ArrowUpRight, ArrowDownRight,
   Activity, CheckCircle2, Target, AlertTriangle, Percent,
   LayoutGrid, Calculator, Wallet, FileText, Loader2,
+  Inbox, Trophy, TrendingDown, Hourglass, Zap, Send, Clock4, Repeat,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RelatoriosTab as DreFinanceiroTab } from "./financeiro/Relatorios";
@@ -148,6 +149,392 @@ function BarsMini({ dados, cor }: { dados: { label: string; value: number }[]; c
         </div>
       ))}
     </div>
+  );
+}
+
+// ─── Componentes do redesign aba Atendimento ────────────────────────────────
+
+function SecaoLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 mt-2">
+      <div className="w-1 h-3 rounded-full bg-blue-600" />
+      <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
+        {children}
+      </span>
+    </div>
+  );
+}
+
+const KPI_ACCENTS: Record<string, { border: string; icon: string; value: string }> = {
+  blue:    { border: "border-l-blue-500",    icon: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",    value: "text-blue-800 dark:text-blue-200" },
+  green:   { border: "border-l-emerald-500", icon: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", value: "text-emerald-800 dark:text-emerald-200" },
+  violet:  { border: "border-l-violet-500",  icon: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",  value: "text-violet-800 dark:text-violet-200" },
+  amber:   { border: "border-l-amber-500",   icon: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",   value: "text-amber-800 dark:text-amber-200" },
+  emerald: { border: "border-l-emerald-600", icon: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", value: "text-emerald-900 dark:text-emerald-100" },
+  rose:    { border: "border-l-rose-500",    icon: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",    value: "text-rose-800 dark:text-rose-200" },
+  indigo:  { border: "border-l-indigo-500",  icon: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",  value: "text-indigo-800 dark:text-indigo-200" },
+  slate:   { border: "border-l-slate-500",   icon: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",       value: "text-slate-800 dark:text-slate-200" },
+};
+
+function KpiBlock({
+  accent, icon, label, value, hint,
+}: {
+  accent: keyof typeof KPI_ACCENTS;
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  hint?: React.ReactNode;
+}) {
+  const a = KPI_ACCENTS[accent];
+  return (
+    <div className={`bg-card border border-border rounded-xl p-4 border-l-4 ${a.border} shadow-sm relative`}>
+      <div className={`absolute top-3 right-3 w-7 h-7 rounded-md ${a.icon} flex items-center justify-center`}>
+        {icon}
+      </div>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{label}</p>
+      <p className={`text-2xl font-bold mt-1 leading-tight ${a.value}`}>{value}</p>
+      {hint && <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">{hint}</p>}
+    </div>
+  );
+}
+
+function Trend({ pct }: { pct: number }) {
+  if (pct === 0) return <span className="text-muted-foreground">→ 0%</span>;
+  const up = pct > 0;
+  return (
+    <span className={up ? "text-emerald-600 font-semibold" : "text-rose-600 font-semibold"}>
+      {up ? "↑" : "↓"} {Math.abs(pct)}%
+    </span>
+  );
+}
+
+const ETAPA_LABEL: Record<string, string> = {
+  novo: "Novo",
+  qualificado: "Qualificado",
+  proposta: "Proposta",
+  negociacao: "Negociação",
+  fechado_ganho: "Ganho",
+  fechado_perdido: "Perdido",
+};
+const ETAPA_BG: Record<string, string> = {
+  novo: "bg-blue-500",
+  qualificado: "bg-cyan-500",
+  proposta: "bg-violet-500",
+  negociacao: "bg-amber-500",
+  fechado_ganho: "bg-emerald-500",
+  fechado_perdido: "bg-rose-500",
+};
+
+function FunilCard({ funil }: { funil: Array<{ etapa: string; total: number; valor: number }> }) {
+  const max = Math.max(1, ...funil.map((f) => f.total));
+  const topo = funil[0]?.total || 0;
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center justify-between">
+          Funil de conversão
+          <span className="text-[10px] text-muted-foreground font-normal">{topo} leads no topo</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-1.5">
+          {funil.map((f) => {
+            const pctMax = (f.total / max) * 100;
+            const pctTopo = topo > 0 ? Math.round((f.total / topo) * 100) : 0;
+            return (
+              <div key={f.etapa} className="flex items-center gap-2">
+                <div className="w-20 text-[11px] font-medium text-muted-foreground">{ETAPA_LABEL[f.etapa]}</div>
+                <div className="flex-1 h-6 bg-muted rounded-md overflow-hidden">
+                  <div className={`h-full ${ETAPA_BG[f.etapa]} flex items-center px-2 text-white text-[11px] font-semibold transition-all`}
+                       style={{ width: `${Math.max(5, pctMax)}%` }}>
+                    {f.total}
+                  </div>
+                </div>
+                <div className="w-20 text-right">
+                  <div className="text-[11px] font-semibold">{formatBRLShort(f.valor)}</div>
+                  <div className="text-[10px] text-muted-foreground">{pctTopo}%</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const CANAL_CORES = ["#10b981", "#6366f1", "#f43f5e", "#94a3b8", "#f59e0b", "#06b6d4"];
+
+function CanalCard({
+  porCanal, total,
+}: {
+  porCanal: Array<{ canalId: number | null; nome: string; telefone: string | null; total: number }>;
+  total: number;
+}) {
+  if (porCanal.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Atendimentos por canal</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground text-center py-8">Sem atendimentos no período.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  // Constrói conic-gradient com as fatias.
+  let cursor = 0;
+  const segs = porCanal.map((c, i) => {
+    const pct = total > 0 ? (c.total / total) * 360 : 0;
+    const seg = { cor: CANAL_CORES[i % CANAL_CORES.length], inicio: cursor, fim: cursor + pct, pct: total > 0 ? Math.round((c.total / total) * 100) : 0 };
+    cursor += pct;
+    return seg;
+  });
+  const gradient = segs.length === 1
+    ? segs[0].cor
+    : `conic-gradient(${segs.map((s) => `${s.cor} ${s.inicio}deg ${s.fim}deg`).join(", ")})`;
+  return (
+    <Card>
+      <CardHeader className="pb-3"><CardTitle className="text-sm">Atendimentos por canal</CardTitle></CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-4">
+          <div className="relative shrink-0" style={{ width: 100, height: 100 }}>
+            <div className="absolute inset-0 rounded-full" style={{ background: gradient }} />
+            <div className="absolute inset-[18px] rounded-full bg-card flex flex-col items-center justify-center">
+              <div className="text-lg font-bold leading-none">{total}</div>
+              <div className="text-[9px] uppercase text-muted-foreground tracking-wide">atend.</div>
+            </div>
+          </div>
+          <div className="flex-1 space-y-1">
+            {porCanal.map((c, i) => (
+              <div key={c.canalId ?? `none-${i}`} className="flex items-center gap-2 text-[11px]">
+                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CANAL_CORES[i % CANAL_CORES.length] }} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{c.nome}</div>
+                  {c.telefone && <div className="text-[9px] text-muted-foreground truncate">{c.telefone}</div>}
+                </div>
+                <div className="font-semibold tabular-nums">{segs[i].pct}%</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RankingCard({
+  atendentes,
+}: {
+  atendentes: Array<{ colabId: number; nome: string; ganhos: number; perdidos: number; valorFechado: number; taxaConversao: number | null }>;
+}) {
+  if (atendentes.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Ranking de atendentes</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground text-center py-8">Sem fechamentos no período.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  const medalhas = ["🥇", "🥈", "🥉"];
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center justify-between">
+          Ranking de atendentes
+          <span className="text-[10px] text-muted-foreground font-normal">por valor fechado</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-1">
+          {atendentes.map((a, i) => (
+            <div key={a.colabId} className="grid grid-cols-[28px_1fr_auto_auto] items-center gap-2 py-1.5 border-b last:border-b-0 border-border/50 text-[11px]">
+              <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold ${
+                i === 0 ? "bg-amber-100 text-amber-700" :
+                i === 1 ? "bg-slate-200 text-slate-700" :
+                i === 2 ? "bg-orange-100 text-orange-700" :
+                "bg-muted text-muted-foreground"
+              }`}>
+                {i < 3 ? medalhas[i] : i + 1}
+              </div>
+              <div className="min-w-0">
+                <div className="font-medium truncate">{a.nome}</div>
+                <div className="text-[10px] text-muted-foreground">{a.ganhos} ganhos · {a.perdidos} perdas</div>
+              </div>
+              <div className="text-right">
+                <div className="font-bold tabular-nums">{formatBRLShort(a.valorFechado)}</div>
+              </div>
+              <div className="text-right w-12">
+                <div className="font-bold">{a.taxaConversao !== null ? `${a.taxaConversao}%` : "—"}</div>
+                <div className="text-[9px] text-muted-foreground">conv.</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function VolumeDiarioCard({
+  dados,
+}: {
+  dados: Array<{ dia: string; recebidos: number; ganhos: number; perdidos: number }>;
+}) {
+  if (dados.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Volume diário</CardTitle></CardHeader>
+        <CardContent><p className="text-xs text-muted-foreground text-center py-8">Sem dados no período.</p></CardContent>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center justify-between">
+          Volume diário
+          <span className="text-[10px] text-muted-foreground font-normal">recebidos × ganhos × perdidos</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={dados.map((d) => ({ ...d, label: formatDiaCurto(d.dia) }))}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+            <XAxis dataKey="label" fontSize={10} tickLine={false} axisLine={false} />
+            <YAxis fontSize={10} tickLine={false} axisLine={false} />
+            <Tooltip
+              labelFormatter={(_l, payload) => (payload && payload[0] ? formatDiaCompleto((payload[0] as any).payload.dia) : "")}
+              contentStyle={{ fontSize: 11, borderRadius: 8 }}
+            />
+            <defs>
+              <linearGradient id="grad-recebidos" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <Area type="monotone" dataKey="recebidos" stroke="#3b82f6" strokeWidth={2} fill="url(#grad-recebidos)" name="Recebidos" />
+            <Bar dataKey="ganhos" fill="#10b981" name="Ganhos" maxBarSize={14} />
+            <Bar dataKey="perdidos" fill="#ef4444" name="Perdidos" maxBarSize={14} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MotivosPerdaCard({
+  motivos, totalPerdidos,
+}: {
+  motivos: Array<{ motivo: string; total: number }>;
+  totalPerdidos: number;
+}) {
+  if (motivos.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Motivos de perda</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground text-center py-8">
+            {totalPerdidos > 0 ? "Nenhum motivo registrado." : "Sem leads perdidos no período."}
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+  const max = motivos[0]?.total || 1;
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center justify-between">
+          Motivos de perda
+          <span className="text-[10px] text-muted-foreground font-normal">{totalPerdidos} perdidos</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {motivos.slice(0, 6).map((m) => (
+            <div key={m.motivo} className="flex items-center gap-2 text-[11px]">
+              <div className="flex-1 min-w-0 truncate" title={m.motivo}>{m.motivo}</div>
+              <div className="h-1.5 w-16 bg-rose-100 rounded-full overflow-hidden shrink-0">
+                <div className="h-full bg-rose-500" style={{ width: `${(m.total / max) * 100}%` }} />
+              </div>
+              <div className="w-6 text-right font-bold text-rose-700 tabular-nums">{m.total}</div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TabelaAtendentesCard({
+  atendentes,
+}: {
+  atendentes: Array<{
+    colabId: number; nome: string;
+    atendimentos: number; leadsTotal: number;
+    ganhos: number; perdidos: number; emAberto: number;
+    taxaConversao: number | null; valorFechado: number;
+  }>;
+}) {
+  if (atendentes.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Detalhamento por atendente</CardTitle></CardHeader>
+        <CardContent><p className="text-xs text-muted-foreground text-center py-8">Sem atendentes ativos no período.</p></CardContent>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center justify-between">
+          Detalhamento por atendente
+          <span className="text-[10px] text-muted-foreground font-normal">volume × conversão × valor</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="text-[10px] uppercase tracking-wide">
+                <TableHead>Atendente</TableHead>
+                <TableHead className="text-center">Atend.</TableHead>
+                <TableHead className="text-center">Leads</TableHead>
+                <TableHead className="text-center">Ganhos</TableHead>
+                <TableHead className="text-center">Perdidos</TableHead>
+                <TableHead className="text-center">Em aberto</TableHead>
+                <TableHead className="text-center">Conv.</TableHead>
+                <TableHead className="text-right">Valor fechado</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {atendentes.map((a) => (
+                <TableRow key={a.colabId}>
+                  <TableCell className="font-medium">{a.nome}</TableCell>
+                  <TableCell className="text-center tabular-nums">{a.atendimentos}</TableCell>
+                  <TableCell className="text-center tabular-nums">{a.leadsTotal}</TableCell>
+                  <TableCell className="text-center tabular-nums text-emerald-700 font-semibold">{a.ganhos}</TableCell>
+                  <TableCell className="text-center tabular-nums text-rose-700 font-semibold">{a.perdidos}</TableCell>
+                  <TableCell className="text-center tabular-nums text-muted-foreground">{a.emAberto}</TableCell>
+                  <TableCell className="text-center">
+                    {a.taxaConversao !== null ? (
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        a.taxaConversao >= 60 ? "bg-emerald-100 text-emerald-800" :
+                        a.taxaConversao >= 40 ? "bg-amber-100 text-amber-800" :
+                        "bg-rose-100 text-rose-800"
+                      }`}>{a.taxaConversao}%</span>
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell className="text-right font-bold tabular-nums">{formatBRL(a.valorFechado)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -325,6 +712,7 @@ const DIAS_DEFAULT_RELATORIO = 30;
 function AbaAtendimento() {
   const [setorId, setSetorId] = useState<number | null>(null);
   const [atendenteId, setAtendenteId] = useState<number | null>(null);
+  const [canalId, setCanalId] = useState<number | null>(null);
   const [{ inicio, fim }, setRange] = useState(() => rangeDeDias(DIAS_DEFAULT_RELATORIO));
   const [personalizado, setPersonalizado] = useState(false);
 
@@ -333,6 +721,7 @@ function AbaAtendimento() {
     { modulo: "relatorios" },
     { retry: false },
   );
+  const { data: canaisList } = trpc.configuracoes.listarCanais.useQuery(undefined, { retry: false });
 
   // Atendentes filtrados pelo setor (se selecionado). Quando troca setor,
   // limpa o atendente pra evitar combinação inválida.
@@ -347,6 +736,7 @@ function AbaAtendimento() {
       dataFim: fim,
       setorId: setorId ?? undefined,
       atendenteId: atendenteId ?? undefined,
+      canalId: canalId ?? undefined,
     },
     { refetchInterval: 60_000 },
   );
@@ -355,7 +745,7 @@ function AbaAtendimento() {
     <div className="space-y-4">
       <Card>
         <CardContent className="pt-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Setor</Label>
               <Select
@@ -363,7 +753,6 @@ function AbaAtendimento() {
                 onValueChange={(v) => {
                   const novo = v === "__all__" ? null : parseInt(v, 10);
                   setSetorId(novo);
-                  // Se o atendente atual não pertence ao setor novo, limpa
                   if (novo != null && atendenteId != null) {
                     const aindaValido = ((colabsList?.colaboradores || []) as any[])
                       .some((c) => c.id === atendenteId && c.setorId === novo);
@@ -398,15 +787,30 @@ function AbaAtendimento() {
             </div>
 
             <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Canal</Label>
+              <Select
+                value={canalId == null ? "__all__" : String(canalId)}
+                onValueChange={(v) => setCanalId(v === "__all__" ? null : parseInt(v, 10))}
+              >
+                <SelectTrigger className="text-xs h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos os canais</SelectItem>
+                  {((canaisList || []) as any[])
+                    .filter((c) => c.status !== "removido")
+                    .map((c) => {
+                      const tel = c.telefone ? ` · ${c.telefone}` : "";
+                      return <SelectItem key={c.id} value={String(c.id)}>{c.nome || c.tipo}{tel}</SelectItem>;
+                    })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">De</Label>
               <Input
-                type="date"
-                className="text-xs h-9"
+                type="date" className="text-xs h-9"
                 value={inicio}
-                onChange={(e) => {
-                  setRange((r) => ({ ...r, inicio: e.target.value }));
-                  setPersonalizado(true);
-                }}
+                onChange={(e) => { setRange((r) => ({ ...r, inicio: e.target.value })); setPersonalizado(true); }}
                 max={fim}
               />
             </div>
@@ -414,13 +818,9 @@ function AbaAtendimento() {
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Até</Label>
               <Input
-                type="date"
-                className="text-xs h-9"
+                type="date" className="text-xs h-9"
                 value={fim}
-                onChange={(e) => {
-                  setRange((r) => ({ ...r, fim: e.target.value }));
-                  setPersonalizado(true);
-                }}
+                onChange={(e) => { setRange((r) => ({ ...r, fim: e.target.value })); setPersonalizado(true); }}
                 max={new Date().toISOString().slice(0, 10)}
               />
             </div>
@@ -436,8 +836,7 @@ function AbaAtendimento() {
               size="sm"
               className="text-xs h-7"
               onClick={() => {
-                setSetorId(null);
-                setAtendenteId(null);
+                setSetorId(null); setAtendenteId(null); setCanalId(null);
                 setPersonalizado(false);
                 setRange(rangeDeDias(DIAS_DEFAULT_RELATORIO));
               }}
@@ -460,62 +859,138 @@ function AbaAtendimento() {
 }
 
 function AbaAtendimentoConteudo({ data }: { data: any }) {
+  const delta = (atual: number, anterior: number) => {
+    if (!anterior) return null;
+    return Math.round(((atual - anterior) / anterior) * 100);
+  };
+  const formatSeg = (s: number) => {
+    if (!s || s <= 0) return "—";
+    const m = Math.floor(s / 60);
+    const r = Math.round(s % 60);
+    return m > 0 ? `${m}m ${String(r).padStart(2, "0")}s` : `${r}s`;
+  };
+  const deltaLeads = delta(data.leadsRecebidos, data.leadsRecebidosAnt);
+  const deltaGanhos = delta(data.leadsGanhos, data.leadsGanhosAnt);
+
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi icon={<MessageCircle className="h-5 w-5 text-blue-500" />} label="Total Conversas" value={data.totalConversas} />
-        <Kpi icon={<ArrowDownRight className="h-5 w-5 text-emerald-500" />} label="Msgs Recebidas" value={data.mensagensRecebidas} />
-        <Kpi icon={<ArrowUpRight className="h-5 w-5 text-violet-500" />} label="Msgs Enviadas" value={data.mensagensEnviadas} />
-        <Kpi icon={<Activity className="h-5 w-5 text-amber-500" />} label="Total Msgs" value={data.totalMensagens} />
+
+      {/* ─── Funil de leads ─── */}
+      <SecaoLabel>Funil de leads</SecaoLabel>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiBlock
+          accent="blue"
+          icon={<Inbox className="h-4 w-4" />}
+          label="Leads recebidos"
+          value={data.leadsRecebidos.toLocaleString("pt-BR")}
+          hint={<>Criados no período {deltaLeads !== null && <Trend pct={deltaLeads} />}</>}
+        />
+        <KpiBlock
+          accent="indigo"
+          icon={<Hourglass className="h-4 w-4" />}
+          label="Em pipeline"
+          value={data.leadsEmPipeline.toLocaleString("pt-BR")}
+          hint={`Abertos · ${formatBRL(data.valorEmPipeline)}`}
+        />
+        <KpiBlock
+          accent="emerald"
+          icon={<Trophy className="h-4 w-4" />}
+          label="Leads ganhos"
+          value={data.leadsGanhos.toLocaleString("pt-BR")}
+          hint={<>{formatBRL(data.valorGanho)} {deltaGanhos !== null && <Trend pct={deltaGanhos} />}</>}
+        />
+        <KpiBlock
+          accent="rose"
+          icon={<TrendingDown className="h-4 w-4" />}
+          label="Leads perdidos"
+          value={data.leadsPerdidos.toLocaleString("pt-BR")}
+          hint={`Valor: ${formatBRL(data.valorPerdido)}`}
+        />
       </div>
 
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm">Por Status</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {Object.entries(data.conversasPorStatus).length === 0 ? (
-              <p className="col-span-full text-sm text-muted-foreground text-center py-2">
-                Nenhuma conversa no período.
-              </p>
-            ) : (
-              Object.entries(data.conversasPorStatus).map(([s, t]) => (
-                <div key={s} className="rounded-lg border p-3 text-center">
-                  <p className={`text-2xl font-bold ${STATUS_CORES[s] || ""}`}>{t as number}</p>
-                  <p className="text-xs text-muted-foreground">{STATUS_LABELS[s] || s}</p>
-                </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {/* ─── Atendimento ─── */}
+      <SecaoLabel>Atendimento (conversas)</SecaoLabel>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiBlock
+          accent="blue"
+          icon={<MessageCircle className="h-4 w-4" />}
+          label="Atendimentos"
+          value={data.totalConversas.toLocaleString("pt-BR")}
+          hint="Conversas iniciadas no período"
+        />
+        <KpiBlock
+          accent="green"
+          icon={<ArrowDownRight className="h-4 w-4" />}
+          label="Msgs recebidas"
+          value={data.mensagensRecebidas.toLocaleString("pt-BR")}
+          hint={data.totalConversas > 0 ? `Média ${Math.round(data.mensagensRecebidas / data.totalConversas)}/atend.` : ""}
+        />
+        <KpiBlock
+          accent="violet"
+          icon={<Send className="h-4 w-4" />}
+          label="Msgs enviadas"
+          value={data.mensagensEnviadas.toLocaleString("pt-BR")}
+          hint={data.totalConversas > 0 ? `Média ${Math.round(data.mensagensEnviadas / data.totalConversas)}/atend.` : ""}
+        />
+        <KpiBlock
+          accent="amber"
+          icon={<Zap className="h-4 w-4" />}
+          label="Tempo p/ 1ª resposta"
+          value={formatSeg(data.segMedioPriResp)}
+          hint="Média no período"
+        />
+      </div>
 
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm">Conversas / Dia</CardTitle></CardHeader>
-        <CardContent>
-          {!data.conversasPorDia.length ? (
-            <p className="text-sm text-muted-foreground text-center py-6">Sem dados.</p>
-          ) : (
-            <BarsMini
-              dados={data.conversasPorDia.map((d: any) => ({ label: d.dia.slice(5), value: d.total }))}
-              cor="bg-blue-500/80"
-            />
-          )}
-        </CardContent>
-      </Card>
+      {/* ─── Desempenho ─── */}
+      <SecaoLabel>Desempenho</SecaoLabel>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiBlock
+          accent="emerald"
+          icon={<Percent className="h-4 w-4" />}
+          label="Taxa de conversão"
+          value={data.taxaConversao !== null ? `${data.taxaConversao}%` : "—"}
+          hint={data.taxaConversao !== null ? `${data.leadsGanhos} ganhos / ${data.leadsGanhos + data.leadsPerdidos} fechamentos` : "Sem fechamentos"}
+        />
+        <KpiBlock
+          accent="indigo"
+          icon={<DollarSign className="h-4 w-4" />}
+          label="Ticket médio"
+          value={data.ticketMedio !== null ? formatBRL(data.ticketMedio) : "—"}
+          hint="Valor médio dos contratos fechados"
+        />
+        <KpiBlock
+          accent="violet"
+          icon={<Target className="h-4 w-4" />}
+          label="Conversa → Lead"
+          value={data.conversaParaLead !== null ? `${data.conversaParaLead}%` : "—"}
+          hint="Conversas que geraram lead"
+        />
+        <KpiBlock
+          accent="slate"
+          icon={<Clock4 className="h-4 w-4" />}
+          label="Ciclo médio"
+          value={data.cicloMedioDias > 0 ? `${Math.round(data.cicloMedioDias)} dias` : "—"}
+          hint="Lead → Fechamento"
+        />
+      </div>
 
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm">Mensagens / Dia</CardTitle></CardHeader>
-        <CardContent>
-          {!data.mensagensPorDia.length ? (
-            <p className="text-sm text-muted-foreground text-center py-6">Sem dados.</p>
-          ) : (
-            <BarsMini
-              dados={data.mensagensPorDia.map((d: any) => ({ label: d.dia.slice(5), value: d.total }))}
-              cor="bg-emerald-500/80"
-            />
-          )}
-        </CardContent>
-      </Card>
+      {/* ─── Funil · Canal · Ranking ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <FunilCard funil={data.funil} />
+        <CanalCard porCanal={data.porCanal} total={data.totalConversas} />
+        <RankingCard atendentes={data.tabelaAtendentes.slice(0, 5)} />
+      </div>
+
+      {/* ─── Volume diário · Motivos ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="lg:col-span-2">
+          <VolumeDiarioCard dados={data.volumeDiario} />
+        </div>
+        <MotivosPerdaCard motivos={data.motivosPerda} totalPerdidos={data.leadsPerdidos} />
+      </div>
+
+      {/* ─── Tabela detalhada ─── */}
+      <TabelaAtendentesCard atendentes={data.tabelaAtendentes} />
     </div>
   );
 }
