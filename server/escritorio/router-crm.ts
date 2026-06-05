@@ -245,6 +245,15 @@ export const crmRouter = router({
       // Aceita tanto `/uploads/...` (path local do projeto) quanto URL
       // HTTP absoluta — o resolverMediaPath() lida com os dois.
       mediaUrl: z.string().max(2000).optional(),
+      // Quando informado, envia como template HSM via Cloud API em vez de
+      // mensagem livre. `nome` = nome do template Meta aprovado;
+      // `idioma` = código BCP-47 (default pt_BR); `params` = valores pros
+      // {{1}}, {{2}}... do corpo, na ordem. Só funciona em canal whatsapp_api.
+      metaTemplate: z.object({
+        nome: z.string().min(1).max(100),
+        idioma: z.string().max(20).optional(),
+        params: z.array(z.string().max(200)).max(20).optional(),
+      }).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -334,8 +343,21 @@ export const crmRouter = router({
                   const client = new WhatsAppCloudClient({ accessToken: config.accessToken, phoneNumberId: config.phoneNumberId });
                   const telefone = convData.telefone?.replace(/\D/g, "") || "";
                   if (telefone) {
-                    const msgId = await enviarConteudoCloudApi(client, telefone, input.tipo, input.conteudo, input.mediaUrl);
-                    log.info(`[CRM] Mensagem enviada via Cloud API CoEx para ${telefone} (msgId: ${msgId})`);
+                    let msgId: string;
+                    if (input.metaTemplate) {
+                      // Template Meta: monta o array de components com 1 body
+                      // com 1 parameter por {{N}} preenchido. Sem params = template
+                      // sem variáveis (caso comum dos "lembrete fixo").
+                      const params = input.metaTemplate.params ?? [];
+                      const components = params.length > 0
+                        ? [{ type: "body", parameters: params.map((p) => ({ type: "text", text: String(p) })) }]
+                        : undefined;
+                      msgId = await client.enviarTemplate(telefone, input.metaTemplate.nome, input.metaTemplate.idioma || "pt_BR", components);
+                      log.info(`[CRM] Template Meta "${input.metaTemplate.nome}" enviado pra ${telefone} (msgId: ${msgId})`);
+                    } else {
+                      msgId = await enviarConteudoCloudApi(client, telefone, input.tipo, input.conteudo, input.mediaUrl);
+                      log.info(`[CRM] Mensagem enviada via Cloud API CoEx para ${telefone} (msgId: ${msgId})`);
+                    }
                     // Atualizar idExterno da mensagem para rastrear status
                     if (msgId) {
                       const { mensagens } = await import("../../drizzle/schema");
