@@ -1724,6 +1724,11 @@ export const mensagemTemplates = mysqlTable("mensagem_templates", {
   conteudo: text("conteudoTpl").notNull(),
   categoria: mysqlEnum("categoriaTpl", ["saudacao", "cobranca", "agendamento", "juridico", "encerramento", "outro"]).default("outro").notNull(),
   atalho: varchar("atalhoTpl", { length: 20 }),
+  // Mídia opcional anexada ao template. Path local (/uploads/...) ou URL
+  // pública. Quando preenchido, ao escolher o template no chat o sistema
+  // envia a mensagem como imagem/documento/video em vez de texto puro.
+  midiaUrl: varchar("midiaUrlTpl", { length: 512 }),
+  midiaTipo: mysqlEnum("midiaTipoTpl", ["imagem", "video", "audio", "documento"]),
   criadoPor: int("criadoPorTpl").notNull(),
   createdAt: timestamp("createdAtTpl").defaultNow().notNull(),
 });
