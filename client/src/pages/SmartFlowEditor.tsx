@@ -46,7 +46,7 @@ import "@xyflow/react/dist/style.css";
 import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Banknote, BookOpen, Brain, Bot, Calendar, CheckCircle2, ChevronDown, Circle,
-  CircleDollarSign, Clock, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle, MessageCircleQuestion,
+  CircleDollarSign, Clock, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle, MessageCircleQuestion, Shuffle,
   Move, Pause, PhoneCall, Play, Plus, Repeat, Save, Search, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, Zap,
   CalendarCheck, CalendarX, CalendarClock, CalendarSearch, Trash2, XCircle,
   Variable as VariableIcon,
@@ -136,6 +136,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   transferir: PhoneCall,
   distribuir_atendimento: Users,
   condicional: GitBranch,
+  randomizar: Shuffle,
   para_cada_item: Repeat,
   esperar: Clock,
   webhook: Webhook,
@@ -257,6 +258,7 @@ const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
   transferir: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
   distribuir_atendimento: { grad: "from-teal-500 to-emerald-600", border: "border-teal-300 dark:border-teal-800" },
   condicional: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
+  randomizar: { grad: "from-fuchsia-500 to-pink-500", border: "border-fuchsia-300 dark:border-fuchsia-800" },
   para_cada_item: { grad: "from-amber-500 to-yellow-500", border: "border-amber-300 dark:border-amber-800" },
   esperar: { grad: "from-slate-500 to-slate-600", border: "border-slate-300 dark:border-slate-700" },
   webhook: { grad: "from-pink-500 to-rose-500", border: "border-pink-300 dark:border-pink-800" },
@@ -423,6 +425,23 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
                 <HandleRow handleId="sem_resposta" label="não respondeu (tempo)" italic cor="#f59e0b" />
               </>
             );
+          })()}
+        </div>
+      ) : data.tipo === "randomizar" ? (
+        // Randomizador: 1 saída por opção (cond_<id>). Mostra peso quando
+        // configurado pra dar feedback visual da probabilidade.
+        <div className="border-t bg-muted/20 pt-1 pb-3">
+          {(() => {
+            const cfg = (data.config || {}) as { opcoes?: Array<{ id: string; label?: string; peso?: number }> };
+            const opcoes = cfg.opcoes || [];
+            const totalPeso = opcoes.reduce((s, o) => s + Math.max(0, Number(o.peso ?? 1)), 0);
+            return opcoes.length > 0 ? opcoes.map((o, i) => {
+              const peso = Math.max(0, Number(o.peso ?? 1));
+              const pct = totalPeso > 0 ? Math.round((peso / totalPeso) * 100) : 0;
+              return (
+                <HandleRow key={o.id || i} handleId={`cond_${o.id}`} label={`${o.label || o.id || `opção ${i + 1}`} (${pct}%)`} cor="#d946ef" />
+              );
+            }) : <p className="text-[10px] text-muted-foreground italic px-3 py-2">Configure as opções no painel.</p>;
           })()}
         </div>
       ) : data.tipo === "ia_atendente" ? (
@@ -3240,6 +3259,127 @@ function categorizarVariavelCondicao(path: string): string {
   return "Outros";
 }
 
+/**
+ * Config do passo `randomizar` — split aleatório com pesos opcionais.
+ * Cada opção vira uma saída `cond_<id>` do nó. Sem pesos = uniforme.
+ * Pesos relativos: [1, 1, 2] → 25/25/50.
+ */
+function ConfigRandomizarFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const opcoes: Array<{ id: string; label?: string; peso?: number }> =
+    Array.isArray(cfg.opcoes) ? (cfg.opcoes as any[]) : [];
+
+  const slug = (s: string) =>
+    (s || "")
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 32) || `opt_${opcoes.length + 1}`;
+
+  const totalPeso = opcoes.reduce((s, o) => s + Math.max(0, Number(o.peso ?? 1)), 0);
+
+  const adicionar = () => {
+    const i = opcoes.length + 1;
+    onChange({ opcoes: [...opcoes, { id: `opcao_${i}`, label: `Opção ${i}`, peso: 1 }] });
+  };
+  const atualizar = (i: number, patch: Partial<{ id: string; label: string; peso: number }>) => {
+    const novo = opcoes.slice();
+    novo[i] = { ...novo[i], ...patch };
+    // Se o id ainda é o auto-gerado a partir do label antigo, regera com o novo.
+    if (patch.label !== undefined && (!opcoes[i].id || opcoes[i].id === slug(opcoes[i].label || ""))) {
+      novo[i].id = slug(patch.label);
+    }
+    onChange({ opcoes: novo });
+  };
+  const remover = (i: number) => onChange({ opcoes: opcoes.filter((_, j) => j !== i) });
+
+  // Inicializa com 2 opções se vazio — bloco precisa de pelo menos 2 pra fazer sentido.
+  if (opcoes.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-md bg-fuchsia-50 dark:bg-fuchsia-950/30 border border-fuchsia-200 dark:border-fuchsia-900 p-3 text-xs text-fuchsia-900 dark:text-fuchsia-200">
+          <p className="font-medium mb-1">🎲 Randomizador</p>
+          <p>Cada lead que passa por aqui é sorteado pra uma das saídas. Útil pra A/B testing ou balancear leads entre fluxos paralelos.</p>
+        </div>
+        <Button
+          variant="outline" size="sm" className="w-full"
+          onClick={() => onChange({ opcoes: [
+            { id: "opcao_1", label: "Opção A", peso: 1 },
+            { id: "opcao_2", label: "Opção B", peso: 1 },
+          ] })}
+        >
+          <Plus className="h-3.5 w-3.5 mr-1.5" /> Começar com 2 opções
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md bg-fuchsia-50 dark:bg-fuchsia-950/30 border border-fuchsia-200 dark:border-fuchsia-900 p-2.5 text-[11px] text-fuchsia-900 dark:text-fuchsia-200 leading-snug">
+        Cada opção vira uma saída <code>cond_&lt;id&gt;</code> do bloco. Peso opcional (default 1) define a probabilidade — pesos relativos <code>[1, 1, 2]</code> = 25/25/50%.
+      </div>
+
+      <div className="space-y-2">
+        {opcoes.map((o, i) => {
+          const peso = Math.max(0, Number(o.peso ?? 1));
+          const pct = totalPeso > 0 ? Math.round((peso / totalPeso) * 100) : 0;
+          return (
+            <div key={i} className="rounded-md border border-slate-200 dark:border-slate-800 p-2 bg-slate-50/50 dark:bg-slate-900/30 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-muted-foreground w-4">{i + 1}</span>
+                <Input
+                  value={o.label || ""}
+                  maxLength={60}
+                  onChange={(e) => atualizar(i, { label: e.target.value })}
+                  placeholder="Nome da opção"
+                  className="text-xs h-7"
+                />
+                <Input
+                  type="number" min={0} step={1}
+                  value={peso}
+                  onChange={(e) => atualizar(i, { peso: Math.max(0, Number(e.target.value) || 0) })}
+                  className="text-xs h-7 w-16 text-center"
+                  title="Peso (probabilidade relativa)"
+                />
+                <span className="text-[10px] text-muted-foreground w-10 text-right tabular-nums font-medium">{pct}%</span>
+                <Button
+                  variant="ghost" size="sm"
+                  className="h-7 w-7 p-0 text-destructive"
+                  onClick={() => remover(i)}
+                  disabled={opcoes.length <= 2}
+                  title={opcoes.length <= 2 ? "Mínimo 2 opções" : "Remover"}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+              <div className="flex items-center gap-1.5 pl-5">
+                <span className="text-[9px] text-muted-foreground w-4 text-right">id:</span>
+                <Input
+                  value={o.id}
+                  onChange={(e) => atualizar(i, { id: slug(e.target.value) })}
+                  className="text-[10px] h-6 font-mono"
+                  placeholder="snake_case"
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <Button variant="outline" size="sm" onClick={adicionar} className="w-full h-7 text-xs gap-1">
+        <Plus className="h-3 w-3" /> Adicionar opção
+      </Button>
+    </div>
+  );
+}
+
 function ConfigCondicionalFields({
   cfg,
   onChange,
@@ -5651,6 +5791,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigDistribuirAtendimentoFields cfg={cfg} onChange={onChange} />;
     case "condicional":
       return <ConfigCondicionalFields cfg={cfg} onChange={onChange} />;
+    case "randomizar":
+      return <ConfigRandomizarFields cfg={cfg} onChange={onChange} />;
     case "esperar":
       return (
         <div>

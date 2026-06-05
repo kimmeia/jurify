@@ -87,6 +87,7 @@ export type TipoPasso =
   | "transferir"
   | "distribuir_atendimento"
   | "condicional"
+  | "randomizar"
   | "para_cada_item"
   | "esperar"
   | "webhook"
@@ -576,6 +577,33 @@ export interface ConfigCondicional {
 }
 
 /**
+ * Item de opção do passo `randomizar`. Cada um vira uma saída do nó no
+ * canvas (`cond_<id>`). O peso é opcional — sem peso, distribuição é
+ * uniforme. Pesos relativos: `[1, 1, 2]` = 25%/25%/50%.
+ */
+export interface ConfigRandomizarOpcao {
+  /** ID estável da opção (usado em `proximoSe` como `cond_<id>`). Auto-gerado pelo editor. */
+  id: string;
+  /** Rótulo visível no nó pra documentar o significado da saída. */
+  label?: string;
+  /** Peso relativo (>= 0). Omitido = 1. Soma dos pesos = denominador da probabilidade. */
+  peso?: number;
+}
+
+/**
+ * Config do passo `randomizar` — split aleatório do fluxo. Cada lead que
+ * passa pelo bloco sorteia UMA das saídas (com peso opcional) e segue pelo
+ * ramo correspondente. Útil pra A/B testing de mensagens iniciais, balancear
+ * leads entre 2 SDRs em fluxos paralelos, ou variar caminhos sem regra de
+ * negócio. Não é determinístico — execuções diferentes do mesmo lead podem
+ * cair em saídas diferentes (mas dentro de uma execução é estável).
+ */
+export interface ConfigRandomizar {
+  /** Lista de saídas possíveis (mínimo 2). Sem pesos = uniforme. */
+  opcoes?: ConfigRandomizarOpcao[];
+}
+
+/**
  * Mapa `ramoId → clienteId do passo alvo`, serializado como JSON na coluna
  * `smartflow_passos.proximoSe`. Chaves possíveis:
  *   - "default" — próximo passo linear quando não há condicional.
@@ -751,6 +779,7 @@ export type PassoConfigByTipo =
   | { tipo: "transferir"; config: ConfigTransferir }
   | { tipo: "distribuir_atendimento"; config: ConfigDistribuirAtendimento }
   | { tipo: "condicional"; config: ConfigCondicional }
+  | { tipo: "randomizar"; config: ConfigRandomizar }
   | { tipo: "esperar"; config: ConfigEsperar }
   | { tipo: "para_cada_item"; config: ConfigParaCadaItem }
   | { tipo: "webhook"; config: ConfigWebhook }
@@ -920,6 +949,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e PARA o bot de responder (conversa fica 'em atendimento'). Use no fim de um caminho pra passar pro atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
   { id: "distribuir_atendimento", label: "Distribuir atendimento", descricao: "Atribui um atendente à conversa. Dois modos: SETOR (rotação dentro de um setor — Comercial, Financeiro… — menor carga / online primeiro) ou ATENDENTE FIXO (atribui sempre a pessoa escolhida). O bot SEGUE o fluxo — só para quando o atendente responder no inbox. Saídas: atribuído / sem atendente.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
   { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },
+  { id: "randomizar", label: "Randomizador", descricao: "Sorteia uma saída entre N opções (com pesos opcionais). Lead que passa por aqui cai num caminho aleatório — útil pra A/B testing de mensagens ou balancear leads entre 2 SDRs em fluxos paralelos. Sem pesos = distribuição uniforme.", cor: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300", grupo: "fluxo" },
   { id: "para_cada_item", label: "Para cada item (loop)", descricao: "Itera sobre uma lista do contexto e executa o subfluxo do corpo pra cada item.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "fluxo" },
   { id: "esperar", label: "Esperar (delay)", descricao: "Pausa o fluxo por N minutos.", cor: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300", grupo: "fluxo" },
   { id: "webhook", label: "Webhook externo", descricao: "POST para uma URL externa.", cor: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300", grupo: "fluxo" },

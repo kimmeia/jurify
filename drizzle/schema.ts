@@ -2183,6 +2183,7 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "transferir",                    // transfere pra humano
     "distribuir_atendimento",        // escolhe atendente de um setor e seta dono da conversa
     "condicional",                   // if/else baseado em condição
+    "randomizar",                    // split aleatório do fluxo com pesos opcionais (A/B testing)
     "para_cada_item",                // loop sobre lista no contexto
     "esperar",                       // delay (follow-up)
     "webhook",

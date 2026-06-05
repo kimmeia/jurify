@@ -2038,7 +2038,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
             className="w-full h-8 rounded-md border bg-background px-2 text-[11px]"
           >
             <option value="">Todos os canais</option>
-            {((canaisFiltroLista || []) as any[])
+            {(((canaisFiltroLista as any)?.canais || []) as any[])
               .filter((c) => c.status !== "removido")
               .map((c) => {
                 const telLabel = c.telefone ? ` · ${c.telefone}` : "";
