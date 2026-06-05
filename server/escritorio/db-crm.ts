@@ -731,6 +731,10 @@ export async function listarLeads(escritorioId: number, etapa?: string) {
       setorId: colaboradores.setorId,
       setorTipo: setores.tipo,
       conversaId: leads.conversaId,
+      canalId: conversas.canalId,
+      canalNome: canaisIntegrados.nome,
+      canalTipo: canaisIntegrados.tipo,
+      canalTelefone: canaisIntegrados.telefone,
       etapaFunil: leads.etapaFunil, valorEstimado: leads.valorEstimado,
       origemLead: leads.origemLead, probabilidade: leads.probabilidade,
       dataFechamentoPrevisto: leads.dataFechamentoPrevisto,
@@ -743,6 +747,8 @@ export async function listarLeads(escritorioId: number, etapa?: string) {
     .leftJoin(colaboradores, eq(leads.responsavelId, colaboradores.id))
     .leftJoin(users, eq(colaboradores.userId, users.id))
     .leftJoin(setores, eq(colaboradores.setorId, setores.id))
+    .leftJoin(conversas, eq(leads.conversaId, conversas.id))
+    .leftJoin(canaisIntegrados, eq(conversas.canalId, canaisIntegrados.id))
     .where(and(...conditions))
     .orderBy(desc(leads.createdAt)).limit(200);
 

@@ -1569,6 +1569,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
   // Filtros avançados
   const [responsaveisFiltro, setResponsaveisFiltro] = useState<number[]>([]);
   const [setorFiltro, setSetorFiltro] = useState<number | null>(null);
+  const [canalFiltro, setCanalFiltro] = useState<number | null>(null);
   const [periodoFiltro, setPeriodoFiltro] = useState<"todos" | "7d" | "30d" | "90d">("todos");
   const [valorMin, setValorMin] = useState<string>("");
   const [valorMax, setValorMax] = useState<string>("");
@@ -1627,9 +1628,10 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
     mut.mutate({ id, etapaFunil: etapaDestino });
   };
 
-  // Listas dos filtros (atendentes + setores)
+  // Listas dos filtros (atendentes + setores + canais)
   const { data: atendentesLista } = trpc.crm.listarAtendentes.useQuery();
   const { data: setoresFiltroLista } = trpc.configuracoes.listarSetores.useQuery();
+  const { data: canaisFiltroLista } = trpc.configuracoes.listarCanais.useQuery();
   // Map de atendente → setor pra filtragem por setor (lead carrega responsavelId).
   const atendenteToSetor = useMemo(() => {
     const m: Record<number, number | null> = {};
@@ -1655,6 +1657,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
     }
     if (responsaveisFiltro.length > 0 && !responsaveisFiltro.includes(l.responsavelId)) return false;
     if (setorFiltro && atendenteToSetor[l.responsavelId] !== setorFiltro) return false;
+    if (canalFiltro && l.canalId !== canalFiltro) return false;
     if (periodoMs) {
       const t = l.ultimaAtividadeAt ? new Date(l.ultimaAtividadeAt).getTime() : (l.createdAt ? new Date(l.createdAt).getTime() : 0);
       if (t < periodoMs) return false;
@@ -1669,10 +1672,11 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
   const filtrosAtivos =
     (responsaveisFiltro.length > 0 ? 1 : 0) +
     (setorFiltro ? 1 : 0) +
+    (canalFiltro ? 1 : 0) +
     (periodoFiltro !== "todos" ? 1 : 0) +
     (vMin !== null || vMax !== null ? 1 : 0);
   const limparFiltrosAv = () => {
-    setResponsaveisFiltro([]); setSetorFiltro(null); setPeriodoFiltro("todos"); setValorMin(""); setValorMax("");
+    setResponsaveisFiltro([]); setSetorFiltro(null); setCanalFiltro(null); setPeriodoFiltro("todos"); setValorMin(""); setValorMax("");
   };
 
   // Cards agrupados por etapa pro board. As colunas de FECHADO (ganho e
@@ -1858,6 +1862,26 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
             {((setoresFiltroLista || []) as any[]).map((s) => (
               <option key={s.id} value={s.id}>{s.nome}</option>
             ))}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">Canal de comunicação</p>
+          <select
+            value={canalFiltro ?? ""}
+            onChange={(e) => setCanalFiltro(e.target.value ? Number(e.target.value) : null)}
+            className="w-full h-8 rounded-md border bg-background px-2 text-[11px]"
+          >
+            <option value="">Todos os canais</option>
+            {((canaisFiltroLista || []) as any[])
+              .filter((c) => c.status !== "removido")
+              .map((c) => {
+                const telLabel = c.telefone ? ` · ${c.telefone}` : "";
+                return (
+                  <option key={c.id} value={c.id}>
+                    {c.nome || c.tipo}{telLabel}
+                  </option>
+                );
+              })}
           </select>
         </div>
         <div className="space-y-1.5">
