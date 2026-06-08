@@ -119,15 +119,22 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
   if (!tel.trim()) camposBasicosFaltando.push("Telefone");
   const qualifFaltando = validarQualificacaoCompleta(qualif);
   const todosFaltando = [...camposBasicosFaltando, ...qualifFaltando];
+  // Lead = contato em prospecção (ainda não fechou contrato). Cliente = já
+  // fechou. Cliente precisa de TUDO completo pra gerar contrato/cobrança;
+  // lead só precisa de nome (e o operador vai completar conforme conversa
+  // qualifica). Bloquear salvar em lead com 8 campos obrigatórios atrapalha
+  // o atendimento — a dica visual continua, mas não trava o save.
+  const ehLead = cliente.estagio === "lead";
 
   return (
     <Card>
       <CardContent className="pt-4 space-y-4">
         {todosFaltando.length > 0 && (
-          <div className="rounded-md border border-warning/40 bg-warning-bg/40 p-3 text-xs">
-            <p className="font-medium text-warning-fg">
-              Faltam {todosFaltando.length} campo(s) obrigatório(s) pra gerar
-              contratos:
+          <div className={`rounded-md border p-3 text-xs ${ehLead ? "border-blue-300/60 bg-blue-50/50 dark:bg-blue-950/20" : "border-warning/40 bg-warning-bg/40"}`}>
+            <p className={`font-medium ${ehLead ? "text-blue-700 dark:text-blue-300" : "text-warning-fg"}`}>
+              {ehLead
+                ? `Dica: ${todosFaltando.length} campo(s) ainda incompleto(s). Você pode salvar mesmo assim — só serão obrigatórios quando virar cliente.`
+                : `Faltam ${todosFaltando.length} campo(s) obrigatório(s) pra gerar contratos:`}
             </p>
             <p className="text-muted-foreground mt-1">
               {todosFaltando.join(" · ")}
@@ -212,13 +219,14 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
 
         <Button size="sm" onClick={() => {
           // Validação dos campos obrigatórios nativos (qualificação +
-          // endereço). Bloqueia salvar enquanto não estiver completo.
-          if (todosFaltando.length > 0) {
+          // endereço). Bloqueia salvar SÓ pra cliente (lead salva incompleto
+          // — o operador completa conforme a conversa avança).
+          if (!ehLead && todosFaltando.length > 0) {
             toast.error(`Faltam campos obrigatórios: ${todosFaltando.join(", ")}`);
             return;
           }
-          // Validação de campos obrigatórios personalizados
-          if (defsCampos && defsCampos.length > 0) {
+          // Validação de campos obrigatórios personalizados — mesmo critério.
+          if (!ehLead && defsCampos && defsCampos.length > 0) {
             const faltando = validarCamposObrigatorios(camposExtras, defsCampos);
             if (faltando.length > 0) {
               toast.error(`Preencha: ${faltando.join(", ")}`);
