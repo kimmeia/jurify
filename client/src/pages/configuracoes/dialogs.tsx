@@ -32,7 +32,7 @@ import WhatsappQR from "@/components/integracoes/WhatsappQR";
  * Sub-seção do AsaasDialog: visibilidade da cota local do rate guard e
  * reset manual quando o Asaas REAL tiver folga.
  *
- * O rate guard local impede o Jurify de mandar requisições além da cota
+ * O rate guard local impede o JuridFlow de mandar requisições além da cota
  * 12h do Asaas (25k/12h). Mas quando ele bloqueia preemptivamente, todos
  * os syncs (regular + histórico + sweep) abortam — operador fica cego
  * sem saber quando libera. Esta seção mostra X/20k usadas + janela e
@@ -109,7 +109,7 @@ function RateGuardSection({ canEdit }: { canEdit: boolean }) {
         {bloqueado && (
           <div className="rounded-md border border-amber-300/60 bg-amber-50/60 dark:border-amber-700/40 dark:bg-amber-950/30 p-2 text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
             <strong>Sync não progride enquanto bloqueado.</strong> Tentar resetar verifica
-            antes se o Asaas real liberou — se sim, libera a fila do Jurify.
+            antes se o Asaas real liberou — se sim, libera a fila do JuridFlow.
             Se a cota REAL do Asaas estourou, o sistema recusa o reset (resetar
             agora só queimaria o bloqueio real de 12h).
           </div>
@@ -139,7 +139,7 @@ function RateGuardSection({ canEdit }: { canEdit: boolean }) {
               <span className="block">
                 Vou consultar o Asaas pra ver quantos requests sua conta ainda tem
                 disponíveis na janela atual. Se houver folga, libero a fila local
-                do Jurify e os syncs voltam a rodar.
+                do JuridFlow e os syncs voltam a rodar.
               </span>
               <span className="block">
                 <strong>Se o Asaas em si estiver estourado</strong>, o reset é

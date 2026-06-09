@@ -1144,15 +1144,15 @@ export const financeiroRouter = router({
 
   /**
    * Comparação AO VIVO com o Asaas — cruza cobrança-a-cobrança o que o
-   * Jurify tem como recebido no período contra o que o Asaas retorna por
-   * `paymentDate`. Revela a causa de o bruto do Jurify ser MAIOR que o do
+   * JuridFlow tem como recebido no período contra o que o Asaas retorna por
+   * `paymentDate`. Revela a causa de o bruto do JuridFlow ser MAIOR que o do
    * Asaas (impossível se fosse só espelho):
-   *  - `soNoJurify`: cobranças que o Jurify conta como pagas mas o Asaas
+   *  - `soNoJurify`: cobranças que o JuridFlow conta como pagas mas o Asaas
    *    NÃO retorna no período (estornadas/deletadas no Asaas sem webhook,
-   *    ou paymentDate divergente — Jurify usa data do pagamento, Asaas
+   *    ou paymentDate divergente — JuridFlow usa data do pagamento, Asaas
    *    data do crédito).
    *  - `statusDivergente`: mesma cobrança, status diferente entre os dois
-   *    (ex: Jurify RECEIVED, Asaas REFUNDED).
+   *    (ex: JuridFlow RECEIVED, Asaas REFUNDED).
    *
    * É mutation (não query) porque consome cota do Asaas: 1 sweep paginado
    * por `paymentDate`. Disparado sob demanda pelo botão de diagnóstico.
@@ -1266,7 +1266,7 @@ export const financeiroRouter = router({
         0,
       );
 
-      // 2) Jurify: cobranças com status pago + dataPagamento no período
+      // 2) JuridFlow: cobranças com status pago + dataPagamento no período
       const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH", "DUNNING_RECEIVED"];
       const jurifyRows = await db
         .select({
@@ -1283,7 +1283,7 @@ export const financeiroRouter = router({
           eq(asaasCobrancas.escritorioId, esc.escritorio.id),
           // Só origem='asaas' — a comparação é Caixa Asaas vs API Asaas.
           // Cobranças manuais (Caixa Escritório) não têm par no Asaas e
-          // inflariam o total do Jurify sem correspondência.
+          // inflariam o total do JuridFlow sem correspondência.
           eq(asaasCobrancas.origem, "asaas"),
           inArray(asaasCobrancas.status, STATUS_PAGOS),
           between(asaasCobrancas.dataPagamento, input.dataInicio, input.dataFim),
@@ -1318,7 +1318,7 @@ export const financeiroRouter = router({
         0,
       );
 
-      // Cobranças que o Asaas tem pagas mas o Jurify não tem (ou não como pago)
+      // Cobranças que o Asaas tem pagas mas o JuridFlow não tem (ou não como pago)
       const jurifyIds = new Set(
         jurifyRows.map((r) => r.asaasPaymentId).filter(Boolean),
       );

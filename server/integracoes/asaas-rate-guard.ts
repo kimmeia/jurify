@@ -416,7 +416,7 @@ class AsaasRateGuardImpl {
   /**
    * Reseta o contador da Camada 2 (cota 12h LOCAL).
    *
-   * IMPORTANTE: isto só destrava o bloqueio preemptivo do Jurify. NÃO
+   * IMPORTANTE: isto só destrava o bloqueio preemptivo do JuridFlow. NÃO
    * destrava a cota REAL no Asaas — se o Asaas estiver em 429, a próxima
    * chamada vai falhar igual, e a Camada 1 (via headers) bloqueia de novo.
    *

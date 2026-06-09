@@ -715,7 +715,7 @@ export const configuracoesRouter = router({
   /**
    * Cadastro manual de canal WhatsApp Cloud API — alternativa ao Embedded
    * Signup pra casos onde o cliente já tem WABA + número configurados na BM
-   * dele e o OAuth tá bloqueado (BM dona do JuriFy = mesma BM dos números,
+   * dele e o OAuth tá bloqueado (BM dona do JuridFlow = mesma BM dos números,
    * App Review pendente, Tech Provider não aprovado, etc).
    *
    * Recebe os 3 valores que o Embedded Signup normalmente preencheria,

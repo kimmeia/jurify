@@ -949,7 +949,7 @@ export async function syncCobrancasPorVencimentoEscritorio(
  * essas não vão sumir do Asaas, e se sumissem o operador precisaria
  * decidir manualmente o que fazer (auditoria).
  *
- * Cobranças com `origem != 'asaas'` (criadas manualmente no Jurify) são
+ * Cobranças com `origem != 'asaas'` (criadas manualmente no JuridFlow) são
  * intocadas: nunca passaram pela API do Asaas, então não estão no Set
  * e seriam falsamente classificadas como fantasmas.
  */
@@ -1046,7 +1046,7 @@ export async function reconciliarCobrancasFantasmasEscritorio(
  *
  * Antes era mensal (30d). Subiu pra semanal porque fantasma 30d divergia
  * demais com o painel Asaas — caso típico: cobrança deletada no Asaas
- * dia 1 só era apagada no Jurify dia 31. Painel financeiro mostrava
+ * dia 1 só era apagada no JuridFlow dia 31. Painel financeiro mostrava
  * "a receber" estagnado por um mês.
  *
  * Roda só 1 escritório por chamada — distribui custo no tempo. Cron
