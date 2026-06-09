@@ -1894,7 +1894,8 @@ function formatBucketAgenda(bucket: string, gran: string): string {
 }
 
 function AbaAgenda() {
-  const [dias, setDias] = useState<string>(String(DIAS_DEFAULT_RELATORIO));
+  const [periodoSel, setPeriodoSel] = useState<string>(String(DIAS_DEFAULT_RELATORIO));
+  const [{ inicio, fim }, setRange] = useState(() => rangeDeDias(DIAS_DEFAULT_RELATORIO));
   const [tipoSel, setTipoSel] = useState<string>("todos");
   const [atendenteSel, setAtendenteSel] = useState<string>("__all__");
 
@@ -1903,14 +1904,18 @@ function AbaAgenda() {
     { retry: false },
   );
 
-  const { data, isLoading } = trpc.relatorios.agenda.useQuery(
-    {
-      dias: Number(dias),
-      tipo: tipoSel === "todos" ? undefined : (tipoSel as any),
-      atendenteId: atendenteSel === "__all__" ? undefined : Number(atendenteSel),
-    },
-    { refetchInterval: 60_000 },
-  );
+  // Período: preset de dias OU range customizado (quando "custom").
+  const filtroInput = {
+    ...(periodoSel === "custom"
+      ? { dataInicio: inicio, dataFim: fim }
+      : { dias: Number(periodoSel) }),
+    tipo: tipoSel === "todos" ? undefined : (tipoSel as any),
+    atendenteId: atendenteSel === "__all__" ? undefined : Number(atendenteSel),
+  };
+
+  const { data, isLoading } = trpc.relatorios.agenda.useQuery(filtroInput, {
+    refetchInterval: 60_000,
+  });
 
   const pdfMut = (trpc as any).relatorios?.exportarAgendaPdf?.useMutation?.({
     onSuccess: (r: { filename: string; base64: string; mimeType: string }) => {
@@ -1926,7 +1931,7 @@ function AbaAgenda() {
       {/* Filtros locais */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-muted-foreground">Período:</span>
-        <Select value={dias} onValueChange={setDias}>
+        <Select value={periodoSel} onValueChange={setPeriodoSel}>
           <SelectTrigger className="w-36 h-9 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="7">Últimos 7 dias</SelectItem>
@@ -1934,8 +1939,29 @@ function AbaAgenda() {
             <SelectItem value="30">Últimos 30 dias</SelectItem>
             <SelectItem value="90">Últimos 90 dias</SelectItem>
             <SelectItem value="365">Último ano</SelectItem>
+            <SelectItem value="custom">Personalizado</SelectItem>
           </SelectContent>
         </Select>
+
+        {periodoSel === "custom" && (
+          <>
+            <Input
+              type="date"
+              className="w-[140px] h-9 text-xs"
+              value={inicio}
+              max={fim}
+              onChange={(e) => setRange((r) => ({ ...r, inicio: e.target.value }))}
+            />
+            <span className="text-xs text-muted-foreground">→</span>
+            <Input
+              type="date"
+              className="w-[140px] h-9 text-xs"
+              value={fim}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setRange((r) => ({ ...r, fim: e.target.value }))}
+            />
+          </>
+        )}
 
         <span className="text-xs text-muted-foreground ml-2">Tipo:</span>
         <Select value={tipoSel} onValueChange={setTipoSel}>
@@ -1966,13 +1992,7 @@ function AbaAgenda() {
           variant="outline"
           className="h-9 ml-auto"
           disabled={pdfMut?.isPending || !data}
-          onClick={() =>
-            pdfMut?.mutate?.({
-              dias: Number(dias),
-              tipo: tipoSel === "todos" ? undefined : tipoSel,
-              atendenteId: atendenteSel === "__all__" ? undefined : Number(atendenteSel),
-            })
-          }
+          onClick={() => pdfMut?.mutate?.(filtroInput)}
         >
           {pdfMut?.isPending ? (
             <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
