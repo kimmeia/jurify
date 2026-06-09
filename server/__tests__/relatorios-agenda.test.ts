@@ -14,6 +14,7 @@ import {
   montarSerieAgenda,
   resolverGranularidadeAgenda,
 } from "../escritorio/router-relatorios";
+import { gerarAgendaPdf, type AgendaPdfData } from "../escritorio/relatorios-agenda-pdf";
 
 describe("classificarComparecimento", () => {
   it("mapeia cada valor do enum", () => {
@@ -143,5 +144,53 @@ describe("resolverGranularidadeAgenda", () => {
   });
   it("> 92 dias → mes", () => {
     expect(resolverGranularidadeAgenda(d("2026-01-01"), d("2026-12-31"))).toBe("mes");
+  });
+});
+
+describe("gerarAgendaPdf", () => {
+  const sample: AgendaPdfData = {
+    periodo: { inicio: "2026-05-01", fim: "2026-05-31" },
+    granularidade: "semana",
+    totais: { total: 12, compareceu: 7, naoCompareceu: 2, remarcado: 1, pendente: 2, taxaComparecimento: 70 },
+    porTipo: [
+      { tipo: "reuniao_comercial", total: 8 },
+      { tipo: "audiencia", total: 4 },
+    ],
+    serie: [
+      { bucket: "2026-05-04", compareceu: 3, naoCompareceu: 1, remarcado: 0, pendente: 1, total: 5 },
+      { bucket: "2026-05-11", compareceu: 4, naoCompareceu: 1, remarcado: 1, pendente: 1, total: 7 },
+    ],
+    porAtendente: [
+      { colabId: 1, nome: "Marina", total: 7, compareceu: 5, naoCompareceu: 1, remarcado: 1, pendente: 0, taxaComparecimento: 71 },
+      { colabId: 2, nome: "Carlos", total: 5, compareceu: 2, naoCompareceu: 1, remarcado: 0, pendente: 2, taxaComparecimento: 67 },
+    ],
+  };
+
+  it("gera um PDF não-vazio (assinatura %PDF) com dados completos", async () => {
+    const buf = await gerarAgendaPdf({
+      data: sample,
+      nomeEscritorio: "Escritório Teste",
+      tipoLabel: "Todos os tipos",
+      atendenteLabel: "Todos",
+    });
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.length).toBeGreaterThan(800);
+    expect(buf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  });
+
+  it("não quebra com série / tipos / ranking vazios e taxa null", async () => {
+    const buf = await gerarAgendaPdf({
+      data: {
+        ...sample,
+        serie: [],
+        porTipo: [],
+        porAtendente: [],
+        totais: { total: 0, compareceu: 0, naoCompareceu: 0, remarcado: 0, pendente: 0, taxaComparecimento: null },
+      },
+      nomeEscritorio: "Escritório Vazio",
+      tipoLabel: "Todos os tipos",
+      atendenteLabel: "Todos",
+    });
+    expect(buf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
   });
 });

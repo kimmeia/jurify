@@ -35,6 +35,7 @@ import {
   FUSO_HORARIO_PADRAO,
 } from "../../shared/escritorio-types";
 import { gerarComercialPdf, type DetalheAtendentePdf } from "./relatorios-comercial-pdf";
+import { gerarAgendaPdf } from "./relatorios-agenda-pdf";
 
 const log = createLogger("relatorios");
 
@@ -2087,6 +2088,52 @@ export const relatoriosPdfRouter = router({
 
       return {
         filename: `relatorio_comercial_${data.periodo.dataInicio}_${data.periodo.dataFim}.pdf`,
+        base64: buffer.toString("base64"),
+        mimeType: "application/pdf",
+      };
+    }),
+
+  /**
+   * Export da aba Agenda em PDF. Reusa `agenda` via caller — mesmos
+   * filtros/permissão da tela, então os números do PDF batem com a UI.
+   */
+  exportarAgendaPdf: protectedProcedure
+    .input(AgendaInput)
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
+      }
+      const caller = chamarRelatorios(ctx);
+
+      const data = await caller.agenda(input);
+      if (!data) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Sem dados para o período." });
+      }
+
+      const TIPO_LABELS_AG: Record<string, string> = {
+        prazo_processual: "Prazo processual",
+        audiencia: "Audiência",
+        reuniao_comercial: "Reunião comercial",
+        tarefa: "Tarefa",
+        follow_up: "Follow-up",
+        outro: "Outro",
+      };
+      const tipoLabel = input?.tipo ? (TIPO_LABELS_AG[input.tipo] ?? input.tipo) : "Todos os tipos";
+      const atendenteLabel = input?.atendenteId != null
+        ? (data.porAtendente.find((a) => a.colabId === input.atendenteId)?.nome ?? "—")
+        : "Todos";
+
+      const buffer = await gerarAgendaPdf({
+        data,
+        nomeEscritorio: esc.escritorio.nome,
+        tipoLabel,
+        atendenteLabel,
+      });
+
+      const ymd = (v: Date) => v.toISOString().slice(0, 10);
+      return {
+        filename: `relatorio_agendamentos_${ymd(data.periodo.inicio)}_${ymd(data.periodo.fim)}.pdf`,
         base64: buffer.toString("base64"),
         mimeType: "application/pdf",
       };

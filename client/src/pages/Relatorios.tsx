@@ -1912,6 +1912,15 @@ function AbaAgenda() {
     { refetchInterval: 60_000 },
   );
 
+  const pdfMut = (trpc as any).relatorios?.exportarAgendaPdf?.useMutation?.({
+    onSuccess: (r: { filename: string; base64: string; mimeType: string }) => {
+      const blob = base64ToBlob(r.base64, r.mimeType);
+      baixarBlob(blob, r.filename, r.mimeType);
+      toast.success("PDF baixado");
+    },
+    onError: (err: any) => toast.error("Erro ao gerar PDF", { description: err.message }),
+  });
+
   return (
     <div className="space-y-4">
       {/* Filtros locais */}
@@ -1951,6 +1960,27 @@ function AbaAgenda() {
             ))}
           </SelectContent>
         </Select>
+
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-9 ml-auto"
+          disabled={pdfMut?.isPending || !data}
+          onClick={() =>
+            pdfMut?.mutate?.({
+              dias: Number(dias),
+              tipo: tipoSel === "todos" ? undefined : tipoSel,
+              atendenteId: atendenteSel === "__all__" ? undefined : Number(atendenteSel),
+            })
+          }
+        >
+          {pdfMut?.isPending ? (
+            <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+          ) : (
+            <FileText className="h-4 w-4 mr-1.5" />
+          )}
+          Exportar PDF
+        </Button>
       </div>
 
       {isLoading ? <LoadingBlock /> : !data ? <Empty /> : <AgendaConteudo data={data} />}
