@@ -596,7 +596,7 @@ function DreSection({
 }
 
 /**
- * Dialog de diagnóstico de divergência entre "Caixa Asaas" (Jurify) e o
+ * Dialog de diagnóstico de divergência entre "Caixa Asaas" (JuridFlow) e o
  * card "Recebidos" do painel Asaas. Mostra 3 cortes:
  *  1. Total por status pago — RECEIVED_IN_CASH (suspeito #1) é dinheiro
  *     marcado como recebido FORA do Asaas — painel Asaas pode excluir
@@ -672,7 +672,7 @@ function DiagnosticoDivergenciaDialog({
               </div>
               <p className="text-[11px] text-indigo-800 dark:text-indigo-200 mb-2">
                 Consulta o Asaas ao vivo (gasta cota) e cruza cobrança-a-cobrança.
-                Identifica as cobranças que o Jurify conta como recebidas mas o
+                Identifica as cobranças que o JuridFlow conta como recebidas mas o
                 Asaas não retorna — a causa do bruto estar maior aqui.
               </p>
 
@@ -685,7 +685,7 @@ function DiagnosticoDivergenciaDialog({
                       <p className="text-[10px] text-slate-500">{comp.totalAsaas.count} cobranças</p>
                     </div>
                     <div>
-                      <p className="text-indigo-700 dark:text-indigo-300">Jurify (dataPagamento)</p>
+                      <p className="text-indigo-700 dark:text-indigo-300">JuridFlow (dataPagamento)</p>
                       <p className="font-bold tabular-nums">{formatBRL(comp.totalJurify.value)}</p>
                       <p className="text-[10px] text-slate-500">{comp.totalJurify.count} cobranças</p>
                     </div>
@@ -745,25 +745,25 @@ function DiagnosticoDivergenciaDialog({
 
                   <div className="text-xs bg-white dark:bg-slate-900 rounded p-2 space-y-1">
                     <p>
-                      <strong>{comp.soNoJurify.count}</strong> cobranças só no Jurify
+                      <strong>{comp.soNoJurify.count}</strong> cobranças só no JuridFlow
                       (total <strong>{formatBRL(comp.soNoJurify.total)}</strong>) — o
                       Asaas não retornou no período. <strong>Esta é a causa provável.</strong>
                     </p>
                     <p>
                       <strong>{comp.statusDivergente.count}</strong> com status
-                      diferente entre Jurify e Asaas.
+                      diferente entre JuridFlow e Asaas.
                     </p>
                     <p>
                       <strong>{comp.soNoAsaas.count}</strong> só no Asaas
                       (total {formatBRL(comp.soNoAsaas.value)}) — Asaas tem como pago
-                      mas o Jurify não.
+                      mas o JuridFlow não.
                     </p>
                   </div>
 
                   {comp.soNoJurify.itens.length > 0 && (
                     <div>
                       <p className="text-[11px] font-semibold text-indigo-900 dark:text-indigo-100 mb-1">
-                        Cobranças só no Jurify (sobrando)
+                        Cobranças só no JuridFlow (sobrando)
                       </p>
                       <Table>
                         <TableHeader>
@@ -793,13 +793,13 @@ function DiagnosticoDivergenciaDialog({
                   {comp.statusDivergente.itens.length > 0 && (
                     <div>
                       <p className="text-[11px] font-semibold text-indigo-900 dark:text-indigo-100 mb-1">
-                        Status divergente (Jurify ≠ Asaas)
+                        Status divergente (JuridFlow ≠ Asaas)
                       </p>
                       <Table>
                         <TableHeader>
                           <TableRow>
                             <TableHead className="text-[10px]">Descrição</TableHead>
-                            <TableHead className="text-[10px]">Status Jurify</TableHead>
+                            <TableHead className="text-[10px]">Status JuridFlow</TableHead>
                             <TableHead className="text-[10px]">Status Asaas</TableHead>
                             <TableHead className="text-[10px] text-right">Valor</TableHead>
                           </TableRow>
@@ -828,7 +828,7 @@ function DiagnosticoDivergenciaDialog({
                 </h3>
                 <div className="grid grid-cols-3 gap-3 text-xs">
                   <div>
-                    <p className="text-amber-700 dark:text-amber-300">Total bruto (Jurify)</p>
+                    <p className="text-amber-700 dark:text-amber-300">Total bruto (JuridFlow)</p>
                     <p className="text-base font-bold text-amber-900 dark:text-amber-100 tabular-nums">
                       {formatBRL(data.resumo.totalBruto)}
                     </p>
@@ -861,12 +861,12 @@ function DiagnosticoDivergenciaDialog({
 
             <section>
               <h3 className="text-sm font-semibold text-slate-800 mb-2">
-                1. Total por status (Jurify) — bruto vs líquido por forma de pagamento
+                1. Total por status (JuridFlow) — bruto vs líquido por forma de pagamento
               </h3>
               <p className="text-[11px] text-slate-500 mb-2">
                 Se a soma de <code>RECEIVED_IN_CASH</code> bate com a
                 diferença que você está vendo, é hipótese A. Se a coluna "Taxa"
-                bate, é hipótese das taxas (Asaas mostra líquido, Jurify mostra bruto).
+                bate, é hipótese das taxas (Asaas mostra líquido, JuridFlow mostra bruto).
               </p>
               <Table>
                 <TableHeader>
@@ -981,7 +981,7 @@ function DiagnosticoDivergenciaDialog({
                 </h3>
                 <p className="text-[11px] text-slate-500 mb-2">
                   Cobranças marcadas como "pago em dinheiro/manual" (via
-                  Jurify ou direto no Asaas). Total:{" "}
+                  JuridFlow ou direto no Asaas). Total:{" "}
                   <strong>{formatBRL(data.recebidoEmCash.total)}</strong> em{" "}
                   {data.recebidoEmCash.count} cobranças.
                 </p>
@@ -1020,7 +1020,7 @@ function DiagnosticoDivergenciaDialog({
                 Se aparecer cobrança paga no <strong>último dia do mês
                 anterior</strong> ou no <strong>primeiro dia do próximo
                 mês</strong>, pode ser timezone (UTC vs Brasília). Asaas
-                pode classificar essa cobrança num mês diferente do Jurify.
+                pode classificar essa cobrança num mês diferente do JuridFlow.
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>

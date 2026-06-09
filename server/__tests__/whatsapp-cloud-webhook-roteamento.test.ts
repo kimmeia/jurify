@@ -3,7 +3,7 @@
  *
  * Regressão: o webhook resolvia o canal pelo phone_number_id e, se falhasse,
  * caía num fallback por wabaId. Como vários números podem dividir a MESMA
- * WABA e só alguns estarem conectados neste JuriFy, esse fallback ENTREGAVA
+ * WABA e só alguns estarem conectados neste JuridFlow, esse fallback ENTREGAVA
  * a mensagem de um número não-conectado pro canal de outro número da mesma
  * WABA — vazamento entre sistemas (ex.: número usado noutro CRM aparecia aqui).
  *

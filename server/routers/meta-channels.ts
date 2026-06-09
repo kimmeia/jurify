@@ -235,7 +235,7 @@ async function exchangeCodeForToken(code: string, redirectUri?: string): Promise
 /**
  * Inscreve o app Meta para receber webhooks de uma WABA específica.
  * Sem esta chamada, mensagens recebidas pelo número WhatsApp NUNCA chegam
- * ao webhook do JuriFy, mesmo com a URL configurada no painel da Meta.
+ * ao webhook do JuridFlow, mesmo com a URL configurada no painel da Meta.
  *
  * É best-effort: falha aqui não bloqueia a conexão do canal (usuário
  * pode re-inscrever depois via mutation explícita). Mas logamos warn
@@ -420,7 +420,7 @@ export const metaChannelsRouter = router({
       }
 
       // Inscreve a app no WABA pra receber webhooks. Sem isso, mensagens
-      // recebidas no número NUNCA chegam ao /api/webhooks/whatsapp do JuriFy
+      // recebidas no número NUNCA chegam ao /api/webhooks/whatsapp do JuridFlow
       // (mesmo que a URL esteja cadastrada no painel da Meta). Best-effort:
       // se falhar, conexão segue mas usuário precisa re-inscrever via UI.
       const subResult = await subscribeAppToWaba(accessToken, input.wabaId);
@@ -789,7 +789,7 @@ export const metaChannelsRouter = router({
    *  - Quando o token expira e a inscrição cai (raro, mas acontece).
    *
    * Sem essa inscrição, mensagens chegam no número WhatsApp mas a Meta
-   * não envia pro webhook do JuriFy → módulo Atendimento fica vazio.
+   * não envia pro webhook do JuridFlow → módulo Atendimento fica vazio.
    */
   subscribeWebhooks: protectedProcedure
     .input(z.object({ canalId: z.number() }))
