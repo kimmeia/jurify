@@ -59,8 +59,11 @@ export default function SubscriptionGuard({
     if (user.role === "admin") return;
     if (authError) return; // logout em curso
     if (queriesDone && !hasAccess) {
-      if (location !== "/plans") {
-        setLocation("/plans");
+      // Sem acesso → aba "Meu Plano" das Configurações (onde se assina).
+      // NÃO usar "/plans": essa rota faz <Redirect> pra /configuracoes, e o
+      // guard re-dispararia o redirect → loop infinito (React #185).
+      if (location !== "/configuracoes") {
+        setLocation("/configuracoes?tab=meu-plano");
       }
     }
   }, [isLoading, user, hasAccess, queriesDone, location, setLocation, authError]);
@@ -78,14 +81,14 @@ export default function SubscriptionGuard({
     );
   }
 
-  // Bloqueia render quando vai redirecionar pra Plans, OU quando há
+  // Bloqueia render quando vai redirecionar pra aba de plano, OU quando há
   // erro de auth (logout em curso, evita flash de UI sem dados).
   if (
     user?.role === "user" &&
     queriesDone &&
     !hasAccess &&
     !authError &&
-    location !== "/plans"
+    location !== "/configuracoes"
   ) {
     return null;
   }
