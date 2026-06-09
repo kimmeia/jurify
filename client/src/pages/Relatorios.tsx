@@ -26,6 +26,7 @@ import {
   Activity, CheckCircle2, Target, AlertTriangle, Percent,
   LayoutGrid, Calculator, Wallet, FileText, Loader2,
   Inbox, Trophy, TrendingDown, Hourglass, Zap, Send, Clock4, Repeat,
+  CalendarCheck, XCircle, Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RelatoriosTab as DreFinanceiroTab } from "./financeiro/Relatorios";
@@ -596,6 +597,7 @@ export default function Relatorios() {
     podeRelatorios && "atendimento",
     podeRelatorios && "comercial",
     podeRelatorios && "producao",
+    podeRelatorios && "agenda",
     podeCalculos && "calculos",
     podeFinanceiro && "financeiro",
   ].filter(Boolean) as string[];
@@ -645,6 +647,14 @@ export default function Relatorios() {
                     </span>
                   </SelectItem>
                 )}
+                {podeRelatorios && (
+                  <SelectItem value="agenda">
+                    <span className="flex items-center gap-2">
+                      <CalendarCheck className="h-4 w-4 text-violet-500" />
+                      Agenda
+                    </span>
+                  </SelectItem>
+                )}
                 {podeCalculos && (
                   <SelectItem value="calculos">
                     <span className="flex items-center gap-2">
@@ -678,6 +688,7 @@ export default function Relatorios() {
           {tab === "atendimento" && podeRelatorios && <AbaAtendimento />}
           {tab === "comercial" && podeRelatorios && <DashboardComercial />}
           {tab === "producao" && podeRelatorios && <AbaProducao />}
+          {tab === "agenda" && podeRelatorios && <AbaAgenda />}
           {tab === "calculos" && podeCalculos && <AbaCalculos />}
           {tab === "financeiro" && podeFinanceiro && <DreFinanceiroTab />}
         </div>
@@ -1860,6 +1871,213 @@ function ProducaoConteudo({ data }: { data: any }) {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ───────────────────── aba: Agenda ─────────────────────
+
+const TIPO_AGENDA_LABELS: Record<string, string> = {
+  prazo_processual: "Prazo processual",
+  audiencia: "Audiência",
+  reuniao_comercial: "Reunião comercial",
+  tarefa: "Tarefa",
+  follow_up: "Follow-up",
+  outro: "Outro",
+};
+
+/** Formata o bucket "YYYY-MM-DD" da série conforme a granularidade. */
+function formatBucketAgenda(bucket: string, gran: string): string {
+  const [y, m, d] = bucket.split("-");
+  if (!y || !m) return bucket;
+  return gran === "mes" ? `${m}/${y}` : `${d}/${m}`;
+}
+
+function AbaAgenda() {
+  const [dias, setDias] = useState<string>(String(DIAS_DEFAULT_RELATORIO));
+  const [tipoSel, setTipoSel] = useState<string>("todos");
+  const [atendenteSel, setAtendenteSel] = useState<string>("__all__");
+
+  const { data: colabsList } = trpc.configuracoes.listarColaboradoresParaFiltro.useQuery(
+    { modulo: "relatorios" },
+    { retry: false },
+  );
+
+  const { data, isLoading } = trpc.relatorios.agenda.useQuery(
+    {
+      dias: Number(dias),
+      tipo: tipoSel === "todos" ? undefined : (tipoSel as any),
+      atendenteId: atendenteSel === "__all__" ? undefined : Number(atendenteSel),
+    },
+    { refetchInterval: 60_000 },
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Filtros locais */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted-foreground">Período:</span>
+        <Select value={dias} onValueChange={setDias}>
+          <SelectTrigger className="w-36 h-9 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7">Últimos 7 dias</SelectItem>
+            <SelectItem value="15">Últimos 15 dias</SelectItem>
+            <SelectItem value="30">Últimos 30 dias</SelectItem>
+            <SelectItem value="90">Últimos 90 dias</SelectItem>
+            <SelectItem value="365">Último ano</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <span className="text-xs text-muted-foreground ml-2">Tipo:</span>
+        <Select value={tipoSel} onValueChange={setTipoSel}>
+          <SelectTrigger className="w-44 h-9 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os tipos</SelectItem>
+            {Object.entries(TIPO_AGENDA_LABELS).map(([v, l]) => (
+              <SelectItem key={v} value={v}>{l}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <span className="text-xs text-muted-foreground ml-2">Atendente:</span>
+        <Select value={atendenteSel} onValueChange={setAtendenteSel}>
+          <SelectTrigger className="w-48 h-9 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Todos os atendentes</SelectItem>
+            {((colabsList?.colaboradores || []) as any[]).map((c) => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.userName || c.userEmail || `#${c.id}`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isLoading ? <LoadingBlock /> : !data ? <Empty /> : <AgendaConteudo data={data} />}
+    </div>
+  );
+}
+
+function AgendaConteudo({ data }: { data: any }) {
+  const t = data.totais;
+  const chartData = (data.serie || []).map((s: any) => ({
+    label: formatBucketAgenda(s.bucket, data.granularidade),
+    comp: s.compareceu,
+    nao: s.naoCompareceu,
+    rem: s.remarcado,
+  }));
+  const maxTipo = Math.max(1, ...(data.porTipo || []).map((x: any) => x.total));
+
+  return (
+    <div className="space-y-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+        <Kpi icon={<CalendarCheck className="h-5 w-5 text-slate-500" />} label="Agendamentos no período" value={t.total} />
+        <Kpi icon={<CheckCircle2 className="h-5 w-5 text-emerald-500" />} label="Compareceram" value={t.compareceu} highlight="text-emerald-600" />
+        <Kpi icon={<XCircle className="h-5 w-5 text-rose-500" />} label="Não vieram" value={t.naoCompareceu} highlight="text-rose-600" />
+        <Kpi icon={<Repeat className="h-5 w-5 text-amber-500" />} label="Remarcaram" value={t.remarcado} highlight="text-amber-600" />
+        <Kpi icon={<Hourglass className="h-5 w-5 text-slate-400" />} label="Sem resultado" value={t.pendente} />
+        <Kpi
+          icon={<Target className="h-5 w-5 text-violet-500" />}
+          label="Taxa de comparecimento"
+          value={t.taxaComparecimento == null ? "—" : `${t.taxaComparecimento}%`}
+          highlight="text-violet-600"
+        />
+      </div>
+
+      {/* Série temporal empilhada por resultado */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center justify-between gap-2 flex-wrap">
+            <span>Agendamentos por período</span>
+            <span className="flex items-center gap-3 text-[11px] font-normal text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />Compareceu</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-rose-500" />Não veio</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500" />Remarcou</span>
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {chartData.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-8">Sem agendamentos no período.</p>
+          ) : (
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="comp" name="Compareceu" stackId="a" fill="#10b981" />
+                  <Bar dataKey="nao" name="Não veio" stackId="a" fill="#f43f5e" />
+                  <Bar dataKey="rem" name="Remarcou" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        {/* Por tipo de compromisso */}
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Por tipo de compromisso</CardTitle></CardHeader>
+          <CardContent>
+            {(data.porTipo || []).length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">Sem dados.</p>
+            ) : (
+              <div className="space-y-2.5">
+                {data.porTipo.map((x: any) => (
+                  <div key={x.tipo} className="flex items-center gap-3 text-sm">
+                    <span className="w-36 shrink-0 truncate text-muted-foreground">{TIPO_AGENDA_LABELS[x.tipo] || x.tipo}</span>
+                    <div className="flex-1 h-5 rounded bg-muted overflow-hidden">
+                      <div className="h-full bg-violet-500" style={{ width: `${(x.total / maxTipo) * 100}%` }} />
+                    </div>
+                    <span className="w-8 text-right font-bold tabular-nums">{x.total}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Ranking por atendente */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4 text-violet-500" /> Por atendente</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {(data.porAtendente || []).length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">Sem agendamentos no período.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Atendente</TableHead>
+                    <TableHead className="text-xs text-right">Total</TableHead>
+                    <TableHead className="text-xs text-right">Veio</TableHead>
+                    <TableHead className="text-xs text-right">Não</TableHead>
+                    <TableHead className="text-xs text-right">Remarc.</TableHead>
+                    <TableHead className="text-xs text-right">Taxa</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.porAtendente.map((a: any) => (
+                    <TableRow key={a.colabId}>
+                      <TableCell className="text-xs font-medium max-w-[160px] truncate">{a.nome}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums font-bold">{a.total}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums text-emerald-600">{a.compareceu}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums text-rose-600">{a.naoCompareceu}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums text-amber-600">{a.remarcado}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums font-semibold">{a.taxaComparecimento == null ? "—" : `${a.taxaComparecimento}%`}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
