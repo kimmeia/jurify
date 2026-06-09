@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JuridFlow — Relatório de Agendamentos (proposta)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: { sans: ['Inter','ui-sans-serif','system-ui','sans-serif'] },
+    colors: { primary: '#4f46e5' },
+  } } };
+</script>
+<style>
+  body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; background: #eef0f6; color: #0f172a; margin: 0; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  .chip { cursor: pointer; }
+  .chip.on { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+
+  /* Donut por resultado: compareceu(emerald) · não(rose) · remarcou(amber) · pendente(slate) */
+  .donut {
+    width: 168px; height: 168px; border-radius: 9999px;
+    background: conic-gradient(
+      #10b981 0deg 218deg,
+      #f43f5e 218deg 276deg,
+      #f59e0b 276deg 325deg,
+      #cbd5e1 325deg 360deg
+    );
+    -webkit-mask: radial-gradient(circle 52px at center, transparent 98%, #000 100%);
+            mask: radial-gradient(circle 52px at center, transparent 98%, #000 100%);
+  }
+  .seg { transition: height .25s ease; }
+</style>
+</head>
+<body>
+
+<!-- ════════ BARRA EXPLICATIVA ════════ -->
+<div class="bg-slate-900 text-white px-5 py-3 flex items-center gap-3 flex-wrap sticky top-0 z-30">
+  <i data-lucide="calendar-check" class="w-4 h-4 text-indigo-300 shrink-0"></i>
+  <span class="font-semibold">Relatório de Agendamentos — proposta pra aprovação</span>
+  <span class="text-slate-500 hidden md:inline">·</span>
+  <span class="text-slate-400 hidden md:inline text-sm">quantos por período · compareceu / não veio / remarcou · ranking por atendente</span>
+  <span class="ml-auto text-[11px] text-slate-400 bg-slate-800 rounded-full px-3 py-1">nova aba em <b class="text-slate-200">Relatórios</b></span>
+</div>
+
+<div class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+
+  <!-- ───────── FILTROS ───────── -->
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+    <div class="flex flex-wrap items-end gap-4">
+      <div>
+        <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Período</p>
+        <div class="flex gap-1.5 text-sm">
+          <button onclick="pick(this)" class="chip border border-slate-200 rounded-lg px-3 py-1.5 font-medium">7 dias</button>
+          <button onclick="pick(this)" class="chip on border border-slate-200 rounded-lg px-3 py-1.5 font-medium">30 dias</button>
+          <button onclick="pick(this)" class="chip border border-slate-200 rounded-lg px-3 py-1.5 font-medium">90 dias</button>
+          <button onclick="pick(this)" class="chip border border-slate-200 rounded-lg px-3 py-1.5 font-medium">Personalizado</button>
+        </div>
+      </div>
+      <div>
+        <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Intervalo</p>
+        <div class="flex items-center gap-1.5 text-sm">
+          <input type="date" value="2026-05-01" class="h-9 rounded-lg border border-slate-200 px-2 bg-slate-50">
+          <span class="text-slate-400">→</span>
+          <input type="date" value="2026-05-31" class="h-9 rounded-lg border border-slate-200 px-2 bg-slate-50">
+        </div>
+      </div>
+      <div>
+        <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Atendente</p>
+        <select class="h-9 rounded-lg border border-slate-200 px-2 text-sm bg-slate-50 min-w-[150px]">
+          <option>Todos os atendentes</option><option>Rafael Rocha</option><option>Marina Souza</option>
+          <option>Carlos Lima</option><option>Ana Beatriz</option><option>Pedro Henrique</option>
+        </select>
+      </div>
+      <div>
+        <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Tipo</p>
+        <select class="h-9 rounded-lg border border-slate-200 px-2 text-sm bg-slate-50 min-w-[150px]">
+          <option>Todos os tipos</option><option>Reunião comercial</option><option>Audiência</option>
+          <option>Follow-up</option><option>Prazo processual</option><option>Outro</option>
+        </select>
+      </div>
+      <button class="ml-auto h-9 px-3 rounded-lg border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5">
+        <i data-lucide="file-down" class="w-4 h-4"></i> Exportar PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- ───────── KPIs ───────── -->
+  <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+    <!-- Total -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-lg bg-slate-100 text-slate-600 grid place-items-center shrink-0"><i data-lucide="calendar-days" class="w-5 h-5"></i></div>
+        <div><p class="text-2xl font-extrabold tabular-nums leading-none">142</p><p class="text-[10px] text-slate-500 mt-1">Agendamentos no período</p></div>
+      </div>
+    </div>
+    <!-- Compareceu -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 border-l-4 border-l-emerald-500">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-lg bg-emerald-100 text-emerald-700 grid place-items-center shrink-0"><i data-lucide="check-circle" class="w-5 h-5"></i></div>
+        <div><p class="text-2xl font-extrabold tabular-nums leading-none text-emerald-700">86</p><p class="text-[10px] text-slate-500 mt-1">Compareceram · <b>61%</b></p></div>
+      </div>
+    </div>
+    <!-- Não veio -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 border-l-4 border-l-rose-500">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-lg bg-rose-100 text-rose-700 grid place-items-center shrink-0"><i data-lucide="x-circle" class="w-5 h-5"></i></div>
+        <div><p class="text-2xl font-extrabold tabular-nums leading-none text-rose-700">23</p><p class="text-[10px] text-slate-500 mt-1">Não vieram · <b>16%</b></p></div>
+      </div>
+    </div>
+    <!-- Remarcou -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 border-l-4 border-l-amber-500">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-lg bg-amber-100 text-amber-700 grid place-items-center shrink-0"><i data-lucide="rotate-ccw" class="w-5 h-5"></i></div>
+        <div><p class="text-2xl font-extrabold tabular-nums leading-none text-amber-700">19</p><p class="text-[10px] text-slate-500 mt-1">Remarcaram · <b>13%</b></p></div>
+      </div>
+    </div>
+    <!-- Pendentes -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 border-l-4 border-l-slate-300">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><i data-lucide="hourglass" class="w-5 h-5"></i></div>
+        <div><p class="text-2xl font-extrabold tabular-nums leading-none text-slate-500">14</p><p class="text-[10px] text-slate-500 mt-1">Sem resultado ainda</p></div>
+      </div>
+    </div>
+    <!-- Taxa de comparecimento (destaque) -->
+    <div class="rounded-2xl shadow-sm p-4 bg-indigo-600 text-white">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-lg bg-white/15 grid place-items-center shrink-0"><i data-lucide="target" class="w-5 h-5"></i></div>
+        <div><p class="text-2xl font-extrabold tabular-nums leading-none">67%</p><p class="text-[10px] text-indigo-100 mt-1">Taxa de comparecimento</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────── GRÁFICOS ───────── -->
+  <div class="grid lg:grid-cols-3 gap-6 items-start">
+
+    <!-- Série temporal empilhada -->
+    <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <div class="flex items-center justify-between mb-1">
+        <p class="font-bold text-sm flex items-center gap-2"><i data-lucide="bar-chart-3" class="w-4 h-4 text-indigo-500"></i> Agendamentos por período</p>
+        <div class="flex items-center gap-3 text-[11px] text-slate-500">
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500"></span>Compareceu</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-rose-500"></span>Não veio</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-amber-500"></span>Remarcou</span>
+        </div>
+      </div>
+      <p class="text-[11px] text-slate-400 mb-4">Maio/2026 · agrupado por semana</p>
+
+      <div class="flex items-end justify-around gap-3 h-52 border-b border-slate-100 pb-0">
+        <!-- cada barra: rem(topo) · não(meio) · comp(base) -->
+        <!-- Semana 1: 25 (c16 n5 r4) -->
+        <div class="flex flex-col items-center gap-2 flex-1 max-w-[64px]">
+          <span class="text-[11px] font-bold text-slate-600 tabular-nums">25</span>
+          <div class="w-full flex flex-col justify-end rounded-t-md overflow-hidden" title="01–07/05 · 25 agend.">
+            <div class="seg bg-amber-400" style="height:24px" title="Remarcou: 4"></div>
+            <div class="seg bg-rose-400" style="height:30px" title="Não veio: 5"></div>
+            <div class="seg bg-emerald-500" style="height:96px" title="Compareceu: 16"></div>
+          </div>
+          <span class="text-[10px] text-slate-400">01–07</span>
+        </div>
+        <!-- Semana 2: 26 (c19 n4 r3) -->
+        <div class="flex flex-col items-center gap-2 flex-1 max-w-[64px]">
+          <span class="text-[11px] font-bold text-slate-600 tabular-nums">26</span>
+          <div class="w-full flex flex-col justify-end rounded-t-md overflow-hidden" title="08–14/05 · 26 agend.">
+            <div class="seg bg-amber-400" style="height:18px" title="Remarcou: 3"></div>
+            <div class="seg bg-rose-400" style="height:24px" title="Não veio: 4"></div>
+            <div class="seg bg-emerald-500" style="height:114px" title="Compareceu: 19"></div>
+          </div>
+          <span class="text-[10px] text-slate-400">08–14</span>
+        </div>
+        <!-- Semana 3: 25 (c14 n6 r5) -->
+        <div class="flex flex-col items-center gap-2 flex-1 max-w-[64px]">
+          <span class="text-[11px] font-bold text-slate-600 tabular-nums">25</span>
+          <div class="w-full flex flex-col justify-end rounded-t-md overflow-hidden" title="15–21/05 · 25 agend.">
+            <div class="seg bg-amber-400" style="height:30px" title="Remarcou: 5"></div>
+            <div class="seg bg-rose-400" style="height:36px" title="Não veio: 6"></div>
+            <div class="seg bg-emerald-500" style="height:84px" title="Compareceu: 14"></div>
+          </div>
+          <span class="text-[10px] text-slate-400">15–21</span>
+        </div>
+        <!-- Semana 4: 30 (c22 n5 r3) -->
+        <div class="flex flex-col items-center gap-2 flex-1 max-w-[64px]">
+          <span class="text-[11px] font-bold text-slate-600 tabular-nums">30</span>
+          <div class="w-full flex flex-col justify-end rounded-t-md overflow-hidden" title="22–28/05 · 30 agend.">
+            <div class="seg bg-amber-400" style="height:18px" title="Remarcou: 3"></div>
+            <div class="seg bg-rose-400" style="height:30px" title="Não veio: 5"></div>
+            <div class="seg bg-emerald-500" style="height:132px" title="Compareceu: 22"></div>
+          </div>
+          <span class="text-[10px] text-slate-400">22–28</span>
+        </div>
+        <!-- Semana 5: 22 (c15 n3 r4) -->
+        <div class="flex flex-col items-center gap-2 flex-1 max-w-[64px]">
+          <span class="text-[11px] font-bold text-slate-600 tabular-nums">22</span>
+          <div class="w-full flex flex-col justify-end rounded-t-md overflow-hidden" title="29–31/05 · 22 agend.">
+            <div class="seg bg-amber-400" style="height:24px" title="Remarcou: 4"></div>
+            <div class="seg bg-rose-400" style="height:18px" title="Não veio: 3"></div>
+            <div class="seg bg-emerald-500" style="height:90px" title="Compareceu: 15"></div>
+          </div>
+          <span class="text-[10px] text-slate-400">29–31</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Donut por resultado -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <p class="font-bold text-sm flex items-center gap-2 mb-4"><i data-lucide="pie-chart" class="w-4 h-4 text-indigo-500"></i> Distribuição por resultado</p>
+      <div class="flex items-center gap-5">
+        <div class="relative shrink-0">
+          <div class="donut"></div>
+          <div class="absolute inset-0 grid place-items-center">
+            <div class="text-center"><p class="text-xl font-extrabold tabular-nums leading-none">142</p><p class="text-[9px] text-slate-400">total</p></div>
+          </div>
+        </div>
+        <div class="space-y-2 text-sm flex-1">
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm bg-emerald-500"></span><span class="text-slate-600">Compareceu</span><span class="ml-auto font-bold tabular-nums">86</span></div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm bg-rose-500"></span><span class="text-slate-600">Não veio</span><span class="ml-auto font-bold tabular-nums">23</span></div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm bg-amber-500"></span><span class="text-slate-600">Remarcou</span><span class="ml-auto font-bold tabular-nums">19</span></div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm bg-slate-300"></span><span class="text-slate-600">Sem resultado</span><span class="ml-auto font-bold tabular-nums">14</span></div>
+        </div>
+      </div>
+      <div class="mt-4 rounded-xl bg-slate-50 border border-slate-100 p-3 text-[11px] text-slate-500 leading-relaxed">
+        <b class="text-slate-700">Taxa de comparecimento = 67%</b> · compareceu ÷ (compareceu + não veio + remarcou). Os <b>14 sem resultado</b> (compromissos futuros ou não concluídos) ficam fora do denominador.
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────── POR TIPO ───────── -->
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+    <p class="font-bold text-sm flex items-center gap-2 mb-4"><i data-lucide="shapes" class="w-4 h-4 text-indigo-500"></i> Por tipo de compromisso</p>
+    <div class="space-y-2.5 text-sm">
+      <div class="flex items-center gap-3"><span class="w-36 text-slate-600 shrink-0">Reunião comercial</span><div class="flex-1 h-5 rounded bg-slate-100 overflow-hidden"><div class="h-full bg-indigo-500" style="width:100%"></div></div><span class="w-8 text-right font-bold tabular-nums">58</span></div>
+      <div class="flex items-center gap-3"><span class="w-36 text-slate-600 shrink-0">Audiência</span><div class="flex-1 h-5 rounded bg-slate-100 overflow-hidden"><div class="h-full bg-indigo-500" style="width:59%"></div></div><span class="w-8 text-right font-bold tabular-nums">34</span></div>
+      <div class="flex items-center gap-3"><span class="w-36 text-slate-600 shrink-0">Follow-up</span><div class="flex-1 h-5 rounded bg-slate-100 overflow-hidden"><div class="h-full bg-indigo-500" style="width:48%"></div></div><span class="w-8 text-right font-bold tabular-nums">28</span></div>
+      <div class="flex items-center gap-3"><span class="w-36 text-slate-600 shrink-0">Prazo processual</span><div class="flex-1 h-5 rounded bg-slate-100 overflow-hidden"><div class="h-full bg-indigo-500" style="width:21%"></div></div><span class="w-8 text-right font-bold tabular-nums">12</span></div>
+      <div class="flex items-center gap-3"><span class="w-36 text-slate-600 shrink-0">Outro</span><div class="flex-1 h-5 rounded bg-slate-100 overflow-hidden"><div class="h-full bg-indigo-500" style="width:17%"></div></div><span class="w-8 text-right font-bold tabular-nums">10</span></div>
+    </div>
+  </div>
+
+  <!-- ───────── RANKING POR ATENDENTE ───────── -->
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+      <p class="font-bold text-sm flex items-center gap-2"><i data-lucide="users" class="w-4 h-4 text-indigo-500"></i> Agendamentos por atendente</p>
+      <span class="text-[11px] text-slate-400">ordenado por nº de agendamentos</span>
+    </div>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-[11px] uppercase tracking-wide text-slate-400 bg-slate-50/60">
+          <th class="text-left font-semibold px-5 py-2.5">Atendente</th>
+          <th class="text-right font-semibold px-2 py-2.5">Total</th>
+          <th class="text-right font-semibold px-2 py-2.5 text-emerald-600">Compareceu</th>
+          <th class="text-right font-semibold px-2 py-2.5 text-rose-600">Não veio</th>
+          <th class="text-right font-semibold px-2 py-2.5 text-amber-600">Remarcou</th>
+          <th class="text-right font-semibold px-2 py-2.5 text-slate-400">Pend.</th>
+          <th class="text-left font-semibold px-5 py-2.5 w-56">Taxa de comparecimento</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        <!-- Rafael -->
+        <tr class="hover:bg-slate-50/60">
+          <td class="px-5 py-3"><div class="flex items-center gap-2.5"><span class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 grid place-items-center text-[11px] font-bold">RR</span><span class="font-semibold text-slate-700">Rafael Rocha</span></div></td>
+          <td class="text-right px-2 font-bold tabular-nums">38</td>
+          <td class="text-right px-2 tabular-nums text-emerald-700">26</td>
+          <td class="text-right px-2 tabular-nums text-rose-700">6</td>
+          <td class="text-right px-2 tabular-nums text-amber-700">4</td>
+          <td class="text-right px-2 tabular-nums text-slate-400">2</td>
+          <td class="px-5 py-3"><div class="flex items-center gap-2"><div class="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-emerald-500" style="width:72%"></div></div><span class="text-xs font-bold tabular-nums w-9 text-right">72%</span></div></td>
+        </tr>
+        <!-- Marina -->
+        <tr class="hover:bg-slate-50/60">
+          <td class="px-5 py-3"><div class="flex items-center gap-2.5"><span class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 grid place-items-center text-[11px] font-bold">MS</span><span class="font-semibold text-slate-700">Marina Souza</span></div></td>
+          <td class="text-right px-2 font-bold tabular-nums">31</td>
+          <td class="text-right px-2 tabular-nums text-emerald-700">21</td>
+          <td class="text-right px-2 tabular-nums text-rose-700">4</td>
+          <td class="text-right px-2 tabular-nums text-amber-700">3</td>
+          <td class="text-right px-2 tabular-nums text-slate-400">3</td>
+          <td class="px-5 py-3"><div class="flex items-center gap-2"><div class="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-emerald-500" style="width:75%"></div></div><span class="text-xs font-bold tabular-nums w-9 text-right">75%</span></div></td>
+        </tr>
+        <!-- Carlos (pior taxa, destaca em rose) -->
+        <tr class="hover:bg-slate-50/60">
+          <td class="px-5 py-3"><div class="flex items-center gap-2.5"><span class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 grid place-items-center text-[11px] font-bold">CL</span><span class="font-semibold text-slate-700">Carlos Lima</span></div></td>
+          <td class="text-right px-2 font-bold tabular-nums">28</td>
+          <td class="text-right px-2 tabular-nums text-emerald-700">14</td>
+          <td class="text-right px-2 tabular-nums text-rose-700">8</td>
+          <td class="text-right px-2 tabular-nums text-amber-700">5</td>
+          <td class="text-right px-2 tabular-nums text-slate-400">1</td>
+          <td class="px-5 py-3"><div class="flex items-center gap-2"><div class="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-rose-500" style="width:52%"></div></div><span class="text-xs font-bold tabular-nums w-9 text-right text-rose-600">52%</span></div></td>
+        </tr>
+        <!-- Ana -->
+        <tr class="hover:bg-slate-50/60">
+          <td class="px-5 py-3"><div class="flex items-center gap-2.5"><span class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 grid place-items-center text-[11px] font-bold">AB</span><span class="font-semibold text-slate-700">Ana Beatriz</span></div></td>
+          <td class="text-right px-2 font-bold tabular-nums">26</td>
+          <td class="text-right px-2 tabular-nums text-emerald-700">16</td>
+          <td class="text-right px-2 tabular-nums text-rose-700">3</td>
+          <td class="text-right px-2 tabular-nums text-amber-700">4</td>
+          <td class="text-right px-2 tabular-nums text-slate-400">3</td>
+          <td class="px-5 py-3"><div class="flex items-center gap-2"><div class="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-emerald-500" style="width:70%"></div></div><span class="text-xs font-bold tabular-nums w-9 text-right">70%</span></div></td>
+        </tr>
+        <!-- Pedro -->
+        <tr class="hover:bg-slate-50/60">
+          <td class="px-5 py-3"><div class="flex items-center gap-2.5"><span class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 grid place-items-center text-[11px] font-bold">PH</span><span class="font-semibold text-slate-700">Pedro Henrique</span></div></td>
+          <td class="text-right px-2 font-bold tabular-nums">19</td>
+          <td class="text-right px-2 tabular-nums text-emerald-700">9</td>
+          <td class="text-right px-2 tabular-nums text-rose-700">2</td>
+          <td class="text-right px-2 tabular-nums text-amber-700">3</td>
+          <td class="text-right px-2 tabular-nums text-slate-400">5</td>
+          <td class="px-5 py-3"><div class="flex items-center gap-2"><div class="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-emerald-500" style="width:64%"></div></div><span class="text-xs font-bold tabular-nums w-9 text-right">64%</span></div></td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr class="bg-slate-50 border-t-2 border-slate-200 font-bold">
+          <td class="px-5 py-3 text-slate-700">Total</td>
+          <td class="text-right px-2 tabular-nums">142</td>
+          <td class="text-right px-2 tabular-nums text-emerald-700">86</td>
+          <td class="text-right px-2 tabular-nums text-rose-700">23</td>
+          <td class="text-right px-2 tabular-nums text-amber-700">19</td>
+          <td class="text-right px-2 tabular-nums text-slate-400">14</td>
+          <td class="px-5 py-3"><div class="flex items-center gap-2"><div class="flex-1 h-2 rounded-full bg-slate-200 overflow-hidden"><div class="h-full bg-indigo-600" style="width:67%"></div></div><span class="text-xs tabular-nums w-9 text-right text-indigo-700">67%</span></div></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- ───────── NOTA TÉCNICA / COMO FAZER ───────── -->
+  <div class="bg-white border border-slate-200 rounded-2xl p-4 text-[12px] text-slate-500 leading-relaxed">
+    <p class="font-bold text-slate-700 mb-1.5 flex items-center gap-1.5"><i data-lucide="wrench" class="w-4 h-4"></i> Como fazer (resumo técnico)</p>
+    <ul class="list-disc pl-5 space-y-1">
+      <li><b class="text-slate-700">Sem migration.</b> Os campos já existem em <code class="bg-slate-100 px-1 rounded">agendamentos</code>: <code class="bg-slate-100 px-1 rounded">responsavelId</code> (atendente), <code class="bg-slate-100 px-1 rounded">comparecimento</code> (compareceu/nao_compareceu/remarcado), <code class="bg-slate-100 px-1 rounded">status</code>, <code class="bg-slate-100 px-1 rounded">tipo</code> e <code class="bg-slate-100 px-1 rounded">dataInicio</code>.</li>
+      <li><b class="text-slate-700">Backend:</b> nova procedure <code class="bg-slate-100 px-1 rounded">relatoriosRouter.agenda</code> — mesmo input dos outros relatórios (período + <code class="bg-slate-100 px-1 rounded">setorId</code>/<code class="bg-slate-100 px-1 rounded">atendenteId</code>), gate <code class="bg-slate-100 px-1 rounded">checkPermission("relatorios")</code> (verProprios trava no próprio <code class="bg-slate-100 px-1 rounded">responsavelId</code>). Agrega 3 cortes via SQL: por resultado, série por semana/dia e <code class="bg-slate-100 px-1 rounded">GROUP BY responsavelId</code> p/ ranking (join <code class="bg-slate-100 px-1 rounded">colaboradores→users</code> p/ nome).</li>
+      <li><b class="text-slate-700">Frontend:</b> nova aba <b>"Agenda"</b> em <code class="bg-slate-100 px-1 rounded">client/src/pages/Relatorios.tsx</code>, reusando os componentes <code class="bg-slate-100 px-1 rounded">Kpi</code>, recharts e a tabela de ranking que já existem.</li>
+      <li><b class="text-slate-700">Métrica-chave:</b> taxa de comparecimento = compareceu ÷ (compareceu + não veio + remarcou). Pendentes (NULL) ficam fora do denominador.</li>
+      <li><b class="text-slate-700">PDF (opcional):</b> espelhar <code class="bg-slate-100 px-1 rounded">relatoriosPdfRouter.exportarComercialPdf</code> p/ exportar o relatório.</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+  function pick(btn){ document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); btn.classList.add('on'); }
+  lucide.createIcons();
+</script>
+</body>
+</html>

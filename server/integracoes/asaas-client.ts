@@ -777,7 +777,7 @@ export class AsaasClient {
    * Testa se a cota REAL no Asaas tem folga, lendo `RateLimit-Remaining`
    * de 1 GET (`/finance/balance` — endpoint leve e idempotente). Bypassa o
    * guard local via axios cru — interessa medir o Asaas, não o estado do
-   * Jurify. Retorna a cota REAL pra UI decidir se permite reset.
+   * JuridFlow. Retorna a cota REAL pra UI decidir se permite reset.
    *
    * Se o Asaas retornar 429, sinaliza `estouradoNoAsaas=true` — não permite
    * reset (resetar a Camada 2 local sem a Asaas estar livre só atrasa o

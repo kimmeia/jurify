@@ -104,7 +104,7 @@ async function findCanalByPhoneNumberId(phoneNumberId: string): Promise<CanalInf
  * Resolve o canal de uma mensagem recebida ESTRITAMENTE pelo phone_number_id.
  *
  * Sem fallback por wabaId de propósito: vários números podem dividir a MESMA
- * WABA e só alguns estarem conectados neste JuriFy (ex.: o cliente usa um dos
+ * WABA e só alguns estarem conectados neste JuridFlow (ex.: o cliente usa um dos
  * números em outro sistema). Cair no wabaId entregava a mensagem de um número
  * NÃO-conectado pro canal de outro número da mesma WABA — vazamento real entre
  * sistemas/escritórios. O phone_number_id é único por número e sempre presente
@@ -216,7 +216,7 @@ export function registerWhatsAppCloudWebhook(app: Express) {
           if (!canalInfo) {
             log.warn(
               { phoneNumberId, wabaId },
-              "[WhatsApp Cloud] Mensagem de número não conectado neste JuriFy — ignorada",
+              "[WhatsApp Cloud] Mensagem de número não conectado neste JuridFlow — ignorada",
             );
             continue;
           }

@@ -17,7 +17,7 @@ import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
 import { getDb } from "../db";
 import {
-  conversas, mensagens, leads, contatos, calculosHistorico,
+  agendamentos, conversas, mensagens, leads, contatos, calculosHistorico,
   kanbanCards, kanbanColunas, kanbanMovimentacoes,
   colaboradores, setores, asaasCobrancas, categoriasCobranca,
   comissoesFechadas, users, canaisIntegrados,
@@ -35,6 +35,7 @@ import {
   FUSO_HORARIO_PADRAO,
 } from "../../shared/escritorio-types";
 import { gerarComercialPdf, type DetalheAtendentePdf } from "./relatorios-comercial-pdf";
+import { gerarAgendaPdf } from "./relatorios-agenda-pdf";
 
 const log = createLogger("relatorios");
 
@@ -151,6 +152,149 @@ export function desdeDias(dias: number): Date {
  *  escritório. Asaas é cobrança (cliente já existente) e telefone/site
  *  não fazem parte do funil de captação direto. */
 const ORIGENS_LEAD = ["whatsapp", "instagram", "facebook", "manual"] as const;
+
+// ─── Relatório de Agenda: helpers puros (testáveis sem DB) ──────────────────
+
+/** Mapeia o enum `comparecimento` (incl. NULL) para a chave do agregado.
+ *  NULL/desconhecido = "pendente" (compromisso futuro ou sem resultado). */
+export function classificarComparecimento(
+  comparecimento: string | null,
+): "compareceu" | "naoCompareceu" | "remarcado" | "pendente" {
+  switch (comparecimento) {
+    case "compareceu": return "compareceu";
+    case "nao_compareceu": return "naoCompareceu";
+    case "remarcado": return "remarcado";
+    default: return "pendente";
+  }
+}
+
+export type ResumoComparecimento = {
+  total: number;
+  compareceu: number;
+  naoCompareceu: number;
+  remarcado: number;
+  pendente: number;
+  taxaComparecimento: number | null;
+};
+
+/** Taxa de comparecimento (% inteiro). Denominador = compromissos COM
+ *  resultado registrado (exclui pendentes). NULL quando não há nenhum. */
+export function calcularTaxaComparecimento(r: {
+  compareceu: number;
+  naoCompareceu: number;
+  remarcado: number;
+}): number | null {
+  const comResultado = r.compareceu + r.naoCompareceu + r.remarcado;
+  if (comResultado <= 0) return null;
+  return Math.round((r.compareceu / comResultado) * 100);
+}
+
+/** Soma linhas {comparecimento,total} num resumo com taxa. */
+export function resumirComparecimento(
+  rows: Array<{ comparecimento: string | null; total: number }>,
+): ResumoComparecimento {
+  let compareceu = 0, naoCompareceu = 0, remarcado = 0, pendente = 0;
+  for (const r of rows) {
+    const n = Number(r.total) || 0;
+    switch (classificarComparecimento(r.comparecimento)) {
+      case "compareceu": compareceu += n; break;
+      case "naoCompareceu": naoCompareceu += n; break;
+      case "remarcado": remarcado += n; break;
+      default: pendente += n;
+    }
+  }
+  return {
+    total: compareceu + naoCompareceu + remarcado + pendente,
+    compareceu, naoCompareceu, remarcado, pendente,
+    taxaComparecimento: calcularTaxaComparecimento({ compareceu, naoCompareceu, remarcado }),
+  };
+}
+
+/** Ranking por atendente — agrupa (colabId × comparecimento), ordena por
+ *  total desc (desempate por nome). Linhas sem colabId são ignoradas. */
+export function montarRankingAgenda(
+  rows: Array<{ colabId: number | null; comparecimento: string | null; total: number }>,
+  nomePorColab: Map<number, string>,
+): Array<ResumoComparecimento & { colabId: number; nome: string }> {
+  const porColab = new Map<number, Array<{ comparecimento: string | null; total: number }>>();
+  for (const r of rows) {
+    if (r.colabId == null) continue;
+    const arr = porColab.get(r.colabId) ?? [];
+    arr.push({ comparecimento: r.comparecimento, total: r.total });
+    porColab.set(r.colabId, arr);
+  }
+  const ranking = Array.from(porColab.entries()).map(([colabId, rs]) => ({
+    colabId,
+    nome: nomePorColab.get(colabId) ?? `#${colabId}`,
+    ...resumirComparecimento(rs),
+  }));
+  ranking.sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome, "pt-BR"));
+  return ranking;
+}
+
+/** Normaliza o bucket vindo do SQL (string "YYYY-MM-DD" OU Date) p/ string. */
+function normalizarBucketAgenda(bucket: string | Date | null): string | null {
+  if (bucket == null) return null;
+  if (bucket instanceof Date) return bucket.toISOString().slice(0, 10);
+  const s = String(bucket);
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+
+/** Pivota linhas (bucket × comparecimento) numa série ordenada por bucket. */
+export function montarSerieAgenda(
+  rows: Array<{ bucket: string | Date | null; comparecimento: string | null; total: number }>,
+): Array<{
+  bucket: string;
+  compareceu: number;
+  naoCompareceu: number;
+  remarcado: number;
+  pendente: number;
+  total: number;
+}> {
+  const porBucket = new Map<
+    string,
+    { compareceu: number; naoCompareceu: number; remarcado: number; pendente: number }
+  >();
+  for (const r of rows) {
+    const b = normalizarBucketAgenda(r.bucket);
+    if (b == null) continue;
+    const acc = porBucket.get(b) ?? { compareceu: 0, naoCompareceu: 0, remarcado: 0, pendente: 0 };
+    acc[classificarComparecimento(r.comparecimento)] += Number(r.total) || 0;
+    porBucket.set(b, acc);
+  }
+  return Array.from(porBucket.entries())
+    .map(([bucket, a]) => ({
+      bucket,
+      ...a,
+      total: a.compareceu + a.naoCompareceu + a.remarcado + a.pendente,
+    }))
+    .sort((x, y) => x.bucket.localeCompare(y.bucket));
+}
+
+/** Granularidade do gráfico conforme o tamanho do período (em dias). */
+export function resolverGranularidadeAgenda(
+  dataInicio: Date,
+  dataFim: Date,
+): "dia" | "semana" | "mes" {
+  const dias = Math.floor((dataFim.getTime() - dataInicio.getTime()) / 86_400_000) + 1;
+  if (dias <= 14) return "dia";
+  if (dias <= 92) return "semana";
+  return "mes";
+}
+
+/** Input do relatório Agenda — preset de dias OU range custom + filtros. */
+const AgendaInput = z
+  .object({
+    dias: z.number().min(1).max(365).optional(),
+    dataInicio: z.string().optional(),
+    dataFim: z.string().optional(),
+    setorId: z.number().int().positive().optional(),
+    atendenteId: z.number().int().positive().optional(),
+    tipo: z
+      .enum(["prazo_processual", "audiencia", "reuniao_comercial", "tarefa", "follow_up", "outro"])
+      .optional(),
+  })
+  .optional();
 
 export const relatoriosRouter = router({
   /** Atendimento — conversas e mensagens, filtradas por período + setor +
@@ -1701,6 +1845,124 @@ export const relatoriosRouter = router({
     };
   }),
 
+  /** Agenda — agendamentos no período: totais por resultado (compareceu /
+   *  não veio / remarcou / sem registro), série temporal e ranking por
+   *  atendente (responsavelId). Mesmo gate dos demais relatórios; verProprios
+   *  trava no próprio colaborador. Período filtra por `dataInicio` (quando o
+   *  compromisso ESTÁ marcado), não pela data de criação. */
+  agenda: protectedProcedure.input(AgendaInput).query(async ({ ctx, input }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return null;
+    const db = await getDb();
+    if (!db) return null;
+    const eid = esc.escritorio.id;
+
+    const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+    let dataInicio: Date;
+    let dataFim: Date;
+    if (input?.dias && !(input?.dataInicio && input?.dataFim)) {
+      dataInicio = desdeDias(input.dias);
+      dataFim = new Date();
+    } else {
+      const p = resolverPeriodoNoFuso(new Date(), tz, input);
+      dataInicio = p.dataInicio;
+      dataFim = p.dataFim;
+    }
+
+    const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
+    if (!perm.allowed) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão para acessar relatórios.",
+      });
+    }
+    const soProprios = !perm.verTodos && perm.verProprios;
+
+    const colaboradorIds = await resolverColaboradorIds({
+      db,
+      escritorioId: eid,
+      setorId: input?.setorId,
+      atendenteId: input?.atendenteId,
+      soProprios,
+      proprioColabId: esc.colaborador.id,
+    });
+
+    const granularidade = resolverGranularidadeAgenda(dataInicio, dataFim);
+    const colData = agendamentos.dataInicio;
+    const bucketExpr =
+      granularidade === "dia"
+        ? sql<string>`DATE(${colData})`
+        : granularidade === "semana"
+          ? sql<string>`DATE(${colData} - INTERVAL WEEKDAY(${colData}) DAY)`
+          : sql<string>`DATE(DATE_FORMAT(${colData}, '%Y-%m-01'))`;
+
+    const baseWhere = and(
+      eq(agendamentos.escritorioId, eid),
+      gte(agendamentos.dataInicio, dataInicio),
+      lte(agendamentos.dataInicio, dataFim),
+      ...(colaboradorIds ? [inArray(agendamentos.responsavelId, colaboradorIds)] : []),
+      ...(input?.tipo ? [eq(agendamentos.tipo, input.tipo)] : []),
+    );
+
+    const [porAtendComp, porTipoRows, serieRows, colabRows] = await Promise.all([
+      db
+        .select({
+          colabId: agendamentos.responsavelId,
+          comparecimento: agendamentos.comparecimento,
+          total: sql<number>`COUNT(*)`,
+        })
+        .from(agendamentos)
+        .where(baseWhere)
+        .groupBy(agendamentos.responsavelId, agendamentos.comparecimento),
+      db
+        .select({ tipo: agendamentos.tipo, total: sql<number>`COUNT(*)` })
+        .from(agendamentos)
+        .where(baseWhere)
+        .groupBy(agendamentos.tipo),
+      db
+        .select({
+          bucket: bucketExpr,
+          comparecimento: agendamentos.comparecimento,
+          total: sql<number>`COUNT(*)`,
+        })
+        .from(agendamentos)
+        .where(baseWhere)
+        .groupBy(bucketExpr, agendamentos.comparecimento)
+        .orderBy(bucketExpr),
+      db
+        .select({ id: colaboradores.id, nome: users.name, email: users.email })
+        .from(colaboradores)
+        .innerJoin(users, eq(colaboradores.userId, users.id))
+        .where(eq(colaboradores.escritorioId, eid)),
+    ]);
+
+    const nomePorColab = new Map<number, string>();
+    for (const c of colabRows) nomePorColab.set(c.id, c.nome || c.email || `#${c.id}`);
+
+    const linhasComp = porAtendComp.map((r) => ({
+      colabId: r.colabId,
+      comparecimento: r.comparecimento,
+      total: Number(r.total),
+    }));
+
+    return {
+      periodo: { inicio: dataInicio, fim: dataFim },
+      granularidade,
+      totais: resumirComparecimento(linhasComp),
+      porTipo: porTipoRows
+        .map((r) => ({ tipo: r.tipo as string, total: Number(r.total) }))
+        .sort((a, b) => b.total - a.total),
+      serie: montarSerieAgenda(
+        serieRows.map((r) => ({
+          bucket: r.bucket as string | null,
+          comparecimento: r.comparecimento,
+          total: Number(r.total),
+        })),
+      ),
+      porAtendente: montarRankingAgenda(linhasComp, nomePorColab),
+    };
+  }),
+
   /** Cálculos — histórico de cálculos do usuário.
    *  Gateado por permissão `calculos` (não `relatorios`) pra que atendente
    *  consiga ver o próprio histórico mesmo sem perm de relatórios. Filtra
@@ -1826,6 +2088,52 @@ export const relatoriosPdfRouter = router({
 
       return {
         filename: `relatorio_comercial_${data.periodo.dataInicio}_${data.periodo.dataFim}.pdf`,
+        base64: buffer.toString("base64"),
+        mimeType: "application/pdf",
+      };
+    }),
+
+  /**
+   * Export da aba Agenda em PDF. Reusa `agenda` via caller — mesmos
+   * filtros/permissão da tela, então os números do PDF batem com a UI.
+   */
+  exportarAgendaPdf: protectedProcedure
+    .input(AgendaInput)
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
+      }
+      const caller = chamarRelatorios(ctx);
+
+      const data = await caller.agenda(input);
+      if (!data) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Sem dados para o período." });
+      }
+
+      const TIPO_LABELS_AG: Record<string, string> = {
+        prazo_processual: "Prazo processual",
+        audiencia: "Audiência",
+        reuniao_comercial: "Reunião comercial",
+        tarefa: "Tarefa",
+        follow_up: "Follow-up",
+        outro: "Outro",
+      };
+      const tipoLabel = input?.tipo ? (TIPO_LABELS_AG[input.tipo] ?? input.tipo) : "Todos os tipos";
+      const atendenteLabel = input?.atendenteId != null
+        ? (data.porAtendente.find((a) => a.colabId === input.atendenteId)?.nome ?? "—")
+        : "Todos";
+
+      const buffer = await gerarAgendaPdf({
+        data,
+        nomeEscritorio: esc.escritorio.nome,
+        tipoLabel,
+        atendenteLabel,
+      });
+
+      const ymd = (v: Date) => v.toISOString().slice(0, 10);
+      return {
+        filename: `relatorio_agendamentos_${ymd(data.periodo.inicio)}_${ymd(data.periodo.fim)}.pdf`,
         base64: buffer.toString("base64"),
         mimeType: "application/pdf",
       };
