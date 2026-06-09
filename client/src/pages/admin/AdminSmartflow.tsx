@@ -70,7 +70,7 @@ export default function AdminSmartflow() {
   const clones = (templates as any[]).reduce((a, t) => a + (t.clones || 0), 0);
 
   return (
-    <div className="space-y-5 max-w-7xl mx-auto">
+    <div className="space-y-5">
       {/* HERO (pegada do SmartFlow do cliente) */}
       <div
         className="relative overflow-hidden rounded-2xl p-5 border"
