@@ -54,7 +54,7 @@ export default function RevisarOrfasPage() {
   });
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-6 space-y-4 max-w-5xl">
+    <div className="px-4 sm:px-6 py-6 space-y-4">
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"
