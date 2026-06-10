@@ -16,7 +16,7 @@ import { getDb } from "../db";
 import { canaisIntegrados } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
-import { isLidJid } from "../../shared/whatsapp-types";
+import { isLidJid, jidToPhone } from "../../shared/whatsapp-types";
 
 const log = createLogger("canal-envio");
 
@@ -37,6 +37,30 @@ export interface EnvioMensagemOpts {
   /** JID/chatId externo da conversa (preferido em WhatsApp QR pra reusar sessão). */
   chatIdExterno?: string | null;
   conteudo: string;
+}
+
+/**
+ * Resolve o número de destino pra Cloud API.
+ *
+ * O `chatIdExterno` da conversa tem prioridade: é o wa_id de quem
+ * realmente está conversando com o canal (janela de 24h aberta na Meta).
+ * `contatos.telefone` é só fallback — é dado cadastral, pode ter sido
+ * alterado por edição manual ou vínculo Asaas (outro número, ou formato
+ * sem DDI 55) e aí a Meta rejeita o envio mesmo com conversa em
+ * andamento. JID @lid não é telefone — cai direto no fallback.
+ */
+export function resolverDestinatarioCloudApi(opts: {
+  telefone?: string | null;
+  chatIdExterno?: string | null;
+}): string | null {
+  // jidToPhone devolve "" pra @lid; split(":") descarta device part de
+  // JIDs Baileys ("5511999999999:2") que viraria dígito extra no número.
+  const doJid = opts.chatIdExterno
+    ? jidToPhone(opts.chatIdExterno).split(":")[0].replace(/\D/g, "")
+    : "";
+  if (doJid.length >= 10) return doJid;
+  const tel = (opts.telefone || "").replace(/\D/g, "");
+  return tel.length >= 10 ? tel : null;
 }
 
 /**
@@ -255,13 +279,9 @@ async function enviarViaCloudApi(canal: any, opts: EnvioMensagemOpts): Promise<E
     }
 
     // Cloud API exige telefone limpo (não aceita JID @lid nem @s.whatsapp.net).
-    // Se só temos chatIdExterno, tentamos extrair o número da parte antes do @.
-    let telefone = (opts.telefone || "").replace(/\D/g, "");
-    if (!telefone && opts.chatIdExterno) {
-      const antesDoArroba = opts.chatIdExterno.split("@")[0];
-      telefone = antesDoArroba.replace(/\D/g, "");
-    }
-    if (!telefone || telefone.length < 10) {
+    // chatIdExterno da conversa primeiro; telefone cadastral é fallback.
+    const telefone = resolverDestinatarioCloudApi(opts);
+    if (!telefone) {
       return { ok: false, erro: "Telefone inválido pra Cloud API", provider: "whatsapp_api" };
     }
 

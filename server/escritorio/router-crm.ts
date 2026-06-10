@@ -362,8 +362,16 @@ export const crmRouter = router({
                 const config = decryptConfig(canalRow.configEncrypted, canalRow.configIv, canalRow.configTag);
                 if (config.accessToken && config.phoneNumberId) {
                   const { WhatsAppCloudClient } = await import("../integracoes/whatsapp-cloud");
+                  const { resolverDestinatarioCloudApi } = await import("../integracoes/canal-envio");
                   const client = new WhatsAppCloudClient({ accessToken: config.accessToken, phoneNumberId: config.phoneNumberId });
-                  const telefone = convData.telefone?.replace(/\D/g, "") || "";
+                  // chatIdExterno (wa_id de quem conversa) primeiro: o telefone
+                  // do cadastro pode ter sido trocado (vínculo Asaas, edição) e
+                  // apontar pra outro número — a Meta rejeitaria o envio mesmo
+                  // com a janela de 24h desta conversa aberta.
+                  const telefone = resolverDestinatarioCloudApi({
+                    telefone: convData.telefone,
+                    chatIdExterno: convData.chatIdExterno,
+                  });
                   if (telefone) {
                     let msgId: string;
                     if (input.metaTemplate) {
@@ -385,6 +393,12 @@ export const crmRouter = router({
                       const { mensagens } = await import("../../drizzle/schema");
                       await db.update(mensagens).set({ idExterno: msgId, status: "enviada" }).where(eq(mensagens.id, id));
                     }
+                  } else {
+                    // Sem destinatário válido a mensagem nunca sai — marca
+                    // falha em vez de deixá-la "pendente" eterna na UI.
+                    log.warn(`[CRM] Conversa ${input.conversaId} sem destinatário válido pra Cloud API`);
+                    const { mensagens } = await import("../../drizzle/schema");
+                    await db.update(mensagens).set({ status: "falha" }).where(eq(mensagens.id, id));
                   }
                 } else { log.warn(`[CRM] Canal CoEx ${convData.canalId} sem accessToken ou phoneNumberId`); }
               }
@@ -769,7 +783,21 @@ export const crmRouter = router({
       return { success: true, telefonesAnteriores: anteriores };
     }),
 
-  /** Vincular conversa a contato existente (mesclar) */
+  /**
+   * Vincular conversa a contato existente.
+   *
+   * Caso clássico: esposa do cliente chama de outro número → o handler do
+   * WhatsApp cria um contato fantasma (lead só com nome/telefone) + a
+   * conversa. O operador vincula ao cliente real. Quando o contato de
+   * origem é esse fantasma, o cadastro inteiro é absorvido via
+   * `unificarContatos`: conversas/leads migram, o número vira telefone
+   * secundário do cliente (próximas mensagens já caem nele e o
+   * atendente/SmartFlow veem o contexto certo) e o fantasma some.
+   *
+   * Cadastro de origem "rico" (com CPF, email, processo vinculado ou já
+   * promovido a cliente) NÃO é absorvido — só a conversa muda de dono,
+   * preservando o outro cadastro e o roteamento das mensagens dele.
+   */
   vincularConversaAoContato: protectedProcedure
     .input(z.object({ conversaId: z.number(), contatoId: z.number() }))
     .mutation(async ({ ctx, input }) => {
@@ -778,13 +806,45 @@ export const crmRouter = router({
       const db = await getDb();
       if (!db) throw new Error("DB indisponível");
 
-      const { conversas } = await import("../../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
+      const { clienteProcessos } = await import("../../drizzle/schema");
+
+      const [conv] = await db.select({ id: conversas.id, contatoId: conversas.contatoId })
+        .from(conversas)
+        .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!conv) throw new Error("Conversa não encontrada");
+
+      const [destino] = await db.select({ id: contatos.id }).from(contatos)
+        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!destino) throw new Error("Contato não encontrado");
+
+      if (conv.contatoId === destino.id) return { success: true, unificado: false };
+
+      const [origem] = await db.select().from(contatos)
+        .where(and(eq(contatos.id, conv.contatoId), eq(contatos.escritorioId, esc.escritorio.id)))
+        .limit(1);
+
+      let ehFantasma = !!origem && !origem.cpfCnpj && !origem.email && origem.estagio === "lead";
+      if (ehFantasma && origem) {
+        const [processo] = await db.select({ id: clienteProcessos.id }).from(clienteProcessos)
+          .where(and(
+            eq(clienteProcessos.contatoId, origem.id),
+            eq(clienteProcessos.escritorioId, esc.escritorio.id),
+          ))
+          .limit(1);
+        if (processo) ehFantasma = false;
+      }
+
+      if (ehFantasma && origem) {
+        await unificarContatos(esc.escritorio.id, destino.id, origem.id);
+        return { success: true, unificado: true };
+      }
 
       await db.update(conversas)
-        .set({ contatoId: input.contatoId })
-        .where(eq(conversas.id, input.conversaId));
+        .set({ contatoId: destino.id })
+        .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)));
 
-      return { success: true };
+      return { success: true, unificado: false };
     }),
 });

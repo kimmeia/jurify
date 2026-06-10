@@ -28,6 +28,7 @@ import { createLogger } from "../_core/logger";
 import { marcarEventoProcessado } from "./asaas-idempotency";
 import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
 import { extrairDataPagamento, inserirVinculoAsaasIdempotente, getAsaasClientForEscritorio } from "./asaas-sync";
+import { mesclarCadastroDoAsaas } from "./asaas-cadastro-merge";
 import { gerarDespesaTaxaAsaas } from "./asaas-despesas-auto";
 import { dataHojeBR } from "../../shared/escritorio-types";
 const log = createLogger("integracoes-asaas-webhook");
@@ -445,26 +446,26 @@ export function registerAsaasWebhook(app: Express) {
           if (!vincLocal) {
             const cpfLimpo = (customer.cpfCnpj || "").replace(/\D/g, "");
             // Procurar contato existente por CPF/CNPJ
-            let contatoId: number | null = null;
+            let contatoExistente: typeof contatos.$inferSelect | null = null;
             if (cpfLimpo) {
               const [contato] = await db.select().from(contatos)
                 .where(and(
                   eq(contatos.escritorioId, escritorioId),
                   or(eq(contatos.cpfCnpj, cpfLimpo), like(contatos.cpfCnpj, `%${cpfLimpo}%`))
                 )).limit(1);
-              contatoId = contato?.id || null;
+              contatoExistente = contato ?? null;
             }
+            let contatoId: number | null = contatoExistente?.id ?? null;
 
-            if (contatoId) {
-              // Contato existe — ATUALIZAR dados com os novos do Asaas (nome novo).
-              // NÃO deletamos vínculos antigos: Asaas permite duplicatas de customer
-              // com o mesmo CPF, e o CRM referência todos no mesmo contato (N:1).
-              await db.update(contatos).set({
-                nome: customer.name,
-                cpfCnpj: cpfLimpo || null,
-                email: customer.email || null,
-                telefone: customer.mobilePhone || customer.phone || null,
-              }).where(eq(contatos.id, contatoId));
+            if (contatoExistente && contatoId) {
+              // Contato existe — atualiza nome/CPF do Asaas, mas preserva
+              // telefone/email do CRM (mesclarCadastroDoAsaas: Asaas só
+              // preenche quando o CRM está vazio). NÃO deletamos vínculos
+              // antigos: Asaas permite duplicatas de customer com o mesmo
+              // CPF, e o CRM referência todos no mesmo contato (N:1).
+              await db.update(contatos).set(
+                mesclarCadastroDoAsaas(contatoExistente, customer),
+              ).where(eq(contatos.id, contatoId));
             } else {
               // Criar contato novo no CRM. Origem "asaas" pra deixar
               // claro que veio da sincronização (não foi cadastro manual).
@@ -491,12 +492,18 @@ export function registerAsaasWebhook(app: Express) {
         } else if (body.event === "CUSTOMER_UPDATED") {
           if (vincLocal) {
             const cpfLimpo = (customer.cpfCnpj || "").replace(/\D/g, "");
-            await db.update(contatos).set({
-              nome: customer.name,
-              cpfCnpj: cpfLimpo || null,
-              email: customer.email || null,
-              telefone: customer.mobilePhone || customer.phone || null,
-            }).where(eq(contatos.id, vincLocal.contatoId));
+            // Telefone/email do CRM são preservados — o Asaas dispara
+            // CUSTOMER_UPDATED até como eco de updates feitos pelo próprio
+            // app (ex: criarCobranca envia mobilePhone), e sobrescrever o
+            // telefone aqui redirecionava o WhatsApp pro número errado.
+            const [contatoAtual] = await db.select().from(contatos)
+              .where(eq(contatos.id, vincLocal.contatoId))
+              .limit(1);
+            if (contatoAtual) {
+              await db.update(contatos).set(
+                mesclarCadastroDoAsaas(contatoAtual, customer),
+              ).where(eq(contatos.id, contatoAtual.id));
+            }
 
             await db.update(asaasClientes).set({
               nome: customer.name,
