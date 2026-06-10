@@ -364,6 +364,9 @@ export default function Configuracoes() {
       mensagemAusencia: escritorio.mensagemAusencia || "",
       mensagemBoasVindas: escritorio.mensagemBoasVindas || "",
       agendaResponsavelPadraoId: (escritorio as any).agendaResponsavelPadraoId ?? null,
+      msgDividirRespostas: (escritorio as any).msgDividirRespostas ?? true,
+      msgDividirMax: (escritorio as any).msgDividirMax ?? 4,
+      msgDividirRitmo: (escritorio as any).msgDividirRitmo ?? "natural",
     });
     setEditMode(true);
   };
@@ -665,6 +668,43 @@ export default function Configuracoes() {
                 <>
                   <div className="space-y-1.5"><Label className="text-[11px]">Mensagem de boas-vindas (primeiro contato)</Label><Textarea placeholder="Olá! Bem-vindo ao escritório..." rows={3} value={formPerfil.mensagemBoasVindas} onChange={(e) => setFormPerfil({ ...formPerfil, mensagemBoasVindas: e.target.value })} /></div>
                   <div className="space-y-1.5"><Label className="text-[11px]">Mensagem de ausência (fora do horário)</Label><Textarea placeholder="No momento estamos fora do horário..." rows={3} value={formPerfil.mensagemAusencia} onChange={(e) => setFormPerfil({ ...formPerfil, mensagemAusencia: e.target.value })} /></div>
+                  <div className="rounded-lg border border-slate-200 p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[12px] font-semibold">Dividir respostas longas do robô</p>
+                        <p className="text-[10.5px] text-slate-500">Envia a resposta da IA/SmartFlow em mensagens menores, com pausa e "digitando…" entre elas — como um atendente humano. O envio manual nunca é dividido.</p>
+                      </div>
+                      <Switch checked={!!formPerfil.msgDividirRespostas} onCheckedChange={(v) => setFormPerfil({ ...formPerfil, msgDividirRespostas: v })} />
+                    </div>
+                    {formPerfil.msgDividirRespostas && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[11px]">Máximo de mensagens</Label>
+                          <Select value={String(formPerfil.msgDividirMax ?? 4)} onValueChange={(v) => setFormPerfil({ ...formPerfil, msgDividirMax: Number(v) })}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="2">2 mensagens</SelectItem>
+                              <SelectItem value="3">3 mensagens</SelectItem>
+                              <SelectItem value="4">4 mensagens</SelectItem>
+                              <SelectItem value="5">5 mensagens</SelectItem>
+                              <SelectItem value="6">6 mensagens</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[11px]">Ritmo</Label>
+                          <Select value={formPerfil.msgDividirRitmo ?? "natural"} onValueChange={(v) => setFormPerfil({ ...formPerfil, msgDividirRitmo: v })}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="rapido">Rápido (0,5–1,5s)</SelectItem>
+                              <SelectItem value="natural">Natural (1–3s)</SelectItem>
+                              <SelectItem value="calmo">Calmo (2–5s)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </>
               ) : (
                 <>
@@ -675,6 +715,16 @@ export default function Configuracoes() {
                   <div className="rounded-lg bg-slate-50 p-3">
                     <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">🌙 Fora do horário</p>
                     <p className="text-[11.5px] text-slate-700 italic">"{escritorio.mensagemAusencia || "Sem mensagem configurada"}"</p>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">💬 Divisão de respostas do robô</p>
+                    <p className="text-[11.5px] text-slate-700">
+                      {(escritorio as any).msgDividirRespostas ?? true
+                        ? `Ativada · máx. ${(escritorio as any).msgDividirMax ?? 4} mensagens · ritmo ${
+                            ({ rapido: "rápido", natural: "natural", calmo: "calmo" } as any)[(escritorio as any).msgDividirRitmo ?? "natural"]
+                          }`
+                        : "Desativada — respostas saem num bloco único"}
+                    </p>
                   </div>
                 </>
               )}

@@ -1138,16 +1138,50 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
         if (canais.length === 0) return false;
         const canalId = canais[0].id;
 
+        // Divide mensagens longas em bolhas com pausa (mesma regra das
+        // respostas de conversa — config do escritório). Sem typing aqui:
+        // envio proativo nem sempre tem conversa/última msg recebida.
+        const { escritorios } = await import("../../drizzle/schema");
+        const [escCfg] = await db
+          .select({
+            ativo: escritorios.msgDividirRespostas,
+            max: escritorios.msgDividirMax,
+            ritmo: escritorios.msgDividirRitmo,
+          })
+          .from(escritorios)
+          .where(eq(escritorios.id, escritorioId))
+          .limit(1);
+
+        const { dividirMensagemNatural, calcularDelayDigitacaoMs } = await import(
+          "../integracoes/dividir-mensagem"
+        );
+        const partes = escCfg?.ativo
+          ? dividirMensagemNatural(mensagem, { maxMensagens: escCfg.max })
+          : [mensagem];
+
         const { enviarMensagemPeloCanal } = await import("../integracoes/canal-envio");
-        const r = await enviarMensagemPeloCanal({
-          canalId,
-          telefone,
-          conteudo: mensagem,
-        });
-        if (!r.ok) {
-          log.warn({ canalId, erro: r.erro, provider: r.provider }, "SmartFlow: envio WhatsApp falhou");
+        let okTodas = true;
+        for (let i = 0; i < partes.length; i++) {
+          if (i > 0) {
+            await new Promise((r) =>
+              setTimeout(r, calcularDelayDigitacaoMs(partes[i], escCfg?.ritmo)),
+            );
+          }
+          const r = await enviarMensagemPeloCanal({
+            canalId,
+            telefone,
+            conteudo: partes[i],
+          });
+          if (!r.ok) {
+            log.warn(
+              { canalId, erro: r.erro, provider: r.provider, parte: i + 1, totalPartes: partes.length },
+              "SmartFlow: envio WhatsApp falhou",
+            );
+            okTodas = false;
+            break;
+          }
         }
-        return r.ok;
+        return okTodas;
       } catch (err: any) {
         log.error({ err: err.message }, "SmartFlow: erro ao enviar WhatsApp");
         return false;

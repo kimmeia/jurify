@@ -297,6 +297,17 @@ export const escritorios = mysqlTable("escritorios", {
    * "gpt-*" = OpenAI, "claude-*" = Anthropic). NULL = usa default global.
    */
   motorResumoModelo: varchar("motor_resumo_modelo", { length: 64 }),
+  /**
+   * Divisão de respostas automáticas (Atendente IA / SmartFlow) em
+   * mensagens menores com pausa e "digitando…" — simula atendente
+   * humano. Envio manual do operador nunca é dividido. Regras de
+   * quebra em server/integracoes/dividir-mensagem.ts.
+   */
+  msgDividirRespostas: boolean("msgDividirRespostas").default(true).notNull(),
+  msgDividirMax: int("msgDividirMax").default(4).notNull(),
+  msgDividirRitmo: mysqlEnum("msgDividirRitmo", ["rapido", "natural", "calmo"])
+    .default("natural")
+    .notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
