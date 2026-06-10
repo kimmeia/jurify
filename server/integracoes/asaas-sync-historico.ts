@@ -37,6 +37,7 @@ import { decrypt } from "../escritorio/crypto-utils";
 import { AsaasClient } from "./asaas-client";
 import { adotarCobrancasOrfas } from "./asaas-adocao-orfas";
 import { extrairDataPagamento } from "./asaas-sync";
+import { mapearFormaPagamento } from "./asaas-forma-pagamento";
 import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
 import { createLogger } from "../_core/logger";
 
@@ -120,7 +121,7 @@ async function processarJanelaUm(
   escritorioId: number,
   diaIso: string,
 ): Promise<
-  | { ok: true; novas: number; atualizadas: number }
+  | { ok: true; novas: number; atualizadas: number; falhas: number }
   | { ok: false; tipo: "rate_limit"; mensagem: string }
   | { ok: false; tipo: "erro_fatal"; mensagem: string }
 > {
@@ -129,6 +130,7 @@ async function processarJanelaUm(
 
   let novas = 0;
   let atualizadas = 0;
+  let falhas = 0;
   let offset = 0;
   let hasMore = true;
   let paginas = 0;
@@ -181,71 +183,82 @@ async function processarJanelaUm(
     for (const cob of res.data) {
       if (cob.deleted) continue;
 
-      const contatoId = customerToContato.get(cob.customer) ?? null;
-      const [local] = await db
-        .select({ id: asaasCobrancas.id })
-        .from(asaasCobrancas)
-        .where(and(
-          eq(asaasCobrancas.escritorioId, escritorioId),
-          eq(asaasCobrancas.asaasPaymentId, cob.id),
-        ))
-        .limit(1);
+      // Erro pontual numa cobrança (valor inesperado da API, enum, etc)
+      // NÃO pode derrubar a janela inteira — antes um único INSERT
+      // rejeitado travava a importação no mesmo dia pra sempre.
+      try {
+        const contatoId = customerToContato.get(cob.customer) ?? null;
+        const [local] = await db
+          .select({ id: asaasCobrancas.id })
+          .from(asaasCobrancas)
+          .where(and(
+            eq(asaasCobrancas.escritorioId, escritorioId),
+            eq(asaasCobrancas.asaasPaymentId, cob.id),
+          ))
+          .limit(1);
 
-      if (local) {
-        // Já existe — apenas atualiza status/data/líquido (não toca
-        // atribuição manual existente)
-        await db
-          .update(asaasCobrancas)
-          .set({
-            status: cob.status,
-            valor: cob.value.toString(),
-            valorLiquido: cob.netValue?.toString() || null,
-            vencimento: cob.dueDate,
-            dataPagamento: extrairDataPagamento(cob),
-            descricao: cob.description || null,
-            invoiceUrl: cob.invoiceUrl,
-            bankSlipUrl: cob.bankSlipUrl || null,
-            formaPagamento: (cob.billingType as any) || "UNDEFINED",
-            ...(contatoId ? { contatoId } : {}),
-          })
-          .where(eq(asaasCobrancas.id, local.id));
-        atualizadas++;
-      } else {
-        const atendenteInferido = await inferirAtendentePorCobranca(
-          escritorioId,
-          cob.externalReference || null,
-          contatoId,
-        );
-        await db
-          .insert(asaasCobrancas)
-          .values({
-            escritorioId,
-            contatoId,
-            asaasPaymentId: cob.id,
-            asaasCustomerId: cob.customer,
-            valor: cob.value.toString(),
-            valorLiquido: cob.netValue?.toString() || null,
-            vencimento: cob.dueDate,
-            formaPagamento: (cob.billingType as any) || "UNDEFINED",
-            status: cob.status,
-            descricao: cob.description || null,
-            invoiceUrl: cob.invoiceUrl,
-            bankSlipUrl: cob.bankSlipUrl || null,
-            dataPagamento: extrairDataPagamento(cob),
-            externalReference: cob.externalReference || null,
-            atendenteId: atendenteInferido,
-          })
-          .onDuplicateKeyUpdate({
-            set: {
+        if (local) {
+          // Já existe — apenas atualiza status/data/líquido (não toca
+          // atribuição manual existente)
+          await db
+            .update(asaasCobrancas)
+            .set({
               status: cob.status,
               valor: cob.value.toString(),
               valorLiquido: cob.netValue?.toString() || null,
               vencimento: cob.dueDate,
               dataPagamento: extrairDataPagamento(cob),
               descricao: cob.description || null,
-            },
-          });
-        novas++;
+              invoiceUrl: cob.invoiceUrl,
+              bankSlipUrl: cob.bankSlipUrl || null,
+              formaPagamento: mapearFormaPagamento(cob.billingType),
+              ...(contatoId ? { contatoId } : {}),
+            })
+            .where(eq(asaasCobrancas.id, local.id));
+          atualizadas++;
+        } else {
+          const atendenteInferido = await inferirAtendentePorCobranca(
+            escritorioId,
+            cob.externalReference || null,
+            contatoId,
+          );
+          await db
+            .insert(asaasCobrancas)
+            .values({
+              escritorioId,
+              contatoId,
+              asaasPaymentId: cob.id,
+              asaasCustomerId: cob.customer,
+              valor: cob.value.toString(),
+              valorLiquido: cob.netValue?.toString() || null,
+              vencimento: cob.dueDate,
+              formaPagamento: mapearFormaPagamento(cob.billingType),
+              status: cob.status,
+              descricao: cob.description || null,
+              invoiceUrl: cob.invoiceUrl,
+              bankSlipUrl: cob.bankSlipUrl || null,
+              dataPagamento: extrairDataPagamento(cob),
+              externalReference: cob.externalReference || null,
+              atendenteId: atendenteInferido,
+            })
+            .onDuplicateKeyUpdate({
+              set: {
+                status: cob.status,
+                valor: cob.value.toString(),
+                valorLiquido: cob.netValue?.toString() || null,
+                vencimento: cob.dueDate,
+                dataPagamento: extrairDataPagamento(cob),
+                descricao: cob.description || null,
+              },
+            });
+          novas++;
+        }
+      } catch (err: any) {
+        falhas++;
+        log.error(
+          { escritorioId, diaIso, paymentId: cob.id, billingType: cob.billingType, err: err?.message },
+          "[asaas-sync-historico] cobrança falhou — pulando (sync continua)",
+        );
       }
     }
 
@@ -259,7 +272,14 @@ async function processarJanelaUm(
     );
   }
 
-  return { ok: true, novas, atualizadas };
+  if (falhas > 0) {
+    log.warn(
+      { escritorioId, diaIso, falhas, novas, atualizadas },
+      "[asaas-sync-historico] janela concluída com falhas pontuais",
+    );
+  }
+
+  return { ok: true, novas, atualizadas, falhas };
 }
 
 /**
@@ -425,23 +445,31 @@ export async function processarSyncHistorico(): Promise<void> {
 
         // Ao concluir o sync, adota cobranças órfãs (customer Asaas
         // existente mas sem vínculo local → cobrança fica sem nome no
-        // Financeiro). Roda 1 vez no fim, não a cada janela. Falha
-        // gracefully se rate limit bater — sobras ficam pra próxima
-        // rodada ou pro clique manual de "Sincronizar Clientes".
+        // Financeiro). Roda no fim, em rodadas de MAX_ADOTAR_POR_RUN,
+        // até esgotar: importação de 10 anos acumula milhares de órfãs
+        // e uma rodada única deixava o resto sem dono. 429 interrompe
+        // (cota) — sobras ficam pro clique manual de "Sincronizar
+        // Clientes".
         if (concluiu) {
           try {
-            const r = await adotarCobrancasOrfas(cfg.escritorioId, client);
-            log.info(
-              {
-                escritorioId: cfg.escritorioId,
-                novosContatos: r.novosContatos,
-                vinculadosExistentes: r.vinculadosExistentes,
-                customersFalhados: r.customersFalhados,
-                parcial: r.parcial,
-                restantesEstimado: r.restantesEstimado,
-              },
-              "[asaas-sync-historico] adoção de órfãs após sync",
-            );
+            const MAX_RODADAS_ADOCAO = 25;
+            for (let rodada = 1; rodada <= MAX_RODADAS_ADOCAO; rodada++) {
+              const r = await adotarCobrancasOrfas(cfg.escritorioId, client);
+              log.info(
+                {
+                  escritorioId: cfg.escritorioId,
+                  rodada,
+                  novosContatos: r.novosContatos,
+                  vinculadosExistentes: r.vinculadosExistentes,
+                  customersFalhados: r.customersFalhados,
+                  parcial: r.parcial,
+                  motivoParcial: r.motivoParcial,
+                  restantesEstimado: r.restantesEstimado,
+                },
+                "[asaas-sync-historico] adoção de órfãs após sync",
+              );
+              if (r.motivoParcial !== "cap") break;
+            }
           } catch (err: any) {
             log.warn(
               { escritorioId: cfg.escritorioId, err: err?.message },
