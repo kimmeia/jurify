@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Importação de extrato Asaas — opções A e B</title>
+<style>
+  :root{
+    --ink:#1f2430; --muted:#6b7280; --bg:#f4f6f8; --panel:#fff; --border:#e6e8ec;
+    --violet:#7c3aed; --violet-bg:#f5f3ff; --violet-border:#ddd6fe;
+    --amber-bg:#fffbeb; --amber-border:#fde68a; --amber-ink:#92400e;
+    --green-bg:#f0fdf4; --green-border:#bbf7d0; --green-ink:#166534;
+    --red:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;
+    line-height:1.5;padding:32px 16px 80px}
+  .wrap{max-width:880px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 6px}
+  .sub{color:var(--muted);margin:0 0 28px;font-size:15px}
+  h2{font-size:18px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+  .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
+  .b-easy{background:#dbeafe;color:#1d4ed8}
+  .b-rec{background:#dcfce7;color:#15803d}
+  .section{margin:0 0 40px}
+  .note{color:var(--muted);font-size:13.5px;margin:6px 0 14px}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+  .dialog{max-width:440px;margin:0 auto;border-radius:14px;border:1px solid var(--border);background:#fff;box-shadow:0 18px 40px rgba(16,24,40,.16);overflow:hidden}
+  .dialog .head{padding:14px 18px;border-bottom:1px solid var(--border);font-weight:600;display:flex;align-items:center;gap:8px}
+  .dialog .body{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
+  .input{border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13.5px;background:#fff;color:var(--ink)}
+  .btn{display:inline-flex;align-items:center;gap:6px;border-radius:9px;padding:8px 14px;font-size:13.5px;font-weight:600;border:1px solid transparent;cursor:default}
+  .btn-primary{background:var(--violet);color:#fff}
+  .btn-outline{background:#fff;border-color:var(--border);color:var(--ink)}
+  .btn-amber{background:#f59e0b;color:#fff}
+  .btn-sm{padding:5px 10px;font-size:12.5px}
+  .alert{border-radius:10px;padding:12px 14px;font-size:13.5px;border:1px solid}
+  .alert-amber{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber-ink)}
+  .alert-green{background:var(--green-bg);border-color:var(--green-border);color:var(--green-ink)}
+  .alert b{font-weight:700}
+  .toast{position:relative;max-width:360px;margin:14px auto 0;background:#111827;color:#f9fafb;border-radius:10px;padding:12px 14px;font-size:13px;box-shadow:0 10px 24px rgba(0,0,0,.25)}
+  .toast .t{font-weight:600;margin-bottom:2px}
+  .toast .d{color:#d1d5db;font-size:12.5px}
+  /* card opção B */
+  .card-b{border:1px solid var(--violet-border);background:var(--violet-bg);border-radius:14px;padding:16px 18px}
+  .card-b .top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .card-b h3{margin:0;font-size:15px;display:flex;align-items:center;gap:8px}
+  .spin{width:14px;height:14px;border-radius:50%;border:2px solid #c4b5fd;border-top-color:var(--violet);display:inline-block;animation:rot 1s linear infinite}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .meta{font-size:12.5px;color:#5b21b6;margin-top:2px}
+  .bar{height:7px;border-radius:999px;background:#ede9fe;margin:12px 0 8px;overflow:hidden}
+  .bar i{display:block;height:100%;width:38%;background:linear-gradient(90deg,#8b5cf6,#7c3aed);border-radius:999px}
+  .stats{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:#4c1d95}
+  .stats b{font-weight:700}
+  .vel{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#6b7280;margin-top:12px;flex-wrap:wrap}
+  .sel{border:1px solid var(--border);background:#fff;border-radius:7px;padding:3px 8px;font-size:12.5px}
+  .pill{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px}
+  .pill-run{background:#ede9fe;color:#6d28d9}
+  .pill-pause{background:#fef3c7;color:#b45309}
+  .pill-done{background:#dcfce7;color:#15803d}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;border-radius:12px;overflow:hidden;border:1px solid var(--border)}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:#f8fafc;font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  tr:last-child td{border-bottom:none}
+  .ok{color:#15803d;font-weight:600}
+  .warn{color:#b45309;font-weight:600}
+  .divider{height:1px;background:var(--border);margin:18px 0}
+  .estado-label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Importação de extrato Asaas — como ficaria</h1>
+  <p class="sub">Mockup para aprovação · nada foi implementado. Contexto: hoje, quando a cota do Asaas
+  (25 mil requisições/12h) aperta, a importação para no meio <b>sem avisar</b> — parece que importou tudo.</p>
+
+  <!-- ════════ OPÇÃO A ════════ -->
+  <div class="section">
+    <h2>Opção A — Avisar quando parar no meio <span class="badge b-easy">rápida</span></h2>
+    <p class="note">Mesmo dialog de hoje (aba Despesas e Configurações). A diferença: quando a importação
+    é interrompida por cota, aparece o aviso âmbar com <b>até onde foi</b> e o botão de continuar.
+    Re-rodar nunca duplica (proteção já existente).</p>
+
+    <div class="dialog">
+      <div class="head">⬇️&nbsp; Importar extrato Asaas</div>
+      <div class="body">
+        <div class="row2">
+          <div><label>Período</label><div class="input">Personalizado ▾</div></div>
+          <div><label>&nbsp;</label><div style="display:flex;gap:8px">
+            <div class="input" style="flex:1">01/01/2024</div>
+            <div class="input" style="flex:1">10/06/2026</div>
+          </div></div>
+        </div>
+
+        <div class="alert alert-amber">
+          ⚠️ <b>Importação incompleta — limite do Asaas atingido.</b><br/>
+          Processadas <b>1.240 de ~3.000</b> movimentações (parou em <b>14/03/2025</b>).
+          184 despesas novas · 96 duplicadas · 2 erros.<br/>
+          <span style="font-size:12.5px">O que já entrou não duplica. Continue mais tarde, quando a cota liberar.</span>
+          <div style="margin-top:8px"><span class="btn btn-amber btn-sm">↻ Continuar de onde parou</span></div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px">
+          <span class="btn btn-outline">Fechar</span>
+          <span class="btn btn-primary">Sincronizar</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast">
+      <div class="t">⚠️ 184 despesas importadas — incompleto</div>
+      <div class="d">Limite do Asaas atingido em 14/03/2025. Rode novamente mais tarde para completar.</div>
+    </div>
+  </div>
+
+  <!-- ════════ OPÇÃO B ════════ -->
+  <div class="section">
+    <h2>Opção B — Importação em segundo plano <span class="badge b-rec">recomendada p/ histórico longo</span></h2>
+    <p class="note">Mesmo modelo do card de importação de cobranças que você já usa: escolhe o período uma vez,
+    o sistema processa em janelas pequenas a cada poucos minutos, <b>respeitando a cota</b>, e retoma sozinho
+    se pausar. O card vive no topo da aba <b>Despesas</b>. Três estados:</p>
+
+    <div class="estado-label">1 · Executando</div>
+    <div class="card-b">
+      <div class="top">
+        <div>
+          <h3><span class="spin"></span> Importando extrato Asaas <span class="pill pill-run">executando</span></h3>
+          <div class="meta">412 de 1.095 dias · 683 restantes · estimativa ~14h</div>
+        </div>
+        <span class="btn btn-outline btn-sm">⏸ Pausar</span>
+      </div>
+      <div class="bar"><i></i></div>
+      <div class="stats">
+        <span><b>1.890</b> despesas novas</span>
+        <span><b>240</b> duplicadas</span>
+        <span><b>3</b> erros pontuais</span>
+        <span><b>último dia:</b> 22/08/2025</span>
+      </div>
+      <div class="vel">Velocidade: a cada <span class="sel">5 min ▾</span> processa <span class="sel">7 dias ▾</span>
+        <span>· divide a cota com a importação de cobranças e o uso normal</span></div>
+    </div>
+
+    <div class="estado-label">2 · Pausado por cota (retoma sozinho)</div>
+    <div class="card-b" style="background:var(--amber-bg);border-color:var(--amber-border)">
+      <div class="top">
+        <div>
+          <h3>⏳ Importando extrato Asaas <span class="pill pill-pause">pausado — cota Asaas</span></h3>
+          <div class="meta" style="color:var(--amber-ink)">Limite de requisições atingido. Retoma automaticamente quando a janela de 12h liberar — nada se perde.</div>
+        </div>
+        <span class="btn btn-outline btn-sm">↻ Tentar agora</span>
+      </div>
+      <div class="bar" style="background:#fef3c7"><i style="width:61%;background:linear-gradient(90deg,#f59e0b,#d97706)"></i></div>
+      <div class="stats" style="color:var(--amber-ink)">
+        <span><b>668</b> de 1.095 dias</span>
+        <span><b>2.913</b> despesas novas</span>
+        <span><b>último dia:</b> 03/02/2023</span>
+      </div>
+    </div>
+
+    <div class="estado-label">3 · Concluído</div>
+    <div class="alert alert-green" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <span>✅ <b>Extrato importado por completo.</b> 4.412 despesas (jan/2016 → jun/2026) · 312 duplicadas ignoradas.</span>
+      <span class="btn btn-outline btn-sm">Fechar</span>
+    </div>
+  </div>
+
+  <!-- ════════ COMPARAÇÃO ════════ -->
+  <div class="section">
+    <h2>Comparação rápida</h2>
+    <table>
+      <tr><th></th><th>A — Aviso de parcial</th><th>B — Segundo plano</th></tr>
+      <tr><td><b>Resolve o "importou e sumiu"</b></td><td class="ok">Sim — mostra que parou e onde</td><td class="ok">Sim — nem depende de você acompanhar</td></tr>
+      <tr><td><b>Períodos curtos (7–90 dias)</b></td><td class="ok">Atende bem</td><td class="ok">Atende</td></tr>
+      <tr><td><b>Histórico longo (anos)</b></td><td class="warn">Exige re-rodar várias vezes na mão</td><td class="ok">Importa tudo sozinho, dentro da cota</td></tr>
+      <tr><td><b>Briga com a cota do Asaas</b></td><td class="warn">Pode esbarrar (roda tudo de uma vez)</td><td class="ok">Dilui o consumo (janelas + rate guard)</td></tr>
+      <tr><td><b>Esforço de implementação</b></td><td>Pequeno (1 sessão)</td><td>Médio (reusa o motor do sync de cobranças)</td></tr>
+    </table>
+    <p class="note" style="margin-top:12px"><b>Recomendação A + B:</b> o aviso da opção A entra também no fluxo da B
+    (é o estado "pausado por cota"). Dá pra fazer A primeiro e B em seguida, ou os dois juntos.</p>
+  </div>
+
+</div>
+</body>
+</html>
