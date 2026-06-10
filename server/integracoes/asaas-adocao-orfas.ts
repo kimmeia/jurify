@@ -54,6 +54,12 @@ export interface AdocaoOrfasResultado {
   customersFalhados: number;
   /** True se a operação parou no meio (429 ou hard cap atingido). */
   parcial: boolean;
+  /**
+   * Por que parou no meio: "rate_limit" (429 — não adianta repetir agora)
+   * ou "cap" (MAX_ADOTAR_POR_RUN — caller pode chamar de novo pra
+   * continuar). Null quando parcial=false.
+   */
+  motivoParcial: "rate_limit" | "cap" | null;
   /** Quantos órfãos restam após esta execução (estimativa local). */
   restantesEstimado: number;
 }
@@ -69,6 +75,7 @@ export async function adotarCobrancasOrfas(
       vinculadosExistentes: 0,
       customersFalhados: 0,
       parcial: false,
+      motivoParcial: null,
       restantesEstimado: 0,
     };
   }
@@ -93,6 +100,7 @@ export async function adotarCobrancasOrfas(
   let vinculadosExistentes = 0;
   let customersFalhados = 0;
   let parcial = totalOrfaos > MAX_ADOTAR_POR_RUN;
+  let motivoParcial: "rate_limit" | "cap" | null = parcial ? "cap" : null;
   let processados = 0;
 
   for (let i = 0; i < aProcessar.length; i++) {
@@ -173,6 +181,7 @@ export async function adotarCobrancasOrfas(
           "[adocao-orfas] Rate limit 429 — abortando graciosamente",
         );
         parcial = true;
+        motivoParcial = "rate_limit";
         break;
       }
       customersFalhados++;
@@ -187,6 +196,7 @@ export async function adotarCobrancasOrfas(
     vinculadosExistentes,
     customersFalhados,
     parcial,
+    motivoParcial,
     restantesEstimado,
   };
 }

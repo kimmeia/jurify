@@ -16,6 +16,7 @@ import { asaasConfig, asaasClientes, asaasCobrancas, contatos, colaboradores, no
 import { eq, and, inArray, isNull, ne, or, lt } from "drizzle-orm";
 import { decrypt } from "../escritorio/crypto-utils";
 import { AsaasClient, type AsaasPayment } from "./asaas-client";
+import { mapearFormaPagamento } from "./asaas-forma-pagamento";
 import { RateLimitError } from "./asaas-rate-guard";
 import { createLogger } from "../_core/logger";
 import { isDuplicateEntryError } from "../_core/sql-helpers";
@@ -312,7 +313,7 @@ export async function syncCobrancasDeCliente(
             valor: cob.value.toString(),
             valorLiquido: cob.netValue?.toString() || null,
             vencimento: cob.dueDate,
-            formaPagamento: (cob.billingType as any) || "UNDEFINED",
+            formaPagamento: mapearFormaPagamento(cob.billingType),
             status: cob.status,
             descricao: cob.description || null,
             invoiceUrl: cob.invoiceUrl,
@@ -329,7 +330,7 @@ export async function syncCobrancasDeCliente(
               valor: cob.value.toString(),
               valorLiquido: cob.netValue?.toString() || null,
               vencimento: cob.dueDate,
-              formaPagamento: (cob.billingType as any) || "UNDEFINED",
+              formaPagamento: mapearFormaPagamento(cob.billingType),
               descricao: cob.description || null,
               invoiceUrl: cob.invoiceUrl,
               bankSlipUrl: cob.bankSlipUrl || null,
@@ -885,7 +886,7 @@ export async function syncCobrancasPorVencimentoEscritorio(
               valor: cob.value.toString(),
               valorLiquido: cob.netValue?.toString() || null,
               vencimento: cob.dueDate,
-              formaPagamento: (cob.billingType as any) || "UNDEFINED",
+              formaPagamento: mapearFormaPagamento(cob.billingType),
               status: cob.status,
               descricao: cob.description || null,
               invoiceUrl: cob.invoiceUrl,
@@ -900,7 +901,7 @@ export async function syncCobrancasPorVencimentoEscritorio(
                 valor: cob.value.toString(),
                 valorLiquido: cob.netValue?.toString() || null,
                 vencimento: cob.dueDate,
-                formaPagamento: (cob.billingType as any) || "UNDEFINED",
+                formaPagamento: mapearFormaPagamento(cob.billingType),
                 descricao: cob.description || null,
                 invoiceUrl: cob.invoiceUrl,
                 bankSlipUrl: cob.bankSlipUrl || null,
