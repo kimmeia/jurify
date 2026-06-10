@@ -56,7 +56,20 @@ export interface AsaasCustomerInput {
   groupName?: string;
 }
 
-export type AsaasBillingType = "BOLETO" | "CREDIT_CARD" | "PIX" | "UNDEFINED";
+/**
+ * billingType como o Asaas DEVOLVE em payments. Na criação enviamos só
+ * BOLETO/CREDIT_CARD/PIX/UNDEFINED (validado por Zod nos routers), mas o
+ * histórico de uma conta pode conter DEBIT_CARD, TRANSFER e DEPOSIT —
+ * persistidos no enum local via `mapearFormaPagamento()`.
+ */
+export type AsaasBillingType =
+  | "BOLETO"
+  | "CREDIT_CARD"
+  | "PIX"
+  | "UNDEFINED"
+  | "DEBIT_CARD"
+  | "TRANSFER"
+  | "DEPOSIT";
 
 export type AsaasPaymentStatus =
   | "PENDING"

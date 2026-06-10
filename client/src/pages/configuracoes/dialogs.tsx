@@ -508,14 +508,20 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
  *
  * Idempotente: re-rodar a mesma janela não duplica nada (UNIQUE INDEX
  * em `despesas.asaasFinTransId`).
+ *
+ * Exportado: também usado pelo botão "Importar extrato Asaas" da aba
+ * Despesas (pages/financeiro/DespesasWrapper.tsx).
  */
-function SincronizarExtratoSection({ canEdit }: { canEdit: boolean }) {
+export function SincronizarExtratoSection({ canEdit }: { canEdit: boolean }) {
   const [periodo, setPeriodo] = useState<"7d" | "30d" | "90d" | "custom">("30d");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
 
+  const utils = trpc.useUtils();
   const extratoMut = (trpc as any).asaas?.sincronizarExtrato?.useMutation?.({
     onSuccess: (r: any) => {
+      // Reflete as despesas novas na aba Despesas sem reload manual.
+      (utils as any).despesas?.listar?.invalidate?.();
       const novos = r.novasDespesas;
       const dup = r.duplicadas;
       const tiposExtras = Object.keys(r.tiposVistos || {}).filter(

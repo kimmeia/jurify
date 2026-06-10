@@ -137,6 +137,7 @@ describe("adotarCobrancasOrfas — caminhos felizes", () => {
     expect(r.vinculadosExistentes).toBe(0);
     expect(r.customersFalhados).toBe(0);
     expect(r.parcial).toBe(false);
+    expect(r.motivoParcial).toBeNull();
 
     const inserts = captured.filter((c) => c.op === "insert");
     expect(inserts.map((i) => i.table)).toEqual(["contatos", "asaas_clientes"]);
@@ -219,6 +220,7 @@ describe("adotarCobrancasOrfas — rate limit e cap", () => {
 
     const r = await adotarCobrancasOrfas(10, client);
     expect(r.parcial).toBe(true);
+    expect(r.motivoParcial).toBe("rate_limit");
     expect(r.restantesEstimado).toBeGreaterThan(0);
     // Só chamou buscarCliente uma vez (parou no 429)
     expect(client.buscarCliente).toHaveBeenCalledTimes(1);

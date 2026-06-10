@@ -29,6 +29,7 @@ import { marcarEventoProcessado } from "./asaas-idempotency";
 import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
 import { extrairDataPagamento, inserirVinculoAsaasIdempotente, getAsaasClientForEscritorio } from "./asaas-sync";
 import { mesclarCadastroDoAsaas } from "./asaas-cadastro-merge";
+import { mapearFormaPagamento } from "./asaas-forma-pagamento";
 import { gerarDespesaTaxaAsaas } from "./asaas-despesas-auto";
 import { dataHojeBR } from "../../shared/escritorio-types";
 const log = createLogger("integracoes-asaas-webhook");
@@ -290,7 +291,7 @@ export function registerAsaasWebhook(app: Express) {
               valor: payment.value.toString(),
               valorLiquido: payment.netValue?.toString() || null,
               vencimento: payment.dueDate,
-              formaPagamento: (payment.billingType as any) || "UNDEFINED",
+              formaPagamento: mapearFormaPagamento(payment.billingType),
               status: payment.status,
               descricao: payment.description || null,
               invoiceUrl: payment.invoiceUrl || null,
@@ -313,7 +314,7 @@ export function registerAsaasWebhook(app: Express) {
                 descricao: payment.description || null,
                 invoiceUrl: payment.invoiceUrl || null,
                 bankSlipUrl: payment.bankSlipUrl || null,
-                formaPagamento: (payment.billingType as any) || "UNDEFINED",
+                formaPagamento: mapearFormaPagamento(payment.billingType),
                 externalReference: payment.externalReference || null,
                 // Se a cobrança já existia órfã (criada por outro caminho
                 // sem vínculo), adota o contato do vínculo atual.
