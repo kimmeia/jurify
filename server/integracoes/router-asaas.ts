@@ -28,6 +28,7 @@ import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { AsaasClient, type AsaasCustomer } from "./asaas-client";
+import { mesclarCadastroDoAsaas } from "./asaas-cadastro-merge";
 import { executarExclusaoCobrancasEmMassa } from "./asaas-cobrancas-bulk";
 import { adotarCobrancasOrfas } from "./asaas-adocao-orfas";
 import { calcularParcelas } from "./parcelamento-local";
@@ -421,13 +422,12 @@ type SyncResult = {
 };
 
 /**
- * Fecha o ciclo de vinculação: escreve no CRM (contatos) o que veio do
- * Asaas como fonte de verdade, grava o vínculo principal + eventuais
- * vínculos secundários (duplicatas do Asaas com mesmo CPF) e sincroniza
- * cobranças de todos eles no mesmo contato do CRM.
- *
- * Nome/CPF/email/telefone do Asaas têm precedência; se algum campo faltar
- * no Asaas, o valor atual do CRM é preservado (fallback com ||).
+ * Fecha o ciclo de vinculação: atualiza o cadastro no CRM com a política
+ * de `mesclarCadastroDoAsaas` (nome/CPF do Asaas quando presentes;
+ * telefone/email do CRM preservados — Asaas só preenche se vazio), grava
+ * o vínculo principal + eventuais vínculos secundários (duplicatas do
+ * Asaas com mesmo CPF) e sincroniza cobranças de todos eles no mesmo
+ * contato do CRM.
  *
  * Secundários recebem `primario=false` e servem só para puxar histórico;
  * cobranças novas sempre saem do primário (ver criarCobranca).
@@ -445,12 +445,9 @@ async function finalizarVinculacao(
   cpfLimpo: string,
   secundarios: AsaasCustomer[] = [],
 ): Promise<SyncResult> {
-  await db.update(contatos).set({
-    nome: asaasCli.name || contato.nome,
-    cpfCnpj: (asaasCli.cpfCnpj || cpfLimpo).replace(/\D/g, ""),
-    email: asaasCli.email || contato.email,
-    telefone: asaasCli.mobilePhone || asaasCli.phone || contato.telefone,
-  }).where(and(
+  await db.update(contatos).set(
+    mesclarCadastroDoAsaas(contato, { ...asaasCli, cpfCnpj: asaasCli.cpfCnpj || cpfLimpo }),
+  ).where(and(
     eq(contatos.id, contatoId),
     eq(contatos.escritorioId, escritorioId),
   ));
@@ -1333,22 +1330,35 @@ export const asaasRouter = router({
           continue;
         }
         if (cli.name) {
-          const cpfLimpo = cli.cpfCnpj ? cli.cpfCnpj.replace(/\D/g, "") : null;
-          await db
-            .update(contatos)
-            .set({
-              nome: cli.name,
-              ...(cpfLimpo ? { cpfCnpj: cpfLimpo } : {}),
-              email: cli.email ?? null,
-              telefone: cli.mobilePhone ?? cli.phone ?? null,
+          // Carrega o cadastro atual: telefone/email do CRM são preservados
+          // (Asaas só preenche quando vazios) — ver mesclarCadastroDoAsaas.
+          const [contatoAtual] = await db
+            .select({
+              nome: contatos.nome,
+              cpfCnpj: contatos.cpfCnpj,
+              email: contatos.email,
+              telefone: contatos.telefone,
             })
+            .from(contatos)
             .where(
               and(
                 eq(contatos.id, v.contatoId),
                 eq(contatos.escritorioId, esc.escritorio.id),
               ),
-            );
-          atualizadosVinculados++;
+            )
+            .limit(1);
+          if (contatoAtual) {
+            await db
+              .update(contatos)
+              .set(mesclarCadastroDoAsaas(contatoAtual, cli))
+              .where(
+                and(
+                  eq(contatos.id, v.contatoId),
+                  eq(contatos.escritorioId, esc.escritorio.id),
+                ),
+              );
+            atualizadosVinculados++;
+          }
         }
       } catch (err: any) {
         const status = err?.response?.status ?? err?.cause?.response?.status;
