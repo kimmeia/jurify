@@ -512,10 +512,23 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
  * Exportado: também usado pelo botão "Importar extrato Asaas" da aba
  * Despesas (pages/financeiro/DespesasWrapper.tsx).
  */
+function formatarDataBR(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return y && m && d ? `${d}/${m}/${y}` : iso;
+}
+
 export function SincronizarExtratoSection({ canEdit }: { canEdit: boolean }) {
   const [periodo, setPeriodo] = useState<"7d" | "30d" | "90d" | "custom">("30d");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
+  // Resultado parcial da última execução (cota do Asaas cortou no meio).
+  // Renderiza o alerta âmbar com "até onde foi" + botão de continuar.
+  const [parcialInfo, setParcialInfo] = useState<{
+    novasDespesas: number;
+    duplicadas: number;
+    erros: number;
+    ultimaDataProcessada: string | null;
+  } | null>(null);
 
   const utils = trpc.useUtils();
   const extratoMut = (trpc as any).asaas?.sincronizarExtrato?.useMutation?.({
@@ -524,17 +537,45 @@ export function SincronizarExtratoSection({ canEdit }: { canEdit: boolean }) {
       (utils as any).despesas?.listar?.invalidate?.();
       const novos = r.novasDespesas;
       const dup = r.duplicadas;
+      if (r.parcial) {
+        setParcialInfo({
+          novasDespesas: novos,
+          duplicadas: dup,
+          erros: r.erros ?? 0,
+          ultimaDataProcessada: r.ultimaDataProcessada ?? null,
+        });
+        toast.warning(`${novos} despesa(s) importada(s) — incompleto`, {
+          description: `Limite do Asaas atingido${
+            r.ultimaDataProcessada ? ` (parou em ${formatarDataBR(r.ultimaDataProcessada)})` : ""
+          }. Rode novamente mais tarde para completar — não duplica.`,
+          duration: 12000,
+        });
+        return;
+      }
+      setParcialInfo(null);
       const tiposExtras = Object.keys(r.tiposVistos || {}).filter(
         (t) => !["PAYMENT_RECEIVED", "PAYMENT_OVERDUE_RECEIVED", "PAYMENT_REVERSAL"].includes(t),
       );
+      const errosTxt = r.erros > 0 ? ` ${r.erros} com erro (ver logs).` : "";
       toast.success(`${novos} despesa(s) importada(s)`, {
-        description: `${dup} duplicadas, ${r.ignoradas} créditos ignorados. ${
+        description: `${dup} duplicadas, ${r.ignoradas} créditos ignorados.${errosTxt} ${
           tiposExtras.length > 0 ? `Tipos: ${tiposExtras.slice(0, 5).join(", ")}` : ""
         }`,
         duration: 10000,
       });
     },
     onError: (err: any) => toast.error("Erro ao sincronizar extrato", { description: err.message }),
+  }) || {};
+
+  const segundoPlanoMut = (trpc as any).asaas?.extratoSyncIniciar?.useMutation?.({
+    onSuccess: (r: any) => {
+      (utils as any).asaas?.extratoSyncStatus?.invalidate?.();
+      toast.success("Importação em segundo plano iniciada", {
+        description: `${r.totalDias} dia(s) de extrato · estimativa ~${r.estimativaHoras}h. Acompanhe o progresso na aba Despesas.`,
+        duration: 10000,
+      });
+    },
+    onError: (err: any) => toast.error("Erro ao iniciar importação", { description: err.message }),
   }) || {};
 
   const calcularDatas = () => {
@@ -596,21 +637,66 @@ export function SincronizarExtratoSection({ canEdit }: { canEdit: boolean }) {
         </div>
         <div>
           <Label className="text-xs invisible">.</Label>
+          <div className="flex gap-1.5">
+            <Button
+              size="sm"
+              className="flex-1 h-8 text-xs"
+              onClick={onSync}
+              disabled={!canEdit || extratoMut.isPending}
+            >
+              {extratoMut.isPending ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <Receipt className="h-3 w-3 mr-1" />
+              )}
+              Sincronizar agora
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 h-8 text-xs"
+              title="Processa em janelas pelo servidor, respeitando a cota do Asaas — ideal pra períodos longos. Acompanhe na aba Despesas."
+              onClick={() => {
+                const datas = calcularDatas();
+                if (periodo === "custom" && (!datas.desde || !datas.ate)) {
+                  toast.error("Informe data de início e fim");
+                  return;
+                }
+                segundoPlanoMut.mutate?.({ desde: datas.desde, ate: datas.ate });
+              }}
+              disabled={!canEdit || segundoPlanoMut.isPending}
+            >
+              {segundoPlanoMut.isPending ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : null}
+              Em 2º plano
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {parcialInfo && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2.5 text-xs text-amber-900 dark:text-amber-200 space-y-1.5">
+          <div className="font-semibold">⚠️ Importação incompleta — limite do Asaas atingido</div>
+          <div>
+            {parcialInfo.novasDespesas} despesa(s) nova(s) · {parcialInfo.duplicadas} duplicada(s)
+            {parcialInfo.erros > 0 ? ` · ${parcialInfo.erros} com erro` : ""}
+            {parcialInfo.ultimaDataProcessada
+              ? ` · parou em ${formatarDataBR(parcialInfo.ultimaDataProcessada)}`
+              : ""}
+            . O que já entrou não duplica — continue mais tarde, quando a cota liberar.
+          </div>
           <Button
             size="sm"
-            className="w-full h-8 text-xs"
+            variant="outline"
+            className="h-7 text-xs border-amber-400"
             onClick={onSync}
             disabled={!canEdit || extratoMut.isPending}
           >
-            {extratoMut.isPending ? (
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-            ) : (
-              <Receipt className="h-3 w-3 mr-1" />
-            )}
-            Sincronizar agora
+            ↻ Continuar de onde parou
           </Button>
         </div>
-      </div>
+      )}
 
       {periodo === "custom" && (
         <div className="grid grid-cols-2 gap-2">

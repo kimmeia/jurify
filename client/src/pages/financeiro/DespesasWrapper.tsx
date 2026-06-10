@@ -30,6 +30,7 @@ import { Calculator, Download, History } from "lucide-react";
 import { DespesasTab } from "./Despesas";
 import { CalcularSection, HistoricoSection } from "./Comissoes";
 import { SincronizarExtratoSection } from "../configuracoes/dialogs";
+import { ExtratoSyncCard } from "./ExtratoSyncCard";
 
 export function DespesasWrapper() {
   const [calcularAberto, setCalcularAberto] = useState(false);
@@ -67,6 +68,8 @@ export function DespesasWrapper() {
           Histórico de fechamentos
         </Button>
       </div>
+
+      <ExtratoSyncCard />
 
       <DespesasTab />
 

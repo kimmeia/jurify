@@ -91,6 +91,12 @@ export interface SincronizarExtratoResultado {
   tiposVistos: Record<string, number>;
   /** Se a sync parou no meio (429 etc), true. Caller pode reagendar. */
   parcial: boolean;
+  /**
+   * Data (YYYY-MM-DD) da última movimentação processada. Quando
+   * `parcial=true`, mostra ao usuário até onde a importação chegou —
+   * re-rodar a mesma janela completa o resto (idempotente).
+   */
+  ultimaDataProcessada: string | null;
 }
 
 interface CategoriaCache {
@@ -169,6 +175,7 @@ export async function sincronizarExtratoAsaas(
     erros: 0,
     tiposVistos: {},
     parcial: false,
+    ultimaDataProcessada: null,
   };
   if (!db) return resultado;
 
@@ -203,6 +210,7 @@ export async function sincronizarExtratoAsaas(
 
     for (const mov of pagina.data) {
       resultado.totalProcessadas++;
+      if (mov.date) resultado.ultimaDataProcessada = mov.date;
       const tipo = mov.type || "UNKNOWN";
       resultado.tiposVistos[tipo] = (resultado.tiposVistos[tipo] ?? 0) + 1;
 
