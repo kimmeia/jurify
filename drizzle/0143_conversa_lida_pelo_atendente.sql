@@ -6,3 +6,8 @@
 
 ALTER TABLE `conversas`
   ADD COLUMN `lidaPeloAtendenteEm` TIMESTAMP NULL DEFAULT NULL;
+
+-- Backfill: conversas existentes começam como "lidas agora". Sem isso,
+-- o primeiro deploy acorda com TODA a lista destacada (histórico inteiro
+-- de entradas contando como não lido). Só mensagens novas destacam.
+UPDATE `conversas` SET `lidaPeloAtendenteEm` = NOW() WHERE `lidaPeloAtendenteEm` IS NULL;
