@@ -772,8 +772,9 @@ export default function Atendimento() {
                             ? "bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/30 dark:hover:bg-violet-950/40"
                             : naoLidas > 0
                               // Mensagem nova: card inteiro destacado até abrir
-                              // a conversa (não só fonte/badge — sumia na lista)
-                              ? "bg-violet-100/80 hover:bg-violet-100 dark:bg-violet-900/40 dark:hover:bg-violet-900/50"
+                              // a conversa — preto translúcido (pedido do dono;
+                              // o violeta confundia com a selecionada)
+                              ? "bg-black/[0.07] hover:bg-black/[0.10] dark:bg-white/10 dark:hover:bg-white/[0.14]"
                               : "hover:bg-muted/40")
                         }
                         onClick={() => setSelId(c.id)}
@@ -781,7 +782,7 @@ export default function Atendimento() {
                         {selecionada ? (
                           <span className="absolute left-0 top-3 bottom-3 w-1 bg-violet-600 rounded-r" aria-hidden />
                         ) : naoLidas > 0 ? (
-                          <span className="absolute left-0 top-3 bottom-3 w-[3px] bg-violet-400 rounded-r" aria-hidden />
+                          <span className="absolute left-0 top-3 bottom-3 w-[3px] bg-slate-600 dark:bg-slate-300 rounded-r" aria-hidden />
                         ) : null}
                         <div className="flex items-start gap-2.5">
                           <div className="relative shrink-0">
