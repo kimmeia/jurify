@@ -784,6 +784,25 @@ export const crmRouter = router({
     }),
 
   /**
+   * Zera o contador de não lidas da conversa — chamado quando o atendente
+   * a abre no inbox (e a cada mensagem que chega com ela aberta).
+   */
+  marcarConversaLida: protectedProcedure
+    .input(z.object({ conversaId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      await db.update(conversas)
+        .set({ lidaPeloAtendenteEm: new Date() })
+        .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)));
+
+      return { success: true };
+    }),
+
+  /**
    * Vincular conversa a contato existente.
    *
    * Caso clássico: esposa do cliente chama de outro número → o handler do

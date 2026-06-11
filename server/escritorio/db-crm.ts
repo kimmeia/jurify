@@ -3,7 +3,7 @@
  * Fase 3 — Inclui algoritmo de distribuição inteligente de leads
  */
 
-import { eq, and, desc, asc, or, sql, gte, lte, like, inArray, type SQL } from "drizzle-orm";
+import { eq, and, desc, asc, or, sql, gt, gte, lte, like, inArray, isNull, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios, setores } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
@@ -598,10 +598,36 @@ export async function listarConversas(escritorioId: number, filtros?: {
     }
   }
 
+  // Não lidas = mensagens de ENTRADA depois da última abertura da conversa
+  // pelo atendente (lidaPeloAtendenteEm; NULL = nunca abriu → todas contam).
+  // O campo sempre existiu no contrato (ConversaInfo.naoLidas) mas nunca era
+  // calculado — badge/negrito/fundo destacado da lista ficavam mortos.
+  const naoLidasPorConversa = new Map<number, number>();
+  {
+    const idsConv = rows.map((r) => r.id);
+    if (idsConv.length > 0) {
+      const contagens = await db
+        .select({ conversaId: mensagens.conversaId, n: sql<number>`COUNT(*)` })
+        .from(mensagens)
+        .innerJoin(conversas, eq(conversas.id, mensagens.conversaId))
+        .where(and(
+          inArray(mensagens.conversaId, idsConv),
+          eq(mensagens.direcao, "entrada"),
+          or(
+            isNull(conversas.lidaPeloAtendenteEm),
+            gt(mensagens.createdAt, conversas.lidaPeloAtendenteEm),
+          ),
+        ))
+        .groupBy(mensagens.conversaId);
+      for (const c of contagens) naoLidasPorConversa.set(c.conversaId, Number(c.n));
+    }
+  }
+
   return rows.map((r) => ({
     ...r,
     atendenteNome: r.atendenteId ? atendenteMap[r.atendenteId] : undefined,
     temAtraso: contatosComAtraso.has(r.contatoId),
+    naoLidas: naoLidasPorConversa.get(r.id) ?? 0,
     ultimaMensagemAt: toIsoString(r.ultimaMensagemAt) ?? undefined,
     createdAt: toIsoString(r.createdAt) ?? "",
   }));
