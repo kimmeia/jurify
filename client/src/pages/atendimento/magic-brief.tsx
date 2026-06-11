@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { Sparkles, AlertTriangle, Calendar, DollarSign, Clock, Loader2 } from "lucide-react";
+import { Sparkles, AlertTriangle, Calendar, DollarSign, Clock, Loader2, X, ChevronDown } from "lucide-react";
 
 function formatBRL(c: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(c / 100);
@@ -19,7 +19,13 @@ function diffDias(dateStr: any): string | null {
  * Magic Brief — prediz o motivo da conversa em 1 linha, com contexto
  * cross-module (processo + financeiro + agenda) em chips abaixo.
  */
-export function MagicBrief({ conversaId }: { conversaId: number }) {
+export function MagicBrief({
+  conversaId,
+  onRecolher,
+}: {
+  conversaId: number;
+  onRecolher?: () => void;
+}) {
   const { data, isLoading } = trpc.atendimentoIa.briefInstantaneo.useQuery(
     { conversaId },
     { staleTime: 60_000, retry: false },
@@ -46,6 +52,15 @@ export function MagicBrief({ conversaId }: { conversaId: number }) {
           "linear-gradient(135deg, rgba(139,92,246,0.04) 0%, rgba(99,102,241,0.04) 50%, rgba(236,72,153,0.04) 100%)",
       }}
     >
+      {onRecolher && (
+        <button
+          onClick={onRecolher}
+          title="Recolher contexto (Brief, eventos e SLA)"
+          className="absolute top-2 right-2 w-5 h-5 rounded-md border border-violet-200 bg-white/90 text-violet-700 hover:bg-violet-100 flex items-center justify-center z-10"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
       <div className="flex items-start gap-2.5">
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
           <Sparkles className="h-3.5 w-3.5 text-white" />
@@ -106,5 +121,59 @@ export function MagicBrief({ conversaId }: { conversaId: number }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Barra compacta do contexto recolhido — substitui Brief + Diff + Action
+ * Cards quando o atendente fecha o bloco (✕). Resume o essencial em uma
+ * linha clicável; SLA crítico continua em vermelho mesmo recolhido.
+ * Reusa a query do brief (mesmo cache — sem request extra).
+ */
+export function ContextoRecolhidoBar({
+  conversaId,
+  slaCritico,
+  onExpandir,
+}: {
+  conversaId: number;
+  slaCritico?: boolean;
+  onExpandir: () => void;
+}) {
+  const { data } = trpc.atendimentoIa.briefInstantaneo.useQuery(
+    { conversaId },
+    { staleTime: 60_000, retry: false },
+  );
+  const ctx = data?.contexto;
+
+  return (
+    <button
+      onClick={onExpandir}
+      title="Expandir contexto (Brief, eventos e SLA)"
+      className="mx-4 mt-3 flex items-center gap-2 flex-wrap rounded-full border border-dashed border-violet-200 bg-violet-50/70 hover:bg-violet-100/70 px-3 py-1.5 text-[10px] transition-colors text-left"
+    >
+      <span className="inline-flex items-center gap-1 font-bold text-violet-700">
+        <Sparkles className="h-3 w-3" /> Brief
+      </span>
+      {ctx?.proximaAudiencia && (
+        <span className="inline-flex items-center gap-1 font-semibold text-blue-700">
+          <Calendar className="h-3 w-3" /> {diffDias(ctx.proximaAudiencia.data)}
+        </span>
+      )}
+      {ctx?.financeiro && ctx.financeiro.total > 0 && (
+        <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
+          <DollarSign className="h-3 w-3" />
+          {ctx.financeiro.pagos}/{ctx.financeiro.total}
+          {ctx.financeiro.vencidos > 0 && (
+            <span className="text-red-600 font-bold">· {ctx.financeiro.vencidos} venc.</span>
+          )}
+        </span>
+      )}
+      {slaCritico && (
+        <span className="inline-flex items-center gap-1 font-bold text-red-600">
+          <Clock className="h-3 w-3" /> SLA crítico
+        </span>
+      )}
+      <ChevronDown className="h-3.5 w-3.5 text-violet-600 ml-auto shrink-0" />
+    </button>
   );
 }

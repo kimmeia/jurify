@@ -46,7 +46,7 @@ import type { StatusConversa, EtapaFunil } from "@shared/crm-types";
 import { parseValorBR } from "@shared/valor-br";
 import { FUSO_HORARIO_PADRAO, dataHojeBR, rotuloDataConversa } from "@shared/escritorio-types";
 import { RespostaRapidaAutocomplete } from "@/components/atendimento/RespostaRapidaAutocomplete";
-import { MagicBrief } from "./atendimento/magic-brief";
+import { MagicBrief, ContextoRecolhidoBar } from "./atendimento/magic-brief";
 import { ConversationDiff } from "./atendimento/conversation-diff";
 import { AIActionCards } from "./atendimento/ai-action-cards";
 import { ComplianceGuard, ComplianceGuardBadge } from "./atendimento/compliance-guard";
@@ -770,13 +770,19 @@ export default function Atendimento() {
                           "w-full text-left px-3 py-3 border-b transition-colors relative " +
                           (selecionada
                             ? "bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/30 dark:hover:bg-violet-950/40"
-                            : "hover:bg-muted/40")
+                            : naoLidas > 0
+                              // Mensagem nova: card inteiro destacado até abrir
+                              // a conversa (não só fonte/badge — sumia na lista)
+                              ? "bg-violet-100/80 hover:bg-violet-100 dark:bg-violet-900/40 dark:hover:bg-violet-900/50"
+                              : "hover:bg-muted/40")
                         }
                         onClick={() => setSelId(c.id)}
                       >
-                        {selecionada && (
+                        {selecionada ? (
                           <span className="absolute left-0 top-3 bottom-3 w-1 bg-violet-600 rounded-r" aria-hidden />
-                        )}
+                        ) : naoLidas > 0 ? (
+                          <span className="absolute left-0 top-3 bottom-3 w-[3px] bg-violet-400 rounded-r" aria-hidden />
+                        ) : null}
                         <div className="flex items-start gap-2.5">
                           <div className="relative shrink-0">
                             <div
@@ -970,6 +976,15 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const [tom, setTom] = useState<"formal" | "direto" | "empatico" | "amigavel">("empatico");
   const [confirmExcluirConversa, setConfirmExcluirConversa] = useState(false);
   const [metaParamsDialog, setMetaParamsDialog] = useState<{ template: any; preview: string } | null>(null);
+  // Bloco de contexto (Brief + Diff + ActionCards) recolhível — preferência
+  // do atendente persistida no navegador, vale pra todas as conversas.
+  const [ctxRecolhido, setCtxRecolhido] = useState<boolean>(() => {
+    try { return localStorage.getItem("jurify:atendimento:ctxRecolhido") === "1"; } catch { return false; }
+  });
+  const toggleCtxRecolhido = (v: boolean) => {
+    setCtxRecolhido(v);
+    try { localStorage.setItem("jurify:atendimento:ctxRecolhido", v ? "1" : "0"); } catch { /* modo privado */ }
+  };
 
   // Compor com IA — gera sugestão no tom escolhido
   const composerSugestao = trpc.atendimentoIa.composerSugestao.useMutation({
@@ -1265,16 +1280,29 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" title="Excluir" onClick={handleDelete}><Trash2 className="h-3 w-3" /></Button>
       </div>
     </div>
-    {/* 🌟 Killer feature: Magic Brief Instantâneo (IA prevê motivo da conversa) */}
-    <MagicBrief conversaId={cid} />
-    {/* 🌟 Killer feature: Conversation Diff (o que mudou desde sua última resposta) */}
-    <ConversationDiff conversaId={cid} />
-    {/* 🌟 Killer feature: AI Action Cards (detecta intenção e oferece workflow 1-click) */}
-    <AIActionCards
-      conversaId={cid}
-      contatoNome={conv?.contatoNome || "Cliente"}
-      onEnviarMensagem={(texto) => setMsg(texto)}
-    />
+    {/* Bloco de contexto recolhível: Brief + Diff + Action Cards. O ✕ no
+        brief recolhe tudo numa barrinha de resumo (SLA crítico continua
+        visível em vermelho); o ⌄ da barrinha expande de volta. */}
+    {ctxRecolhido ? (
+      <ContextoRecolhidoBar
+        conversaId={cid}
+        slaCritico={!!(conv as any)?.temAtraso}
+        onExpandir={() => toggleCtxRecolhido(false)}
+      />
+    ) : (
+      <>
+        {/* 🌟 Killer feature: Magic Brief Instantâneo (IA prevê motivo da conversa) */}
+        <MagicBrief conversaId={cid} onRecolher={() => toggleCtxRecolhido(true)} />
+        {/* 🌟 Killer feature: Conversation Diff (o que mudou desde sua última resposta) */}
+        <ConversationDiff conversaId={cid} />
+        {/* 🌟 Killer feature: AI Action Cards (detecta intenção e oferece workflow 1-click) */}
+        <AIActionCards
+          conversaId={cid}
+          contatoNome={conv?.contatoNome || "Cliente"}
+          onEnviarMensagem={(texto) => setMsg(texto)}
+        />
+      </>
+    )}
     <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2 min-h-[360px] max-h-[420px] lg:min-h-0 lg:max-h-none">
       {maybeMore && (msgs?.length ?? 0) > 0 && (
         <div className="flex justify-center pb-2">
