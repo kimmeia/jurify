@@ -297,6 +297,17 @@ export const escritorios = mysqlTable("escritorios", {
    * "gpt-*" = OpenAI, "claude-*" = Anthropic). NULL = usa default global.
    */
   motorResumoModelo: varchar("motor_resumo_modelo", { length: 64 }),
+  /**
+   * Divisão de respostas automáticas (Atendente IA / SmartFlow) em
+   * mensagens menores com pausa e "digitando…" — simula atendente
+   * humano. Envio manual do operador nunca é dividido. Regras de
+   * quebra em server/integracoes/dividir-mensagem.ts.
+   */
+  msgDividirRespostas: boolean("msgDividirRespostas").default(true).notNull(),
+  msgDividirMax: int("msgDividirMax").default(4).notNull(),
+  msgDividirRitmo: mysqlEnum("msgDividirRitmo", ["rapido", "natural", "calmo"])
+    .default("natural")
+    .notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -1410,6 +1421,38 @@ export const asaasConfig = mysqlTable("asaas_config", {
    * 30 dias desde aqui; NULL = nunca rodou (roda na próxima oportunidade).
    */
   ultimaReconciliacaoFantasmasEm: timestamp("ultimaReconciliacaoFantasmasEm"),
+  /**
+   * Importação de extrato Asaas em segundo plano — espelho do
+   * historicoSync de cobranças acima: cursor anda do dia mais recente
+   * pro mais antigo em janelas de `extratoSyncDiasPorTick` dias,
+   * respeitando `extratoSyncIntervaloMinutos` entre janelas.
+   * `extratoSyncProximaTentativaEm` é o backoff automático quando a
+   * cota do Asaas corta uma janela no meio (resultado parcial): o cron
+   * pula o escritório até esse horário e retoma sozinho.
+   */
+  extratoSyncStatus: mysqlEnum("extratoSyncStatus", [
+    "inativo",
+    "agendado",
+    "executando",
+    "pausado",
+    "concluido",
+    "erro",
+  ]).default("inativo").notNull(),
+  extratoSyncDe: varchar("extratoSyncDe", { length: 10 }),
+  extratoSyncAte: varchar("extratoSyncAte", { length: 10 }),
+  extratoSyncCursor: varchar("extratoSyncCursor", { length: 10 }),
+  extratoSyncTotalDias: int("extratoSyncTotalDias"),
+  extratoSyncDiasFeitos: int("extratoSyncDiasFeitos").default(0).notNull(),
+  extratoSyncDespesasImportadas: int("extratoSyncDespesasImportadas").default(0).notNull(),
+  extratoSyncDuplicadas: int("extratoSyncDuplicadas").default(0).notNull(),
+  extratoSyncErros: int("extratoSyncErros").default(0).notNull(),
+  extratoSyncIntervaloMinutos: int("extratoSyncIntervaloMinutos").default(10).notNull(),
+  extratoSyncDiasPorTick: int("extratoSyncDiasPorTick").default(7).notNull(),
+  extratoSyncProximaTentativaEm: timestamp("extratoSyncProximaTentativaEm"),
+  extratoSyncIniciadoEm: timestamp("extratoSyncIniciadoEm"),
+  extratoSyncUltimaJanelaEm: timestamp("extratoSyncUltimaJanelaEm"),
+  extratoSyncConcluidoEm: timestamp("extratoSyncConcluidoEm"),
+  extratoSyncErroMensagem: varchar("extratoSyncErroMensagem", { length: 512 }),
   createdAt: timestamp("createdAtAsaasConfig").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAsaasConfig").defaultNow().onUpdateNow().notNull(),
 });

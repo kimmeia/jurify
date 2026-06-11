@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Atendimento — destaque de não lidas + contexto recolhível</title>
+<style>
+  :root{
+    --ink:#111b21; --muted:#6b7280; --bg:#f4f6f8; --panel:#fff; --border:#e6e8ec;
+    --violet:#7c3aed; --violet-50:#f5f3ff; --violet-100:#ede9fe; --violet-200:#ddd6fe;
+    --slate-100:#f1f5f9; --slate-200:#e2e8f0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:#1f2430;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;
+    line-height:1.5;padding:32px 16px 80px}
+  .wrap{max-width:980px;margin:0 auto}
+  h1{font-size:25px;margin:0 0 6px}
+  .sub{color:var(--muted);margin:0 0 30px;font-size:14.5px}
+  h2{font-size:17px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+  .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
+  .b-1{background:#dbeafe;color:#1d4ed8}.b-2{background:#fce7f3;color:#be185d}
+  .section{margin:0 0 44px}
+  .note{color:var(--muted);font-size:13px;margin:6px 0 16px;max-width:760px}
+  .cols{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+  .col{flex:1;min-width:300px}
+  .col-label{font-size:12.5px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:7px}
+  .col-label .dot{width:8px;height:8px;border-radius:50%}
+  .l-antes{color:#b91c1c}.l-antes .dot{background:#ef4444}
+  .l-depois{color:#047857}.l-depois .dot{background:#10b981}
+
+  /* ── lista de conversas ── */
+  .lista{background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(16,24,40,.06)}
+  .conv{display:flex;gap:10px;padding:11px 12px;border-bottom:1px solid #eef1f4;position:relative;background:#fff}
+  .conv:last-child{border-bottom:none}
+  .avatar{width:38px;height:38px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:12px;font-weight:700}
+  .a1{background:linear-gradient(135deg,#8b5cf6,#6366f1)} .a2{background:linear-gradient(135deg,#10b981,#0ea5e9)}
+  .a3{background:linear-gradient(135deg,#f59e0b,#ef4444)} .a4{background:linear-gradient(135deg,#ec4899,#8b5cf6)}
+  .conv .info{flex:1;min-width:0}
+  .conv .l1{display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .conv .nome{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .conv .hora{font-size:10px;color:#94a3b8;flex-shrink:0}
+  .conv .l2{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:2px}
+  .conv .prev{font-size:11.5px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pill{font-size:8.5px;font-weight:700;border-radius:5px;padding:1px 6px;border:1px solid;display:inline-flex;align-items:center;gap:4px;margin-top:6px}
+  .p-atend{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+  .p-aguard{background:#fffbeb;border-color:#fde68a;color:#b45309}
+  .cnt{min-width:18px;height:18px;border-radius:999px;background:var(--violet);color:#fff;font-size:10px;font-weight:700;
+    display:inline-flex;align-items:center;justify-content:center;padding:0 5px;flex-shrink:0}
+  /* estados novos */
+  .conv.nao-lida{background:var(--violet-100)}
+  .conv.nao-lida .nome{font-weight:800;color:#111}
+  .conv.nao-lida .hora{color:var(--violet);font-weight:700}
+  .conv.nao-lida .prev{color:#374151;font-weight:600}
+  .conv.nao-lida::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;background:#a78bfa;border-radius:0 3px 3px 0}
+  .conv.selecionada{background:var(--violet-50)}
+  .conv.selecionada::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:4px;background:var(--violet);border-radius:0 3px 3px 0}
+  .tag-estado{position:absolute;right:8px;bottom:6px;font-size:8.5px;color:#94a3b8;font-style:italic}
+
+  /* ── área da conversa ── */
+  .chatbox{background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(16,24,40,.06)}
+  .chat-head{padding:9px 14px;border-bottom:1px solid #eef1f4;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px;color:#334155}
+  .chat-body{padding:12px 14px 16px;background:#fbfcfd;display:flex;flex-direction:column;gap:8px;min-height:240px}
+  .brief{border:1px solid var(--violet-200);border-radius:12px;padding:10px 12px;position:relative;
+    background:linear-gradient(135deg,rgba(139,92,246,.05),rgba(99,102,241,.05) 50%,rgba(236,72,153,.05))}
+  .brief .tt{font-size:9.5px;font-weight:800;color:#6d28d9;text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;gap:6px}
+  .brief .ico{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px}
+  .brief p{margin:4px 0 0;font-size:13px;font-weight:500}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .chip{font-size:9.5px;font-weight:600;border-radius:7px;padding:2.5px 8px;border:1px solid;background:rgba(255,255,255,.85);display:inline-flex;gap:4px;align-items:center}
+  .c-azul{border-color:#bfdbfe;color:#1e40af}.c-verde{border-color:#a7f3d0;color:#065f46}.c-ambar{border-color:#fde68a;color:#92400e}
+  .evento{border:1px solid #bfdbfe;background:#eff6ff;border-radius:12px;padding:9px 12px;font-size:12px;color:#1e40af;display:flex;gap:8px;align-items:center}
+  .sla{border:1px solid #fecaca;background:#fef2f2;border-radius:12px;padding:9px 12px;font-size:12px;color:#b91c1c;display:flex;gap:8px;align-items:center}
+  .msg{background:#fff;border:1px solid #e9edf1;border-radius:10px;border-top-left-radius:3px;padding:7px 10px;font-size:12.5px;max-width:75%;box-shadow:0 1px 1px rgba(0,0,0,.04)}
+  .msg.out{background:#1d4ed8;color:#fff;align-self:flex-end;border-top-left-radius:10px;border-top-right-radius:3px;border-color:#1d4ed8}
+  .fechar{position:absolute;top:8px;right:8px;width:20px;height:20px;border-radius:6px;border:1px solid var(--violet-200);
+    background:#fff;color:#6d28d9;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:default}
+  /* barra recolhida */
+  .ctx-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;border:1px dashed var(--violet-200);background:var(--violet-50);
+    border-radius:999px;padding:4px 10px;font-size:10px}
+  .ctx-bar .mini{display:inline-flex;align-items:center;gap:4px;font-weight:700;color:#6d28d9}
+  .ctx-bar .sep{color:#c4b5fd}
+  .ctx-bar .mini.alerta{color:#b91c1c}
+  .ctx-bar .expand{margin-left:auto;color:#6d28d9;font-weight:800;font-size:12px}
+  .obs{font-size:11px;color:#94a3b8;font-style:italic;margin-top:4px}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border-radius:12px;overflow:hidden;border:1px solid var(--border);margin-top:6px}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--border)}
+  th{background:#f8fafc;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  tr:last-child td{border-bottom:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Atendimento — duas melhorias</h1>
+  <p class="sub">Mockup para aprovação · nada foi implementado. ① Conversa com mensagem nova ganha fundo destacado na lista.
+  ② O bloco de contexto (Brief + evento + SLA) ganha botão de recolher — hoje ele toma a tela da conversa.</p>
+
+  <!-- ════════ MELHORIA 1 ════════ -->
+  <div class="section">
+    <h2><span class="badge b-1">Melhoria 1</span> Mensagem nova = card destacado na lista</h2>
+    <p class="note">Hoje a conversa com mensagem não lida só muda o peso da fonte e mostra o contador — o fundo continua branco
+    e some no meio da lista. Na proposta, o card inteiro escurece (violeta claro + filete na borda) até a conversa ser aberta.</p>
+
+    <div class="cols">
+      <div class="col">
+        <div class="col-label l-antes"><span class="dot"></span> HOJE</div>
+        <div class="lista">
+          <div class="conv selecionada">
+            <div class="avatar a1">K</div>
+            <div class="info">
+              <div class="l1"><span class="nome">Kilviane</span><span class="hora">09:57</span></div>
+              <div class="l2"><span class="prev">Entendi, Kilviane. O financiamento…</span></div>
+              <span class="pill p-aguard">● Aguardando</span>
+            </div>
+            <span class="tag-estado">selecionada</span>
+          </div>
+          <div class="conv">
+            <div class="avatar a2">MF</div>
+            <div class="info">
+              <div class="l1"><span class="nome" style="font-weight:800">Marciana Ferreira</span><span class="hora" style="color:#7c3aed;font-weight:700">2 min</span></div>
+              <div class="l2"><span class="prev" style="color:#374151;font-weight:600">a dívida da senhora é com a stone?</span><span class="cnt">3</span></div>
+              <span class="pill p-atend">● Em atendimento</span>
+            </div>
+            <span class="tag-estado">não lida — fundo igual às outras 😕</span>
+          </div>
+          <div class="conv">
+            <div class="avatar a3">FS</div>
+            <div class="info">
+              <div class="l1"><span class="nome">Francisco Sousa</span><span class="hora">1 h</span></div>
+              <div class="l2"><span class="prev">Essa conciliação foi somente os re…</span></div>
+              <span class="pill p-atend">● Em atendimento</span>
+            </div>
+          </div>
+          <div class="conv">
+            <div class="avatar a4">EC</div>
+            <div class="info">
+              <div class="l1"><span class="nome">Esmeralda Copelli</span><span class="hora">3 h</span></div>
+              <div class="l2"><span class="prev">Vendo o andamento do meu proce…</span></div>
+              <span class="pill p-atend">● Em atendimento</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="col-label l-depois"><span class="dot"></span> PROPOSTA</div>
+        <div class="lista">
+          <div class="conv selecionada">
+            <div class="avatar a1">K</div>
+            <div class="info">
+              <div class="l1"><span class="nome">Kilviane</span><span class="hora">09:57</span></div>
+              <div class="l2"><span class="prev">Entendi, Kilviane. O financiamento…</span></div>
+              <span class="pill p-aguard">● Aguardando</span>
+            </div>
+            <span class="tag-estado">selecionada (igual hoje)</span>
+          </div>
+          <div class="conv nao-lida">
+            <div class="avatar a2">MF</div>
+            <div class="info">
+              <div class="l1"><span class="nome">Marciana Ferreira</span><span class="hora">2 min</span></div>
+              <div class="l2"><span class="prev">a dívida da senhora é com a stone?</span><span class="cnt">3</span></div>
+              <span class="pill p-atend">● Em atendimento</span>
+            </div>
+            <span class="tag-estado">não lida — fundo destacado ✓</span>
+          </div>
+          <div class="conv nao-lida">
+            <div class="avatar a3">FS</div>
+            <div class="info">
+              <div class="l1"><span class="nome">Francisco Sousa</span><span class="hora">agora</span></div>
+              <div class="l2"><span class="prev">consegui o comprovante!</span><span class="cnt">1</span></div>
+              <span class="pill p-atend">● Em atendimento</span>
+            </div>
+          </div>
+          <div class="conv">
+            <div class="avatar a4">EC</div>
+            <div class="info">
+              <div class="l1"><span class="nome">Esmeralda Copelli</span><span class="hora">3 h</span></div>
+              <div class="l2"><span class="prev">Vendo o andamento do meu proce…</span></div>
+              <span class="pill p-atend">● Em atendimento</span>
+            </div>
+            <span class="tag-estado">lida — branco normal</span>
+          </div>
+        </div>
+        <p class="obs">Ao abrir a conversa, o card volta ao normal (não lidas zeram — comportamento que já existe).</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ MELHORIA 2 ════════ -->
+  <div class="section">
+    <h2><span class="badge b-2">Melhoria 2</span> Brief / evento / SLA recolhíveis</h2>
+    <p class="note">Hoje o Brief Instantâneo (+ card de evento e alerta de SLA, quando existem) ficam fixos no topo e
+    empurram a conversa pra baixo. Na proposta, um <b>✕</b> recolhe o bloco inteiro numa linha fina de resumo —
+    clicável pra expandir de volta. A escolha fica memorizada (por atendente, no navegador) e vale pras próximas conversas.</p>
+
+    <div class="cols">
+      <div class="col">
+        <div class="col-label l-antes"><span class="dot"></span> HOJE — contexto sempre aberto</div>
+        <div class="chatbox">
+          <div class="chat-head">💬 Kilviane · 558586964559</div>
+          <div class="chat-body">
+            <div class="brief">
+              <div class="tt"><span class="ico">✦</span> BRIEF INSTANTÂNEO</div>
+              <p>Cliente busca orientação sobre juros abusivos em financiamento de loja de móveis.</p>
+              <div class="chips">
+                <span class="chip c-azul">📅 Audiência · em 3d</span>
+                <span class="chip c-verde">💰 2/3 pagos</span>
+                <span class="chip c-ambar">⚖ Último ato · 5d atrás</span>
+              </div>
+            </div>
+            <div class="evento">📞 Chamada perdida ontem às 17:42 · 1min</div>
+            <div class="sla">⏱ SLA crítico — aguardando resposta há 26 min</div>
+            <div class="msg">Olá, gostaria de falar com um advogado especialista…</div>
+            <div class="msg out">Olá! Me chamo Isaac, vou dar prosseguimento ao seu atendimento.</div>
+            <p class="obs" style="text-align:center">↑ sobrou pouco espaço pra conversa em si</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="col-label l-depois"><span class="dot"></span> PROPOSTA — com ✕ pra recolher</div>
+        <div class="chatbox">
+          <div class="chat-head">💬 Kilviane · 558586964559 <span style="margin-left:auto;font-size:10px;color:#94a3b8">estado A: aberto</span></div>
+          <div class="chat-body" style="min-height:150px;padding-bottom:10px">
+            <div class="brief">
+              <div class="fechar" title="Recolher contexto">✕</div>
+              <div class="tt"><span class="ico">✦</span> BRIEF INSTANTÂNEO</div>
+              <p>Cliente busca orientação sobre juros abusivos em financiamento de loja de móveis.</p>
+              <div class="chips">
+                <span class="chip c-azul">📅 Audiência · em 3d</span>
+                <span class="chip c-verde">💰 2/3 pagos</span>
+              </div>
+            </div>
+            <p class="obs">o ✕ recolhe Brief + evento + SLA de uma vez ↓</p>
+          </div>
+          <div class="chat-head">💬 Kilviane · 558586964559 <span style="margin-left:auto;font-size:10px;color:#94a3b8">estado B: recolhido</span></div>
+          <div class="chat-body">
+            <div class="ctx-bar">
+              <span class="mini">✦ Brief</span><span class="sep">·</span>
+              <span class="mini" style="color:#1e40af">📅 3d</span><span class="sep">·</span>
+              <span class="mini" style="color:#065f46">💰 2/3</span><span class="sep">·</span>
+              <span class="mini alerta">⏱ SLA 26min</span>
+              <span class="expand" title="Expandir">⌄</span>
+            </div>
+            <div class="msg">Olá, gostaria de falar com um advogado especialista…</div>
+            <div class="msg out">Olá! Me chamo Isaac, vou dar prosseguimento ao seu atendimento.</div>
+            <div class="msg">Kilviane</div>
+            <div class="msg">Ola</div>
+            <div class="msg out">Kilviane, como posso te ajudar especificamente em relação à redução de juros…</div>
+            <p class="obs" style="text-align:center">↑ a conversa ganha a tela; o essencial continua visível na barrinha (SLA crítico segue vermelho)</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ COMPORTAMENTO ════════ -->
+  <div class="section">
+    <h2>Comportamento proposto</h2>
+    <table>
+      <tr><th>Detalhe</th><th>Como funciona</th></tr>
+      <tr><td><b>Fundo da não lida</b></td><td>Violeta claro (mais escuro que o branco), filete lilás na borda esquerda. Some ao abrir a conversa. Estado "selecionada" continua como é hoje.</td></tr>
+      <tr><td><b>✕ do contexto</b></td><td>Recolhe Brief + evento + SLA juntos, virando uma barrinha de resumo clicável (⌄ expande de volta).</td></tr>
+      <tr><td><b>Memória</b></td><td>A preferência (aberto/recolhido) fica salva no navegador do atendente e vale pra todas as conversas — não precisa fechar toda vez.</td></tr>
+      <tr><td><b>SLA crítico</b></td><td>Mesmo recolhido, o chip de SLA fica vermelho na barrinha — alerta nunca desaparece de vez.</td></tr>
+    </table>
+  </div>
+
+  <p class="obs" style="text-align:center"><b>Nenhuma alteração foi feita.</b> Aprovo daqui → implemento as duas melhorias e aviso pra autorizar o deploy.</p>
+
+</div>
+</body>
+</html>

@@ -237,6 +237,9 @@ export const configuracoesRouter = router({
       mensagemAusencia: z.string().max(1000).optional(),
       mensagemBoasVindas: z.string().max(1000).optional(),
       agendaResponsavelPadraoId: z.number().int().positive().nullable().optional(),
+      msgDividirRespostas: z.boolean().optional(),
+      msgDividirMax: z.number().int().min(2).max(6).optional(),
+      msgDividirRitmo: z.enum(["rapido", "natural", "calmo"]).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const result = await getEscritorioPorUsuario(ctx.user.id);

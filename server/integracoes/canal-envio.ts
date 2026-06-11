@@ -229,6 +229,73 @@ export async function enviarInterativoPeloCanalApi(opts: {
   }
 }
 
+/**
+ * Mostra "digitando…" pro destinatário antes da próxima bolha de uma
+ * resposta dividida. Best-effort TOTAL: qualquer falha (canal sem
+ * sessão, API recusou, DB fora) vira no-op — o envio nunca depende do
+ * indicador.
+ *
+ * - Baileys: presence "composing" no JID.
+ * - Cloud API: typing indicator atrelado à última mensagem RECEBIDA da
+ *   conversa (a Meta exige o message_id de uma mensagem do cliente).
+ */
+export async function sinalizarDigitando(opts: {
+  canalId: number;
+  chatIdExterno?: string | null;
+  telefone?: string | null;
+  conversaId?: number;
+}): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const [canal] = await db
+      .select()
+      .from(canaisIntegrados)
+      .where(eq(canaisIntegrados.id, opts.canalId))
+      .limit(1);
+    if (!canal) return;
+
+    if (canal.tipo === "whatsapp_qr") {
+      const destinatario = opts.chatIdExterno || opts.telefone;
+      if (!destinatario) return;
+      const { getWhatsappManager } = await import("./whatsapp-baileys");
+      await getWhatsappManager().enviarPresenca(opts.canalId, destinatario, "composing");
+      return;
+    }
+
+    if (canal.tipo === "whatsapp_api") {
+      if (!opts.conversaId) return;
+      if (!canal.configEncrypted || !canal.configIv || !canal.configTag) return;
+      const { decryptConfig } = await import("../escritorio/crypto-utils");
+      const config = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
+      if (!config?.accessToken || !config?.phoneNumberId) return;
+
+      const { mensagens } = await import("../../drizzle/schema");
+      const { and, desc, isNotNull } = await import("drizzle-orm");
+      const [ultimaRecebida] = await db
+        .select({ idExterno: mensagens.idExterno })
+        .from(mensagens)
+        .where(and(
+          eq(mensagens.conversaId, opts.conversaId),
+          eq(mensagens.direcao, "entrada"),
+          isNotNull(mensagens.idExterno),
+        ))
+        .orderBy(desc(mensagens.id))
+        .limit(1);
+      if (!ultimaRecebida?.idExterno) return;
+
+      const { WhatsAppCloudClient } = await import("./whatsapp-cloud");
+      const client = new WhatsAppCloudClient({
+        accessToken: config.accessToken,
+        phoneNumberId: config.phoneNumberId,
+      });
+      await client.enviarTypingIndicator(ultimaRecebida.idExterno);
+    }
+  } catch (e: any) {
+    log.debug({ canalId: opts.canalId, err: e?.message }, "sinalizarDigitando falhou (não-fatal)");
+  }
+}
+
 async function enviarViaBaileys(opts: EnvioMensagemOpts): Promise<EnvioResultado> {
   try {
     const { getWhatsappManager } = await import("./whatsapp-baileys");

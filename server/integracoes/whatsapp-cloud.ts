@@ -246,6 +246,21 @@ export class WhatsAppCloudClient {
     });
   }
 
+  /**
+   * Mostra "digitando…" pro cliente. A Cloud API atrela o indicador à
+   * última mensagem RECEBIDA (marca como lida junto); ele some sozinho
+   * em ~25s ou quando a próxima mensagem é enviada. Best-effort — quem
+   * chama trata falha como não-fatal.
+   */
+  async enviarTypingIndicator(messageIdRecebido: string): Promise<void> {
+    await this.api.post(`/${this.phoneNumberId}/messages`, {
+      messaging_product: "whatsapp",
+      status: "read",
+      message_id: messageIdRecebido,
+      typing_indicator: { type: "text" },
+    });
+  }
+
   /** Baixar media (retorna URL temporaria) */
   async getMediaUrl(mediaId: string): Promise<string> {
     const res = await this.api.get(`/${mediaId}`);

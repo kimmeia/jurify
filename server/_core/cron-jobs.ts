@@ -263,6 +263,21 @@ export function iniciarJobs() {
     }
   }, 5 * 60 * 1000);
 
+  // A cada 5 minutos: processa 1 janela de importação de extrato Asaas
+  // por escritório elegível (despesas em segundo plano). Cooldown por
+  // escritório via `extratoSyncIntervaloMinutos`; backoff automático de
+  // 1h quando a cota do Asaas corta uma janela no meio.
+  setInterval(async () => {
+    try {
+      const { processarSyncExtrato } = await import(
+        "../integracoes/asaas-extrato-historico"
+      );
+      await processarSyncExtrato();
+    } catch (err: any) {
+      log.error("[Cron] processarSyncExtrato falhou:", err.message);
+    }
+  }, 5 * 60 * 1000);
+
   // 1x por dia: roda reconciliação de cobranças fantasmas em 1
   // escritório (o mais defasado). Só dispara onde passaram 7+ dias
   // desde a última. Detecta locais PENDING/OVERDUE que foram apagadas

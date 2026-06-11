@@ -1489,6 +1489,241 @@ export const asaasRouter = router({
     }),
 
   /**
+   * Inicia a importação de extrato em SEGUNDO PLANO (janelas processadas
+   * pelo cron, respeitando a cota do Asaas). Pra períodos longos (anos)
+   * é o único caminho confiável — o `sincronizarExtrato` síncrono acima
+   * fica pros períodos curtos.
+   */
+  extratoSyncIniciar: protectedProcedure
+    .input(
+      z.object({
+        desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        intervaloMinutos: z.number().int().min(5).max(720).default(10),
+        diasPorTick: z.number().int().min(1).max(30).default(7),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para importar extrato." });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [cfg] = await db
+        .select()
+        .from(asaasConfig)
+        .where(eq(asaasConfig.escritorioId, esc.escritorio.id))
+        .limit(1);
+      if (!cfg || cfg.status !== "conectado") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Asaas não está conectado. Conecte antes de importar o extrato.",
+        });
+      }
+      if (cfg.extratoSyncStatus === "agendado" || cfg.extratoSyncStatus === "executando") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Já existe uma importação de extrato em andamento. Aguarde ou cancele antes de iniciar nova.",
+        });
+      }
+
+      const ate = input.ate ?? dataHojeBR();
+      if (input.desde > ate) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Data inicial deve ser anterior ou igual à final." });
+      }
+      const { contarDiasInclusivos } = await import("./asaas-sync-historico");
+      const totalDias = contarDiasInclusivos(input.desde, ate);
+      const MAX_DIAS = 365 * 10;
+      if (totalDias > MAX_DIAS) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Período muito longo (${totalDias} dias). Máximo permitido: ${MAX_DIAS}.`,
+        });
+      }
+
+      await db
+        .update(asaasConfig)
+        .set({
+          extratoSyncStatus: "agendado",
+          extratoSyncDe: input.desde,
+          extratoSyncAte: ate,
+          extratoSyncCursor: ate,
+          extratoSyncTotalDias: totalDias,
+          extratoSyncDiasFeitos: 0,
+          extratoSyncDespesasImportadas: 0,
+          extratoSyncDuplicadas: 0,
+          extratoSyncErros: 0,
+          extratoSyncIntervaloMinutos: input.intervaloMinutos,
+          extratoSyncDiasPorTick: input.diasPorTick,
+          extratoSyncProximaTentativaEm: null,
+          extratoSyncIniciadoEm: new Date(),
+          extratoSyncUltimaJanelaEm: null,
+          extratoSyncConcluidoEm: null,
+          extratoSyncErroMensagem: null,
+        })
+        .where(eq(asaasConfig.id, cfg.id));
+
+      log.info(
+        { escritorioId: esc.escritorio.id, desde: input.desde, ate, totalDias },
+        "[Asaas] Importação de extrato em segundo plano agendada",
+      );
+
+      return {
+        success: true,
+        desde: input.desde,
+        ate,
+        totalDias,
+        estimativaHoras: Math.ceil((totalDias / input.diasPorTick) * input.intervaloMinutos / 60),
+      };
+    }),
+
+  /** Estado atual da importação de extrato em segundo plano. */
+  extratoSyncStatus: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const [cfg] = await db
+      .select({
+        status: asaasConfig.extratoSyncStatus,
+        de: asaasConfig.extratoSyncDe,
+        ate: asaasConfig.extratoSyncAte,
+        cursor: asaasConfig.extratoSyncCursor,
+        totalDias: asaasConfig.extratoSyncTotalDias,
+        diasFeitos: asaasConfig.extratoSyncDiasFeitos,
+        despesasImportadas: asaasConfig.extratoSyncDespesasImportadas,
+        duplicadas: asaasConfig.extratoSyncDuplicadas,
+        erros: asaasConfig.extratoSyncErros,
+        intervaloMinutos: asaasConfig.extratoSyncIntervaloMinutos,
+        diasPorTick: asaasConfig.extratoSyncDiasPorTick,
+        proximaTentativaEm: asaasConfig.extratoSyncProximaTentativaEm,
+        iniciadoEm: asaasConfig.extratoSyncIniciadoEm,
+        ultimaJanelaEm: asaasConfig.extratoSyncUltimaJanelaEm,
+        concluidoEm: asaasConfig.extratoSyncConcluidoEm,
+        erroMensagem: asaasConfig.extratoSyncErroMensagem,
+      })
+      .from(asaasConfig)
+      .where(eq(asaasConfig.escritorioId, esc.escritorio.id))
+      .limit(1);
+
+    if (!cfg) return { status: "inativo" as const };
+    return cfg;
+  }),
+
+  extratoSyncPausar: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+    if (!perm.editar) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    await db
+      .update(asaasConfig)
+      .set({ extratoSyncStatus: "pausado" })
+      .where(
+        and(
+          eq(asaasConfig.escritorioId, esc.escritorio.id),
+          inArray(asaasConfig.extratoSyncStatus, ["agendado", "executando"] as const),
+        ),
+      );
+    return { success: true };
+  }),
+
+  /**
+   * Retoma a importação de extrato (pausada, em erro ou aguardando o
+   * backoff de cota — "Tentar agora" limpa o timer e processa no
+   * próximo tick do cron).
+   */
+  extratoSyncRetomar: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+    if (!perm.editar) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const [cfg] = await db
+      .select()
+      .from(asaasConfig)
+      .where(eq(asaasConfig.escritorioId, esc.escritorio.id))
+      .limit(1);
+    if (!cfg) throw new TRPCError({ code: "NOT_FOUND", message: "Configuração Asaas não encontrada." });
+    if (cfg.extratoSyncStatus === "concluido" || cfg.extratoSyncStatus === "inativo") {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Nada pra retomar — inicie uma nova importação se precisar.",
+      });
+    }
+
+    await db
+      .update(asaasConfig)
+      .set({
+        extratoSyncStatus: "executando",
+        extratoSyncUltimaJanelaEm: null,
+        extratoSyncProximaTentativaEm: null,
+        extratoSyncErroMensagem: null,
+      })
+      .where(eq(asaasConfig.id, cfg.id));
+    return { success: true };
+  }),
+
+  /** Cancela e zera a importação de extrato (ou fecha o card concluído). */
+  extratoSyncCancelar: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+    if (!perm.editar) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    await db
+      .update(asaasConfig)
+      .set({
+        extratoSyncStatus: "inativo",
+        extratoSyncDe: null,
+        extratoSyncAte: null,
+        extratoSyncCursor: null,
+        extratoSyncTotalDias: null,
+        extratoSyncDiasFeitos: 0,
+        extratoSyncDespesasImportadas: 0,
+        extratoSyncDuplicadas: 0,
+        extratoSyncErros: 0,
+        extratoSyncProximaTentativaEm: null,
+        extratoSyncIniciadoEm: null,
+        extratoSyncUltimaJanelaEm: null,
+        extratoSyncConcluidoEm: null,
+        extratoSyncErroMensagem: null,
+      })
+      .where(eq(asaasConfig.escritorioId, esc.escritorio.id));
+    return { success: true };
+  }),
+
+  extratoSyncAjustarVelocidade: protectedProcedure
+    .input(
+      z.object({
+        intervaloMinutos: z.number().int().min(5).max(720),
+        diasPorTick: z.number().int().min(1).max(30),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .update(asaasConfig)
+        .set({
+          extratoSyncIntervaloMinutos: input.intervaloMinutos,
+          extratoSyncDiasPorTick: input.diasPorTick,
+        })
+        .where(eq(asaasConfig.escritorioId, esc.escritorio.id));
+      return { success: true };
+    }),
+
+  /**
    * Vincula um contato do CRM a um cliente do Asaas em até 3 passos:
    *   1. Busca no Asaas por CPF/CNPJ → se achar, vincula direto
    *      (Asaas é fonte de verdade, atualiza nome/email/telefone do CRM).
