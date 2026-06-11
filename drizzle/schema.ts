@@ -723,6 +723,12 @@ export const conversas = mysqlTable("conversas", {
   chatIdExterno: varchar("chatIdExterno", { length: 128 }),
   ultimaMensagemAt: timestamp("ultimaMensagemAt"),
   ultimaMensagemPreview: varchar("ultimaMensagemPreview", { length: 255 }),
+  /**
+   * Última vez que o atendente ABRIU esta conversa no inbox. Mensagens de
+   * entrada com createdAt posterior contam como "não lidas" (badge +
+   * destaque na lista). NULL = nunca aberta — todas as entradas contam.
+   */
+  lidaPeloAtendenteEm: timestamp("lidaPeloAtendenteEm"),
   tempoEspera: int("tempoEspera"),
   tempoConclusao: int("tempoConclusao"),
   avaliacaoCliente: int("avaliacaoCliente"),

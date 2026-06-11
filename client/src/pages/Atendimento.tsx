@@ -1024,6 +1024,15 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   // Só APPROVED — PENDING/REJECTED não dá pra usar.
   const metaTpls = ((metaTplsRaw || []) as any[]).filter((t) => t.status === "APPROVED");
   const { data: msgs, refetch } = trpc.crm.listarMensagens.useQuery({ conversaId: cid }, { refetchInterval: 3000 });
+  // Zera o contador de não lidas ao abrir a conversa e a cada mensagem que
+  // chega com ela aberta (o atendente está vendo) — alimenta o destaque da
+  // lista (badge/negrito/fundo).
+  const marcarLidaMut = trpc.crm.marcarConversaLida.useMutation({ onSuccess: () => onUpdate() });
+  const totalEntradas = (msgs || []).filter((m: any) => m.direcao === "entrada").length;
+  useEffect(() => {
+    if (cid) marcarLidaMut.mutate({ conversaId: cid });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cid, totalEntradas]);
   // Fuso do escritório (Configurações → Escritório) — datas/horas do chat
   // seguem o relógio do operador, não o UTC do server.
   const { data: meuEscr } = trpc.configuracoes.meuEscritorio.useQuery();

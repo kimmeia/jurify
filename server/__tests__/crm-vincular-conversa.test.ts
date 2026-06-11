@@ -206,3 +206,13 @@ describe("crm.vincularConversaAoContato", () => {
     expect(captured.updates).toHaveLength(0);
   });
 });
+
+describe("crm.marcarConversaLida", () => {
+  it("grava lidaPeloAtendenteEm escopado ao escritório", async () => {
+    const r = await caller().crm.marcarConversaLida({ conversaId: 5 });
+    expect(r).toEqual({ success: true });
+    const upd = captured.updates.filter((u) => u.table === "conversas");
+    expect(upd).toHaveLength(1);
+    expect(upd[0].set.lidaPeloAtendenteEm).toBeInstanceOf(Date);
+  });
+});
