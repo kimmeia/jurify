@@ -285,54 +285,107 @@ export async function enviarAutoReply(canalId: number, conversaId: number, chatI
  * A UI lê o campo `status` pra renderizar ícone de sucesso/falha.
  */
 async function enviarResposta(canalId: number, conversaId: number, chatIdExterno: string, resposta: string) {
-  const msgId = await salvarMensagem({
-    conversaId,
-    remetenteId: undefined,
-    direcao: "saida",
-    tipo: "texto",
-    conteudo: resposta,
-    status: "pendente",
-  });
+  const ctxConv = await buscarContextoEnvioConversa(conversaId);
+
+  // Divide a resposta em bolhas menores ("atendente humano", aprovado
+  // via mockup). Config por escritório; resposta curta sai inteira
+  // (regra dentro de dividirMensagemNatural). Envio manual do operador
+  // não passa por aqui — nunca é dividido.
+  const { dividirMensagemNatural, calcularDelayDigitacaoMs } = await import("./dividir-mensagem");
+  const partes = ctxConv?.dividir.ativo
+    ? dividirMensagemNatural(resposta, { maxMensagens: ctxConv.dividir.max })
+    : [resposta];
 
   // O helper enviarMensagemPeloCanal já roteia entre Baileys (whatsapp_qr) e
   // Cloud API (whatsapp_api) baseado no tipo do canal. Antes este caminho
   // chamava Baileys direto, fazendo respostas automáticas falharem em canais
   // Cloud API com "Sessão WhatsApp desconectada".
-  const telefonePN = await buscarTelefonePNdaConversa(conversaId);
-  const { enviarMensagemPeloCanal } = await import("./canal-envio");
-  const r = await enviarMensagemPeloCanal({
-    canalId,
-    chatIdExterno,
-    telefone: telefonePN,
-    conteudo: resposta,
-  });
+  const { enviarMensagemPeloCanal, sinalizarDigitando } = await import("./canal-envio");
 
-  if (r.ok) {
-    await atualizarStatusMensagem(msgId, "enviada");
-  } else {
-    log.error({ err: r.erro, conversaId, canalId, msgId, provider: r.provider }, "[ChatBot] Envio WA erro");
-    await atualizarStatusMensagem(msgId, "falha");
+  for (let i = 0; i < partes.length; i++) {
+    if (i > 0) {
+      // "Digitando…" durante a pausa, proporcional ao tamanho da
+      // PRÓXIMA bolha. Best-effort — nunca bloqueia o envio.
+      void sinalizarDigitando({
+        canalId,
+        chatIdExterno,
+        telefone: ctxConv?.telefonePN ?? null,
+        conversaId,
+      });
+      await new Promise((r) =>
+        setTimeout(r, calcularDelayDigitacaoMs(partes[i], ctxConv?.dividir.ritmo)),
+      );
+    }
+
+    const msgId = await salvarMensagem({
+      conversaId,
+      remetenteId: undefined,
+      direcao: "saida",
+      tipo: "texto",
+      conteudo: partes[i],
+      status: "pendente",
+    });
+
+    const r = await enviarMensagemPeloCanal({
+      canalId,
+      chatIdExterno,
+      telefone: ctxConv?.telefonePN ?? null,
+      conteudo: partes[i],
+    });
+
+    if (r.ok) {
+      await atualizarStatusMensagem(msgId, "enviada");
+    } else {
+      log.error(
+        { err: r.erro, conversaId, canalId, msgId, parte: i + 1, totalPartes: partes.length, provider: r.provider },
+        "[ChatBot] Envio WA erro",
+      );
+      await atualizarStatusMensagem(msgId, "falha");
+      // Bolha falhou → não envia as seguintes (resposta com buraco no
+      // meio é pior que truncada; as restantes nem são persistidas).
+      break;
+    }
   }
 }
 
-/** Busca o telefone (PN) do contato associado à conversa. Usado pra converter JID @lid. */
-async function buscarTelefonePNdaConversa(conversaId: number): Promise<string | null> {
+/**
+ * Contexto de envio da conversa: telefone PN do contato (pra converter
+ * JID @lid) + config de divisão de mensagens do escritório.
+ */
+async function buscarContextoEnvioConversa(conversaId: number): Promise<{
+  telefonePN: string | null;
+  dividir: { ativo: boolean; max: number; ritmo: "rapido" | "natural" | "calmo" };
+} | null> {
   try {
     const { getDb } = await import("../db");
-    const { conversas, contatos } = await import("../../drizzle/schema");
+    const { conversas, contatos, escritorios } = await import("../../drizzle/schema");
     const { eq } = await import("drizzle-orm");
     const db = await getDb();
     if (!db) return null;
     const [row] = await db
-      .select({ telefone: contatos.telefone })
+      .select({
+        telefone: contatos.telefone,
+        dividirAtivo: escritorios.msgDividirRespostas,
+        dividirMax: escritorios.msgDividirMax,
+        dividirRitmo: escritorios.msgDividirRitmo,
+      })
       .from(conversas)
       .innerJoin(contatos, eq(contatos.id, conversas.contatoId))
+      .innerJoin(escritorios, eq(escritorios.id, conversas.escritorioId))
       .where(eq(conversas.id, conversaId))
       .limit(1);
-    const tel = row?.telefone?.replace(/\D/g, "") || "";
-    return tel.length >= 10 ? tel : null;
+    if (!row) return null;
+    const tel = row.telefone?.replace(/\D/g, "") || "";
+    return {
+      telefonePN: tel.length >= 10 ? tel : null,
+      dividir: {
+        ativo: row.dividirAtivo,
+        max: row.dividirMax,
+        ritmo: row.dividirRitmo,
+      },
+    };
   } catch (err: any) {
-    log.warn({ err: err?.message, conversaId }, "Falha ao buscar telefone PN da conversa");
+    log.warn({ err: err?.message, conversaId }, "Falha ao buscar contexto de envio da conversa");
     return null;
   }
 }

@@ -78,6 +78,9 @@ export async function atualizarEscritorio(
     mensagemAusencia?: string;
     mensagemBoasVindas?: string;
     agendaResponsavelPadraoId?: number | null;
+    msgDividirRespostas?: boolean;
+    msgDividirMax?: number;
+    msgDividirRitmo?: "rapido" | "natural" | "calmo";
   },
 ) {
   const db = await getDb();
@@ -96,6 +99,9 @@ export async function atualizarEscritorio(
   if (dados.mensagemAusencia !== undefined) updateData.mensagemAusencia = dados.mensagemAusencia || null;
   if (dados.mensagemBoasVindas !== undefined) updateData.mensagemBoasVindas = dados.mensagemBoasVindas || null;
   if (dados.agendaResponsavelPadraoId !== undefined) updateData.agendaResponsavelPadraoId = dados.agendaResponsavelPadraoId || null;
+  if (dados.msgDividirRespostas !== undefined) updateData.msgDividirRespostas = dados.msgDividirRespostas;
+  if (dados.msgDividirMax !== undefined) updateData.msgDividirMax = dados.msgDividirMax;
+  if (dados.msgDividirRitmo !== undefined) updateData.msgDividirRitmo = dados.msgDividirRitmo;
 
   if (Object.keys(updateData).length === 0) return;
 

@@ -236,6 +236,29 @@ class WhatsappSessionManager extends EventEmitter {
     return this.enviarMensagemJid(canalId, msg.telefone, msg.conteudo, msg.tipo, msg.mediaUrl, msg.mediaCaption);
   }
 
+  /**
+   * Mostra "digitando…" (composing) ou limpa (paused) pro destinatário.
+   * Best-effort: sessão desconectada ou JID inválido apenas retornam
+   * false — quem chama nunca deve falhar por causa do indicador.
+   */
+  async enviarPresenca(
+    canalId: number,
+    destinatario: string,
+    presenca: "composing" | "paused",
+  ): Promise<boolean> {
+    try {
+      const state = this.sessions.get(canalId);
+      if (!state || state.status !== "conectado" || !state.socket) return false;
+      const jid = destinatario.includes("@")
+        ? destinatario
+        : `${destinatario.replace(/\D/g, "")}@s.whatsapp.net`;
+      await state.socket.sendPresenceUpdate(presenca, jid);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Envia mensagem usando JID direto (chatIdExterno) ou número de telefone */
   async enviarMensagemJid(
     canalId: number,
