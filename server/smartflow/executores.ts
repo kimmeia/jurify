@@ -810,49 +810,28 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
         ));
       if (candidatos.length === 0) return null;
 
-      const dezMinAtras = new Date(Date.now() - 30 * 60 * 1000);
-      const online = candidatos.filter((c) => c.ultimaAtividade && new Date(c.ultimaAtividade) >= dezMinAtras);
-
-      // `somenteOnline` → só os online; senão grupo todo (online tem prioridade).
-      const elegiveis = params.somenteOnline ? online : candidatos;
-      if (elegiveis.length === 0) return null;
-
       // Carga = conversas abertas (aguardando/em_atendimento) por atendente.
+      // Usada como TRAVA de capacidade no rodízio (não como ranking).
       const cargaPorId = new Map<number, number>();
       const cargas = await db
         .select({ atendenteId: conversas.atendenteId, n: sql<number>`COUNT(*)` })
         .from(conversas)
         .where(and(
           eq(conversas.escritorioId, escritorioId),
-          inArray(conversas.atendenteId, elegiveis.map((c) => c.id)),
+          inArray(conversas.atendenteId, candidatos.map((c) => c.id)),
           or(eq(conversas.status, "aguardando"), eq(conversas.status, "em_atendimento")),
         ))
         .groupBy(conversas.atendenteId);
       for (const r of cargas) if (r.atendenteId != null) cargaPorId.set(r.atendenteId, Number(r.n));
 
-      const onlineIds = new Set(online.map((c) => c.id));
-      // Critério (em ordem):
-      // 1. Menor carga proporcional ganha — online ou offline. Sem isso, 1
-      //    atendente online com a aba sempre aberta pegava todas as conversas,
-      //    mesmo com 50 em aberto, enquanto os outros (offline pela janela de
-      //    inatividade) ficavam ociosos. "Online absoluto" era o bug do
-      //    primeiro dia em prod (4 leads pra mesma pessoa, 1 pros outros).
-      // 2. Empate de carga: online vence offline (heartbeat 30min — antes era
-      //    10min, severo demais pra quem trabalha com a aba em segundo plano).
-      // 3. Round-robin por ultimaDistribuicao (quem recebeu há mais tempo).
-      // 4. Menor id (estabilidade).
-      const escolhido = [...elegiveis].sort((a, b) => {
-        const aC = (cargaPorId.get(a.id) ?? 0) / Math.max(1, a.maxSimultaneos || 5);
-        const bC = (cargaPorId.get(b.id) ?? 0) / Math.max(1, b.maxSimultaneos || 5);
-        if (aC !== bC) return aC - bC;
-        const aOn = onlineIds.has(a.id) ? 0 : 1;
-        const bOn = onlineIds.has(b.id) ? 0 : 1;
-        if (aOn !== bOn) return aOn - bOn;
-        const aT = a.ultimaDistribuicao ? new Date(a.ultimaDistribuicao).getTime() : 0;
-        const bT = b.ultimaDistribuicao ? new Date(b.ultimaDistribuicao).getTime() : 0;
-        if (aT !== bT) return aT - bT;
-        return a.id - b.id;
-      })[0];
+      // Pool online-first + round-robin puro + capacidade como trava —
+      // regras e racional em server/smartflow/distribuicao.ts.
+      const { selecionarAtendenteRodizio } = await import("./distribuicao");
+      const escolhidoId = selecionarAtendenteRodizio(candidatos, cargaPorId, {
+        somenteOnline: params.somenteOnline,
+      });
+      if (escolhidoId == null) return null;
+      const escolhido = candidatos.find((c) => c.id === escolhidoId)!;
 
       // Seta o dono da conversa SEM mexer no status (bot segue o fluxo). Marca
       // ultimaDistribuicao pra round-robin nas próximas distribuições. E grava

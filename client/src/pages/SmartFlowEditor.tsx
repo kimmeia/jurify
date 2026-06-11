@@ -3869,7 +3869,11 @@ function ConfigDistribuirAtendimentoFields({
           </div>
           <label className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs">
             <Checkbox checked={somenteOnline} onCheckedChange={(v) => onChange({ somenteOnline: v === true })} />
-            <span>Só atendentes <strong>online</strong> (ativos nos últimos ~10 min). Desligado = qualquer atendente do setor.</span>
+            <span>
+              Só atendentes <strong>online</strong> (ativos nos últimos ~30 min) — ninguém online sai por "sem atendente".
+              <br />
+              <span className="text-[10px] text-muted-foreground">Desligado (padrão): rodízio um a um entre os online; todos offline → rodízio entre todos do setor. Quem está no limite de atendimentos é pulado.</span>
+            </span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs">
             <Checkbox checked={redistribuirSempre} onCheckedChange={(v) => onChange({ redistribuirSempre: v === true })} />
