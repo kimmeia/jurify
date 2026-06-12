@@ -13,9 +13,10 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
-import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip } from "lucide-react";
+import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { TIPOS_CANAL_COMUNICACAO } from "@shared/canal-types";
 
@@ -967,7 +968,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   // mas ainda não foi enviada. Renderiza preview acima do composer e é
   // limpa após o send. Sem isso, escolher template com PDF só substituía o
   // texto e perdia a mídia.
-  const [pendingMedia, setPendingMedia] = useState<{ url: string; tipo: "imagem" | "video" | "audio" | "documento"; nome?: string } | null>(null);
+  const [pendingMedia, setPendingMedia] = useState<{ url: string; tipo: "imagem" | "video" | "audio" | "documento"; nome?: string; tamanho?: number } | null>(null);
   const [showAddLead, setShowAddLead] = useState(false);
   const [showAgendar, setShowAgendar] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -1416,13 +1417,18 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       {pendingMedia && (
         <div className="mx-3 mb-1 flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-md px-2.5 py-1.5">
           {pendingMedia.tipo === "imagem" ? <ImageIcon className="h-3.5 w-3.5 text-emerald-700 shrink-0" /> :
+           pendingMedia.tipo === "video" ? <VideoIcon className="h-3.5 w-3.5 text-emerald-700 shrink-0" /> :
            pendingMedia.tipo === "documento" ? <FileText className="h-3.5 w-3.5 text-emerald-700 shrink-0" /> :
            <Paperclip className="h-3.5 w-3.5 text-emerald-700 shrink-0" />}
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200 truncate">
               {pendingMedia.nome || pendingMedia.tipo}
             </p>
-            <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 truncate">{pendingMedia.url}</p>
+            <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 truncate">
+              {pendingMedia.tamanho
+                ? `${(pendingMedia.tamanho / 1024 / 1024).toFixed(1)} MB · o texto digitado vira a legenda`
+                : pendingMedia.url}
+            </p>
           </div>
           <button
             onClick={() => setPendingMedia(null)}
@@ -1436,6 +1442,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
 
       {/* Linha 2: Composer */}
       <div className="p-3 pt-2 flex gap-2">
+        <AnexoButton onAnexar={(m) => setPendingMedia(m)} />
         <Popover open={showTemplates} onOpenChange={setShowTemplates}>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" title="Respostas rápidas">
@@ -1865,6 +1872,135 @@ function blobParaBase64(blob: Blob): Promise<string> {
     r.onerror = () => rej(new Error("Falha ao ler áudio do navegador."));
     r.readAsDataURL(blob);
   });
+}
+
+/**
+ * Botão 📎 do composer — anexa foto, vídeo ou documento (aprovado via
+ * mockup). Valida formato e tamanho ANTES do upload, com os limites do
+ * WhatsApp; o arquivo vai pra `pendingMedia` (preview + legenda) e sai
+ * no envio normal, nos dois canais (Cloud API e QR).
+ */
+const ANEXO_SPECS = {
+  imagem: {
+    accept: "image/jpeg,image/png,image/gif,image/webp",
+    maxMB: 5,
+    label: "Foto",
+    erroFormato: "Formato de foto não suportado. Use JPG, PNG, GIF ou WebP.",
+  },
+  video: {
+    accept: "video/mp4",
+    maxMB: 16,
+    label: "Vídeo",
+    erroFormato: "O WhatsApp só aceita vídeo MP4. Converta o arquivo (.mov/.avi → MP4) e tente de novo.",
+  },
+  documento: {
+    accept: ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt",
+    maxMB: 95,
+    label: "Documento",
+    erroFormato: "Formato não suportado. Use PDF, Word, Excel, CSV ou TXT.",
+  },
+} as const;
+
+function AnexoButton({
+  onAnexar,
+}: {
+  onAnexar: (m: { url: string; tipo: "imagem" | "video" | "documento"; nome: string; tamanho: number }) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const tipoSelRef = useRef<keyof typeof ANEXO_SPECS>("imagem");
+  const [subindo, setSubindo] = useState(false);
+  const uploadMut = (trpc as any).upload.enviar.useMutation();
+
+  const escolher = (tipo: keyof typeof ANEXO_SPECS) => {
+    tipoSelRef.current = tipo;
+    if (inputRef.current) {
+      inputRef.current.accept = ANEXO_SPECS[tipo].accept;
+      inputRef.current.value = "";
+      inputRef.current.click();
+    }
+  };
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const tipo = tipoSelRef.current;
+    const spec = ANEXO_SPECS[tipo];
+
+    if (tipo === "video" && file.type !== "video/mp4") {
+      toast.error(spec.erroFormato);
+      return;
+    }
+    if (tipo === "imagem" && !/^image\/(jpeg|png|gif|webp)$/.test(file.type)) {
+      toast.error(spec.erroFormato);
+      return;
+    }
+    if (file.size > spec.maxMB * 1024 * 1024) {
+      toast.error(`${spec.label} muito grande (${(file.size / 1024 / 1024).toFixed(1)} MB)`, {
+        description:
+          `Limite: ${spec.maxMB} MB` +
+          (tipo === "video" ? " — limite do WhatsApp. Comprima o vídeo e tente de novo." : "."),
+      });
+      return;
+    }
+
+    try {
+      setSubindo(true);
+      const base64 = await blobParaBase64(file);
+      const r = await uploadMut.mutateAsync({
+        nome: file.name,
+        tipo: file.type || "application/octet-stream",
+        base64,
+        tamanho: file.size,
+      });
+      onAnexar({ url: r.url, tipo, nome: file.name, tamanho: file.size });
+    } catch (err: any) {
+      toast.error("Falha ao anexar arquivo", { description: err?.message });
+    } finally {
+      setSubindo(false);
+    }
+  };
+
+  return (
+    <>
+      <input ref={inputRef} type="file" className="hidden" onChange={onFile} />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 p-0 shrink-0"
+            title="Anexar foto, vídeo ou documento"
+            disabled={subindo}
+          >
+            {subindo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" side="top" className="w-56">
+          <DropdownMenuItem onClick={() => escolher("imagem")}>
+            <ImageIcon className="h-4 w-4 mr-2 text-emerald-600" />
+            <span className="text-sm">
+              Foto
+              <span className="block text-[10px] text-muted-foreground">JPG, PNG, GIF, WebP · até 5 MB</span>
+            </span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => escolher("video")}>
+            <VideoIcon className="h-4 w-4 mr-2 text-violet-600" />
+            <span className="text-sm">
+              Vídeo
+              <span className="block text-[10px] text-muted-foreground">MP4 · até 16 MB (WhatsApp)</span>
+            </span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => escolher("documento")}>
+            <FileText className="h-4 w-4 mr-2 text-blue-600" />
+            <span className="text-sm">
+              Documento
+              <span className="block text-[10px] text-muted-foreground">PDF, Word, Excel, CSV · até 95 MB</span>
+            </span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
 }
 
 function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDragChange }: { leads: any[]; onUpdate: () => void; onWA?: (p: string) => void; onAddLead: () => void; onGoToConversa: (conversaId: number) => void; onDragChange?: (ativo: boolean) => void }) {

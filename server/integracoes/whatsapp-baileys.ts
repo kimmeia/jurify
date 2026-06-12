@@ -314,6 +314,11 @@ class WhatsappSessionManager extends EventEmitter {
           image: { url: mediaUrl },
           caption: mediaCaption || conteudo || "",
         });
+      } else if (tipo === "video" && mediaUrl) {
+        sent = await state.socket.sendMessage(jid, {
+          video: { url: mediaUrl },
+          caption: mediaCaption || conteudo || "",
+        });
       } else if (tipo === "documento" && mediaUrl) {
         sent = await state.socket.sendMessage(jid, {
           document: { url: mediaUrl },

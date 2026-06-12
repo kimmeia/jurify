@@ -40,7 +40,14 @@ describe("rejeitarConteudoDetectado", () => {
     expect(rejeitarConteudoDetectado("audio/ogg", "video/webm")).toContain("não é permitido");
     // nem o cruzamento webm<->mp4
     expect(rejeitarConteudoDetectado("audio/mp4", "video/webm")).toContain("não é permitido");
-    expect(rejeitarConteudoDetectado("audio/webm", "video/mp4")).toContain("não é permitido");
+    // video/mp4 entrou na allowlist (anexo de vídeo do composer), mas
+    // declarar audio/webm com conteúdo video/mp4 segue REJEITADO — agora
+    // pelo mismatch declarado≠detectado, não mais pela allowlist.
+    expect(rejeitarConteudoDetectado("audio/webm", "video/mp4")).toContain("não bate com o conteúdo");
+  });
+
+  it("aceita vídeo MP4 legítimo (declarado e detectado como video/mp4)", () => {
+    expect(rejeitarConteudoDetectado("video/mp4", "video/mp4")).toBeNull();
   });
 
   it("rejeita conteúdo que não está na allowlist (ex: executável)", () => {
