@@ -1206,6 +1206,103 @@ function RankingPodioTabela({
   );
 }
 
+/**
+ * Cards de "Fechamentos por origem" com drill-down: clicar numa origem
+ * abre a lista de clientes daquele fechamento (mesmo recorte de
+ * período/atendente do relatório). Aprovado via mockup.
+ */
+function FechamentosPorOrigemCard({ itens }: { itens: any[] }) {
+  const [origemAberta, setOrigemAberta] = useState<string | null>(null);
+  const aberta = itens.find((o: any) => o.origem === origemAberta);
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm">Fechamentos por origem</CardTitle>
+        <p className="text-[10px] text-muted-foreground mt-0.5">
+          Origem registrada no cadastro do fechamento (Google revisional, Meta leilão, BNI, etc.).
+          Clique num card para ver os clientes.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {itens.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            Sem fechamentos com origem cadastrada no período.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {itens.map((o: any) => (
+                <button
+                  key={o.origem}
+                  type="button"
+                  className={
+                    "rounded-lg border p-3 text-center transition-all hover:border-emerald-300 hover:shadow-sm " +
+                    (origemAberta === o.origem ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500" : "")
+                  }
+                  onClick={() => setOrigemAberta(origemAberta === o.origem ? null : o.origem)}
+                >
+                  <p className="text-xl font-bold text-emerald-700">{o.total}</p>
+                  <p className="text-xs text-muted-foreground truncate" title={o.origem}>{o.origem}</p>
+                </button>
+              ))}
+            </div>
+            {aberta && (aberta.fechamentos?.length ?? 0) > 0 && (
+              <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/50 overflow-hidden">
+                <div className="flex items-center gap-2 px-3.5 py-2 text-xs flex-wrap">
+                  <span>
+                    <strong className="text-emerald-900">{aberta.origem}</strong> · {aberta.total} fechamento(s) no período
+                  </span>
+                  <span className="ml-auto font-bold text-emerald-700">{formatBRL(aberta.valorTotal || 0)}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => setOrigemAberta(null)}
+                  >
+                    ✕ Fechar
+                  </Button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs bg-white">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-wide text-emerald-700 bg-emerald-50/80">
+                        <th className="text-left px-3.5 py-1.5 font-semibold">Cliente</th>
+                        <th className="text-left px-3.5 py-1.5 font-semibold">Fechado em</th>
+                        <th className="text-right px-3.5 py-1.5 font-semibold">Valor</th>
+                        <th className="text-left px-3.5 py-1.5 font-semibold">Responsável</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {aberta.fechamentos.map((f: any, i: number) => (
+                        <tr key={i} className="border-t">
+                          <td className="px-3.5 py-1.5">
+                            {f.contatoId ? (
+                              <a href={`/clientes?id=${f.contatoId}`} className="text-blue-600 font-medium hover:underline">
+                                {f.cliente}
+                              </a>
+                            ) : (
+                              f.cliente
+                            )}
+                          </td>
+                          <td className="px-3.5 py-1.5 text-muted-foreground">
+                            {f.fechadoEm ? new Date(f.fechadoEm).toLocaleDateString("pt-BR") : "—"}
+                          </td>
+                          <td className="px-3.5 py-1.5 text-right font-semibold tabular-nums">{formatBRL(f.valor || 0)}</td>
+                          <td className="px-3.5 py-1.5 text-muted-foreground">{f.responsavel || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function DashboardComercial() {
   // Filtros locais: setor (default = primeiro tipo='comercial'),
   // atendente, período (default mês vigente).
@@ -1642,32 +1739,7 @@ function DashboardComercial() {
           </Card>
 
           {/* Fechamentos por origem — texto livre do cadastro de fechamento */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Fechamentos por origem</CardTitle>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                Origem registrada no cadastro do fechamento (Google revisional, Meta leilão, BNI, etc.).
-              </p>
-            </CardHeader>
-            <CardContent>
-              {(!data.fechamentosPorOrigem || data.fechamentosPorOrigem.length === 0) ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Sem fechamentos com origem cadastrada no período.
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {data.fechamentosPorOrigem.map((o: any) => (
-                    <div key={o.origem} className="rounded-lg border p-3 text-center">
-                      <p className="text-xl font-bold text-emerald-700">{o.total}</p>
-                      <p className="text-xs text-muted-foreground truncate" title={o.origem}>
-                        {o.origem}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <FechamentosPorOrigemCard itens={data.fechamentosPorOrigem || []} />
         </>
       )}
 

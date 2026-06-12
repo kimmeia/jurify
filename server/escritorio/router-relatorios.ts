@@ -37,6 +37,63 @@ import {
 import { gerarComercialPdf, type DetalheAtendentePdf } from "./relatorios-comercial-pdf";
 import { gerarAgendaPdf } from "./relatorios-agenda-pdf";
 
+/**
+ * Agrupa fechamentos detalhados (leads fechado_ganho) por origem do
+ * fechamento. Saída alimenta os cards clicáveis de "Fechamentos por
+ * origem" na tela e as subtabelas do PDF comercial. `fechadoEm` cai em
+ * `criadoEm` para leads pré-backfill da migration 0134.
+ */
+export function agruparFechamentosPorOrigem(rows: Array<{
+  origem: string | null;
+  contatoId: number | null;
+  cliente: string | null;
+  fechadoEm: Date | null;
+  criadoEm: Date;
+  valor: number | string | null;
+  responsavel: string | null;
+}>): Array<{
+  origem: string;
+  total: number;
+  valorTotal: number;
+  fechamentos: Array<{
+    contatoId: number | null;
+    cliente: string;
+    fechadoEm: string | null;
+    valor: number;
+    responsavel: string | null;
+  }>;
+}> {
+  const porOrigem = new Map<string, {
+    origem: string; total: number; valorTotal: number;
+    fechamentos: Array<{ contatoId: number | null; cliente: string; fechadoEm: string | null; valor: number; responsavel: string | null }>;
+  }>();
+  for (const r of rows) {
+    const origem = (r.origem || "").trim() || "Sem origem";
+    let g = porOrigem.get(origem);
+    if (!g) {
+      g = { origem, total: 0, valorTotal: 0, fechamentos: [] };
+      porOrigem.set(origem, g);
+    }
+    const valor = Number(r.valor || 0);
+    g.total++;
+    g.valorTotal += valor;
+    const quando = r.fechadoEm ?? r.criadoEm ?? null;
+    g.fechamentos.push({
+      contatoId: r.contatoId,
+      cliente: r.cliente || "Cliente",
+      fechadoEm: quando ? new Date(quando).toISOString() : null,
+      valor,
+      responsavel: r.responsavel,
+    });
+  }
+  const lista = [...porOrigem.values()];
+  for (const g of lista) {
+    g.fechamentos.sort((a, b) => (b.fechadoEm || "").localeCompare(a.fechadoEm || ""));
+  }
+  lista.sort((a, b) => b.total - a.total);
+  return lista;
+}
+
 const log = createLogger("relatorios");
 
 const PeriodoInput = z
@@ -909,12 +966,20 @@ export const relatoriosRouter = router({
     // aqui agregamos leads.origemLead — texto preenchido no cadastro do
     // fechamento (ex: "Google revisional", "Meta leilão", "BNI", "Indicação").
     // Filtra apenas leads que viraram contrato (etapaFunil=fechado_ganho).
-    const fechamentosOrigemRows = await db
+    const fechamentosDetalheRows = await db
       .select({
         origem: leads.origemLead,
-        total: sql<number>`COUNT(*)`,
+        contatoId: leads.contatoId,
+        cliente: contatos.nome,
+        fechadoEm: leads.fechadoEm,
+        criadoEm: leads.createdAt,
+        valor: leads.valorEstimado,
+        responsavel: users.name,
       })
       .from(leads)
+      .innerJoin(contatos, eq(leads.contatoId, contatos.id))
+      .leftJoin(colaboradores, eq(colaboradores.id, leads.responsavelId))
+      .leftJoin(users, eq(users.id, colaboradores.userId))
       .where(
         and(
           eq(leads.escritorioId, eid),
@@ -923,8 +988,7 @@ export const relatoriosRouter = router({
           ...filtroLeadResp,
           sql`${leads.origemLead} IS NOT NULL AND ${leads.origemLead} != ''`,
         ),
-      )
-      .groupBy(leads.origemLead);
+      );
 
     // ── Conversas atendidas no período ─────────────────────────────────────
     const [conversasTotal] = await db
@@ -968,10 +1032,7 @@ export const relatoriosRouter = router({
         origem: r.origem as string,
         total: Number(r.total),
       })),
-      fechamentosPorOrigem: fechamentosOrigemRows.map((r) => ({
-        origem: (r.origem || "Sem origem") as string,
-        total: Number(r.total),
-      })),
+      fechamentosPorOrigem: agruparFechamentosPorOrigem(fechamentosDetalheRows),
     };
   }),
 
@@ -1470,12 +1531,20 @@ export const relatoriosRouter = router({
         .groupBy(contatos.origem);
 
       // ── Fechamentos por origem (texto livre do catálogo do escritório) ────
-      const fechamentosOrigemRows = await db
+      const fechamentosDetalheRows = await db
         .select({
           origem: leads.origemLead,
-          total: sql<number>`COUNT(*)`,
+          contatoId: leads.contatoId,
+          cliente: contatos.nome,
+          fechadoEm: leads.fechadoEm,
+          criadoEm: leads.createdAt,
+          valor: leads.valorEstimado,
+          responsavel: users.name,
         })
         .from(leads)
+        .innerJoin(contatos, eq(leads.contatoId, contatos.id))
+        .leftJoin(colaboradores, eq(colaboradores.id, leads.responsavelId))
+        .leftJoin(users, eq(users.id, colaboradores.userId))
         .where(and(
           eq(leads.escritorioId, eid),
           eq(leads.etapaFunil, "fechado_ganho"),
@@ -1483,8 +1552,7 @@ export const relatoriosRouter = router({
           gte(leads.createdAt, dataInicio),
           lte(leads.createdAt, dataFim),
           sql`${leads.origemLead} IS NOT NULL AND ${leads.origemLead} != ''`,
-        ))
-        .groupBy(leads.origemLead);
+        ));
 
       return {
         periodo: {
@@ -1520,10 +1588,7 @@ export const relatoriosRouter = router({
           origem: r.origem as string,
           total: Number(r.total),
         })),
-        fechamentosPorOrigem: fechamentosOrigemRows.map((r) => ({
-          origem: (r.origem || "Sem origem") as string,
-          total: Number(r.total),
-        })),
+        fechamentosPorOrigem: agruparFechamentosPorOrigem(fechamentosDetalheRows),
         filtros: {
           setorId: input?.setorId ?? null,
           atendenteId: input?.atendenteId ?? null,
