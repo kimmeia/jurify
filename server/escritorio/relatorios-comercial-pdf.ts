@@ -40,7 +40,18 @@ export type ComercialDashboardData = {
   cobrancasPorDia: Array<{ dia: string; faturado: number }>;
   etapas: Record<string, { total: number; valor: number }>;
   contatosPorOrigem: Array<{ origem: string; total: number }>;
-  fechamentosPorOrigem: Array<{ origem: string; total: number }>;
+  fechamentosPorOrigem: Array<{
+    origem: string;
+    total: number;
+    valorTotal?: number;
+    fechamentos?: Array<{
+      contatoId: number | null;
+      cliente: string;
+      fechadoEm: string | null;
+      valor: number;
+      responsavel: string | null;
+    }>;
+  }>;
   filtros: { setorId: number | null; atendenteId: number | null };
 };
 
@@ -564,6 +575,49 @@ export async function gerarComercialPdf(args: {
           data.fechamentosPorOrigem.map((o) => ({ valor: o.total, label: o.origem })),
           { cols: 4, corNumero: "#047857", corBorda: C.emeraldBd },
         );
+
+        // Subtabela por origem: clientes de cada fechamento (mesma ordem
+        // dos cards). Aprovado via mockup junto com o card clicável da tela.
+        for (const o of data.fechamentosPorOrigem) {
+          if (!o.fechamentos || o.fechamentos.length === 0) continue;
+          ensure(46);
+          const yh = doc.y;
+          rrect(L, yh, W, 18, 4, "#f6fdf9", C.emeraldBd, 0.8);
+          doc.fillColor("#065f46").font("Helvetica-Bold").fontSize(8.5)
+            .text(o.origem, L + 8, yh + 5, { width: W - 230, lineBreak: false, ellipsis: true });
+          doc.fillColor("#047857").font("Helvetica-Bold").fontSize(8)
+            .text(`${o.total} fechamento(s) · ${formatBRL(o.valorTotal || 0)}`,
+              L + W - 218, yh + 5, { width: 210, align: "right", lineBreak: false });
+          doc.y = yh + 24;
+
+          const xCli = L + 4, wCli = 232, xData = L + 244, wData = 70,
+            xVal = L + 318, wVal = 96, xResp = L + 424, wResp = 90;
+          const yc = doc.y;
+          doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(7);
+          doc.text("Cliente", xCli, yc, { width: wCli });
+          doc.text("Fechado em", xData, yc, { width: wData });
+          doc.text("Valor", xVal, yc, { width: wVal, align: "right" });
+          doc.text("Responsável", xResp, yc, { width: wResp });
+          doc.y = yc + 10;
+          hr(doc.y, C.line, 0.5);
+          doc.y += 3;
+
+          for (const f of o.fechamentos) {
+            ensure(14);
+            const yr = doc.y;
+            doc.fillColor(C.dark).font("Helvetica").fontSize(8)
+              .text(f.cliente, xCli, yr, { width: wCli, lineBreak: false, ellipsis: true });
+            doc.fillColor(C.muted).font("Helvetica").fontSize(8)
+              .text(f.fechadoEm ? new Date(f.fechadoEm).toLocaleDateString("pt-BR") : "—",
+                xData, yr, { width: wData, lineBreak: false });
+            doc.fillColor(C.emerald).font("Helvetica-Bold").fontSize(8)
+              .text(formatBRL(f.valor || 0), xVal, yr, { width: wVal, align: "right", lineBreak: false });
+            doc.fillColor(C.muted).font("Helvetica").fontSize(8)
+              .text(f.responsavel || "—", xResp, yr, { width: wResp, lineBreak: false, ellipsis: true });
+            doc.y = yr + 12;
+          }
+          doc.y += 8;
+        }
       }
 
       // ── Nota de metodologia ──────────────────────────────────────────────────

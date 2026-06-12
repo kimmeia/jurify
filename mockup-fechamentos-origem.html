@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Relatórios — clientes por fechamento (tela + PDF)</title>
+<style>
+  :root{
+    --ink:#1f2430; --muted:#6b7280; --bg:#f4f6f8; --panel:#fff; --border:#e6e8ec;
+    --emerald:#059669; --emerald-50:#ecfdf5; --emerald-200:#a7f3d0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;
+    line-height:1.5;padding:32px 16px 80px}
+  .wrap{max-width:920px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 6px}
+  .sub{color:var(--muted);margin:0 0 28px;font-size:14px}
+  h2{font-size:16.5px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+  .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
+  .b-1{background:#d1fae5;color:#047857}.b-2{background:#fee2e2;color:#b91c1c}
+  .section{margin:0 0 40px}
+  .note{color:var(--muted);font-size:13px;margin:6px 0 14px;max-width:760px}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 2px 10px rgba(16,24,40,.05)}
+  .panel .tt{font-size:13.5px;font-weight:700;margin-bottom:2px}
+  .panel .ts{font-size:11px;color:var(--muted);margin-bottom:14px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+  .ocard{border:1px solid var(--border);border-radius:10px;padding:14px 10px;text-align:center;background:#fff;cursor:default;position:relative;transition:all .15s}
+  .ocard .n{font-size:20px;font-weight:800;color:var(--emerald)}
+  .ocard .l{font-size:11px;color:var(--muted);margin-top:2px}
+  .ocard.clicavel:hover{border-color:var(--emerald-200);box-shadow:0 2px 8px rgba(5,150,105,.12)}
+  .ocard.ativo{border-color:var(--emerald);background:var(--emerald-50);box-shadow:0 0 0 1px var(--emerald)}
+  .ocard.ativo::after{content:"▾";position:absolute;bottom:-1px;left:50%;transform:translate(-50%,100%);color:var(--emerald);font-size:13px}
+  .hint{font-size:10.5px;color:#94a3b8;font-style:italic;margin-top:8px}
+  /* painel expandido */
+  .detalhe{margin-top:14px;border:1px solid var(--emerald-200);border-radius:12px;background:var(--emerald-50);overflow:hidden}
+  .detalhe .head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;font-size:12.5px}
+  .detalhe .head b{color:#065f46}
+  .detalhe .head .soma{font-weight:800;color:#047857}
+  .detalhe .fechar{font-size:11px;color:#047857;border:1px solid var(--emerald-200);background:#fff;border-radius:7px;padding:3px 10px;cursor:default}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff}
+  th,td{padding:8px 14px;text-align:left;border-top:1px solid #e2efe9}
+  th{background:#f6fdf9;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#047857;border-top:none}
+  td .link{color:#2563eb;font-weight:600;cursor:default}
+  td.right,th.right{text-align:right}
+  .resp{display:inline-flex;align-items:center;gap:6px}
+  .av{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;color:#fff;font-weight:700}
+  /* PDF */
+  .pdf{background:#fff;border:1px solid var(--border);border-radius:6px;max-width:620px;margin:0 auto;
+    box-shadow:0 14px 34px rgba(16,24,40,.14);padding:26px 30px;font-size:11px}
+  .pdf .ph{display:flex;justify-content:space-between;border-bottom:2px solid var(--emerald);padding-bottom:8px;margin-bottom:14px}
+  .pdf .ph b{font-size:13px}
+  .pdf .ph span{color:var(--muted);font-size:9.5px}
+  .pdf h3{font-size:11.5px;color:#047857;margin:14px 0 6px;border-left:3px solid var(--emerald);padding-left:8px}
+  .pdf .psub{font-size:8.5px;color:#94a3b8;margin:-4px 0 8px 11px}
+  .pdf table{font-size:9.5px}
+  .pdf th{font-size:8px;padding:5px 8px}
+  .pdf td{padding:4.5px 8px}
+  .pdf .origem-head{display:flex;justify-content:space-between;background:#f6fdf9;border:1px solid #d6ece2;border-radius:5px;padding:5px 9px;margin:10px 0 5px;font-weight:700;font-size:10px;color:#065f46}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Relatórios — clientes por fechamento de origem</h1>
+  <p class="sub">Mockup para aprovação · nada foi implementado. Ao clicar num card de "Fechamentos por origem",
+  a lista de clientes daquela origem abre logo abaixo — e o PDF do relatório passa a trazer as mesmas listas.</p>
+
+  <!-- ════════ TELA ════════ -->
+  <div class="section">
+    <h2><span class="badge b-1">Na tela</span> Card clicável expande a lista de clientes</h2>
+    <p class="note">Os cards continuam iguais; ganham hover e clique. Clicou → painel verde abre abaixo com os
+    fechamentos daquela origem <b>no período filtrado</b> (mesmos filtros do relatório). Clicar de novo (ou no ✕) fecha.</p>
+
+    <div class="panel">
+      <div class="tt">Fechamentos por origem</div>
+      <div class="ts">Origem registrada no cadastro do fechamento (Google revisional, Meta leilão, BNI, etc.).</div>
+      <div class="cards">
+        <div class="ocard clicavel"><div class="n">3</div><div class="l">manual</div></div>
+        <div class="ocard clicavel ativo"><div class="n">13</div><div class="l">Google (Revisional)</div></div>
+        <div class="ocard clicavel"><div class="n">3</div><div class="l">Ligação</div></div>
+        <div class="ocard clicavel"><div class="n">4</div><div class="l">Meta (Revisional)</div></div>
+        <div class="ocard clicavel"><div class="n">2</div><div class="l">Indicação</div></div>
+        <div class="ocard clicavel"><div class="n">1</div><div class="l">Outro</div></div>
+      </div>
+
+      <div class="detalhe">
+        <div class="head">
+          <span><b>Google (Revisional)</b> · 13 fechamento(s) no período</span>
+          <span class="soma">R$ 41.350,00</span>
+          <span class="fechar">✕ Fechar</span>
+        </div>
+        <table>
+          <tr><th>Cliente</th><th>Fechado em</th><th class="right">Valor</th><th>Responsável</th></tr>
+          <tr><td><span class="link">Francisco Antonio De Oliveira</span></td><td>09/06/2026</td><td class="right">R$ 7.250,00</td><td><span class="resp"><span class="av" style="background:#7c3aed">V</span>Vitória</span></td></tr>
+          <tr><td><span class="link">Marly Deus acima de Tudor</span></td><td>08/06/2026</td><td class="right">R$ 6.000,00</td><td><span class="resp"><span class="av" style="background:#0ea5e9">B</span>Beatriz</span></td></tr>
+          <tr><td><span class="link">Santiago Ribeiro</span></td><td>08/06/2026</td><td class="right">R$ 4.800,00</td><td><span class="resp"><span class="av" style="background:#7c3aed">V</span>Vitória</span></td></tr>
+          <tr><td><span class="link">Lenice Oliveira</span></td><td>06/06/2026</td><td class="right">R$ 3.900,00</td><td><span class="resp"><span class="av" style="background:#f59e0b">R</span>Rodrigo</span></td></tr>
+          <tr><td><span class="link">Ediberto Bezerra Loureiro</span></td><td>05/06/2026</td><td class="right">R$ 3.500,00</td><td><span class="resp"><span class="av" style="background:#0ea5e9">B</span>Beatriz</span></td></tr>
+          <tr><td colspan="4" style="text-align:center;color:#94a3b8;font-size:11px">… mais 8 fechamento(s)</td></tr>
+        </table>
+      </div>
+      <p class="hint">Clique no nome abre o cliente em /clientes. A lista respeita período e atendente filtrados no topo do relatório.</p>
+    </div>
+  </div>
+
+  <!-- ════════ PDF ════════ -->
+  <div class="section">
+    <h2><span class="badge b-2">No PDF</span> Mesmas listas, agrupadas por origem</h2>
+    <p class="note">A seção "Fechamentos por origem" do PDF (hoje só o gráfico de totais) ganha, na sequência,
+    uma subtabela por origem com os clientes — na mesma ordem dos cards.</p>
+
+    <div class="pdf">
+      <div class="ph">
+        <b>Relatório Comercial — Boyadjian Advogados</b>
+        <span>Período: 01/06/2026 a 11/06/2026 · gerado em 12/06/2026</span>
+      </div>
+
+      <h3>Fechamentos por origem</h3>
+      <p class="psub">Origem registrada no cadastro do fechamento. Totais do período filtrado.</p>
+
+      <div class="origem-head"><span>Google (Revisional)</span><span>13 fechamentos · R$ 41.350,00</span></div>
+      <table>
+        <tr><th>Cliente</th><th>Fechado em</th><th class="right">Valor</th><th>Responsável</th></tr>
+        <tr><td>Francisco Antonio De Oliveira</td><td>09/06/2026</td><td class="right">R$ 7.250,00</td><td>Vitória</td></tr>
+        <tr><td>Marly Deus acima de Tudor</td><td>08/06/2026</td><td class="right">R$ 6.000,00</td><td>Beatriz</td></tr>
+        <tr><td>Santiago Ribeiro</td><td>08/06/2026</td><td class="right">R$ 4.800,00</td><td>Vitória</td></tr>
+        <tr><td colspan="4" style="text-align:center;color:#94a3b8">… demais fechamentos da origem …</td></tr>
+      </table>
+
+      <div class="origem-head"><span>Meta (Revisional)</span><span>4 fechamentos · R$ 12.400,00</span></div>
+      <table>
+        <tr><th>Cliente</th><th>Fechado em</th><th class="right">Valor</th><th>Responsável</th></tr>
+        <tr><td>Kauan Mendes</td><td>07/06/2026</td><td class="right">R$ 4.300,00</td><td>Pablo</td></tr>
+        <tr><td>Vicente Almeida</td><td>04/06/2026</td><td class="right">R$ 3.600,00</td><td>Isaac</td></tr>
+        <tr><td colspan="4" style="text-align:center;color:#94a3b8">…</td></tr>
+      </table>
+
+      <div class="origem-head"><span>Indicação</span><span>2 fechamentos · R$ 5.500,00</span></div>
+      <table>
+        <tr><th>Cliente</th><th>Fechado em</th><th class="right">Valor</th><th>Responsável</th></tr>
+        <tr><td>Renan Souza</td><td>03/06/2026</td><td class="right">R$ 3.000,00</td><td>Beatriz</td></tr>
+        <tr><td>Jhozy Lima</td><td>02/06/2026</td><td class="right">R$ 2.500,00</td><td>Vitória</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════════ COMPORTAMENTO ════════ -->
+  <div class="section">
+    <h2>Comportamento proposto</h2>
+    <div class="panel" style="padding:0;overflow:hidden">
+      <table style="font-size:13px">
+        <tr><th style="background:#f8fafc;color:#6b7280">Detalhe</th><th style="background:#f8fafc;color:#6b7280">Como funciona</th></tr>
+        <tr><td><b>Clique no card</b></td><td>Abre o painel com Cliente · Data do fechamento · Valor · Responsável. Clicar de novo (ou ✕) fecha. Um painel por vez.</td></tr>
+        <tr><td><b>Filtros</b></td><td>A lista respeita o período e o atendente já filtrados no relatório — mesmo recorte dos cards.</td></tr>
+        <tr><td><b>Link do cliente</b></td><td>Nome clicável abre o cadastro do cliente.</td></tr>
+        <tr><td><b>PDF</b></td><td>Subtabela por origem (todas as origens, na ordem dos cards), com total e soma no cabeçalho de cada uma. Sem limite de linhas — o PDF pagina sozinho.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <p class="hint" style="text-align:center"><b>Nenhuma alteração foi feita.</b> Aprovando, implemento tela + PDF e aviso para autorizar o deploy.</p>
+
+</div>
+</body>
+</html>
