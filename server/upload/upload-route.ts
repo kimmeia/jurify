@@ -75,6 +75,9 @@ const ALLOWED_TYPES = new Set([
   // mantemos ogg+mpeg+wav pra cobrir variações de codec e arquivos arrastados.
   "audio/webm",
   "audio/mp4",
+  // Vídeo enviado pelo composer do Atendimento (anexo 📎). Só MP4 — é o
+  // formato que a API do WhatsApp aceita; o client valida 16 MB antes.
+  "video/mp4",
   "audio/ogg",
   "audio/mpeg",
   "audio/wav",
