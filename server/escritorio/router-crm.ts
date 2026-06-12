@@ -68,19 +68,24 @@ async function enviarConteudoCloudApi(
       return client.enviarAudioPorId(telefone, mediaId);
     }
 
-    if (tipo === "imagem" || tipo === "documento") {
+    if (tipo === "imagem" || tipo === "documento" || tipo === "video") {
       if (ehHttp) {
         return tipo === "imagem"
           ? client.enviarImagem(telefone, origem, conteudo || undefined)
-          : client.enviarDocumento(telefone, origem, path.basename(origem), conteudo || undefined);
+          : tipo === "video"
+            ? client.enviarVideo(telefone, origem, conteudo || undefined)
+            : client.enviarDocumento(telefone, origem, path.basename(origem), conteudo || undefined);
       }
       const buf = await fsp.readFile(origem);
       const ft = await fileTypeFromBuffer(buf);
-      const mime = ft?.mime || (tipo === "imagem" ? "image/jpeg" : "application/octet-stream");
+      const mime = ft?.mime
+        || (tipo === "imagem" ? "image/jpeg" : tipo === "video" ? "video/mp4" : "application/octet-stream");
       const mediaId = await client.uploadMedia(buf, mime, path.basename(origem));
       return tipo === "imagem"
         ? client.enviarImagemPorId(telefone, mediaId, conteudo || undefined)
-        : client.enviarDocumentoPorId(telefone, mediaId, path.basename(origem), conteudo || undefined);
+        : tipo === "video"
+          ? client.enviarVideoPorId(telefone, mediaId, conteudo || undefined)
+          : client.enviarDocumentoPorId(telefone, mediaId, path.basename(origem), conteudo || undefined);
     }
   }
 

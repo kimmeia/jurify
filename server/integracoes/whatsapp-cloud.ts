@@ -182,6 +182,18 @@ export class WhatsAppCloudClient {
     return res.data?.messages?.[0]?.id || "";
   }
 
+  /** Enviar vídeo (MP4 — único formato aceito pela Cloud API; máx 16 MB) */
+  async enviarVideo(telefone: string, videoUrl: string, caption?: string): Promise<string> {
+    const res = await this.api.post(`/${this.phoneNumberId}/messages`, {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: telefone.replace(/\D/g, ""),
+      type: "video",
+      video: { link: videoUrl, caption },
+    });
+    return res.data?.messages?.[0]?.id || "";
+  }
+
   /** Enviar audio */
   async enviarAudio(telefone: string, audioUrl: string): Promise<string> {
     const res = await this.api.post(`/${this.phoneNumberId}/messages`, {
@@ -235,6 +247,10 @@ export class WhatsAppCloudClient {
   /** Enviar documento por media_id. */
   async enviarDocumentoPorId(telefone: string, mediaId: string, filename: string, caption?: string): Promise<string> {
     return this.enviarMidiaPorId(telefone, { type: "document", document: { id: mediaId, filename, caption } });
+  }
+
+  async enviarVideoPorId(telefone: string, mediaId: string, caption?: string): Promise<string> {
+    return this.enviarMidiaPorId(telefone, { type: "video", video: { id: mediaId, caption } });
   }
 
   /** Marcar mensagem como lida */
