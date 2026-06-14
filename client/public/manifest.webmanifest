@@ -3,18 +3,39 @@
   "short_name": "JuridFlow",
   "description": "O sistema operacional do escritório de advocacia.",
   "id": "/",
-  "start_url": "/?source=pwa",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/atendimento?source=pwa",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#4f46e5",
   "theme_color": "#7c3aed",
-  "lang": "pt-BR",
   "categories": ["business", "productivity"],
   "icons": [
     { "src": "/icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
     { "src": "/pwa-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
     { "src": "/pwa-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
     { "src": "/pwa-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Atendimento",
+      "short_name": "Atendimento",
+      "url": "/atendimento?source=pwa",
+      "icons": [{ "src": "/pwa-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Clientes",
+      "short_name": "Clientes",
+      "url": "/clientes?source=pwa",
+      "icons": [{ "src": "/pwa-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Agenda",
+      "short_name": "Agenda",
+      "url": "/agenda?source=pwa",
+      "icons": [{ "src": "/pwa-192.png", "sizes": "192x192" }]
+    }
   ]
 }
