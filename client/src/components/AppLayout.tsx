@@ -277,11 +277,13 @@ function AppSidebarContent({
   // Atendimento abre o app focado nele, sem o menu dos outros módulos.
   // "Abrir versão completa" (no menu do perfil) sai do foco e mostra a
   // sidebar inteira; "Modo atendimento" (no menu de usuário) volta.
-  // Admin global e quem não vê Atendimento mantêm o menu completo.
+  // Vale inclusive pro dono/admin do escritório — o painel admin global
+  // vive em /admin (AdminLayout, fora daqui) e segue acessível pela
+  // versão completa. Quem não vê Atendimento mantém o menu completo.
   const [mobileCompleto, setMobileCompleto] = useState<boolean>(() => {
     try { return localStorage.getItem("jurify:mobileCompleto") === "1"; } catch { return false; }
   });
-  const modoFocadoMobile = isMobile && !mobileCompleto && !isAdmin && canSee("atendimento");
+  const modoFocadoMobile = isMobile && !mobileCompleto && canSee("atendimento");
   const abrirVersaoCompleta = () => {
     try { localStorage.setItem("jurify:mobileCompleto", "1"); } catch { /* modo privado */ }
     setMobileCompleto(true);
@@ -595,7 +597,7 @@ function AppSidebarContent({
                     <DropdownMenuSeparator />
                   </>
                 )}
-                {isMobile && !isAdmin && canSee("atendimento") && (
+                {isMobile && canSee("atendimento") && (
                   <>
                     <DropdownMenuItem onClick={voltarModoAtendimento} className="cursor-pointer">
                       <Smartphone className="mr-2 h-4 w-4" />
