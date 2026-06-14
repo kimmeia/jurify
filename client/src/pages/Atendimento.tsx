@@ -13,7 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
 import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon, ChevronLeft } from "lucide-react";
@@ -58,7 +58,7 @@ import { CentroDeComando } from "./atendimento/centro-de-comando";
 import { FilaChamadas } from "./atendimento/fila-chamadas";
 import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
-import { Sparkles, ScrollText, Bot } from "lucide-react";
+import { Sparkles, ScrollText, Bot, MoreVertical } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 function timeAgo(d: string) { if (!d) return ""; const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "agora"; if (m < 60) return m + "min"; const h = Math.floor(m / 60); if (h < 24) return h + "h"; return Math.floor(h / 24) + "d"; }
@@ -1210,8 +1210,59 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
     return <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{content}</p>;
   };
 
+  const mobile = !!onVoltar;
+
   return (<>
-    {/* Header linha 1: contato */}
+    {/* Mobile: cabeçalho compacto estilo WhatsApp (1 linha + menu de ações). */}
+    {mobile && (
+      <div className="flex items-center gap-2 px-2 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] border-b bg-card">
+        <button onClick={onVoltar} aria-label="Voltar para a lista" className="shrink-0 h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted">
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-xs font-bold text-primary shrink-0">{initials(conv?.contatoNome || "?")}</div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold truncate leading-tight">{conv?.contatoNome || "Contato"}</p>
+          <p className="text-[11px] text-muted-foreground truncate leading-tight">
+            {STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status || ""}
+            {(conv?.contatoTelefone || conv?.chatIdExterno) ? ` · ${conv?.contatoTelefone || conv?.chatIdExterno?.replace(/@.*/, "")}` : ""}
+          </p>
+        </div>
+        {(() => {
+          const tel = conv?.contatoTelefone || conv?.chatIdExterno?.replace(/@.*/, "") || "";
+          const podeLigarWa = !!onLigarWhatsApp && conv?.canalTipo === "whatsapp_api" && !!conv?.canalId && !!tel;
+          return (<>
+            {onWA && tel && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 shrink-0" title="Abrir no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-4 w-4" /></Button>}
+            {podeLigarWa && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-green-600 shrink-0" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-4 w-4" /></Button>}
+          </>);
+        })()}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" aria-label="Ações da conversa"><MoreVertical className="h-5 w-5" /></Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            {bot.managed && conv && (
+              <>
+                <DropdownMenuItem onClick={() => botToggle.toggle(conv.id, bot.pausado)} disabled={botToggle.pending}>
+                  <Bot className="h-4 w-4 mr-2" />{bot.pausado ? "Reativar bot" : "Pausar bot (assumir)"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
+            {onAbrirLinhaTempo && <DropdownMenuItem onClick={onAbrirLinhaTempo}><ScrollText className="h-4 w-4 mr-2" />Linha do Tempo</DropdownMenuItem>}
+            <DropdownMenuItem onClick={() => setShowAddLead(true)}><TrendingUp className="h-4 w-4 mr-2" />Pipeline</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowAgendar(true)}><Calendar className="h-4 w-4 mr-2" />Agendar</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowTransferir(true)}><ArrowRightLeft className="h-4 w-4 mr-2" />Transferir</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowVincular(true)}><Link2 className="h-4 w-4 mr-2" />Vincular</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-4 w-4 mr-2 text-emerald-600" />Resolver</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-4 w-4 mr-2" />Fechar</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive"><Trash2 className="h-4 w-4 mr-2" />Excluir</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    )}
+    {/* Desktop: cabeçalho completo (badges + barra de ações). */}
+    {!mobile && (
     <div className="px-4 py-2.5 border-b">
       <div className="flex items-center gap-3">
         {/* Voltar pra lista — só no mobile (inbox em tela cheia). */}
@@ -1328,6 +1379,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" title="Excluir" onClick={handleDelete}><Trash2 className="h-3 w-3" /></Button>
       </div>
     </div>
+    )}
     {/* Bloco de contexto recolhível: Brief + Diff + Action Cards. O ✕ no
         brief recolhe tudo numa barrinha de resumo (SLA crítico continua
         visível em vermelho); o ⌄ da barrinha expande de volta. */}
