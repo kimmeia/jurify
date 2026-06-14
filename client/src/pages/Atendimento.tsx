@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from "react";
+import { createPortal } from "react-dom";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -887,40 +888,65 @@ export default function Atendimento() {
               </ScrollArea>
             </div>
 
-            {/* Coluna 2: Chat hero. No mobile, esconde quando nenhuma
-                conversa está aberta (mostra só o inbox). */}
-            <div className={isMobile ? (selId ? "fixed inset-0 z-50 bg-card flex flex-col overflow-x-hidden" : "hidden") : "bg-card overflow-hidden flex flex-col lg:min-h-0"}>
-              {selId ? (
-                <ChatArea
-                  cid={selId}
-                  convs={convs || []}
-                  onVoltar={isMobile ? () => setSelId(null) : undefined}
-                  onUpdate={rC}
-                  onLeadUpdate={rL}
-                  onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined}
-                  onTel={hasTwilio ? (p) => setTelPopup(p) : undefined}
-                  onDeleted={() => {
-                    setSelId(null);
-                    rC();
-                  }}
-                  onTransferido={() => {
-                    setSelId(null);
-                    rC();
-                  }}
-                  onAbrirLinhaTempo={() => {
-                    const conv = (convs || []).find((c: any) => c.id === selId);
-                    if (conv?.contatoId) setShowLinhaTempo(conv.contatoId);
-                  }}
-                  onLigarWhatsApp={(info) => chamadaWa.ligar(info)}
-                />
-              ) : (
-                <CentroDeComando
-                  convs={convs || []}
-                  onAbrirConversa={setSelId}
-                  onIniciar={() => setShowIniciar(true)}
-                />
+            {/* Coluna 2: Chat. No mobile com conversa aberta, vai pra um portal
+                no document.body e ocupa a tela inteira — `fixed inset-0` fica
+                imune a qualquer ancestral com transform/overflow que estava
+                limitando a altura (composer flutuava no meio da tela). */}
+            {isMobile && selId
+              ? createPortal(
+                  <div className="fixed inset-0 z-[60] bg-card flex flex-col">
+                    <ChatArea
+                      cid={selId}
+                      convs={convs || []}
+                      onVoltar={() => setSelId(null)}
+                      onUpdate={rC}
+                      onLeadUpdate={rL}
+                      onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined}
+                      onTel={hasTwilio ? (p) => setTelPopup(p) : undefined}
+                      onDeleted={() => { setSelId(null); rC(); }}
+                      onTransferido={() => { setSelId(null); rC(); }}
+                      onAbrirLinhaTempo={() => {
+                        const conv = (convs || []).find((c: any) => c.id === selId);
+                        if (conv?.contatoId) setShowLinhaTempo(conv.contatoId);
+                      }}
+                      onLigarWhatsApp={(info) => chamadaWa.ligar(info)}
+                    />
+                  </div>,
+                  document.body,
+                )
+              : (
+                <div className={isMobile ? "hidden" : "bg-card overflow-hidden flex flex-col lg:min-h-0"}>
+                  {selId ? (
+                    <ChatArea
+                      cid={selId}
+                      convs={convs || []}
+                      onUpdate={rC}
+                      onLeadUpdate={rL}
+                      onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined}
+                      onTel={hasTwilio ? (p) => setTelPopup(p) : undefined}
+                      onDeleted={() => {
+                        setSelId(null);
+                        rC();
+                      }}
+                      onTransferido={() => {
+                        setSelId(null);
+                        rC();
+                      }}
+                      onAbrirLinhaTempo={() => {
+                        const conv = (convs || []).find((c: any) => c.id === selId);
+                        if (conv?.contatoId) setShowLinhaTempo(conv.contatoId);
+                      }}
+                      onLigarWhatsApp={(info) => chamadaWa.ligar(info)}
+                    />
+                  ) : (
+                    <CentroDeComando
+                      convs={convs || []}
+                      onAbrirConversa={setSelId}
+                      onIniciar={() => setShowIniciar(true)}
+                    />
+                  )}
+                </div>
               )}
-            </div>
 
             {/* Coluna 3: AI Rail (colapsável — clica no ✨ pra expandir o Customer 360°).
                 Oculta no mobile (Customer 360° fica restrito ao desktop); `contents`
