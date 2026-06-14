@@ -59,7 +59,7 @@ import { CentroDeComando } from "./atendimento/centro-de-comando";
 import { FilaChamadas } from "./atendimento/fila-chamadas";
 import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
-import { Sparkles, ScrollText, Bot, MoreVertical } from "lucide-react";
+import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 function timeAgo(d: string) { if (!d) return ""; const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "agora"; if (m < 60) return m + "min"; const h = Math.floor(m / 60); if (h < 24) return h + "h"; return Math.floor(h / 24) + "d"; }
@@ -746,7 +746,7 @@ export default function Atendimento() {
                   })}
                 </div>
               </div>
-              <ScrollArea className="flex-1 lg:min-h-0">
+              <ScrollArea className="flex-1 min-h-0">
                 {!convs?.length ? (
                   <div className="text-center py-16 px-4">
                     <MessageCircle className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
@@ -983,7 +983,7 @@ export default function Atendimento() {
           className="fixed right-5 z-40 h-14 w-14 rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/40 flex items-center justify-center active:scale-95 transition"
           style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
         >
-          <MessageCircle className="h-6 w-6" />
+          <SquarePen className="h-6 w-6" />
         </button>
       )}
       {waPopup && <WhatsAppCallPopup phone={waPopup} onClose={() => setWaPopup(null)} />}
@@ -1429,7 +1429,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         />
       </>
     )}
-    <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2 min-h-[360px] max-h-[420px] lg:min-h-0 lg:max-h-none">
+    <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0">
       {maybeMore && (msgs?.length ?? 0) > 0 && (
         <div className="flex justify-center pb-2">
           <Button
