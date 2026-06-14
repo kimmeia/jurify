@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import * as Sentry from "@sentry/react";
 import App from "./App";
+import { registrarServiceWorker } from "./pwa";
 import "./index.css";
 
 // Umami — analytics opcional. Injetado em runtime (em vez de <script> no
@@ -155,3 +156,5 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </trpc.Provider>
 );
+
+registrarServiceWorker();

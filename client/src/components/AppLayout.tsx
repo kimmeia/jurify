@@ -47,6 +47,8 @@ import {
   Zap,
   LayoutGrid,
   Lightbulb,
+  Monitor,
+  Smartphone,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -270,6 +272,33 @@ function AppSidebarContent({
   };
 
   const isAdmin = user?.role === "admin";
+
+  // Modo "app de atendimento" no celular (opção A): quem tem o módulo
+  // Atendimento abre o app focado nele, sem o menu dos outros módulos.
+  // "Abrir versão completa" (no menu do perfil) sai do foco e mostra a
+  // sidebar inteira; "Modo atendimento" (no menu de usuário) volta.
+  // Admin global e quem não vê Atendimento mantêm o menu completo.
+  const [mobileCompleto, setMobileCompleto] = useState<boolean>(() => {
+    try { return localStorage.getItem("jurify:mobileCompleto") === "1"; } catch { return false; }
+  });
+  const modoFocadoMobile = isMobile && !mobileCompleto && !isAdmin && canSee("atendimento");
+  const abrirVersaoCompleta = () => {
+    try { localStorage.setItem("jurify:mobileCompleto", "1"); } catch { /* modo privado */ }
+    setMobileCompleto(true);
+  };
+  const voltarModoAtendimento = () => {
+    try { localStorage.removeItem("jurify:mobileCompleto"); } catch { /* modo privado */ }
+    setMobileCompleto(false);
+    setLocation("/atendimento");
+  };
+
+  // No modo focado, qualquer rota fora de Atendimento/Configurações volta
+  // pro Atendimento — o app no celular não navega pros outros módulos.
+  useEffect(() => {
+    if (!modoFocadoMobile) return;
+    const permitida = location === "/atendimento" || location.startsWith("/configuracoes");
+    if (!permitida) setLocation("/atendimento");
+  }, [modoFocadoMobile, location, setLocation]);
 
   return (
     <>
@@ -566,6 +595,15 @@ function AppSidebarContent({
                     <DropdownMenuSeparator />
                   </>
                 )}
+                {isMobile && !isAdmin && canSee("atendimento") && (
+                  <>
+                    <DropdownMenuItem onClick={voltarModoAtendimento} className="cursor-pointer">
+                      <Smartphone className="mr-2 h-4 w-4" />
+                      <span>Modo atendimento</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
@@ -594,17 +632,66 @@ function AppSidebarContent({
         )}
         {/* Banner topo: trial em andamento (Fase 3) */}
         <TrialBanner />
-        {isMobile && (
+        {isMobile && modoFocadoMobile && (
+          /* Header enxuto do app de atendimento (celular). */
+          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+            <div className="flex items-center gap-2">
+              <span
+                className="inline-flex items-center justify-center font-display font-extrabold text-white shrink-0 select-none"
+                style={{ width: 30, height: 30, borderRadius: 8, fontSize: 16, lineHeight: 1, background: "linear-gradient(135deg,#7c3aed,#4f46e5)" }}
+                aria-hidden
+              >
+                J<span style={{ color: "#c4b5fd" }}>.</span>
+              </span>
+              <span className="font-bold tracking-tight text-foreground">Atendimento</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <NotificacoesSino />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Perfil">
+                    <Avatar className="h-8 w-8 border">
+                      <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
+                        {user?.name?.charAt(0).toUpperCase() || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="px-2 py-1.5">
+                    <p className="text-sm font-medium truncate leading-none text-foreground">{user?.name || "Utilizador"}</p>
+                    <p className="text-xs text-muted-foreground truncate mt-1.5">{nomeEscritorio || user?.email || "-"}</p>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setLocation("/configuracoes")} className="cursor-pointer">
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Configurações</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={abrirVersaoCompleta} className="cursor-pointer">
+                    <Monitor className="mr-2 h-4 w-4" />
+                    <span>Abrir versão completa</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Sair</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        )}
+        {isMobile && !modoFocadoMobile && (
           <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
               <span className="tracking-tight text-foreground font-medium">
-                SaaS de Cálculos
+                {nomeEscritorio || "JuridFlow"}
               </span>
             </div>
           </div>
         )}
-        <main className="flex-1 p-6">
+        <main className={"flex-1 " + (modoFocadoMobile ? "p-0" : "p-6")}>
           <ChamadaWhatsappProvider>{children}</ChamadaWhatsappProvider>
         </main>
       </SidebarInset>
