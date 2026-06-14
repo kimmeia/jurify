@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · App instalável (PWA) + ícone "J."</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#0f172a; --border:#334155;
+    --ink:#e2e8f0; --muted:#94a3b8; --sky:#7dd3fc;
+    --g1:#7c3aed; --g2:#4f46e5;
+    --grad:linear-gradient(135deg,#7c3aed 0%,#4f46e5 100%);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+    padding:40px 22px 80px;line-height:1.55}
+  .wrap{max-width:1000px;margin:0 auto}
+  .head{text-align:center;margin-bottom:34px}
+  .head .badge{display:inline-block;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;background:#1e293b;border:1px solid #334155;color:var(--sky);padding:5px 14px;border-radius:999px;margin-bottom:14px}
+  .head h1{font-size:25px;color:#f8fafc;margin-bottom:8px}
+  .head p{font-size:14px;color:var(--muted);max-width:680px;margin:0 auto}
+  .sec{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:26px;margin-bottom:24px}
+  .sec h2{font-size:16.5px;color:#f1f5f9;margin-bottom:4px;display:flex;align-items:center;gap:9px}
+  .sec h2 .n{width:25px;height:25px;border-radius:7px;background:#0ea5e9;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+  .sec .desc{font-size:13px;color:var(--muted);margin-bottom:18px}
+
+  /* ÍCONE — squircle iOS */
+  .icon{font-family:Poppins,sans-serif;font-weight:800;display:flex;align-items:center;justify-content:center;
+    color:#fff;line-height:1;user-select:none;position:relative}
+  .sq{border-radius:23%}
+  .grad{background:var(--grad)}
+  .icon .j{display:inline-flex;align-items:baseline}
+  .icon .dot{color:#c4b5fd}
+
+  .opts{display:flex;gap:22px;flex-wrap:wrap;justify-content:center}
+  .opt{display:flex;flex-direction:column;align-items:center;gap:10px;background:#0f172a;border:1px solid #2d3b51;border-radius:14px;padding:20px 26px;min-width:200px}
+  .opt .tag{font-size:11px;font-weight:700;color:#cbd5e1}
+  .opt .sub{font-size:10.5px;color:var(--muted);text-align:center;max-width:170px}
+  .opt.reco{border-color:#10b981;box-shadow:0 0 0 1px #10b981}
+  .opt.reco .tag{color:#6ee7b7}
+  .reco-pill{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;background:#064e3b;color:#6ee7b7;padding:2px 7px;border-radius:999px}
+
+  /* grade de tamanhos */
+  .sizes{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end}
+  .size{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .size .lbl{font-size:10.5px;color:var(--muted);text-align:center}
+  .size .lbl b{color:#cbd5e1;display:block;font-size:11px}
+  .maskable{position:relative}
+  .safe{position:absolute;inset:0;border-radius:50%;border:1.5px dashed rgba(255,255,255,.5)}
+
+  /* contextos */
+  .ctx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px}
+  .phone{background:linear-gradient(160deg,#1e1b4b,#0f172a);border:1px solid #312e81;border-radius:22px;padding:18px;min-height:230px;position:relative;overflow:hidden}
+  .phone .clock{text-align:center;color:#c7d2fe;font-size:11px;margin-bottom:14px;font-weight:600}
+  .appgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 10px}
+  .appicon{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .appicon .nm{font-size:9px;color:#e0e7ff;text-align:center;max-width:54px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ph-placeholder{border-radius:14px;background:rgba(255,255,255,.08)}
+  .ph-label{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:10px;color:var(--muted)}
+
+  /* aba navegador */
+  .browser{background:#0b1220;border:1px solid #334155;border-radius:12px;overflow:hidden}
+  .tabbar{display:flex;align-items:center;gap:0;background:#1e293b;padding:8px 8px 0}
+  .tab{display:flex;align-items:center;gap:7px;background:#0b1220;border-radius:8px 8px 0 0;padding:7px 12px;font-size:11.5px;color:#e2e8f0;max-width:200px}
+  .tab .fav{width:15px;height:15px;border-radius:4px;flex-shrink:0}
+  .urlbar{padding:8px 12px;display:flex;align-items:center;gap:8px}
+  .urlbar .url{flex:1;background:#1e293b;border-radius:999px;padding:6px 12px;font-size:11px;color:#94a3b8}
+  .urlbar .inst{font-size:11px;color:#7dd3fc;border:1px solid #334155;border-radius:7px;padding:4px 9px;display:flex;align-items:center;gap:5px}
+
+  /* splash */
+  .splash{background:var(--grad);border-radius:18px;min-height:230px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;position:relative}
+  .splash .wm{font-family:Poppins;font-weight:800;font-size:20px;color:#fff;letter-spacing:-.5px}
+  .splash .wm span{color:#c4b5fd}
+  .splash .spin{position:absolute;bottom:24px;width:22px;height:22px;border:2.5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:rot 1s linear infinite}
+  @keyframes rot{to{transform:rotate(360deg)}}
+
+  /* prompt de instalação */
+  .install-card{background:#fff;border-radius:14px;padding:14px;display:flex;align-items:center;gap:13px;max-width:380px;margin:0 auto;box-shadow:0 18px 40px rgba(0,0,0,.4)}
+  .install-card .txt{flex:1}
+  .install-card .t{font-size:13.5px;font-weight:700;color:#0f172a}
+  .install-card .s{font-size:11.5px;color:#64748b}
+  .install-card .btn{background:var(--grad);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:12.5px;font-weight:700;white-space:nowrap}
+  .install-card .x{color:#94a3b8;font-size:16px;font-weight:700}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;color:var(--sky);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:8px 10px;border-bottom:1px solid #334155}
+  td{padding:8px 10px;border-bottom:1px solid #243044;color:#cbd5e1}
+  td:first-child{font-weight:600;color:#e2e8f0;white-space:nowrap}
+  .foot{text-align:center;font-size:12.5px;color:#64748b;margin-top:8px;line-height:1.7}
+  .foot b{color:#fbbf24}
+  .lbl{font-size:10.5px;color:var(--muted);font-style:italic;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <div class="badge">Mockup para aprovação · App instalável (PWA)</div>
+    <h1>📱 JuridFlow como app + ícone "J."</h1>
+    <p>Mesma ideia do app do CRM-SaaS (Devular): instalar o JuridFlow na tela inicial do celular/desktop, abrir
+    em tela cheia (sem barra do navegador), com ícone próprio e splash. Abaixo, o ícone proposto ("J" + ponto, no
+    estilo do "D." do Devular) e como tudo aparece pro usuário.</p>
+  </div>
+
+  <!-- 1. ÍCONE — opções -->
+  <div class="sec">
+    <h2><span class="n">1</span> O ícone — letra J com ponto final</h2>
+    <p class="desc">Três tratamentos do mesmo conceito. O fundo usa o gradiente da marca (violeta → índigo), no formato
+    arredondado (squircle) padrão de app. Escolha um — sugiro o primeiro.</p>
+    <div class="opts">
+      <div class="opt reco">
+        <div class="icon sq grad" style="width:120px;height:120px;font-size:72px">
+          <span class="j">J<span class="dot">.</span></span>
+        </div>
+        <div class="tag">Opção A — ponto lilás <span class="reco-pill">recomendado</span></div>
+        <div class="sub">"J" branco + ponto em lilás claro (ecoa o "Flow" violeta do logo). Personalidade sem poluir.</div>
+      </div>
+      <div class="opt">
+        <div class="icon sq grad" style="width:120px;height:120px;font-size:72px">
+          <span class="j">J<span class="dot" style="color:#fff">.</span></span>
+        </div>
+        <div class="tag">Opção B — tudo branco</div>
+        <div class="sub">"J." inteiro branco. Mais sóbrio e neutro, máximo contraste.</div>
+      </div>
+      <div class="opt">
+        <div class="icon sq" style="width:120px;height:120px;font-size:72px;background:#fff;border:1px solid #e2e8f0">
+          <span class="j" style="color:#7c3aed">J<span class="dot" style="color:#4f46e5">.</span></span>
+        </div>
+        <div class="tag">Opção C — fundo claro</div>
+        <div class="sub">"J." violeta sobre branco. Variante usada em favicon claro / fundos escuros.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. TAMANHOS -->
+  <div class="sec">
+    <h2><span class="n">2</span> Tamanhos gerados (a partir da opção escolhida)</h2>
+    <p class="desc">O ícone é exportado nos tamanhos que cada sistema pede — incluindo a versão "maskable" (Android
+    recorta em círculo/squircle; o conteúdo fica dentro da zona segura tracejada).</p>
+    <div class="sizes">
+      <div class="size">
+        <div class="icon sq grad" style="width:96px;height:96px;font-size:58px"><span class="j">J<span class="dot">.</span></span></div>
+        <div class="lbl"><b>512×512</b>loja / splash</div>
+      </div>
+      <div class="size">
+        <div class="icon sq grad" style="width:64px;height:64px;font-size:38px"><span class="j">J<span class="dot">.</span></span></div>
+        <div class="lbl"><b>192×192</b>home Android</div>
+      </div>
+      <div class="size">
+        <div class="icon sq grad" style="width:56px;height:56px;font-size:34px"><span class="j">J<span class="dot">.</span></span></div>
+        <div class="lbl"><b>180×180</b>apple-touch (iOS)</div>
+      </div>
+      <div class="size">
+        <div class="icon grad maskable" style="width:64px;height:64px;font-size:30px;border-radius:18px"><span class="j">J<span class="dot">.</span></span><span class="safe"></span></div>
+        <div class="lbl"><b>maskable</b>zona segura</div>
+      </div>
+      <div class="size">
+        <div class="icon sq grad" style="width:32px;height:32px;font-size:19px"><span class="j">J<span class="dot">.</span></span></div>
+        <div class="lbl"><b>32×32</b>favicon</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. CONTEXTOS -->
+  <div class="sec">
+    <h2><span class="n">3</span> Como aparece pro usuário</h2>
+    <p class="desc">O mesmo ícone em cada lugar onde o usuário vai vê-lo.</p>
+    <div class="ctx-grid">
+
+      <!-- home screen -->
+      <div>
+        <div class="phone">
+          <div class="clock">9:41</div>
+          <div class="appgrid">
+            <div class="appicon"><div class="ph-placeholder" style="width:54px;height:54px"></div><span class="nm">Agenda</span></div>
+            <div class="appicon"><div class="ph-placeholder" style="width:54px;height:54px"></div><span class="nm">Mensagens</span></div>
+            <div class="appicon">
+              <div class="icon sq grad" style="width:54px;height:54px;font-size:32px"><span class="j">J<span class="dot">.</span></span></div>
+              <span class="nm" style="color:#fff;font-weight:700">JuridFlow</span>
+            </div>
+            <div class="appicon"><div class="ph-placeholder" style="width:54px;height:54px"></div><span class="nm">Fotos</span></div>
+          </div>
+          <div class="ph-label">Tela inicial do celular</div>
+        </div>
+      </div>
+
+      <!-- aba navegador -->
+      <div>
+        <div class="browser">
+          <div class="tabbar">
+            <div class="tab">
+              <span class="fav grad" style="display:inline-flex;align-items:center;justify-content:center;font-family:Poppins;font-weight:800;font-size:9px;color:#fff">J</span>
+              JuridFlow
+            </div>
+          </div>
+          <div class="urlbar">
+            <span class="url">🔒 juridflow.com.br/dashboard</span>
+            <span class="inst">⊕ Instalar</span>
+          </div>
+        </div>
+        <p class="lbl" style="text-align:center">Favicon na aba + botão "Instalar" do navegador (desktop)</p>
+      </div>
+
+      <!-- splash -->
+      <div>
+        <div class="splash">
+          <div class="icon sq" style="width:84px;height:84px;font-size:50px;background:rgba(255,255,255,.14);backdrop-filter:blur(4px)"><span class="j">J<span class="dot" style="color:#e9d5ff">.</span></span></div>
+          <div class="wm">Jurid<span>Flow</span></div>
+          <div class="spin"></div>
+        </div>
+        <p class="lbl" style="text-align:center">Splash ao abrir o app (enquanto carrega)</p>
+      </div>
+
+      <!-- prompt instalação -->
+      <div>
+        <div style="display:flex;align-items:center;min-height:230px">
+          <div class="install-card">
+            <div class="icon sq grad" style="width:46px;height:46px;font-size:27px;flex-shrink:0"><span class="j">J<span class="dot">.</span></span></div>
+            <div class="txt">
+              <div class="t">Instalar o JuridFlow</div>
+              <div class="s">Acesso rápido na tela inicial, em tela cheia.</div>
+            </div>
+            <button class="btn">Instalar</button>
+            <span class="x">×</span>
+          </div>
+        </div>
+        <p class="lbl" style="text-align:center">Convite de instalação dentro do app (1 clique)</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 4. PLANO TÉCNICO -->
+  <div class="sec">
+    <h2><span class="n">4</span> O que será implementado (sem mudar o sistema)</h2>
+    <p class="desc">PWA é uma camada por cima do app atual — nada do que já existe muda. Só adiciona o "instalável".</p>
+    <table>
+      <tr><th>Peça</th><th>O que faz</th></tr>
+      <tr><td>Manifest</td><td>Nome ("JuridFlow"), cor de tema (violeta), ícones e modo tela cheia (standalone). É o que habilita "Instalar".</td></tr>
+      <tr><td>Ícones</td><td>A opção aprovada, exportada em 192/512/maskable + apple-touch (180) + favicon. Geradas a partir de 1 SVG vetorial (nítido em qualquer tela).</td></tr>
+      <tr><td>Service worker</td><td>Faz o app abrir mesmo com internet ruim (cache da "casca"). Atualiza sozinho quando há versão nova — sem cache travado.</td></tr>
+      <tr><td>Convite de instalação</td><td>Banner discreto dentro do app (1 clique pra instalar). Some depois de instalado ou dispensado.</td></tr>
+      <tr><td>Meta tags</td><td>theme-color, apple-touch-icon e afins no index.html — pra iOS e Android tratarem como app de verdade.</td></tr>
+      <tr><td>Notificações push</td><td><b>Fora deste escopo</b> (é um projeto à parte). Aqui é só instalar + abrir em tela cheia + offline básico.</td></tr>
+    </table>
+    <p class="lbl">Compatível com Android/Chrome (instala direto), Desktop (Chrome/Edge) e iOS/Safari (via "Adicionar à Tela de Início"). Funciona junto com a sessão/login atuais.</p>
+  </div>
+
+  <p class="foot"><b>Nenhuma alteração foi feita.</b> Me diga qual opção de ícone (A, B ou C) e, aprovando o plano,
+  implemento o PWA completo e te aviso pra autorizar o deploy.</p>
+
+</div>
+</body>
+</html>
