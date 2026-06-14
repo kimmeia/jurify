@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JuridFlow · App mobile focado em Atendimento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background: #0f172a; color: #e2e8f0; padding: 40px 20px 70px; }
+  .container { max-width: 1080px; margin: 0 auto; }
+  .header { text-align: center; margin-bottom: 30px; }
+  .header .badge { display: inline-block; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; background: #1e293b; border: 1px solid #334155; color: #7dd3fc; padding: 5px 14px; border-radius: 999px; margin-bottom: 14px; }
+  .header h1 { font-size: 24px; color: #f8fafc; margin-bottom: 8px; }
+  .header p { font-size: 14px; color: #94a3b8; max-width: 700px; margin: 0 auto; line-height: 1.6; }
+
+  /* ícone J. da marca (PWA) */
+  .jic { font-family: Poppins, sans-serif; font-weight: 800; color: #fff; display: inline-flex; align-items: baseline; justify-content: center; background: linear-gradient(135deg,#7c3aed,#4f46e5); line-height: 1; }
+  .jic .d { color: #c4b5fd; }
+
+  .phones { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; margin: 28px 0; }
+  .phone-col { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 248px; }
+  .phone-cap { font-size: 12.5px; color: #cbd5e1; font-weight: 600; text-align: center; }
+  .phone-cap small { display: block; font-weight: 400; color: #94a3b8; font-size: 10.5px; margin-top: 2px; }
+  .phone { width: 240px; height: 506px; border-radius: 36px; background: #000; padding: 9px; box-shadow: 0 20px 50px rgba(0,0,0,.5), 0 0 0 2px #334155; position: relative; }
+  .screen { width: 100%; height: 100%; border-radius: 28px; overflow: hidden; position: relative; background: #fff; }
+  .notch { position: absolute; top: 9px; left: 50%; transform: translateX(-50%); width: 95px; height: 19px; background: #000; border-radius: 0 0 13px 13px; z-index: 40; }
+  .app { width: 100%; height: 100%; display: flex; flex-direction: column; background: #fff; }
+
+  /* header enxuto novo */
+  .hdr { display: flex; align-items: center; gap: 9px; padding: 32px 12px 10px; border-bottom: 1px solid #eef1f4; }
+  .hdr .ttl { font-size: 16.5px; font-weight: 800; color: #0f172a; }
+  .hdr .sp { flex: 1; }
+  .hdr .ic { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #475569; position: relative; }
+  .hdr .ic .dot { position: absolute; top: 4px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; border: 1.5px solid #fff; }
+  .hdr .av { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg,#ec4899,#8b5cf6); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+
+  /* header antigo (comparação) */
+  .hdr-old { display: flex; align-items: center; gap: 10px; padding: 32px 12px 10px; border-bottom: 1px solid #eef1f4; }
+  .hdr-old .burger { font-size: 18px; color: #334155; }
+  .hdr-old .ttl { font-size: 15px; font-weight: 700; color: #64748b; }
+  .drawer { position: absolute; inset: 0; background: rgba(15,23,42,.35); display: flex; }
+  .drawer .panel { width: 78%; background: #fff; height: 100%; padding: 28px 0 12px; overflow-y: auto; }
+  .drawer .mi { display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 12px; color: #334155; }
+  .drawer .mi.on { background: #ede9fe; color: #6d28d9; font-weight: 700; border-left: 3px solid #7c3aed; }
+  .drawer .mi .i { width: 16px; text-align: center; }
+
+  /* menu de perfil */
+  .menu { position: absolute; top: 70px; right: 10px; width: 186px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 12px 30px rgba(15,23,42,.2); padding: 6px; z-index: 30; }
+  .menu .u { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; margin-bottom: 4px; }
+  .menu .u .n { font-size: 12.5px; font-weight: 700; color: #0f172a; }
+  .menu .u .e { font-size: 10px; color: #94a3b8; }
+  .menu .it { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; font-size: 12px; color: #334155; }
+  .menu .it.full { color: #6d28d9; font-weight: 700; background: #f5f3ff; }
+  .menu .it.sair { color: #dc2626; }
+
+  /* inbox */
+  .list { flex: 1; overflow-y: auto; }
+  .filtros { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
+  .chip { font-size: 9.5px; padding: 4px 10px; border-radius: 999px; background: #f1f5f9; color: #475569; }
+  .chip.on { background: #7c3aed; color: #fff; font-weight: 700; }
+  .c { display: flex; gap: 10px; padding: 11px 13px; border-bottom: 1px solid #f1f5f9; align-items: center; position: relative; }
+  .c.unread { background: rgba(0,0,0,.06); }
+  .c.unread::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; background: #475569; border-radius: 0 3px 3px 0; }
+  .c .cav { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .c .tx { flex: 1; min-width: 0; }
+  .c .nm { font-size: 13.5px; font-weight: 600; color: #0f172a; }
+  .c.unread .nm { font-weight: 800; }
+  .c .pv { font-size: 11.5px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .c .meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .c .hr { font-size: 9px; color: #94a3b8; }
+  .c.unread .hr { color: #7c3aed; font-weight: 700; }
+  .c .bdg { background: #7c3aed; color: #fff; font-size: 9px; font-weight: 800; min-width: 17px; height: 17px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 5px; }
+  .stpill { font-size: 8px; font-weight: 700; padding: 1px 6px; border-radius: 5px; border: 1px solid; display: inline-block; margin-top: 3px; }
+  .st-ag { background: #fffbeb; border-color: #fde68a; color: #b45309; }
+  .st-at { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+  .fab { position: absolute; bottom: 18px; right: 16px; width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 6px 18px rgba(124,58,237,.5); }
+
+  /* conversa */
+  .chdr { display: flex; align-items: center; gap: 8px; padding: 30px 8px 9px; border-bottom: 1px solid #eef1f4; background: #fff; }
+  .chdr .bk { font-size: 20px; color: #475569; }
+  .chdr .cav { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg,#ec4899,#8b5cf6); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .chdr .nm { font-size: 13.5px; font-weight: 700; color: #0f172a; line-height: 1.1; }
+  .chdr .st { font-size: 9.5px; color: #94a3b8; }
+  .chdr .sp { flex: 1; }
+  .chdr .ic { font-size: 15px; color: #16a34a; }
+  .chdr .mn { font-size: 17px; color: #475569; }
+  .brief { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border: 1px dashed #ddd6fe; background: #f5f3ff; border-radius: 999px; margin: 7px 10px 0; padding: 4px 10px; font-size: 9px; color: #6d28d9; font-weight: 700; }
+  .brief .sep { color: #c4b5fd; }
+  .brief .sla { color: #b91c1c; }
+  .chat { flex: 1; display: flex; flex-direction: column; background: #efe7dd; min-height: 0; }
+  .cbody { flex: 1; padding: 10px; display: flex; flex-direction: column; gap: 7px; overflow-y: auto; }
+  .bub { max-width: 80%; border-radius: 11px; padding: 7px 10px; font-size: 12px; line-height: 1.4; box-shadow: 0 1px 1px rgba(0,0,0,.06); }
+  .bub.in { background: #fff; align-self: flex-start; border-top-left-radius: 3px; }
+  .bub.out { background: #d9fdd3; align-self: flex-end; border-top-right-radius: 3px; }
+  .bub .h { display: block; text-align: right; font-size: 8.5px; color: #667781; margin-top: 2px; }
+  .day { align-self: center; background: rgba(255,255,255,.85); color: #54656f; font-size: 9px; padding: 2px 9px; border-radius: 7px; }
+  .comp { background: #f0f2f5; padding: 7px 9px; display: flex; align-items: center; gap: 7px; }
+  .comp .cl, .comp .mc { font-size: 15px; color: #54656f; }
+  .comp .bx { flex: 1; background: #fff; border-radius: 999px; height: 30px; display: flex; align-items: center; padding: 0 12px; font-size: 10.5px; color: #8696a0; }
+  .comp .snd { width: 30px; height: 30px; border-radius: 50%; background: #7c3aed; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+
+  .col-label { font-size: 12px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 7px; }
+  .l-antes { color: #fca5a5; } .l-depois { color: #6ee7b7; }
+  .dot8 { width: 8px; height: 8px; border-radius: 50%; }
+  .l-antes .dot8 { background: #f87171; } .l-depois .dot8 { background: #34d399; }
+
+  .section { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 22px; margin-top: 8px; }
+  .section h2 { font-size: 16px; color: #f1f5f9; margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  td { padding: 8px 10px; border-bottom: 1px solid #243044; color: #cbd5e1; line-height: 1.5; vertical-align: top; }
+  td:first-child { font-weight: 600; color: #e2e8f0; white-space: nowrap; }
+  .nota { background: #0f172a; border: 1px solid #2d3b51; border-radius: 12px; padding: 14px 16px; margin-top: 14px; font-size: 12.5px; color: #cbd5e1; line-height: 1.55; }
+  .nota b { color: #7dd3fc; }
+  .footer-note { text-align: center; font-size: 12.5px; color: #64748b; margin-top: 20px; line-height: 1.7; }
+  .footer-note b { color: #fbbf24; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="badge">Mockup para aprovação · app mobile JuridFlow</div>
+    <h1><span class="jic" style="width:26px;height:26px;font-size:15px;border-radius:7px;vertical-align:middle">J<span class="d">.</span></span> &nbsp;App focado em Atendimento (celular)</h1>
+    <p>No celular o JuridFlow vira uma ferramenta de atendimento: abre direto no inbox, header enxuto, sem o menu de
+    ~13 módulos. Reaproveita o que já fizemos nesta sessão — destaque de não lidas, barra de contexto recolhível,
+    anexos no composer e o ícone "J." do app instalável. O <b>desktop continua completo, intacto</b>.</p>
+  </div>
+
+  <div class="phones">
+
+    <!-- ANTES -->
+    <div class="phone-col">
+      <div class="col-label l-antes"><span class="dot8"></span> HOJE — menu com ~13 módulos</div>
+      <div class="phone"><div class="notch"></div><div class="screen">
+        <div class="app">
+          <div class="hdr-old"><span class="burger">☰</span><span class="ttl">SaaS de Cálculos</span></div>
+          <div class="drawer"><div class="panel">
+            <div class="mi"><span class="i">▦</span> Dashboard</div>
+            <div class="mi"><span class="i">👥</span> Clientes</div>
+            <div class="mi"><span class="i">📄</span> Modelos</div>
+            <div class="mi"><span class="i">📅</span> Agenda</div>
+            <div class="mi"><span class="i">🔎</span> Processos</div>
+            <div class="mi on"><span class="i">💬</span> Atendimento</div>
+            <div class="mi"><span class="i">🤖</span> Agentes IA</div>
+            <div class="mi"><span class="i">▤</span> Kanban</div>
+            <div class="mi"><span class="i">⚡</span> SmartFlow</div>
+            <div class="mi"><span class="i">📊</span> Relatórios</div>
+            <div class="mi"><span class="i">💲</span> Financeiro</div>
+            <div class="mi"><span class="i">⚙️</span> Configurações</div>
+          </div></div>
+        </div>
+      </div></div>
+      <div class="phone-cap">Menu pesado pra quem só atende<small>e o título ainda diz "SaaS de Cálculos" 😬</small></div>
+    </div>
+
+    <!-- inbox -->
+    <div class="phone-col">
+      <div class="col-label l-depois"><span class="dot8"></span> PROPOSTA — inbox</div>
+      <div class="phone"><div class="notch"></div><div class="screen">
+        <div class="app">
+          <div class="hdr">
+            <span class="jic" style="width:26px;height:26px;font-size:15px;border-radius:7px">J<span class="d">.</span></span>
+            <span class="ttl">Atendimento</span>
+            <span class="sp"></span>
+            <span class="ic">🔔<span class="dot"></span></span>
+            <span class="av">RR</span>
+          </div>
+          <div class="filtros">
+            <span class="chip on">Todas 2</span>
+            <span class="chip">Aguardando 1</span>
+            <span class="chip">Em atend. 1</span>
+          </div>
+          <div class="list">
+            <div class="c unread">
+              <div class="cav" style="background:linear-gradient(135deg,#ec4899,#8b5cf6)">RR</div>
+              <div class="tx"><div class="nm">Rafael Rocha</div><div class="pv">Pode me mandar um vídeo?</div><span class="stpill st-ag">Aguardando</span></div>
+              <div class="meta"><span class="hr">33min</span><span class="bdg">2</span></div>
+            </div>
+            <div class="c">
+              <div class="cav" style="background:linear-gradient(135deg,#10b981,#0ea5e9)">KV</div>
+              <div class="tx"><div class="nm">Kilviane</div><div class="pv">Loja de móveis</div><span class="stpill st-at">Em atendimento</span></div>
+              <div class="meta"><span class="hr">1h</span></div>
+            </div>
+          </div>
+          <div class="fab">✎</div>
+        </div>
+      </div></div>
+      <div class="phone-cap">Abre direto na lista<small>"J. Atendimento" + 🔔 + perfil · não lida destacada · FAB nova conversa</small></div>
+    </div>
+
+    <!-- conversa -->
+    <div class="phone-col">
+      <div class="col-label l-depois"><span class="dot8"></span> PROPOSTA — conversa</div>
+      <div class="phone"><div class="notch"></div><div class="screen">
+        <div class="app">
+          <div class="chdr">
+            <span class="bk">‹</span>
+            <span class="cav">RR</span>
+            <div><div class="nm">Rafael Rocha</div><div class="st">Aguardando · +55 85 9143-4285</div></div>
+            <span class="sp"></span>
+            <span class="ic">📞</span>
+            <span class="mn">⋮</span>
+          </div>
+          <div class="brief">✦ Brief <span class="sep">·</span> 📅 3d <span class="sep">·</span> 💰 2/3 <span class="sep">·</span> <span class="sla">⏱ SLA</span> <span class="sep">·</span> ⌄</div>
+          <div class="chat">
+            <div class="cbody">
+              <span class="day">Hoje</span>
+              <div class="bub in">Consegue me mandar um vídeo de como fica pronto?<span class="h">13:02</span></div>
+              <div class="bub out">Claro! Já te envio 😊<span class="h">13:05</span></div>
+            </div>
+            <div class="comp">
+              <span class="cl">📎</span>
+              <div class="bx">Mensagem…</div>
+              <span class="mc">🎙</span>
+              <span class="snd">➤</span>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <div class="phone-cap">Conversa em tela cheia<small>‹ volta · barra de contexto recolhível · 📎 anexo (foto/vídeo/doc)</small></div>
+    </div>
+
+    <!-- menu perfil -->
+    <div class="phone-col">
+      <div class="col-label l-depois"><span class="dot8"></span> PROPOSTA — menu do perfil</div>
+      <div class="phone"><div class="notch"></div><div class="screen">
+        <div class="app">
+          <div class="hdr">
+            <span class="jic" style="width:26px;height:26px;font-size:15px;border-radius:7px">J<span class="d">.</span></span>
+            <span class="ttl">Atendimento</span>
+            <span class="sp"></span>
+            <span class="ic">🔔</span>
+            <span class="av">RR</span>
+          </div>
+          <div class="list" style="opacity:.35">
+            <div class="c"><div class="cav" style="background:#ec4899">RR</div><div class="tx"><div class="nm">Rafael Rocha</div><div class="pv">Pode me mandar um vídeo?</div></div></div>
+            <div class="c"><div class="cav" style="background:#10b981">KV</div><div class="tx"><div class="nm">Kilviane</div><div class="pv">Loja de móveis</div></div></div>
+          </div>
+          <div class="menu">
+            <div class="u"><span class="av" style="width:28px;height:28px;background:linear-gradient(135deg,#ec4899,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">RR</span><div><div class="n">Rafael Rocha</div><div class="e">Boyadjian Advogados</div></div></div>
+            <div class="it">🔔 Notificações</div>
+            <div class="it">⚙️ Configurações</div>
+            <div class="it full">🖥️ Abrir versão completa</div>
+            <div class="it sair">⏻ Sair</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="phone-cap">Toque no avatar → menu enxuto<small>perfil · notificações · configurações · versão completa · sair</small></div>
+    </div>
+
+  </div>
+
+  <div class="section">
+    <h2>O que muda (só no celular)</h2>
+    <table>
+      <tr><td>Cabeçalho</td><td>☰ + "SaaS de Cálculos" (texto antigo) → ícone <b>"J." + "Atendimento"</b> + 🔔 + avatar.</td></tr>
+      <tr><td>Navegação</td><td>Abre e fica no <b>Atendimento</b>: lista ↔ conversa em <b>tela cheia</b> (‹ volta). Some o menu dos outros módulos.</td></tr>
+      <tr><td>Reaproveitado</td><td>Tudo que já fizemos: não lida destacada, barra de contexto recolhível (Brief/SLA), 📎 anexos (foto/vídeo/doc), 🔔 notificações e o ícone "J." do app instalável (PWA).</td></tr>
+      <tr><td>Menu do perfil</td><td>Avatar abre: nome/escritório · Notificações · Configurações · <b>Abrir versão completa</b> · Sair.</td></tr>
+      <tr><td>Nova conversa</td><td>Botão flutuante (FAB) violeta — atalho pra iniciar conversa.</td></tr>
+      <tr><td>Desktop / tablet</td><td><b>Nada muda</b> — segue completo, com todos os módulos na barra lateral.</td></tr>
+    </table>
+    <div class="nota">
+      <b>Decisão proposta (opção A):</b> no celular, <b>todo mundo</b> abre no Atendimento-focado, e quem precisar dos
+      outros módulos usa o <b>"Abrir versão completa"</b> (lembra a escolha no aparelho). É o mais simples e fiel ao
+      app do Devular. Se preferir a opção B (só atendente/SDR entram no modo focado; dono/gestor mantêm o menu
+      completo no celular), eu ajusto — é só avisar.
+    </div>
+  </div>
+
+  <p class="footer-note">
+    <b>Nada foi implementado ainda</b> — mockup pra você aprovar.<br>
+    Aprovando, deixo o celular assim (atendimento-focado, opção A salvo aviso) e mantenho o desktop intacto.
+  </p>
+
+</div>
+</body>
+</html>

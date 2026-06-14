@@ -16,7 +16,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
-import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon } from "lucide-react";
+import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon, ChevronLeft } from "lucide-react";
+import { useIsMobile } from "@/hooks/useMobile";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { TIPOS_CANAL_COMUNICACAO } from "@shared/canal-types";
 
@@ -365,6 +366,7 @@ function NovoContatoDialog({ open, onOpenChange, onSuccess }: { open: boolean; o
 }
 
 export default function Atendimento() {
+  const isMobile = useIsMobile();
   const [tab, setTab] = useState("inbox"); const [selId, setSelId] = useState<number | null>(null);
   const [showNovo, setShowNovo] = useState(false); const [showIniciar, setShowIniciar] = useState(false); const [showNovoLead, setShowNovoLead] = useState(false);
   const [busca, setBusca] = useState(""); const [filtro, setFiltro] = useState("todos");
@@ -552,8 +554,9 @@ export default function Atendimento() {
               deixando um vão embaixo. Cada coluna rola por dentro (min-h-0).
               No mobile (stack) mantém o fluxo natural com piso de 600px. */}
           <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_auto] gap-0 rounded-xl border bg-card overflow-hidden lg:h-[calc(100dvh-220px)]" style={{ minHeight: 600 }}>
-            {/* Coluna 1: Lista de conversas */}
-            <div className="border-r bg-muted/10 overflow-hidden flex flex-col lg:min-h-0">
+            {/* Coluna 1: Lista de conversas. No mobile, esconde quando há
+                conversa aberta (inbox ↔ conversa em tela cheia). */}
+            <div className={"border-r bg-muted/10 overflow-hidden flex flex-col lg:min-h-0" + (isMobile && selId ? " hidden" : "")}>
               {/* Header: busca + pills de filtro com contador */}
               <div className="p-3 border-b space-y-2.5">
                 <div className="flex items-center gap-1.5">
@@ -882,12 +885,14 @@ export default function Atendimento() {
               </ScrollArea>
             </div>
 
-            {/* Coluna 2: Chat hero */}
-            <div className="bg-card overflow-hidden flex flex-col lg:min-h-0">
+            {/* Coluna 2: Chat hero. No mobile, esconde quando nenhuma
+                conversa está aberta (mostra só o inbox). */}
+            <div className={"bg-card overflow-hidden flex flex-col lg:min-h-0" + (isMobile && !selId ? " hidden" : "")}>
               {selId ? (
                 <ChatArea
                   cid={selId}
                   convs={convs || []}
+                  onVoltar={() => setSelId(null)}
                   onUpdate={rC}
                   onLeadUpdate={rL}
                   onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined}
@@ -915,7 +920,10 @@ export default function Atendimento() {
               )}
             </div>
 
-            {/* Coluna 3: AI Rail (colapsável — clica no ✨ pra expandir o Customer 360°) */}
+            {/* Coluna 3: AI Rail (colapsável — clica no ✨ pra expandir o Customer 360°).
+                Oculta no mobile (Customer 360° fica restrito ao desktop); `contents`
+                mantém o AIRail como 3ª coluna do grid no desktop, sem div extra. */}
+            <div className={isMobile ? "hidden" : "contents"}>
             {(() => {
               const convAtual = (convs || []).find((c: any) => c.id === selId);
               return (
@@ -933,6 +941,7 @@ export default function Atendimento() {
                 />
               );
             })()}
+            </div>
           </div>
         </TabsContent>
         <TabsContent value="pipeline" className="mt-4"><PipelineKanban leads={leads || []} onUpdate={rL} onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined} onAddLead={() => setShowNovoLead(true)} onGoToConversa={goToConversaFromLead} onDragChange={setPipelineDragAtivo} /></TabsContent>
@@ -962,7 +971,7 @@ export default function Atendimento() {
   );
 }
 
-function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onTransferido, onAbrirLinhaTempo, onLigarWhatsApp }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onTransferido?: () => void; onAbrirLinhaTempo?: () => void; onLigarWhatsApp?: (info: { canalId: number; telefone: string; contatoId?: number; contatoNome?: string; conversaId: number }) => void }) {
+function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onTransferido, onAbrirLinhaTempo, onLigarWhatsApp, onVoltar }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onTransferido?: () => void; onAbrirLinhaTempo?: () => void; onLigarWhatsApp?: (info: { canalId: number; telefone: string; contatoId?: number; contatoNome?: string; conversaId: number }) => void; onVoltar?: () => void }) {
   const [msg, setMsg] = useState(""); const ref = useRef<HTMLDivElement>(null);
   // Mídia "pendente": foi anexada via template (ou upload manual no futuro)
   // mas ainda não foi enviada. Renderiza preview acima do composer e é
@@ -1187,6 +1196,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
     {/* Header linha 1: contato */}
     <div className="px-4 py-2.5 border-b">
       <div className="flex items-center gap-3">
+        {/* Voltar pra lista — só no mobile (inbox em tela cheia). */}
+        {onVoltar && (
+          <button
+            onClick={onVoltar}
+            className="lg:hidden -ml-1 mr-0.5 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent shrink-0"
+            aria-label="Voltar para a lista"
+          >
+            <ChevronLeft className="h-5 w-5 text-muted-foreground" />
+          </button>
+        )}
         <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-xs font-bold text-primary shrink-0">{initials(conv?.contatoNome || "?")}</div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
