@@ -520,13 +520,13 @@ export default function Atendimento() {
   // inbox ganha mais espaço útil pro chat (coluna do meio = `1fr`) quanto
   // mais largo for o viewport — o operador reclamava do canto vazio.
   return (
-    <div className="space-y-4">
+    <div className={isMobile ? "-mx-6 -mt-6" : "space-y-4"}>
       <Tabs value={tab} onValueChange={setTab}>
         {/* Barra única: tabs Inbox/Pipeline à esquerda + Nova Conversa à direita.
             Substitui o card hero "Atendimento" que ocupava ~74px sem agregar — o
             nome da seção já está no menu lateral. */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <TabsList className="h-10 w-auto">
+        <div className={isMobile ? ("flex items-center gap-2 px-3 py-2 border-b bg-background " + (selId ? "hidden" : "")) : "flex items-center gap-3 flex-wrap"}>
+          <TabsList className={isMobile ? "h-9 w-full" : "h-10 w-auto"}>
             <TabsTrigger value="inbox" className="text-xs sm:text-sm gap-1.5 px-4"><Inbox className="h-3.5 w-3.5" /> Inbox</TabsTrigger>
             <TabsTrigger value="pipeline" className="text-xs sm:text-sm gap-1.5 px-4"><TrendingUp className="h-3.5 w-3.5" /> Pipeline</TabsTrigger>
             <TabsTrigger value="chamadas" className="text-xs sm:text-sm gap-1.5 px-4">
@@ -539,24 +539,26 @@ export default function Atendimento() {
             </TabsTrigger>
           </TabsList>
           <div className="flex-1" />
-          <Button
-            size="sm"
-            onClick={() => setShowIniciar(true)}
-            className="h-10 bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-md shadow-emerald-500/20"
-          >
-            <MessageCircle className="h-4 w-4 mr-1.5" /> Nova Conversa
-          </Button>
+          {!isMobile && (
+            <Button
+              size="sm"
+              onClick={() => setShowIniciar(true)}
+              className="h-10 bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-md shadow-emerald-500/20"
+            >
+              <MessageCircle className="h-4 w-4 mr-1.5" /> Nova Conversa
+            </Button>
+          )}
         </div>
-        <TabsContent value="inbox" className="mt-4">
+        <TabsContent value="inbox" className={isMobile ? "mt-0" : "mt-4"}>
           {/* Layout ULTRA: Lista | Chat hero | AI Rail (colapsa pra Customer 360°) */}
           {/* Altura travada na viewport (lg+) — sem isso, a coluna mais alta
               (lista de conversas) esticava o grid e o compositor "flutuava",
               deixando um vão embaixo. Cada coluna rola por dentro (min-h-0).
               No mobile (stack) mantém o fluxo natural com piso de 600px. */}
-          <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_auto] gap-0 rounded-xl border bg-card overflow-hidden lg:h-[calc(100dvh-220px)]" style={{ minHeight: 600 }}>
+          <div className={isMobile ? "grid grid-cols-1 gap-0 bg-card overflow-hidden h-[calc(100dvh-104px)]" : "grid grid-cols-1 lg:grid-cols-[260px_1fr_auto] gap-0 rounded-xl border bg-card overflow-hidden lg:h-[calc(100dvh-220px)]"} style={isMobile ? undefined : { minHeight: 600 }}>
             {/* Coluna 1: Lista de conversas. No mobile, esconde quando há
                 conversa aberta (inbox ↔ conversa em tela cheia). */}
-            <div className={"border-r bg-muted/10 overflow-hidden flex flex-col lg:min-h-0" + (isMobile && selId ? " hidden" : "")}>
+            <div className={isMobile ? ("bg-muted/10 overflow-hidden flex flex-col" + (selId ? " hidden" : "")) : "border-r bg-muted/10 overflow-hidden flex flex-col lg:min-h-0"}>
               {/* Header: busca + pills de filtro com contador */}
               <div className="p-3 border-b space-y-2.5">
                 <div className="flex items-center gap-1.5">
@@ -887,12 +889,12 @@ export default function Atendimento() {
 
             {/* Coluna 2: Chat hero. No mobile, esconde quando nenhuma
                 conversa está aberta (mostra só o inbox). */}
-            <div className={"bg-card overflow-hidden flex flex-col lg:min-h-0" + (isMobile && !selId ? " hidden" : "")}>
+            <div className={isMobile ? (selId ? "fixed inset-0 z-50 bg-card flex flex-col" : "hidden") : "bg-card overflow-hidden flex flex-col lg:min-h-0"}>
               {selId ? (
                 <ChatArea
                   cid={selId}
                   convs={convs || []}
-                  onVoltar={() => setSelId(null)}
+                  onVoltar={isMobile ? () => setSelId(null) : undefined}
                   onUpdate={rC}
                   onLeadUpdate={rL}
                   onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined}
@@ -947,6 +949,17 @@ export default function Atendimento() {
         <TabsContent value="pipeline" className="mt-4"><PipelineKanban leads={leads || []} onUpdate={rL} onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined} onAddLead={() => setShowNovoLead(true)} onGoToConversa={goToConversaFromLead} onDragChange={setPipelineDragAtivo} /></TabsContent>
         <TabsContent value="chamadas"><FilaChamadas chamada={chamadaWa} /></TabsContent>
       </Tabs>
+      {/* FAB "nova conversa" — substitui o botão da barra no celular (Inbox). */}
+      {isMobile && tab === "inbox" && !selId && (
+        <button
+          onClick={() => setShowIniciar(true)}
+          aria-label="Nova conversa"
+          className="fixed right-5 z-40 h-14 w-14 rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/40 flex items-center justify-center active:scale-95 transition"
+          style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
+        >
+          <MessageCircle className="h-6 w-6" />
+        </button>
+      )}
       {waPopup && <WhatsAppCallPopup phone={waPopup} onClose={() => setWaPopup(null)} />}
       {telPopup && <TwilioCallPopup phone={telPopup} onClose={() => setTelPopup(null)} />}
       <IniciarConversaDialog
@@ -990,7 +1003,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   // Bloco de contexto (Brief + Diff + ActionCards) recolhível — preferência
   // do atendente persistida no navegador, vale pra todas as conversas.
   const [ctxRecolhido, setCtxRecolhido] = useState<boolean>(() => {
-    try { return localStorage.getItem("jurify:atendimento:ctxRecolhido") === "1"; } catch { return false; }
+    try {
+      const saved = localStorage.getItem("jurify:atendimento:ctxRecolhido");
+      if (saved !== null) return saved === "1";
+    } catch { /* modo privado */ }
+    // Sem preferência salva: recolhido no celular (chat limpo), expandido no desktop.
+    return !!onVoltar;
   });
   const toggleCtxRecolhido = (v: boolean) => {
     setCtxRecolhido(v);
@@ -1200,7 +1218,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         {onVoltar && (
           <button
             onClick={onVoltar}
-            className="lg:hidden -ml-1 mr-0.5 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent shrink-0"
+            className="-ml-1 mr-0.5 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent shrink-0"
             aria-label="Voltar para a lista"
           >
             <ChevronLeft className="h-5 w-5 text-muted-foreground" />
