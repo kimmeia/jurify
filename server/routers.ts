@@ -77,6 +77,7 @@ import { adminAgentesIaRouter } from "./routers/admin-agentes-ia";
 import { adminSmartflowRouter } from "./routers/admin-smartflow";
 import { smartflowRouter } from "./smartflow/router-smartflow";
 import { kanbanRouter } from "./escritorio/router-kanban";
+import { pushRouter } from "./routers/push";
 
 export const appRouter = router({
   // Autenticação própria — email/senha + Google Sign-In
@@ -94,6 +95,9 @@ export const appRouter = router({
 
   // Notificações in-app
   notificacoes: notificacoesRouter,
+
+  // Web Push (PWA) — notificação com o app fechado
+  push: pushRouter,
 
   // Cofre de credenciais (Frente B — gerenciar OAB+senha+2FA pra acessar
   // tribunais autenticados como E-SAJ TJCE)

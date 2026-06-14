@@ -105,8 +105,49 @@ export function registrarSSE(app: Express) {
   });
 }
 
-/** Envia notificação para um usuário específico */
+// Tipos que viram Web Push (notificação com o app fechado). "info" e a
+// sinalização de chamada ficam de fora — são silenciosos / ruído.
+const TIPOS_PUSH = new Set<Notificacao["tipo"]>([
+  "nova_mensagem",
+  "novo_lead",
+  "conversa_atribuida",
+  "assinatura_concluida",
+  "movimentacao_processo",
+  "nova_acao",
+]);
+
+/** Rota que a notificação abre ao ser tocada. */
+function rotaPush(n: Omit<Notificacao, "timestamp">): string {
+  const conversaId = n.dados?.conversaId;
+  if (conversaId) return `/atendimento?conversa=${conversaId}`;
+  if (n.tipo === "movimentacao_processo" || n.tipo === "nova_acao" || n.tipo === "assinatura_concluida") {
+    return "/processos";
+  }
+  return "/atendimento";
+}
+
+/** Envia notificação para um usuário específico (SSE em tempo real + Web Push). */
 export function emitirNotificacao(userId: number, notificacao: Omit<Notificacao, "timestamp">) {
+  // Web Push: independente de o user estar com o app aberto (é justamente
+  // pra quando está fechado). Fire-and-forget — nunca bloqueia o SSE.
+  if (TIPOS_PUSH.has(notificacao.tipo)) {
+    (async () => {
+      try {
+        const { enviarPushParaUsuario } = await import("./web-push");
+        const conversaId = notificacao.dados?.conversaId;
+        await enviarPushParaUsuario(userId, {
+          titulo: notificacao.titulo,
+          corpo: notificacao.mensagem,
+          url: rotaPush(notificacao),
+          tag: conversaId ? `conversa-${conversaId}` : notificacao.tipo,
+          dados: { ...(notificacao.dados ?? {}), tipo: notificacao.tipo },
+        });
+      } catch {
+        /* push é best-effort */
+      }
+    })();
+  }
+
   const conns = conexoes.get(userId);
   if (!conns || conns.length === 0) return;
 

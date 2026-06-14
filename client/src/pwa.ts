@@ -38,5 +38,13 @@ export function registrarServiceWorker() {
       recarregou = true;
       window.location.reload();
     });
+
+    // Fallback de navegação ao tocar numa push (quando o SW não pôde usar
+    // WindowClient.navigate): leva o app pra conversa/rota da notificação.
+    navigator.serviceWorker.addEventListener("message", (e) => {
+      if (e.data?.type === "NAVEGAR" && typeof e.data.url === "string") {
+        window.location.assign(e.data.url);
+      }
+    });
   });
 }

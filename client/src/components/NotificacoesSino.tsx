@@ -24,8 +24,11 @@ import {
   CreditCard,
   Loader2,
   Siren,
+  BellRing,
+  BellOff,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const tipoIconMap: Record<string, React.ReactNode> = {
   movimentacao: <FileSearch className="h-4 w-4 text-blue-500" />,
@@ -58,6 +61,25 @@ export default function NotificacoesSino() {
   const [eventoIdAberto, setEventoIdAberto] = useState<number | null>(null);
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
+  const push = usePushNotifications();
+  const testarPush = trpc.push.testar.useMutation({
+    onSuccess: (r) => {
+      if (r.inscricoes === 0) {
+        toast.error("Este aparelho não está inscrito", {
+          description: "Toque em 'Ativar' de novo e permita quando o navegador pedir.",
+        });
+      } else if (r.enviados > 0) {
+        toast.success("Notificação de teste enviada", {
+          description: "Deve aparecer em 1–2s. Se não vier, feche e reabra o app uma vez.",
+        });
+      } else {
+        toast.warning("Inscrição encontrada, mas o envio falhou", {
+          description: "Reabra o app para atualizar e tente de novo.",
+        });
+      }
+    },
+    onError: (e) => toast.error("Falha ao testar", { description: e.message }),
+  });
 
   const contarQuery = trpc.notificacoes.contarNaoLidas.useQuery(undefined, {
     refetchInterval: 60_000, // Verificar a cada 60 segundos
@@ -161,6 +183,54 @@ export default function NotificacoesSino() {
             </Button>
           )}
         </div>
+
+        {/* Web Push: ativar notificações deste aparelho (mostra mesmo com o
+            app fechado/em segundo plano). */}
+        {push.suportado && (
+          <div className="px-4 pb-2">
+            {push.estado === "ativo" ? (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <BellRing className="h-3 w-3" /> Ativadas neste aparelho
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[11px] px-2"
+                    onClick={() => testarPush.mutate()}
+                    disabled={testarPush.isPending}
+                  >
+                    Testar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[11px] px-2 text-muted-foreground"
+                    onClick={() => push.desativar()}
+                    disabled={push.ocupado}
+                  >
+                    Desativar
+                  </Button>
+                </div>
+              </div>
+            ) : push.estado === "negado" ? (
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <BellOff className="h-3 w-3" /> Notificações bloqueadas no navegador
+              </span>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 w-full text-[11px]"
+                onClick={() => push.ativar()}
+                disabled={push.ocupado}
+              >
+                <BellRing className="h-3 w-3 mr-1" /> Ativar notificações neste aparelho
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Filtros por tipo: necessários quando há volume alto (ex:
             cron de comissões cria muitas) e o tipo procurado fica

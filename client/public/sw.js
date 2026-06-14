@@ -15,7 +15,7 @@
  * Versionar CACHE invalida tudo ao publicar. skipWaiting + clients.claim
  * fazem a versão nova assumir na hora.
  */
-const VERSION = "v1";
+const VERSION = "v2";
 const CACHE = `juridflow-${VERSION}`;
 const SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
 
@@ -36,6 +36,59 @@ self.addEventListener("activate", (event) => {
 // Permite a página forçar a ativação imediata da versão nova.
 self.addEventListener("message", (e) => {
   if (e.data === "skip-waiting") self.skipWaiting();
+});
+
+// ─── Web Push ─────────────────────────────────────────────────────────────
+// Mostra a notificação (app fechado/segundo plano). Se já houver uma janela
+// VISÍVEL (usuário olhando), não duplica — o toast in-app (SSE) já cobre o
+// primeiro plano. `forcar` (teste) ignora essa supressão.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "JuridFlow", body: event.data ? event.data.text() : "" };
+  }
+  const titulo = data.title || "JuridFlow";
+  const url = data.url || "/atendimento";
+  const forcar = !!(data.dados && data.dados.forcar);
+
+  event.waitUntil(
+    (async () => {
+      const clientes = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const emFoco = clientes.some((c) => c.focused === true);
+      if (emFoco && !forcar) return;
+
+      await self.registration.showNotification(titulo, {
+        body: data.body || "",
+        icon: "/pwa-192.png",
+        badge: "/pwa-192.png",
+        tag: data.tag || undefined,
+        renotify: !!data.tag,
+        data: { url, ...(data.dados || {}) },
+      });
+    })(),
+  );
+});
+
+// Toque na notificação: foca uma janela aberta (e navega) ou abre uma nova.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/atendimento";
+  event.waitUntil(
+    (async () => {
+      const clientes = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const c of clientes) {
+        if ("focus" in c) {
+          await c.focus();
+          if ("navigate" in c) c.navigate(url).catch(() => {});
+          else c.postMessage({ type: "NAVEGAR", url });
+          return;
+        }
+      }
+      if (self.clients.openWindow) await self.clients.openWindow(url);
+    })(),
+  );
 });
 
 function ehAsterHash(url) {

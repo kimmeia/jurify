@@ -3396,3 +3396,34 @@ export const emailLog = mysqlTable(
 
 export type EmailLog = typeof emailLog.$inferSelect;
 export type InsertEmailLog = typeof emailLog.$inferInsert;
+
+/**
+ * Inscrições de Web Push (PWA). Uma linha por dispositivo/navegador que o
+ * user autorizou a receber notificações. `endpoint` é único (o browser
+ * reusa o mesmo) — upsert por endpoint. Removida em 404/410 (expirada).
+ */
+export const pushSubscriptions = mysqlTable(
+  "push_subscriptions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    endpoint: varchar("endpoint", { length: 512 }).notNull().unique(),
+    p256dh: varchar("p256dh", { length: 255 }).notNull(),
+    auth: varchar("auth", { length: 255 }).notNull(),
+    userAgent: varchar("userAgent", { length: 255 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxUser: index("idx_push_user").on(t.userId),
+  }),
+);
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+
+/** Par de chaves VAPID do servidor (gerado 1x se não vier por env). Linha única. */
+export const webPushKeys = mysqlTable("web_push_keys", {
+  id: int("id").autoincrement().primaryKey(),
+  publicKey: text("publicKey").notNull(),
+  privateKey: text("privateKey").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
