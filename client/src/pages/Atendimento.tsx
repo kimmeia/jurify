@@ -520,7 +520,7 @@ export default function Atendimento() {
   // inbox ganha mais espaço útil pro chat (coluna do meio = `1fr`) quanto
   // mais largo for o viewport — o operador reclamava do canto vazio.
   return (
-    <div className={isMobile ? "-mx-6 -mt-6" : "space-y-4"}>
+    <div className={isMobile ? "" : "space-y-4"}>
       <Tabs value={tab} onValueChange={setTab}>
         {/* Barra única: tabs Inbox/Pipeline à esquerda + Nova Conversa à direita.
             Substitui o card hero "Atendimento" que ocupava ~74px sem agregar — o
