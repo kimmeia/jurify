@@ -49,6 +49,7 @@ import {
   Lightbulb,
   Monitor,
   Smartphone,
+  Download,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -56,6 +57,8 @@ import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { moduloOcultoNoMenu } from "@/config/visibility";
 import { toast } from "sonner";
+import { InstalarAppDialog } from "@/components/InstalarAppDialog";
+import { dispararInstalacao, pwaInstalado } from "@/lib/pwa-install";
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 260;
@@ -292,6 +295,16 @@ function AppSidebarContent({
     try { localStorage.removeItem("jurify:mobileCompleto"); } catch { /* modo privado */ }
     setMobileCompleto(false);
     setLocation("/atendimento");
+  };
+
+  // "Instalar app" no menu de perfil: tenta o instalador nativo
+  // (Android/Chrome/Edge/desktop); se não houver, abre o passo a passo manual
+  // (iOS/Safari). Some quando o app já está rodando instalado.
+  const [instalarOpen, setInstalarOpen] = useState(false);
+  const mostrarInstalar = !pwaInstalado();
+  const instalarApp = async () => {
+    const r = await dispararInstalacao();
+    if (r === "indisponivel") setInstalarOpen(true);
   };
 
   // No modo focado, qualquer rota fora de Atendimento/Configurações volta
@@ -606,6 +619,12 @@ function AppSidebarContent({
                     <DropdownMenuSeparator />
                   </>
                 )}
+                {mostrarInstalar && (
+                  <DropdownMenuItem onClick={instalarApp} className="cursor-pointer">
+                    <Download className="mr-2 h-4 w-4" />
+                    <span>Instalar app</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
@@ -673,6 +692,12 @@ function AppSidebarContent({
                     <Monitor className="mr-2 h-4 w-4" />
                     <span>Abrir versão completa</span>
                   </DropdownMenuItem>
+                  {mostrarInstalar && (
+                    <DropdownMenuItem onClick={instalarApp} className="cursor-pointer">
+                      <Download className="mr-2 h-4 w-4" />
+                      <span>Instalar app</span>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive">
                     <LogOut className="mr-2 h-4 w-4" />
@@ -697,6 +722,7 @@ function AppSidebarContent({
           <ChamadaWhatsappProvider>{children}</ChamadaWhatsappProvider>
         </main>
       </SidebarInset>
+      <InstalarAppDialog open={instalarOpen} onOpenChange={setInstalarOpen} />
     </>
   );
 }
