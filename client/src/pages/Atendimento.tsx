@@ -889,7 +889,7 @@ export default function Atendimento() {
 
             {/* Coluna 2: Chat hero. No mobile, esconde quando nenhuma
                 conversa está aberta (mostra só o inbox). */}
-            <div className={isMobile ? (selId ? "fixed inset-0 z-50 bg-card flex flex-col" : "hidden") : "bg-card overflow-hidden flex flex-col lg:min-h-0"}>
+            <div className={isMobile ? (selId ? "fixed inset-0 z-50 bg-card flex flex-col overflow-x-hidden" : "hidden") : "bg-card overflow-hidden flex flex-col lg:min-h-0"}>
               {selId ? (
                 <ChatArea
                   cid={selId}
@@ -1463,8 +1463,10 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       onIgnorar={() => { /* registrar event log se quiser auditar */ }}
     />
     {/* Composer ULTRA: Tone Selector + Compor IA + Slash + Compliance badge */}
-    <div className="border-t bg-muted/20">
-      {/* Linha 1: Tone Selector + ✨ Compor IA + Compliance badge */}
+    <div className={"border-t bg-muted/20 " + (mobile ? "pb-[env(safe-area-inset-bottom)]" : "")}>
+      {/* Linha 1: Tone Selector + ✨ Compor IA + Compliance badge — só no
+          desktop. No celular fica atrás do ✨ do composer (mantém o chat limpo). */}
+      {!mobile && (
       <div className="px-3 pt-2 pb-1.5 flex items-center gap-2 flex-wrap">
         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide shrink-0">Tom:</span>
         <div className="inline-flex bg-background border rounded-lg p-0.5 gap-0 shadow-sm">
@@ -1501,6 +1503,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         <div className="flex-1" />
         <ComplianceGuardBadge />
       </div>
+      )}
 
       {/* Preview de mídia anexada (vinda do template). Some ao enviar. */}
       {pendingMedia && (
@@ -1531,7 +1534,20 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
 
       {/* Linha 2: Composer */}
       <div className="p-3 pt-2 flex gap-2">
+        {mobile && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 p-0 shrink-0 text-violet-600"
+            disabled={composerSugestao.isPending}
+            onClick={() => composerSugestao.mutate({ conversaId: cid, tom })}
+            title="Compor com IA"
+          >
+            {composerSugestao.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          </Button>
+        )}
         <AnexoButton onAnexar={(m) => setPendingMedia(m)} />
+        {!mobile && (
         <Popover open={showTemplates} onOpenChange={setShowTemplates}>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" title="Respostas rápidas">
@@ -1628,6 +1644,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             </div>
           </PopoverContent>
         </Popover>
+        )}
         <RespostaRapidaAutocomplete
           value={msg}
           onChange={setMsg}
@@ -1664,7 +1681,8 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         </Button>
       </div>
 
-      {/* Linha 3: Hint compacto */}
+      {/* Linha 3: Hint compacto — só desktop (atalhos de teclado). */}
+      {!mobile && (
       <div className="px-3 pb-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
         <span className="inline-flex items-center gap-1">
           <kbd className="font-mono bg-background px-1 py-0.5 rounded border text-[10px]">/</kbd> respostas rápidas
@@ -1675,6 +1693,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           <span className="text-amber-600 text-[10px]">⚠ IA não configurada — usando template</span>
         )}
       </div>
+      )}
     </div>
     {showAddLead && <AddLeadFromConversaDialog open={showAddLead} onOpenChange={setShowAddLead} conversaId={cid} onSuccess={onLeadUpdate} />}
 
