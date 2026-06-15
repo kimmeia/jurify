@@ -15,8 +15,9 @@ import {
   enviarMensagem, listarMensagens,
   criarLead, listarLeads, atualizarLead, excluirLead,
   obterMetricasDashboard, distribuirLead, obterMetricasDetalhadas,
+  decidirResponsavelLead,
 } from "./db-crm";
-import { conversas, contatos, leads } from "../../drizzle/schema";
+import { conversas, contatos, leads, colaboradores } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 import { createLogger } from "../_core/logger";
@@ -569,12 +570,29 @@ export const crmRouter = router({
       conversaId: z.number().optional(),
       valorEstimado: z.string().optional(),
       origemLead: z.string().max(128).optional(),
+      // Responsável escolhido no Customer 360. Ausente = rodízio (comportamento
+      // antigo). Validado como colaborador do MESMO escritório (anti-vazamento).
+      responsavelId: z.number().int().positive().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "pipeline", "criar", { fallbackModulo: "kanban" });
       if (!perm.allowed) throw new Error("Sem permissão para criar leads.");
-      const responsavelId = (await distribuirLead(perm.escritorioId, input.contatoId).catch(() => null)) ?? perm.colaboradorId;
-      const id = await criarLead({ escritorioId: perm.escritorioId, responsavelId, ...input });
+      const escolhido = input.responsavelId ?? null;
+      let escolhidoValido = false;
+      if (escolhido) {
+        const db = await getDb();
+        if (db) {
+          const [c] = await db.select({ id: colaboradores.id }).from(colaboradores)
+            .where(and(eq(colaboradores.id, escolhido), eq(colaboradores.escritorioId, perm.escritorioId)))
+            .limit(1);
+          escolhidoValido = !!c;
+        }
+      }
+      // Só roda o rodízio quando NÃO houve escolha explícita (preserva "auto").
+      const rodizio = escolhido ? null : (await distribuirLead(perm.escritorioId, input.contatoId).catch(() => null));
+      const responsavelId = decidirResponsavelLead({ escolhido, escolhidoValido, rodizio, criador: perm.colaboradorId });
+      const { responsavelId: _ignore, ...rest } = input;
+      const id = await criarLead({ escritorioId: perm.escritorioId, responsavelId, ...rest });
       return { id, responsavelId };
     }),
 

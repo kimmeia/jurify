@@ -792,6 +792,21 @@ export async function criarLead(dados: {
   return (result as { insertId: number }).insertId;
 }
 
+/**
+ * Decide o responsável de um lead novo. Pura (testável):
+ *  - escolha explícita e válida (colaborador do escritório) → usa ela
+ *  - senão → resultado do rodízio; e se o rodízio não definir, o criador.
+ */
+export function decidirResponsavelLead(opts: {
+  escolhido?: number | null;
+  escolhidoValido: boolean;
+  rodizio?: number | null;
+  criador: number;
+}): number {
+  if (opts.escolhido && opts.escolhidoValido) return opts.escolhido;
+  return opts.rodizio ?? opts.criador;
+}
+
 export async function listarLeads(escritorioId: number, etapa?: string) {
   const db = await getDb();
   if (!db) return [];
