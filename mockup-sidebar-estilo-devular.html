@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Menu lateral estilo Devular (com "J.")</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#1f2430; --muted:#6b7280; --bg:#eef1f5; --border:#e6e8ec; --violet:#7c3aed; --violet2:#4f46e5; --slate:#64748b; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,Arial,sans-serif;line-height:1.55;padding:38px 20px 80px}
+  .wrap{max-width:1040px;margin:0 auto}
+  .head{text-align:center;margin-bottom:30px}
+  .head .badge{display:inline-block;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;background:#fff;border:1px solid var(--border);color:var(--violet);padding:5px 14px;border-radius:999px;margin-bottom:14px}
+  .head h1{font-size:24px;margin-bottom:8px}
+  .head p{font-size:14px;color:var(--muted);max-width:680px;margin:0 auto}
+
+  .row{display:flex;gap:26px;justify-content:center;flex-wrap:wrap;align-items:flex-start;margin:26px 0}
+  .col{display:flex;flex-direction:column;align-items:center;gap:11px}
+  .col .lbl{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:7px}
+  .col .lbl small{display:block;font-weight:400;color:var(--muted);font-size:10.5px}
+  .l-antes{color:#b91c1c}.l-depois{color:#047857}
+  .dot{width:8px;height:8px;border-radius:50%}.l-antes .dot{background:#ef4444}.l-depois .dot{background:#10b981}
+
+  /* moldura "app" */
+  .frame{display:flex;background:#fff;border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(16,24,40,.10);height:560px}
+
+  /* SIDEBAR base */
+  .sb{display:flex;flex-direction:column;background:#fff;border-right:1px solid #eef1f4;height:100%}
+  .sb .top{display:flex;align-items:center;justify-content:center;height:60px;border-bottom:1px solid #f1f5f9}
+  .sb .items{flex:1;display:flex;flex-direction:column;gap:4px;padding:12px 0;overflow:hidden}
+  .sb .foot{height:64px;border-top:1px solid #f1f5f9;display:flex;align-items:center;justify-content:center}
+  .ava{width:34px;height:34px;border-radius:50%;background:#dbeafe;color:#2563eb;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+
+  .ico{width:22px;height:22px;stroke:var(--slate);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+
+  /* item colapsado (só ícone) */
+  .item{display:flex;align-items:center;justify-content:center;height:42px;position:relative}
+  .item.on .ico{stroke:var(--violet)}
+  .item.on::before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:3px;background:var(--violet);border-radius:0 3px 3px 0}
+  .item.on .pill{position:absolute;inset:5px 8px;background:var(--violet);opacity:.10;border-radius:10px}
+
+  /* ── ANTES (JuridFlow hoje): apertado, topo com painel ── */
+  .sb-antes{width:60px}
+  .sb-antes .top{color:#94a3b8}
+  .sb-antes .items{gap:0;padding:6px 0}
+  .sb-antes .item{height:38px}
+
+  /* ── DEPOIS colapsada (estilo Devular) ── */
+  .sb-dev{width:72px}
+  .logoJ{font-family:Poppins;font-weight:800;font-size:24px;line-height:1;color:#0f172a;letter-spacing:-1px}
+  .logoJ .d{color:var(--violet)}
+  .sb-dev .item{height:46px}
+
+  /* ── DEPOIS expandida ── */
+  .sb-exp{width:230px}
+  .sb-exp .top{justify-content:flex-start;padding:0 16px;gap:10px}
+  .sb-exp .items{padding:12px 10px;gap:3px}
+  .sb-exp .item{justify-content:flex-start;gap:12px;padding:0 12px;height:42px;border-radius:10px}
+  .sb-exp .item .txt{font-size:13.5px;color:#334155;font-weight:500}
+  .sb-exp .item.on{background:#f5f3ff}
+  .sb-exp .item.on .txt{color:var(--violet);font-weight:700}
+  .sb-exp .item.on::before{display:none}
+  .sb-exp .foot{justify-content:flex-start;padding:0 14px;gap:10px}
+  .sb-exp .foot .u .n{font-size:13px;font-weight:600;line-height:1.1}
+  .sb-exp .foot .u .e{font-size:10.5px;color:var(--muted)}
+
+  /* conteúdo fake à direita */
+  .content{flex:1;padding:18px;background:#fbfcfd;min-width:120px}
+  .ph{background:#eef1f5;border-radius:10px}
+  .content .h{height:26px;width:60%;margin-bottom:14px}
+  .content .card{height:90px;margin-bottom:12px}
+
+  .opts{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:6px}
+  .opt{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px 22px;display:flex;flex-direction:column;align-items:center;gap:10px;min-width:180px}
+  .opt.reco{border-color:#10b981;box-shadow:0 0 0 1px #10b981}
+  .opt .tag{font-size:11.5px;font-weight:700}
+  .opt .sub{font-size:10.5px;color:var(--muted);text-align:center;max-width:160px}
+  .reco-pill{font-size:9px;font-weight:800;text-transform:uppercase;background:#d1fae5;color:#047857;padding:2px 7px;border-radius:999px}
+  .badgeJ{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center;font-family:Poppins;font-weight:800;color:#fff;font-size:22px}
+  .badgeJ .d{color:#c4b5fd}
+
+  .section{background:#fff;border:1px solid var(--border);border-radius:16px;padding:22px;margin-top:24px}
+  .section h2{font-size:16px;margin-bottom:14px}
+  table{width:100%;border-collapse:collapse;font-size:12.8px}
+  td{padding:9px 10px;border-bottom:1px solid #eef1f4;vertical-align:top}
+  td:first-child{font-weight:600;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  .foot-note{text-align:center;font-size:12.5px;color:var(--muted);margin-top:18px}
+  .foot-note b{color:#b45309}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <div class="badge">Mockup para aprovação · menu lateral</div>
+    <h1>Sidebar do JuridFlow no estilo do Devular</h1>
+    <p>Topo com o ícone <b>"J."</b> (como o "D." do Devular), ícones maiores e mais espaçados, item ativo com
+    realce violeta e avatar no rodapé. Mesma navegação de hoje — só o visual fica mais limpo e "app".</p>
+  </div>
+
+  <div class="row">
+
+    <!-- ANTES -->
+    <div class="col">
+      <div class="lbl l-antes"><span class="dot"></span> JURIDFLOW HOJE</div>
+      <div class="frame" style="width:230px">
+        <div class="sb sb-antes">
+          <div class="top">
+            <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+          </div>
+          <div class="items">
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M2 12h2M20 12h2"/></svg></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+            <div class="item on"><svg class="ico" viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.5-2.3 1a7 7 0 0 0-1.7-1l-.3-2.5h-4l-.3 2.5a7 7 0 0 0-1.7 1l-2.3-1-2 3.5L4.1 11a7 7 0 0 0 0 2l-2 1.5 2 3.5 2.3-1a7 7 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7 7 0 0 0 1.7-1l2.3 1 2-3.5-2-1.5a7 7 0 0 0 .1-1z"/></svg></div>
+          </div>
+          <div class="foot"><div class="ava">R</div></div>
+        </div>
+        <div class="content"><div class="ph h"></div><div class="ph card"></div><div class="ph card"></div></div>
+      </div>
+      <div class="lbl" style="font-weight:400;color:var(--muted);font-size:11px">Topo = botão de painel · ícones apertados</div>
+    </div>
+
+    <!-- DEPOIS colapsada -->
+    <div class="col">
+      <div class="lbl l-depois"><span class="dot"></span> PROPOSTA (recolhida)</div>
+      <div class="frame" style="width:250px">
+        <div class="sb sb-dev">
+          <div class="top"><span class="logoJ">J<span class="d">.</span></span></div>
+          <div class="items">
+            <div class="item on"><span class="pill"></span><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M2 12h2M20 12h2M12 2v2M12 20v2"/></svg></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8A8.5 8.5 0 0 1 12.5 3 8.5 8.5 0 0 1 21 11.5z"/></svg></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.5-2.3 1a7 7 0 0 0-1.7-1l-.3-2.5h-4l-.3 2.5a7 7 0 0 0-1.7 1l-2.3-1-2 3.5L4.1 11a7 7 0 0 0 0 2l-2 1.5 2 3.5 2.3-1a7 7 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7 7 0 0 0 1.7-1l2.3 1 2-3.5-2-1.5a7 7 0 0 0 .1-1z"/></svg></div>
+          </div>
+          <div class="foot"><div class="ava">R</div></div>
+        </div>
+        <div class="content"><div class="ph h"></div><div class="ph card"></div><div class="ph card"></div></div>
+      </div>
+      <div class="lbl" style="font-weight:400;color:var(--muted);font-size:11px">Topo = "J." · ícones espaçados · ativo realçado</div>
+    </div>
+
+    <!-- DEPOIS expandida -->
+    <div class="col">
+      <div class="lbl l-depois"><span class="dot"></span> PROPOSTA (expandida)</div>
+      <div class="frame" style="width:300px">
+        <div class="sb sb-exp">
+          <div class="top"><span class="logoJ" style="font-size:22px">J<span class="d">.</span></span><span style="font-family:Poppins;font-weight:800;font-size:16px;color:#0f172a">JuridFlow</span></div>
+          <div class="items">
+            <div class="item on"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg><span class="txt">Dashboard</span></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><span class="txt">Clientes</span></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8A8.5 8.5 0 0 1 12.5 3 8.5 8.5 0 0 1 21 11.5z"/></svg><span class="txt">Atendimento</span></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span class="txt">SmartFlow</span></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg><span class="txt">Relatórios</span></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span class="txt">Financeiro</span></div>
+            <div class="item"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.5-2.3 1a7 7 0 0 0-1.7-1l-.3-2.5h-4l-.3 2.5a7 7 0 0 0-1.7 1l-2.3-1-2 3.5L4.1 11a7 7 0 0 0 0 2l-2 1.5 2 3.5 2.3-1a7 7 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7 7 0 0 0 1.7-1l2.3 1 2-3.5-2-1.5a7 7 0 0 0 .1-1z"/></svg><span class="txt">Configurações</span></div>
+          </div>
+          <div class="foot"><div class="ava">R</div><div class="u"><div class="n">Rafael Rocha</div><div class="e">Boyadjian Advogados</div></div></div>
+        </div>
+        <div class="content" style="min-width:60px"><div class="ph h"></div><div class="ph card"></div></div>
+      </div>
+      <div class="lbl" style="font-weight:400;color:var(--muted);font-size:11px">"J. JuridFlow" + rótulos + perfil</div>
+    </div>
+
+  </div>
+
+  <!-- variações do logo do topo -->
+  <div class="section">
+    <h2>Como fica o "J." no topo da sidebar</h2>
+    <div class="opts">
+      <div class="opt reco">
+        <span class="logoJ" style="font-size:30px">J<span class="d">.</span></span>
+        <div class="tag">Opção 1 — wordmark <span class="reco-pill">recomendado</span></div>
+        <div class="sub">"J" escuro + ponto violeta sobre o fundo branco — igual ao "D." do Devular. Limpo e leve.</div>
+      </div>
+      <div class="opt">
+        <span class="badgeJ">J<span class="d">.</span></span>
+        <div class="tag">Opção 2 — badge do app</div>
+        <div class="sub">O mesmo ícone colorido do app instalável (PWA), em miniatura. Mais "marca", menos minimalista.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>O que muda</h2>
+    <table>
+      <tr><td>Topo</td><td>Botão de painel → ícone <b>"J."</b> (igual o "D." do Devular). Clicar nele recolhe/expande a barra.</td></tr>
+      <tr><td>Ícones</td><td>Maiores e mais espaçados (respiro entre eles), traço fino cinza; <b>ativo em violeta</b> com realce suave.</td></tr>
+      <tr><td>Rodapé</td><td>Avatar do usuário (recolhida) → avatar + nome/escritório (expandida), abre o menu de perfil.</td></tr>
+      <tr><td>Navegação</td><td><b>Mesma de hoje</b> — os mesmos módulos, mesmas permissões. Só o visual muda.</td></tr>
+      <tr><td>Mobile</td><td>Não muda o app de atendimento do celular (recém-feito); isto é a barra do <b>desktop/tablet</b>.</td></tr>
+    </table>
+  </div>
+
+  <p class="foot-note"><b>Nada foi implementado.</b> Me diga a opção do "J." (1 ou 2) e, aprovando, deixo a sidebar assim.</p>
+
+</div>
+</body>
+</html>
