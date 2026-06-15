@@ -17,7 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 
-export type EstadoChamada = "idle" | "tocando" | "conectando" | "em_chamada" | "encerrada";
+export type EstadoChamada = "idle" | "tocando" | "conectando" | "chamando" | "em_chamada" | "encerrada";
 
 export interface ChamadaAtiva {
   callId: string;
@@ -126,6 +126,7 @@ export function useWhatsappCall() {
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const deteccaoRef = useRef<ReturnType<typeof setInterval> | null>(null); // polling de áudio (saída: "atendeu?")
   const ofertaPendenteRef = useRef<string | null>(null); // offer do connect de entrada
   const ultimaLigacaoRef = useRef<IniciarLigacaoOpts | null>(null); // pra reusar no pedido de permissão
   const estadoRef = useRef(estado);
@@ -155,6 +156,10 @@ export function useWhatsappCall() {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
+    }
+    if (deteccaoRef.current) {
+      clearInterval(deteccaoRef.current);
+      deteccaoRef.current = null;
     }
     if (pcRef.current) {
       try {
@@ -199,6 +204,48 @@ export function useWhatsappCall() {
     setDuracao(0);
     timerRef.current = setInterval(() => setDuracao((d) => d + 1), 1000);
   }, []);
+
+  /**
+   * Detecta o atendimento REAL de uma ligação de saída. A Meta manda o SDP
+   * answer pra montar a mídia ainda DURANTE o toque — então "recebi o answer"
+   * não é "atendeu". Só viramos "em chamada" (e ligamos o cronômetro) quando o
+   * áudio do outro lado começa a fluir de fato (bytes de inbound-rtp crescendo
+   * em leituras seguidas). Assim o relógio nunca conta tempo de toque.
+   */
+  const aguardarAtendimento = useCallback(
+    (pc: RTCPeerConnection) => {
+      if (deteccaoRef.current) return;
+      let anterior = 0;
+      let leiturasComAudio = 0;
+      deteccaoRef.current = setInterval(async () => {
+        try {
+          const stats = await pc.getStats();
+          let bytes = 0;
+          stats.forEach((r: any) => {
+            if (r.type === "inbound-rtp" && (r.kind || r.mediaType) === "audio") {
+              bytes += r.bytesReceived || 0;
+            }
+          });
+          if (bytes > anterior) {
+            anterior = bytes;
+            leiturasComAudio += 1;
+            // 2 leituras seguidas com áudio crescendo (~1,2s) = atendeu mesmo.
+            if (leiturasComAudio >= 2) {
+              if (deteccaoRef.current) {
+                clearInterval(deteccaoRef.current);
+                deteccaoRef.current = null;
+              }
+              setEstado("em_chamada");
+              iniciarTimer();
+            }
+          }
+        } catch {
+          /* getStats pode falhar em alguns browsers — ignora */
+        }
+      }, 600);
+    },
+    [iniciarTimer],
+  );
 
   /** Monta o RTCPeerConnection com mic local + saída de áudio remota. */
   const montarPeer = useCallback(async () => {
@@ -450,8 +497,10 @@ export function useWhatsappCall() {
         if (!c || c.callId !== d.callId || !pc || !d.sdpAnswer) return;
         pc.setRemoteDescription({ type: "answer", sdp: d.sdpAnswer })
           .then(() => {
-            setEstado("em_chamada");
-            iniciarTimer();
+            // Mídia negociada, mas o cliente pode estar só tocando. Mantém
+            // "Chamando…" e liga o cronômetro só quando o áudio fluir.
+            setEstado("chamando");
+            aguardarAtendimento(pc);
           })
           .catch(() => setErro("Falha na conexão de mídia"));
       } else if (detail.tipo === "chamada_encerrada") {
@@ -463,7 +512,7 @@ export function useWhatsappCall() {
 
     window.addEventListener("jurify:notif", onNotif);
     return () => window.removeEventListener("jurify:notif", onNotif);
-  }, [definirChamada, iniciarTimer, finalizar]);
+  }, [definirChamada, finalizar, aguardarAtendimento]);
 
   // Cleanup ao desmontar.
   useEffect(() => () => limparMidia(), [limparMidia]);

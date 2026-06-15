@@ -57,6 +57,7 @@ import { LinhaTempoUnificada } from "./atendimento/linha-tempo-unificada";
 import { AIRail } from "./atendimento/ai-rail";
 import { CentroDeComando } from "./atendimento/centro-de-comando";
 import { FilaChamadas } from "./atendimento/fila-chamadas";
+import { CartaoLigacao } from "./atendimento/cartao-ligacao";
 import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
 import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen } from "lucide-react";
@@ -1460,6 +1461,11 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                     </span>
                   </div>
                 )}
+                {m.tipo === "ligacao" ? (
+                  <div className="flex justify-center">
+                    <CartaoLigacao m={m} tz={tz} />
+                  </div>
+                ) : (
                 <div className={"flex " + (m.direcao === "saida" ? "justify-end" : "justify-start")}>
                   <div className={"max-w-[70%] rounded-2xl px-3.5 py-2 " + (m.direcao === "saida" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-muted rounded-bl-md") + (m.direcao === "saida" && m.status === "falha" ? " ring-2 ring-destructive/60" : "")}>
                     {m.remetenteNome && m.direcao === "saida" && <p className="text-[10px] opacity-60 mb-0.5">{m.remetenteNome}</p>}
@@ -1476,6 +1482,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                     </div>
                   </div>
                 </div>
+                )}
               </Fragment>
             );
           });

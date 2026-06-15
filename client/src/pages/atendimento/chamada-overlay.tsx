@@ -20,22 +20,25 @@ export function ChamadaOverlay({ chamada }: { chamada: UseWhatsappCall }) {
   const tocandoEntrada = estado === "tocando" && ativa.direcao === "entrada";
   const emChamada = estado === "em_chamada";
   const conectando = estado === "conectando";
+  const chamando = estado === "chamando"; // saída: mídia pronta, cliente ainda tocando
 
   const corCirculo = emChamada
     ? "bg-gradient-to-br from-green-500 to-emerald-600 animate-pulse"
     : tocandoEntrada
       ? "bg-gradient-to-br from-emerald-500 to-emerald-600 animate-pulse"
-      : "bg-gradient-to-br from-blue-500 to-blue-600";
+      : chamando
+        ? "bg-gradient-to-br from-blue-500 to-blue-600 animate-pulse"
+        : "bg-gradient-to-br from-blue-500 to-blue-600";
 
   const legenda = tocandoEntrada
     ? "Chamada recebida · WhatsApp"
     : conectando
-      ? ativa.direcao === "saida"
+      ? "Conectando..."
+      : chamando
         ? "Chamando..."
-        : "Conectando..."
-      : emChamada
-        ? fmtDuracao(duracaoSegundos)
-        : "Chamada encerrada";
+        : emChamada
+          ? fmtDuracao(duracaoSegundos)
+          : "Chamada encerrada";
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
@@ -109,8 +112,8 @@ export function ChamadaOverlay({ chamada }: { chamada: UseWhatsappCall }) {
           </div>
         )}
 
-        {/* Conectando (qualquer direção): permite desistir */}
-        {conectando && (
+        {/* Conectando/Chamando (saída): permite desistir antes de atender */}
+        {(conectando || chamando) && (
           <Button variant="destructive" size="lg" className="rounded-full h-14 w-14 p-0 mx-auto" onClick={() => void chamada.desligar()} title="Cancelar">
             <PhoneOff className="h-6 w-6" />
           </Button>
