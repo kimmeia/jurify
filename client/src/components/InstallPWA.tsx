@@ -4,6 +4,9 @@
  * - Captura `beforeinstallprompt` (Android/Chrome/Edge desktop) e mostra um
  *   banner de 1 clique. Em iOS/Safari (que não dispara o evento) mostra uma
  *   dica de "Compartilhar → Adicionar à Tela de Início".
+ * - O evento é capturado cedo no main.tsx (global `window.__pwaInstallPrompt`
+ *   + ponte `pwa:installable`), então o banner nunca perde a corrida quando o
+ *   navegador dispara antes do React montar.
  * - Não aparece se o app já está instalado (display-mode: standalone) nem se
  *   o usuário dispensou (lembrado em localStorage por 30 dias).
  *
@@ -15,7 +18,7 @@ import { X, Share } from "lucide-react";
 const CHAVE_DISPENSA = "jurify:pwa:dispensadoEm";
 const DISPENSA_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
 
-type PromptEvent = Event & { prompt: () => void; userChoice: Promise<{ outcome: string }> };
+type PromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
 function jaInstalado(): boolean {
   return (
@@ -59,13 +62,28 @@ export function InstallPWA() {
   useEffect(() => {
     if (jaInstalado() || dispensadoRecentemente()) return;
 
+    // Evento já capturado cedo no main.tsx? Usa de imediato.
+    if (window.__pwaInstallPrompt) {
+      setEvento(window.__pwaInstallPrompt as PromptEvent);
+      setVisivel(true);
+    }
+
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setEvento(e as PromptEvent);
       setVisivel(true);
     };
+    // Ponte do main.tsx: o evento foi capturado lá antes do React montar.
+    const onBridge = () => {
+      if (window.__pwaInstallPrompt) {
+        setEvento(window.__pwaInstallPrompt as PromptEvent);
+        setVisivel(true);
+      }
+    };
+    const onInstalled = () => setVisivel(false);
     window.addEventListener("beforeinstallprompt", onPrompt);
-    window.addEventListener("appinstalled", () => setVisivel(false));
+    window.addEventListener("pwa:installable", onBridge);
+    window.addEventListener("appinstalled", onInstalled);
 
     // iOS não dispara beforeinstallprompt — mostra dica manual após um tempo.
     let t: ReturnType<typeof setTimeout> | undefined;
@@ -77,6 +95,8 @@ export function InstallPWA() {
     }
     return () => {
       window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("pwa:installable", onBridge);
+      window.removeEventListener("appinstalled", onInstalled);
       if (t) clearTimeout(t);
     };
   }, []);
@@ -89,8 +109,9 @@ export function InstallPWA() {
   };
   const instalar = async () => {
     if (!evento) return;
-    evento.prompt();
+    await evento.prompt();
     try { await evento.userChoice; } catch { /* ignore */ }
+    window.__pwaInstallPrompt = undefined; // consumido — só dá pra usar 1x
     setVisivel(false);
     setEvento(null);
   };

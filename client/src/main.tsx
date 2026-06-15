@@ -9,6 +9,27 @@ import App from "./App";
 import { registrarServiceWorker } from "./pwa";
 import "./index.css";
 
+// PWA — captura o `beforeinstallprompt` O MAIS CEDO POSSÍVEL. Esse evento
+// pode disparar antes do React montar o banner (corrida clássica); se o
+// listener só existir num componente, ele se perde e o banner nunca aparece.
+// Guardamos o evento num global e avisamos via evento custom (pwa:installable).
+declare global {
+  interface Window {
+    __pwaInstallPrompt?: Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+  }
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    window.__pwaInstallPrompt = e as Window["__pwaInstallPrompt"];
+    window.dispatchEvent(new Event("pwa:installable"));
+  });
+  window.addEventListener("appinstalled", () => {
+    window.__pwaInstallPrompt = undefined;
+    window.dispatchEvent(new Event("pwa:installed"));
+  });
+}
+
 // Umami — analytics opcional. Injetado em runtime (em vez de <script> no
 // index.html com placeholder %VITE_ANALYTICS_ENDPOINT%) porque o Vite
 // deixa o placeholder literal quando a variável está vazia, gerando
