@@ -27,6 +27,7 @@ import {
   LayoutGrid, Calculator, Wallet, FileText, Loader2,
   Inbox, Trophy, TrendingDown, Hourglass, Zap, Send, Clock4, Repeat,
   CalendarCheck, XCircle, Users,
+  PhoneOutgoing, PhoneIncoming, PhoneMissed, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RelatoriosTab as DreFinanceiroTab } from "./financeiro/Relatorios";
@@ -540,6 +541,191 @@ function TabelaAtendentesCard({
   );
 }
 
+function fmtDuracaoLonga(seg: number): string {
+  if (!seg || seg <= 0) return "0m";
+  const h = Math.floor(seg / 3600);
+  const m = Math.floor((seg % 3600) / 60);
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+  const s = seg % 60;
+  return m > 0 ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`;
+}
+function fmtMMSS(seg: number | null): string {
+  if (!seg || seg <= 0) return "—";
+  const m = Math.floor(seg / 60);
+  const s = seg % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function LigacoesPorAtendenteCard({
+  linhas,
+}: {
+  linhas: Array<{
+    colabId: number; nome: string; feitas: number; recebidas: number;
+    perdidas: number; duracaoTotalSeg: number; taxaAtendimento: number | null;
+  }>;
+}) {
+  if (!linhas || linhas.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Ligações por atendente</CardTitle></CardHeader>
+        <CardContent><p className="text-xs text-muted-foreground text-center py-8">Sem ligações no período.</p></CardContent>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center justify-between">
+          Ligações por atendente
+          <span className="text-[10px] text-muted-foreground font-normal">volume × atendimento × tempo</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="text-[10px] uppercase tracking-wide">
+                <TableHead>Atendente</TableHead>
+                <TableHead className="text-center">Feitas</TableHead>
+                <TableHead className="text-center">Receb.</TableHead>
+                <TableHead className="text-center">Perd.</TableHead>
+                <TableHead className="text-center">Taxa</TableHead>
+                <TableHead className="text-right">Tempo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {linhas.map((a) => (
+                <TableRow key={a.colabId}>
+                  <TableCell className="font-medium">{a.nome}</TableCell>
+                  <TableCell className="text-center tabular-nums">{a.feitas}</TableCell>
+                  <TableCell className="text-center tabular-nums text-emerald-700 font-semibold">{a.recebidas}</TableCell>
+                  <TableCell className="text-center tabular-nums text-rose-700 font-semibold">{a.perdidas}</TableCell>
+                  <TableCell className="text-center">
+                    {a.taxaAtendimento !== null ? (
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        a.taxaAtendimento >= 80 ? "bg-emerald-100 text-emerald-800" :
+                        a.taxaAtendimento >= 50 ? "bg-amber-100 text-amber-800" :
+                        "bg-rose-100 text-rose-800"
+                      }`}>{a.taxaAtendimento}%</span>
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums font-semibold">{fmtDuracaoLonga(a.duracaoTotalSeg)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function LigacoesVolumeCard({
+  dados,
+}: {
+  dados: Array<{ dia: string; feitas: number; recebidas: number; perdidas: number }>;
+}) {
+  if (!dados || dados.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Volume diário de ligações</CardTitle></CardHeader>
+        <CardContent><p className="text-xs text-muted-foreground text-center py-8">Sem ligações no período.</p></CardContent>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center justify-between">
+          Volume diário de ligações
+          <span className="text-[10px] text-muted-foreground font-normal">feitas × recebidas × perdidas</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={dados.map((d) => ({ ...d, label: formatDiaCurto(d.dia) }))}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+            <XAxis dataKey="label" fontSize={10} tickLine={false} axisLine={false} />
+            <YAxis fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+            <Tooltip
+              labelFormatter={(_l, payload) => (payload && payload[0] ? formatDiaCompleto((payload[0] as any).payload.dia) : "")}
+              contentStyle={{ fontSize: 11, borderRadius: 8 }}
+            />
+            <Bar dataKey="feitas" fill="#3b82f6" name="Feitas" maxBarSize={14} />
+            <Bar dataKey="recebidas" fill="#10b981" name="Recebidas" maxBarSize={14} />
+            <Bar dataKey="perdidas" fill="#ef4444" name="Perdidas" maxBarSize={14} />
+          </BarChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Seção "Ligações" do relatório de Atendimentos (KPIs + duração + por atendente + volume). */
+function SecaoLigacoes({ data }: { data: any }) {
+  const lig = data.ligacoes;
+  if (!lig) return null;
+  const porAtend = (data.ligacoesPorAtendente || []) as Array<{
+    colabId: number; nome: string; feitas: number; recebidas: number;
+    perdidas: number; duracaoTotalSeg: number; taxaAtendimento: number | null;
+  }>;
+  const porDia = (data.ligacoesPorDia || []) as Array<{ dia: string; feitas: number; recebidas: number; perdidas: number }>;
+  const denom = lig.recebidas + lig.perdidas + lig.recusadas;
+  const totalLig = lig.feitas + lig.recebidas + lig.perdidas + lig.recusadas;
+
+  return (
+    <>
+      <SecaoLabel>Ligações (WhatsApp · voz)</SecaoLabel>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiBlock
+          accent="blue"
+          icon={<PhoneOutgoing className="h-4 w-4" />}
+          label="Ligações feitas"
+          value={lig.feitas.toLocaleString("pt-BR")}
+          hint={lig.feitas > 0 ? `Atendidas: ${lig.feitasAtendidas}` : "Nenhuma no período"}
+        />
+        <KpiBlock
+          accent="green"
+          icon={<PhoneIncoming className="h-4 w-4" />}
+          label="Recebidas"
+          value={lig.recebidas.toLocaleString("pt-BR")}
+          hint="Atendidas no período"
+        />
+        <KpiBlock
+          accent="rose"
+          icon={<PhoneMissed className="h-4 w-4" />}
+          label="Perdidas"
+          value={lig.perdidas.toLocaleString("pt-BR")}
+          hint={lig.recusadas > 0 ? `+ ${lig.recusadas} recusada(s)` : "Ninguém atendeu"}
+        />
+        <KpiBlock
+          accent="emerald"
+          icon={<Percent className="h-4 w-4" />}
+          label="Taxa de atendimento"
+          value={lig.taxaAtendimento !== null ? `${lig.taxaAtendimento}%` : "—"}
+          hint={denom > 0 ? `${lig.recebidas} de ${denom} recebidas` : "Sem ligações recebidas"}
+        />
+      </div>
+
+      {totalLig > 0 && (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-xl bg-muted/40 border px-4 py-2.5 text-[13px]">
+          <span className="flex items-center gap-2 text-muted-foreground">
+            <Clock className="h-4 w-4" /> Tempo total em ligações: <b className="text-foreground">{fmtDuracaoLonga(lig.duracaoTotalSeg)}</b>
+          </span>
+          <span className="flex items-center gap-2 text-muted-foreground">
+            Duração média por chamada: <b className="text-foreground">{fmtMMSS(lig.duracaoMediaSeg)}</b>
+          </span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <LigacoesPorAtendenteCard linhas={porAtend} />
+        <LigacoesVolumeCard dados={porDia} />
+      </div>
+    </>
+  );
+}
+
 function LoadingBlock() {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -952,6 +1138,9 @@ function AbaAtendimentoConteudo({ data }: { data: any }) {
           hint="Média no período"
         />
       </div>
+
+      {/* ─── Ligações ─── */}
+      <SecaoLigacoes data={data} />
 
       {/* ─── Desempenho ─── */}
       <SecaoLabel>Desempenho</SecaoLabel>
