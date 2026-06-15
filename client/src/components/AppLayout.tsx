@@ -2,6 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useNotificacoes } from "@/hooks/useNotificacoes";
 import { ChamadaWhatsappProvider } from "@/hooks/whatsapp-call-context";
 import NotificacoesSino from "@/components/NotificacoesSino";
+import { MarcaJ } from "@/components/MarcaJ";
 import { trpc } from "@/lib/trpc";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +31,6 @@ import {
   LayoutDashboard,
   Calculator,
   LogOut,
-  PanelLeft,
   ShieldCheck,
   CreditCard,
   Lock,
@@ -311,33 +311,20 @@ function AppSidebarContent({
           disableTransition={isResizing}
         >
           <SidebarHeader className="h-16 justify-center">
-            <div className="flex items-center gap-3 px-2 transition-all w-full">
+            <div className={"flex items-center w-full transition-all " + (isCollapsed ? "justify-center" : "gap-2 px-2")}>
               <button
                 onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
                 aria-label="Alternar navegação"
+                title="Recolher / expandir menu"
               >
-                <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                <MarcaJ size={26} wordmark={!isCollapsed} />
               </button>
-              {!isCollapsed ? (
-                <div className="flex flex-col min-w-0 flex-1">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-semibold tracking-tight truncate text-foreground">
-                      {nomeEscritorio || "Cálculos"}
-                    </span>
-                    {isAdmin && (
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                        Admin
-                      </Badge>
-                    )}
-                  </div>
-                  {nomeEscritorio && (
-                    <span className="text-[10px] text-muted-foreground truncate leading-tight">
-                      Escritório
-                    </span>
-                  )}
-                </div>
-              ) : null}
+              {!isCollapsed && isAdmin && (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                  Admin
+                </Badge>
+              )}
               {!isCollapsed && (
                 <div className="ml-auto shrink-0">
                   <NotificacoesSino />
