@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow — correções da conversa (mobile)</title>
+<style>
+  :root{
+    --violet:#7c3aed; --indigo:#4f46e5; --violet-soft:#ede9fe;
+    --blue:#1d4ed8; --ink:#0f172a; --muted:#64748b; --line:#e5e7eb;
+    --bg:#f1f5f9; --card:#ffffff; --gray-bubble:#eef0f4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;background:#eef1f6;color:var(--ink);padding:24px}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 22px;max-width:780px;line-height:1.5}
+  .frames{display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start}
+  .col{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .tag{font-size:12px;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--violet),var(--indigo));padding:5px 12px;border-radius:999px}
+  .tag.fix{background:#0f766e}
+  .note{font-size:11.5px;color:var(--muted);max-width:300px;text-align:center;line-height:1.45}
+  /* phone */
+  .phone{width:330px;height:680px;background:var(--card);border-radius:30px;border:1px solid var(--line);
+    box-shadow:0 18px 50px rgba(15,23,42,.18);overflow:hidden;position:relative;display:flex;flex-direction:column}
+  .statusbar{height:26px;background:#6d28d9;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 14px;font-size:11px;font-weight:600}
+  /* chat header */
+  .chead{display:flex;align-items:center;gap:8px;padding:8px 8px;border-bottom:1px solid var(--line);background:var(--card)}
+  .ic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:0 0 auto;color:var(--muted)}
+  .ic.btn:active{background:#f1f5f9}
+  .av{width:34px;height:34px;border-radius:50%;background:#e0e7ff;color:#3730a3;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .who{flex:1;min-width:0}
+  .who .n{font-weight:700;font-size:14px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .who .s{font-size:11px;color:var(--muted);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .call{color:#16a34a}
+  .dots{color:#334155;font-weight:700}
+  /* brief bar */
+  .brief{margin:9px;padding:7px 12px;border:1px dashed #c7b9f5;border-radius:999px;background:#faf8ff;
+    display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--violet)}
+  .brief .cal{color:#6366f1;font-weight:600}
+  .brief .chev{margin-left:auto;color:#94a3b8}
+  /* messages */
+  .msgs{flex:1;overflow:hidden;padding:10px 12px;display:flex;flex-direction:column;gap:9px;background:var(--card)}
+  .row{display:flex}
+  .row.out{justify-content:flex-end}
+  .b{max-width:72%;padding:8px 11px;border-radius:16px;font-size:13px;line-height:1.35;position:relative}
+  .b.in{background:var(--gray-bubble);border-bottom-left-radius:5px}
+  .b.out{background:var(--blue);color:#fff;border-bottom-right-radius:5px}
+  .b .nm{font-size:10.5px;opacity:.8;margin-bottom:2px}
+  .b .t{font-size:10px;opacity:.75;text-align:right;margin-top:3px}
+  /* composer */
+  .composer{border-top:1px solid var(--line);background:#f8fafc;padding:9px;display:flex;align-items:center;gap:8px}
+  .cbtn{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;color:#475569}
+  .cbtn.ia{color:var(--violet)}
+  .cbtn.zap{color:#7c3aed}
+  .cinput{flex:1;height:38px;border:1px solid var(--line);border-radius:20px;background:#fff;display:flex;align-items:center;padding:0 14px;color:#94a3b8;font-size:13px;min-width:0;overflow:hidden;white-space:nowrap}
+  .send{width:40px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--violet),var(--indigo));color:#fff;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  /* dropdown (⋮) */
+  .menu{position:absolute;top:54px;right:10px;width:212px;background:#fff;border:1px solid var(--line);border-radius:12px;
+    box-shadow:0 16px 40px rgba(15,23,42,.22);padding:6px;z-index:5;font-size:13.5px}
+  .mi{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:#1f2937}
+  .mi .e{width:18px;text-align:center}
+  .mi.sep{border-top:1px solid var(--line);margin-top:5px;padding-top:11px}
+  .mi.danger{color:#dc2626}
+  .mi.hot{background:#f5f3ff}
+  .backdrop{position:absolute;inset:0;background:rgba(15,23,42,.06);z-index:4}
+  /* templates popover */
+  .pop{position:absolute;left:10px;right:10px;bottom:60px;background:#fff;border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 -8px 40px rgba(15,23,42,.18);padding:10px;z-index:6;max-height:330px;overflow:auto}
+  .pop h4{margin:2px 4px 6px;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:flex;justify-content:space-between}
+  .ti{padding:8px 10px;border-radius:9px;border:1px solid transparent}
+  .ti:hover{background:#f8fafc}
+  .ti .tt{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .ti .td{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip{font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px}
+  .chip.slash{background:#ede9fe;color:#6d28d9;font-family:monospace}
+  .chip.meta{background:#dcfce7;color:#15803d}
+  .chip.aprov{background:#dbeafe;color:#1d4ed8}
+  .diveta{border-top:1px solid var(--line);margin:9px 2px 4px;padding-top:7px}
+  .arrow-zap{position:absolute;left:54px;bottom:52px;color:#7c3aed;font-size:11px;font-weight:700;z-index:7}
+  .legend{margin-top:26px;max-width:820px;font-size:13px;color:#334155;line-height:1.6}
+  .legend b{color:var(--ink)}
+  .legend code{background:#eef2ff;color:#4338ca;padding:1px 6px;border-radius:5px;font-size:12px}
+</style>
+</head>
+<body>
+  <h1>JuridFlow · correções da conversa no celular</h1>
+  <p class="sub">Mockup para aprovação. Dois ajustes: (1) o menu <b>⋮</b> volta a abrir corretamente (e com ele todos os diálogos da conversa — Transferir, Agendar, Vincular etc.), e (2) o botão de <b>respostas rápidas / templates</b> (⚡) volta ao composer no celular. Layout do chat (tela cheia, composer no rodapé) permanece igual ao que já está funcionando.</p>
+
+  <div class="frames">
+
+    <!-- FRAME 1: menu ⋮ -->
+    <div class="col">
+      <span class="tag fix">Correção 1 — menu ⋮</span>
+      <div class="phone">
+        <div class="statusbar"><span>11:30</span><span>📶 🔋</span></div>
+        <div class="chead">
+          <div class="ic btn">‹</div>
+          <div class="av">5</div>
+          <div class="who"><div class="n">558596454032</div><div class="s">Em atendimento · 5585…</div></div>
+          <div class="ic call">📞</div>
+          <div class="ic call">📞</div>
+          <div class="ic btn dots">⋮</div>
+        </div>
+        <div class="brief">✨ Brief <span class="cal">📅 hoje</span><span class="chev">⌄</span></div>
+        <div class="msgs">
+          <div class="row out"><div class="b out"><div class="nm">Dayane Rios</div>te aguardamos as 15h<div class="t">11:29 ✓</div></div></div>
+          <div class="row"><div class="b in">Bom dia<div class="t">11:26</div></div></div>
+        </div>
+        <div class="composer">
+          <div class="cbtn ia">✦</div>
+          <div class="cbtn zap">⚡</div>
+          <div class="cbtn">📎</div>
+          <div class="cinput">Bom dia! 😊 Espe…</div>
+          <div class="cbtn">🎤</div>
+          <div class="send">➤</div>
+        </div>
+        <!-- open dropdown on top -->
+        <div class="backdrop"></div>
+        <div class="menu">
+          <div class="mi hot"><span class="e">🤖</span> Pausar bot (assumir)</div>
+          <div class="mi sep"><span class="e">📜</span> Linha do Tempo</div>
+          <div class="mi"><span class="e">📈</span> Pipeline</div>
+          <div class="mi"><span class="e">📅</span> Agendar</div>
+          <div class="mi"><span class="e">↔️</span> Transferir</div>
+          <div class="mi"><span class="e">🔗</span> Vincular</div>
+          <div class="mi sep"><span class="e">✅</span> Resolver</div>
+          <div class="mi"><span class="e">⛔</span> Fechar</div>
+          <div class="mi danger"><span class="e">🗑️</span> Excluir</div>
+        </div>
+      </div>
+      <p class="note">Tocar no ⋮ abre o menu <b>por cima</b> do chat (antes abria atrás e travava). As mesmas ações do desktop, agrupadas.</p>
+    </div>
+
+    <!-- FRAME 2: templates -->
+    <div class="col">
+      <span class="tag fix">Correção 2 — templates / respostas</span>
+      <div class="phone">
+        <div class="statusbar"><span>11:30</span><span>📶 🔋</span></div>
+        <div class="chead">
+          <div class="ic btn">‹</div>
+          <div class="av">5</div>
+          <div class="who"><div class="n">558596454032</div><div class="s">Em atendimento · 5585…</div></div>
+          <div class="ic call">📞</div>
+          <div class="ic call">📞</div>
+          <div class="ic btn dots">⋮</div>
+        </div>
+        <div class="brief">✨ Brief <span class="cal">📅 hoje</span><span class="chev">⌄</span></div>
+        <div class="msgs">
+          <div class="row out"><div class="b out"><div class="nm">Dayane Rios</div>segue nosso endereço novamente…<div class="t">11:29 ✓</div></div></div>
+        </div>
+        <!-- templates popover above composer -->
+        <div class="backdrop"></div>
+        <div class="pop">
+          <h4>📝 Respostas rápidas <span>3</span></h4>
+          <div class="ti"><div class="tt">Saudação inicial <span class="chip slash">/oi</span></div><div class="td">Olá! Aqui é da {{escritorio}}, como posso ajudar?</div></div>
+          <div class="ti"><div class="tt">Endereço <span class="chip slash">/end</span></div><div class="td">Seguimos na Rua Tomás Acioli 575, Joaquim Távora…</div></div>
+          <div class="ti"><div class="tt">Confirmar horário <span class="chip slash">/15h</span></div><div class="td">Te aguardamos às 15h. Posso confirmar?</div></div>
+          <div class="diveta"></div>
+          <h4>💬 Templates Meta (oficiais) <span>2</span></h4>
+          <div class="ti"><div class="tt">retorno_atendimento <span class="chip meta">PT-BR</span> <span class="chip aprov">aprovado</span></div><div class="td">Olá {{1}}, retomando seu atendimento sobre…</div></div>
+          <div class="ti"><div class="tt">lembrete_audiencia <span class="chip meta">PT-BR</span> <span class="chip aprov">aprovado</span></div><div class="td">Lembrete: sua audiência é dia {{1}} às {{2}}.</div></div>
+        </div>
+        <div class="arrow-zap">↑ abre daqui</div>
+        <div class="composer">
+          <div class="cbtn ia">✦</div>
+          <div class="cbtn zap" style="background:#ede9fe;border-radius:10px">⚡</div>
+          <div class="cbtn">📎</div>
+          <div class="cinput">Digite sua mensagem…</div>
+          <div class="cbtn">🎤</div>
+          <div class="send">➤</div>
+        </div>
+      </div>
+      <p class="note">O botão <b>⚡</b> volta ao composer no celular. Abre respostas rápidas (atalho <code>/</code>) <b>e</b> os templates oficiais da Meta para enviar fora da janela de 24h.</p>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <p><b>Resumo técnico das correções</b></p>
+    <p>• <b>Menu ⋮ e diálogos:</b> remover o <code>portal/z-[60]</code> que eu tinha colocado no chat e voltar ao <code>fixed inset-0 z-50</code> igual ao Devular. O chat continua em tela cheia com o composer no rodapé (o que resolveu isso foi tirar o teto de altura <code>max-h-[420px]</code> das mensagens, não o portal). Sem o portal, o ⋮ e os diálogos (Transferir, Agendar, Vincular, Resolver…) voltam a abrir por cima.</p>
+    <p>• <b>Templates:</b> remover o <code>mobile ? "hidden"</code> do botão ⚡, restaurando respostas rápidas + templates Meta no composer do celular.</p>
+    <p>Composer final no celular: <b>✦ IA · ⚡ templates · 📎 anexo · campo · 🎤 áudio · ➤ enviar</b>.</p>
+  </div>
+</body>
+</html>
