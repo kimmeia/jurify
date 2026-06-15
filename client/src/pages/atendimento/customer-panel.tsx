@@ -15,7 +15,7 @@
  * próprio atendimento. O atendente nunca sai da conversa.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -737,18 +737,59 @@ function AdicionarProcessoInline({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
+// ─── Seletor de responsável (usuário) ────────────────────────────────────────
+
+/**
+ * Dropdown de responsável da negociação. Lista a equipe (listarAtendentes).
+ * `autoSelecionarMeu` pré-seleciona o usuário atual quando o valor está vazio
+ * (criação de lead manual fica com quem cria, salvo escolha de outro).
+ */
+function ResponsavelSelect({
+  value, onChange, autoSelecionarMeu,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  autoSelecionarMeu?: boolean;
+}) {
+  const { data: atendentes } = trpc.crm.listarAtendentes.useQuery(undefined, { staleTime: 60_000 });
+  const { data: me } = trpc.auth.me.useQuery(undefined, { staleTime: 60_000 });
+
+  useEffect(() => {
+    if (!autoSelecionarMeu || value || !atendentes || !me) return;
+    const meu = (atendentes as any[]).find((a) => a.userId === me.id);
+    if (meu) onChange(String(meu.id));
+  }, [autoSelecionarMeu, value, atendentes, me, onChange]);
+
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="h-8 text-xs">
+        <SelectValue placeholder="Selecione o responsável" />
+      </SelectTrigger>
+      <SelectContent>
+        {(atendentes as any[] | undefined)?.map((a) => (
+          <SelectItem key={a.id} value={String(a.id)}>
+            {a.nome || a.email}{me && a.userId === me.id ? " (você)" : ""}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 // ─── Criar lead inline (popover) ─────────────────────────────────────────────
 
 function CriarLeadInline({ contatoId, onSuccess }: { contatoId: number; onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
   const [valorEstimado, setValorEstimado] = useState("");
   const [origem, setOrigem] = useState("");
+  const [responsavelId, setResponsavelId] = useState("");
 
   const mut = trpc.crm.criarLead.useMutation({
     onSuccess: () => {
       toast.success("Lead criado");
       setValorEstimado("");
       setOrigem("");
+      setResponsavelId("");
       setOpen(false);
       onSuccess();
     },
@@ -787,6 +828,10 @@ function CriarLeadInline({ contatoId, onSuccess }: { contatoId: number; onSucces
             className="h-8 text-xs"
           />
         </div>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground">Responsável</Label>
+          <ResponsavelSelect value={responsavelId} onChange={setResponsavelId} autoSelecionarMeu />
+        </div>
         <Button
           size="sm"
           className="w-full h-8 text-xs"
@@ -795,6 +840,7 @@ function CriarLeadInline({ contatoId, onSuccess }: { contatoId: number; onSucces
               contatoId,
               valorEstimado: valorEstimado || undefined,
               origemLead: origem || undefined,
+              responsavelId: responsavelId ? Number(responsavelId) : undefined,
             })
           }
           disabled={mut.isPending}
@@ -1003,6 +1049,7 @@ function EditarLeadInline({
   const [etapa, setEtapa] = useState<EtapaFunil>(lead.etapaFunil);
   const [valor, setValor] = useState(lead.valorEstimado || "");
   const [observacoes, setObservacoes] = useState(lead.observacoes || "");
+  const [responsavelId, setResponsavelId] = useState(lead.responsavelId ? String(lead.responsavelId) : "");
 
   const mut = trpc.crm.atualizarLead.useMutation({
     onSuccess: () => {
@@ -1095,6 +1142,10 @@ function EditarLeadInline({
           />
         </div>
         <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground">Responsável</Label>
+          <ResponsavelSelect value={responsavelId} onChange={setResponsavelId} />
+        </div>
+        <div className="space-y-1.5">
           <Label className="text-[10px] text-muted-foreground">Observações</Label>
           <Textarea
             placeholder="Anotações sobre essa negociação..."
@@ -1113,6 +1164,7 @@ function EditarLeadInline({
               etapaFunil: etapa,
               valorEstimado: valor || undefined,
               observacoes: observacoes || undefined,
+              responsavelId: responsavelId ? Number(responsavelId) : undefined,
             })
           }
           disabled={mut.isPending}

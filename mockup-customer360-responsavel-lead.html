@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Customer 360 — escolher responsável na nova negociação</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif}</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-4xl mx-auto px-5 py-8">
+
+  <header class="mb-6">
+    <div class="flex items-center gap-2 text-sm text-violet-600 font-semibold">
+      <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-violet-600 text-white text-xs font-bold">J.</span>
+      JuridFlow · Atendimento → Customer 360
+    </div>
+    <h1 class="text-2xl font-bold mt-2">Nova negociação: escolher o responsável (usuário)</h1>
+    <p class="text-slate-500 mt-1 text-[15px]">Hoje a negociação criada pelo Customer 360 cai no rodízio automático e não dá pra dizer <b>quem</b> fica responsável. A correção adiciona o seletor de <b>Responsável</b> na criação e na edição da negociação.</p>
+  </header>
+
+  <div class="grid md:grid-cols-2 gap-5 items-start">
+    <!-- ANTES -->
+    <div class="rounded-2xl border border-red-200 bg-white overflow-hidden">
+      <div class="px-4 py-2 bg-red-50 border-b border-red-100">
+        <span class="text-red-600 text-xs font-bold uppercase tracking-wide">Antes</span>
+        <span class="text-[11px] text-red-500 ml-2">sem escolher o responsável</span>
+      </div>
+      <div class="p-6 flex justify-center bg-slate-50">
+        <div class="w-64 rounded-xl border bg-white shadow-lg p-3 space-y-2">
+          <p class="text-xs font-semibold flex items-center gap-1.5">↗ Nova negociação</p>
+          <div>
+            <label class="text-[10px] text-slate-500">Valor estimado (R$)</label>
+            <div class="h-8 rounded-md border px-2 flex items-center text-xs text-slate-700">5000.00</div>
+          </div>
+          <div>
+            <label class="text-[10px] text-slate-500">Origem (opcional)</label>
+            <div class="h-8 rounded-md border px-2 flex items-center text-xs text-slate-400">Indicação, Google, etc.</div>
+          </div>
+          <button class="w-full h-8 rounded-md bg-blue-600 text-white text-xs font-medium">Criar lead</button>
+          <p class="text-[10px] text-red-500 text-center">⚠ cai no rodízio — não escolho quem</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEPOIS -->
+    <div class="rounded-2xl border border-emerald-200 bg-white overflow-hidden">
+      <div class="px-4 py-2 bg-emerald-50 border-b border-emerald-100">
+        <span class="text-emerald-700 text-xs font-bold uppercase tracking-wide">Depois</span>
+        <span class="text-[11px] text-emerald-600 ml-2">escolhe o responsável</span>
+      </div>
+      <div class="p-6 flex justify-center bg-slate-50">
+        <div class="w-64 rounded-xl border bg-white shadow-lg p-3 space-y-2">
+          <p class="text-xs font-semibold flex items-center gap-1.5">↗ Nova negociação</p>
+          <div>
+            <label class="text-[10px] text-slate-500">Valor estimado (R$)</label>
+            <div class="h-8 rounded-md border px-2 flex items-center text-xs text-slate-700">5000.00</div>
+          </div>
+          <div>
+            <label class="text-[10px] text-slate-500">Origem (opcional)</label>
+            <div class="h-8 rounded-md border px-2 flex items-center text-xs text-slate-400">Indicação, Google, etc.</div>
+          </div>
+          <!-- NOVO campo -->
+          <div class="rounded-md ring-2 ring-violet-300 p-1.5 -m-1.5 bg-violet-50/40">
+            <label class="text-[10px] text-violet-700 font-semibold flex items-center gap-1">👤 Responsável <span class="text-[9px] font-normal text-violet-400">novo</span></label>
+            <div class="h-8 rounded-md border bg-white px-2 flex items-center justify-between text-xs text-slate-700 mt-0.5">
+              <span class="flex items-center gap-1.5"><span class="h-4 w-4 rounded-full bg-blue-200 text-blue-700 text-[8px] flex items-center justify-center">P</span> Você (Pablo Sousa)</span>
+              <span class="text-slate-400">▾</span>
+            </div>
+          </div>
+          <button class="w-full h-8 rounded-md bg-blue-600 text-white text-xs font-medium">Criar lead</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- dropdown aberto (detalhe) -->
+  <div class="mt-5 rounded-2xl border bg-white p-5">
+    <p class="text-[13px] font-semibold mb-3">Seletor de responsável (lista a equipe)</p>
+    <div class="w-64 rounded-lg border shadow-sm overflow-hidden text-xs">
+      <div class="px-3 py-2 bg-violet-50 flex items-center gap-2"><span class="h-5 w-5 rounded-full bg-blue-200 text-blue-700 text-[9px] flex items-center justify-center">P</span> Você (Pablo Sousa) <span class="ml-auto text-violet-600">✓</span></div>
+      <div class="px-3 py-2 flex items-center gap-2 border-t"><span class="h-5 w-5 rounded-full bg-emerald-200 text-emerald-700 text-[9px] flex items-center justify-center">D</span> Dayane Rios</div>
+      <div class="px-3 py-2 flex items-center gap-2 border-t"><span class="h-5 w-5 rounded-full bg-amber-200 text-amber-700 text-[9px] flex items-center justify-center">I</span> Isaac Cavalcante</div>
+      <div class="px-3 py-2 flex items-center gap-2 border-t text-slate-500"><span class="h-5 w-5 rounded-full bg-slate-200 text-slate-600 text-[9px] flex items-center justify-center">⟳</span> Distribuir automático (rodízio)</div>
+    </div>
+    <p class="text-[12px] text-slate-500 mt-3">Padrão = <b>você</b> (quem está criando). A opção <b>“Distribuir automático”</b> mantém o comportamento atual (rodízio) pra quem preferir.</p>
+  </div>
+
+  <!-- editar negociação também -->
+  <div class="mt-5 rounded-2xl border bg-white p-5">
+    <p class="text-[13px] font-semibold mb-1">Na edição da negociação também</p>
+    <p class="text-[12px] text-slate-500 mb-3">O mesmo seletor entra no painel de editar a negociação (junto de Etapa, Valor, Observações), pra <b>reatribuir</b> o responsável depois.</p>
+    <div class="w-72 rounded-xl border bg-slate-50 p-3 space-y-2 text-xs">
+      <div><label class="text-[10px] text-slate-500">Etapa (coluna)</label><div class="h-8 rounded-md border bg-white px-2 flex items-center">Negociação</div></div>
+      <div><label class="text-[10px] text-slate-500">Valor estimado (R$)</label><div class="h-8 rounded-md border bg-white px-2 flex items-center">5000.00</div></div>
+      <div class="rounded-md ring-2 ring-violet-300 p-1.5 -m-0.5 bg-violet-50/40"><label class="text-[10px] text-violet-700 font-semibold">👤 Responsável <span class="text-[9px] font-normal text-violet-400">novo</span></label><div class="h-8 rounded-md border bg-white px-2 flex items-center justify-between mt-0.5">Dayane Rios <span class="text-slate-400">▾</span></div></div>
+      <div><label class="text-[10px] text-slate-500">Observações</label><div class="h-12 rounded-md border bg-white px-2 py-1 text-slate-400">Anotações…</div></div>
+    </div>
+  </div>
+
+  <!-- PLANO -->
+  <div class="mt-6 rounded-2xl border border-violet-200 bg-violet-50/40 p-5">
+    <h2 class="text-lg font-bold mb-3 text-violet-900">Plano de implementação</h2>
+    <ol class="space-y-2 text-[13px] text-slate-700 list-decimal pl-5">
+      <li><b>Frontend (Customer 360):</b> adiciona o seletor <b>Responsável</b> no popover “Nova negociação” e no painel de editar a negociação, populado por <code>crm.listarAtendentes</code>. Padrão = usuário atual; opção “Distribuir automático”.</li>
+      <li><b>Backend:</b> <code>crm.criarLead</code> passa a aceitar <code>responsavelId</code> opcional — se vier, usa ele; se não, mantém o rodízio (<code>distribuirLead</code>). <code>crm.atualizarLead</code> aceita <code>responsavelId</code> pra reatribuir.</li>
+      <li><b>Permissão:</b> mantém o gate atual (<code>pipeline/kanban · criar</code>); só dono/gestor/quem tem a flag pode escolher outro responsável que não ele mesmo.</li>
+      <li><b>Validação:</b> <code>pnpm check</code> + <code>pnpm test</code> + build do client.</li>
+    </ol>
+    <p class="text-[12px] text-slate-500 mt-4 border-t border-violet-200 pt-3">⚠️ <b>Confirme a interpretação:</b> entendi que falta <b>escolher o usuário/responsável</b> na negociação. Se o problema for outro (ex.: dá <b>erro</b> ao clicar em “Criar lead”), me diga o que aparece que eu corrijo o caminho certo.</p>
+  </div>
+
+  <p class="text-center text-[12px] text-slate-400 mt-8">Mockup para aprovação · JuridFlow</p>
+</div>
+</body>
+</html>
