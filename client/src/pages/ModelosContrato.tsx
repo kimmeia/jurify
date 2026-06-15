@@ -14,6 +14,14 @@ import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { GerarContratoDialog } from "@/components/GerarContratoDialog";
+import { SubirDocumentoAssinaturaDialog } from "@/components/SubirDocumentoAssinaturaDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,6 +60,7 @@ import {
   Wand2,
   FileSignature,
   Info,
+  ChevronDown,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
@@ -159,6 +168,8 @@ export default function ModelosContrato() {
   });
 
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [avulsoOpen, setAvulsoOpen] = useState(false);
+  const [subirOpen, setSubirOpen] = useState(false);
   const [editando, setEditando] = useState<ModeloLista | null>(null);
   const [excluindo, setExcluindo] = useState<ModeloLista | null>(null);
   const [chip, setChip] = useState<FiltroChip>("todos");
@@ -221,13 +232,38 @@ export default function ModelosContrato() {
               </p>
             </div>
             {isGestor && (
-              <Button
-                onClick={() => setUploadOpen(true)}
-                className="bg-white text-slate-900 hover:bg-slate-100 shadow-sm font-semibold"
-              >
-                <Plus className="h-4 w-4 mr-1.5" />
-                Novo modelo
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="bg-white text-slate-900 hover:bg-slate-100 shadow-sm font-semibold">
+                    <Plus className="h-4 w-4 mr-1.5" />
+                    Novo
+                    <ChevronDown className="h-4 w-4 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-72">
+                  <DropdownMenuItem onClick={() => setUploadOpen(true)} className="cursor-pointer items-start gap-2.5 py-2.5">
+                    <FileText className="h-4 w-4 mt-0.5 text-indigo-600" />
+                    <div>
+                      <p className="text-sm font-medium">Modelo reutilizável</p>
+                      <p className="text-[11px] text-muted-foreground">Sobe um .docx com placeholders pra reusar sempre.</p>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setAvulsoOpen(true)} className="cursor-pointer items-start gap-2.5 py-2.5">
+                    <PenLine className="h-4 w-4 mt-0.5 text-violet-600" />
+                    <div>
+                      <p className="text-sm font-medium">Contrato avulso</p>
+                      <p className="text-[11px] text-muted-foreground">Escolhe um modelo existente, preenche e gera (PDF ou assinatura).</p>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSubirOpen(true)} className="cursor-pointer items-start gap-2.5 py-2.5">
+                    <Upload className="h-4 w-4 mt-0.5 text-emerald-600" />
+                    <div>
+                      <p className="text-sm font-medium">Subir documento p/ assinatura</p>
+                      <p className="text-[11px] text-muted-foreground">Sobe um PDF/Word pronto e só posiciona as assinaturas.</p>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
 
@@ -465,6 +501,12 @@ export default function ModelosContrato() {
           }}
         />
       )}
+
+      {/* Contrato avulso: escolhe um modelo existente + cliente e gera. */}
+      <GerarContratoDialog open={avulsoOpen} onOpenChange={setAvulsoOpen} />
+
+      {/* Subir documento pronto (PDF/Word) só pra posicionar assinaturas. */}
+      <SubirDocumentoAssinaturaDialog open={subirOpen} onOpenChange={setSubirOpen} />
 
       {editando && (
         <MappingEditorDialog

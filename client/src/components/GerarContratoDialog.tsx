@@ -48,6 +48,7 @@ import {
   EditorPosicionamentoCampos,
   type CampoParaSalvar,
 } from "@/components/EditorPosicionamentoCampos";
+import { ClienteCombobox } from "@/pages/financeiro/ClienteCombobox";
 
 interface ModeloLista {
   id: number;
@@ -58,7 +59,9 @@ interface ModeloLista {
 }
 
 interface Props {
-  contatoId: number;
+  /** Ausente = modo avulso: o operador escolhe o cliente dentro do dialog
+   *  (aberto pela página Modelos). Presente = aberto do detalhe do cliente. */
+  contatoId?: number;
   contatoNome?: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -69,6 +72,10 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
   const { data: modelos, isLoading } = (trpc as any).modelosContrato.listar.useQuery(undefined, {
     enabled: open,
   });
+
+  const avulso = contatoId == null;
+  const [clienteAvulso, setClienteAvulso] = useState<{ id: number; nome: string } | null>(null);
+  const contatoIdEfetivo = contatoId ?? clienteAvulso?.id ?? null;
 
   const [modeloId, setModeloId] = useState<number | null>(null);
   const [valoresManuais, setValoresManuais] = useState<Record<string, string>>({});
@@ -92,6 +99,7 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
       setValoresManuais({});
       setLinkGerado(null);
       setEditorState(null);
+      setClienteAvulso(null);
     }
   }, [open]);
 
@@ -146,7 +154,7 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
           ? `${window.location.origin}${r.linkAssinatura}`
           : r.linkAssinatura;
       // Invalida lista do cliente independente do fluxo escolhido.
-      utils.assinaturas?.listarPorCliente?.invalidate?.({ contatoId });
+      if (contatoIdEfetivo != null) utils.assinaturas?.listarPorCliente?.invalidate?.({ contatoId: contatoIdEfetivo });
       if (modoPosicional) {
         // Fluxo NOVO (Fase 1): abre editor de posicionamento.
         // Usa endpoint dedicado /api/assinatura/pdf/:id em vez do path
@@ -199,19 +207,19 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
   const isPending = baixarMut.isPending || assinaturaMut.isPending;
 
   function handleBaixar() {
-    if (!modeloSelecionado) return;
+    if (!modeloSelecionado || contatoIdEfetivo == null) return;
     baixarMut.mutate({
       modeloId: modeloSelecionado.id,
-      contatoId,
+      contatoId: contatoIdEfetivo,
       valoresManuais: placeholdersManuais.length > 0 ? valoresManuais : undefined,
     });
   }
 
   function handleEnviarParaAssinatura() {
-    if (!modeloSelecionado) return;
+    if (!modeloSelecionado || contatoIdEfetivo == null) return;
     assinaturaMut.mutate({
       modeloId: modeloSelecionado.id,
-      contatoId,
+      contatoId: contatoIdEfetivo,
       valoresManuais: placeholdersManuais.length > 0 ? valoresManuais : undefined,
     });
   }
@@ -265,7 +273,11 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
             Gerar contrato
           </DialogTitle>
           <DialogDescription>
-            {contatoNome ? `Cliente: ${contatoNome}` : "Escolha um modelo e preencha os campos manuais."}
+            {contatoNome
+              ? `Cliente: ${contatoNome}`
+              : avulso
+                ? "Escolha o cliente, o modelo e preencha os campos."
+                : "Escolha um modelo e preencha os campos manuais."}
           </DialogDescription>
         </DialogHeader>
 
@@ -301,6 +313,18 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
           </div>
         ) : (
           <div className="space-y-4 py-2">
+            {avulso && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Cliente *</Label>
+                <ClienteCombobox
+                  value={clienteAvulso ? String(clienteAvulso.id) : ""}
+                  onChange={(id, cli) =>
+                    setClienteAvulso(id && cli ? { id: Number(id), nome: cli.contatoNome } : null)
+                  }
+                  placeholder="Busque o cliente por nome, CPF ou telefone..."
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs">Modelo *</Label>
               {isLoading ? (
@@ -444,7 +468,7 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
               <Button
                 variant="outline"
                 onClick={handleBaixar}
-                disabled={!modeloSelecionado || !todosPreenchidos || isPending}
+                disabled={!modeloSelecionado || !todosPreenchidos || isPending || contatoIdEfetivo == null}
               >
                 {baixarMut.isPending ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -455,7 +479,7 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
               </Button>
               <Button
                 onClick={handleEnviarParaAssinatura}
-                disabled={!modeloSelecionado || !todosPreenchidos || isPending}
+                disabled={!modeloSelecionado || !todosPreenchidos || isPending || contatoIdEfetivo == null}
               >
                 {assinaturaMut.isPending ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

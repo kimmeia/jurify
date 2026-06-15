@@ -16,6 +16,8 @@ import { eq, and, desc, sql, asc } from "drizzle-orm";
 import { toIsoString } from "../_core/dates";
 import crypto from "crypto";
 import { estamparAssinatura } from "./pdf-stamp-assinatura";
+import { converterDocxParaPdf } from "./docx-to-pdf";
+import { TRPCError } from "@trpc/server";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("router-assinaturas");
@@ -105,6 +107,94 @@ export const assinaturasRouter = router({
         token,
         linkAssinatura: `/assinar/${token}`,
       };
+    }),
+
+  /**
+   * Cria uma assinatura a partir de um documento JÁ PRONTO que o operador
+   * subiu (PDF ou Word) — fluxo "subir documento p/ assinatura", sem
+   * modelo nem placeholders. Word é convertido em PDF (o posicionador e o
+   * /assinar trabalham com PDF). Retorna {assinaturaId, documentoUrl} pra
+   * o front abrir o editor de posicionamento de campos.
+   *
+   * `arquivoUrl` vem do uploadRouter (/uploads/escritorio_<id>/<file>) —
+   * validamos que pertence ao escritório antes de tocar o disco.
+   */
+  criarDeUpload: protectedProcedure
+    .input(z.object({
+      contatoId: z.number(),
+      titulo: z.string().min(2).max(255),
+      descricao: z.string().max(512).optional(),
+      arquivoUrl: z.string().max(2048),
+      diasExpiracao: z.number().int().min(1).max(90).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Segurança: só aceita arquivo deste escritório (sem path traversal).
+      const prefixo = `/uploads/escritorio_${esc.escritorio.id}/`;
+      if (!input.arquivoUrl.startsWith(prefixo) || input.arquivoUrl.includes("..")) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo inválido." });
+      }
+      const origemPath = path.join(path.resolve("./uploads"), input.arquivoUrl.replace("/uploads/", ""));
+      if (!fs.existsSync(origemPath)) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Arquivo não encontrado — faça o upload novamente." });
+      }
+
+      // PDF segue direto; Word vira PDF.
+      const ext = (origemPath.toLowerCase().split(".").pop() || "");
+      let pdfBuffer: Buffer;
+      if (ext === "pdf") {
+        pdfBuffer = fs.readFileSync(origemPath);
+      } else if (ext === "docx" || ext === "doc") {
+        try {
+          pdfBuffer = await converterDocxParaPdf(fs.readFileSync(origemPath));
+        } catch (err: unknown) {
+          log.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao converter documento p/ PDF (subir p/ assinatura)");
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não consegui converter o Word em PDF. Tente subir o PDF direto." });
+        }
+      } else {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Formato não suportado. Envie PDF ou Word (.docx)." });
+      }
+
+      // Salva o PDF final no diretório de assinaturas (mesmo padrão de gerarComoAssinatura).
+      const escDir = path.join(path.resolve("./uploads/assinaturas"), `escritorio_${esc.escritorio.id}`);
+      ensureDir(escDir);
+      const pdfFilename = `${Date.now()}_${crypto.randomBytes(8).toString("hex")}.pdf`;
+      fs.writeFileSync(path.join(escDir, pdfFilename), pdfBuffer);
+      const documentoUrl = `/uploads/assinaturas/escritorio_${esc.escritorio.id}/${pdfFilename}`;
+
+      const [contato] = await db.select().from(contatos)
+        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!contato) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
+
+      const token = gerarToken();
+      const diasExp = input.diasExpiracao ?? 30;
+      const expiracao = new Date();
+      expiracao.setDate(expiracao.getDate() + diasExp);
+
+      const [result] = await db.insert(assinaturasDigitais).values({
+        escritorioId: esc.escritorio.id,
+        contatoId: input.contatoId,
+        titulo: input.titulo,
+        descricao: input.descricao || null,
+        documentoUrl,
+        assinantNome: contato.nome || null,
+        assinantEmail: contato.email || null,
+        assinantTelefone: contato.telefone || null,
+        tokenAssinatura: token,
+        enviadoPor: esc.colaborador.id,
+        status: "pendente",
+        expiracaoAt: expiracao,
+      });
+      const assinaturaId = (result as { insertId: number }).insertId;
+
+      log.info({ assinaturaId, contatoId: input.contatoId, escritorioId: esc.escritorio.id }, "Assinatura criada a partir de documento enviado");
+
+      return { assinaturaId, token, linkAssinatura: `/assinar/${token}`, documentoUrl };
     }),
 
   /** Marca como enviado (após enviar link por WhatsApp/email) */
