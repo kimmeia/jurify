@@ -15,6 +15,8 @@ import {
   montarSinalizacaoChamada,
   montarSinalFila,
   montarSinalEntrante,
+  descreverLigacao,
+  formatarDuracaoLigacao,
 } from "../../shared/whatsapp-calling-types";
 
 // ─── Helpers puros ───────────────────────────────────────────────────────────
@@ -178,6 +180,41 @@ describe("montarSinalEntrante", () => {
     expect(s.dados.callId).toBe("C1");
     expect(s.dados.direcao).toBe("entrada");
     expect(s.mensagem).toBe("Rafael");
+  });
+});
+
+describe("formatarDuracaoLigacao", () => {
+  it("formata segundos em M:SS", () => {
+    expect(formatarDuracaoLigacao(154)).toBe("2:34");
+    expect(formatarDuracaoLigacao(9)).toBe("0:09");
+    expect(formatarDuracaoLigacao(60)).toBe("1:00");
+  });
+  it("zero/nulo vira string vazia (sem '0:00' enganoso)", () => {
+    expect(formatarDuracaoLigacao(0)).toBe("");
+    expect(formatarDuracaoLigacao(null)).toBe("");
+    expect(formatarDuracaoLigacao(undefined)).toBe("");
+  });
+});
+
+describe("descreverLigacao", () => {
+  it("encerrada atendida: rótulo por direção + duração", () => {
+    expect(descreverLigacao("saida", "encerrada", 154)).toBe("Ligação realizada · 2:34");
+    expect(descreverLigacao("entrada", "encerrada", 72)).toBe("Chamada recebida · 1:12");
+  });
+  it("encerrada sem duração não anexa o tempo", () => {
+    expect(descreverLigacao("saida", "encerrada", 0)).toBe("Ligação realizada");
+  });
+  it("perdida/recusada/falha por direção", () => {
+    expect(descreverLigacao("entrada", "perdida")).toBe("Chamada perdida");
+    expect(descreverLigacao("saida", "perdida")).toBe("Não atendida");
+    expect(descreverLigacao("entrada", "rejeitada")).toBe("Chamada recusada");
+    expect(descreverLigacao("saida", "rejeitada")).toBe("Ligação recusada");
+    expect(descreverLigacao("entrada", "falha")).toBe("Falha na ligação");
+  });
+  it("em andamento e toque", () => {
+    expect(descreverLigacao("entrada", "em_andamento")).toBe("Em ligação…");
+    expect(descreverLigacao("saida", "tocando")).toBe("Chamando…");
+    expect(descreverLigacao("entrada", "tocando")).toBe("Chamada recebida");
   });
 });
 
