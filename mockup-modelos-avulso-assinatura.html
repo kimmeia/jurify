@@ -13,12 +13,12 @@
   .head .badge{display:inline-block;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;background:#fff;border:1px solid var(--border);color:var(--violet);padding:5px 14px;border-radius:999px;margin-bottom:14px}
   .head h1{font-size:24px;margin-bottom:8px}
   .head p{font-size:14px;color:var(--muted);max-width:720px;margin:0 auto}
+  .rev{display:inline-block;margin-top:10px;font-size:11.5px;background:#fef3c7;border:1px solid #fde68a;color:#92400e;border-radius:999px;padding:4px 12px}
   .sec{margin-bottom:34px}
   .sec h2{font-size:16.5px;margin-bottom:4px;display:flex;align-items:center;gap:9px}
   .sec h2 .n{width:25px;height:25px;border-radius:7px;background:var(--violet);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
   .sec .desc{font-size:13px;color:var(--muted);margin-bottom:16px;max-width:760px}
 
-  /* janela de app */
   .win{background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 10px 30px rgba(16,24,40,.10)}
   .win .bar{background:#f8fafc;border-bottom:1px solid #eef1f4;padding:8px 14px;font-size:12px;color:#64748b;display:flex;align-items:center;gap:7px}
   .win .bar .dotrow{display:flex;gap:5px;margin-right:6px}
@@ -33,7 +33,7 @@
   .btn-primary{background:var(--violet);color:#fff}
   .btn-out{background:#fff;border-color:var(--border);color:var(--ink)}
   .btn-emerald{background:var(--emerald);color:#fff}
-  .menu{position:absolute;right:0;top:46px;width:330px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 40px rgba(16,24,40,.18);padding:7px;z-index:5}
+  .menu{position:absolute;right:0;top:46px;width:340px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 40px rgba(16,24,40,.18);padding:7px;z-index:5}
   .mi{display:flex;gap:12px;align-items:flex-start;padding:11px;border-radius:10px}
   .mi:hover{background:#f5f3ff}
   .mi .ic{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
@@ -41,46 +41,51 @@
   .mi .ss{font-size:11px;color:var(--muted)}
   .mi .new{font-size:8.5px;font-weight:800;text-transform:uppercase;background:#dcfce7;color:#047857;padding:1px 6px;border-radius:999px;margin-left:6px;vertical-align:middle}
 
-  /* grade de modelos fake */
   .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;opacity:.55}
   .mcard{border:1px solid var(--border);border-radius:12px;height:96px;background:linear-gradient(135deg,#f5f3ff,#eef2ff);padding:12px}
   .mcard .mt{font-size:12px;font-weight:700;color:#475569}
 
-  /* form */
-  .field{margin-bottom:12px}
+  .field{margin-bottom:13px}
   .lab{font-size:11.5px;font-weight:600;color:#475569;margin-bottom:5px;display:block}
   .inp{border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:13px;background:#fff;width:100%;color:var(--ink)}
-  .inp.sel::after{content:"▾";float:right;color:#94a3b8}
+  .inp.sel{display:flex;justify-content:space-between;align-items:center}
+  .inp.sel::after{content:"▾";color:#94a3b8}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
-  /* editor de texto */
-  .ed-toolbar{display:flex;gap:4px;border:1px solid var(--border);border-bottom:none;border-radius:9px 9px 0 0;padding:6px 8px;background:#f8fafc;flex-wrap:wrap;align-items:center}
-  .ed-toolbar .tb{width:28px;height:26px;border-radius:6px;background:#fff;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;color:#475569}
-  .ed-toolbar .varbtn{margin-left:auto;font-size:11px;color:var(--violet);border:1px solid #ddd6fe;background:#f5f3ff;border-radius:7px;padding:4px 9px;font-weight:600}
-  .ed-area{border:1px solid var(--border);border-radius:0 0 9px 9px;padding:14px;font-size:13px;min-height:170px;line-height:1.7;color:#334155}
-  .ed-area .var{background:#ede9fe;color:#6d28d9;border-radius:4px;padding:0 4px;font-weight:600;font-size:12px}
+  /* dropdown de modelos (avulso) */
+  .modelos-dd{border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .modelos-dd .opt{display:flex;align-items:center;gap:10px;padding:10px 12px;font-size:13px;border-bottom:1px solid #f1f5f9}
+  .modelos-dd .opt:last-child{border-bottom:none}
+  .modelos-dd .opt.on{background:#f5f3ff}
+  .modelos-dd .opt .mi2{width:30px;height:30px;border-radius:8px;background:#eef2ff;color:#4f46e5;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .modelos-dd .opt .nm{font-weight:600}
+  .modelos-dd .opt .badge2{margin-left:auto;font-size:9px;font-weight:700;border-radius:999px;padding:2px 7px}
+  .b-ass{background:#ecfdf5;color:#047857}
+  .b-var{background:#eff6ff;color:#1d4ed8}
 
-  /* upload zone */
+  .campos{background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:12px}
+  .campos .ct{font-size:11px;font-weight:700;color:#475569;margin-bottom:9px}
+  .campos .auto{font-size:11px;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:7px;padding:6px 9px;margin-bottom:10px}
+  .campos .auto .v{font-family:ui-monospace,monospace;font-size:10.5px}
+
+  /* upload + posicionador (iguais ao anterior) */
   .drop{border:2px dashed #c7d2fe;border-radius:12px;background:#f5f3ff;padding:30px;text-align:center}
   .drop .big{font-size:30px}
   .drop .t1{font-size:14px;font-weight:700;margin-top:8px}
   .drop .t2{font-size:11.5px;color:var(--muted);margin-top:3px}
-
-  /* posicionador */
   .pos{display:flex;gap:14px}
   .palette{width:150px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
   .palette .pt{font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.04em}
   .chip{border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;background:#fff;color:#334155}
   .chip .g{width:9px;height:9px;border-radius:3px}
-  .doc{flex:1;background:#f1f5f9;border:1px solid var(--border);border-radius:10px;padding:16px;position:relative;min-height:300px}
+  .doc{flex:1;background:#f1f5f9;border:1px solid var(--border);border-radius:10px;padding:16px}
   .page{background:#fff;border:1px solid #e2e8f0;border-radius:4px;height:300px;position:relative;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:18px}
   .page .line{height:8px;background:#eef1f5;border-radius:3px;margin-bottom:9px}
-  .fieldbox{position:absolute;border:2px dashed;border-radius:6px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.7)}
+  .fieldbox{position:absolute;border:2px dashed;border-radius:6px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
   .fb-sig{border-color:#7c3aed;color:#6d28d9;background:#f5f3ff}
   .fb-date{border-color:#0ea5e9;color:#0369a1;background:#eff6ff}
 
   .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid #eef1f4}
-
   .reuso{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:10px 13px;font-size:12px;color:#065f46;margin-top:12px}
   .reuso b{font-weight:700}
   table{width:100%;border-collapse:collapse;font-size:12.8px;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
@@ -98,16 +103,15 @@
   <div class="head">
     <div class="badge">Mockup para aprovação · módulo Modelos</div>
     <h1>📄 Modelos: contrato avulso + subir documento p/ assinatura</h1>
-    <p>Hoje, pra gerar um contrato é preciso ter um <b>modelo .docx</b> cadastrado com placeholders. A proposta
-    adiciona dois caminhos rápidos: escrever um <b>contrato avulso</b> na hora, e <b>subir um documento pronto</b>
-    (PDF/Word) só pra posicionar as assinaturas. Reaproveita todo o fluxo de assinatura digital que já existe.</p>
+    <p>Dois caminhos rápidos novos na página Modelos: gerar um <b>contrato avulso a partir de um modelo existente</b>
+    (sem precisar entrar no cadastro do cliente) e <b>subir um documento pronto</b> só pra posicionar as assinaturas.</p>
+    <div class="rev">↻ Revisado: o contrato avulso parte de um modelo já existente — não é escrever do zero.</div>
   </div>
 
   <!-- 1. menu Novo -->
   <div class="sec">
     <h2><span class="n">1</span> O botão "Novo" passa a oferecer 3 caminhos</h2>
-    <p class="desc">Mesma página de Modelos. O botão vira um menu com as opções — a primeira é a de hoje; as duas
-    de baixo são novas.</p>
+    <p class="desc">Mesma página de Modelos. A primeira opção é a de hoje; as duas de baixo são novas.</p>
     <div class="win">
       <div class="bar"><span class="dotrow"><i style="background:#f87171"></i><i style="background:#fbbf24"></i><i style="background:#34d399"></i></span> juridflow.com.br/modelos-contrato</div>
       <div class="body">
@@ -117,7 +121,7 @@
             <span class="btn btn-primary">＋ Novo ▾</span>
             <div class="menu">
               <div class="mi"><span class="ic" style="background:#eef2ff;color:#4f46e5">📑</span><div><div class="tt">Modelo reutilizável</div><div class="ss">Sobe um .docx com placeholders ({{cliente.nome}}) pra reusar sempre. (como é hoje)</div></div></div>
-              <div class="mi"><span class="ic" style="background:#f5f3ff;color:#7c3aed">✍️</span><div><div class="tt">Contrato avulso <span class="new">novo</span></div><div class="ss">Escreve ou cola o texto agora, preenche e gera. Para um contrato único, sem virar modelo.</div></div></div>
+              <div class="mi"><span class="ic" style="background:#f5f3ff;color:#7c3aed">✍️</span><div><div class="tt">Contrato avulso <span class="new">novo</span></div><div class="ss">Escolhe um <b>modelo existente</b>, preenche e gera um contrato pontual — PDF ou enviar p/ assinatura. Sem entrar no cliente.</div></div></div>
               <div class="mi"><span class="ic" style="background:#ecfdf5;color:#059669">📤</span><div><div class="tt">Subir documento p/ assinatura <span class="new">novo</span></div><div class="ss">Sobe um PDF/Word já pronto e só posiciona as assinaturas. Sem placeholders.</div></div></div>
             </div>
           </div>
@@ -131,32 +135,39 @@
     </div>
   </div>
 
-  <!-- 2. contrato avulso -->
+  <!-- 2. contrato avulso (REVISADO) -->
   <div class="sec">
-    <h2><span class="n">2</span> Contrato avulso — escrever e enviar na hora</h2>
-    <p class="desc">Um editor simples: cliente, título e o texto do contrato (com opção de inserir variáveis como
-    {{cliente.nome}} / {{cliente.cpf}}, que são preenchidas automaticamente). No fim: gerar PDF ou já enviar pra assinatura.</p>
-    <div class="win" style="max-width:680px;margin:0 auto">
+    <h2><span class="n">2</span> Contrato avulso — a partir de um modelo existente</h2>
+    <p class="desc">Você escolhe um dos modelos já cadastrados, indica o cliente (as variáveis {{cliente.*}} são
+    preenchidas sozinhas) e preenche só os campos manuais do modelo. No fim: gerar PDF ou enviar pra assinatura.
+    É o mesmo gerador que hoje só abre dentro do cliente — agora acessível direto em Modelos.</p>
+    <div class="win" style="max-width:700px;margin:0 auto">
       <div class="bar"><span class="dotrow"><i style="background:#f87171"></i><i style="background:#fbbf24"></i><i style="background:#34d399"></i></span> Novo contrato avulso</div>
       <div class="body">
-        <div class="row2">
-          <div class="field"><span class="lab">Cliente</span><div class="inp sel">Rafael Rocha</div></div>
-          <div class="field"><span class="lab">Título do contrato</span><div class="inp">Contrato de prestação de serviços</div></div>
+        <div class="field">
+          <span class="lab">1 · Escolha o modelo</span>
+          <div class="modelos-dd">
+            <div class="opt on"><span class="mi2">📑</span><span class="nm">Contrato de Honorários</span><span class="badge2 b-ass">assinatura</span></div>
+            <div class="opt"><span class="mi2">📑</span><span class="nm">Procuração Ad Judicia</span><span class="badge2 b-var">variáveis</span></div>
+            <div class="opt"><span class="mi2">📑</span><span class="nm">Acordo Extrajudicial</span><span class="badge2 b-ass">assinatura</span></div>
+          </div>
         </div>
         <div class="field">
-          <span class="lab">Texto do contrato</span>
-          <div class="ed-toolbar">
-            <span class="tb" style="font-weight:800">B</span><span class="tb" style="font-style:italic">I</span><span class="tb" style="text-decoration:underline">U</span><span class="tb">‹/›</span><span class="tb">≡</span><span class="tb">•</span>
-            <span class="varbtn">+ Inserir variável</span>
-          </div>
-          <div class="ed-area">
-            Pelo presente instrumento, <span class="var">{{cliente.nome}}</span>, inscrito no CPF
-            <span class="var">{{cliente.cpf}}</span>, contrata os serviços advocatícios de
-            <span class="var">{{escritorio.nome}}</span> para…<br/><br/>
-            Cláusula 1ª — Do objeto. O presente contrato tem por objeto…
+          <span class="lab">2 · Cliente</span>
+          <div class="inp sel">Rafael Rocha <span></span></div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <span class="lab">3 · Preencher</span>
+          <div class="campos">
+            <div class="auto">✓ Preenchido automático do cliente: <span class="v">{{cliente.nome}}</span>, <span class="v">{{cliente.cpf}}</span>, <span class="v">{{escritorio.nome}}</span></div>
+            <div class="ct">Campos manuais deste modelo</div>
+            <div class="row2">
+              <div><span class="lab">Valor dos honorários</span><div class="inp">R$ 5.000,00</div></div>
+              <div><span class="lab">Forma de pagamento</span><div class="inp">3x no cartão</div></div>
+            </div>
           </div>
         </div>
-        <div class="reuso">✓ <b>Reaproveita:</b> geração de PDF e o catálogo de variáveis já existentes nos modelos.</div>
+        <div class="reuso">✓ <b>Reaproveita:</b> o gerador de contrato (GerarContratoDialog) e o catálogo de variáveis que já existem — só ganham um ponto de entrada na página Modelos.</div>
         <div class="foot">
           <span class="btn btn-out">📄 Gerar PDF</span>
           <span class="btn btn-emerald">✍️ Enviar para assinatura →</span>
@@ -175,7 +186,7 @@
       <div class="bar"><span class="dotrow"><i style="background:#f87171"></i><i style="background:#fbbf24"></i><i style="background:#34d399"></i></span> Subir documento p/ assinatura · passo 1</div>
       <div class="body">
         <div class="row2" style="margin-bottom:14px">
-          <div class="field" style="margin:0"><span class="lab">Cliente</span><div class="inp sel">Rafael Rocha</div></div>
+          <div class="field" style="margin:0"><span class="lab">Cliente</span><div class="inp sel">Rafael Rocha <span></span></div></div>
           <div class="field" style="margin:0"><span class="lab">Título</span><div class="inp">Contrato de honorários — Rafael</div></div>
         </div>
         <div class="drop">
@@ -209,7 +220,7 @@
             </div>
           </div>
         </div>
-        <div class="reuso">✓ <b>Reaproveita 100%:</b> este é o mesmo editor de posicionamento que já existe ao gerar contrato a partir de modelo (campos Assinatura/Data/Nome/CPF, coordenadas no PDF) + o fluxo público <b>/assinar/:token</b>.</div>
+        <div class="reuso">✓ <b>Reaproveita 100%:</b> mesmo editor de posicionamento que já existe ao gerar contrato a partir de modelo (campos Assinatura/Data/Nome/CPF) + o fluxo público <b>/assinar/:token</b>.</div>
         <div class="foot">
           <span class="btn btn-out">Salvar rascunho</span>
           <span class="btn btn-emerald">Enviar para o cliente →</span>
@@ -223,18 +234,20 @@
     <h2><span class="n">4</span> O que é novo × o que já existe</h2>
     <table>
       <tr><th>Item</th><th>Situação</th></tr>
-      <tr><td>Posicionar assinaturas</td><td>✅ Já existe (EditorPosicionamentoCampos) — será reusado nos dois fluxos novos.</td></tr>
-      <tr><td>Criar assinatura + link /assinar</td><td>✅ Já existe — aceita um documento por URL e gera o link público.</td></tr>
-      <tr><td>Word → PDF</td><td>✅ Já existe (conversor usado nos modelos) — reusado no "subir documento".</td></tr>
+      <tr><td>Gerar contrato a partir de modelo</td><td>✅ Já existe (hoje só abre dentro do cliente) — vira o "contrato avulso" com ponto de entrada em Modelos.</td></tr>
+      <tr><td>Posicionar assinaturas</td><td>✅ Já existe (EditorPosicionamentoCampos) — reusado nos dois caminhos.</td></tr>
+      <tr><td>Criar assinatura + link /assinar</td><td>✅ Já existe — aceita documento por URL e gera o link público.</td></tr>
+      <tr><td>Word → PDF</td><td>✅ Já existe — reusado no "subir documento".</td></tr>
       <tr><td>Menu "Novo" com 3 opções</td><td>🆕 Pequeno ajuste de UI na página Modelos.</td></tr>
-      <tr><td>Subir documento avulso p/ assinar</td><td>🆕 Tela de upload (PDF/Word) + cliente → cai direto no posicionador. Sem placeholders.</td></tr>
-      <tr><td>Contrato avulso (editor)</td><td>🆕 Editor de texto com variáveis → gera PDF / envia p/ assinatura. (o maior dos dois)</td></tr>
+      <tr><td>Contrato avulso (escolher modelo em Modelos)</td><td>🆕 Abre o gerador a partir da página Modelos + escolher o cliente ali.</td></tr>
+      <tr><td>Subir documento avulso p/ assinar</td><td>🆕 Tela de upload (PDF/Word) + cliente → cai direto no posicionador.</td></tr>
     </table>
-    <p class="desc" style="margin-top:12px">Decisões pra confirmar: <b>(a)</b> no contrato avulso, ofereço um checkbox
-    "salvar também como modelo" pra reaproveitar depois? <b>(b)</b> o "subir documento" aceita PDF e Word — confirma os dois?</p>
+    <p class="desc" style="margin-top:12px">Decisões pra confirmar: <b>(a)</b> no contrato avulso, o cliente é sempre
+    do CRM (variáveis automáticas) ou quer também permitir <b>preencher tudo manual</b> pra alguém não cadastrado?
+    <b>(b)</b> o "subir documento" aceita PDF e Word — confirma os dois?</p>
   </div>
 
-  <p class="foot-note"><b>Nada foi implementado.</b> Aprovando (e respondendo a/b), eu implemento as duas opções. Posso começar pela mais simples (subir documento) e depois o contrato avulso, se preferir entregar em partes.</p>
+  <p class="foot-note"><b>Nada foi implementado.</b> Aprovando (e respondendo a/b), eu implemento. Posso começar pelo "subir documento" (quase só plugar o que já existe) e depois o "contrato avulso".</p>
 
 </div>
 </body>
