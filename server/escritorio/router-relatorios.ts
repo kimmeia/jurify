@@ -20,12 +20,17 @@ import {
   agendamentos, conversas, mensagens, leads, contatos, calculosHistorico,
   kanbanCards, kanbanColunas, kanbanMovimentacoes,
   colaboradores, setores, asaasCobrancas, categoriasCobranca,
-  comissoesFechadas, users, canaisIntegrados,
+  comissoesFechadas, users, canaisIntegrados, chamadas,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
 import { buildFiltroComissaoSQL } from "./router-financeiro";
+import {
+  agregarLigacoes,
+  agregarLigacoesPorAtendente,
+  agregarLigacoesPorDia,
+} from "./relatorio-ligacoes";
 import {
   resolverPeriodoNoFuso,
   subtrairUmMesISO,
@@ -640,6 +645,48 @@ export const relatoriosRouter = router({
     const nomePorColab = new Map<number, { nome: string; email: string }>();
     for (const c of todosColabRows) nomePorColab.set(c.id, { nome: c.nome || c.email || `#${c.id}`, email: c.email || "" });
 
+    // ─── Ligações (tabela chamadas) — mesmos filtros do relatório ───────
+    const baseCham = and(
+      eq(chamadas.escritorioId, eid),
+      gte(chamadas.createdAt, dataInicio),
+      lte(chamadas.createdAt, dataFim),
+      ...(colaboradorIds ? [inArray(chamadas.atendenteId, colaboradorIds)] : []),
+      ...(input?.canalId ? [eq(chamadas.canalId, input.canalId)] : []),
+    );
+    const [chamGeral, chamPorAtend, chamPorDiaRows] = await Promise.all([
+      db.select({
+        direcao: chamadas.direcao,
+        status: chamadas.status,
+        total: sql<number>`COUNT(*)`,
+        durTotal: sql<number>`COALESCE(SUM(${chamadas.duracaoSegundos}), 0)`,
+      }).from(chamadas).where(baseCham).groupBy(chamadas.direcao, chamadas.status),
+      db.select({
+        colabId: chamadas.atendenteId,
+        direcao: chamadas.direcao,
+        status: chamadas.status,
+        total: sql<number>`COUNT(*)`,
+        durTotal: sql<number>`COALESCE(SUM(${chamadas.duracaoSegundos}), 0)`,
+      }).from(chamadas).where(baseCham).groupBy(chamadas.atendenteId, chamadas.direcao, chamadas.status),
+      db.select({
+        dia: sql<string>`DATE(${chamadas.createdAt})`,
+        direcao: chamadas.direcao,
+        status: chamadas.status,
+        total: sql<number>`COUNT(*)`,
+      }).from(chamadas).where(baseCham)
+        .groupBy(sql`DATE(${chamadas.createdAt})`, chamadas.direcao, chamadas.status)
+        .orderBy(sql`DATE(${chamadas.createdAt})`),
+    ]);
+    const resumoLigacoes = agregarLigacoes(
+      chamGeral.map((r) => ({ direcao: String(r.direcao), status: String(r.status), total: Number(r.total), durTotal: Number(r.durTotal) })),
+    );
+    const ligacoesPorAtendente = agregarLigacoesPorAtendente(
+      chamPorAtend.map((r) => ({ colabId: r.colabId, direcao: String(r.direcao), status: String(r.status), total: Number(r.total), durTotal: Number(r.durTotal) })),
+      (id) => nomePorColab.get(id)?.nome || `#${id}`,
+    );
+    const ligacoesPorDia = agregarLigacoesPorDia(
+      chamPorDiaRows.map((r) => ({ dia: String(r.dia), direcao: String(r.direcao), status: String(r.status), total: Number(r.total) })),
+    );
+
     const porAtendente = new Map<number, {
       colabId: number;
       nome: string;
@@ -783,6 +830,10 @@ export const relatoriosRouter = router({
         total: Number(r.total),
       })),
       tabelaAtendentes,
+      // ─── Ligações (WhatsApp · voz) ───
+      ligacoes: resumoLigacoes,
+      ligacoesPorAtendente,
+      ligacoesPorDia,
       motivosPerda: (motivosRows as Array<{ motivo: string | null; total: number }>)
         .filter((r) => r.motivo)
         .map((r) => ({ motivo: r.motivo as string, total: Number(r.total) })),
