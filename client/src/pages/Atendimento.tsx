@@ -344,18 +344,54 @@ function NovoLeadDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOp
   </DialogContent></Dialog>);
 }
 
-function AddLeadFromConversaDialog({ open, onOpenChange, conversaId, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; conversaId: number; onSuccess: () => void }) {
+function AddLeadFromConversaDialog({ open, onOpenChange, conversaId, atendentes, conversaAtendenteId, usuarioUserId, onSuccess }: {
+  open: boolean; onOpenChange: (v: boolean) => void; conversaId: number;
+  atendentes: any[]; conversaAtendenteId?: number | null; usuarioUserId?: number;
+  onSuccess: () => void;
+}) {
   const [valor, setValor] = useState("");
+  const [etapa, setEtapa] = useState<EtapaFunil>("novo");
+  // Responsável padrão: atendente da conversa; se não houver, eu mesmo (quem
+  // está criando). Antes caía no rodízio e a oportunidade nascia no nome de outro.
+  const meuColaboradorId = atendentes.find((a: any) => a.userId === usuarioUserId)?.id;
+  const [responsavelId, setResponsavelId] = useState<number | undefined>(conversaAtendenteId ?? meuColaboradorId);
+  useEffect(() => {
+    if (open) setResponsavelId(conversaAtendenteId ?? meuColaboradorId);
+  }, [open, conversaAtendenteId, meuColaboradorId]);
+
   const criarLead = trpc.crm.criarLeadDeConversa.useMutation({
     onSuccess: () => { toast.success("Lead adicionado ao Pipeline!"); onOpenChange(false); setValor(""); onSuccess(); },
     onError: (e: any) => toast.error(e.message),
   });
   return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-violet-600" /> Adicionar ao Pipeline</DialogTitle></DialogHeader>
     <div className="space-y-3 py-2">
-      <div className="space-y-1.5"><Label>Valor estimado (opcional)</Label><Input placeholder="5000" value={valor} onChange={(e) => setValor(e.target.value)} /></div>
-      <p className="text-xs text-muted-foreground">O contato desta conversa será adicionado como novo lead na etapa "Novo" do pipeline.</p>
+      <div className="space-y-1.5">
+        <Label className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-blue-600" /> Responsável</Label>
+        <Select value={responsavelId != null ? String(responsavelId) : undefined} onValueChange={(v) => setResponsavelId(Number(v))}>
+          <SelectTrigger><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
+          <SelectContent>
+            {atendentes.map((a: any) => (
+              <SelectItem key={a.id} value={String(a.id)}>{a.nome}{a.userId === usuarioUserId ? " (você)" : ""}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">Vem preenchido com o atendente da conversa. O rodízio automático vale só pra leads que chegam sozinhos pelo WhatsApp.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5"><Label>Etapa</Label>
+          <Select value={etapa} onValueChange={(v) => setEtapa(v as EtapaFunil)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(Object.keys(ETAPA_FUNIL_LABELS) as EtapaFunil[]).map((e) => (
+                <SelectItem key={e} value={e}>{ETAPA_FUNIL_LABELS[e]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5"><Label>Valor estimado</Label><Input placeholder="5000" value={valor} onChange={(e) => setValor(e.target.value)} /></div>
+      </div>
     </div>
-    <DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => criarLead.mutate({ conversaId, valorEstimado: valor || undefined })} disabled={criarLead.isPending}>{criarLead.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlusCircle className="h-4 w-4 mr-2" />} Adicionar</Button></DialogFooter>
+    <DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => criarLead.mutate({ conversaId, valorEstimado: valor || undefined, responsavelId, etapaFunil: etapa })} disabled={criarLead.isPending}>{criarLead.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlusCircle className="h-4 w-4 mr-2" />} Adicionar</Button></DialogFooter>
   </DialogContent></Dialog>);
 }
 
@@ -1738,7 +1774,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       </div>
       )}
     </div>
-    {showAddLead && <AddLeadFromConversaDialog open={showAddLead} onOpenChange={setShowAddLead} conversaId={cid} onSuccess={onLeadUpdate} />}
+    {showAddLead && <AddLeadFromConversaDialog open={showAddLead} onOpenChange={setShowAddLead} conversaId={cid} atendentes={(atendentes || []) as any[]} conversaAtendenteId={(conv as any)?.atendenteId ?? null} usuarioUserId={(usuarioLogado as any)?.id} onSuccess={onLeadUpdate} />}
 
     {/* Dialog transferir */}
     {showTransferir && (
