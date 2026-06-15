@@ -744,7 +744,7 @@ export const mensagens = mysqlTable("mensagens", {
   conversaId: int("conversaIdMsg").notNull(),
   remetenteId: int("remetenteIdMsg"),
   direcao: mysqlEnum("direcaoMsg", ["entrada", "saida"]).notNull(),
-  tipo: mysqlEnum("tipoMsg", ["texto", "imagem", "audio", "video", "documento", "localizacao", "contato", "sticker", "sistema"]).notNull(),
+  tipo: mysqlEnum("tipoMsg", ["texto", "imagem", "audio", "video", "documento", "localizacao", "contato", "sticker", "sistema", "ligacao"]).notNull(),
   conteudo: text("conteudoMsg"),
   mediaUrl: varchar("mediaUrl", { length: 512 }),
   mediaType: varchar("mediaType", { length: 64 }),

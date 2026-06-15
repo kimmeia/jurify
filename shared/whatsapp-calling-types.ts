@@ -72,6 +72,46 @@ export function statusChamadaDeTerminate(metaStatus?: string): StatusChamada {
   }
 }
 
+/** Formata a duração de uma ligação em "M:SS" (vazio se zero/nulo). */
+export function formatarDuracaoLigacao(segundos: number | null | undefined): string {
+  if (!segundos || segundos <= 0) return "";
+  const m = Math.floor(segundos / 60);
+  const s = segundos % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/**
+ * Rótulo humano de uma ligação pro cartão na conversa e pro preview da lista.
+ * Combina direção + status e anexa a duração quando a chamada foi atendida.
+ * Pura.
+ */
+export function descreverLigacao(
+  direcao: DirecaoChamada,
+  status: StatusChamada,
+  duracaoSegundos?: number | null,
+): string {
+  const dur = formatarDuracaoLigacao(duracaoSegundos);
+  const saida = direcao === "saida";
+  switch (status) {
+    case "encerrada":
+      return saida
+        ? `Ligação realizada${dur ? ` · ${dur}` : ""}`
+        : `Chamada recebida${dur ? ` · ${dur}` : ""}`;
+    case "perdida":
+      return saida ? "Não atendida" : "Chamada perdida";
+    case "rejeitada":
+      return saida ? "Ligação recusada" : "Chamada recusada";
+    case "falha":
+      return "Falha na ligação";
+    case "em_andamento":
+      return "Em ligação…";
+    case "tocando":
+    case "conectando":
+    default:
+      return saida ? "Chamando…" : "Chamada recebida";
+  }
+}
+
 const soDigitos = (v?: string): string => (v || "").replace(/\D/g, "");
 
 /**
