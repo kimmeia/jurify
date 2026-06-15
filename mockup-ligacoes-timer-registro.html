@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Ligações — correção do timer + registro na conversa</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif; }
+  .ring-dots span { animation: blink 1.4s infinite both; }
+  .ring-dots span:nth-child(2) { animation-delay: .2s; }
+  .ring-dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%,80%,100% { opacity:.2 } 40% { opacity:1 } }
+  .pulse-soft { animation: pulse 2s cubic-bezier(.4,0,.6,1) infinite; }
+  @keyframes pulse { 50% { opacity:.6 } }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+<div class="max-w-6xl mx-auto px-5 py-8">
+
+  <!-- Cabeçalho -->
+  <header class="mb-8">
+    <div class="flex items-center gap-2 text-sm text-violet-600 font-semibold">
+      <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-violet-600 text-white text-xs font-bold">J.</span>
+      JuridFlow · Atendimento
+    </div>
+    <h1 class="text-2xl font-bold mt-2">Ligações — correção do timer + registro na conversa</h1>
+    <p class="text-slate-500 mt-1 text-[15px]">Dois ajustes: (1) o cronômetro só conta o tempo de conversa real; (2) toda ligação fica registrada na conversa do cliente — base pronta para o relatório.</p>
+  </header>
+
+  <!-- ============ PARTE 1: TIMER ============ -->
+  <section class="mb-12">
+    <div class="flex items-center gap-2 mb-4">
+      <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 text-violet-700 font-bold text-sm">1</span>
+      <h2 class="text-lg font-bold">O cronômetro estava contando antes do cliente atender</h2>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-5">
+      <!-- ANTES -->
+      <div class="rounded-2xl border border-red-200 bg-white overflow-hidden">
+        <div class="px-4 py-2 bg-red-50 border-b border-red-100 flex items-center gap-2">
+          <span class="text-red-600 text-xs font-bold uppercase tracking-wide">Antes · bug</span>
+          <span class="text-[11px] text-red-500">conta tempo enquanto só toca</span>
+        </div>
+        <div class="p-6 flex justify-center bg-slate-900/5">
+          <div class="bg-white rounded-2xl shadow-xl w-[300px] p-7 text-center space-y-5">
+            <div class="h-20 w-20 rounded-full mx-auto flex items-center justify-center bg-gradient-to-br from-green-500 to-emerald-600 pulse-soft">
+              <svg class="h-9 w-9 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            </div>
+            <div>
+              <p class="text-lg font-bold flex items-center justify-center gap-1.5">Rafael Rocha</p>
+              <p class="text-xs text-slate-400 mt-0.5">+558596042189</p>
+              <p class="text-2xl font-mono font-semibold text-slate-700 mt-2 bg-red-50 inline-block px-3 rounded">00:08</p>
+              <p class="text-[11px] text-red-500 mt-1">⚠ cliente ainda nem atendeu</p>
+            </div>
+            <div class="flex justify-center gap-4">
+              <div class="h-12 w-12 rounded-full border flex items-center justify-center text-slate-400">🎙️</div>
+              <div class="h-12 w-12 rounded-full bg-red-500 flex items-center justify-center text-white">📵</div>
+            </div>
+            <p class="text-[10px] text-slate-400">WhatsApp · Ligação oficial via Meta</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- DEPOIS -->
+      <div class="rounded-2xl border border-emerald-200 bg-white overflow-hidden">
+        <div class="px-4 py-2 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2">
+          <span class="text-emerald-700 text-xs font-bold uppercase tracking-wide">Depois · correto</span>
+          <span class="text-[11px] text-emerald-600">"Chamando…" sem relógio → relógio só ao atender</span>
+        </div>
+        <div class="p-6 grid grid-cols-2 gap-3 bg-slate-900/5">
+          <!-- toca -->
+          <div class="bg-white rounded-2xl shadow-lg p-5 text-center space-y-4">
+            <div class="h-16 w-16 rounded-full mx-auto flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 pulse-soft">
+              <svg class="h-7 w-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            </div>
+            <div>
+              <p class="font-bold text-sm">Rafael Rocha</p>
+              <p class="text-[10px] text-slate-400">+558596042189</p>
+              <p class="text-sm text-blue-600 mt-1.5 ring-dots font-medium">Chamando<span>.</span><span>.</span><span>.</span></p>
+              <p class="text-[10px] text-slate-400 mt-0.5">tocando no WhatsApp do cliente</p>
+            </div>
+            <div class="flex justify-center">
+              <div class="h-11 w-11 rounded-full bg-red-500 flex items-center justify-center text-white text-xs">cancelar</div>
+            </div>
+          </div>
+          <!-- em chamada -->
+          <div class="bg-white rounded-2xl shadow-lg p-5 text-center space-y-4">
+            <div class="h-16 w-16 rounded-full mx-auto flex items-center justify-center bg-gradient-to-br from-green-500 to-emerald-600 pulse-soft">
+              <svg class="h-7 w-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            </div>
+            <div>
+              <p class="font-bold text-sm">Rafael Rocha</p>
+              <p class="text-[10px] text-slate-400">+558596042189</p>
+              <p class="text-xl font-mono font-semibold text-emerald-600 mt-1.5">00:03</p>
+              <p class="text-[10px] text-emerald-600 mt-0.5">✓ atendeu — relógio começou agora</p>
+            </div>
+            <div class="flex justify-center gap-3">
+              <div class="h-11 w-11 rounded-full border flex items-center justify-center text-slate-400 text-xs">🎙️</div>
+              <div class="h-11 w-11 rounded-full bg-red-500 flex items-center justify-center text-white text-xs">📵</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4 rounded-xl bg-white border border-slate-200 p-4 text-[13px] text-slate-600 leading-relaxed">
+      <b class="text-slate-800">Como corrige:</b> o sinal que a Meta manda (SDP answer) serve para <i>montar o áudio</i> e chega ainda durante o toque — hoje ele é tratado como "atendeu". A correção separa os estados:
+      <span class="font-medium text-blue-600">Chamando…</span> (toca, sem relógio) →
+      <span class="font-medium text-emerald-600">Em chamada</span> (relógio zera e começa) só quando o áudio realmente passa a fluir.
+      E a <b>duração gravada</b> (na conversa e no relatório) usa o tempo <b>oficial que a Meta reporta no fim da ligação</b> — exato, à prova de divergência.
+    </div>
+  </section>
+
+  <!-- ============ PARTE 2: REGISTRO NA CONVERSA ============ -->
+  <section class="mb-12">
+    <div class="flex items-center gap-2 mb-4">
+      <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 text-violet-700 font-bold text-sm">2</span>
+      <h2 class="text-lg font-bold">Toda ligação registrada na conversa do cliente</h2>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-5">
+      <!-- ANTES -->
+      <div class="rounded-2xl border border-red-200 bg-white overflow-hidden">
+        <div class="px-4 py-2 bg-red-50 border-b border-red-100">
+          <span class="text-red-600 text-xs font-bold uppercase tracking-wide">Antes</span>
+          <span class="text-[11px] text-red-500 ml-2">ligação não deixa rastro nenhum no chat</span>
+        </div>
+        <div class="p-4 space-y-3 bg-slate-50 min-h-[260px]">
+          <div class="flex justify-start"><div class="bg-white border rounded-2xl rounded-bl-md px-3 py-2 text-[13px] shadow-sm">Oii <span class="text-[10px] text-slate-400 ml-1">10:10</span></div></div>
+          <div class="flex justify-end"><div class="bg-blue-600 text-white rounded-2xl rounded-br-md px-3 py-2 text-[13px] shadow-sm max-w-[80%]">Olá, me chamo Isaac, vou dar prosseguimento ao seu atendimento. <span class="text-[10px] opacity-70 ml-1">10:10 ✓</span></div></div>
+          <div class="flex justify-center"><span class="text-[11px] text-slate-400 italic">— ligação de 2 min aconteceu aqui, mas nada aparece —</span></div>
+          <div class="flex justify-start"><div class="bg-white border rounded-2xl rounded-bl-md px-3 py-2 text-[13px] shadow-sm">Teste <span class="text-[10px] text-slate-400 ml-1">11:58</span></div></div>
+        </div>
+      </div>
+
+      <!-- DEPOIS -->
+      <div class="rounded-2xl border border-emerald-200 bg-white overflow-hidden">
+        <div class="px-4 py-2 bg-emerald-50 border-b border-emerald-100">
+          <span class="text-emerald-700 text-xs font-bold uppercase tracking-wide">Depois</span>
+          <span class="text-[11px] text-emerald-600 ml-2">cartão de ligação no meio da conversa</span>
+        </div>
+        <div class="p-4 space-y-3 bg-slate-50 min-h-[260px]">
+          <div class="flex justify-start"><div class="bg-white border rounded-2xl rounded-bl-md px-3 py-2 text-[13px] shadow-sm">Oii <span class="text-[10px] text-slate-400 ml-1">10:10</span></div></div>
+          <div class="flex justify-end"><div class="bg-blue-600 text-white rounded-2xl rounded-br-md px-3 py-2 text-[13px] shadow-sm max-w-[80%]">Olá, me chamo Isaac, vou dar prosseguimento ao seu atendimento. <span class="text-[10px] opacity-70 ml-1">10:10 ✓</span></div></div>
+
+          <!-- cartão: ligação realizada (atendida) -->
+          <div class="flex justify-center">
+            <div class="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full pl-2 pr-3 py-1.5 text-[12px] shadow-sm">
+              <span class="h-6 w-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">↗</span>
+              <span class="font-medium">Ligação realizada · <span class="font-mono">02:34</span></span>
+              <span class="text-emerald-500/80">· por Pablo · 11:20</span>
+            </div>
+          </div>
+
+          <div class="flex justify-start"><div class="bg-white border rounded-2xl rounded-bl-md px-3 py-2 text-[13px] shadow-sm">Teste <span class="text-[10px] text-slate-400 ml-1">11:58</span></div></div>
+
+          <!-- cartão: chamada perdida -->
+          <div class="flex justify-center">
+            <div class="inline-flex items-center gap-2 bg-red-50 border border-red-200 text-red-800 rounded-full pl-2 pr-3 py-1.5 text-[12px] shadow-sm">
+              <span class="h-6 w-6 rounded-full bg-red-100 flex items-center justify-center text-red-600">↘</span>
+              <span class="font-medium">Chamada perdida</span>
+              <span class="text-red-500/80">· ninguém atendeu · 12:03</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- legenda dos tipos de cartão -->
+    <div class="mt-4 rounded-xl bg-white border border-slate-200 p-4">
+      <p class="text-[13px] font-semibold text-slate-700 mb-3">Estados do cartão de ligação</p>
+      <div class="flex flex-wrap gap-2.5 text-[12px]">
+        <span class="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full px-2.5 py-1"><b>↗</b> Ligação realizada · 02:34</span>
+        <span class="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full px-2.5 py-1"><b>↘</b> Chamada recebida · 01:12 · atendida por Dayane</span>
+        <span class="inline-flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-800 rounded-full px-2.5 py-1"><b>↘</b> Chamada perdida · ninguém atendeu</span>
+        <span class="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-full px-2.5 py-1"><b>↘</b> Chamada recusada</span>
+        <span class="inline-flex items-center gap-1.5 bg-slate-100 border border-slate-200 text-slate-600 rounded-full px-2.5 py-1"><b>↗</b> Não atendida (cliente não atendeu)</span>
+      </div>
+      <p class="text-[12px] text-slate-500 mt-3 leading-relaxed">
+        Um único cartão por ligação, criado quando a chamada começa e <b>finalizado com o resultado + duração</b> quando termina. Aparece na <b>conversa do Atendimento</b> e na <b>Linha do Tempo</b> do cliente.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ PARTE 3: RELATÓRIO (próximo passo, base já pronta) ============ -->
+  <section class="mb-12">
+    <div class="flex items-center gap-2 mb-4">
+      <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 text-violet-700 font-bold text-sm">3</span>
+      <h2 class="text-lg font-bold">Relatório de ligações <span class="text-xs font-normal text-slate-400">(base de dados já existe — fica pronto para ativar)</span></h2>
+    </div>
+
+    <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      <div class="px-5 py-3 border-b flex items-center justify-between">
+        <p class="font-semibold text-sm">Ligações · últimos 30 dias</p>
+        <span class="text-[11px] text-slate-400">exportável em PDF</span>
+      </div>
+      <div class="p-5 grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div class="rounded-xl bg-blue-50 border border-blue-100 p-3"><p class="text-[11px] text-blue-600">Feitas</p><p class="text-xl font-bold text-blue-800">128</p></div>
+        <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-3"><p class="text-[11px] text-emerald-600">Recebidas</p><p class="text-xl font-bold text-emerald-800">86</p></div>
+        <div class="rounded-xl bg-red-50 border border-red-100 p-3"><p class="text-[11px] text-red-600">Perdidas</p><p class="text-xl font-bold text-red-800">14</p></div>
+        <div class="rounded-xl bg-violet-50 border border-violet-100 p-3"><p class="text-[11px] text-violet-600">Taxa atendim.</p><p class="text-xl font-bold text-violet-800">86%</p></div>
+        <div class="rounded-xl bg-slate-50 border border-slate-200 p-3"><p class="text-[11px] text-slate-500">Duração média</p><p class="text-xl font-bold text-slate-700">3:12</p></div>
+      </div>
+      <div class="px-5 pb-5">
+        <table class="w-full text-[13px]">
+          <thead><tr class="text-slate-400 text-[11px] uppercase text-left border-b"><th class="py-2">Atendente</th><th>Feitas</th><th>Recebidas</th><th>Perdidas</th><th>Tempo total</th></tr></thead>
+          <tbody class="divide-y">
+            <tr><td class="py-2 font-medium">Pablo Sousa</td><td>54</td><td>31</td><td>4</td><td class="font-mono">2h41</td></tr>
+            <tr><td class="py-2 font-medium">Dayane Rios</td><td>48</td><td>39</td><td>6</td><td class="font-mono">3h08</td></tr>
+            <tr><td class="py-2 font-medium">Isaac Cavalcante</td><td>26</td><td>16</td><td>4</td><td class="font-mono">1h27</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="text-[12px] text-slate-500 mt-3">A tabela <code class="bg-slate-200 px-1 rounded">chamadas</code> já guarda direção, status, duração, quem atendeu e horários — então o relatório é praticamente uma consulta. Faço junto ou depois, você decide.</p>
+  </section>
+
+  <!-- ============ PLANO TÉCNICO ============ -->
+  <section>
+    <div class="rounded-2xl border border-violet-200 bg-violet-50/40 p-5">
+      <h2 class="text-lg font-bold mb-3 text-violet-900">Plano de implementação</h2>
+      <ol class="space-y-2.5 text-[13px] text-slate-700 list-decimal pl-5">
+        <li><b>Timer (frontend):</b> separar o estado <i>"Chamando…"</i> (toca, sem relógio) do <i>"Em chamada"</i>; iniciar o cronômetro só quando o áudio realmente flui (não ao receber o SDP da Meta).</li>
+        <li><b>Duração oficial (backend):</b> gravar a duração que a Meta reporta no <code>terminate</code> — fonte da verdade para conversa e relatório.</li>
+        <li><b>Cartão na conversa:</b> novo tipo <code>ligacao</code> na tabela <code>mensagens</code> (migration aditiva, não-destrutiva) com os dados da chamada no campo <code>payload</code>; um cartão por ligação, criado no início e finalizado no fim com resultado + duração.</li>
+        <li><b>Renderização:</b> cartão centralizado no chat do Atendimento (e na Linha do Tempo), com ícone de direção e cor por resultado.</li>
+        <li><b>Cobertura:</b> saída (realizada / não atendida), entrada (recebida / perdida / recusada).</li>
+        <li><b>Relatório (opcional agora):</b> tela "Ligações" com totais + por atendente + período, lendo de <code>chamadas</code>; export em PDF.</li>
+        <li><b>Validação:</b> <code>pnpm check</code> + <code>pnpm test</code> (novos testes para a normalização de status/duração e o upsert do cartão) + build do client.</li>
+      </ol>
+      <p class="text-[12px] text-slate-500 mt-4 border-t border-violet-200 pt-3">
+        ⚙️ <b>Nota técnica:</b> a documentação da Meta é ambígua sobre o momento exato em que o SDP answer chega (toque vs. atendido). Por isso a duração gravada se ancora no número oficial do <code>terminate</code>, e o gatilho do relógio ao vivo será confirmado com os logs reais em staging.
+      </p>
+    </div>
+  </section>
+
+  <p class="text-center text-[12px] text-slate-400 mt-8">Mockup para aprovação · JuridFlow</p>
+</div>
+</body>
+</html>
