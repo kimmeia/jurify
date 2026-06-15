@@ -41,6 +41,25 @@ export function resolverMediaPathLocal(mediaUrl: string): string {
 }
 
 /**
+ * Confirma que um colaborador pertence ao escritório. Usado antes de gravar um
+ * `responsavelId` vindo do client (seletor de responsável do Pipeline) — sem
+ * isso um id forjado atribuiria o lead a alguém de outro escritório.
+ */
+async function colaboradorDoEscritorio(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  escritorioId: number,
+  colaboradorId: number,
+): Promise<boolean> {
+  const { colaboradores } = await import("../../drizzle/schema");
+  const [c] = await db
+    .select({ id: colaboradores.id })
+    .from(colaboradores)
+    .where(and(eq(colaboradores.id, colaboradorId), eq(colaboradores.escritorioId, escritorioId)))
+    .limit(1);
+  return !!c;
+}
+
+/**
  * Envia o conteúdo pela Cloud API escolhendo o método certo pelo tipo.
  *
  * Mídia local (o caso normal: upload devolve `/uploads/...`) sobe os bytes
@@ -569,12 +588,22 @@ export const crmRouter = router({
       conversaId: z.number().optional(),
       valorEstimado: z.string().optional(),
       origemLead: z.string().max(128).optional(),
+      responsavelId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "pipeline", "criar", { fallbackModulo: "kanban" });
       if (!perm.allowed) throw new Error("Sem permissão para criar leads.");
-      const responsavelId = (await distribuirLead(perm.escritorioId, input.contatoId).catch(() => null)) ?? perm.colaboradorId;
-      const id = await criarLead({ escritorioId: perm.escritorioId, responsavelId, ...input });
+      // Lead criado à mão fica com quem criou (ou com o responsável escolhido),
+      // não com o rodízio (distribuirLead) — esse existe só pra lead que entra
+      // sozinho pelo WhatsApp. Sortear outro atendente aqui era o bug "criou no
+      // nome de outra pessoa".
+      const { responsavelId: respEscolhido, ...rest } = input;
+      const db = await getDb();
+      const responsavelId =
+        respEscolhido && db && (await colaboradorDoEscritorio(db, perm.escritorioId, respEscolhido))
+          ? respEscolhido
+          : perm.colaboradorId;
+      const id = await criarLead({ escritorioId: perm.escritorioId, responsavelId, ...rest });
       return { id, responsavelId };
     }),
 
@@ -644,6 +673,8 @@ export const crmRouter = router({
     .input(z.object({
       conversaId: z.number(),
       valorEstimado: z.string().optional(),
+      responsavelId: z.number().optional(),
+      etapaFunil: z.enum(["novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido"]).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -654,19 +685,28 @@ export const crmRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
       const [conv] = await db
-        .select({ contatoId: conversas.contatoId })
+        .select({ contatoId: conversas.contatoId, atendenteId: conversas.atendenteId })
         .from(conversas)
         .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)))
         .limit(1);
       if (!conv) throw new Error("Conversa não encontrada.");
 
-      const responsavelId = (await distribuirLead(esc.escritorio.id, conv.contatoId).catch(() => null)) ?? esc.colaborador.id;
+      // Responsável: escolha explícita do operador → atendente da conversa →
+      // quem está criando. NUNCA o rodízio (distribuirLead): ele existe pra lead
+      // que chega sozinho pelo WhatsApp; criar a oportunidade à mão sorteando
+      // outro atendente era o bug "cria a oportunidade no nome de outro".
+      const responsavelId =
+        input.responsavelId && (await colaboradorDoEscritorio(db, esc.escritorio.id, input.responsavelId))
+          ? input.responsavelId
+          : (conv.atendenteId ?? esc.colaborador.id);
+
       const id = await criarLead({
         escritorioId: esc.escritorio.id,
         contatoId: conv.contatoId,
         conversaId: input.conversaId,
         responsavelId,
         valorEstimado: input.valorEstimado,
+        etapaFunil: input.etapaFunil,
         origemLead: "whatsapp",
       });
       return { id, responsavelId };
