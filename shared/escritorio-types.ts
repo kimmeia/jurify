@@ -89,6 +89,25 @@ export function dataHojeBR(
 }
 
 /**
+ * Intervalo (YYYY-MM-DD) da grade mensal do calendário: do domingo que abre a
+ * primeira semana ao sábado que fecha a última. Usado pra buscar SÓ os eventos
+ * do mês visível, em vez do histórico inteiro do escritório (que estourava o
+ * teto da query e escondia os eventos futuros). Aritmética só de data — estável
+ * em qualquer fuso (construtor + getters locais).
+ */
+export function rangeGradeCalendario(mes: Date): { inicio: string; fim: string } {
+  const first = new Date(mes.getFullYear(), mes.getMonth(), 1);
+  const last = new Date(mes.getFullYear(), mes.getMonth() + 1, 0);
+  const inicio = new Date(first);
+  inicio.setDate(first.getDate() - first.getDay()); // volta pro domingo
+  const fim = new Date(last);
+  fim.setDate(last.getDate() + (6 - last.getDay())); // avança pro sábado
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return { inicio: fmt(inicio), fim: fmt(fim) };
+}
+
+/**
  * Rótulo de separador de data no chat/timeline, observado no fuso `tz`.
  *
  * "Hoje" / "Ontem" pros dois dias mais recentes; senão a data por extenso
