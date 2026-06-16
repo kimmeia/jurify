@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { rangeGradeCalendario } from "@shared/escritorio-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -522,13 +523,19 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
 // VIEW: CALENDÁRIO MENSAL
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar }: {
+function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRangeChange }: {
   eventos: any[];
   onCriarEvento?: () => void;
   onCardClick?: (ev: any) => void;
   podeCriar?: boolean;
+  /** Avisa o pai do intervalo (grade) do mês visível, pra buscar só ele. */
+  onRangeChange?: (r: { inicio: string; fim: string }) => void;
 }) {
   const [mes, setMes] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+
+  // Reporta o intervalo da grade ao navegar de mês → o pai recarrega só esse
+  // período (sem isso, o calendário pedia todo o histórico e estourava o teto).
+  useEffect(() => { onRangeChange?.(rangeGradeCalendario(mes)); }, [mes, onRangeChange]);
   const [diaSelecionado, setDiaSelecionado] = useState<Date | null>(() => new Date());
   const [bloquearDialog, setBloquearDialog] = useState<Date | null>(null);
 
@@ -2951,11 +2958,12 @@ export default function Agenda() {
     { refetchInterval: 30000 }
   );
 
-  // Pra o calendário: query separada SEM filtros — mostra todos os eventos
-  // do escritório, independente do que tá filtrado na lista. Refetch é
-  // menos frequente (60s) porque calendário é navegação, não dashboard.
+  // Pra o calendário: query separada SEM filtro de status (mostra todos),
+  // mas LIMITADA ao intervalo do mês visível — senão, com muitos eventos
+  // antigos, o teto da query enchia só de passado e o futuro sumia.
+  const [calRange, setCalRange] = useState(() => rangeGradeCalendario(new Date()));
   const { data: eventosCalendario } = trpc.agenda.listar.useQuery(
-    { fonte: "todos", status: undefined },
+    { fonte: "todos", status: undefined, dataInicio: calRange.inicio, dataFim: calRange.fim },
     { refetchInterval: 60000, enabled: tab === "calendario" },
   );
 
@@ -3115,6 +3123,7 @@ export default function Agenda() {
             onCriarEvento={() => setCriarOpen(true)}
             onCardClick={(ev) => setDetalhesEvento(ev)}
             podeCriar={podeCriar}
+            onRangeChange={setCalRange}
           />
         </TabsContent>
       </Tabs>
