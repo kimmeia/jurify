@@ -29,12 +29,23 @@ export interface CandidatoDistribuicao {
   ultimaDistribuicao: Date | string | null;
 }
 
+export type ModoDistribuicao = "todos" | "online_primeiro" | "somente_online";
+
+/** Capacidade efetiva: null ou ≤0 = SEM LIMITE (∞); caso contrário, o número. */
+function capacidadeMax(max: number | null): number {
+  return max == null || max <= 0 ? Infinity : max;
+}
+
 export function selecionarAtendenteRodizio(
   candidatos: CandidatoDistribuicao[],
   cargaPorId: ReadonlyMap<number, number>,
-  opts?: { somenteOnline?: boolean; agora?: Date },
+  opts?: { modoOnline?: ModoDistribuicao; somenteOnline?: boolean; agora?: Date },
 ): number | null {
   if (candidatos.length === 0) return null;
+
+  // Modo explícito vence; senão deriva do boolean legado `somenteOnline`.
+  const modo: ModoDistribuicao =
+    opts?.modoOnline ?? (opts?.somenteOnline ? "somente_online" : "online_primeiro");
 
   const agora = opts?.agora ?? new Date();
   const limiteOnline = agora.getTime() - JANELA_ONLINE_MS;
@@ -42,11 +53,14 @@ export function selecionarAtendenteRodizio(
     (c) => !!c.ultimaAtividade && new Date(c.ultimaAtividade).getTime() >= limiteOnline,
   );
 
-  const pool = opts?.somenteOnline
-    ? online
-    : online.length > 0
-      ? online
-      : candidatos;
+  const pool =
+    modo === "todos"
+      ? candidatos // ignora online: rodízio entre todos do setor
+      : modo === "somente_online"
+        ? online
+        : online.length > 0
+          ? online
+          : candidatos; // online_primeiro
   if (pool.length === 0) return null;
 
   const ordemRodizio = [...pool].sort((a, b) => {
@@ -57,7 +71,7 @@ export function selecionarAtendenteRodizio(
   });
 
   const comFolga = ordemRodizio.filter(
-    (c) => (cargaPorId.get(c.id) ?? 0) < Math.max(1, c.maxSimultaneos || 5),
+    (c) => (cargaPorId.get(c.id) ?? 0) < capacidadeMax(c.maxSimultaneos),
   );
 
   return (comFolga[0] ?? ordemRodizio[0]).id;

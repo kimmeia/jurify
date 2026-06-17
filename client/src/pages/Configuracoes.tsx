@@ -192,7 +192,7 @@ export default function Configuracoes() {
   const [editandoColab, setEditandoColab] = useState<any | null>(null);
   const [editColabCargoPersonalizadoId, setEditColabCargoPersonalizadoId] = useState<number | null>(null);
   const [editColabSetorId, setEditColabSetorId] = useState<number | null>(null);
-  const [editColabMaxAtend, setEditColabMaxAtend] = useState<number>(5);
+  const [editColabMaxAtend, setEditColabMaxAtend] = useState<number | null>(5); // null = sem limite
   const [editColabRecebeLeads, setEditColabRecebeLeads] = useState<boolean>(false);
   const [editColabMetaMensal, setEditColabMetaMensal] = useState<string>("");
   const [diagColabId, setDiagColabId] = useState<number | null>(null);
@@ -322,7 +322,7 @@ export default function Configuracoes() {
     setEditandoColab(c);
     setEditColabCargoPersonalizadoId(c.cargoPersonalizadoId ?? null);
     setEditColabSetorId(c.setorId ?? null);
-    setEditColabMaxAtend(c.maxAtendimentosSimultaneos ?? 5);
+    setEditColabMaxAtend(c.maxAtendimentosSimultaneos ?? null);
     setEditColabRecebeLeads(!!c.recebeLeadsAutomaticos);
     setEditColabMetaMensal(c.metaMensal != null ? String(c.metaMensal) : "");
   }
@@ -910,7 +910,7 @@ export default function Configuracoes() {
                                 </div>
                                 <div>
                                   <p className="text-slate-400 uppercase tracking-wider text-[9px]">Max atend.</p>
-                                  <p className="font-semibold tabular-nums">{c.maxAtendimentosSimultaneos ?? "—"}</p>
+                                  <p className="font-semibold tabular-nums">{c.maxAtendimentosSimultaneos == null ? "Sem limite" : c.maxAtendimentosSimultaneos}</p>
                                 </div>
                                 <div>
                                   <p className="text-slate-400 uppercase tracking-wider text-[9px]">Leads auto</p>
@@ -1353,9 +1353,19 @@ export default function Configuracoes() {
                     type="number"
                     min={1}
                     max={50}
-                    value={editColabMaxAtend}
+                    value={editColabMaxAtend ?? ""}
+                    disabled={editColabMaxAtend === null}
+                    placeholder={editColabMaxAtend === null ? "Sem limite" : undefined}
                     onChange={(e) => setEditColabMaxAtend(parseInt(e.target.value, 10) || 1)}
                   />
+                  <label className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editColabMaxAtend === null}
+                      onChange={(e) => setEditColabMaxAtend(e.target.checked ? null : 5)}
+                    />
+                    Sem limite (recebe sempre no rodízio)
+                  </label>
                 </div>
                 <div className="space-y-2">
                   <Label className="block">Recebe leads auto?</Label>

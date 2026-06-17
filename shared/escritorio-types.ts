@@ -334,7 +334,8 @@ export interface ColaboradorInfo {
   cargo: CargoColaborador;
   departamento?: string;
   ativo: boolean;
-  maxAtendimentosSimultaneos: number;
+  /** null = sem limite de atendimentos simultâneos. */
+  maxAtendimentosSimultaneos: number | null;
   recebeLeadsAutomaticos: boolean;
   createdAt: string;
 }

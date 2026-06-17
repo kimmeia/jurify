@@ -535,7 +535,15 @@ export interface ConfigDistribuirAtendimento {
   setorId?: number;
   /** Colaborador fixo (`colaboradores.id`) — usado quando modo="atendente_fixo". */
   atendenteId?: number;
-  /** true = só atendentes online (heartbeat ~10min); false = grupo todo. Só vale pra modo="setor". */
+  /**
+   * Quem entra no rodízio (modo="setor"):
+   *  - "todos": rodízio entre TODOS do setor, ignora online (default novo).
+   *  - "online_primeiro": só os online; ninguém online → todos.
+   *  - "somente_online": só os online; ninguém online → sem_atendente.
+   * Ausente = derivado de `somenteOnline` (compat com fluxos antigos).
+   */
+  modoDistribuicao?: "todos" | "online_primeiro" | "somente_online";
+  /** @deprecated Use `modoDistribuicao`. true→somente_online, false→online_primeiro. */
   somenteOnline?: boolean;
   /** Default false (sticky): respeita o atendente já atrelado à conversa.
    *  true = ignora sticky e roda round-robin SEMPRE — útil pra setor de fila
