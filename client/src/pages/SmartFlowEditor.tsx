@@ -997,11 +997,16 @@ function novoClienteId(): string {
 
 function criarNode(tipo: TipoPasso, y: number, config: Record<string, unknown> = {}): PassoNode {
   const meta = getTipoPassoMeta(tipo);
+  // Blocos novos de distribuição já nascem "Todos do setor" (rodízio entre
+  // todos, ignora online) — padrão mais intuitivo. Fluxos antigos não passam
+  // por aqui (são carregados do banco), então não mudam.
+  const configFinal: Record<string, unknown> =
+    tipo === "distribuir_atendimento" ? { modoDistribuicao: "todos", ...config } : config;
   return {
     id: novoNodeId(),
     type: "passo",
     position: { x: 80, y },
-    data: { tipo, config, label: meta.label, clienteId: novoClienteId() },
+    data: { tipo, config: configFinal, label: meta.label, clienteId: novoClienteId() },
   };
 }
 
