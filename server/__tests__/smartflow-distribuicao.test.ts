@@ -126,16 +126,39 @@ describe("selecionarAtendenteRodizio — capacidade como trava", () => {
     expect(selecionarAtendenteRodizio(candidatos, carga, { agora: AGORA })).toBe(2);
   });
 
-  it("maxSimultaneos nulo/0 cai no default 5", () => {
+  it("maxSimultaneos null/0 = SEM LIMITE (nunca trava a vaga)", () => {
     const candidatos = [
       cand(1, { ultimaAtividade: ONLINE, ultimaDistribuicao: dist(60), maxSimultaneos: null }),
-      cand(2, { ultimaAtividade: ONLINE, ultimaDistribuicao: dist(10) }),
+      cand(2, { ultimaAtividade: ONLINE, ultimaDistribuicao: dist(10), maxSimultaneos: 5 }),
     ];
-    const carga = new Map([[1, 5]]); // atinge o default 5 → pulado
-    expect(selecionarAtendenteRodizio(candidatos, carga, { agora: AGORA })).toBe(2);
+    const carga = new Map([[1, 50], [2, 1]]); // id 1 com 50 abertas, mas sem limite
+    // id 1 esperou mais (60>10) e tem folga (∞) → ganha mesmo lotado
+    expect(selecionarAtendenteRodizio(candidatos, carga, { agora: AGORA })).toBe(1);
   });
 
   it("lista vazia → null", () => {
     expect(selecionarAtendenteRodizio([], new Map(), { agora: AGORA })).toBeNull();
+  });
+});
+
+describe("selecionarAtendenteRodizio — modo 'todos' (ignora online)", () => {
+  it("distribui entre TODOS do setor mesmo havendo gente online", () => {
+    const candidatos = [
+      cand(1, { ultimaAtividade: OFFLINE, ultimaDistribuicao: dist(120) }), // offline, esperou mais
+      cand(2, { ultimaAtividade: ONLINE, ultimaDistribuicao: dist(10) }),
+    ];
+    // modo "todos": offline entra no rodízio; id 1 esperou mais → ganha
+    expect(selecionarAtendenteRodizio(candidatos, new Map(), { modoOnline: "todos", agora: AGORA })).toBe(1);
+    // contraste: "online primeiro" escolheria o online (id 2)
+    expect(selecionarAtendenteRodizio(candidatos, new Map(), { modoOnline: "online_primeiro", agora: AGORA })).toBe(2);
+  });
+
+  it("modo 'todos' ainda respeita capacidade quando há limite", () => {
+    const candidatos = [
+      cand(1, { ultimaAtividade: OFFLINE, ultimaDistribuicao: dist(120), maxSimultaneos: 3 }),
+      cand(2, { ultimaAtividade: OFFLINE, ultimaDistribuicao: dist(10), maxSimultaneos: 3 }),
+    ];
+    const carga = new Map([[1, 3]]); // id 1 no limite → pulado, vai pro 2
+    expect(selecionarAtendenteRodizio(candidatos, carga, { modoOnline: "todos", agora: AGORA })).toBe(2);
   });
 });

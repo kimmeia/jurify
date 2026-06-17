@@ -3825,8 +3825,15 @@ function ConfigDistribuirAtendimentoFields({
   const modo: "setor" | "atendente_fixo" = cfg.modo === "atendente_fixo" ? "atendente_fixo" : "setor";
   const setorId = typeof cfg.setorId === "number" ? cfg.setorId : 0;
   const atendenteId = typeof cfg.atendenteId === "number" ? cfg.atendenteId : 0;
-  const somenteOnline = cfg.somenteOnline === true;
   const redistribuirSempre = cfg.redistribuirSempre === true;
+  // Modo de rodízio: campo novo vence; fluxos antigos derivam do `somenteOnline`
+  // (mostra exatamente o que o motor executa).
+  const modoDistribuicao: "todos" | "online_primeiro" | "somente_online" =
+    cfg.modoDistribuicao === "todos" || cfg.modoDistribuicao === "online_primeiro" || cfg.modoDistribuicao === "somente_online"
+      ? cfg.modoDistribuicao
+      : cfg.somenteOnline === true
+        ? "somente_online"
+        : "online_primeiro";
   return (
     <div className="space-y-3">
       <div className="rounded-md bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-900 p-2">
@@ -3867,14 +3874,24 @@ function ConfigDistribuirAtendimentoFields({
               <p className="text-[10px] text-destructive mt-1">Nenhum setor cadastrado. Crie em <strong>Configurações → Equipe</strong> e vincule atendentes.</p>
             )}
           </div>
-          <label className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs">
-            <Checkbox checked={somenteOnline} onCheckedChange={(v) => onChange({ somenteOnline: v === true })} />
-            <span>
-              Só atendentes <strong>online</strong> (ativos nos últimos ~30 min) — ninguém online sai por "sem atendente".
-              <br />
-              <span className="text-[10px] text-muted-foreground">Desligado (padrão): rodízio um a um entre os online; todos offline → rodízio entre todos do setor. Quem está no limite de atendimentos é pulado.</span>
+          <div className="rounded border p-2 bg-muted/20">
+            <Label className="text-xs">Quem entra no rodízio</Label>
+            <Select value={modoDistribuicao} onValueChange={(v) => onChange({ modoDistribuicao: v })}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos do setor (ignora online)</SelectItem>
+                <SelectItem value="online_primeiro">Online primeiro</SelectItem>
+                <SelectItem value="somente_online">Somente online</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-[10px] text-muted-foreground block mt-1">
+              {modoDistribuicao === "todos"
+                ? "Rodízio um a um entre TODOS os atendentes do setor, dê igual quem está com o app aberto. Quem está no limite de atendimentos é pulado."
+                : modoDistribuicao === "somente_online"
+                  ? "Só atendentes online (ativos ~30 min). Ninguém online → sai por “sem atendente” (transbordo)."
+                  : "Só os online; se ninguém estiver online, rodízio entre todos. (“Online” = app do JuridFlow aberto nos últimos ~30 min.)"}
             </span>
-          </label>
+          </div>
           <label className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs">
             <Checkbox checked={redistribuirSempre} onCheckedChange={(v) => onChange({ redistribuirSempre: v === true })} />
             <span>

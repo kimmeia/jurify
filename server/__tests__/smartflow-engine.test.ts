@@ -2267,7 +2267,8 @@ describe("SmartFlow Engine", () => {
         { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "x", config: { template: "Sem atendente" } },
       ];
       const r = await executarCenario(passos, { conversaId: 9, contatoId: 5 }, exec);
-      expect(distribuirAtendimentoPorSetor).toHaveBeenCalledWith(expect.objectContaining({ setorId: 3, somenteOnline: true, conversaId: 9 }));
+      // `somenteOnline: true` (legado) é derivado pra modoDistribuicao="somente_online".
+      expect(distribuirAtendimentoPorSetor).toHaveBeenCalledWith(expect.objectContaining({ setorId: 3, modoDistribuicao: "somente_online", conversaId: 9 }));
       expect(r.contexto.atendenteEscolhidoNome).toBe("Maria");
       expect(r.contexto.atendenteEscolhidoId).toBe(12);
       // Alias curto pra interpolação em prompts ({{atendente}}).
@@ -2275,6 +2276,17 @@ describe("SmartFlow Engine", () => {
       expect(r.contexto.aguardandoMensagem).toBeFalsy(); // não para o bot
       expect(r.respostas.join(" ")).toContain("Você será atendido por Maria");
       expect(r.respostas.join(" ")).not.toContain("Sem atendente");
+    });
+
+    it("modoDistribuicao='todos' é repassado ao executor (rodízio entre todos do setor)", async () => {
+      const distribuirAtendimentoPorSetor = vi.fn().mockResolvedValue({ id: 7, nome: "João" });
+      const exec = criarMockExecutores({ distribuirAtendimentoPorSetor });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "distribuir_atendimento", clienteId: "d", config: { setorId: 3, modoDistribuicao: "todos" }, proximoSe: { atribuido: "ok", sem_atendente: "x" } },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "ok", config: { template: "ok" } },
+      ];
+      await executarCenario(passos, { conversaId: 9 }, exec);
+      expect(distribuirAtendimentoPorSetor).toHaveBeenCalledWith(expect.objectContaining({ setorId: 3, modoDistribuicao: "todos" }));
     });
 
     it("ninguém elegível → saída 'sem_atendente'", async () => {
