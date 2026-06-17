@@ -1031,7 +1031,8 @@ export async function distribuirLead(
           ));
 
         const carga = Number((cargaAnterior as { count: number } | undefined)?.count || 0);
-        const max = anteriorDisponivel.maxAtendimentosSimultaneos || 5;
+        const maxRaw = anteriorDisponivel.maxAtendimentosSimultaneos;
+        const max = maxRaw == null || maxRaw <= 0 ? Infinity : maxRaw; // null/0 = sem limite
 
         if (carga < max) {
           log.info({ atendenteId: anteriorDisponivel.id }, "Distribuição: retornando ao atendente anterior");
@@ -1072,7 +1073,8 @@ export async function distribuirLead(
 
   for (const at of candidatos) {
     const carga = cargaMap[at.id] || 0;
-    const max = at.maxAtendimentosSimultaneos || 5;
+    const maxRaw = at.maxAtendimentosSimultaneos;
+    const max = maxRaw == null || maxRaw <= 0 ? Infinity : maxRaw; // null/0 = sem limite
 
     if (carga >= max) continue; // Sobrecarregado
 

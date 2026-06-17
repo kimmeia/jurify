@@ -330,7 +330,8 @@ export const configuracoesRouter = router({
        *  Null = sem meta. */
       metaMensal: z.number().nonnegative().nullable().optional(),
       ativo: z.boolean().optional(),
-      maxAtendimentosSimultaneos: z.number().int().min(1).max(50).optional(),
+      // null = sem limite de atendimentos simultâneos.
+      maxAtendimentosSimultaneos: z.number().int().min(1).max(50).nullable().optional(),
       recebeLeadsAutomaticos: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {

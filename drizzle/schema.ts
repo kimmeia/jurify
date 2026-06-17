@@ -348,7 +348,7 @@ export const colaboradores = mysqlTable(
     /** Quem removeu (colaboradores.id). NULL pra remoções antigas
      *  (pré-migration) ou remoções automáticas do sistema. */
     removidoPor: int("removidoPor"),
-    maxAtendimentosSimultaneos: int("maxAtendimentosSimultaneos").default(5).notNull(),
+    maxAtendimentosSimultaneos: int("maxAtendimentosSimultaneos").default(5),
     recebeLeadsAutomaticos: boolean("recebeLeadsAutomaticos").default(true).notNull(),
     ultimaAtividade: timestamp("ultimaAtividade"),
     ultimaDistribuicao: timestamp("ultimaDistribuicao"),

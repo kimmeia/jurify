@@ -828,7 +828,7 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
       // regras e racional em server/smartflow/distribuicao.ts.
       const { selecionarAtendenteRodizio } = await import("./distribuicao");
       const escolhidoId = selecionarAtendenteRodizio(candidatos, cargaPorId, {
-        somenteOnline: params.somenteOnline,
+        modoOnline: params.modoDistribuicao,
       });
       if (escolhidoId == null) return null;
       const escolhido = candidatos.find((c) => c.id === escolhidoId)!;

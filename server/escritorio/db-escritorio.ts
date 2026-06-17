@@ -185,7 +185,8 @@ export async function atualizarColaborador(
     /** Meta mensal R$. Null limpa. */
     metaMensal?: number | null;
     ativo?: boolean;
-    maxAtendimentosSimultaneos?: number;
+    /** null = sem limite de atendimentos simultâneos. */
+    maxAtendimentosSimultaneos?: number | null;
     recebeLeadsAutomaticos?: boolean;
   },
 ) {

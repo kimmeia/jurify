@@ -295,7 +295,8 @@ export interface SmartflowExecutores {
    */
   distribuirAtendimentoPorSetor: (params: {
     setorId: number;
-    somenteOnline: boolean;
+    /** Quem entra no rodízio: todos / online primeiro / somente online. */
+    modoDistribuicao: "todos" | "online_primeiro" | "somente_online";
     conversaId?: number;
     /** Se setado, IGNORA setor/round-robin e atribui esse colaborador direto
      *  (modo "atendente fixo" do bloco). Verifica ativo; se inativo, devolve null. */
@@ -1852,8 +1853,10 @@ async function handleDistribuirAtendimento(
   ctx: SmartflowContexto,
   exec: SmartflowExecutores,
 ): Promise<PassoResultado> {
-  const cfg = passo.config as { modo?: string; setorId?: number; atendenteId?: number; somenteOnline?: boolean; redistribuirSempre?: boolean };
+  const cfg = passo.config as { modo?: string; setorId?: number; atendenteId?: number; modoDistribuicao?: "todos" | "online_primeiro" | "somente_online"; somenteOnline?: boolean; redistribuirSempre?: boolean };
   const modo = cfg.modo === "atendente_fixo" ? "atendente_fixo" : "setor";
+  // Modo de rodízio: novo campo vence; fluxos antigos derivam do `somenteOnline`.
+  const modoDistribuicao = cfg.modoDistribuicao ?? (cfg.somenteOnline === true ? "somente_online" : "online_primeiro");
   const conversaId = typeof ctx.conversaId === "number" ? ctx.conversaId : undefined;
 
   // Validação por modo: setor exige setorId; atendente_fixo exige atendenteId.
@@ -1886,7 +1889,7 @@ async function handleDistribuirAtendimento(
   try {
     const escolhido = await exec.distribuirAtendimentoPorSetor({
       setorId,
-      somenteOnline: cfg.somenteOnline === true,
+      modoDistribuicao,
       conversaId,
       atendenteIdFixo,
       redistribuirSempre: cfg.redistribuirSempre === true,

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Distribuição só em 2 de 6 atendentes</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif}</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-5 py-8">
+
+  <header class="mb-6">
+    <div class="flex items-center gap-2 text-sm text-teal-600 font-semibold">
+      <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-violet-600 text-white text-xs font-bold">J.</span>
+      JuridFlow · SmartFlow · Distribuir atendimento
+    </div>
+    <h1 class="text-2xl font-bold mt-2">A distribuição só cai em 2 dos 6 atendentes do setor</h1>
+    <p class="text-slate-500 mt-1 text-[15px]">O setor Comercial tem 6 atendentes, mas as conversas vão sempre pros mesmos 2. O bloco está certo — o que pega é a regra de <b>"online primeiro"</b>.</p>
+  </header>
+
+  <!-- DIAGNÓSTICO -->
+  <div class="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 mb-5">
+    <h2 class="text-base font-bold mb-2 text-amber-900">🔎 Por que acontece</h2>
+    <p class="text-[13.5px] text-slate-700 leading-relaxed">
+      A distribuição por setor é <b>"online primeiro"</b>: se <b>pelo menos 1</b> atendente está online, a conversa
+      só vai pros <b>online</b> — os offline <b>só entram se TODOS estiverem offline</b>.
+    </p>
+    <p class="text-[13.5px] text-slate-700 leading-relaxed mt-2">
+      E "online" aqui significa <b>estar com o app do JuridFlow aberto</b> nos últimos ~30 min (o app manda um
+      "sinal de vida" a cada 5 min). Como só <b>2</b> dos 6 deixam o painel aberto, a regra manda <b>tudo pra esses 2</b>;
+      os outros 4 respondem pelo inbox de vez em quando, ficam "offline" e <b>nunca entram no rodízio</b>.
+    </p>
+  </div>
+
+  <!-- DIAGRAMA antes -->
+  <div class="rounded-2xl border bg-white p-5 mb-5">
+    <p class="text-[13px] font-semibold mb-3">Setor Comercial — hoje (online primeiro)</p>
+    <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
+      <!-- online -->
+      <div class="text-center">
+        <div class="h-12 w-12 mx-auto rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold relative">P<span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white"></span></div>
+        <p class="text-[10px] mt-1 font-medium">Pablo</p><p class="text-[9px] text-emerald-600">online · recebe</p>
+      </div>
+      <div class="text-center">
+        <div class="h-12 w-12 mx-auto rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold relative">D<span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white"></span></div>
+        <p class="text-[10px] mt-1 font-medium">Dayane</p><p class="text-[9px] text-emerald-600">online · recebe</p>
+      </div>
+      <!-- offline x4 -->
+      <div class="text-center opacity-50">
+        <div class="h-12 w-12 mx-auto rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold relative">I<span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-slate-400 ring-2 ring-white"></span></div>
+        <p class="text-[10px] mt-1 font-medium">Isaac</p><p class="text-[9px] text-slate-400">offline · pulado</p>
+      </div>
+      <div class="text-center opacity-50">
+        <div class="h-12 w-12 mx-auto rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold relative">W<span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-slate-400 ring-2 ring-white"></span></div>
+        <p class="text-[10px] mt-1 font-medium">Wilson</p><p class="text-[9px] text-slate-400">offline · pulado</p>
+      </div>
+      <div class="text-center opacity-50">
+        <div class="h-12 w-12 mx-auto rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold relative">M<span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-slate-400 ring-2 ring-white"></span></div>
+        <p class="text-[10px] mt-1 font-medium">Marina</p><p class="text-[9px] text-slate-400">offline · pulado</p>
+      </div>
+      <div class="text-center opacity-50">
+        <div class="h-12 w-12 mx-auto rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold relative">R<span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-slate-400 ring-2 ring-white"></span></div>
+        <p class="text-[10px] mt-1 font-medium">Rafa</p><p class="text-[9px] text-slate-400">offline · pulado</p>
+      </div>
+    </div>
+    <p class="text-[12px] text-rose-600 mt-3 text-center">→ 100% das conversas para 2 pessoas</p>
+  </div>
+
+  <!-- SOLUÇÃO -->
+  <h2 class="text-lg font-bold mb-3">A solução: um modo "Todos do setor"</h2>
+  <p class="text-[13.5px] text-slate-600 mb-4">Hoje o bloco só tem "online primeiro" (padrão) e "somente online". Falta a opção de <b>rodízio entre TODOS do setor, ignorando se o app está aberto</b> — ideal pra quem responde pelo inbox/WhatsApp sem ficar com o painel aberto.</p>
+
+  <div class="grid md:grid-cols-2 gap-5">
+    <!-- painel de config: depois -->
+    <div class="rounded-2xl border border-emerald-200 bg-white overflow-hidden">
+      <div class="px-4 py-2 bg-emerald-50 border-b border-emerald-100"><span class="text-emerald-700 text-xs font-bold uppercase tracking-wide">Config do bloco — depois</span></div>
+      <div class="p-4 space-y-3">
+        <div>
+          <p class="text-[11px] text-slate-500 mb-1">Como distribuir</p>
+          <div class="h-9 rounded-md border px-3 flex items-center justify-between text-sm">Setor (rotação entre atendentes) <span class="text-slate-400">▾</span></div>
+        </div>
+        <div>
+          <p class="text-[11px] text-slate-500 mb-1">Setor</p>
+          <div class="h-9 rounded-md border px-3 flex items-center justify-between text-sm">Comercial <span class="text-slate-400">6 atendentes ▾</span></div>
+        </div>
+        <div class="rounded-md ring-2 ring-violet-300 bg-violet-50/40 p-2 -m-0.5">
+          <p class="text-[11px] text-violet-700 font-semibold mb-1.5">Quem entra no rodízio <span class="text-[9px] font-normal text-violet-400">novo</span></p>
+          <div class="space-y-1.5 text-[12px]">
+            <label class="flex items-start gap-2"><input type="radio" checked class="mt-0.5"><span><b>Todos do setor</b> — rodízio entre os 6, dê igual quem está online. <span class="text-emerald-600">(resolve seu caso)</span></span></label>
+            <label class="flex items-start gap-2"><input type="radio" class="mt-0.5"><span><b>Online primeiro</b> — só os online; ninguém online → todos. <span class="text-slate-400">(padrão atual)</span></span></label>
+            <label class="flex items-start gap-2"><input type="radio" class="mt-0.5"><span><b>Somente online</b> — só online; ninguém online → "sem atendente" (transbordo).</span></label>
+          </div>
+        </div>
+        <div class="rounded-md border p-2 text-[11px] text-slate-500 flex items-start gap-2">
+          <input type="checkbox" class="mt-0.5"><span><b>Redistribuir sempre</b> — ignora o atendente atual da conversa (round-robin de verdade). Continua igual.</span></div>
+      </div>
+    </div>
+
+    <!-- diagrama depois -->
+    <div class="rounded-2xl border bg-white p-5">
+      <p class="text-[13px] font-semibold mb-3">Com "Todos do setor"</p>
+      <div class="grid grid-cols-3 gap-3">
+        <div class="text-center"><div class="h-11 w-11 mx-auto rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">P</div><p class="text-[9px] mt-1 text-emerald-600">recebe</p></div>
+        <div class="text-center"><div class="h-11 w-11 mx-auto rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">D</div><p class="text-[9px] mt-1 text-emerald-600">recebe</p></div>
+        <div class="text-center"><div class="h-11 w-11 mx-auto rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">I</div><p class="text-[9px] mt-1 text-emerald-600">recebe</p></div>
+        <div class="text-center"><div class="h-11 w-11 mx-auto rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">W</div><p class="text-[9px] mt-1 text-emerald-600">recebe</p></div>
+        <div class="text-center"><div class="h-11 w-11 mx-auto rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">M</div><p class="text-[9px] mt-1 text-emerald-600">recebe</p></div>
+        <div class="text-center"><div class="h-11 w-11 mx-auto rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">R</div><p class="text-[9px] mt-1 text-emerald-600">recebe</p></div>
+      </div>
+      <p class="text-[12px] text-emerald-600 mt-4 text-center">→ rodízio justo entre os 6 (1→2→3→4→5→6→1…)</p>
+      <p class="text-[11px] text-slate-500 mt-3 leading-snug">A capacidade (limite de atendimentos simultâneos) continua valendo como trava: quem está cheio é pulado na vez dele.</p>
+    </div>
+  </div>
+
+  <!-- PLANO -->
+  <div class="mt-6 rounded-2xl border border-violet-200 bg-violet-50/40 p-5">
+    <h2 class="text-lg font-bold mb-3 text-violet-900">Plano de implementação</h2>
+    <ol class="space-y-2 text-[13px] text-slate-700 list-decimal pl-5">
+      <li><b>Novo modo no bloco:</b> trocar o checkbox "Só atendentes online" por uma escolha de 3 opções — <i>Todos do setor</i> / <i>Online primeiro</i> / <i>Somente online</i>. Compatível com fluxos atuais (quem tinha o checkbox vira "online primeiro" ou "somente online").</li>
+      <li><b>Motor de distribuição:</b> o seletor já tem o gancho de "online"; adiciono o modo "todos" (rodízio em cima de todos os ativos do setor, ignorando o heartbeat). Round-robin e trava de capacidade seguem iguais.</li>
+      <li><b>Sem migration destrutiva:</b> campo novo no passo com default que preserva o comportamento atual.</li>
+      <li><b>Validação:</b> <code>pnpm check</code> + <code>pnpm test</code> (casos do seletor: todos vs online-primeiro vs somente-online) + build do client.</li>
+    </ol>
+    <p class="text-[12px] text-slate-500 mt-4 border-t border-violet-200 pt-3">
+      💡 <b>Atalho imediato (sem mexer no código):</b> hoje, pra forçar o rodízio entre os 6, os 4 atendentes precisariam manter o app do JuridFlow aberto (ficam "online"). O modo "Todos do setor" elimina essa exigência.
+    </p>
+  </div>
+
+  <p class="text-center text-[12px] text-slate-400 mt-8">Mockup para aprovação · JuridFlow</p>
+</div>
+</body>
+</html>
