@@ -16,7 +16,7 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, asaasWebhookEventos, categoriasCobranca, clienteProcessos, cobrancaAcoes, colaboradores, comissoesFechadas, comissoesFechadasItens, comissoesLancamentosLog, contatos, users } from "../../drizzle/schema";
+import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, asaasWebhookEventos, categoriasCobranca, clienteProcessos, cobrancaAcoes, colaboradores, comissoesFechadas, comissoesFechadasItens, comissoesLancamentosLog, contatos, conversas, users } from "../../drizzle/schema";
 import { eq, and, desc, like, or, inArray, between, gte, lte, sql, isNull } from "drizzle-orm";
 import { alias as aliasedTable } from "drizzle-orm/mysql-core";
 import {
@@ -5168,8 +5168,24 @@ export const asaasRouter = router({
       comProcesso.map((c) => c.contatoId).filter((x): x is number => !!x),
     );
 
+    // Contato com CONVERSA é interação real — não pode ser apagado pela limpeza
+    // (apagava o contato e deixava a conversa órfã, sumindo do inbox mas
+    // inflando o contador). Preserva.
+    const comConversa = await db
+      .selectDistinct({ contatoId: conversas.contatoId })
+      .from(conversas)
+      .where(
+        and(
+          eq(conversas.escritorioId, esc.escritorio.id),
+          inArray(conversas.contatoId, candidatoIds),
+        ),
+      );
+    const setComConversa = new Set(
+      comConversa.map((c) => c.contatoId).filter((x): x is number => !!x),
+    );
+
     const orfaos = candidatos.filter(
-      (c) => !setComCobranca.has(c.id) && !setComProcesso.has(c.id),
+      (c) => !setComCobranca.has(c.id) && !setComProcesso.has(c.id) && !setComConversa.has(c.id),
     );
 
     return {
@@ -5243,8 +5259,22 @@ export const asaasRouter = router({
       comProcesso.map((c) => c.contatoId).filter((x): x is number => !!x),
     );
 
+    // Não apaga contato que tem CONVERSA — apagar deixava a conversa órfã.
+    const comConversa = await db
+      .selectDistinct({ contatoId: conversas.contatoId })
+      .from(conversas)
+      .where(
+        and(
+          eq(conversas.escritorioId, esc.escritorio.id),
+          inArray(conversas.contatoId, candidatoIds),
+        ),
+      );
+    const setComConversa = new Set(
+      comConversa.map((c) => c.contatoId).filter((x): x is number => !!x),
+    );
+
     const idsAlvo = candidatos
-      .filter((c) => !setComCobranca.has(c.id) && !setComProcesso.has(c.id))
+      .filter((c) => !setComCobranca.has(c.id) && !setComProcesso.has(c.id) && !setComConversa.has(c.id))
       .map((c) => c.id)
       .slice(0, 5000);
 

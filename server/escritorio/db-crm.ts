@@ -507,9 +507,14 @@ export async function contarConversasPorStatus(escritorioId: number, filtros?: {
   if (!db) return zero;
   const base = await condicoesConversa(db, escritorioId, filtros);
   if (!base) return zero;
+  // Mesmos INNER JOINs da `listarConversas` — sem isso o contador contava
+  // conversas órfãs (contato/canal removido) que a lista não mostra, e o
+  // badge ("Aguardando 5") divergia dos cards (2). Agora conta só o listável.
   const rows = await db
     .select({ status: conversas.status, n: sql<number>`COUNT(*)` })
     .from(conversas)
+    .innerJoin(contatos, eq(conversas.contatoId, contatos.id))
+    .innerJoin(canaisIntegrados, eq(conversas.canalId, canaisIntegrados.id))
     .where(and(...base))
     .groupBy(conversas.status);
   const out = { ...zero };
