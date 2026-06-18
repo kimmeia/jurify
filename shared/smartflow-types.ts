@@ -545,10 +545,6 @@ export interface ConfigDistribuirAtendimento {
   modoDistribuicao?: "todos" | "online_primeiro" | "somente_online";
   /** @deprecated Use `modoDistribuicao`. true→somente_online, false→online_primeiro. */
   somenteOnline?: boolean;
-  /** Default false (sticky): respeita o atendente já atrelado à conversa.
-   *  true = ignora sticky e roda round-robin SEMPRE — útil pra setor de fila
-   *  rotativa, ou pra testes. Só vale pra modo="setor". */
-  redistribuirSempre?: boolean;
 }
 /**
  * Uma condição individual avaliada pelo passo `condicional`. Cada condição
