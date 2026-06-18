@@ -3830,7 +3830,6 @@ function ConfigDistribuirAtendimentoFields({
   const modo: "setor" | "atendente_fixo" = cfg.modo === "atendente_fixo" ? "atendente_fixo" : "setor";
   const setorId = typeof cfg.setorId === "number" ? cfg.setorId : 0;
   const atendenteId = typeof cfg.atendenteId === "number" ? cfg.atendenteId : 0;
-  const redistribuirSempre = cfg.redistribuirSempre === true;
   // Modo de rodízio: campo novo vence; fluxos antigos derivam do `somenteOnline`
   // (mostra exatamente o que o motor executa).
   const modoDistribuicao: "todos" | "online_primeiro" | "somente_online" =
@@ -3897,14 +3896,10 @@ function ConfigDistribuirAtendimentoFields({
                   : "Só os online; se ninguém estiver online, rodízio entre todos. (“Online” = app do JuridFlow aberto nos últimos ~30 min.)"}
             </span>
           </div>
-          <label className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs">
-            <Checkbox checked={redistribuirSempre} onCheckedChange={(v) => onChange({ redistribuirSempre: v === true })} />
-            <span>
-              <strong>Redistribuir sempre</strong> (ignora atendente atual da conversa).
-              <br />
-              <span className="text-[10px] text-muted-foreground">Padrão: desligado — cliente que já tem atendente continua com ele (sticky). Ligue pra setor de fila, ou pra testes onde você quer ver round-robin de verdade com o mesmo contato.</span>
-            </span>
-          </label>
+          <p className="text-[10px] text-muted-foreground rounded border border-dashed p-2">
+            O bloco <strong>sempre distribui</strong> quando o fluxo passa por ele. Pra só distribuir se a conversa
+            ainda não tem dono, coloque antes um bloco <strong>Condição</strong> testando <code>{"{{conversaTemAtendente}}"}</code>.
+          </p>
         </>
       ) : (
         <div>
