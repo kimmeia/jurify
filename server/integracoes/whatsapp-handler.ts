@@ -470,26 +470,6 @@ async function pegarResponsavelDoContato(contatoId: number): Promise<number | nu
   }
 }
 
-/** Grava o responsavelId no contato (chamado quando primeira conversa
- *  é distribuída) — só seta se ainda for null pra não sobrescrever
- *  reatribuições manuais feitas pelo admin.
- */
-async function definirResponsavelDoContato(contatoId: number, colaboradorId: number) {
-  if (!contatoId || !colaboradorId) return;
-  try {
-    const { getDb } = await import("../db");
-    const { contatos } = await import("../../drizzle/schema");
-    const { eq, and, isNull } = await import("drizzle-orm");
-    const db = await getDb();
-    if (!db) return;
-    await db.update(contatos)
-      .set({ responsavelId: colaboradorId })
-      .where(and(eq(contatos.id, contatoId), isNull(contatos.responsavelId)));
-  } catch (err) {
-    log.warn({ err: String(err), contatoId }, "Falha ao definir responsavel do contato");
-  }
-}
-
 /** Lê atendenteId da conversa — usado pra notificar via SSE só o
  *  atendente responsável + dono/gestores (não todos do escritório). */
 /**

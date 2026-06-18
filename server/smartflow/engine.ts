@@ -301,8 +301,6 @@ export interface SmartflowExecutores {
     /** Se setado, IGNORA setor/round-robin e atribui esse colaborador direto
      *  (modo "atendente fixo" do bloco). Verifica ativo; se inativo, devolve null. */
     atendenteIdFixo?: number;
-    /** Se true, ignora sticky-by-setor e força fresh pick (round-robin sempre). */
-    redistribuirSempre?: boolean;
   }) => Promise<{ id: number; nome: string } | null>;
   /**
    * Resolve quem é o dono da agenda pra um atendimento, em cascata:
@@ -1853,7 +1851,7 @@ async function handleDistribuirAtendimento(
   ctx: SmartflowContexto,
   exec: SmartflowExecutores,
 ): Promise<PassoResultado> {
-  const cfg = passo.config as { modo?: string; setorId?: number; atendenteId?: number; modoDistribuicao?: "todos" | "online_primeiro" | "somente_online"; somenteOnline?: boolean; redistribuirSempre?: boolean };
+  const cfg = passo.config as { modo?: string; setorId?: number; atendenteId?: number; modoDistribuicao?: "todos" | "online_primeiro" | "somente_online"; somenteOnline?: boolean };
   const modo = cfg.modo === "atendente_fixo" ? "atendente_fixo" : "setor";
   // Modo de rodízio: novo campo vence; fluxos antigos derivam do `somenteOnline`.
   const modoDistribuicao = cfg.modoDistribuicao ?? (cfg.somenteOnline === true ? "somente_online" : "online_primeiro");
@@ -1892,7 +1890,6 @@ async function handleDistribuirAtendimento(
       modoDistribuicao,
       conversaId,
       atendenteIdFixo,
-      redistribuirSempre: cfg.redistribuirSempre === true,
     });
     if (!escolhido) {
       return { sucesso: true, contexto: ctx, proximoRamoId: "sem_atendente" };

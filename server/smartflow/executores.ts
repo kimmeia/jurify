@@ -720,7 +720,7 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
 
     async distribuirAtendimentoPorSetor(params): Promise<{ id: number; nome: string } | null> {
       const { getDb } = await import("../db");
-      const { colaboradores, users, conversas, contatos } = await import("../../drizzle/schema");
+      const { colaboradores, users, conversas } = await import("../../drizzle/schema");
       const { eq, and, or, inArray, sql } = await import("drizzle-orm");
       const db = await getDb();
       if (!db) return null;
@@ -745,51 +745,8 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
           await db.update(conversas)
             .set({ atendenteId: colab.id })
             .where(and(eq(conversas.id, params.conversaId), eq(conversas.escritorioId, escritorioId)));
-          // Stickiness cross-conv: próxima conversa do mesmo cliente continua nele.
-          const [conv] = await db
-            .select({ contatoId: conversas.contatoId })
-            .from(conversas)
-            .where(and(eq(conversas.id, params.conversaId), eq(conversas.escritorioId, escritorioId)))
-            .limit(1);
-          if (conv?.contatoId) {
-            await db.update(contatos)
-              .set({ responsavelId: colab.id })
-              .where(and(eq(contatos.id, conv.contatoId), eq(contatos.escritorioId, escritorioId)));
-          }
         }
         return { id: colab.id, nome: colab.nome || "Atendente" };
-      }
-
-      // STICKY DENTRO DO SETOR: se a conversa JÁ tem atendente atrelado, ele
-      // está ativo E É DO SETOR PEDIDO, só republica esse nome — não
-      // redistribui. Evita "roubar" cliente que já está num atendimento em
-      // andamento. Se o atendente atrelado for de OUTRO setor (ou inativo /
-      // removido), ignora e cai na distribuição normal — assim conserta caso
-      // típico em que uma distribuição anterior (ou legacy) jogou em alguém
-      // de outro setor.
-      // Toggle "redistribuirSempre" do bloco pula esse check — força fresh
-      // pick a cada execução (round-robin sempre), útil pra setor de fila.
-      if (params.conversaId && !params.redistribuirSempre) {
-        const [conv] = await db
-          .select({ atendenteId: conversas.atendenteId })
-          .from(conversas)
-          .where(and(eq(conversas.id, params.conversaId), eq(conversas.escritorioId, escritorioId)))
-          .limit(1);
-        if (conv?.atendenteId) {
-          const [existente] = await db
-            .select({ id: colaboradores.id, nome: users.name })
-            .from(colaboradores)
-            .innerJoin(users, eq(users.id, colaboradores.userId))
-            .where(and(
-              eq(colaboradores.id, conv.atendenteId),
-              eq(colaboradores.ativo, true),
-              eq(colaboradores.setorId, params.setorId),
-            ))
-            .limit(1);
-          if (existente?.id) {
-            return { id: existente.id, nome: existente.nome || "Atendente" };
-          }
-        }
       }
 
       // Atendentes ATIVOS do setor (com o nome do usuário).
@@ -833,24 +790,15 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
       if (escolhidoId == null) return null;
       const escolhido = candidatos.find((c) => c.id === escolhidoId)!;
 
-      // Seta o dono da conversa SEM mexer no status (bot segue o fluxo). Marca
-      // ultimaDistribuicao pra round-robin nas próximas distribuições. E grava
-      // o atendente como responsável do contato pra próximas conversas dele
-      // continuarem caindo na mesma pessoa (stickiness cross-conversa).
+      // Seta o atendente DESTA conversa (sem mexer no status — o bot segue o
+      // fluxo) e marca ultimaDistribuicao pro round-robin. NÃO grava
+      // contato.responsavelId: o "dono do cliente" é CRM puro (definido só
+      // manualmente). A distribuição decide apenas quem atende a conversa —
+      // sem amarra escondida que funilava tudo pro mesmo atendente.
       if (params.conversaId) {
         await db.update(conversas)
           .set({ atendenteId: escolhido.id })
           .where(and(eq(conversas.id, params.conversaId), eq(conversas.escritorioId, escritorioId)));
-        const [conv] = await db
-          .select({ contatoId: conversas.contatoId })
-          .from(conversas)
-          .where(and(eq(conversas.id, params.conversaId), eq(conversas.escritorioId, escritorioId)))
-          .limit(1);
-        if (conv?.contatoId) {
-          await db.update(contatos)
-            .set({ responsavelId: escolhido.id })
-            .where(and(eq(contatos.id, conv.contatoId), eq(contatos.escritorioId, escritorioId)));
-        }
       }
       await db.update(colaboradores)
         .set({ ultimaDistribuicao: new Date() })
