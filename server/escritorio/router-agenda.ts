@@ -183,6 +183,12 @@ export const agendaRouter = router({
         ? await contatoIdsDoColaborador(db, escritorioId, perm.colaboradorId)
         : [];
 
+      // Teto de eventos: com intervalo de datas (calendário/Período) o resultado
+      // já é limitado pelo período, então usa um teto alto pra não cortar dias
+      // de meses cheios (>200 eventos sumia do dia 22 em diante). Sem intervalo
+      // (lista aberta) mantém 200 como proteção contra acervo gigante.
+      const limiteEventos = input?.dataInicio && input?.dataFim ? 3000 : 200;
+
       // ─── COMPROMISSOS (agendamentos) ────────────────────────────────────
       if (input?.fonte !== "tarefa") {
         const agConditions: any[] = [eq(agendamentos.escritorioId, escritorioId)];
@@ -224,7 +230,7 @@ export const agendaRouter = router({
         const ags = await db.select().from(agendamentos)
           .where(and(...agConditions))
           .orderBy(asc(agendamentos.dataInicio))
-          .limit(200);
+          .limit(limiteEventos);
 
         for (const ag of ags) {
           eventos.push({
@@ -294,7 +300,7 @@ export const agendaRouter = router({
         const trs = await db.select().from(tarefas)
           .where(and(...tConditions))
           .orderBy(asc(tarefas.dataVencimento))
-          .limit(200);
+          .limit(limiteEventos);
 
         // Buscar nomes dos contatos vinculados
         const contatoIds = [...new Set(trs.filter(t => t.contatoId).map(t => t.contatoId!))];
