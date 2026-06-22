@@ -449,7 +449,14 @@ export default function Atendimento() {
   };
   const convs = (() => {
     const todas = convsAll || [];
-    const porStatus = filtro === "todos" ? todas : todas.filter((c: any) => c.status === filtro);
+    let porStatus = filtro === "todos" ? todas : todas.filter((c: any) => c.status === filtro);
+    // Mantém a conversa ABERTA visível mesmo que mude de status e saia do filtro
+    // da aba (ex.: ao responder, aguardando → em_atendimento) — senão ela "some"
+    // da lista e o atendente precisa trocar de aba pra reencontrar.
+    if (selId != null && !porStatus.some((c: any) => c.id === selId)) {
+      const aberta = todas.find((c: any) => c.id === selId);
+      if (aberta) porStatus = [aberta, ...porStatus];
+    }
     const q = inboxBusca.trim().toLowerCase();
     if (!q) return porStatus;
     const qDigits = q.replace(/\D/g, "");
@@ -898,7 +905,7 @@ export default function Atendimento() {
                   <div className="fixed inset-0 z-[60] bg-card flex flex-col">
                     <ChatArea
                       cid={selId}
-                      convs={convs || []}
+                      convs={convsAll || []}
                       onVoltar={() => setSelId(null)}
                       onUpdate={rC}
                       onLeadUpdate={rL}
@@ -907,7 +914,7 @@ export default function Atendimento() {
                       onDeleted={() => { setSelId(null); rC(); }}
                       onTransferido={() => { setSelId(null); rC(); }}
                       onAbrirLinhaTempo={() => {
-                        const conv = (convs || []).find((c: any) => c.id === selId);
+                        const conv = (convsAll || []).find((c: any) => c.id === selId);
                         if (conv?.contatoId) setShowLinhaTempo(conv.contatoId);
                       }}
                       onLigarWhatsApp={(info) => chamadaWa.ligar(info)}
@@ -920,7 +927,7 @@ export default function Atendimento() {
                   {selId ? (
                     <ChatArea
                       cid={selId}
-                      convs={convs || []}
+                      convs={convsAll || []}
                       onUpdate={rC}
                       onLeadUpdate={rL}
                       onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined}
@@ -934,7 +941,7 @@ export default function Atendimento() {
                         rC();
                       }}
                       onAbrirLinhaTempo={() => {
-                        const conv = (convs || []).find((c: any) => c.id === selId);
+                        const conv = (convsAll || []).find((c: any) => c.id === selId);
                         if (conv?.contatoId) setShowLinhaTempo(conv.contatoId);
                       }}
                       onLigarWhatsApp={(info) => chamadaWa.ligar(info)}
