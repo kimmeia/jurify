@@ -484,7 +484,14 @@ export default function Atendimento() {
   };
   const convs = (() => {
     const todas = convsAll || [];
-    const porStatus = filtro === "todos" ? todas : todas.filter((c: any) => c.status === filtro);
+    let porStatus = filtro === "todos" ? todas : todas.filter((c: any) => c.status === filtro);
+    // Mantém a conversa ABERTA visível mesmo que mude de status e saia do filtro
+    // da aba (ex.: ao responder, aguardando → em_atendimento) — senão ela "some"
+    // da lista e o atendente precisa trocar de aba pra reencontrar.
+    if (selId != null && !porStatus.some((c: any) => c.id === selId)) {
+      const aberta = todas.find((c: any) => c.id === selId);
+      if (aberta) porStatus = [aberta, ...porStatus];
+    }
     const q = inboxBusca.trim().toLowerCase();
     if (!q) return porStatus;
     const qDigits = q.replace(/\D/g, "");
@@ -930,7 +937,7 @@ export default function Atendimento() {
               {selId ? (
                 <ChatArea
                   cid={selId}
-                  convs={convs || []}
+                  convs={convsAll || []}
                   onVoltar={isMobile ? () => setSelId(null) : undefined}
                   onUpdate={rC}
                   onLeadUpdate={rL}
@@ -945,7 +952,7 @@ export default function Atendimento() {
                     rC();
                   }}
                   onAbrirLinhaTempo={() => {
-                    const conv = (convs || []).find((c: any) => c.id === selId);
+                    const conv = (convsAll || []).find((c: any) => c.id === selId);
                     if (conv?.contatoId) setShowLinhaTempo(conv.contatoId);
                   }}
                   onLigarWhatsApp={(info) => chamadaWa.ligar(info)}
@@ -956,6 +963,7 @@ export default function Atendimento() {
                   onAbrirConversa={setSelId}
                   onIniciar={() => setShowIniciar(true)}
                 />
+
               )}
             </div>
 

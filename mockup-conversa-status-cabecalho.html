@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Conversa "quebra" ao mudar de status</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif}</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-5 py-8">
+
+  <header class="mb-6">
+    <div class="flex items-center gap-2 text-sm text-violet-600 font-semibold">
+      <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-violet-600 text-white text-xs font-bold">J.</span>
+      JuridFlow · Atendimento (Inbox)
+    </div>
+    <h1 class="text-2xl font-bold mt-2">A conversa "vira Contato / Sem atendente" ao responder</h1>
+    <p class="text-slate-500 mt-1 text-[15px]">Conversa em <b>Aguardando</b> → você responde → vira <b>Em atendimento</b>. Nesse instante o cabeçalho perde o nome/telefone/atendente e ela some da lista. É a MESMA conversa, só renderizada quebrada.</p>
+  </header>
+
+  <!-- DIAGNÓSTICO -->
+  <div class="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 mb-6">
+    <h2 class="text-base font-bold mb-2 text-amber-900">🔎 Por que acontece</h2>
+    <p class="text-[13.5px] text-slate-700 leading-relaxed">
+      O cabeçalho do chat busca os dados da conversa na <b>lista filtrada pela aba atual</b>. Quando o status muda
+      (Aguardando → Em atendimento) e você está na aba "Aguardando", a conversa <b>sai daquele filtro</b> → o cabeçalho
+      não a encontra mais e cai no <b>fallback genérico</b>: avatar "?", nome "Contato", "Sem atendente", sem telefone,
+      sem botão Financeiro. As mensagens continuam (carregam separado), mas o topo "quebra".
+    </p>
+  </div>
+
+  <!-- ANTES / DEPOIS do cabeçalho -->
+  <div class="grid md:grid-cols-2 gap-5 mb-6">
+    <!-- ANTES -->
+    <div class="rounded-2xl border border-rose-200 bg-white overflow-hidden">
+      <div class="px-4 py-2 bg-rose-50 border-b border-rose-100"><span class="text-rose-600 text-xs font-bold uppercase tracking-wide">Antes (quebrado)</span></div>
+      <div class="p-4">
+        <div class="flex items-center gap-2 border-b pb-3">
+          <div class="h-9 w-9 rounded-full bg-slate-200 text-slate-400 flex items-center justify-center font-bold">?</div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="font-semibold text-sm">Contato</span>
+              <span class="text-[10px] bg-amber-100 text-amber-700 rounded px-1.5 py-0.5">Sem atendente</span>
+            </div>
+            <p class="text-[11px] text-slate-400">— sem telefone —</p>
+          </div>
+        </div>
+        <div class="flex gap-3 mt-2 text-[11px] text-slate-400">
+          <span>Linha do Tempo</span><span>Pipeline</span><span>Agendar</span><span>Transferir</span><span>Vincular</span>
+          <span class="text-rose-400 line-through">Financeiro</span>
+        </div>
+        <p class="text-[12px] text-rose-500 mt-3">⚠ nome, telefone, atendente e Financeiro sumiram — e a conversa saiu da lista (só acha em "Em atendimento").</p>
+      </div>
+    </div>
+
+    <!-- DEPOIS -->
+    <div class="rounded-2xl border border-emerald-200 bg-white overflow-hidden">
+      <div class="px-4 py-2 bg-emerald-50 border-b border-emerald-100"><span class="text-emerald-700 text-xs font-bold uppercase tracking-wide">Depois (correto)</span></div>
+      <div class="p-4">
+        <div class="flex items-center gap-2 border-b pb-3">
+          <div class="h-9 w-9 rounded-full bg-blue-200 text-blue-700 flex items-center justify-center font-bold">PB</div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-semibold text-sm">Paulo Bezerra</span>
+              <span class="text-[10px] bg-blue-100 text-blue-700 rounded px-1.5 py-0.5">Em atendimento</span>
+              <span class="text-[10px] bg-violet-100 text-violet-700 rounded px-1.5 py-0.5">👤 Vitória Hellen</span>
+            </div>
+            <p class="text-[11px] text-slate-500">+55 85 9141-2282</p>
+          </div>
+        </div>
+        <div class="flex gap-3 mt-2 text-[11px] text-slate-500">
+          <span>Linha do Tempo</span><span>Pipeline</span><span class="text-emerald-600 font-medium">Financeiro</span><span>Agendar</span><span>Transferir</span><span>Vincular</span>
+        </div>
+        <p class="text-[12px] text-emerald-600 mt-3">✓ cabeçalho continua completo, dê igual a aba/status. Nada quebra.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- LISTA: conversa não some -->
+  <div class="rounded-2xl border bg-white p-5 mb-6">
+    <p class="text-[13px] font-semibold mb-3">A conversa aberta não some da lista ao mudar de status</p>
+    <div class="grid md:grid-cols-2 gap-4">
+      <!-- antes -->
+      <div>
+        <p class="text-[11px] text-rose-600 font-semibold mb-1.5">Antes — aba "Aguardando"</p>
+        <div class="rounded-lg border divide-y text-xs">
+          <div class="px-3 py-2 flex items-center gap-2"><span class="h-6 w-6 rounded-full bg-emerald-200 text-emerald-700 text-[9px] flex items-center justify-center">MA</span> Maria · aguardando</div>
+          <div class="px-3 py-2 flex items-center gap-2 text-slate-400 italic">Paulo Bezerra sumiu daqui ⤴ (virou "em atendimento")</div>
+        </div>
+      </div>
+      <!-- depois -->
+      <div>
+        <p class="text-[11px] text-emerald-600 font-semibold mb-1.5">Depois — aba "Aguardando"</p>
+        <div class="rounded-lg border divide-y text-xs">
+          <div class="px-3 py-2 flex items-center gap-2 bg-violet-50 ring-1 ring-violet-200">
+            <span class="h-6 w-6 rounded-full bg-blue-200 text-blue-700 text-[9px] flex items-center justify-center">PB</span>
+            <span class="flex-1">Paulo Bezerra</span>
+            <span class="text-[9px] bg-blue-100 text-blue-700 rounded px-1 py-0.5">Em atendimento</span>
+            <span class="text-[9px] text-violet-500">aberta</span>
+          </div>
+          <div class="px-3 py-2 flex items-center gap-2"><span class="h-6 w-6 rounded-full bg-emerald-200 text-emerald-700 text-[9px] flex items-center justify-center">MA</span> Maria · aguardando</div>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-1.5">A conversa que você está vendo fica <b>fixada</b> na lista (com o selo do novo status) até você sair dela — não precisa trocar de aba pra reencontrar.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- PLANO -->
+  <div class="rounded-2xl border border-violet-200 bg-violet-50/40 p-5">
+    <h2 class="text-lg font-bold mb-3 text-violet-900">Correção proposta</h2>
+    <ol class="space-y-2 text-[13px] text-slate-700 list-decimal pl-5">
+      <li><b>Cabeçalho sempre completo:</b> o chat passa a buscar os dados da conversa na <b>lista completa</b> (todos os status), não na filtrada pela aba. Assim nome, telefone, atendente e Financeiro nunca somem ao mudar de status.</li>
+      <li><b>Conversa aberta não some:</b> a conversa atualmente selecionada continua <b>visível e destacada</b> na lista mesmo que mude de status e saia do filtro da aba — até você abrir outra. Sem "cadê a conversa?".</li>
+      <li>Mudança só de front-end (tela do Atendimento). <code>pnpm check</code> + <code>pnpm test</code> + build do client.</li>
+    </ol>
+    <p class="text-[12px] text-slate-500 mt-4 border-t border-violet-200 pt-3">Comportamento de status não muda (responder ainda coloca em "Em atendimento") — só não quebra mais a tela nem esconde a conversa aberta.</p>
+  </div>
+
+  <p class="text-center text-[12px] text-slate-400 mt-8">Mockup para aprovação · JuridFlow</p>
+</div>
+</body>
+</html>
