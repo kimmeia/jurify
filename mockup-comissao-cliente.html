@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Comissão — mostrar o CLIENTE nas cobranças</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif}</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-5 py-8">
+
+  <header class="mb-6">
+    <div class="flex items-center gap-2 text-sm text-emerald-600 font-semibold">
+      <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-violet-600 text-white text-xs font-bold">J.</span>
+      JuridFlow · Financeiro → Gerar comissão
+    </div>
+    <h1 class="text-2xl font-bold mt-2">Mostrar o <span class="text-emerald-600">cliente</span> nas cobranças da comissão</h1>
+    <p class="text-slate-500 mt-1 text-[15px]">Hoje a coluna mostra só a <b>descrição</b> ("Cobrança gerada a partir de Pix", "honorarios", "—") e não dá pra saber quem pagou. A correção troca por <b>Cliente</b> (nome), mantendo a descrição como apoio.</p>
+  </header>
+
+  <!-- ANTES -->
+  <div class="rounded-2xl border border-rose-200 bg-white overflow-hidden mb-5">
+    <div class="px-4 py-2 bg-rose-50 border-b border-rose-100"><span class="text-rose-600 text-xs font-bold uppercase tracking-wide">Antes</span> <span class="text-[11px] text-rose-500 ml-2">não dá pra saber quem pagou</span></div>
+    <table class="w-full text-[13px]">
+      <thead><tr class="text-slate-400 text-[10px] uppercase tracking-wide text-left border-b"><th class="px-4 py-2">Pago em</th><th>Descrição</th><th>Categoria</th><th class="text-right px-4">Valor</th></tr></thead>
+      <tbody class="divide-y">
+        <tr><td class="px-4 py-2 text-slate-500">08/06/2026</td><td class="text-slate-600">Cobrança gerada automaticamente a partir de Pix recebido.</td><td>Honorário inicial</td><td class="text-right px-4 tabular-nums">R$ 2.500,00</td></tr>
+        <tr><td class="px-4 py-2 text-slate-500">08/06/2026</td><td class="text-slate-600">honorarios</td><td>Honorário inicial</td><td class="text-right px-4 tabular-nums">R$ 3.000,00</td></tr>
+        <tr><td class="px-4 py-2 text-slate-500">10/06/2026</td><td class="text-slate-400">—</td><td>Honorário inicial</td><td class="text-right px-4 tabular-nums">R$ 300,00</td></tr>
+        <tr><td class="px-4 py-2 text-slate-500">17/06/2026</td><td class="text-slate-600">Honorários — parcela 1/3</td><td>Honorário inicial</td><td class="text-right px-4 tabular-nums">R$ 500,00</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- DEPOIS -->
+  <div class="rounded-2xl border border-emerald-200 bg-white overflow-hidden mb-6">
+    <div class="px-4 py-2 bg-emerald-50 border-b border-emerald-100"><span class="text-emerald-700 text-xs font-bold uppercase tracking-wide">Depois</span> <span class="text-[11px] text-emerald-600 ml-2">o nome de quem pagou em destaque</span></div>
+    <table class="w-full text-[13px]">
+      <thead><tr class="text-slate-400 text-[10px] uppercase tracking-wide text-left border-b"><th class="px-4 py-2">Pago em</th><th>Cliente</th><th>Categoria</th><th class="text-right px-4">Valor</th></tr></thead>
+      <tbody class="divide-y">
+        <tr><td class="px-4 py-2 text-slate-500">08/06/2026</td>
+          <td class="py-2"><p class="font-medium text-slate-800">Paulo Roberto Gomes</p><p class="text-[11px] text-slate-400">Cobrança gerada a partir de Pix recebido</p></td>
+          <td>Honorário inicial</td><td class="text-right px-4 tabular-nums">R$ 2.500,00</td></tr>
+        <tr><td class="px-4 py-2 text-slate-500">08/06/2026</td>
+          <td class="py-2"><p class="font-medium text-slate-800">Ana Eliza do Nascimento</p><p class="text-[11px] text-slate-400">honorarios</p></td>
+          <td>Honorário inicial</td><td class="text-right px-4 tabular-nums">R$ 3.000,00</td></tr>
+        <tr><td class="px-4 py-2 text-slate-500">10/06/2026</td>
+          <td class="py-2"><p class="font-medium text-slate-800">Verônica Uchoa Gama</p><p class="text-[11px] text-slate-400">—</p></td>
+          <td>Honorário inicial</td><td class="text-right px-4 tabular-nums">R$ 300,00</td></tr>
+        <tr><td class="px-4 py-2 text-slate-500">17/06/2026</td>
+          <td class="py-2"><p class="font-medium text-slate-800">Ângela Lopes da Silva</p><p class="text-[11px] text-slate-400">Honorários — parcela 1/3</p></td>
+          <td>Honorário inicial</td><td class="text-right px-4 tabular-nums">R$ 500,00</td></tr>
+      </tbody>
+    </table>
+    <p class="text-[12px] text-slate-500 px-4 py-3 border-t">Coluna vira <b>Cliente</b> (nome em destaque) e a descrição fica como <b>linha de apoio</b> em cinza. Cobrança sem cliente vinculado mostra a descrição no lugar do nome (sem ficar vazio).</p>
+  </div>
+
+  <!-- PLANO -->
+  <div class="rounded-2xl border border-violet-200 bg-violet-50/40 p-5">
+    <h2 class="text-lg font-bold mb-3 text-violet-900">Correção</h2>
+    <ol class="space-y-2 text-[13px] text-slate-700 list-decimal pl-5">
+      <li><b>Backend:</b> a consulta da comissão passa a juntar <code>contatos</code> (pelo <code>contatoId</code> da cobrança) e retornar o <b>nome do cliente</b> junto de cada cobrança. O nome do cliente já é usado em outra tabela do mesmo módulo — é o mesmo padrão.</li>
+      <li><b>Frontend:</b> na tabela de cobranças da comissão, a coluna "Descrição" vira <b>"Cliente"</b> (nome em destaque + descrição em cinza embaixo). Vale pras cobranças que entram E pras excluídas.</li>
+      <li>Sem migration. <code>pnpm check</code> + <code>pnpm test</code> + build do client.</li>
+    </ol>
+    <p class="text-[12px] text-slate-500 mt-4 border-t border-violet-200 pt-3">Se preferir <b>só o nome</b> (sem a descrição embaixo), me diz que eu removo o apoio.</p>
+  </div>
+
+  <p class="text-center text-[12px] text-slate-400 mt-8">Mockup para aprovação · JuridFlow</p>
+</div>
+</body>
+</html>
