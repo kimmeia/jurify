@@ -603,6 +603,7 @@ function ListaCobrancas({
     valor: number;
     dataPagamento: string | null;
     descricao: string | null;
+    contatoNome?: string | null;
     categoriaNome: string | null;
     motivo?: string | null;
     motivoExclusao?: string | null;
@@ -629,7 +630,7 @@ function ListaCobrancas({
             <TableHeader>
               <TableRow>
                 <TableHead className="text-xs">Pago em</TableHead>
-                <TableHead className="text-xs">Descrição</TableHead>
+                <TableHead className="text-xs">Cliente</TableHead>
                 <TableHead className="text-xs">Categoria</TableHead>
                 {cor === "slate" && (
                   <TableHead className="text-xs">Motivo</TableHead>
@@ -643,8 +644,17 @@ function ListaCobrancas({
                   <TableCell className="text-xs">
                     {formatData(item.dataPagamento)}
                   </TableCell>
-                  <TableCell className="text-xs max-w-xs truncate">
-                    {item.descricao ?? "—"}
+                  <TableCell className="text-xs max-w-xs">
+                    {item.contatoNome ? (
+                      <>
+                        <p className="font-medium truncate">{item.contatoNome}</p>
+                        {item.descricao && (
+                          <p className="text-[10px] text-muted-foreground truncate">{item.descricao}</p>
+                        )}
+                      </>
+                    ) : (
+                      <span className="truncate">{item.descricao ?? "—"}</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-xs">
                     {item.categoriaNome ?? (

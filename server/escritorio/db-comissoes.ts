@@ -17,6 +17,7 @@ import {
   comissoesFechadas,
   comissoesFechadasItens,
   comissoesLancamentosLog,
+  contatos,
   despesas,
   users,
 } from "../../drizzle/schema";
@@ -193,10 +194,12 @@ export async function simularComissao(
       categoriaNome: categoriasCobranca.nome,
       categoriaComissionavel: categoriasCobranca.comissionavel,
       descricao: asaasCobrancas.descricao,
+      contatoNome: contatos.nome,
       asaasPaymentId: asaasCobrancas.asaasPaymentId,
     })
     .from(asaasCobrancas)
     .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
+    .leftJoin(contatos, eq(contatos.id, asaasCobrancas.contatoId))
     .where(and(...condicoes))
     .orderBy(asc(asaasCobrancas.dataPagamento));
 
@@ -226,6 +229,7 @@ export async function simularComissao(
       valor: Number(l.valor),
       dataPagamento: l.dataPagamento,
       descricao: l.descricao,
+      contatoNome: l.contatoNome,
       categoriaNome: l.categoriaNome,
       categoriaComissionavel: l.categoriaComissionavel,
       comissionavelOverride: l.comissionavelOverride,
