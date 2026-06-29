@@ -178,7 +178,19 @@ export const clientesRouter = router({
     let where: any = eq(contatos.escritorioId, perm.escritorioId);
     // Se só pode ver próprios, filtra por responsável
     if (!perm.verTodos && perm.verProprios) { where = and(where, eq(contatos.responsavelId, perm.colaboradorId)); }
-    if (input?.busca) { const b = `%${input.busca}%`; where = and(where, or(like(contatos.nome, b), like(contatos.telefone, b), like(contatos.email, b), like(contatos.cpfCnpj, b))); }
+    if (input?.busca) {
+      const b = `%${input.busca}%`;
+      // CPF e telefone são gravados só com dígitos; busca com pontuação
+      // ("068.869.413-64") não casaria no LIKE cru. Compara também a versão
+      // só-dígitos do termo. Mantém o LIKE cru pros 4 campos (zero regressão).
+      const ors = [like(contatos.nome, b), like(contatos.telefone, b), like(contatos.email, b), like(contatos.cpfCnpj, b)];
+      const digitos = input.busca.replace(/\D/g, "");
+      if (digitos.length >= 3) {
+        const d = `%${digitos}%`;
+        ors.push(like(contatos.cpfCnpj, d), like(contatos.telefone, d));
+      }
+      where = and(where, or(...ors));
+    }
 
     // Estágio (Cliente vs Lead). Omitido ou 'todos' = sem filtro (backcompat
     // com Processos/Agenda/vincular, que usam esta lista pra escolher pessoa).
