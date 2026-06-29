@@ -33,6 +33,13 @@ type ClienteComboboxProps = {
   onChange: (contatoId: string, cliente: Cliente | null) => void;
   placeholder?: string;
   disabled?: boolean;
+  /**
+   * Fonte da busca:
+   *  - "financeiro" (default): clientes vinculados ao Asaas (Nova Cobrança etc.)
+   *  - "cadastro": todos os clientes cadastrados (tela Clientes / contatos),
+   *    gated por permissão de `clientes`. Usado pra gerar contrato / assinatura.
+   */
+  fonte?: "financeiro" | "cadastro";
 };
 
 function useDebounced<T>(value: T, delay = 300) {
@@ -49,6 +56,7 @@ export function ClienteCombobox({
   onChange,
   placeholder = "Selecione um cliente",
   disabled,
+  fonte = "financeiro",
 }: ClienteComboboxProps) {
   const [open, setOpen] = useState(false);
   const [busca, setBusca] = useState("");
@@ -58,10 +66,28 @@ export function ClienteCombobox({
   // correto no trigger mesmo quando a busca muda e ele sai da lista.
   const [selecionado, setSelecionado] = useState<Cliente | null>(null);
 
-  const { data: clientes, isFetching } = trpc.asaas.listarClientesVinculados.useQuery(
+  // Hooks de query são incondicionais (regra do React); só 1 fica ativo por
+  // vez via `enabled`, conforme a fonte.
+  const isCadastro = fonte === "cadastro";
+  const qFinanceiro = trpc.asaas.listarClientesVinculados.useQuery(
     { busca: buscaDebounced || undefined },
-    { retry: false, keepPreviousData: true } as any,
+    { retry: false, keepPreviousData: true, enabled: !isCadastro } as any,
   );
+  const qCadastro = (trpc as any).clientes.listar.useQuery(
+    { busca: buscaDebounced || undefined, limite: 20 },
+    { retry: false, keepPreviousData: true, enabled: isCadastro } as any,
+  );
+  const clientes = useMemo<Cliente[]>(() => {
+    if (isCadastro) {
+      return ((qCadastro.data?.clientes ?? []) as any[]).map((c) => ({
+        contatoId: c.id,
+        contatoNome: c.nome,
+        cpfCnpj: c.cpfCnpj ?? "",
+      }));
+    }
+    return (qFinanceiro.data ?? []) as Cliente[];
+  }, [isCadastro, qCadastro.data, qFinanceiro.data]);
+  const isFetching = isCadastro ? qCadastro.isFetching : qFinanceiro.isFetching;
 
   // Se o pai muda o value externamente (ex: reset), limpa o cache local.
   useEffect(() => {

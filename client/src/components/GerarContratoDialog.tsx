@@ -317,6 +317,7 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
               <div className="space-y-1.5">
                 <Label className="text-xs">Cliente *</Label>
                 <ClienteCombobox
+                  fonte="cadastro"
                   value={clienteAvulso ? String(clienteAvulso.id) : ""}
                   onChange={(id, cli) =>
                     setClienteAvulso(id && cli ? { id: Number(id), nome: cli.contatoNome } : null)

@@ -190,6 +190,7 @@ export function SubirDocumentoAssinaturaDialog({
             <div className="space-y-1.5">
               <Label className="text-xs">Cliente *</Label>
               <ClienteCombobox
+                fonte="cadastro"
                 value={cliente ? String(cliente.id) : ""}
                 onChange={(id, cli) => setCliente(id && cli ? { id: Number(id), nome: cli.contatoNome } : null)}
                 placeholder="Busque o cliente por nome, CPF ou telefone..."
