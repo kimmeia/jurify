@@ -179,6 +179,19 @@ export async function gerarComercialPdf(args: {
           doc.y = doc.page.margins.top;
         }
       };
+      // pdfkit 0.17 ignora `ellipsis` sem `height`, e `lineBreak:false` ainda
+      // quebra a linha quando há `width` — então truncamos na mão, medindo na
+      // fonte/tamanho atuais. Chamar SEMPRE depois de fixar font()+fontSize().
+      const fit = (texto: string, larguraMax: number): string => {
+        if (!texto) return texto;
+        if (doc.widthOfString(texto) <= larguraMax) return texto;
+        const ell = "…";
+        let t = texto;
+        while (t.length > 1 && doc.widthOfString(t + ell) > larguraMax) {
+          t = t.slice(0, -1);
+        }
+        return t.replace(/\s+$/, "") + ell;
+      };
       const hr = (y: number, color: string = C.line, w = 0.7) => {
         doc.save().strokeColor(color).lineWidth(w).moveTo(L, y).lineTo(R, y).stroke().restore();
       };
@@ -225,7 +238,7 @@ export async function gerarComercialPdf(args: {
       const meta = (label: string, val: string, x: number, yy: number) => {
         doc.fillColor(C.faint).font("Helvetica").fontSize(7.5).text(label.toUpperCase(), x, yy);
         doc.fillColor(C.dark).font("Helvetica-Bold").fontSize(9)
-          .text(val, x, yy + 9, { width: colMeta - 16, lineBreak: false, ellipsis: true });
+          .text(fit(val, colMeta - 16), x, yy + 9, { width: colMeta - 16, lineBreak: false });
       };
       meta("Período", `${formatData(data.periodo.dataInicio)} a ${formatData(data.periodo.dataFim)}`, L + 10, y + 6);
       meta("Setor comercial", setorNome, L + colMeta, y + 6);
@@ -353,10 +366,10 @@ export async function gerarComercialPdf(args: {
           doc.fillColor(top3 ? C.amber : C.muted).font(top3 ? "Helvetica-Bold" : "Helvetica")
             .fontSize(8.5).text(`${idx + 1}º`, xRank, yr + 3, { width: 18 });
           doc.fillColor(C.dark).font(top3 ? "Helvetica-Bold" : "Helvetica").fontSize(8.5)
-            .text(r.nome, xAtend, yr, { width: 140, lineBreak: false, ellipsis: true });
+            .text(fit(r.nome, 140), xAtend, yr, { width: 140, lineBreak: false });
           if (r.setorNome) {
             doc.fillColor(C.faint).font("Helvetica").fontSize(6.5)
-              .text(r.setorNome, xAtend, yr + 10, { width: 140, lineBreak: false, ellipsis: true });
+              .text(fit(r.setorNome, 140), xAtend, yr + 10, { width: 140, lineBreak: false });
           }
           doc.fillColor(C.blue).font("Helvetica-Bold").fontSize(8.5)
             .text(formatBRL(r.valorFechado), xFech, yr + 3, { width: wFech, align: "right", lineBreak: false });
@@ -397,10 +410,10 @@ export async function gerarComercialPdf(args: {
           const yh = doc.y;
           rrect(L, yh, W, 22, 4, "#f8fafc", C.line, 0.8);
           doc.fillColor(C.dark).font("Helvetica-Bold").fontSize(9.5)
-            .text(at.nome, L + 8, yh + 5, { width: 200, lineBreak: false, ellipsis: true });
+            .text(fit(at.nome, 200), L + 8, yh + 5, { width: 200, lineBreak: false });
           if (at.setorNome) {
             doc.fillColor(C.faint).font("Helvetica").fontSize(6.8)
-              .text(at.setorNome, L + 8, yh + 15, { width: 200, lineBreak: false, ellipsis: true });
+              .text(fit(at.setorNome, 200), L + 8, yh + 15, { width: 200, lineBreak: false });
           }
           doc.fillColor(C.muted).font("Helvetica").fontSize(7.5)
             .text("Total fechado", L + W - 250, yh + 4, { width: 110, align: "right" });
@@ -428,7 +441,7 @@ export async function gerarComercialPdf(args: {
             ensure(18);
             const yr = doc.y;
             doc.fillColor(C.dark).font("Helvetica").fontSize(8)
-              .text(cl.nome, xCli, yr + 2, { width: 165, lineBreak: false, ellipsis: true });
+              .text(fit(cl.nome, 165), xCli, yr + 2, { width: 165, lineBreak: false });
             doc.fillColor(C.blue).font("Helvetica-Bold").fontSize(8)
               .text(formatBRL(cl.valorFechado), xF, yr + 2, { width: wF, align: "right", lineBreak: false });
             doc.fillColor(C.muted).font("Helvetica").fontSize(8)
@@ -535,7 +548,7 @@ export async function gerarComercialPdf(args: {
           doc.fillColor(corNumero).font("Helvetica-Bold").fontSize(15)
             .text(String(it.valor), x, y0 + 8, { width: bw, align: "center" });
           doc.fillColor(C.muted).font("Helvetica").fontSize(7)
-            .text(it.label, x + 4, y0 + 29, { width: bw - 8, align: "center", lineBreak: false, ellipsis: true });
+            .text(fit(it.label, bw - 8), x + 4, y0 + 29, { width: bw - 8, align: "center", lineBreak: false });
           // Avança a linha só na última coluna (ou no último item).
           if (col === cols - 1 || i === items.length - 1) doc.y = y0 + bh + 8;
           else doc.y = y0;
@@ -584,7 +597,7 @@ export async function gerarComercialPdf(args: {
           const yh = doc.y;
           rrect(L, yh, W, 18, 4, "#f6fdf9", C.emeraldBd, 0.8);
           doc.fillColor("#065f46").font("Helvetica-Bold").fontSize(8.5)
-            .text(o.origem, L + 8, yh + 5, { width: W - 230, lineBreak: false, ellipsis: true });
+            .text(fit(o.origem, W - 230), L + 8, yh + 5, { width: W - 230, lineBreak: false });
           doc.fillColor("#047857").font("Helvetica-Bold").fontSize(8)
             .text(`${o.total} fechamento(s) · ${formatBRL(o.valorTotal || 0)}`,
               L + W - 218, yh + 5, { width: 210, align: "right", lineBreak: false });
@@ -606,14 +619,14 @@ export async function gerarComercialPdf(args: {
             ensure(14);
             const yr = doc.y;
             doc.fillColor(C.dark).font("Helvetica").fontSize(8)
-              .text(f.cliente, xCli, yr, { width: wCli, lineBreak: false, ellipsis: true });
+              .text(fit(f.cliente, wCli), xCli, yr, { width: wCli, lineBreak: false });
             doc.fillColor(C.muted).font("Helvetica").fontSize(8)
               .text(f.fechadoEm ? new Date(f.fechadoEm).toLocaleDateString("pt-BR") : "—",
                 xData, yr, { width: wData, lineBreak: false });
             doc.fillColor(C.emerald).font("Helvetica-Bold").fontSize(8)
               .text(formatBRL(f.valor || 0), xVal, yr, { width: wVal, align: "right", lineBreak: false });
             doc.fillColor(C.muted).font("Helvetica").fontSize(8)
-              .text(f.responsavel || "—", xResp, yr, { width: wResp, lineBreak: false, ellipsis: true });
+              .text(fit(f.responsavel || "—", wResp), xResp, yr, { width: wResp, lineBreak: false });
             doc.y = yr + 12;
           }
           doc.y += 8;
