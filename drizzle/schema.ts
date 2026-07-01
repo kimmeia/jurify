@@ -679,7 +679,7 @@ export const contatos = mysqlTable("contatos", {
    *  - 'cancelado': cliente desistiu/cancelou
    * Encerrado e cancelado aparecem em vermelho na lista + no filtro próprio.
    */
-  situacaoServico: mysqlEnum("situacaoServico", ["ativo", "encerrado", "cancelado"]).default("ativo").notNull(),
+  situacaoServico: mysqlEnum("situacaoServico", ["ativo", "suspenso", "encerrado", "cancelado", "rescindido", "executado"]).default("ativo").notNull(),
   servicoEncerradoEm: timestamp("servicoEncerradoEm"),
   servicoEncerradoMotivo: varchar("servicoEncerradoMotivo", { length: 500 }),
   /** colaboradorId de quem encerrou (auditoria). */

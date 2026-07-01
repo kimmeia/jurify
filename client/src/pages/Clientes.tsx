@@ -295,7 +295,8 @@ type Segmento =
   | "com_telefone"
   | "aguardando_docs"
   | "com_debito"
-  | "encerrados";
+  | "encerrados"
+  | "suspensos";
 
 /** Backend agora filtra todos os segmentos no servidor (incluindo
  *  com_debito via subquery em asaas_cobrancas). Esta função mantém
@@ -331,10 +332,33 @@ function aplicarSegmento(
     return clientes.filter((c) => (c.tags || "").toLowerCase().includes("vip"));
   }
   if (seg === "encerrados") {
-    return clientes.filter((c) => c.situacaoServico && c.situacaoServico !== "ativo");
+    return clientes.filter((c) => c.situacaoServico && c.situacaoServico !== "ativo" && c.situacaoServico !== "suspenso");
+  }
+  if (seg === "suspensos") {
+    return clientes.filter((c) => c.situacaoServico === "suspenso");
   }
   return clientes;
 }
+
+/** Situação do serviço → rótulo, ícone e classes de cor (lista + detalhe).
+ *  Suspenso = amarelo (pausa reversível); Encerrado = cinza (concluído);
+ *  Cancelado/Rescindido/Executado = vermelho (perda). */
+const SITUACAO_SERVICO_INFO: Record<string, { label: string; icon: string; nome: string; badge: string }> = {
+  suspenso:   { label: "Suspenso",   icon: "⏸", nome: "text-amber-600", badge: "bg-amber-50 text-amber-700 border-amber-200" },
+  encerrado:  { label: "Encerrado",  icon: "✓", nome: "text-slate-600", badge: "bg-slate-100 text-slate-600 border-slate-200" },
+  cancelado:  { label: "Cancelado",  icon: "⛔", nome: "text-rose-600", badge: "bg-rose-50 text-rose-700 border-rose-200" },
+  rescindido: { label: "Rescindido", icon: "✂", nome: "text-rose-600", badge: "bg-red-50 text-red-700 border-red-200" },
+  executado:  { label: "Executado",  icon: "⚖", nome: "text-rose-700", badge: "bg-red-100 text-red-800 border-red-300" },
+};
+
+/** Opções do diálogo de situação — agrupadas (pausa × encerramento). */
+const OPCOES_SITUACAO: Array<{ grupo?: string; tipo: "suspenso" | "encerrado" | "cancelado" | "rescindido" | "executado"; titulo: string; desc: string }> = [
+  { grupo: "Pausa temporária", tipo: "suspenso", titulo: "Suspenso", desc: "Pausa temporária — dá pra reativar depois." },
+  { grupo: "Encerramento definitivo", tipo: "encerrado", titulo: "Encerrado (concluído)", desc: "A ação/serviço terminou normalmente." },
+  { tipo: "cancelado", titulo: "Cancelado pelo cliente", desc: "O cliente desistiu / cancelou." },
+  { tipo: "rescindido", titulo: "Rescindido (por nós)", desc: "Rescindimos — ex: falta de pagamento." },
+  { tipo: "executado", titulo: "Executado", desc: "Execução judicial (cobrança)." },
+];
 
 /** Heurística "inativo há quantos dias" — usado nas pills do row. */
 function diasInativo(c: any): number | null {
@@ -709,6 +733,14 @@ export default function Clientes() {
               <ChipSegmento ativo={segmento === "inativo"} onClick={() => setSegmento("inativo")}>
                 Inativos (30d+)
               </ChipSegmento>
+              <ChipSegmento ativo={segmento === "suspensos"} onClick={() => setSegmento("suspensos")}>
+                ⏸ Suspensos
+                {(stats?.suspensos ?? 0) > 0 && (
+                  <CountPill ativo={segmento === "suspensos"} tom="amber">
+                    {stats?.suspensos}
+                  </CountPill>
+                )}
+              </ChipSegmento>
               <ChipSegmento ativo={segmento === "encerrados"} onClick={() => setSegmento("encerrados")}>
                 ⛔ Encerrados/Cancelados
                 {(stats?.encerrados ?? 0) > 0 && (
@@ -1016,9 +1048,8 @@ function LinhaCliente({
   const vencido = Number(resumoFin?.vencido ?? 0);
   const recebido = Number(resumoFin?.recebido ?? 0);
   const pendente = Number(resumoFin?.pendente ?? 0);
-  const cancelado = c.situacaoServico === "cancelado";
-  const encerrado = c.situacaoServico === "encerrado";
-  const foraDeServico = cancelado || encerrado;
+  const situacao: string | null = c.situacaoServico && c.situacaoServico !== "ativo" ? c.situacaoServico : null;
+  const situacaoInfo = situacao ? SITUACAO_SERVICO_INFO[situacao] : null;
 
   return (
     <div
@@ -1038,17 +1069,12 @@ function LinhaCliente({
       </div>
       <div className="min-w-0">
         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-          <p className={`text-sm font-semibold truncate ${foraDeServico ? "text-rose-600" : inativoDias != null ? "text-slate-600" : ""}`}>
+          <p className={`text-sm font-semibold truncate ${situacaoInfo ? situacaoInfo.nome : inativoDias != null ? "text-slate-600" : ""}`}>
             {c.nome}
           </p>
-          {cancelado && (
-            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-              ⛔ Cancelado
-            </span>
-          )}
-          {encerrado && (
-            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-              ✓ Encerrado
+          {situacaoInfo && (
+            <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${situacaoInfo.badge}`}>
+              {situacaoInfo.icon} {situacaoInfo.label}
             </span>
           )}
           {isVip && <Star className="h-3.5 w-3.5 text-amber-500 shrink-0 fill-amber-500" />}
@@ -2650,11 +2676,12 @@ function ClienteDetalhe({
   });
   // Encerramento/cancelamento de serviço.
   const [encerrarOpen, setEncerrarOpen] = useState(false);
-  const [encerrarTipo, setEncerrarTipo] = useState<"cancelado" | "encerrado">("cancelado");
+  const [encerrarTipo, setEncerrarTipo] = useState<"suspenso" | "encerrado" | "cancelado" | "rescindido" | "executado">("cancelado");
   const [encerrarMotivo, setEncerrarMotivo] = useState("");
+  const [encerrarData, setEncerrarData] = useState("");
   const encerrarServicoMut = (trpc as any).clientes.encerrarServico.useMutation({
     onSuccess: () => {
-      toast.success(encerrarTipo === "cancelado" ? "Serviço cancelado" : "Serviço encerrado");
+      toast.success(`Serviço ${SITUACAO_SERVICO_INFO[encerrarTipo]?.label.toLowerCase() ?? "atualizado"}`);
       setEncerrarOpen(false);
       setEncerrarMotivo("");
       refetch();
@@ -2699,7 +2726,8 @@ function ClienteDetalhe({
   ) || { data: null };
   const podeExcluirCliente = !!(minhasPerms?.permissoes?.clientes?.excluir);
   const podeEditarCliente = !!(minhasPerms?.permissoes?.clientes?.editar);
-  const foraDeServico = cliente?.situacaoServico && cliente.situacaoServico !== "ativo";
+  const situacaoServico: string | null = cliente?.situacaoServico && cliente.situacaoServico !== "ativo" ? cliente.situacaoServico : null;
+  const foraDeServico = !!situacaoServico;
 
   if (!cliente) {
     return (
@@ -2757,7 +2785,7 @@ function ClienteDetalhe({
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <h2 className="text-2xl font-bold tracking-tight">{cliente.nome}</h2>
+                <h2 className={`text-2xl font-bold tracking-tight ${situacaoServico === "suspenso" ? "text-amber-200" : foraDeServico ? "text-rose-200" : ""}`}>{cliente.nome}</h2>
                 {isVip && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-400/25 text-amber-50 border border-amber-300/30">
                     <Star className="w-3 h-3 fill-current" /> VIP
@@ -2777,9 +2805,13 @@ function ClienteDetalhe({
                     <CheckCircle2 className="w-3 h-3" /> Cliente
                   </span>
                 )}
-                {foraDeServico && (
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${cliente.situacaoServico === "cancelado" ? "bg-rose-500/30 text-rose-50 border-rose-300/40" : "bg-slate-500/30 text-slate-50 border-slate-300/40"}`}>
-                    <Ban className="w-3 h-3" /> {cliente.situacaoServico === "cancelado" ? "Cancelado" : "Encerrado"}
+                {foraDeServico && situacaoServico && (
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                    situacaoServico === "suspenso" ? "bg-amber-500/30 text-amber-50 border-amber-300/40"
+                    : situacaoServico === "encerrado" ? "bg-slate-500/30 text-slate-50 border-slate-300/40"
+                    : "bg-rose-500/30 text-rose-50 border-rose-300/40"
+                  }`}>
+                    <Ban className="w-3 h-3" /> {SITUACAO_SERVICO_INFO[situacaoServico]?.label}
                   </span>
                 )}
               </div>
@@ -2815,11 +2847,15 @@ function ClienteDetalhe({
                   </span>
                 )}
               </div>
-              {foraDeServico && (
-                <div className={`mt-2 inline-flex items-start gap-2 rounded-lg px-3 py-1.5 text-xs border ${cliente.situacaoServico === "cancelado" ? "bg-rose-500/20 border-rose-300/30 text-rose-50" : "bg-slate-500/25 border-slate-300/30 text-slate-50"}`}>
+              {foraDeServico && situacaoServico && (
+                <div className={`mt-2 inline-flex items-start gap-2 rounded-lg px-3 py-1.5 text-xs border ${
+                  situacaoServico === "suspenso" ? "bg-amber-500/20 border-amber-300/30 text-amber-50"
+                  : situacaoServico === "encerrado" ? "bg-slate-500/25 border-slate-300/30 text-slate-50"
+                  : "bg-rose-500/20 border-rose-300/30 text-rose-50"
+                }`}>
                   <Ban className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                   <span>
-                    Serviço {cliente.situacaoServico === "cancelado" ? "cancelado" : "encerrado"}
+                    Serviço {SITUACAO_SERVICO_INFO[situacaoServico]?.label.toLowerCase()}
                     {(cliente as any).servicoEncerradoEm ? ` em ${new Date((cliente as any).servicoEncerradoEm).toLocaleDateString("pt-BR")}` : ""}
                     {(cliente as any).servicoEncerradoPorNome ? ` por ${(cliente as any).servicoEncerradoPorNome}` : ""}
                     {(cliente as any).servicoEncerradoMotivo ? ` — ${(cliente as any).servicoEncerradoMotivo}` : ""}
@@ -2908,8 +2944,8 @@ function ClienteDetalhe({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => { setEncerrarTipo("cancelado"); setEncerrarMotivo(""); setEncerrarOpen(true); }}
-                    title="Encerrar ou cancelar o serviço deste cliente"
+                    onClick={() => { setEncerrarTipo("cancelado"); setEncerrarMotivo(""); setEncerrarData(new Date().toISOString().slice(0, 10)); setEncerrarOpen(true); }}
+                    title="Suspender, encerrar, cancelar, rescindir ou executar o serviço"
                     className="text-rose-100 bg-rose-500/25 hover:bg-rose-500/35 border border-rose-300/30 backdrop-blur-sm shadow-sm h-8 text-xs"
                   >
                     <Ban className="w-3.5 h-3.5 mr-1" />
@@ -3236,37 +3272,48 @@ function ClienteDetalhe({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Ban className="h-5 w-5 text-rose-600" />
-              Encerrar serviço
+              Situação do serviço
             </DialogTitle>
             <DialogDescription>
               Cliente: <b>{cliente?.nome}</b>
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-1">
-            {([
-              { tipo: "cancelado" as const, titulo: "Cancelado pelo cliente", desc: "O cliente desistiu / cancelou o serviço." },
-              { tipo: "encerrado" as const, titulo: "Encerrado (concluído)", desc: "A ação/serviço terminou normalmente." },
-            ]).map((o) => (
-              <button
-                key={o.tipo}
-                type="button"
-                onClick={() => setEncerrarTipo(o.tipo)}
-                className={`w-full text-left flex gap-3 rounded-lg border p-3 transition-colors ${encerrarTipo === o.tipo ? "border-rose-400 bg-rose-50" : "border-border hover:bg-muted/40"}`}
-              >
-                <span className={`mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 ${encerrarTipo === o.tipo ? "border-rose-500 bg-rose-500 ring-2 ring-inset ring-white" : "border-muted-foreground/40"}`} />
-                <span>
-                  <span className="text-sm font-medium block">{o.titulo}</span>
-                  <span className="text-xs text-muted-foreground">{o.desc}</span>
-                </span>
-              </button>
-            ))}
+          <div className="space-y-2 py-1 max-h-[50vh] overflow-y-auto pr-1">
+            {OPCOES_SITUACAO.map((o) => {
+              const sel = encerrarTipo === o.tipo;
+              const amber = o.tipo === "suspenso";
+              return (
+                <div key={o.tipo}>
+                  {o.grupo && (
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mt-2 mb-1">
+                      {o.grupo}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setEncerrarTipo(o.tipo)}
+                    className={`w-full text-left flex gap-3 rounded-lg border p-2.5 transition-colors ${sel ? (amber ? "border-amber-400 bg-amber-50" : "border-rose-400 bg-rose-50") : "border-border hover:bg-muted/40"}`}
+                  >
+                    <span className={`mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 ${sel ? (amber ? "border-amber-500 bg-amber-500 ring-2 ring-inset ring-white" : "border-rose-500 bg-rose-500 ring-2 ring-inset ring-white") : "border-muted-foreground/40"}`} />
+                    <span>
+                      <span className="text-sm font-medium block">{o.titulo}</span>
+                      <span className="text-xs text-muted-foreground">{o.desc}</span>
+                    </span>
+                  </button>
+                </div>
+              );
+            })}
+            <div className="space-y-1 pt-1">
+              <Label className="text-xs">Data</Label>
+              <Input type="date" value={encerrarData} onChange={(e) => setEncerrarData(e.target.value)} />
+            </div>
             <div className="space-y-1">
               <Label className="text-xs">Motivo (opcional)</Label>
               <Textarea
                 rows={2}
                 value={encerrarMotivo}
                 onChange={(e) => setEncerrarMotivo(e.target.value)}
-                placeholder="Ex: cliente desistiu por questões financeiras"
+                placeholder="Ex: rescindido por falta de pagamento"
                 maxLength={500}
               />
             </div>
@@ -3276,13 +3323,14 @@ function ClienteDetalhe({
               Cancelar
             </Button>
             <Button
-              className="bg-rose-600 hover:bg-rose-700 text-white"
+              className={encerrarTipo === "suspenso" ? "bg-amber-500 hover:bg-amber-600 text-white" : "bg-rose-600 hover:bg-rose-700 text-white"}
               disabled={encerrarServicoMut.isPending}
               onClick={() =>
                 encerrarServicoMut.mutate({
                   contatoId: id,
                   tipo: encerrarTipo,
                   motivo: encerrarMotivo.trim() || undefined,
+                  data: encerrarData || undefined,
                 })
               }
             >
@@ -3291,7 +3339,7 @@ function ClienteDetalhe({
               ) : (
                 <Ban className="h-4 w-4 mr-2" />
               )}
-              {encerrarTipo === "cancelado" ? "Cancelar serviço" : "Encerrar serviço"}
+              Confirmar
             </Button>
           </DialogFooter>
         </DialogContent>

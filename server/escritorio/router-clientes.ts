@@ -160,7 +160,7 @@ export const clientesRouter = router({
      * com 200 clientes mostrava só os VIPs entre os 50 mais recentes).
      */
     segmento: z
-      .enum(["todos", "vip", "inativo", "novos", "com_email", "com_telefone", "aguardando_docs", "com_debito", "encerrados"])
+      .enum(["todos", "vip", "inativo", "novos", "com_email", "com_telefone", "aguardando_docs", "com_debito", "encerrados", "suspensos"])
       .optional(),
     /**
      * Estágio: 'cliente' (fechou contrato) | 'lead' (em atendimento) |
@@ -248,8 +248,11 @@ export const clientesRouter = router({
         )`,
       );
     } else if (seg === "encerrados") {
-      // Serviço encerrado OU cancelado (tudo que não está ativo).
-      where = and(where, sql`${contatos.situacaoServico} <> 'ativo'`);
+      // Encerramentos definitivos — exclui ativo e suspenso (suspenso tem
+      // filtro próprio, é pausa reversível).
+      where = and(where, sql`${contatos.situacaoServico} NOT IN ('ativo', 'suspenso')`);
+    } else if (seg === "suspensos") {
+      where = and(where, eq(contatos.situacaoServico, "suspenso"));
     }
 
     const rows = await db.select().from(contatos).where(where).orderBy(desc(contatos.createdAt)).limit(limite).offset(offset);
@@ -544,8 +547,10 @@ export const clientesRouter = router({
   encerrarServico: protectedProcedure
     .input(z.object({
       contatoId: z.number(),
-      tipo: z.enum(["encerrado", "cancelado"]),
+      tipo: z.enum(["suspenso", "encerrado", "cancelado", "rescindido", "executado"]),
       motivo: z.string().max(500).optional(),
+      // Data do encerramento/suspensão (o usuário escolhe). Default = hoje.
+      data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "editar");
@@ -559,7 +564,8 @@ export const clientesRouter = router({
         .update(contatos)
         .set({
           situacaoServico: input.tipo,
-          servicoEncerradoEm: new Date(),
+          // meia-noite→meio-dia evita a data "voltar 1 dia" por fuso.
+          servicoEncerradoEm: input.data ? new Date(input.data + "T12:00:00") : new Date(),
           servicoEncerradoMotivo: input.motivo?.trim() || null,
           servicoEncerradoPor: perm.colaboradorId,
         })
@@ -1264,6 +1270,7 @@ export const clientesRouter = router({
       aguardandoDocumentacao: 0,
       inadimplentes: 0,
       encerrados: 0,
+      suspensos: 0,
     };
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
     if (!perm.allowed) return ZERO;
@@ -1299,7 +1306,8 @@ export const clientesRouter = router({
         comTelefone: sql<number | string>`SUM(CASE WHEN ${contatos.telefone} IS NOT NULL AND ${contatos.telefone} <> '' THEN 1 ELSE 0 END)`,
         comEmail: sql<number | string>`SUM(CASE WHEN ${contatos.email} IS NOT NULL AND ${contatos.email} <> '' THEN 1 ELSE 0 END)`,
         aguardandoDocumentacao: sql<number | string>`SUM(CASE WHEN ${contatos.documentacaoPendente} = 1 THEN 1 ELSE 0 END)`,
-        encerrados: sql<number | string>`SUM(CASE WHEN ${contatos.situacaoServico} <> 'ativo' THEN 1 ELSE 0 END)`,
+        encerrados: sql<number | string>`SUM(CASE WHEN ${contatos.situacaoServico} NOT IN ('ativo', 'suspenso') THEN 1 ELSE 0 END)`,
+        suspensos: sql<number | string>`SUM(CASE WHEN ${contatos.situacaoServico} = 'suspenso' THEN 1 ELSE 0 END)`,
       })
       .from(contatos)
       .where(where);
@@ -1347,6 +1355,7 @@ export const clientesRouter = router({
       aguardandoDocumentacao: Number(stats?.aguardandoDocumentacao ?? 0),
       inadimplentes,
       encerrados: Number(stats?.encerrados ?? 0),
+      suspensos: Number(stats?.suspensos ?? 0),
     };
   }),
 
