@@ -32,7 +32,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createLogger } from "../_core/logger";
 import { converterDocxParaPdf } from "./docx-to-pdf";
-import { checkPermissionAdminOuMatriz } from "./check-permission";
+import { checkPermission } from "./check-permission";
 import {
   CATALOGO_BASE,
   detectarPlaceholders,
@@ -57,17 +57,32 @@ function ensureDir(dir: string) {
 }
 
 /**
- * Garante que o usuário pode gerenciar modelos de contrato. Aceita dono,
- * gestor (legado preservado) ou cargo personalizado com permissão de
- * editar "configuracoes". Antes do bug #9, hardcode em `cargo === "dono" ||
- * cargo === "gestor"` ignorava cargos personalizados criados via UI.
+ * Garante que o usuário pode GERENCIAR modelos de contrato (subir, mapear,
+ * mover, excluir). Segue a permissão do módulo "modelos" (editar). Cai em
+ * "configuracoes" pra não quebrar cargos configurados antes do módulo
+ * Modelos existir (checkPermission já dá bypass pro dono).
  */
 async function requireGestao(userId: number): Promise<void> {
-  const perm = await checkPermissionAdminOuMatriz(userId, "configuracoes", "editar");
+  const perm = await checkPermission(userId, "modelos", "editar", { fallbackModulo: "configuracoes" });
   if (!perm.allowed) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Apenas dono, gestor ou cargo com permissão de editar configurações pode gerenciar modelos de contrato.",
+      message: "Sem permissão para gerenciar modelos de contrato.",
+    });
+  }
+}
+
+/**
+ * Garante que o usuário pode VER/USAR modelos (listar, abrir, gerar). Segue
+ * a permissão do módulo "modelos" (ver). Cai em "clientes" pra preservar o
+ * acesso de quem já via Modelos (o menu era gated por "clientes").
+ */
+async function requireVer(userId: number): Promise<void> {
+  const perm = await checkPermission(userId, "modelos", "ver", { fallbackModulo: "clientes" });
+  if (!perm.allowed) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Sem permissão para acessar modelos de contrato.",
     });
   }
 }
@@ -122,6 +137,7 @@ export const modelosContratoRouter = router({
   /** Lista variáveis disponíveis (catálogo base + campos personalizados
    *  do escritório). Usado pela UI de mapeamento. */
   catalogoVariaveis: protectedProcedure.query(async ({ ctx }) => {
+    await requireVer(ctx.user.id);
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return CATALOGO_BASE;
     const db = await getDb();
@@ -143,6 +159,7 @@ export const modelosContratoRouter = router({
   }),
 
   listar: protectedProcedure.query(async ({ ctx }) => {
+    await requireVer(ctx.user.id);
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return [];
     const db = await getDb();
@@ -171,6 +188,7 @@ export const modelosContratoRouter = router({
   obter: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
+      await requireVer(ctx.user.id);
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
@@ -375,6 +393,7 @@ export const modelosContratoRouter = router({
    *  da UI ao mover/criar modelo. NULL (raiz) é omitido — frontend
    *  representa como item "Sem pasta" separadamente. */
   listarPastas: protectedProcedure.query(async ({ ctx }) => {
+    await requireVer(ctx.user.id);
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return [];
     const db = await getDb();
@@ -468,6 +487,7 @@ export const modelosContratoRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await requireVer(ctx.user.id);
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
 
@@ -511,6 +531,7 @@ export const modelosContratoRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await requireVer(ctx.user.id);
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
