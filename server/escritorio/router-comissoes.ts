@@ -14,6 +14,7 @@ import {
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { checkPermission } from "./check-permission";
 import { diagnosticarComissao, fecharComissao, FechamentoJaExisteError, simularComissao } from "./db-comissoes";
+import { gerarComissaoPdf, type ComissaoPdfItem } from "./comissao-pdf";
 
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const dataInput = z.string().regex(DATA_REGEX, "Use o formato YYYY-MM-DD.");
@@ -82,6 +83,86 @@ export const comissoesRouter = router({
         input.periodoInicio,
         input.periodoFim,
       );
+    }),
+
+  /**
+   * Gera o PDF do "Relatório de Comissão" (mesmos dados do `simular`) pra
+   * impressão/conferência antes de fechar o período com o atendente.
+   * Retorna base64 (transportável via tRPC) que o front decodifica em Blob.
+   */
+  exportarPdf: protectedProcedure
+    .input(
+      z.object({
+        atendenteId: z.number(),
+        periodoInicio: dataInput,
+        periodoFim: dataInput,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
+      if (input.periodoInicio > input.periodoFim) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Período inválido: início depois do fim." });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [atendente] = await db
+        .select({ nome: users.name, cargo: colaboradores.cargo })
+        .from(colaboradores)
+        .innerJoin(users, eq(users.id, colaboradores.userId))
+        .where(and(
+          eq(colaboradores.id, input.atendenteId),
+          eq(colaboradores.escritorioId, esc.escritorio.id),
+        ))
+        .limit(1);
+      if (!atendente) throw new TRPCError({ code: "NOT_FOUND", message: "Atendente não encontrado." });
+
+      const sim = await simularComissao(
+        esc.escritorio.id, input.atendenteId, input.periodoInicio, input.periodoFim,
+      );
+
+      const mapItem = (c: {
+        dataPagamento: string | null; contatoNome: string | null; descricao: string | null;
+        categoriaNome: string | null; valor: number; motivoExclusao?: string | null;
+      }): ComissaoPdfItem => ({
+        dataPagamento: c.dataPagamento ?? "",
+        contatoNome: c.contatoNome ?? null,
+        descricao: c.descricao ?? null,
+        categoriaNome: c.categoriaNome ?? null,
+        valor: Number(c.valor),
+        motivoExclusao: c.motivoExclusao ?? null,
+      });
+
+      const buffer = await gerarComissaoPdf({
+        nomeEscritorio: esc.escritorio.nome,
+        atendenteNome: atendente.nome ?? "—",
+        atendenteCargo: atendente.cargo ?? "",
+        periodoInicio: input.periodoInicio,
+        periodoFim: input.periodoFim,
+        emitidoEm: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+        aliquotaAplicada: Number(sim.aliquotaAplicada ?? 0),
+        totais: sim.totais,
+        regra: { modo: sim.regra.modo, valorMinimo: sim.regra.valorMinimo, baseFaixa: sim.regra.baseFaixa },
+        faixaAplicada: sim.faixaAplicada
+          ? {
+              valorBaseClassificacao: Number(sim.faixaAplicada.valorBaseClassificacao),
+              limiteAte: sim.faixaAplicada.limiteAte === null ? null : Number(sim.faixaAplicada.limiteAte),
+              aliquotaPercent: Number(sim.faixaAplicada.aliquotaPercent),
+            }
+          : null,
+        comissionaveis: sim.comissionaveis.map(mapItem),
+        naoComissionaveis: sim.naoComissionaveis.map(mapItem),
+      });
+
+      const slug = (atendente.nome ?? "atendente")
+        .normalize("NFD").replace(/[̀-ͯ]/g, "")
+        .replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase().slice(0, 40) || "atendente";
+      return {
+        filename: `comissao_${slug}_${input.periodoInicio}_a_${input.periodoFim}.pdf`,
+        base64: buffer.toString("base64"),
+        mimeType: "application/pdf",
+      };
     }),
 
   /**
