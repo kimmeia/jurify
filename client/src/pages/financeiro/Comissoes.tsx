@@ -56,6 +56,7 @@ import {
 import {
   Calculator,
   CheckCircle2,
+  FileDown,
   History,
   Loader2,
   Lock,
@@ -65,7 +66,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { formatBRL, useFinanceiroPerms } from "./helpers";
+import { formatBRL, useFinanceiroPerms, base64ToBlob, baixarBlob } from "./helpers";
 import {
   FiltrosAtribuir,
   filtrosParaInput,
@@ -186,6 +187,15 @@ export function CalcularSection() {
     },
     onError: (err: any) =>
       toast.error("Erro ao fechar", { description: err.message }),
+  });
+
+  const exportarPdfMut = (trpc.comissoes.exportarPdf as any).useMutation({
+    onSuccess: (r: { filename: string; base64: string; mimeType: string }) => {
+      baixarBlob(base64ToBlob(r.base64, r.mimeType), r.filename, r.mimeType);
+      toast.success("PDF gerado");
+    },
+    onError: (err: any) =>
+      toast.error("Erro ao gerar PDF", { description: err.message }),
   });
 
   const totais = sim.data?.totais;
@@ -342,6 +352,23 @@ export function CalcularSection() {
               title="Compara cobranças pagas no período com o que entra na comissão"
             >
               🔍 Diagnosticar diferença
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!sim.data || exportarPdfMut.isPending}
+              onClick={() =>
+                atendenteIdNum &&
+                exportarPdfMut.mutate({ atendenteId: atendenteIdNum, periodoInicio, periodoFim })
+              }
+              title="Gerar PDF pra impressão/conferência antes de fechar"
+            >
+              {exportarPdfMut.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+              ) : (
+                <FileDown className="h-3.5 w-3.5 mr-2" />
+              )}
+              Gerar PDF
             </Button>
           </div>
 
