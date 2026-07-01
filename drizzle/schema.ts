@@ -673,6 +673,18 @@ export const contatos = mysqlTable("contatos", {
    */
   documentacaoObservacoes: text("documentacaoObservacoes"),
   /**
+   * Situação do serviço do cliente:
+   *  - 'ativo' (default): serviço em andamento
+   *  - 'encerrado': ação/serviço concluído normalmente
+   *  - 'cancelado': cliente desistiu/cancelou
+   * Encerrado e cancelado aparecem em vermelho na lista + no filtro próprio.
+   */
+  situacaoServico: mysqlEnum("situacaoServico", ["ativo", "encerrado", "cancelado"]).default("ativo").notNull(),
+  servicoEncerradoEm: timestamp("servicoEncerradoEm"),
+  servicoEncerradoMotivo: varchar("servicoEncerradoMotivo", { length: 500 }),
+  /** colaboradorId de quem encerrou (auditoria). */
+  servicoEncerradoPor: int("servicoEncerradoPor"),
+  /**
    * Valores dos campos personalizados do escritório (definidos em
    * `camposPersonalizadosCliente`). JSON serializado com formato:
    * `{ "<chave>": "<valor>" }`. Nulo quando o cliente ainda não tem
