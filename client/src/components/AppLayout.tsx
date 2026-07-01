@@ -396,9 +396,9 @@ function AppSidebarContent({
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
-              {/* Modelos de contrato — depende de "clientes" pra fazer sentido (gera
-                  contrato pra um cliente específico). */}
-              {canSee("clientes") && <SidebarMenuItem>
+              {/* Modelos de contrato — módulo próprio "modelos". Herda de
+                  "clientes" pra cargos antigos (ver check-permission / MODULO_HERANCA). */}
+              {canSee("modelos") && <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location === "/modelos-contrato"}
                   onClick={() => navigateOrBlock("/modelos-contrato")}

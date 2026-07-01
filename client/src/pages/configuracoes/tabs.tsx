@@ -17,28 +17,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, Plus, Trash2, Shield } from "lucide-react";
 import { toast } from "sonner";
+import { MODULOS, MODULOS_LABELS } from "@shared/permissoes-modulos";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Aba Permissões — Gerenciamento de cargos e permissões customizáveis
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Deve bater com o MODULOS do backend (router-permissoes.ts) e com os
-// canSee() do AppLayout.tsx. Ao adicionar módulo novo, incluir aqui.
-const MODULOS_LABELS: Record<string, string> = {
-  dashboard: "Dashboard",
-  calculos: "Cálculos",
-  clientes: "Clientes",
-  processos: "Processos",
-  atendimento: "Atendimento",
-  kanban: "Kanban",
-  agenda: "Agenda",
-  smartflow: "SmartFlow",
-  agentesIa: "Agentes IA",
-  relatorios: "Relatórios",
-  financeiro: "Financeiro",
-  configuracoes: "Configurações",
-  equipe: "Equipe",
-};
+// Módulos e rótulos vêm da fonte única em shared/permissoes-modulos.ts
+// (mesma lista do backend) — evita drift entre matriz, canSee() e checagem.
 const PERM_LABELS: Record<string, string> = { verTodos: "Ver todos", verProprios: "Ver próprios", criar: "Criar", editar: "Editar", excluir: "Excluir" };
 const CORES_CARGO = ["#dc2626", "#2563eb", "#16a34a", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];
 
@@ -66,7 +52,7 @@ export function PermissoesTab() {
   // pelo backend.
   const [editPerms, setEditPerms] = useState<Record<string, Record<string, boolean>>>({});
 
-  const modulos = Object.keys(MODULOS_LABELS);
+  const modulos = [...MODULOS];
   const perms = Object.keys(PERM_LABELS);
 
   const initNovoPerms = () => {

@@ -20,6 +20,7 @@ import { getDb } from "../db";
 import { colaboradores, cargosPersonalizados, permissoesCargo } from "../../drizzle/schema";
 import { eq, and, or } from "drizzle-orm";
 import { getEscritorioPorUsuario } from "./db-escritorio";
+import { MODULOS } from "../../shared/permissoes-modulos";
 
 export interface PermissionResult {
   allowed: boolean;
@@ -45,6 +46,7 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     dashboard: perm(true, true, false, false, false),
     calculos: perm(true, true, true, true, true),
     clientes: perm(true, true, true, true, true),
+    modelos: perm(true, true, true, true, true),
     processos: perm(true, true, true, true, false),
     atendimento: perm(true, true, true, true, false),
     kanban: perm(true, true, true, true, false),
@@ -64,6 +66,7 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     dashboard: perm(true, true, false, false, false),
     calculos: perm(true, true, true, true, false),
     clientes: perm(false, true, true, true, false),
+    modelos: perm(false, true, true, true, false),
     processos: perm(false, true, true, true, false),
     atendimento: perm(false, true, true, true, false),
     kanban: perm(false, true, true, true, false),
@@ -82,6 +85,7 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     dashboard: perm(true, true, false, false, false),
     calculos: perm(true, true, false, false, false),
     clientes: perm(false, false, false, false, false),
+    modelos: perm(false, false, false, false, false),
     processos: perm(false, true, false, false, false),
     atendimento: perm(false, false, false, false, false),
     kanban: perm(false, false, false, false, false),
@@ -106,6 +110,7 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     dashboard: perm(true, true, false, false, false),
     calculos: perm(true, true, true, true, false),
     clientes: perm(false, true, true, true, false),
+    modelos: perm(false, true, true, true, false),
     processos: perm(false, true, true, true, false),
     atendimento: perm(false, true, true, true, false),
     kanban: perm(false, true, true, true, false),
@@ -127,13 +132,8 @@ function perm(vt: boolean, vp: boolean, c: boolean, e: boolean, x: boolean): Per
 }
 
 function defaultPerm(vt: boolean, vp: boolean, c: boolean, e: boolean, x: boolean): Record<string, PermissionResult> {
-  const modules = [
-    "dashboard", "calculos", "clientes", "processos", "atendimento",
-    "kanban", "agenda", "tarefas", "smartflow", "agentesIa", "relatorios", "financeiro",
-    "configuracoes", "equipe",
-    // legados
-    "pipeline", "agendamento",
-  ];
+  // Fonte única (inclui "modelos") + legados mantidos por retrocompat.
+  const modules = [...MODULOS, "pipeline", "agendamento"];
   const result: Record<string, PermissionResult> = {};
   for (const m of modules) result[m] = perm(vt, vp, c, e, x);
   return result;
