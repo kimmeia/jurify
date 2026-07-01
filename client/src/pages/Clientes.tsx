@@ -30,7 +30,7 @@ import {
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
   Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello, Pencil,
-  MapPin, AlertTriangle, Briefcase, UserPlus,
+  MapPin, AlertTriangle, Briefcase, UserPlus, Ban,
 } from "lucide-react";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
 import {
@@ -294,7 +294,8 @@ type Segmento =
   | "com_email"
   | "com_telefone"
   | "aguardando_docs"
-  | "com_debito";
+  | "com_debito"
+  | "encerrados";
 
 /** Backend agora filtra todos os segmentos no servidor (incluindo
  *  com_debito via subquery em asaas_cobrancas). Esta função mantém
@@ -328,6 +329,9 @@ function aplicarSegmento(
   }
   if (seg === "vip") {
     return clientes.filter((c) => (c.tags || "").toLowerCase().includes("vip"));
+  }
+  if (seg === "encerrados") {
+    return clientes.filter((c) => c.situacaoServico && c.situacaoServico !== "ativo");
   }
   return clientes;
 }
@@ -705,6 +709,14 @@ export default function Clientes() {
               <ChipSegmento ativo={segmento === "inativo"} onClick={() => setSegmento("inativo")}>
                 Inativos (30d+)
               </ChipSegmento>
+              <ChipSegmento ativo={segmento === "encerrados"} onClick={() => setSegmento("encerrados")}>
+                ⛔ Encerrados/Cancelados
+                {(stats?.encerrados ?? 0) > 0 && (
+                  <CountPill ativo={segmento === "encerrados"} tom="rose">
+                    {stats?.encerrados}
+                  </CountPill>
+                )}
+              </ChipSegmento>
             </div>
           </div>
 
@@ -1004,6 +1016,9 @@ function LinhaCliente({
   const vencido = Number(resumoFin?.vencido ?? 0);
   const recebido = Number(resumoFin?.recebido ?? 0);
   const pendente = Number(resumoFin?.pendente ?? 0);
+  const cancelado = c.situacaoServico === "cancelado";
+  const encerrado = c.situacaoServico === "encerrado";
+  const foraDeServico = cancelado || encerrado;
 
   return (
     <div
@@ -1023,9 +1038,19 @@ function LinhaCliente({
       </div>
       <div className="min-w-0">
         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-          <p className={`text-sm font-semibold truncate ${inativoDias != null ? "text-slate-600" : ""}`}>
+          <p className={`text-sm font-semibold truncate ${foraDeServico ? "text-rose-600" : inativoDias != null ? "text-slate-600" : ""}`}>
             {c.nome}
           </p>
+          {cancelado && (
+            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+              ⛔ Cancelado
+            </span>
+          )}
+          {encerrado && (
+            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+              ✓ Encerrado
+            </span>
+          )}
           {isVip && <Star className="h-3.5 w-3.5 text-amber-500 shrink-0 fill-amber-500" />}
           {c.documentacaoPendente && (
             <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
@@ -2623,6 +2648,30 @@ function ClienteDetalhe({
     },
     onError: (e: any) => toast.error(e.message),
   });
+  // Encerramento/cancelamento de serviço.
+  const [encerrarOpen, setEncerrarOpen] = useState(false);
+  const [encerrarTipo, setEncerrarTipo] = useState<"cancelado" | "encerrado">("cancelado");
+  const [encerrarMotivo, setEncerrarMotivo] = useState("");
+  const encerrarServicoMut = (trpc as any).clientes.encerrarServico.useMutation({
+    onSuccess: () => {
+      toast.success(encerrarTipo === "cancelado" ? "Serviço cancelado" : "Serviço encerrado");
+      setEncerrarOpen(false);
+      setEncerrarMotivo("");
+      refetch();
+      onUpdate();
+      utilsTrpc.clientes.estatisticas.invalidate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const reativarServicoMut = (trpc as any).clientes.reativarServico.useMutation({
+    onSuccess: () => {
+      toast.success("Serviço reativado");
+      refetch();
+      onUpdate();
+      utilsTrpc.clientes.estatisticas.invalidate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
   const [excluirConfirmAlvo, setExcluirConfirmAlvo] = useState(false);
   const [mesclarOpen, setMesclarOpen] = useState(false);
   const mesclarMut = trpc.crm.unificarContatos.useMutation({
@@ -2649,6 +2698,8 @@ function ClienteDetalhe({
     { retry: false, refetchOnWindowFocus: false },
   ) || { data: null };
   const podeExcluirCliente = !!(minhasPerms?.permissoes?.clientes?.excluir);
+  const podeEditarCliente = !!(minhasPerms?.permissoes?.clientes?.editar);
+  const foraDeServico = cliente?.situacaoServico && cliente.situacaoServico !== "ativo";
 
   if (!cliente) {
     return (
@@ -2824,6 +2875,32 @@ function ClienteDetalhe({
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                 Fechamento
               </Button>
+              {podeEditarCliente && (
+                foraDeServico ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => reativarServicoMut.mutate({ contatoId: id })}
+                    disabled={reativarServicoMut.isPending}
+                    title="Reativar o serviço deste cliente"
+                    className="text-emerald-100 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-300/30 backdrop-blur-sm shadow-sm h-8 text-xs"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                    Reativar serviço
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setEncerrarTipo("cancelado"); setEncerrarMotivo(""); setEncerrarOpen(true); }}
+                    title="Encerrar ou cancelar o serviço deste cliente"
+                    className="text-rose-100 bg-rose-500/25 hover:bg-rose-500/35 border border-rose-300/30 backdrop-blur-sm shadow-sm h-8 text-xs"
+                  >
+                    <Ban className="w-3.5 h-3.5 mr-1" />
+                    Encerrar serviço
+                  </Button>
+                )
+              )}
               {podeExcluirCliente && (
                 <Button
                   variant="ghost"
@@ -3137,6 +3214,72 @@ function ClienteDetalhe({
           utilsTrpc.clientes.detalhe.invalidate({ id });
         }}
       />
+
+      <Dialog open={encerrarOpen} onOpenChange={setEncerrarOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Ban className="h-5 w-5 text-rose-600" />
+              Encerrar serviço
+            </DialogTitle>
+            <DialogDescription>
+              Cliente: <b>{cliente?.nome}</b>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            {([
+              { tipo: "cancelado" as const, titulo: "Cancelado pelo cliente", desc: "O cliente desistiu / cancelou o serviço." },
+              { tipo: "encerrado" as const, titulo: "Encerrado (concluído)", desc: "A ação/serviço terminou normalmente." },
+            ]).map((o) => (
+              <button
+                key={o.tipo}
+                type="button"
+                onClick={() => setEncerrarTipo(o.tipo)}
+                className={`w-full text-left flex gap-3 rounded-lg border p-3 transition-colors ${encerrarTipo === o.tipo ? "border-rose-400 bg-rose-50" : "border-border hover:bg-muted/40"}`}
+              >
+                <span className={`mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 ${encerrarTipo === o.tipo ? "border-rose-500 bg-rose-500 ring-2 ring-inset ring-white" : "border-muted-foreground/40"}`} />
+                <span>
+                  <span className="text-sm font-medium block">{o.titulo}</span>
+                  <span className="text-xs text-muted-foreground">{o.desc}</span>
+                </span>
+              </button>
+            ))}
+            <div className="space-y-1">
+              <Label className="text-xs">Motivo (opcional)</Label>
+              <Textarea
+                rows={2}
+                value={encerrarMotivo}
+                onChange={(e) => setEncerrarMotivo(e.target.value)}
+                placeholder="Ex: cliente desistiu por questões financeiras"
+                maxLength={500}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEncerrarOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              disabled={encerrarServicoMut.isPending}
+              onClick={() =>
+                encerrarServicoMut.mutate({
+                  contatoId: id,
+                  tipo: encerrarTipo,
+                  motivo: encerrarMotivo.trim() || undefined,
+                })
+              }
+            >
+              {encerrarServicoMut.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Ban className="h-4 w-4 mr-2" />
+              )}
+              {encerrarTipo === "cancelado" ? "Cancelar serviço" : "Encerrar serviço"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

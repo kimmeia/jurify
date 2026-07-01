@@ -160,7 +160,7 @@ export const clientesRouter = router({
      * com 200 clientes mostrava só os VIPs entre os 50 mais recentes).
      */
     segmento: z
-      .enum(["todos", "vip", "inativo", "novos", "com_email", "com_telefone", "aguardando_docs", "com_debito"])
+      .enum(["todos", "vip", "inativo", "novos", "com_email", "com_telefone", "aguardando_docs", "com_debito", "encerrados"])
       .optional(),
     /**
      * Estágio: 'cliente' (fechou contrato) | 'lead' (em atendimento) |
@@ -247,6 +247,9 @@ export const clientesRouter = router({
             )
         )`,
       );
+    } else if (seg === "encerrados") {
+      // Serviço encerrado OU cancelado (tudo que não está ativo).
+      where = and(where, sql`${contatos.situacaoServico} <> 'ativo'`);
     }
 
     const rows = await db.select().from(contatos).where(where).orderBy(desc(contatos.createdAt)).limit(limite).offset(offset);
@@ -525,6 +528,60 @@ export const clientesRouter = router({
         .set({ estagio: input.estagio })
         .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, perm.escritorioId)));
       return { success: true, estagio: input.estagio };
+    }),
+
+  /**
+   * Encerra o serviço do cliente: 'encerrado' (ação/serviço concluído) ou
+   * 'cancelado' (cliente desistiu). Registra data, motivo e autor pra
+   * auditoria. O cliente passa a aparecer em vermelho na lista.
+   */
+  encerrarServico: protectedProcedure
+    .input(z.object({
+      contatoId: z.number(),
+      tipo: z.enum(["encerrado", "cancelado"]),
+      motivo: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+      if (!perm.allowed) throw new Error("Sem permissão para editar clientes.");
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const pode = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+      if (!pode) throw new Error("Cliente não encontrado ou sem permissão.");
+
+      await db
+        .update(contatos)
+        .set({
+          situacaoServico: input.tipo,
+          servicoEncerradoEm: new Date(),
+          servicoEncerradoMotivo: input.motivo?.trim() || null,
+          servicoEncerradoPor: perm.colaboradorId,
+        })
+        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, perm.escritorioId)));
+      return { success: true, situacaoServico: input.tipo };
+    }),
+
+  /** Reativa o serviço (desfaz encerramento/cancelamento). */
+  reativarServico: protectedProcedure
+    .input(z.object({ contatoId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+      if (!perm.allowed) throw new Error("Sem permissão para editar clientes.");
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const pode = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+      if (!pode) throw new Error("Cliente não encontrado ou sem permissão.");
+
+      await db
+        .update(contatos)
+        .set({
+          situacaoServico: "ativo",
+          servicoEncerradoEm: null,
+          servicoEncerradoMotivo: null,
+          servicoEncerradoPor: null,
+        })
+        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, perm.escritorioId)));
+      return { success: true, situacaoServico: "ativo" as const };
     }),
 
   atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).nullable().optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional() }))
@@ -1200,6 +1257,7 @@ export const clientesRouter = router({
       comEmail: 0,
       aguardandoDocumentacao: 0,
       inadimplentes: 0,
+      encerrados: 0,
     };
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
     if (!perm.allowed) return ZERO;
@@ -1235,6 +1293,7 @@ export const clientesRouter = router({
         comTelefone: sql<number | string>`SUM(CASE WHEN ${contatos.telefone} IS NOT NULL AND ${contatos.telefone} <> '' THEN 1 ELSE 0 END)`,
         comEmail: sql<number | string>`SUM(CASE WHEN ${contatos.email} IS NOT NULL AND ${contatos.email} <> '' THEN 1 ELSE 0 END)`,
         aguardandoDocumentacao: sql<number | string>`SUM(CASE WHEN ${contatos.documentacaoPendente} = 1 THEN 1 ELSE 0 END)`,
+        encerrados: sql<number | string>`SUM(CASE WHEN ${contatos.situacaoServico} <> 'ativo' THEN 1 ELSE 0 END)`,
       })
       .from(contatos)
       .where(where);
@@ -1281,6 +1340,7 @@ export const clientesRouter = router({
       comEmail: Number(stats?.comEmail ?? 0),
       aguardandoDocumentacao: Number(stats?.aguardandoDocumentacao ?? 0),
       inadimplentes,
+      encerrados: Number(stats?.encerrados ?? 0),
     };
   }),
 
