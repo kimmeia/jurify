@@ -21,26 +21,7 @@ import { getDb } from "../db";
 import { cargosPersonalizados, permissoesCargo, colaboradores } from "../../drizzle/schema";
 import { eq, and, desc, or } from "drizzle-orm";
 import { checkPermissionAdminOuMatriz, limparCachePermissoes } from "./check-permission";
-
-// Módulos disponíveis no sistema — precisam bater com os nomes usados
-// no canSee() do AppLayout.tsx. Ao adicionar um módulo no sidebar,
-// obrigatoriamente adicionar aqui (e nas PERMISSOES_PADRAO abaixo).
-const MODULOS = [
-  "dashboard",
-  "calculos",
-  "clientes",
-  "processos",
-  "atendimento",
-  "kanban",
-  "agenda",
-  "tarefas",
-  "smartflow",
-  "agentesIa",
-  "relatorios",
-  "financeiro",
-  "configuracoes",
-  "equipe",
-] as const;
+import { MODULOS, MODULO_HERANCA } from "../../shared/permissoes-modulos";
 
 type Perm = { verTodos: boolean; verProprios: boolean; criar: boolean; editar: boolean; excluir: boolean };
 function p(vt: boolean, vp: boolean, c: boolean, e: boolean, x: boolean): Perm {
@@ -55,6 +36,7 @@ const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
     dashboard: p(true, true, true, true, true),
     calculos: p(true, true, true, true, true),
     clientes: p(true, true, true, true, true),
+    modelos: p(true, true, true, true, true),
     processos: p(true, true, true, true, true),
     atendimento: p(true, true, true, true, true),
     kanban: p(true, true, true, true, true),
@@ -71,6 +53,7 @@ const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
     dashboard: p(true, true, false, false, false),
     calculos: p(true, true, true, true, true),
     clientes: p(true, true, true, true, true),
+    modelos: p(true, true, true, true, true),
     processos: p(true, true, true, true, false),
     atendimento: p(true, true, true, true, false),
     kanban: p(true, true, true, true, false),
@@ -87,6 +70,7 @@ const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
     dashboard: p(true, true, false, false, false),
     calculos: p(true, true, true, true, false),
     clientes: p(false, true, true, true, false),
+    modelos: p(false, true, true, true, false),
     processos: p(false, true, true, true, false),
     atendimento: p(false, true, true, true, false),
     kanban: p(false, true, true, true, false),
@@ -103,6 +87,7 @@ const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
     dashboard: p(true, true, false, false, false),
     calculos: p(true, true, false, false, false),
     clientes: p(false, false, false, false, false),
+    modelos: p(false, false, false, false, false),
     processos: p(false, true, false, false, false),
     atendimento: p(false, false, false, false, false),
     kanban: p(false, false, false, false, false),
@@ -121,6 +106,7 @@ const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
     dashboard: p(true, true, false, false, false),
     calculos: p(true, true, true, true, false),
     clientes: p(false, true, true, true, false),
+    modelos: p(false, true, true, true, false),
     processos: p(false, true, true, true, false),
     atendimento: p(false, true, true, true, false),
     kanban: p(false, true, true, true, false),
@@ -211,6 +197,12 @@ export const permissoesRouter = router({
           editar: p.editar,
           excluir: p.excluir,
         };
+      }
+
+      // Módulos desmembrados herdam do base quando o cargo não tem linha
+      // própria — a matriz mostra o estado efetivo (ex.: Modelos = Clientes).
+      for (const [mod, base] of Object.entries(MODULO_HERANCA)) {
+        if (!permMap[mod] && permMap[base]) permMap[mod] = { ...permMap[base] };
       }
 
       // Contar colaboradores deste cargo: vinculados explicitamente (cargoPersonalizadoId)
@@ -469,6 +461,13 @@ export const permissoesRouter = router({
         editar: p.editar,
         excluir: p.excluir,
       };
+    }
+
+    // Módulos desmembrados herdam do base quando não têm linha própria,
+    // ANTES do preenchimento com false — evita perder acesso no deploy
+    // (ex.: quem via Modelos via Clientes continua vendo até o admin ajustar).
+    for (const [mod, base] of Object.entries(MODULO_HERANCA)) {
+      if (!permMap[mod] && permMap[base]) permMap[mod] = { ...permMap[base] };
     }
 
     // Garante que TODOS os módulos do sistema têm entrada no map.
