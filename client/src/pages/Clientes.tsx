@@ -2777,6 +2777,11 @@ function ClienteDetalhe({
                     <CheckCircle2 className="w-3 h-3" /> Cliente
                   </span>
                 )}
+                {foraDeServico && (
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${cliente.situacaoServico === "cancelado" ? "bg-rose-500/30 text-rose-50 border-rose-300/40" : "bg-slate-500/30 text-slate-50 border-slate-300/40"}`}>
+                    <Ban className="w-3 h-3" /> {cliente.situacaoServico === "cancelado" ? "Cancelado" : "Encerrado"}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-4 text-xs text-white/75 flex-wrap">
                 {cliente.telefone && (
@@ -2810,6 +2815,17 @@ function ClienteDetalhe({
                   </span>
                 )}
               </div>
+              {foraDeServico && (
+                <div className={`mt-2 inline-flex items-start gap-2 rounded-lg px-3 py-1.5 text-xs border ${cliente.situacaoServico === "cancelado" ? "bg-rose-500/20 border-rose-300/30 text-rose-50" : "bg-slate-500/25 border-slate-300/30 text-slate-50"}`}>
+                  <Ban className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>
+                    Serviço {cliente.situacaoServico === "cancelado" ? "cancelado" : "encerrado"}
+                    {(cliente as any).servicoEncerradoEm ? ` em ${new Date((cliente as any).servicoEncerradoEm).toLocaleDateString("pt-BR")}` : ""}
+                    {(cliente as any).servicoEncerradoPorNome ? ` por ${(cliente as any).servicoEncerradoPorNome}` : ""}
+                    {(cliente as any).servicoEncerradoMotivo ? ` — ${(cliente as any).servicoEncerradoMotivo}` : ""}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Ações */}
