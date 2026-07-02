@@ -1368,6 +1368,31 @@ function montarComponentesTemplate(cfg: any, ip: (s?: string) => string): any[] 
 }
 
 /**
+ * Valida os parâmetros do template ANTES de mandar pra Meta e devolve uma
+ * mensagem clara apontando a variável vazia — em vez do genérico #131008
+ * ("Required parameter is missing"). Cobre corpo, cabeçalho e botões.
+ */
+function validarParametrosTemplate(cfg: any, ip: (s?: string) => string): string | null {
+  const corpo = Array.isArray(cfg.templateCorpo) ? cfg.templateCorpo : [];
+  for (let i = 0; i < corpo.length; i++) {
+    if (!ip(corpo[i]).trim()) {
+      return `A variável {{${i + 1}}} do corpo do template está vazia. Preencha no passo (ex: {{nomeCliente}}) ou confira se a variável existe no contexto do gatilho.`;
+    }
+  }
+  const h = cfg.templateHeader;
+  if (h && typeof h === "object" && h.formato && !ip(h.valor).trim()) {
+    return "O cabeçalho do template está sem valor (variável/URL). Preencha no passo.";
+  }
+  const botoes = Array.isArray(cfg.templateBotoes) ? cfg.templateBotoes : [];
+  for (const b of botoes) {
+    if (b && b.tipo && !ip(b?.valor).trim()) {
+      return `O parâmetro do botão (${String(b.tipo).toLowerCase()}) do template está vazio. Preencha no passo.`;
+    }
+  }
+  return null;
+}
+
+/**
  * Envia um template (HSM) aprovado da Meta. Diferente do texto livre, o
  * template é disparado DIRETO pela Cloud API (não volta como `resposta`
  * pelo canal — texto e template são chamadas distintas na API), então
@@ -1395,6 +1420,11 @@ async function enviarTemplateWhatsApp(
   const { interpolarVariaveis } = await import("./interpolar");
   const ip = (s?: string) => interpolarVariaveis(String(s ?? ""), ctx as any);
   const componentes = montarComponentesTemplate(cfg, ip);
+  // Aponta a variável vazia ANTES de a Meta recusar com o genérico #131008.
+  const faltando = validarParametrosTemplate(cfg, ip);
+  if (faltando) {
+    return { sucesso: false, contexto: ctx, mensagemErro: faltando };
+  }
   try {
     const r = await exec.enviarWhatsAppTemplate(telefone, { nome, idioma, componentes });
     // Aceita boolean (compat) ou { ok, erro }. Quando vem o erro real (da
