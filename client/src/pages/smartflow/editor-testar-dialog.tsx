@@ -277,6 +277,9 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
       vencimento: "2026-04-01",
       diasAtraso: 5,
       nomeCliente: "João Silva",
+      // Troque por um número real (55 + DDD + número) pra receber o teste.
+      telefoneCliente: "5511999990000",
+      emailCliente: "joao@example.com",
       contatoId: 42,
     },
     pagamento_proximo_vencimento: {
@@ -286,6 +289,9 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
       vencimento: "2026-05-25",
       diasAteVencer: 3,
       nomeCliente: "João Silva",
+      // Troque por um número real (55 + DDD + número) pra receber o teste.
+      telefoneCliente: "5511999990000",
+      emailCliente: "joao@example.com",
       contatoId: 42,
     },
     agendamento_criado: {

@@ -1049,6 +1049,27 @@ describe("SmartFlow Engine", () => {
       expect(enviarWhatsAppTemplate).toHaveBeenCalledTimes(1);
     });
 
+    it("aponta a variável vazia do template antes de chamar a Meta (#131008)", async () => {
+      const enviarWhatsAppTemplate = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsAppTemplate });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "whatsapp_enviar", clienteId: "n1",
+          config: {
+            modo: "template",
+            templateNome: "cobranca",
+            templateIdioma: "pt_BR",
+            templateCorpo: ["{{cliente.nome}}", ""], // {{2}} em branco
+          },
+        },
+      ];
+      const r = await executarCenario(passos, { telefoneCliente: "5585999990000", cliente: { nome: "Ana" } }, exec);
+      expect(r.sucesso).toBe(false);
+      expect(r.erro || "").toContain("{{2}}");
+      // Nem chega a chamar a Meta — a validação barra antes.
+      expect(enviarWhatsAppTemplate).not.toHaveBeenCalled();
+    });
+
     it("modo texto continua usando enviarWhatsApp (não o template)", async () => {
       const enviarWhatsApp = vi.fn().mockResolvedValue(true);
       const enviarWhatsAppTemplate = vi.fn().mockResolvedValue(true);
