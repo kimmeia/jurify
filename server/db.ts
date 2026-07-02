@@ -455,10 +455,16 @@ export async function getRecentUsers(limit = 10) {
   const db = await getDb();
   if (!db) return [];
 
+  // "Novos clientes" = donos de escritório (não colaboradores). Antes listava
+  // qualquer role=user, então um colaborador recém-adicionado aparecia como
+  // cliente novo.
   const result = await db
     .select()
     .from(users)
-    .where(eq(users.role, "user"))
+    .where(and(
+      eq(users.role, "user"),
+      inArray(users.id, db.select({ id: escritorios.ownerId }).from(escritorios)),
+    ))
     .orderBy(desc(users.createdAt))
     .limit(limit);
 
@@ -630,13 +636,18 @@ export async function getAdminStats() {
     };
   }
 
-  // Só `id` e `createdAt` — nada mais precisa pra computar stats. Antes
-  // fazia `select()` que trazia passwordHash desnecessariamente.
-  const allClients = await db
+  // Cliente = dono de escritório (assinante). Colaboradores ficam dentro do
+  // cadastro do dono e NÃO contam como clientes separados — é a definição da
+  // tela Admin > Clientes. Antes contava todo `role=user` (donos +
+  // colaboradores + cadastros soltos), inflando o total.
+  const donoUsers = await db
     .select({ id: users.id, createdAt: users.createdAt })
     .from(users)
-    .where(eq(users.role, "user"));
-  const totalClients = allClients.length;
+    .where(and(
+      eq(users.role, "user"),
+      inArray(users.id, db.select({ id: escritorios.ownerId }).from(escritorios)),
+    ));
+  const totalClients = donoUsers.length;
 
   const activeSubs = await db
     .select()
@@ -677,7 +688,7 @@ export async function getAdminStats() {
 
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const newClientsThisMonth = allClients.filter(
+  const newClientsThisMonth = donoUsers.filter(
     (u) => new Date(u.createdAt) >= startOfMonth
   ).length;
 
