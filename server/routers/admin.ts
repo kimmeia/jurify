@@ -377,9 +377,11 @@ export const adminRouter = router({
         if (escritInfo) {
           isDonoEscritorio = escritInfo.ownerId === input.userId;
           if (isDonoEscritorio) {
-            // Lista os colaboradores do escritório (com dados do user) pra UI
-            // exibir a equipe dentro do cadastro do cliente. O dono também
-            // aparece (ehDono) pra deixar claro quem assina.
+            // Lista os colaboradores ATIVOS do escritório (com dados do user)
+            // pra UI exibir a equipe dentro do cadastro do cliente. O dono
+            // também aparece (ehDono) pra deixar claro quem assina. Filtra
+            // `ativo` pra o número bater com a coluna Equipe da lista (que já
+            // conta só ativos) — antes contava inativos e divergia.
             const colabs = await db
               .select({
                 userId: colaboradores.userId,
@@ -391,7 +393,7 @@ export const adminRouter = router({
               })
               .from(colaboradores)
               .leftJoin(users, eq(users.id, colaboradores.userId))
-              .where(eq(colaboradores.escritorioId, escritorioId));
+              .where(and(eq(colaboradores.escritorioId, escritorioId), eq(colaboradores.ativo, true)));
             colabsCount = colabs.length;
             colaboradoresLista = colabs.map((c) => ({
               userId: c.userId,
