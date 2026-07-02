@@ -1448,6 +1448,15 @@ function FinanceiroClienteTab({
     onError: (err: any) => toast.error("Erro", { description: err.message }),
   });
 
+  // Corrigir a forma de pagamento de uma cobrança manual (lançou errado).
+  const atualizarFormaMut = (trpc as any).asaas.atualizarFormaPagamento.useMutation({
+    onSuccess: () => {
+      toast.success("Forma de pagamento atualizada");
+      refetch();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+
   function copiarLink(url: string) {
     navigator.clipboard.writeText(url);
     toast.success("Link copiado");
@@ -1749,6 +1758,36 @@ function FinanceiroClienteTab({
                               <span className="ml-auto text-[10px] text-muted-foreground">atual</span>
                             )}
                           </DropdownMenuItem>
+                          {/* Forma de pagamento: corrige quando o operador lançou
+                              errado. Só manual — na do Asaas a forma vem do gateway. */}
+                          {c.origem === "manual" && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuLabel className="text-[10px] uppercase tracking-wide">
+                                Forma de pagamento
+                              </DropdownMenuLabel>
+                              {([
+                                ["PIX", "Pix"],
+                                ["DINHEIRO", "Dinheiro"],
+                                ["TRANSFERENCIA", "Transferência"],
+                                ["CREDIT_CARD", "Cartão"],
+                                ["BOLETO", "Boleto"],
+                                ["OUTRO", "Outro"],
+                              ] as const).map(([val, label]) => (
+                                <DropdownMenuItem
+                                  key={val}
+                                  onClick={() => atualizarFormaMut.mutate({ id: c.id, forma: val })}
+                                  disabled={atualizarFormaMut.isPending}
+                                  className="gap-2"
+                                >
+                                  {label}
+                                  {c.formaPagamento === val && (
+                                    <span className="ml-auto text-[10px] text-muted-foreground">atual</span>
+                                  )}
+                                </DropdownMenuItem>
+                              ))}
+                            </>
+                          )}
                           {/* Desvincular beneficiário: só aparece quando há vínculo lógico.
                               Reverte pra cobrança contar pro contato pagador original. */}
                           {c.contatoBeneficiarioId !== null && (

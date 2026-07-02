@@ -2425,6 +2425,57 @@ export const asaasRouter = router({
     }),
 
   /**
+   * Corrige a forma de pagamento de uma cobrança MANUAL (o operador errou
+   * ao lançar). Só manual: na cobrança do Asaas a forma reflete o
+   * billingType real do gateway (o cliente escolheu), então não se edita
+   * à mão. Mesmo gate/escopo do `atualizarComissionavel`.
+   */
+  atualizarFormaPagamento: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        forma: z.enum(["PIX", "DINHEIRO", "TRANSFERENCIA", "CREDIT_CARD", "BOLETO", "OUTRO"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão pra editar cobranças.",
+        });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [cob] = await db
+        .select({ id: asaasCobrancas.id, origem: asaasCobrancas.origem })
+        .from(asaasCobrancas)
+        .where(
+          and(
+            eq(asaasCobrancas.id, input.id),
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!cob) throw new TRPCError({ code: "NOT_FOUND" });
+      if (cob.origem !== "manual") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "A forma de cobranças do Asaas vem do gateway e não pode ser editada aqui.",
+        });
+      }
+
+      await db
+        .update(asaasCobrancas)
+        .set({ formaPagamento: input.forma })
+        .where(eq(asaasCobrancas.id, cob.id));
+
+      return { success: true, forma: input.forma };
+    }),
+
+  /**
    * Cria cobrança "manual" — sem passar pela API Asaas. Usada quando
    * o cliente paga em dinheiro/cartão presencial, ou quando o
    * escritório está sem Asaas conectado e quer registrar a entrada
