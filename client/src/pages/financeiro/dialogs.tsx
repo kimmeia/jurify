@@ -315,8 +315,8 @@ export function NovaCobrancaDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) resetForm(); onOpenChange(o); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Nova cobranca</DialogTitle></DialogHeader>
+      <DialogContent className="max-w-md flex flex-col max-h-[90vh]">
+        <DialogHeader className="shrink-0"><DialogTitle>Nova cobranca</DialogTitle></DialogHeader>
         {resultado ? (
           <div className="space-y-3 py-2">
             <div className="flex items-center gap-2 text-emerald-600"><CheckCircle2 className="h-5 w-5" /><span className="font-medium">Cobranca criada</span></div>
@@ -325,7 +325,7 @@ export function NovaCobrancaDialog({
             <Button className="w-full" onClick={() => { resetForm(); onOpenChange(false); }}>Fechar</Button>
           </div>
         ) : (
-          <><div className="space-y-3 py-1">
+          <><div className="space-y-3 py-1 flex-1 overflow-y-auto min-h-0 pr-1">
             {asaasConectado ? (
               <div className="grid grid-cols-4 gap-2">
                 <Button variant={modo === "avulsa" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("avulsa")}>Avulsa</Button>
@@ -622,7 +622,7 @@ export function NovaCobrancaDialog({
                 </p>
               </div>
             )}
-          </div><DialogFooter><Button variant="outline" onClick={() => { setDuplicatasDetectadas(null); onOpenChange(false); }}>Cancelar</Button><Button onClick={handleCriar} disabled={isPending || !contatoId || !valor || !vencimento || (vencimento < new Date().toISOString().slice(0, 10) && !(modo === "manual" && jaPaga))}>{isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}{modo === "parcelada" ? `Parcelar ${parcelas}x` : modo === "recorrente" ? "Criar assinatura" : (duplicatasDetectadas && duplicatasDetectadas.length > 0 ? "Criar mesmo assim" : "Criar")}</Button></DialogFooter></>
+          </div><DialogFooter className="shrink-0 border-t pt-4"><Button variant="outline" onClick={() => { setDuplicatasDetectadas(null); onOpenChange(false); }}>Cancelar</Button><Button onClick={handleCriar} disabled={isPending || !contatoId || !valor || !vencimento || (vencimento < new Date().toISOString().slice(0, 10) && !(modo === "manual" && jaPaga))}>{isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}{modo === "parcelada" ? `Parcelar ${parcelas}x` : modo === "recorrente" ? "Criar assinatura" : (duplicatasDetectadas && duplicatasDetectadas.length > 0 ? "Criar mesmo assim" : "Criar")}</Button></DialogFooter></>
         )}
       </DialogContent>
     </Dialog>
