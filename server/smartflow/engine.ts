@@ -419,7 +419,7 @@ export interface SmartflowExecutores {
   enviarWhatsAppTemplate?: (
     telefone: string,
     template: { nome: string; idioma?: string; componentes?: any[] },
-  ) => Promise<boolean>;
+  ) => Promise<boolean | { ok: boolean; erro?: string }>;
   /**
    * Retorna a lista formatada de cobranças em aberto do cliente (PENDING /
    * OVERDUE), com link de pagamento quando disponível. Usada pra expandir
@@ -1396,12 +1396,20 @@ async function enviarTemplateWhatsApp(
   const ip = (s?: string) => interpolarVariaveis(String(s ?? ""), ctx as any);
   const componentes = montarComponentesTemplate(cfg, ip);
   try {
-    const ok = await exec.enviarWhatsAppTemplate(telefone, { nome, idioma, componentes });
+    const r = await exec.enviarWhatsAppTemplate(telefone, { nome, idioma, componentes });
+    // Aceita boolean (compat) ou { ok, erro }. Quando vem o erro real (da
+    // Meta / resolução de canal), mostra ele — em vez da mensagem genérica
+    // que confundia (dizia "confira canal/template" mesmo quando o motivo
+    // era outro, ex: número inválido, nome/idioma divergente, parâmetro).
+    const ok = typeof r === "boolean" ? r : r.ok;
+    const erroReal = typeof r === "boolean" ? undefined : r.erro;
     if (!ok) {
       return {
         sucesso: false,
         contexto: ctx,
-        mensagemErro: "Falha ao enviar template — confira se há canal WhatsApp oficial (API) conectado e se o template está aprovado na Meta.",
+        mensagemErro: erroReal
+          ? `Falha ao enviar template: ${erroReal}`
+          : "Falha ao enviar template — confira se há canal WhatsApp oficial (API) conectado e se o template está aprovado na Meta.",
       };
     }
   } catch (err: any) {
