@@ -1139,10 +1139,11 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
       }
     },
 
-    async enviarWhatsAppTemplate(telefone, template): Promise<boolean> {
+    async enviarWhatsAppTemplate(telefone, template): Promise<{ ok: boolean; erro?: string }> {
       // Template (HSM) só vai pelo canal oficial Meta (Cloud API). O helper
       // resolve o canal whatsapp_api conectado, decripta as credenciais e
-      // dispara via Graph API. Retorna false (sem lançar) pro motor reportar.
+      // dispara via Graph API. Devolve { ok, erro } — o motor mostra o motivo
+      // real (Meta/canal) em vez de uma mensagem genérica.
       try {
         const { enviarTemplatePeloCanalApi } = await import("../integracoes/canal-envio");
         const r = await enviarTemplatePeloCanalApi({
@@ -1155,10 +1156,10 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
         if (!r.ok) {
           log.warn({ erro: r.erro, template: template.nome }, "SmartFlow: envio de template WhatsApp falhou");
         }
-        return r.ok;
+        return { ok: r.ok, erro: r.erro };
       } catch (err: any) {
         log.error({ err: err.message }, "SmartFlow: erro ao enviar template WhatsApp");
-        return false;
+        return { ok: false, erro: err?.message || String(err) };
       }
     },
 
