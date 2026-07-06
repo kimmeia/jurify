@@ -1457,6 +1457,20 @@ function FinanceiroClienteTab({
     onError: (err: any) => toast.error("Erro", { description: err.message }),
   });
 
+  // Excluir um pagamento lançado MANUALMENTE (lançou por engano). Só manual —
+  // cobrança do Asaas deve ser cancelada no gateway.
+  const [excluirCobrancaAlvo, setExcluirCobrancaAlvo] = useState<{ id: number; descricao: string } | null>(null);
+  const excluirCobrancaMut = (trpc as any).asaas.excluirCobrancaManual.useMutation({
+    onSuccess: () => {
+      toast.success("Pagamento excluído");
+      setExcluirCobrancaAlvo(null);
+      refetch();
+      utils.asaas.resumoContato.invalidate();
+      utils.asaas.kpis.invalidate();
+    },
+    onError: (err: any) => toast.error("Erro ao excluir", { description: err.message }),
+  });
+
   function copiarLink(url: string) {
     navigator.clipboard.writeText(url);
     toast.success("Link copiado");
@@ -1558,6 +1572,33 @@ function FinanceiroClienteTab({
         contatoBeneficiarioNome={contatoNome}
         onSuccess={refetch}
       />
+
+      <AlertDialog open={!!excluirCobrancaAlvo} onOpenChange={(o) => !o && setExcluirCobrancaAlvo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir pagamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove definitivamente o pagamento manual
+              {excluirCobrancaAlvo?.descricao ? <> <strong>"{excluirCobrancaAlvo.descricao}"</strong></> : null} do
+              caixa deste cliente. Vale só para lançamentos manuais — cobranças do
+              Asaas devem ser canceladas no gateway.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirCobrancaMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (excluirCobrancaAlvo) excluirCobrancaMut.mutate({ id: excluirCobrancaAlvo.id });
+              }}
+              disabled={excluirCobrancaMut.isPending}
+            >
+              {excluirCobrancaMut.isPending ? "Excluindo..." : "Excluir definitivamente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Totais agregados */}
       <div className="grid grid-cols-3 gap-2">
@@ -1806,6 +1847,20 @@ function FinanceiroClienteTab({
                               >
                                 <X className="h-3.5 w-3.5" />
                                 Desvincular pagamento de terceiro
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          {/* Excluir: só pagamento lançado manualmente (lançou
+                              por engano). Cobrança do Asaas se cancela no gateway. */}
+                          {c.origem === "manual" && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => setExcluirCobrancaAlvo({ id: c.id, descricao: c.descricao || "pagamento manual" })}
+                                className="gap-2 text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Excluir pagamento
                               </DropdownMenuItem>
                             </>
                           )}
