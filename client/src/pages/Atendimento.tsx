@@ -517,6 +517,14 @@ export default function Atendimento() {
   const [pipelineDragAtivo, setPipelineDragAtivo] = useState(false);
   const { data: leads, refetch: rL } = trpc.crm.listarLeads.useQuery(undefined, { refetchInterval: pipelineDragAtivo ? false : 8000 });
   const { data: canaisData } = trpc.configuracoes.listarCanais.useQuery();
+  // Disjuntor anti-spam: canais que a Meta restringiu (131031 e afins). Enquanto
+  // houver, mostra banner e o sistema pausa os templates. Refetch de 30s pra
+  // sumir sozinho quando a Meta liberar (auto-cura via envio bem-sucedido).
+  const { data: canaisRestritos, refetch: rCr } = trpc.crm.canaisRestritos.useQuery(undefined, { refetchInterval: 30000 });
+  const reativarCanal = trpc.crm.reativarCanal.useMutation({
+    onSuccess: () => { toast.success("Canal reativado — o sistema vai voltar a tentar enviar."); rCr(); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const hasWhatsapp = (canaisData?.canais || []).some((c: any) => (c.tipo === "whatsapp_qr" || c.tipo === "whatsapp_api") && c.status === "conectado");
   const hasTwilio = (canaisData?.canais || []).some((c: any) => c.tipo === "telefone_voip" && (c.status === "conectado" || c.temConfig));
@@ -565,6 +573,31 @@ export default function Atendimento() {
   // mais largo for o viewport — o operador reclamava do canto vazio.
   return (
     <div className={isMobile ? "" : "space-y-4"}>
+      {Array.isArray(canaisRestritos) && canaisRestritos.length > 0 && (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 flex items-start gap-3 mx-2 mt-2 lg:mx-0 lg:mt-0">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 text-sm">
+            <p className="font-semibold text-destructive">Conta WhatsApp restrita pela Meta — envios de template pausados</p>
+            {canaisRestritos.map((c: any) => (
+              <p key={c.id} className="text-destructive/90 text-xs mt-1 break-words">
+                {c.nome || c.telefone || `Canal ${c.id}`}: {c.motivo || "conta restrita"}
+              </p>
+            ))}
+            <p className="text-muted-foreground text-xs mt-1.5">
+              Resolva em business.facebook.com (Qualidade da conta → Solicitar análise). O sistema pausou os disparos para não agravar a restrição. Depois de a Meta liberar, clique em "Já resolvi".
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            disabled={reativarCanal.isPending}
+            onClick={() => (canaisRestritos as any[]).forEach((c) => reativarCanal.mutate({ canalId: c.id }))}
+          >
+            Já resolvi
+          </Button>
+        </div>
+      )}
       <Tabs value={tab} onValueChange={setTab}>
         {/* Barra única: tabs Inbox/Pipeline à esquerda + Nova Conversa à direita.
             Substitui o card hero "Atendimento" que ocupava ~74px sem agregar — o

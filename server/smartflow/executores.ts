@@ -1227,6 +1227,8 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
           nome: template.nome,
           idioma: template.idioma,
           componentes: template.componentes,
+          contatoId: template.contatoId,
+          exigirOptin: true, // fluxo automático — não dispara template "frio" (anti-spam)
         });
         if (!r.ok) {
           log.warn({ erro: r.erro, template: template.nome }, "SmartFlow: envio de template WhatsApp falhou");

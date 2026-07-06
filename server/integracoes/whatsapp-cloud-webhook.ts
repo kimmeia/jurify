@@ -384,6 +384,16 @@ export function registerWhatsAppCloudWebhook(app: Express) {
                 await db.update(mensagens)
                   .set({ status: newStatus as any, erroEntrega })
                   .where(eq(mensagens.idExterno, status.id));
+                // Disjuntor: se a Meta reportou restrição/spam (131031 e afins)
+                // no webhook `failed`, PAUSA os templates deste canal — é por
+                // aqui que o 131031 assíncrono chega. Sem isso o sistema seguia
+                // martelando a Meta e agravando a reputação.
+                if (erroEntrega) {
+                  const guard = await import("./whatsapp-envio-guard");
+                  await guard
+                    .registrarFalhaTemplate({ db, canalId: canalInfo.canalId, erro: erroEntrega })
+                    .catch(() => {});
+                }
               }
             } catch { /* ignore status update errors */ }
           }
