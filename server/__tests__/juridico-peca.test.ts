@@ -21,12 +21,33 @@ const FONTES: FonteContexto[] = [
 ];
 
 describe("montarPromptPeca", () => {
-  it("system proíbe invenção e traz seções; user traz fatos + fontes", () => {
+  it("system: padrão forense (caixa alta + citação recuada), proíbe invenção; user traz fatos + fontes", () => {
     const { system, user } = montarPromptPeca({ fatos: "contrato abusivo" }, FONTES, TIPO);
     expect(system).toMatch(/N[ÃA]O invente/i);
-    expect(system).toContain("Dos Fatos");
+    expect(system).toContain("DOS FATOS"); // seções em CAIXA ALTA (padrão forense)
+    expect(system).toMatch(/CAIXA ALTA/);
+    expect(system).toContain("«"); // marcador de transcrição de jurisprudência (recuo)
     expect(user).toContain("contrato abusivo");
     expect(user).toContain("Súmula 297/STJ");
+  });
+
+  it("injeta o dossiê real (qualificação, processo, documentos) no user", () => {
+    const { user } = montarPromptPeca(
+      {
+        fatos: "capitalização indevida",
+        qualificacao: "MARIA SILVA, brasileira, casada, CPF 123",
+        processo: "CNJ 0801234-56.2024.8.06.0001, valor R$ 45.000",
+        documentos: "Contrato nº 4455-A; parcela subiu de 1200 para 1890",
+      },
+      FONTES,
+      TIPO,
+    );
+    expect(user).toContain("QUALIFICAÇÃO DO AUTOR");
+    expect(user).toContain("MARIA SILVA");
+    expect(user).toContain("PROCESSO:");
+    expect(user).toContain("0801234-56");
+    expect(user).toContain("DOCUMENTOS ANEXADOS");
+    expect(user).toContain("4455-A");
   });
 });
 
