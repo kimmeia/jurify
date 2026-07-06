@@ -22,7 +22,7 @@ import { avaliarViabilidade, type FonteContexto } from "./avaliacao";
 import { gerarPeca, TIPOS_PECA } from "./peca";
 import { montarPecaDocx } from "./docx";
 import { montarDossie } from "./dossie";
-import { montarConteudoDocumentos } from "./leitura-documento";
+import { montarConteudoDocumentos, lerConteudoBuffer, chunkTexto } from "./leitura-documento";
 
 /** Resolve a chave OpenAI (embeddings sempre via OpenAI). null se não houver. */
 async function resolverChaveOpenAI(escritorioId: number): Promise<string | null> {
@@ -397,4 +397,60 @@ export const juridicoRouter = router({
     }
     return { total: rows.length, indexadas, porTipo };
   }),
+
+  /**
+   * [admin] Sobe uma DECISÃO/jurisprudência pra base GLOBAL: lê o arquivo
+   * (extração ou Vision), fatia em trechos, embedda cada um e insere como fonte
+   * global (escritorioId NULL) — amplia o conhecimento do Agente pra todos os
+   * escritórios. É o "subir decisão" (vs. só sincronizar a base fixa).
+   */
+  subirDecisao: adminProcedure
+    .input(z.object({
+      nomeArquivo: z.string().min(1).max(200),
+      base64: z.string().min(10),
+      identificador: z.string().min(2).max(160),
+      titulo: z.string().max(255).optional(),
+      area: z.string().max(80).optional(),
+      tipo: z.enum(["sumula", "lei", "precedente", "tese"]).optional(),
+      modelo: z.string().max(64).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const key = await resolverChaveOpenAI(esc?.escritorio.id ?? 0);
+      if (!key) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Sem chave OpenAI pra indexar (configure a chave da plataforma ou do escritório)." });
+
+      const base64 = input.base64.includes(",") ? input.base64.split(",")[1] : input.base64;
+      const buffer = Buffer.from(base64, "base64");
+      const modelo = input.modelo || "claude-sonnet-4-20250514"; // Claude lê PDF nativo (escaneado)
+      const leitura = await lerConteudoBuffer(esc?.escritorio.id ?? 0, buffer, input.nomeArquivo, modelo);
+      if (!leitura.texto) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Não foi possível ler o documento: ${leitura.nota || "sem texto"}` });
+      }
+
+      const trechos = chunkTexto(leitura.texto);
+      if (!trechos.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Documento sem conteúdo aproveitável." });
+
+      const area = input.area || AREA_REVISIONAL;
+      const tipo = input.tipo || "precedente";
+      let indexadas = 0;
+      for (let i = 0; i < trechos.length; i++) {
+        const textoIndex = [input.identificador, input.titulo, trechos[i]].filter(Boolean).join(" — ");
+        const emb = await gerarEmbeddingSeguro(textoIndex, key).catch(() => null);
+        await db.insert(fontesJuridicas).values({
+          escritorioId: null, // global — vale pra todos os escritórios
+          tipo,
+          identificador: trechos.length > 1 ? `${input.identificador} [${i + 1}/${trechos.length}]` : input.identificador,
+          orgao: null,
+          area,
+          titulo: input.titulo ?? null,
+          texto: trechos[i],
+          tags: null,
+          embedding: emb ? JSON.stringify(emb) : null,
+        });
+        if (emb) indexadas++;
+      }
+      return { trechos: trechos.length, indexadas, via: leitura.via };
+    }),
 });

@@ -41,6 +41,32 @@ export function mimeDoNome(nome: string): string {
   return MIME_POR_EXT[ext] || "application/octet-stream";
 }
 
+/**
+ * Fatia um texto longo (decisão/jurisprudência) em trechos pra virarem fontes
+ * embeddáveis na base RAG. Tenta cortar em fim de frase/parágrafo pra não
+ * partir no meio; usa sobreposição pra não perder contexto entre trechos.
+ */
+export function chunkTexto(texto: string, tamanho = 1200, overlap = 150): string[] {
+  const limpo = String(texto || "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+  if (!limpo) return [];
+  if (limpo.length <= tamanho) return [limpo];
+  const chunks: string[] = [];
+  let i = 0;
+  while (i < limpo.length) {
+    let fim = Math.min(i + tamanho, limpo.length);
+    if (fim < limpo.length) {
+      const janela = limpo.slice(i, fim);
+      const corte = Math.max(janela.lastIndexOf("\n"), janela.lastIndexOf(". "));
+      if (corte > tamanho * 0.5) fim = i + corte + 1;
+    }
+    const trecho = limpo.slice(i, fim).trim();
+    if (trecho) chunks.push(trecho);
+    if (fim >= limpo.length) break;
+    i = Math.max(fim - overlap, i + 1);
+  }
+  return chunks;
+}
+
 const ehImagem = (mime: string) => mime.startsWith("image/");
 const ehTextoExtraivel = (mime: string) =>
   mime === "application/pdf" ||
@@ -82,37 +108,50 @@ export interface LeituraDocumento {
   nota?: string;
 }
 
-/** Lê o conteúdo de UM documento: extração ou Vision, conforme o tipo. */
+/**
+ * Lê o conteúdo de um BUFFER conforme o tipo: extração barata (PDF/DOCX/TXT)
+ * ou Vision (imagem / PDF escaneado). Reutilizado tanto pra arquivo de cliente
+ * quanto pra upload de decisão no admin.
+ */
+export async function lerConteudoBuffer(
+  escritorioId: number,
+  bytes: Buffer,
+  nome: string,
+  modelo: string,
+): Promise<LeituraDocumento> {
+  const mime = mimeDoNome(nome);
+  if (!bytes || bytes.length === 0) return { nome, texto: null, via: "erro", nota: "arquivo vazio" };
+  if (bytes.length > MAX_BYTES) return { nome, texto: null, via: "erro", nota: "arquivo grande demais" };
+
+  if (ehTextoExtraivel(mime)) {
+    const r = await extrairTextoDocumento(bytes, mime);
+    if (r.texto) return { nome, texto: r.texto, via: "extracao" };
+    if (mime === "application/pdf") {
+      const v = await transcreverDocumentoVision(escritorioId, { modelo, base64: bytes.toString("base64"), mime, ehPdf: true });
+      if (v.texto) return { nome, texto: v.texto, via: "vision" };
+      return { nome, texto: null, via: "erro", nota: v.erro || "PDF escaneado sem leitura" };
+    }
+    return { nome, texto: null, via: "erro", nota: r.erro || "sem texto extraível" };
+  }
+
+  if (ehImagem(mime)) {
+    const v = await transcreverDocumentoVision(escritorioId, { modelo, base64: bytes.toString("base64"), mime, ehPdf: false });
+    if (v.texto) return { nome, texto: v.texto, via: "vision" };
+    return { nome, texto: null, via: "erro", nota: v.erro || "não foi possível ler a imagem" };
+  }
+
+  return { nome, texto: null, via: "erro", nota: `tipo não suportado (${mime})` };
+}
+
+/** Lê o conteúdo de UM documento (por url): extração ou Vision. */
 export async function lerConteudoDocumento(
   escritorioId: number,
   arq: ArquivoRef,
   modelo: string,
 ): Promise<LeituraDocumento> {
-  const mime = mimeDoNome(arq.nome);
   const bytes = await lerBytes(arq.url);
   if (!bytes) return { nome: arq.nome, texto: null, via: "erro", nota: "arquivo não encontrado, grande demais ou inacessível" };
-
-  // 1. Extração barata (texto real de PDF/DOCX/TXT).
-  if (ehTextoExtraivel(mime)) {
-    const r = await extrairTextoDocumento(bytes, mime);
-    if (r.texto) return { nome: arq.nome, texto: r.texto, via: "extracao" };
-    // PDF sem texto = provavelmente escaneado → tenta Vision.
-    if (mime === "application/pdf") {
-      const v = await transcreverDocumentoVision(escritorioId, { modelo, base64: bytes.toString("base64"), mime, ehPdf: true });
-      if (v.texto) return { nome: arq.nome, texto: v.texto, via: "vision" };
-      return { nome: arq.nome, texto: null, via: "erro", nota: v.erro || "PDF escaneado sem leitura" };
-    }
-    return { nome: arq.nome, texto: null, via: "erro", nota: r.erro || "sem texto extraível" };
-  }
-
-  // 2. Imagem → Vision.
-  if (ehImagem(mime)) {
-    const v = await transcreverDocumentoVision(escritorioId, { modelo, base64: bytes.toString("base64"), mime, ehPdf: false });
-    if (v.texto) return { nome: arq.nome, texto: v.texto, via: "vision" };
-    return { nome: arq.nome, texto: null, via: "erro", nota: v.erro || "não foi possível ler a imagem" };
-  }
-
-  return { nome: arq.nome, texto: null, via: "erro", nota: `tipo não suportado (${mime})` };
+  return lerConteudoBuffer(escritorioId, bytes, arq.nome, modelo);
 }
 
 /**
