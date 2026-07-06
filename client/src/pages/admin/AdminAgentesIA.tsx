@@ -21,7 +21,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Bot, Plus, Edit, Trash2, Upload, Link2, FileText, FileIcon, Loader2,
-  Send, Sparkles, AlertTriangle, CheckCircle2, ExternalLink, BrainCircuit, Play,
+  Send, Sparkles, AlertTriangle, CheckCircle2, ExternalLink, BrainCircuit, Play, Scale,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -730,6 +730,18 @@ export default function AdminAgentesIA() {
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
+  // Base jurídica (RAG) do Agente Jurídico — popular/indexar com 1 clique.
+  const { data: baseStatus, refetch: refetchBase } = (trpc as any).juridico.statusBaseGlobal.useQuery(undefined, { retry: false });
+  const seedBaseMut = (trpc as any).juridico.seedBaseRevisional.useMutation({
+    onSuccess: (r: any) => {
+      toast.success("Base jurídica atualizada", {
+        description: `${r.inseridas} nova(s) fonte(s), ${r.indexadas} indexada(s).${r.indexou ? "" : " (sem chave OpenAI — não indexou)"}`,
+      });
+      refetchBase();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -784,6 +796,34 @@ export default function AdminAgentesIA() {
           </CardContent>
         </Card>
       )}
+
+      {/* Base jurídica (Agente Jurídico) — popular/indexar */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Scale className="h-4 w-4 text-violet-600" /> Base jurídica — Agente Jurídico
+          </CardTitle>
+          <CardDescription>
+            Súmulas, leis e precedentes usados pra avaliar a chance de sucesso e redigir peças.
+            Popule e indexe (embeddings) uma vez — depois o Agente Jurídico já funciona.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-4">
+          <div className="text-sm">
+            <span className="font-semibold">{baseStatus?.total ?? 0}</span> fontes ·{" "}
+            <span className="font-semibold text-emerald-600">{baseStatus?.indexadas ?? 0}</span> indexadas
+          </div>
+          <Button size="sm" onClick={() => seedBaseMut.mutate()} disabled={seedBaseMut.isPending}>
+            {seedBaseMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1.5" />}
+            Popular / indexar base (revisional)
+          </Button>
+          {(baseStatus?.total ?? 0) > 0 && (baseStatus?.indexadas ?? 0) < (baseStatus?.total ?? 0) && (
+            <span className="text-xs text-amber-600">
+              Há fontes não indexadas — clique pra indexar (precisa de chave OpenAI configurada).
+            </span>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Lista de agentes */}
       {isLoading ? (
