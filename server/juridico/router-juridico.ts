@@ -255,7 +255,9 @@ export const juridicoRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const seed = await seedFontesRevisional(db);
     let indexadas = 0;
-    const key = esc ? await resolverChaveOpenAI(esc.escritorio.id) : null;
+    // escritorioId ?? 0 → cai na chave da plataforma (admin) quando o admin
+    // do sistema não é dono de escritório.
+    const key = await resolverChaveOpenAI(esc?.escritorio.id ?? 0);
     if (key) {
       const r = await reindexarEmbeddings(db, key, { escritorioId: null, area: AREA_REVISIONAL });
       indexadas = r.indexadas;
@@ -270,8 +272,25 @@ export const juridicoRouter = router({
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const key = esc ? await resolverChaveOpenAI(esc.escritorio.id) : null;
-      if (!key) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Sem chave OpenAI pra indexar." });
+      const key = await resolverChaveOpenAI(esc?.escritorio.id ?? 0);
+      if (!key) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Sem chave OpenAI pra indexar (configure a chave da plataforma ou do escritório)." });
       return reindexarEmbeddings(db, key, { escritorioId: null, area: input?.area });
     }),
+
+  /** [admin] Estado da base GLOBAL (independe de escritório) — pro painel. */
+  statusBaseGlobal: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { total: 0, indexadas: 0, porTipo: {} as Record<string, number> };
+    const rows = await db
+      .select({ tipo: fontesJuridicas.tipo, temEmb: sql<number>`CASE WHEN ${fontesJuridicas.embedding} IS NULL THEN 0 ELSE 1 END` })
+      .from(fontesJuridicas)
+      .where(isNull(fontesJuridicas.escritorioId));
+    const porTipo: Record<string, number> = {};
+    let indexadas = 0;
+    for (const r of rows) {
+      porTipo[r.tipo] = (porTipo[r.tipo] ?? 0) + 1;
+      if (Number(r.temEmb) === 1) indexadas++;
+    }
+    return { total: rows.length, indexadas, porTipo };
+  }),
 });
