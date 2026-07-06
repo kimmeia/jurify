@@ -232,6 +232,81 @@ async function resolverContextoCliente(
 }
 
 /**
+ * Persiste um envio de template (HSM) como mensagem de saída na conversa do
+ * contato — best-effort. Conecta o disparo proativo ao webhook de status de
+ * entrega da Meta (casa por `idExterno`): sem essa linha, o `failed` posterior
+ * não tem onde encaixar e o motivo da não-entrega some — o disparo fica
+ * "executado" mentindo. Nunca lança: falha aqui não pode derrubar um envio já
+ * efetuado na Meta.
+ */
+async function persistirEnvioTemplate(
+  escritorioId: number,
+  dados: { contatoId: number; canalId?: number; idExterno: string; conteudo: string },
+): Promise<void> {
+  try {
+    const { getDb } = await import("../db");
+    const { canaisIntegrados, conversas } = await import("../../drizzle/schema");
+    const { eq, and, or, desc } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return;
+
+    // Canal oficial que efetivou o envio (fallback: o whatsapp_api conectado).
+    let canalId = dados.canalId;
+    if (!canalId) {
+      const [canal] = await db
+        .select({ id: canaisIntegrados.id })
+        .from(canaisIntegrados)
+        .where(
+          and(
+            eq(canaisIntegrados.escritorioId, escritorioId),
+            eq(canaisIntegrados.tipo, "whatsapp_api"),
+            eq(canaisIntegrados.status, "conectado"),
+          ),
+        )
+        .limit(1);
+      canalId = canal?.id;
+    }
+    if (!canalId) return;
+
+    // Reusa a conversa não-fechada mais recente do contato nesse canal; senão
+    // cria uma. Evita poluir o inbox com conversa duplicada a cada cobrança.
+    const [existente] = await db
+      .select({ id: conversas.id })
+      .from(conversas)
+      .where(
+        and(
+          eq(conversas.escritorioId, escritorioId),
+          eq(conversas.canalId, canalId),
+          eq(conversas.contatoId, dados.contatoId),
+          or(
+            eq(conversas.status, "aguardando"),
+            eq(conversas.status, "em_atendimento"),
+            eq(conversas.status, "resolvido"),
+          ),
+        ),
+      )
+      .orderBy(desc(conversas.ultimaMensagemAt))
+      .limit(1);
+
+    const { criarConversa, enviarMensagem } = await import("../escritorio/db-crm");
+    const conversaId =
+      existente?.id ??
+      (await criarConversa({ escritorioId, contatoId: dados.contatoId, canalId, assunto: "Cobrança (SmartFlow)" }));
+
+    await enviarMensagem({
+      conversaId,
+      direcao: "saida",
+      tipo: "texto",
+      conteudo: dados.conteudo,
+      status: "enviada",
+      idExterno: dados.idExterno,
+    });
+  } catch (err: any) {
+    log.warn({ err: err?.message, contatoId: dados.contatoId }, "SmartFlow: falha ao persistir envio de template (não-fatal)");
+  }
+}
+
+/**
  * Cria executores reais para um escritório específico.
  */
 export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemAnexa): SmartflowExecutores {
@@ -1155,6 +1230,18 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
         });
         if (!r.ok) {
           log.warn({ erro: r.erro, template: template.nome }, "SmartFlow: envio de template WhatsApp falhou");
+        } else if (template.contatoId && r.idExterno) {
+          // Persiste o disparo como mensagem de saída na conversa do contato.
+          // Sem isso, o envio é fire-and-forget: a Meta aceita (200) mas o
+          // webhook `failed` posterior não acha linha por `idExterno` e o
+          // motivo da não-entrega some — dava "executado" mentiroso. Agora o
+          // template aparece na timeline E fica rastreável pelo status.
+          await persistirEnvioTemplate(escritorioId, {
+            contatoId: template.contatoId,
+            canalId: r.canalId,
+            idExterno: r.idExterno,
+            conteudo: template.conteudoPreview || `[Template: ${template.nome}]`,
+          });
         }
         return { ok: r.ok, erro: r.erro };
       } catch (err: any) {

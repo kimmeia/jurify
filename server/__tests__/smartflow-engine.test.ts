@@ -4086,4 +4086,61 @@ describe("SmartFlow Engine", () => {
       }
     });
   });
+
+  describe("whatsapp_enviar (template HSM)", () => {
+    const passoTemplate = (corpo: string[]): Passo[] => [
+      {
+        id: 1,
+        ordem: 1,
+        tipo: "whatsapp_enviar",
+        config: {
+          modo: "template",
+          templateNome: "1d_antes_pagamento",
+          templateIdioma: "pt_BR",
+          templateCorpo: corpo,
+        },
+      },
+    ];
+
+    it("passa contatoId + prévia interpolada pro enviarWhatsAppTemplate (pra rastrear entrega)", async () => {
+      const enviarWhatsAppTemplate = vi.fn().mockResolvedValue({ ok: true });
+      const exec = criarMockExecutores({ enviarWhatsAppTemplate });
+      const r = await executarCenario(
+        passoTemplate(["{{nomeCliente}}", "{{pagamentoValor}}", "{{linkPagamento}}"]),
+        {
+          mensagem: "x",
+          contatoId: 42,
+          telefoneCliente: "5585999998888",
+          nomeCliente: "Rafael",
+          pagamentoValor: "800,00",
+          linkPagamento: "https://asaas.com/i/abc",
+        },
+        exec,
+      );
+
+      expect(r.sucesso).toBe(true);
+      expect(enviarWhatsAppTemplate).toHaveBeenCalledTimes(1);
+      const [telefone, tpl] = (enviarWhatsAppTemplate as any).mock.calls[0];
+      expect(telefone).toBe("5585999998888");
+      expect(tpl.contatoId).toBe(42);
+      expect(tpl.conteudoPreview).toContain("1d_antes_pagamento");
+      expect(tpl.conteudoPreview).toContain("Rafael");
+      expect(tpl.conteudoPreview).toContain("https://asaas.com/i/abc");
+    });
+
+    it("barra o envio (e NÃO persiste) quando uma variável do corpo fica vazia", async () => {
+      const enviarWhatsAppTemplate = vi.fn().mockResolvedValue({ ok: true });
+      const exec = criarMockExecutores({ enviarWhatsAppTemplate });
+      // linkPagamento ausente no contexto → {{2}} interpola pra vazio.
+      const r = await executarCenario(
+        passoTemplate(["{{nomeCliente}}", "{{linkPagamento}}"]),
+        { mensagem: "x", contatoId: 42, telefoneCliente: "5585999998888", nomeCliente: "Rafael" },
+        exec,
+      );
+
+      expect(r.sucesso).toBe(false);
+      expect(r.erro).toContain("{{2}}");
+      expect(enviarWhatsAppTemplate).not.toHaveBeenCalled();
+    });
+  });
 });
