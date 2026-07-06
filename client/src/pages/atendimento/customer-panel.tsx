@@ -741,15 +741,14 @@ function AdicionarProcessoInline({ onSuccess }: { onSuccess: () => void }) {
 
 /**
  * Dropdown de responsável da negociação. Lista a equipe (listarAtendentes).
- * `incluirAuto` adiciona a opção de distribuição automática (rodízio).
- * `autoSelecionarMeu` pré-seleciona o usuário atual quando o valor está vazio.
+ * `autoSelecionarMeu` pré-seleciona o usuário atual quando o valor está vazio
+ * (criação de lead manual fica com quem cria, salvo escolha de outro).
  */
 function ResponsavelSelect({
-  value, onChange, incluirAuto, autoSelecionarMeu,
+  value, onChange, autoSelecionarMeu,
 }: {
   value: string;
   onChange: (v: string) => void;
-  incluirAuto?: boolean;
   autoSelecionarMeu?: boolean;
 }) {
   const { data: atendentes } = trpc.crm.listarAtendentes.useQuery(undefined, { staleTime: 60_000 });
@@ -767,7 +766,6 @@ function ResponsavelSelect({
         <SelectValue placeholder="Selecione o responsável" />
       </SelectTrigger>
       <SelectContent>
-        {incluirAuto && <SelectItem value="auto">Distribuir automático (rodízio)</SelectItem>}
         {(atendentes as any[] | undefined)?.map((a) => (
           <SelectItem key={a.id} value={String(a.id)}>
             {a.nome || a.email}{me && a.userId === me.id ? " (você)" : ""}
@@ -832,7 +830,7 @@ function CriarLeadInline({ contatoId, onSuccess }: { contatoId: number; onSucces
         </div>
         <div className="space-y-1.5">
           <Label className="text-[10px] text-muted-foreground">Responsável</Label>
-          <ResponsavelSelect value={responsavelId} onChange={setResponsavelId} incluirAuto autoSelecionarMeu />
+          <ResponsavelSelect value={responsavelId} onChange={setResponsavelId} autoSelecionarMeu />
         </div>
         <Button
           size="sm"
@@ -842,7 +840,7 @@ function CriarLeadInline({ contatoId, onSuccess }: { contatoId: number; onSucces
               contatoId,
               valorEstimado: valorEstimado || undefined,
               origemLead: origem || undefined,
-              responsavelId: responsavelId && responsavelId !== "auto" ? Number(responsavelId) : undefined,
+              responsavelId: responsavelId ? Number(responsavelId) : undefined,
             })
           }
           disabled={mut.isPending}

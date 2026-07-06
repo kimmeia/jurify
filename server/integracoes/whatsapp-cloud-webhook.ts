@@ -24,6 +24,26 @@ const log = createLogger("integracoes-whatsapp-cloud-webhook");
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+interface MetaStatusErro {
+  code?: number | string;
+  title?: string;
+  message?: string;
+  error_data?: { details?: string };
+}
+
+/**
+ * Extrai o motivo legível de uma falha de entrega do `errors[]` que a Meta
+ * manda no webhook de status `failed`. Ex: "131026: Message undeliverable".
+ * Antes esse array era ignorado — a mensagem virava só status="falha" e o
+ * operador ficava sem saber POR QUE não chegou. Exportada pra teste.
+ */
+export function extrairMotivoFalhaEntrega(status: { errors?: MetaStatusErro[] } | null | undefined): string {
+  const e = Array.isArray(status?.errors) ? status!.errors![0] : undefined;
+  if (!e) return "Falha na entrega (sem detalhe da Meta)";
+  const detalhe = e.error_data?.details || e.message || e.title || "";
+  return [e.code, detalhe].filter(Boolean).join(": ") || String(e.code ?? "falha");
+}
+
 /**
  * Lê a config Meta decriptada de `admin_integracoes` (provedor='whatsapp_cloud').
  * Retorna `{verifyToken, appSecret}` — campos individuais existem na mesma
@@ -355,8 +375,14 @@ export function registerWhatsAppCloudWebhook(app: Express) {
                 : null;
 
               if (newStatus && status.id) {
+                // `failed`: captura o motivo real da Meta (`errors[]`) — antes
+                // era descartado, deixando o operador sem saber POR QUE a
+                // mensagem não chegou (um template ficava "executado" mentindo).
+                // Nos demais status limpamos o campo (auto-cura: reenvio que
+                // passou volta a ficar "ok").
+                const erroEntrega = newStatus === "falha" ? extrairMotivoFalhaEntrega(status) : null;
                 await db.update(mensagens)
-                  .set({ status: newStatus as any })
+                  .set({ status: newStatus as any, erroEntrega })
                   .where(eq(mensagens.idExterno, status.id));
               }
             } catch { /* ignore status update errors */ }

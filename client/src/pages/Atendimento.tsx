@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from "react";
-import { createPortal } from "react-dom";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,7 @@ import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
@@ -346,18 +345,54 @@ function NovoLeadDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOp
   </DialogContent></Dialog>);
 }
 
-function AddLeadFromConversaDialog({ open, onOpenChange, conversaId, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; conversaId: number; onSuccess: () => void }) {
+function AddLeadFromConversaDialog({ open, onOpenChange, conversaId, atendentes, conversaAtendenteId, usuarioUserId, onSuccess }: {
+  open: boolean; onOpenChange: (v: boolean) => void; conversaId: number;
+  atendentes: any[]; conversaAtendenteId?: number | null; usuarioUserId?: number;
+  onSuccess: () => void;
+}) {
   const [valor, setValor] = useState("");
+  const [etapa, setEtapa] = useState<EtapaFunil>("novo");
+  // Responsável padrão: atendente da conversa; se não houver, eu mesmo (quem
+  // está criando). Antes caía no rodízio e a oportunidade nascia no nome de outro.
+  const meuColaboradorId = atendentes.find((a: any) => a.userId === usuarioUserId)?.id;
+  const [responsavelId, setResponsavelId] = useState<number | undefined>(conversaAtendenteId ?? meuColaboradorId);
+  useEffect(() => {
+    if (open) setResponsavelId(conversaAtendenteId ?? meuColaboradorId);
+  }, [open, conversaAtendenteId, meuColaboradorId]);
+
   const criarLead = trpc.crm.criarLeadDeConversa.useMutation({
     onSuccess: () => { toast.success("Lead adicionado ao Pipeline!"); onOpenChange(false); setValor(""); onSuccess(); },
     onError: (e: any) => toast.error(e.message),
   });
   return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-violet-600" /> Adicionar ao Pipeline</DialogTitle></DialogHeader>
     <div className="space-y-3 py-2">
-      <div className="space-y-1.5"><Label>Valor estimado (opcional)</Label><Input placeholder="5000" value={valor} onChange={(e) => setValor(e.target.value)} /></div>
-      <p className="text-xs text-muted-foreground">O contato desta conversa será adicionado como novo lead na etapa "Novo" do pipeline.</p>
+      <div className="space-y-1.5">
+        <Label className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-blue-600" /> Responsável</Label>
+        <Select value={responsavelId != null ? String(responsavelId) : undefined} onValueChange={(v) => setResponsavelId(Number(v))}>
+          <SelectTrigger><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
+          <SelectContent>
+            {atendentes.map((a: any) => (
+              <SelectItem key={a.id} value={String(a.id)}>{a.nome}{a.userId === usuarioUserId ? " (você)" : ""}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">Vem preenchido com o atendente da conversa. O rodízio automático vale só pra leads que chegam sozinhos pelo WhatsApp.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5"><Label>Etapa</Label>
+          <Select value={etapa} onValueChange={(v) => setEtapa(v as EtapaFunil)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(Object.keys(ETAPA_FUNIL_LABELS) as EtapaFunil[]).map((e) => (
+                <SelectItem key={e} value={e}>{ETAPA_FUNIL_LABELS[e]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5"><Label>Valor estimado</Label><Input placeholder="5000" value={valor} onChange={(e) => setValor(e.target.value)} /></div>
+      </div>
     </div>
-    <DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => criarLead.mutate({ conversaId, valorEstimado: valor || undefined })} disabled={criarLead.isPending}>{criarLead.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlusCircle className="h-4 w-4 mr-2" />} Adicionar</Button></DialogFooter>
+    <DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => criarLead.mutate({ conversaId, valorEstimado: valor || undefined, responsavelId, etapaFunil: etapa })} disabled={criarLead.isPending}>{criarLead.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlusCircle className="h-4 w-4 mr-2" />} Adicionar</Button></DialogFooter>
   </DialogContent></Dialog>);
 }
 
@@ -896,65 +931,41 @@ export default function Atendimento() {
               </ScrollArea>
             </div>
 
-            {/* Coluna 2: Chat. No mobile com conversa aberta, vai pra um portal
-                no document.body e ocupa a tela inteira — `fixed inset-0` fica
-                imune a qualquer ancestral com transform/overflow que estava
-                limitando a altura (composer flutuava no meio da tela). */}
-            {isMobile && selId
-              ? createPortal(
-                  <div className="fixed inset-0 z-[60] bg-card flex flex-col">
-                    <ChatArea
-                      cid={selId}
-                      convs={convsAll || []}
-                      onVoltar={() => setSelId(null)}
-                      onUpdate={rC}
-                      onLeadUpdate={rL}
-                      onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined}
-                      onTel={hasTwilio ? (p) => setTelPopup(p) : undefined}
-                      onDeleted={() => { setSelId(null); rC(); }}
-                      onTransferido={() => { setSelId(null); rC(); }}
-                      onAbrirLinhaTempo={() => {
-                        const conv = (convsAll || []).find((c: any) => c.id === selId);
-                        if (conv?.contatoId) setShowLinhaTempo(conv.contatoId);
-                      }}
-                      onLigarWhatsApp={(info) => chamadaWa.ligar(info)}
-                    />
-                  </div>,
-                  document.body,
-                )
-              : (
-                <div className={isMobile ? "hidden" : "bg-card overflow-hidden flex flex-col lg:min-h-0"}>
-                  {selId ? (
-                    <ChatArea
-                      cid={selId}
-                      convs={convsAll || []}
-                      onUpdate={rC}
-                      onLeadUpdate={rL}
-                      onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined}
-                      onTel={hasTwilio ? (p) => setTelPopup(p) : undefined}
-                      onDeleted={() => {
-                        setSelId(null);
-                        rC();
-                      }}
-                      onTransferido={() => {
-                        setSelId(null);
-                        rC();
-                      }}
-                      onAbrirLinhaTempo={() => {
-                        const conv = (convsAll || []).find((c: any) => c.id === selId);
-                        if (conv?.contatoId) setShowLinhaTempo(conv.contatoId);
-                      }}
-                      onLigarWhatsApp={(info) => chamadaWa.ligar(info)}
-                    />
-                  ) : (
-                    <CentroDeComando
-                      convs={convs || []}
-                      onAbrirConversa={setSelId}
-                      onIniciar={() => setShowIniciar(true)}
-                    />
-                  )}
-                </div>
+            {/* Coluna 2: Chat. No mobile com conversa aberta vira overlay em
+                tela cheia (fixed inset-0) cobrindo o header do app. */}
+            <div className={isMobile ? (selId ? "fixed inset-0 z-50 bg-card flex flex-col" : "hidden") : "bg-card overflow-hidden flex flex-col min-h-0"}>
+              {selId ? (
+                <ChatArea
+                  cid={selId}
+                  convs={convsAll || []}
+                  onVoltar={isMobile ? () => setSelId(null) : undefined}
+                  onUpdate={rC}
+                  onLeadUpdate={rL}
+                  onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined}
+                  onTel={hasTwilio ? (p) => setTelPopup(p) : undefined}
+                  onDeleted={() => {
+                    setSelId(null);
+                    rC();
+                  }}
+                  onTransferido={() => {
+                    setSelId(null);
+                    rC();
+                  }}
+                  onAbrirLinhaTempo={() => {
+                    const conv = (convsAll || []).find((c: any) => c.id === selId);
+                    if (conv?.contatoId) setShowLinhaTempo(conv.contatoId);
+                  }}
+                  onLigarWhatsApp={(info) => chamadaWa.ligar(info)}
+                />
+              ) : (
+                <CentroDeComando
+                  convs={convs || []}
+                  onAbrirConversa={setSelId}
+                  onIniciar={() => setShowIniciar(true)}
+                />
+
               )}
+            </div>
 
             {/* Coluna 3: AI Rail (colapsável — clica no ✨ pra expandir o Customer 360°).
                 Oculta no mobile (Customer 360° fica restrito ao desktop); `contents`
@@ -1028,6 +1039,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const [showAddLead, setShowAddLead] = useState(false);
   const [showAgendar, setShowAgendar] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [maisMenuAberto, setMaisMenuAberto] = useState(false);
   const [showTransferir, setShowTransferir] = useState(false);
   const [showVincular, setShowVincular] = useState(false);
   const [buscaVincular, setBuscaVincular] = useState("");
@@ -1482,11 +1494,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                       {m.direcao === "saida" && m.status === "pendente" && <Loader2 className="h-3 w-3 animate-spin" aria-label="Enviando" />}
                       {m.direcao === "saida" && (m.status === "enviada" || m.status === "entregue" || m.status === "lida") && <Check className="h-3 w-3" aria-label="Enviada" />}
                       {m.direcao === "saida" && m.status === "falha" && (
-                        <span title="Falha no envio — veja logs do WhatsApp">
+                        <span title={(m as any).erroEntrega || "Falha no envio — veja logs do WhatsApp"}>
                           <AlertTriangle className="h-3 w-3 text-red-200" aria-label="Falha no envio" />
                         </span>
                       )}
                     </div>
+                    {m.direcao === "saida" && m.status === "falha" && (m as any).erroEntrega && (
+                      <p className="text-[10px] mt-1 text-red-100/90 leading-snug break-words">
+                        ⚠ Não entregue — {(m as any).erroEntrega}
+                      </p>
+                    )}
                   </div>
                 </div>
                 )}
@@ -1574,27 +1591,70 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
 
       {/* Linha 2: Composer */}
       <div className="p-3 pt-2 flex gap-2">
-        {mobile && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 w-9 p-0 shrink-0 text-violet-600"
-            disabled={composerSugestao.isPending}
-            onClick={() => composerSugestao.mutate({ conversaId: cid, tom })}
-            title="Compor com IA"
-          >
-            {composerSugestao.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          </Button>
+        {mobile ? (
+          <Popover open={maisMenuAberto} onOpenChange={setMaisMenuAberto}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={"h-9 w-9 p-0 shrink-0 rounded-full transition-transform " + (maisMenuAberto ? "bg-gradient-to-br from-violet-600 to-indigo-600 text-white rotate-45" : "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300")}
+                title="Mais ações"
+                aria-label="Mais ações"
+              >
+                <Plus className="h-5 w-5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" side="top" className="w-60 p-1.5">
+              <button
+                type="button"
+                disabled={composerSugestao.isPending}
+                onClick={() => { setMaisMenuAberto(false); composerSugestao.mutate({ conversaId: cid, tom }); }}
+                className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left disabled:opacity-60"
+              >
+                <span className="h-9 w-9 rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 flex items-center justify-center shrink-0">
+                  {composerSugestao.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                </span>
+                <span className="min-w-0"><span className="block text-sm font-semibold">Compor com IA</span><span className="block text-[11px] text-muted-foreground">Gera a resposta no tom escolhido</span></span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMaisMenuAberto(false); setShowTemplates(true); }}
+                className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left"
+              >
+                <span className="h-9 w-9 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                  <Zap className="h-4 w-4" />
+                </span>
+                <span className="min-w-0"><span className="block text-sm font-semibold">Respostas rápidas / Templates</span><span className="block text-[11px] text-muted-foreground">Atalho “/” e templates da Meta</span></span>
+              </button>
+              <AnexoButton
+                onAnexar={(m) => { setPendingMedia(m); setMaisMenuAberto(false); }}
+                trigger={
+                  <button type="button" className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left">
+                    <span className="h-9 w-9 rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300 flex items-center justify-center shrink-0">
+                      <Paperclip className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0"><span className="block text-sm font-semibold">Anexar</span><span className="block text-[11px] text-muted-foreground">Foto, vídeo ou documento</span></span>
+                  </button>
+                }
+              />
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <AnexoButton onAnexar={(m) => setPendingMedia(m)} />
         )}
-        <AnexoButton onAnexar={(m) => setPendingMedia(m)} />
-        {!mobile && (
         <Popover open={showTemplates} onOpenChange={setShowTemplates}>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" title="Respostas rápidas">
-              <Zap className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-96 p-2" align="start" side="top">
+          {mobile ? (
+            <PopoverAnchor asChild>
+              <span aria-hidden className="block h-0 w-0" />
+            </PopoverAnchor>
+          ) : (
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" title="Respostas rápidas">
+                <Zap className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+          )}
+          <PopoverContent className="w-96 p-2 max-w-[calc(100vw-24px)]" align="start" side="top">
             <div className="max-h-96 overflow-y-auto space-y-3">
 
               {/* ─── Respostas rápidas locais ─── */}
@@ -1684,7 +1744,6 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             </div>
           </PopoverContent>
         </Popover>
-        )}
         <RespostaRapidaAutocomplete
           value={msg}
           onChange={setMsg}
@@ -1735,7 +1794,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       </div>
       )}
     </div>
-    {showAddLead && <AddLeadFromConversaDialog open={showAddLead} onOpenChange={setShowAddLead} conversaId={cid} onSuccess={onLeadUpdate} />}
+    {showAddLead && <AddLeadFromConversaDialog open={showAddLead} onOpenChange={setShowAddLead} conversaId={cid} atendentes={(atendentes || []) as any[]} conversaAtendenteId={(conv as any)?.atendenteId ?? null} usuarioUserId={(usuarioLogado as any)?.id} onSuccess={onLeadUpdate} />}
 
     {/* Dialog transferir */}
     {showTransferir && (
@@ -2051,8 +2110,10 @@ const ANEXO_SPECS = {
 
 function AnexoButton({
   onAnexar,
+  trigger,
 }: {
   onAnexar: (m: { url: string; tipo: "imagem" | "video" | "documento"; nome: string; tamanho: number }) => void;
+  trigger?: React.ReactNode;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const tipoSelRef = useRef<keyof typeof ANEXO_SPECS>("imagem");
@@ -2113,6 +2174,7 @@ function AnexoButton({
       <input ref={inputRef} type="file" className="hidden" onChange={onFile} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
+          {trigger ?? (
           <Button
             variant="ghost"
             size="sm"
@@ -2122,6 +2184,7 @@ function AnexoButton({
           >
             {subindo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
           </Button>
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" side="top" className="w-56">
           <DropdownMenuItem onClick={() => escolher("imagem")}>

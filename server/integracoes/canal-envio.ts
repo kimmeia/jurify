@@ -28,6 +28,8 @@ export interface EnvioResultado {
   erro?: string;
   /** Tipo do provider que tentou (pra logs). */
   provider?: "whatsapp_qr" | "whatsapp_api" | "outro";
+  /** Canal que efetivou o envio — usado pra amarrar a mensagem persistida à conversa certa. */
+  canalId?: number;
 }
 
 export interface EnvioMensagemOpts {
@@ -166,7 +168,7 @@ export async function enviarTemplatePeloCanalApi(opts: {
     const { WhatsAppCloudClient } = await import("./whatsapp-cloud");
     const client = new WhatsAppCloudClient({ accessToken: cred.accessToken, phoneNumberId: cred.phoneNumberId });
     const msgId = await client.enviarTemplate(telefone, opts.nome, opts.idioma || "pt_BR", opts.componentes);
-    return { ok: true, idExterno: msgId, provider: "whatsapp_api" };
+    return { ok: true, idExterno: msgId, provider: "whatsapp_api", canalId: cred.canalId };
   } catch (e: any) {
     const apiMsg = e?.response?.data?.error?.message;
     return { ok: false, erro: apiMsg || e?.message || "Falha ao enviar template", provider: "whatsapp_api" };

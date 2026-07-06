@@ -15,9 +15,8 @@ import {
   enviarMensagem, listarMensagens,
   criarLead, listarLeads, atualizarLead, excluirLead,
   obterMetricasDashboard, distribuirLead, obterMetricasDetalhadas,
-  decidirResponsavelLead,
 } from "./db-crm";
-import { conversas, contatos, leads, colaboradores } from "../../drizzle/schema";
+import { conversas, contatos, leads } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 import { createLogger } from "../_core/logger";
@@ -39,6 +38,25 @@ export function resolverMediaPathLocal(mediaUrl: string): string {
     return path.resolve(process.cwd(), mediaUrl.slice(1));
   }
   return mediaUrl;
+}
+
+/**
+ * Confirma que um colaborador pertence ao escritório. Usado antes de gravar um
+ * `responsavelId` vindo do client (seletor de responsável do Pipeline) — sem
+ * isso um id forjado atribuiria o lead a alguém de outro escritório.
+ */
+async function colaboradorDoEscritorio(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  escritorioId: number,
+  colaboradorId: number,
+): Promise<boolean> {
+  const { colaboradores } = await import("../../drizzle/schema");
+  const [c] = await db
+    .select({ id: colaboradores.id })
+    .from(colaboradores)
+    .where(and(eq(colaboradores.id, colaboradorId), eq(colaboradores.escritorioId, escritorioId)))
+    .limit(1);
+  return !!c;
 }
 
 /**
@@ -570,28 +588,21 @@ export const crmRouter = router({
       conversaId: z.number().optional(),
       valorEstimado: z.string().optional(),
       origemLead: z.string().max(128).optional(),
-      // Responsável escolhido no Customer 360. Ausente = rodízio (comportamento
-      // antigo). Validado como colaborador do MESMO escritório (anti-vazamento).
-      responsavelId: z.number().int().positive().optional(),
+      responsavelId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "pipeline", "criar", { fallbackModulo: "kanban" });
       if (!perm.allowed) throw new Error("Sem permissão para criar leads.");
-      const escolhido = input.responsavelId ?? null;
-      let escolhidoValido = false;
-      if (escolhido) {
-        const db = await getDb();
-        if (db) {
-          const [c] = await db.select({ id: colaboradores.id }).from(colaboradores)
-            .where(and(eq(colaboradores.id, escolhido), eq(colaboradores.escritorioId, perm.escritorioId)))
-            .limit(1);
-          escolhidoValido = !!c;
-        }
-      }
-      // Só roda o rodízio quando NÃO houve escolha explícita (preserva "auto").
-      const rodizio = escolhido ? null : (await distribuirLead(perm.escritorioId, input.contatoId).catch(() => null));
-      const responsavelId = decidirResponsavelLead({ escolhido, escolhidoValido, rodizio, criador: perm.colaboradorId });
-      const { responsavelId: _ignore, ...rest } = input;
+      // Lead criado à mão fica com quem criou (ou com o responsável escolhido),
+      // não com o rodízio (distribuirLead) — esse existe só pra lead que entra
+      // sozinho pelo WhatsApp. Sortear outro atendente aqui era o bug "criou no
+      // nome de outra pessoa".
+      const { responsavelId: respEscolhido, ...rest } = input;
+      const db = await getDb();
+      const responsavelId =
+        respEscolhido && db && (await colaboradorDoEscritorio(db, perm.escritorioId, respEscolhido))
+          ? respEscolhido
+          : perm.colaboradorId;
       const id = await criarLead({ escritorioId: perm.escritorioId, responsavelId, ...rest });
       return { id, responsavelId };
     }),
@@ -662,6 +673,8 @@ export const crmRouter = router({
     .input(z.object({
       conversaId: z.number(),
       valorEstimado: z.string().optional(),
+      responsavelId: z.number().optional(),
+      etapaFunil: z.enum(["novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido"]).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -672,19 +685,28 @@ export const crmRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
       const [conv] = await db
-        .select({ contatoId: conversas.contatoId })
+        .select({ contatoId: conversas.contatoId, atendenteId: conversas.atendenteId })
         .from(conversas)
         .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)))
         .limit(1);
       if (!conv) throw new Error("Conversa não encontrada.");
 
-      const responsavelId = (await distribuirLead(esc.escritorio.id, conv.contatoId).catch(() => null)) ?? esc.colaborador.id;
+      // Responsável: escolha explícita do operador → atendente da conversa →
+      // quem está criando. NUNCA o rodízio (distribuirLead): ele existe pra lead
+      // que chega sozinho pelo WhatsApp; criar a oportunidade à mão sorteando
+      // outro atendente era o bug "cria a oportunidade no nome de outro".
+      const responsavelId =
+        input.responsavelId && (await colaboradorDoEscritorio(db, esc.escritorio.id, input.responsavelId))
+          ? input.responsavelId
+          : (conv.atendenteId ?? esc.colaborador.id);
+
       const id = await criarLead({
         escritorioId: esc.escritorio.id,
         contatoId: conv.contatoId,
         conversaId: input.conversaId,
         responsavelId,
         valorEstimado: input.valorEstimado,
+        etapaFunil: input.etapaFunil,
         origemLead: "whatsapp",
       });
       return { id, responsavelId };
