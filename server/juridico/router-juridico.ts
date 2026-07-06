@@ -21,6 +21,7 @@ import { chamarLLMEscritorio } from "./llm";
 import { avaliarViabilidade, type FonteContexto } from "./avaliacao";
 import { gerarPeca, TIPOS_PECA } from "./peca";
 import { montarPecaDocx } from "./docx";
+import { montarDossie } from "./dossie";
 
 /** Resolve a chave OpenAI (embeddings sempre via OpenAI). null se não houver. */
 async function resolverChaveOpenAI(escritorioId: number): Promise<string | null> {
@@ -240,6 +241,21 @@ export const juridicoRouter = router({
    * Redige a peça: recupera as fontes, o modelo do escritório redige citando
    * só essas fontes, e a verificação marca citações sem respaldo (anti-invenção).
    */
+  /**
+   * Dossiê do cliente pro Agente: qualificação + processo + lista de documentos.
+   * Alimenta a tela (preview + seleção) antes de gerar a peça. Isolado por
+   * escritório. Gate: quem pode ver clientes.
+   */
+  contextoDoCliente: protectedProcedure
+    .input(z.object({ contatoId: z.number(), processoId: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão pra ver clientes." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return montarDossie(db, perm.escritorioId, input.contatoId, input.processoId);
+    }),
+
   gerarPeca: protectedProcedure
     .input(z.object({
       fatos: z.string().min(10).max(8000),
@@ -248,6 +264,10 @@ export const juridicoRouter = router({
       resumoAvaliacao: z.string().max(2000).optional(),
       modelo: z.string().max(64).optional(),
       topK: z.number().int().min(1).max(20).optional(),
+      // Dossiê real: quando informado, a peça é fundamentada nos dados do
+      // cliente/processo (qualificação, CNJ, valor, anotações) em vez de genérica.
+      contatoId: z.number().optional(),
+      processoId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -257,12 +277,20 @@ export const juridicoRouter = router({
       const tipo = TIPOS_PECA[input.tipo];
       if (!tipo) throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo de peça inválido." });
 
+      // Dossiê real do cliente/processo (qualificação, processo, anotações).
+      const dossie = input.contatoId
+        ? await montarDossie(db, esc.escritorio.id, input.contatoId, input.processoId)
+        : null;
+      const fatosCompleto = dossie?.fatosContexto
+        ? `${input.fatos}\n\n${dossie.fatosContexto}`
+        : input.fatos;
+
       const modelo = input.modelo || "gpt-4o-mini";
       const key = await resolverChaveOpenAI(esc.escritorio.id);
       if (!key) {
         return { disponivel: false, motivo: "Sem chave OpenAI pra recuperar as fontes (embeddings). Configure em Integrações.", texto: null, fontes: [] as Awaited<ReturnType<typeof recuperarFontes>>, verificacao: null };
       }
-      const consulta = [input.fatos, ...(input.teses ?? [])].join("\n");
+      const consulta = [input.fatos, dossie?.fatosContexto, ...(input.teses ?? [])].filter(Boolean).join("\n");
       let queryEmb: number[];
       try {
         queryEmb = await gerarEmbedding(consulta, key);
@@ -280,7 +308,13 @@ export const juridicoRouter = router({
         return r.texto;
       };
       const { texto, verificacao, erro } = await gerarPeca(
-        { fatos: input.fatos, teses: input.teses, resumoAvaliacao: input.resumoAvaliacao },
+        {
+          fatos: fatosCompleto,
+          teses: input.teses,
+          resumoAvaliacao: input.resumoAvaliacao,
+          qualificacao: dossie?.qualificacao,
+          processo: dossie?.processo,
+        },
         fontesCtx, tipo, chamar,
       );
       if (!texto) {

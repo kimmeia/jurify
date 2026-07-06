@@ -17,6 +17,7 @@ import PizZip from "pizzip";
 import { PECA_TEMPLATE_B64 } from "./peca-template-b64";
 
 const RECUO_1A_LINHA = 709; // ~1,25 cm em twips
+const RECUO_CITACAO = 2268; // 4 cm — recuo de citação longa (jurisprudência)
 const ENTRELINHA_1_5 = 360; // 240 = simples; 360 = 1,5
 
 function escaparXml(s: string): string {
@@ -35,11 +36,13 @@ function ehCaixaAlta(t: string): boolean {
 
 const RE_SECAO = /^(D[OA]S?\s|DO\s|DA\s|DAS\s|DOS\s|DE\s|[IVXLC]+\s*[-–.)]|\d+\s*[-–.)])/;
 
-type Tipo = "titulo" | "secao" | "corpo" | "vazio";
+type Tipo = "titulo" | "secao" | "citacao" | "corpo" | "vazio";
 
 function classificar(linha: string): Tipo {
   const t = linha.trim();
   if (!t) return "vazio";
+  // Transcrição de jurisprudência marcada com guillemets/aspas → citação recuada.
+  if (/^[«"“]/.test(t)) return "citacao";
   if (ehCaixaAlta(t)) {
     // Caixa alta curta abrindo com marcador de seção → título de seção (à
     // esquerda). Caso contrário (endereçamento, nome da ação) → centralizado.
@@ -65,6 +68,16 @@ function paragrafo(linha: string): string {
       `<w:p><w:pPr><w:spacing w:before="240" w:after="60" w:line="${ENTRELINHA_1_5}" w:lineRule="auto"/>` +
       `<w:jc w:val="both"/></w:pPr>` +
       `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${txt}</w:t></w:r></w:p>`
+    );
+  }
+  if (tipo === "citacao") {
+    // Citação de jurisprudência (padrão ABNT/forense): recuo de 4 cm à
+    // esquerda, fonte 10, espaçamento simples. Tira os guillemets marcadores.
+    const limpo = escaparXml(linha.trim().replace(/^[«"“\s]+/, "").replace(/[»"”\s]+$/, ""));
+    return (
+      `<w:p><w:pPr><w:spacing w:before="60" w:after="60" w:line="240" w:lineRule="auto"/>` +
+      `<w:jc w:val="both"/><w:ind w:left="${RECUO_CITACAO}"/></w:pPr>` +
+      `<w:r><w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t xml:space="preserve">${limpo}</w:t></w:r></w:p>`
     );
   }
   // corpo: justificado, recuo de 1ª linha (fonte Times/entrelinha vêm do Normal)

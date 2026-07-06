@@ -41,6 +41,11 @@ export default function AgenteJuridico() {
   const [fontesOpen, setFontesOpen] = useState(false);
   const NF_VAZIO = { tipo: "sumula", identificador: "", titulo: "", texto: "", tags: "" };
   const [nf, setNf] = useState(NF_VAZIO);
+  // Cliente/processo do caso — quando escolhidos, a peça é fundamentada nos
+  // dados REAIS (qualificação, processo, anotações) em vez de genérica.
+  const [buscaCliente, setBuscaCliente] = useState("");
+  const [cliente, setCliente] = useState<{ id: number; nome: string } | null>(null);
+  const [processoId, setProcessoId] = useState<number | null>(null);
 
   const { data: tipos } = (trpc as any).juridico.tiposPeca.useQuery(undefined, { retry: false });
   const tipoSel = tipo || tipos?.[0]?.id || "peticao_inicial_revisional";
@@ -92,6 +97,20 @@ export default function AgenteJuridico() {
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
 
+  // Busca de cliente (>=2 chars) + processos do cliente + dossiê (preview real).
+  const clientesQ = (trpc as any).clientes.listar.useQuery(
+    { busca: buscaCliente, estagio: "cliente", limite: 8 },
+    { enabled: buscaCliente.trim().length >= 2, retry: false },
+  );
+  const processosQ = (trpc as any).clienteProcessos.listar.useQuery(
+    { contatoId: cliente?.id ?? 0 },
+    { enabled: !!cliente, retry: false },
+  );
+  const dossieQ = (trpc as any).juridico.contextoDoCliente.useQuery(
+    { contatoId: cliente?.id ?? 0, processoId: processoId ?? undefined },
+    { enabled: !!cliente, retry: false },
+  );
+
   const podeRodar = fatos.trim().length >= 10;
 
   return (
@@ -111,7 +130,86 @@ export default function AgenteJuridico() {
         </Button>
       </div>
 
-      {/* 1 · Caso */}
+      {/* 1 · Cliente & processo — puxa os dados reais pro dossiê */}
+      <Card>
+        <CardContent className="pt-5 space-y-3">
+          <Label className="text-xs font-semibold">Cliente do caso <span className="text-muted-foreground font-normal">(opcional — fundamenta a peça nos dados reais)</span></Label>
+          {!cliente ? (
+            <div className="space-y-2">
+              <Input placeholder="Buscar cliente por nome ou CPF…" value={buscaCliente} onChange={(e) => setBuscaCliente(e.target.value)} />
+              {buscaCliente.trim().length >= 2 && (
+                <div className="rounded-lg border divide-y max-h-52 overflow-y-auto">
+                  {clientesQ.isLoading && <p className="text-xs text-muted-foreground p-2">Buscando…</p>}
+                  {(clientesQ.data?.clientes ?? []).map((c: any) => (
+                    <button
+                      key={c.id}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted"
+                      onClick={() => { setCliente({ id: c.id, nome: c.nome }); setProcessoId(null); setBuscaCliente(""); }}
+                    >
+                      {c.nome}{c.cpfCnpj ? <span className="text-muted-foreground"> · {c.cpfCnpj}</span> : null}
+                    </button>
+                  ))}
+                  {!clientesQ.isLoading && (clientesQ.data?.clientes?.length ?? 0) === 0 && (
+                    <p className="text-xs text-muted-foreground p-2">Nenhum cliente encontrado.</p>
+                  )}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground">Sem cliente, a peça sai só com os fatos que você digitar (mais genérica).</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-medium flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> {cliente.nome}</div>
+                <Button variant="ghost" size="sm" onClick={() => { setCliente(null); setProcessoId(null); }}>Trocar</Button>
+              </div>
+              {(processosQ.data?.length ?? 0) > 0 && (
+                <div>
+                  <Label className="text-xs">Processo</Label>
+                  <Select value={processoId ? String(processoId) : ""} onValueChange={(v) => setProcessoId(v ? Number(v) : null)}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Escolha o processo (opcional)" /></SelectTrigger>
+                    <SelectContent>
+                      {(processosQ.data ?? []).map((p: any) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.apelido || p.numeroCnj || `Processo ${p.id}`}{p.classe ? ` · ${p.classe}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {dossieQ.data && (
+                <div className="rounded-lg border bg-violet-50/50 p-3 text-xs space-y-2">
+                  {dossieQ.data.qualificacao && (
+                    <div>
+                      <p className="font-semibold text-violet-800">Qualificação (do cadastro)</p>
+                      <p className="whitespace-pre-line text-violet-900/80">{dossieQ.data.qualificacao}</p>
+                    </div>
+                  )}
+                  {dossieQ.data.processo && (
+                    <div>
+                      <p className="font-semibold text-violet-800">Processo</p>
+                      <p className="whitespace-pre-line text-violet-900/80">{dossieQ.data.processo}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-semibold text-violet-800">Documentos ({dossieQ.data.documentos?.length ?? 0})</p>
+                    {(dossieQ.data.documentos ?? []).length > 0 ? (
+                      <ul className="list-disc list-inside text-violet-900/80">
+                        {dossieQ.data.documentos.map((d: any) => <li key={d.id}>{d.nome}</li>)}
+                      </ul>
+                    ) : (
+                      <p className="text-violet-900/60">Nenhum documento anexado a este cliente.</p>
+                    )}
+                    <p className="text-[10px] text-violet-700/70 mt-1">A leitura do conteúdo dos documentos (Vision) entra na próxima etapa.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 2 · Caso */}
       <Card>
         <CardContent className="pt-5 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -168,7 +266,7 @@ export default function AgenteJuridico() {
             <Button
               className="bg-violet-600 hover:bg-violet-700 text-white"
               disabled={!podeRodar || gerarMut.isPending}
-              onClick={() => gerarMut.mutate({ fatos, teses, tipo: tipoSel, modelo, resumoAvaliacao: avaliacao?.resumo })}
+              onClick={() => gerarMut.mutate({ fatos, teses, tipo: tipoSel, modelo, resumoAvaliacao: avaliacao?.resumo, contatoId: cliente?.id, processoId: processoId ?? undefined })}
             >
               {gerarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
               Gerar peça
