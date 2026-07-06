@@ -762,6 +762,10 @@ export const mensagens = mysqlTable("mensagens", {
   mediaType: varchar("mediaType", { length: 64 }),
   status: mysqlEnum("statusMsg", ["pendente", "enviada", "entregue", "lida", "falha"]).default("pendente").notNull(),
   idExterno: varchar("idExterno", { length: 128 }),
+  // Motivo da falha de entrega reportado pela Meta (webhook `failed`, campo
+  // `errors[]`). NULL quando entregue/pendente — vira o código+título quando
+  // a Cloud API recusa a entrega (ex: "131026: Message undeliverable").
+  erroEntrega: text("erroEntrega"),
   replyToId: int("replyToId"),
   // JSON com metadados estruturados que não cabem em conteudo (texto puro).
   // Hoje: respostas a mensagens interativas WhatsApp (button_reply/list_reply
