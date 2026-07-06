@@ -3439,3 +3439,25 @@ export const webPushKeys = mysqlTable("web_push_keys", {
   privateKey: text("privateKey").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+/**
+ * Base de conhecimento jurídico (RAG) do Agente Jurídico — súmulas, leis e
+ * precedentes citáveis. `escritorioId` NULL = base global da plataforma.
+ * `embedding` = JSON de floats pra busca por similaridade (NULL = não indexado).
+ */
+export const fontesJuridicas = mysqlTable("fontes_juridicas", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioId"),
+  tipo: mysqlEnum("tipo", ["sumula", "lei", "precedente", "tese"]).notNull(),
+  identificador: varchar("identificador", { length: 160 }).notNull(),
+  orgao: varchar("orgao", { length: 60 }),
+  area: varchar("area", { length: 80 }).default("geral").notNull(),
+  titulo: varchar("titulo", { length: 255 }),
+  texto: text("texto").notNull(),
+  tags: varchar("tags", { length: 500 }),
+  embedding: text("embedding"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type FonteJuridica = typeof fontesJuridicas.$inferSelect;
+export type InsertFonteJuridica = typeof fontesJuridicas.$inferInsert;

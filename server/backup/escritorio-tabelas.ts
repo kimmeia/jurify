@@ -110,6 +110,7 @@ export const EXCLUIR_NAO_RELEVANTE: ReadonlyArray<{ nomeBanco: string; motivo: s
   { nomeBanco: "asaas_webhook_eventos", motivo: "Idempotency log de webhooks — não tem valor pro dono" },
   { nomeBanco: "escritorio_creditos", motivo: "Saldo único de créditos do escritório — financeiro JuridFlow" },
   { nomeBanco: "escritorio_transacoes", motivo: "Histórico de uso de créditos — financeiro JuridFlow" },
+  { nomeBanco: "fontes_juridicas", motivo: "Base de conhecimento jurídico (súmulas/leis) — global e regenerável via seed/ingestão, não é dado do escritório" },
 ];
 
 /**
