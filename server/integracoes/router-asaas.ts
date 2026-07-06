@@ -2476,6 +2476,43 @@ export const asaasRouter = router({
     }),
 
   /**
+   * Exclui um pagamento lançado MANUALMENTE (origem='manual') — quando o
+   * operador lançou por engano no caixa do cliente. NÃO exclui cobrança do
+   * Asaas (essa vem do gateway e deve ser cancelada lá). Remove também os
+   * vínculos com ações (cobranca_acoes). O snapshot de comissão fechada
+   * (comissoes_fechadas_itens) não tem FK e preserva o valor, então o
+   * histórico de comissão não quebra.
+   */
+  excluirCobrancaManual: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão pra excluir cobranças." });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [cob] = await db
+        .select({ id: asaasCobrancas.id, origem: asaasCobrancas.origem })
+        .from(asaasCobrancas)
+        .where(and(eq(asaasCobrancas.id, input.id), eq(asaasCobrancas.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!cob) throw new TRPCError({ code: "NOT_FOUND" });
+      if (cob.origem !== "manual") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Só pagamentos lançados manualmente podem ser excluídos aqui. Cobranças do Asaas devem ser canceladas no gateway.",
+        });
+      }
+
+      await db.delete(cobrancaAcoes).where(eq(cobrancaAcoes.cobrancaId, cob.id));
+      await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, cob.id));
+      return { success: true };
+    }),
+
+  /**
    * Cria cobrança "manual" — sem passar pela API Asaas. Usada quando
    * o cliente paga em dinheiro/cartão presencial, ou quando o
    * escritório está sem Asaas conectado e quer registrar a entrada
