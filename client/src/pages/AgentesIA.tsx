@@ -23,7 +23,9 @@ import {
   Bot, Plus, Edit, Trash2, Link2, FileText, FileIcon, Loader2,
   Send, Sparkles, ExternalLink, BrainCircuit, Play, KeyRound, CheckCircle2,
   MessageSquare, Search, Store, Users, User as UserIcon, RefreshCw, AlertTriangle,
+  Scale, ArrowRight,
 } from "lucide-react";
+import { Link } from "wouter";
 import { toast } from "sonner";
 import { AgenteCard, type AgenteCardData } from "./agentes/agente-card";
 import { AgentesHero } from "./agentes/agentes-hero";
@@ -1594,6 +1596,30 @@ export default function AgentesIA() {
   return (
     <div className="space-y-5">
       <AgentesHero onNovo={() => { setEditandoId(null); setFormOpen(true); }} />
+
+      {/* Agente Jurídico — agente especializado (redige peças fundamentadas no
+          cliente/processo real). Vive aqui em Agentes IA, com tela própria. */}
+      <Link href="/agente-juridico">
+        <a className="block group">
+          <Card className="border-violet-200 bg-gradient-to-br from-violet-50 to-white hover:shadow-md transition-shadow cursor-pointer">
+            <CardContent className="flex items-center gap-4 py-4">
+              <div className="h-11 w-11 rounded-xl bg-violet-600 text-white flex items-center justify-center shrink-0">
+                <Scale className="h-6 w-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold">Agente Jurídico</p>
+                  <Badge className="bg-violet-600 text-white text-[10px]">Redator de peças</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Seleciona o cliente e o processo, usa a base jurídica e redige a peça no padrão forense — com citações verificadas. Você revisa e assina.
+                </p>
+              </div>
+              <ArrowRight className="h-5 w-5 text-violet-600 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+            </CardContent>
+          </Card>
+        </a>
+      </Link>
 
       {/* Tabs Templates · Escritório · Meus */}
       <div className="flex items-center justify-between flex-wrap gap-3">
