@@ -83,4 +83,15 @@ describe("montarPecaDocx — padrão forense", () => {
     expect(doc).toContain("&lt;réu&gt;");
     expect(doc).not.toContain("<réu>");
   });
+
+  it("transcrição de jurisprudência (« ») vira citação recuada 4 cm, fonte 10", () => {
+    const zip2 = new PizZip(
+      montarPecaDocx("DO DIREITO\n\n«A capitalização mensal é vedada sem pactuação. (STJ)»\n\nProsseguindo."),
+    );
+    const doc2 = zip2.file("word/document.xml")!.asText();
+    expect(doc2).toContain('w:ind w:left="2268"'); // recuo de 4 cm
+    expect(doc2).toContain('w:sz w:val="20"'); // fonte 10 na citação
+    expect(doc2).toContain("A capitalização mensal é vedada"); // texto sem os guillemets
+    expect(doc2).not.toContain("«"); // marcadores removidos
+  });
 });

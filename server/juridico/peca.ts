@@ -21,24 +21,49 @@ export const TIPOS_PECA: Record<string, TipoPeca> = {
   },
 };
 
-export type Caso = { fatos: string; teses?: string[]; resumoAvaliacao?: string };
+export type Caso = {
+  fatos: string;
+  teses?: string[];
+  resumoAvaliacao?: string;
+  /** Qualificação já montada do autor (nome, nacionalidade, estado civil,
+   *  profissão, CPF/CNPJ, endereço) — vinda do cadastro real do cliente. */
+  qualificacao?: string;
+  /** Resumo do processo (CNJ, classe, valor da causa, polo, parte contrária). */
+  processo?: string;
+  /** Texto extraído dos documentos anexados (contrato, extrato…). */
+  documentos?: string;
+};
 
-/** Monta system+user pro modelo redigir a peça, injetando as fontes. */
+/** Monta system+user pro modelo redigir a peça, injetando dossiê + fontes. */
 export function montarPromptPeca(caso: Caso, fontes: FonteContexto[], tipo: TipoPeca): { system: string; user: string } {
+  const secoesCaps = tipo.secoes.map((s) => s.toUpperCase()).join(", ");
   const system =
-    `Você é advogado(a) redator(a). Redija uma "${tipo.label}" em português jurídico formal, ` +
-    `estruturada nas seções: ${tipo.secoes.join(", ")}.\n` +
-    `Regras rígidas:\n` +
+    `Você é advogado(a) redator(a). Redija uma "${tipo.label}" no PADRÃO FORENSE brasileiro, em português jurídico formal.\n` +
+    `ESTRUTURA, nesta ordem:\n` +
+    `1. Endereçamento ao juízo em CAIXA ALTA (ex.: "EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA ___ VARA ... DA COMARCA DE ...").\n` +
+    `2. Qualificação COMPLETA do autor a partir dos dados reais fornecidos.\n` +
+    `3. Nome da ação em CAIXA ALTA (ex.: "${tipo.label.toUpperCase()}").\n` +
+    `4. Havendo parte contrária, "em face de <PARTE>".\n` +
+    `5. Seções em CAIXA ALTA como títulos: ${secoesCaps}, DAS PROVAS, DO VALOR DA CAUSA.\n` +
+    `6. Fecho: "Nestes termos, pede deferimento.", local e data, e linha de assinatura com OAB.\n` +
+    `REGRAS RÍGIDAS:\n` +
+    `- Títulos (endereçamento, nome da ação, seções) SEMPRE em CAIXA ALTA — é o que formata a peça no documento.\n` +
+    `- Transcrição de jurisprudência/ementa: ponha o trecho transcrito entre « e », num parágrafo próprio, pra sair recuado (padrão de citação).\n` +
     `- Use SOMENTE as fontes fornecidas; cite pelo identificador exatamente como veio (ex.: "Súmula 297/STJ").\n` +
-    `- NÃO invente súmula, lei, precedente nem número de processo.\n` +
-    `- NÃO invente fatos além dos informados. Não prometa resultado.\n` +
-    `- Escreva o texto corrido da peça (sem JSON, sem comentários fora da peça).`;
+    `- Fundamente qualificação, processo e fatos NOS DADOS REAIS fornecidos — não use nome, CPF, valor nem endereço fictício/placeholder quando houver dado real.\n` +
+    `- NÃO invente súmula, lei, precedente, número de processo, nem fatos além dos informados. Não prometa resultado.\n` +
+    `- Escreva só o texto corrido da peça (sem JSON, sem comentários fora da peça).`;
   const fontesTxt = fontes.length
     ? fontes.map((f) => `- [${f.identificador}] ${f.titulo ? f.titulo + ": " : ""}${f.texto}`).join("\n")
     : "(nenhuma fonte)";
+  const qualif = caso.qualificacao ? `QUALIFICAÇÃO DO AUTOR (dados reais):\n${caso.qualificacao}\n\n` : "";
+  const proc = caso.processo ? `PROCESSO:\n${caso.processo}\n\n` : "";
+  const docs = caso.documentos ? `CONTEÚDO DOS DOCUMENTOS ANEXADOS:\n${caso.documentos}\n\n` : "";
   const teses = caso.teses?.length ? `\nTESES: ${caso.teses.join("; ")}` : "";
   const aval = caso.resumoAvaliacao ? `\nRESUMO DA VIABILIDADE: ${caso.resumoAvaliacao}` : "";
-  const user = `FATOS:\n${caso.fatos}${teses}${aval}\n\nFONTES (use só estas, cite pelo identificador):\n${fontesTxt}`;
+  const user =
+    `${qualif}${proc}${docs}FATOS:\n${caso.fatos}${teses}${aval}\n\n` +
+    `FONTES (use só estas, cite pelo identificador):\n${fontesTxt}`;
   return { system, user };
 }
 
