@@ -13,8 +13,9 @@ import { getDb } from "../db";
 import { fontesJuridicas } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { resolverAPIKey } from "../integracoes/router-agentes-ia";
-import { gerarEmbedding } from "./embeddings";
+import { gerarEmbedding, gerarEmbeddingSeguro } from "./embeddings";
 import { recuperarFontes, seedFontesRevisional, reindexarEmbeddings } from "./base";
+import { checkPermission } from "../escritorio/check-permission";
 import { AREA_REVISIONAL } from "./fontes-revisional";
 import { chamarLLMEscritorio } from "./llm";
 import { avaliarViabilidade, type FonteContexto } from "./avaliacao";
@@ -57,14 +58,22 @@ export const juridicoRouter = router({
 
   /** Lista as fontes da base (sem o blob de embedding) — pra gestão/consulta. */
   listarFontes: protectedProcedure
-    .input(z.object({ area: z.string().max(80).optional(), busca: z.string().max(160).optional() }).optional())
+    .input(z.object({
+      area: z.string().max(80).optional(),
+      busca: z.string().max(160).optional(),
+      origem: z.enum(["todas", "minhas", "globais"]).optional(),
+    }).optional())
     .query(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) return [];
       const db = await getDb();
       if (!db) return [];
 
-      const escCond = or(isNull(fontesJuridicas.escritorioId), eq(fontesJuridicas.escritorioId, esc.escritorio.id))!;
+      const origem = input?.origem ?? "todas";
+      const escCond =
+        origem === "minhas" ? eq(fontesJuridicas.escritorioId, esc.escritorio.id)
+        : origem === "globais" ? isNull(fontesJuridicas.escritorioId)
+        : or(isNull(fontesJuridicas.escritorioId), eq(fontesJuridicas.escritorioId, esc.escritorio.id))!;
       const conds = [escCond];
       if (input?.area) conds.push(eq(fontesJuridicas.area, input.area));
       if (input?.busca) {
@@ -74,6 +83,7 @@ export const juridicoRouter = router({
       return db
         .select({
           id: fontesJuridicas.id,
+          escritorioId: fontesJuridicas.escritorioId,
           tipo: fontesJuridicas.tipo,
           identificador: fontesJuridicas.identificador,
           orgao: fontesJuridicas.orgao,
@@ -86,6 +96,54 @@ export const juridicoRouter = router({
         .where(and(...conds))
         .orderBy(desc(fontesJuridicas.id))
         .limit(200);
+    }),
+
+  /** Adiciona uma fonte PRÓPRIA do escritório (súmula/lei/precedente/modelo). */
+  adicionarFonte: protectedProcedure
+    .input(z.object({
+      tipo: z.enum(["sumula", "lei", "precedente", "tese"]),
+      identificador: z.string().min(2).max(160),
+      orgao: z.string().max(60).optional(),
+      area: z.string().max(80).optional(),
+      titulo: z.string().max(255).optional(),
+      texto: z.string().min(5).max(8000),
+      tags: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "processos", "editar");
+      if (!perm.editar) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão pra editar fontes." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const area = input.area || AREA_REVISIONAL;
+      // Indexa na hora (best-effort) com a chave do escritório.
+      const key = await resolverChaveOpenAI(perm.escritorioId);
+      const textoIndex = [input.identificador, input.titulo, input.texto].filter(Boolean).join(" — ");
+      const emb = key ? await gerarEmbeddingSeguro(textoIndex, key) : null;
+      const [res] = await db.insert(fontesJuridicas).values({
+        escritorioId: perm.escritorioId,
+        tipo: input.tipo,
+        identificador: input.identificador,
+        orgao: input.orgao ?? null,
+        area,
+        titulo: input.titulo ?? null,
+        texto: input.texto,
+        tags: input.tags ?? null,
+        embedding: emb ? JSON.stringify(emb) : null,
+      });
+      return { id: (res as { insertId: number }).insertId, indexada: !!emb };
+    }),
+
+  /** Exclui uma fonte PRÓPRIA do escritório (não mexe na base global). */
+  excluirFonte: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "processos", "editar");
+      if (!perm.editar) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão pra editar fontes." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // escritorioId setado garante que só remove fonte própria (global é NULL).
+      await db.delete(fontesJuridicas).where(and(eq(fontesJuridicas.id, input.id), eq(fontesJuridicas.escritorioId, perm.escritorioId)));
+      return { success: true };
     }),
 
   /** Busca por similaridade — recupera as fontes mais relevantes à consulta. */

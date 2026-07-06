@@ -399,6 +399,16 @@ export const crmRouter = router({
                   if (telefone) {
                     let msgId: string;
                     if (input.metaTemplate) {
+                      // Disjuntor: se a conta está restrita pela Meta, não dispara
+                      // o template — marca falha com o motivo e aborta (não martela).
+                      const guard = await import("../integracoes/whatsapp-envio-guard");
+                      const permitido = await guard.podeDispararTemplate({ db, canalId: convData.canalId });
+                      if (!permitido.ok) {
+                        log.warn(`[CRM] Template manual bloqueado: ${permitido.erro}`);
+                        const { mensagens } = await import("../../drizzle/schema");
+                        await db.update(mensagens).set({ status: "falha", erroEntrega: permitido.erro }).where(eq(mensagens.id, id));
+                        return { id };
+                      }
                       // Template Meta: monta o array de components com 1 body
                       // com 1 parameter por {{N}} preenchido. Sem params = template
                       // sem variáveis (caso comum dos "lembrete fixo").
@@ -407,6 +417,7 @@ export const crmRouter = router({
                         ? [{ type: "body", parameters: params.map((p) => ({ type: "text", text: String(p) })) }]
                         : undefined;
                       msgId = await client.enviarTemplate(telefone, input.metaTemplate.nome, input.metaTemplate.idioma || "pt_BR", components);
+                      await guard.registrarSucessoTemplate({ db, canalId: convData.canalId });
                       log.info(`[CRM] Template Meta "${input.metaTemplate.nome}" enviado pra ${telefone} (msgId: ${msgId})`);
                     } else {
                       msgId = await enviarConteudoCloudApi(client, telefone, input.tipo, input.conteudo, input.mediaUrl);
@@ -429,10 +440,14 @@ export const crmRouter = router({
             } catch (cloudErr: any) {
               // Persistir a falha (não só logar): a UI mostra status real e o
               // erro de integração externa não morre no response.
+              const erroMsg = cloudErr?.response?.data?.error?.message || cloudErr?.message || "";
               log.error(`[CRM] Erro ao enviar via Cloud API:`, cloudErr?.response?.data?.error || cloudErr.message);
               try {
                 const { mensagens } = await import("../../drizzle/schema");
-                await db.update(mensagens).set({ status: "falha" }).where(eq(mensagens.id, id));
+                await db.update(mensagens).set({ status: "falha", erroEntrega: erroMsg.slice(0, 500) || null }).where(eq(mensagens.id, id));
+                // Disjuntor: erro de restrição/spam da Meta pausa os próximos templates.
+                const guard = await import("../integracoes/whatsapp-envio-guard");
+                await guard.registrarFalhaTemplate({ db, canalId: convData.canalId, erro: erroMsg }).catch(() => {});
               } catch { /* não mascarar o erro original */ }
             }
           }
@@ -786,6 +801,55 @@ export const crmRouter = router({
 
     return rows;
   }),
+
+  /**
+   * Canais WhatsApp com disparo pausado pelo disjuntor anti-spam (a Meta
+   * restringiu a conta — 131031 e afins). Alimenta o banner do Atendimento pra
+   * a equipe parar de tentar enviar em vez de descobrir mensagem por mensagem.
+   */
+  canaisRestritos: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return [];
+    const db = await getDb();
+    if (!db) return [];
+    const { canaisIntegrados } = await import("../../drizzle/schema");
+    const { eq, and } = await import("drizzle-orm");
+    return db
+      .select({
+        id: canaisIntegrados.id,
+        nome: canaisIntegrados.nome,
+        telefone: canaisIntegrados.telefone,
+        motivo: canaisIntegrados.restritoMotivo,
+        desde: canaisIntegrados.restritoEm,
+      })
+      .from(canaisIntegrados)
+      .where(and(eq(canaisIntegrados.escritorioId, esc.escritorio.id), eq(canaisIntegrados.restritoMeta, true)));
+  }),
+
+  /**
+   * Rearma o disjuntor de um canal manualmente ("já resolvi na Meta, pode
+   * tentar de novo"). Só dono/gestor. Não desfaz a restrição na Meta — apenas
+   * libera o sistema a voltar a tentar (se a Meta ainda bloquear, tripa de novo).
+   */
+  reativarCanal: protectedProcedure
+    .input(z.object({ canalId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "atendimento", "editar");
+      if (!perm.allowed || !perm.verTodos) throw new Error("Sem permissão para reativar o canal.");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+      const { canaisIntegrados } = await import("../../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const [canal] = await db
+        .select({ id: canaisIntegrados.id })
+        .from(canaisIntegrados)
+        .where(and(eq(canaisIntegrados.id, input.canalId), eq(canaisIntegrados.escritorioId, perm.escritorioId)))
+        .limit(1);
+      if (!canal) throw new Error("Canal não encontrado.");
+      const guard = await import("../integracoes/whatsapp-envio-guard");
+      await guard.limparCanalRestrito(db, input.canalId);
+      return { success: true };
+    }),
 
   /** Vincular número de telefone adicional a um contato existente */
   vincularNumero: protectedProcedure

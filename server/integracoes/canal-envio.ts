@@ -151,6 +151,11 @@ export async function enviarTemplatePeloCanalApi(opts: {
   nome: string;
   idioma?: string;
   componentes?: any[];
+  /** Contato destinatário — habilita a checagem de opt-in quando exigida. */
+  contatoId?: number;
+  /** Fluxo automático (SmartFlow/scheduler): exige opt-in do contato. Envio
+   *  manual do operador não passa isso (ele já está atendendo o cliente). */
+  exigirOptin?: boolean;
 }): Promise<EnvioResultado> {
   const cred = await getCanalCloudApi(opts.escritorioId);
   if (!cred) {
@@ -164,14 +169,33 @@ export async function enviarTemplatePeloCanalApi(opts: {
   if (!telefone || telefone.length < 10) {
     return { ok: false, erro: "Telefone inválido pra Cloud API", provider: "whatsapp_api" };
   }
+  // Travas anti-spam (disjuntor / rate limit / opt-in) ANTES de tocar a Meta.
+  const db = await getDb();
+  const guard = db ? await import("./whatsapp-envio-guard") : null;
+  if (db && guard) {
+    const permitido = await guard.podeDispararTemplate({
+      db,
+      canalId: cred.canalId,
+      contatoId: opts.contatoId,
+      exigirOptin: opts.exigirOptin,
+    });
+    if (!permitido.ok) {
+      log.warn({ canalId: cred.canalId, tipo: permitido.tipo }, "[Guard] template bloqueado antes do envio");
+      return { ok: false, erro: permitido.erro, provider: "whatsapp_api", canalId: cred.canalId };
+    }
+  }
   try {
     const { WhatsAppCloudClient } = await import("./whatsapp-cloud");
     const client = new WhatsAppCloudClient({ accessToken: cred.accessToken, phoneNumberId: cred.phoneNumberId });
     const msgId = await client.enviarTemplate(telefone, opts.nome, opts.idioma || "pt_BR", opts.componentes);
+    if (db && guard) await guard.registrarSucessoTemplate({ db, canalId: cred.canalId });
     return { ok: true, idExterno: msgId, provider: "whatsapp_api", canalId: cred.canalId };
   } catch (e: any) {
     const apiMsg = e?.response?.data?.error?.message;
-    return { ok: false, erro: apiMsg || e?.message || "Falha ao enviar template", provider: "whatsapp_api" };
+    const erro = apiMsg || e?.message || "Falha ao enviar template";
+    // Meta recusou por restrição/spam? tripa o disjuntor (pausa os próximos).
+    if (db && guard) await guard.registrarFalhaTemplate({ db, canalId: cred.canalId, erro }).catch(() => {});
+    return { ok: false, erro, provider: "whatsapp_api", canalId: cred.canalId };
   }
 }
 
