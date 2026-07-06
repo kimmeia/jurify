@@ -1,25 +1,22 @@
 /**
- * Gera um .docx da peça no PADRÃO FORENSE (uso no Judiciário), sem template e
- * sem dependência nova — monta o OOXML com PizZip.
+ * Gera o .docx da peça no PADRÃO FORENSE, injetando os parágrafos num shell
+ * .docx COMPLETO e válido do Word (peca-template-b64) — em vez de montar o
+ * OOXML mínimo na mão, que o Word recusava abrir por faltar partes que ele
+ * exige (docProps, settings, fontTable, theme…).
  *
- * Padrão aplicado (ABNT/uso forense corrente):
- *   - A4, margens 3 cm (superior/esquerda) e 2 cm (inferior/direita)
- *   - Times New Roman 12, entrelinha 1,5, parágrafos JUSTIFICADOS
- *   - Recuo de 1ª linha (1,25 cm) no corpo
- *   - Endereçamento e título da ação: CAIXA ALTA, centralizado, negrito
- *   - Títulos de seção (DOS FATOS, DO DIREITO, DOS PEDIDOS…): negrito
+ * Padrão do shell: A4, margens 3 cm (sup/esq) e 2 cm (inf/dir), Normal =
+ * Times New Roman 12, entrelinha 1,5, justificado.
  *
- * A classificação é por heurística sobre o texto que a IA devolve (o prompt
- * instrui a escrever endereçamento e seções em caixa alta). O advogado abre no
- * Word e finaliza.
+ * Formatação por parágrafo (heurística sobre o texto que a IA devolve; o prompt
+ * escreve endereçamento e seções em CAIXA ALTA):
+ *   - endereçamento / título da ação (caixa alta) → centralizado, negrito
+ *   - seções (DOS FATOS, DO DIREITO, DOS PEDIDOS…) → negrito
+ *   - corpo → justificado, recuo de 1ª linha (herda fonte/entrelinha do Normal)
  */
 import PizZip from "pizzip";
+import { PECA_TEMPLATE_B64 } from "./peca-template-b64";
 
-// twips: 1 cm ≈ 566,93 twips
-const CM = 566.93;
-const MARGEM_GRANDE = Math.round(3 * CM); // 3 cm → 1701
-const MARGEM_PEQUENA = Math.round(2 * CM); // 2 cm → 1134
-const RECUO_1A_LINHA = Math.round(1.25 * CM); // 1,25 cm → 709
+const RECUO_1A_LINHA = 709; // ~1,25 cm em twips
 const ENTRELINHA_1_5 = 360; // 240 = simples; 360 = 1,5
 
 function escaparXml(s: string): string {
@@ -44,7 +41,7 @@ function classificar(linha: string): Tipo {
   const t = linha.trim();
   if (!t) return "vazio";
   if (ehCaixaAlta(t)) {
-    // Caixa alta curta que abre com marcador de seção → título de seção (à
+    // Caixa alta curta abrindo com marcador de seção → título de seção (à
     // esquerda). Caso contrário (endereçamento, nome da ação) → centralizado.
     return RE_SECAO.test(t) && t.length <= 80 ? "secao" : "titulo";
   }
@@ -53,10 +50,7 @@ function classificar(linha: string): Tipo {
 
 function paragrafo(linha: string): string {
   const tipo = classificar(linha);
-  if (tipo === "vazio") {
-    // Parágrafo em branco preserva a separação visual entre blocos.
-    return `<w:p><w:pPr><w:spacing w:line="${ENTRELINHA_1_5}" w:lineRule="auto"/></w:pPr></w:p>`;
-  }
+  if (tipo === "vazio") return `<w:p></w:p>`;
   const txt = escaparXml(linha.trim());
 
   if (tipo === "titulo") {
@@ -73,7 +67,7 @@ function paragrafo(linha: string): string {
       `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${txt}</w:t></w:r></w:p>`
     );
   }
-  // corpo: justificado, recuo de 1ª linha
+  // corpo: justificado, recuo de 1ª linha (fonte Times/entrelinha vêm do Normal)
   return (
     `<w:p><w:pPr><w:spacing w:line="${ENTRELINHA_1_5}" w:lineRule="auto"/>` +
     `<w:jc w:val="both"/><w:ind w:firstLine="${RECUO_1A_LINHA}"/></w:pPr>` +
@@ -92,56 +86,23 @@ function normalizarLinhas(texto: string): string[] {
   return out;
 }
 
-/** Constrói o Buffer .docx da peça no padrão forense. */
+/**
+ * Constrói o Buffer .docx da peça. Injeta os parágrafos gerados no <w:body> do
+ * shell válido, preservando o <w:sectPr> (margens) do template.
+ */
 export function montarPecaDocx(texto: string): Buffer {
   const corpo = normalizarLinhas(texto).map(paragrafo).join("");
 
-  const documentXml =
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
-    `<w:body>${corpo}<w:sectPr>` +
-    `<w:pgSz w:w="11906" w:h="16838"/>` +
-    `<w:pgMar w:top="${MARGEM_GRANDE}" w:right="${MARGEM_PEQUENA}" w:bottom="${MARGEM_PEQUENA}" w:left="${MARGEM_GRANDE}" w:header="708" w:footer="708" w:gutter="0"/>` +
-    `</w:sectPr></w:body></w:document>`;
+  const zip = new PizZip(Buffer.from(PECA_TEMPLATE_B64, "base64"));
+  const arq = zip.file("word/document.xml");
+  if (!arq) throw new Error("Template de peça inválido: word/document.xml ausente.");
+  const docXml = arq.asText();
 
-  // Fonte e entrelinha padrão do documento (Times New Roman 12, 1,5).
-  const stylesXml =
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-    `<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
-    `<w:docDefaults><w:rPrDefault><w:rPr>` +
-    `<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>` +
-    `<w:sz w:val="24"/><w:szCs w:val="24"/><w:lang w:val="pt-BR"/>` +
-    `</w:rPr></w:rPrDefault>` +
-    `<w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="${ENTRELINHA_1_5}" w:lineRule="auto"/><w:jc w:val="both"/></w:pPr></w:pPrDefault>` +
-    `</w:docDefaults></w:styles>`;
+  // Preserva o sectPr (margens/página) do template e injeta o corpo antes dele.
+  const sect = (docXml.match(/<w:sectPr[\s\S]*?<\/w:sectPr>/) || [""])[0];
+  const novoDoc = docXml.replace(/<w:body>[\s\S]*<\/w:body>/, `<w:body>${corpo}${sect}</w:body>`);
 
-  const contentTypes =
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-    `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
-    `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-    `<Default Extension="xml" ContentType="application/xml"/>` +
-    `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
-    `<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>` +
-    `</Types>`;
-
-  const rels =
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-    `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>` +
-    `</Relationships>`;
-
-  const documentRels =
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-    `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
-    `</Relationships>`;
-
-  const zip = new PizZip();
-  zip.file("[Content_Types].xml", contentTypes);
-  zip.file("_rels/.rels", rels);
-  zip.file("word/document.xml", documentXml);
-  zip.file("word/_rels/document.xml.rels", documentRels);
-  zip.file("word/styles.xml", stylesXml);
+  zip.file("word/document.xml", novoDoc);
   return zip.generate({ type: "nodebuffer", compression: "DEFLATE" });
 }
 

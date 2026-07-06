@@ -52,6 +52,15 @@ describe("montarPecaDocx — padrão forense", () => {
     expect(sty).toContain('w:sz w:val="24"'); // 12pt = 24 meio-pontos
   });
 
+  it("é um pacote Word COMPLETO (não o mínimo que o Word recusa abrir)", () => {
+    // Regressão: injetamos num shell válido do Word. Estas partes precisam
+    // existir — sem elas o Word não abre (bug que motivou a mudança).
+    expect(zip.file("docProps/core.xml")).toBeTruthy();
+    expect(zip.file("docProps/app.xml")).toBeTruthy();
+    expect(zip.file("word/settings.xml")).toBeTruthy();
+    expect(zip.file("word/fontTable.xml")).toBeTruthy();
+  });
+
   it("margens 3 cm (sup/esq) e 2 cm (inf/dir)", () => {
     expect(doc).toContain('w:top="1701"');
     expect(doc).toContain('w:left="1701"');
