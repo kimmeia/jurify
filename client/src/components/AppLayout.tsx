@@ -50,6 +50,7 @@ import {
   Monitor,
   Smartphone,
   Download,
+  Scale,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -407,6 +408,20 @@ function AppSidebarContent({
                 >
                   <FileText className={`h-4 w-4 ${location === "/modelos-contrato" ? "text-primary" : ""}`} />
                   <span className="flex-1">Modelos</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>}
+
+              {/* Agente Jurídico — avalia sucesso + redige peças (RAG). Gated
+                  por "processos" (peças relacionam-se ao processo). */}
+              {canSee("processos") && <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location === "/agente-juridico"}
+                  onClick={() => navigateOrBlock("/agente-juridico")}
+                  tooltip="Agente Jurídico — avaliar sucesso e redigir peças"
+                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
+                >
+                  <Scale className={`h-4 w-4 ${location === "/agente-juridico" ? "text-primary" : ""}`} />
+                  <span className="flex-1">Agente Jurídico</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
