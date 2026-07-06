@@ -23,7 +23,7 @@
  *     a Meta trata como spam.
  */
 
-import { canaisIntegrados, mensagens, conversas } from "../../drizzle/schema";
+import { canaisIntegrados, mensagens, conversas, asaasClientes } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 
@@ -115,19 +115,34 @@ export function _resetRateLimit(): void {
 // ─── Opt-in / consentimento ─────────────────────────────────────────────────
 
 /**
- * Contato deu sinal de consentimento? Definição conservadora e verificável:
- * já existe ≥1 mensagem RECEBIDA dele (ele iniciou/participou da conversa). É
- * o sinal "user-initiated" que a política do WhatsApp reconhece — cold template
- * pra quem nunca escreveu é o padrão que vira spam.
+ * Contato deu sinal de consentimento pra receber template? Duas bases válidas:
+ *
+ *  1. USER-INITIATED: já existe ≥1 mensagem RECEBIDA dele (ele escreveu pra
+ *     gente). Sinal que a política do WhatsApp reconhece pra qualquer template.
+ *
+ *  2. RELAÇÃO TRANSACIONAL: é cliente com vínculo de cobrança (Asaas). É a base
+ *     de consentimento pra template UTILITY (status de pagamento, lembrete de
+ *     vencimento) — a Meta permite mensagem utilitária a quem tem transação com
+ *     a empresa. É o caso de uso legítimo do escritório.
+ *
+ * Cold template pra estranho (sem inbound E sem cobrança) continua barrado — é
+ * o padrão que a Meta trata como spam.
  */
 export async function contatoTemConsentimento(db: any, contatoId: number): Promise<boolean> {
-  const rows = await db
+  const inbound = await db
     .select({ id: mensagens.id })
     .from(mensagens)
     .innerJoin(conversas, eq(mensagens.conversaId, conversas.id))
     .where(and(eq(conversas.contatoId, contatoId), eq(mensagens.direcao, "entrada")))
     .limit(1);
-  return rows.length > 0;
+  if (inbound.length > 0) return true;
+
+  const cliente = await db
+    .select({ id: asaasClientes.id })
+    .from(asaasClientes)
+    .where(eq(asaasClientes.contatoId, contatoId))
+    .limit(1);
+  return cliente.length > 0;
 }
 
 // ─── Disjuntor (persistido em canais_integrados) ────────────────────────────
