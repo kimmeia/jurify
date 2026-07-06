@@ -19,6 +19,7 @@ import { AREA_REVISIONAL } from "./fontes-revisional";
 import { chamarLLMEscritorio } from "./llm";
 import { avaliarViabilidade, type FonteContexto } from "./avaliacao";
 import { gerarPeca, TIPOS_PECA } from "./peca";
+import { montarDocxSimples } from "./docx";
 
 /** Resolve a chave OpenAI (embeddings sempre via OpenAI). null se não houver. */
 async function resolverChaveOpenAI(escritorioId: number): Promise<string | null> {
@@ -228,6 +229,23 @@ export const juridicoRouter = router({
         return { disponivel: false, motivo: llmErro || erro || "Falha ao redigir.", texto: null, fontes, verificacao: null };
       }
       return { disponivel: true, motivo: null as string | null, texto, fontes, verificacao };
+    }),
+
+  /** Exporta o texto (peça, já editado) em .docx pra download. */
+  exportarPecaDocx: protectedProcedure
+    .input(z.object({ texto: z.string().min(1).max(60000), nomeArquivo: z.string().max(120).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Escritório não encontrado." });
+      const buffer = montarDocxSimples(input.texto);
+      const slug = (input.nomeArquivo || "peca")
+        .normalize("NFD").replace(/[̀-ͯ]/g, "")
+        .replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase().slice(0, 60) || "peca";
+      return {
+        filename: `${slug}.docx`,
+        base64: buffer.toString("base64"),
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      };
     }),
 
   /** [admin] Semeia a base revisional (global) e indexa os embeddings. */
