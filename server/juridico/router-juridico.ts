@@ -18,6 +18,7 @@ import { recuperarFontes, seedFontesRevisional, reindexarEmbeddings } from "./ba
 import { AREA_REVISIONAL } from "./fontes-revisional";
 import { chamarLLMEscritorio } from "./llm";
 import { avaliarViabilidade, type FonteContexto } from "./avaliacao";
+import { gerarPeca, TIPOS_PECA } from "./peca";
 
 /** Resolve a chave OpenAI (embeddings sempre via OpenAI). null se não houver. */
 async function resolverChaveOpenAI(escritorioId: number): Promise<string | null> {
@@ -169,6 +170,64 @@ export const juridicoRouter = router({
         return { disponivel: false, motivo: llmErro || erro || "Falha na avaliação.", avaliacao: null, fontes };
       }
       return { disponivel: true, motivo: null as string | null, avaliacao, fontes };
+    }),
+
+  /** Tipos de peça disponíveis (Fase 1: revisional). */
+  tiposPeca: protectedProcedure.query(() =>
+    Object.values(TIPOS_PECA).map((t) => ({ id: t.id, label: t.label, area: t.area, secoes: t.secoes })),
+  ),
+
+  /**
+   * Redige a peça: recupera as fontes, o modelo do escritório redige citando
+   * só essas fontes, e a verificação marca citações sem respaldo (anti-invenção).
+   */
+  gerarPeca: protectedProcedure
+    .input(z.object({
+      fatos: z.string().min(10).max(8000),
+      tipo: z.string().max(80),
+      teses: z.array(z.string().max(300)).max(20).optional(),
+      resumoAvaliacao: z.string().max(2000).optional(),
+      modelo: z.string().max(64).optional(),
+      topK: z.number().int().min(1).max(20).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Escritório não encontrado." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const tipo = TIPOS_PECA[input.tipo];
+      if (!tipo) throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo de peça inválido." });
+
+      const modelo = input.modelo || "gpt-4o-mini";
+      const key = await resolverChaveOpenAI(esc.escritorio.id);
+      if (!key) {
+        return { disponivel: false, motivo: "Sem chave OpenAI pra recuperar as fontes (embeddings). Configure em Integrações.", texto: null, fontes: [] as Awaited<ReturnType<typeof recuperarFontes>>, verificacao: null };
+      }
+      const consulta = [input.fatos, ...(input.teses ?? [])].join("\n");
+      let queryEmb: number[];
+      try {
+        queryEmb = await gerarEmbedding(consulta, key);
+      } catch (e: any) {
+        return { disponivel: false, motivo: e?.message || "Falha nos embeddings.", texto: null, fontes: [] as Awaited<ReturnType<typeof recuperarFontes>>, verificacao: null };
+      }
+
+      const fontes = await recuperarFontes(db, queryEmb, { area: tipo.area, escritorioId: esc.escritorio.id, topK: input.topK ?? 10 });
+      const fontesCtx: FonteContexto[] = fontes.map((f) => ({ identificador: f.identificador, titulo: f.titulo, texto: f.texto }));
+
+      let llmErro: string | undefined;
+      const chamar = async (system: string, user: string): Promise<string | null> => {
+        const r = await chamarLLMEscritorio(esc.escritorio.id, { system, user, modelo, maxTokens: 4000 });
+        if (!r.texto && r.erro) llmErro = r.erro;
+        return r.texto;
+      };
+      const { texto, verificacao, erro } = await gerarPeca(
+        { fatos: input.fatos, teses: input.teses, resumoAvaliacao: input.resumoAvaliacao },
+        fontesCtx, tipo, chamar,
+      );
+      if (!texto) {
+        return { disponivel: false, motivo: llmErro || erro || "Falha ao redigir.", texto: null, fontes, verificacao: null };
+      }
+      return { disponivel: true, motivo: null as string | null, texto, fontes, verificacao };
     }),
 
   /** [admin] Semeia a base revisional (global) e indexa os embeddings. */
