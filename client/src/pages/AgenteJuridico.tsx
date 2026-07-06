@@ -3,7 +3,7 @@
  * peça, fundamentado na base curada (RAG). A IA usa o modelo que o escritório
  * escolher; toda citação é verificada (grounding) e o advogado revisa/assina.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -111,6 +111,12 @@ export default function AgenteJuridico() {
     { enabled: !!cliente, retry: false },
   );
 
+  // Documentos a incluir na leitura — default: todos os do cliente.
+  const [docsSelecionados, setDocsSelecionados] = useState<number[]>([]);
+  useEffect(() => {
+    setDocsSelecionados(((dossieQ.data?.documentos ?? []) as any[]).map((d) => d.id));
+  }, [dossieQ.data]);
+
   const podeRodar = fatos.trim().length >= 10;
 
   return (
@@ -192,15 +198,25 @@ export default function AgenteJuridico() {
                     </div>
                   )}
                   <div>
-                    <p className="font-semibold text-violet-800">Documentos ({dossieQ.data.documentos?.length ?? 0})</p>
+                    <p className="font-semibold text-violet-800">Documentos que o Agente vai ler ({docsSelecionados.length}/{dossieQ.data.documentos?.length ?? 0})</p>
                     {(dossieQ.data.documentos ?? []).length > 0 ? (
-                      <ul className="list-disc list-inside text-violet-900/80">
-                        {dossieQ.data.documentos.map((d: any) => <li key={d.id}>{d.nome}</li>)}
-                      </ul>
+                      <div className="space-y-1 mt-1">
+                        {dossieQ.data.documentos.map((d: any) => (
+                          <label key={d.id} className="flex items-center gap-2 text-violet-900/80 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="accent-violet-600"
+                              checked={docsSelecionados.includes(d.id)}
+                              onChange={(e) => setDocsSelecionados((prev) => e.target.checked ? [...prev, d.id] : prev.filter((x) => x !== d.id))}
+                            />
+                            <span className="truncate">{d.nome}</span>
+                          </label>
+                        ))}
+                      </div>
                     ) : (
                       <p className="text-violet-900/60">Nenhum documento anexado a este cliente.</p>
                     )}
-                    <p className="text-[10px] text-violet-700/70 mt-1">A leitura do conteúdo dos documentos (Vision) entra na próxima etapa.</p>
+                    <p className="text-[10px] text-violet-700/70 mt-1">Lê texto de PDF/DOCX direto; foto/print e PDF escaneado via Vision (modelo do escritório).</p>
                   </div>
                 </div>
               )}
@@ -266,7 +282,7 @@ export default function AgenteJuridico() {
             <Button
               className="bg-violet-600 hover:bg-violet-700 text-white"
               disabled={!podeRodar || gerarMut.isPending}
-              onClick={() => gerarMut.mutate({ fatos, teses, tipo: tipoSel, modelo, resumoAvaliacao: avaliacao?.resumo, contatoId: cliente?.id, processoId: processoId ?? undefined })}
+              onClick={() => gerarMut.mutate({ fatos, teses, tipo: tipoSel, modelo, resumoAvaliacao: avaliacao?.resumo, contatoId: cliente?.id, processoId: processoId ?? undefined, documentoIds: cliente ? docsSelecionados : undefined })}
             >
               {gerarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
               Gerar peça

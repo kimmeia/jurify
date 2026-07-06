@@ -22,6 +22,7 @@ import { avaliarViabilidade, type FonteContexto } from "./avaliacao";
 import { gerarPeca, TIPOS_PECA } from "./peca";
 import { montarPecaDocx } from "./docx";
 import { montarDossie } from "./dossie";
+import { montarConteudoDocumentos } from "./leitura-documento";
 
 /** Resolve a chave OpenAI (embeddings sempre via OpenAI). null se não houver. */
 async function resolverChaveOpenAI(escritorioId: number): Promise<string | null> {
@@ -268,6 +269,9 @@ export const juridicoRouter = router({
       // cliente/processo (qualificação, CNJ, valor, anotações) em vez de genérica.
       contatoId: z.number().optional(),
       processoId: z.number().optional(),
+      // Documentos do cliente a LER (id de cliente_arquivos) — texto/Vision entra
+      // como fato na peça.
+      documentoIds: z.array(z.number()).max(20).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -277,6 +281,8 @@ export const juridicoRouter = router({
       const tipo = TIPOS_PECA[input.tipo];
       if (!tipo) throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo de peça inválido." });
 
+      const modelo = input.modelo || "gpt-4o-mini";
+
       // Dossiê real do cliente/processo (qualificação, processo, anotações).
       const dossie = input.contatoId
         ? await montarDossie(db, esc.escritorio.id, input.contatoId, input.processoId)
@@ -285,7 +291,12 @@ export const juridicoRouter = router({
         ? `${input.fatos}\n\n${dossie.fatosContexto}`
         : input.fatos;
 
-      const modelo = input.modelo || "gpt-4o-mini";
+      // Leitura dos documentos selecionados (extração/Vision, modelo do escritório).
+      let docsTexto = "";
+      if (input.contatoId && input.documentoIds?.length) {
+        const r = await montarConteudoDocumentos(db, esc.escritorio.id, input.contatoId, input.documentoIds, modelo);
+        docsTexto = r.texto;
+      }
       const key = await resolverChaveOpenAI(esc.escritorio.id);
       if (!key) {
         return { disponivel: false, motivo: "Sem chave OpenAI pra recuperar as fontes (embeddings). Configure em Integrações.", texto: null, fontes: [] as Awaited<ReturnType<typeof recuperarFontes>>, verificacao: null };
@@ -314,6 +325,7 @@ export const juridicoRouter = router({
           resumoAvaliacao: input.resumoAvaliacao,
           qualificacao: dossie?.qualificacao,
           processo: dossie?.processo,
+          documentos: docsTexto || undefined,
         },
         fontesCtx, tipo, chamar,
       );
