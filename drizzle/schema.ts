@@ -590,6 +590,13 @@ export const canaisIntegrados = mysqlTable("canais_integrados", {
   // WhatsApp Cloud API: número fica "Pendente" na Meta até receber
   // POST /{phone-number-id}/register. Sem isso, POST /messages falha.
   registradoCloudApi: boolean("registradoCloudApi").default(false).notNull(),
+  // Disjuntor anti-spam: a Meta restringiu a conta (erro 131031 e afins).
+  // Enquanto true, o sistema PAUSA disparos de template pra não piorar a
+  // reputação. `restritoMotivo` guarda o código+título da Meta; `restritoEm`,
+  // quando tripou. Auto-cura: envio bem-sucedido ou reativação manual limpa.
+  restritoMeta: boolean("restritoMeta").default(false).notNull(),
+  restritoMotivo: varchar("restritoMotivo", { length: 512 }),
+  restritoEm: timestamp("restritoEm"),
   createdAt: timestamp("createdAtCanal").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtCanal").defaultNow().onUpdateNow().notNull(),
 });
