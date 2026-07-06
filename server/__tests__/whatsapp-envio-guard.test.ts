@@ -111,15 +111,24 @@ describe("podeDispararTemplate", () => {
     if (!r.ok) expect(r.tipo).toBe("rate");
   });
 
-  it("bloqueia template automático pra contato sem opt-in", async () => {
-    const db = fakeDb({ selectQueue: [[{ restrito: false }], /* sem inbound */ []] });
+  it("bloqueia template automático pra estranho (sem inbound E sem cobrança)", async () => {
+    // canal ok → inbound vazio → asaas vazio → sem consentimento
+    const db = fakeDb({ selectQueue: [[{ restrito: false }], [], []] });
     const r = await podeDispararTemplate({ db, canalId: 3, contatoId: 5, exigirOptin: true, agoraMs: 1000 });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.tipo).toBe("optin");
   });
 
-  it("libera quando canal ok, dentro do rate e contato com opt-in", async () => {
+  it("libera por opt-in user-initiated (contato já escreveu)", async () => {
+    // canal ok → inbound encontrado (não chega a consultar asaas)
     const db = fakeDb({ selectQueue: [[{ restrito: false }], [{ id: 1 }]] });
+    const r = await podeDispararTemplate({ db, canalId: 3, contatoId: 5, exigirOptin: true, agoraMs: 1000 });
+    expect(r.ok).toBe(true);
+  });
+
+  it("libera template UTILITY por relação transacional (cliente Asaas) mesmo sem inbound", async () => {
+    // canal ok → inbound vazio → é cliente com cobrança Asaas → consentimento
+    const db = fakeDb({ selectQueue: [[{ restrito: false }], [], [{ id: 99 }]] });
     const r = await podeDispararTemplate({ db, canalId: 3, contatoId: 5, exigirOptin: true, agoraMs: 1000 });
     expect(r.ok).toBe(true);
   });
