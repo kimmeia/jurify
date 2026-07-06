@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Scale, Target, Sparkles, Download, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Loader2, Scale, Target, Sparkles, Download, AlertTriangle, CheckCircle2, Library, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { base64ToBlob, baixarBlob } from "@/pages/financeiro/helpers";
 
@@ -37,6 +38,9 @@ export default function AgenteJuridico() {
   const [avaliacao, setAvaliacao] = useState<any | null>(null);
   const [pecaTexto, setPecaTexto] = useState<string>("");
   const [verificacao, setVerificacao] = useState<{ fontesUsadas: string[]; suspeitas: string[] } | null>(null);
+  const [fontesOpen, setFontesOpen] = useState(false);
+  const NF_VAZIO = { tipo: "sumula", identificador: "", titulo: "", texto: "", tags: "" };
+  const [nf, setNf] = useState(NF_VAZIO);
 
   const { data: tipos } = (trpc as any).juridico.tiposPeca.useQuery(undefined, { retry: false });
   const tipoSel = tipo || tipos?.[0]?.id || "peticao_inicial_revisional";
@@ -73,18 +77,38 @@ export default function AgenteJuridico() {
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
 
+  // Fontes próprias do escritório (além da base global).
+  const minhasFontesQ = (trpc as any).juridico.listarFontes.useQuery({ origem: "minhas" }, { retry: false, enabled: fontesOpen });
+  const addFonteMut = (trpc as any).juridico.adicionarFonte.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(r.indexada ? "Fonte adicionada e indexada" : "Fonte adicionada (configure a chave OpenAI pra indexar)");
+      setNf(NF_VAZIO);
+      minhasFontesQ.refetch();
+    },
+    onError: (e: any) => toast.error("Erro", { description: e.message }),
+  });
+  const delFonteMut = (trpc as any).juridico.excluirFonte.useMutation({
+    onSuccess: () => { toast.success("Fonte removida"); minhasFontesQ.refetch(); },
+    onError: (e: any) => toast.error("Erro", { description: e.message }),
+  });
+
   const podeRodar = fatos.trim().length >= 10;
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-4">
-      <div>
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <Scale className="h-5 w-5 text-violet-600" /> Agente Jurídico
-          <Badge className="bg-violet-600 text-white">Revisional</Badge>
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Avalie a chance de sucesso e gere a peça — fundamentado, citado e verificado. Você revisa e assina.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <Scale className="h-5 w-5 text-violet-600" /> Agente Jurídico
+            <Badge className="bg-violet-600 text-white">Revisional</Badge>
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Avalie a chance de sucesso e gere a peça — fundamentado, citado e verificado. Você revisa e assina.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" className="shrink-0" onClick={() => setFontesOpen(true)}>
+          <Library className="h-4 w-4 mr-1.5" /> Fontes do escritório
+        </Button>
       </div>
 
       {/* 1 · Caso */}
@@ -239,6 +263,91 @@ export default function AgenteJuridico() {
           </Card>
         </div>
       )}
+
+      {/* Fontes do escritório — CRUD das fontes próprias (além da base global) */}
+      <Dialog open={fontesOpen} onOpenChange={setFontesOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Library className="h-5 w-5 text-violet-600" /> Fontes do escritório</DialogTitle>
+            <DialogDescription>
+              Além da base global, cadastre suas próprias súmulas, jurisprudências ou modelos — o Agente usa nas avaliações e peças (junto com a base global).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 rounded-lg border p-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Tipo</Label>
+                <Select value={nf.tipo} onValueChange={(v) => setNf({ ...nf, tipo: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sumula">Súmula</SelectItem>
+                    <SelectItem value="lei">Lei / artigo</SelectItem>
+                    <SelectItem value="precedente">Precedente</SelectItem>
+                    <SelectItem value="tese">Tese / modelo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Identificador</Label>
+                <Input className="mt-1" value={nf.identificador} onChange={(e) => setNf({ ...nf, identificador: e.target.value })} placeholder="Ex.: Súmula 297/STJ" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Título (opcional)</Label>
+              <Input className="mt-1" value={nf.titulo} onChange={(e) => setNf({ ...nf, titulo: e.target.value })} placeholder="Resumo curto" />
+            </div>
+            <div>
+              <Label className="text-xs">Texto</Label>
+              <Textarea className="mt-1 min-h-[70px]" value={nf.texto} onChange={(e) => setNf({ ...nf, texto: e.target.value })} placeholder="Enunciado / conteúdo que o Agente pode citar" />
+            </div>
+            <div>
+              <Label className="text-xs">Tags (opcional)</Label>
+              <Input className="mt-1" value={nf.tags} onChange={(e) => setNf({ ...nf, tags: e.target.value })} placeholder="capitalização, juros" />
+            </div>
+            <Button
+              size="sm"
+              disabled={addFonteMut.isPending || nf.identificador.trim().length < 2 || nf.texto.trim().length < 5}
+              onClick={() => addFonteMut.mutate({
+                tipo: nf.tipo,
+                identificador: nf.identificador.trim(),
+                titulo: nf.titulo.trim() || undefined,
+                texto: nf.texto.trim(),
+                tags: nf.tags.trim() || undefined,
+              })}
+            >
+              {addFonteMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Plus className="h-4 w-4 mr-1.5" />}
+              Adicionar fonte
+            </Button>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Suas fontes ({minhasFontesQ.data?.length ?? 0})
+            </p>
+            {minhasFontesQ.isLoading && <p className="text-xs text-muted-foreground">Carregando…</p>}
+            {(minhasFontesQ.data ?? []).map((f: any) => (
+              <div key={f.id} className="flex items-start justify-between gap-2 border rounded-md p-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{f.identificador}{f.titulo ? ` — ${f.titulo}` : ""}</p>
+                  <p className="text-[11px] text-muted-foreground line-clamp-2">{f.texto}</p>
+                  {!f.indexada && <span className="text-[10px] text-amber-600">não indexada (configure a chave OpenAI)</span>}
+                </div>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 hover:text-rose-600" disabled={delFonteMut.isPending} onClick={() => delFonteMut.mutate({ id: f.id })}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+            {!minhasFontesQ.isLoading && (minhasFontesQ.data?.length ?? 0) === 0 && (
+              <p className="text-xs text-muted-foreground">Nenhuma fonte própria ainda — a base global já está disponível.</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFontesOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
