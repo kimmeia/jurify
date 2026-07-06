@@ -16,6 +16,8 @@ import { resolverAPIKey } from "../integracoes/router-agentes-ia";
 import { gerarEmbedding } from "./embeddings";
 import { recuperarFontes, seedFontesRevisional, reindexarEmbeddings } from "./base";
 import { AREA_REVISIONAL } from "./fontes-revisional";
+import { chamarLLMEscritorio } from "./llm";
+import { avaliarViabilidade, type FonteContexto } from "./avaliacao";
 
 /** Resolve a chave OpenAI (embeddings sempre via OpenAI). null se não houver. */
 async function resolverChaveOpenAI(escritorioId: number): Promise<string | null> {
@@ -117,6 +119,56 @@ export const juridicoRouter = router({
         topK: input.topK ?? 6,
       });
       return { disponivel: true, motivo: null as string | null, fontes };
+    }),
+
+  /**
+   * Avaliação de sucesso (viabilidade) — recupera as fontes do caso e pede ao
+   * modelo do escritório uma análise estruturada e citada (nota + fatores +
+   * força por tese). Sem % inventado; citações conferidas contra as fontes.
+   */
+  avaliarSucesso: protectedProcedure
+    .input(z.object({
+      fatos: z.string().min(10).max(8000),
+      area: z.string().max(80).optional(),
+      teses: z.array(z.string().max(300)).max(20).optional(),
+      modelo: z.string().max(64).optional(),
+      topK: z.number().int().min(1).max(20).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Escritório não encontrado." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const area = input.area ?? AREA_REVISIONAL;
+      const modelo = input.modelo || "gpt-4o-mini";
+
+      const key = await resolverChaveOpenAI(esc.escritorio.id);
+      if (!key) {
+        return { disponivel: false, motivo: "Sem chave OpenAI pra recuperar as fontes (embeddings). Configure em Integrações.", avaliacao: null, fontes: [] as Awaited<ReturnType<typeof recuperarFontes>> };
+      }
+      const consulta = [input.fatos, ...(input.teses ?? [])].join("\n");
+      let queryEmb: number[];
+      try {
+        queryEmb = await gerarEmbedding(consulta, key);
+      } catch (e: any) {
+        return { disponivel: false, motivo: e?.message || "Falha nos embeddings.", avaliacao: null, fontes: [] as Awaited<ReturnType<typeof recuperarFontes>> };
+      }
+
+      const fontes = await recuperarFontes(db, queryEmb, { area, escritorioId: esc.escritorio.id, topK: input.topK ?? 8 });
+      const fontesCtx: FonteContexto[] = fontes.map((f) => ({ identificador: f.identificador, titulo: f.titulo, texto: f.texto }));
+
+      let llmErro: string | undefined;
+      const chamar = async (system: string, user: string): Promise<string | null> => {
+        const r = await chamarLLMEscritorio(esc.escritorio.id, { system, user, modelo, maxTokens: 2500 });
+        if (!r.texto && r.erro) llmErro = r.erro;
+        return r.texto;
+      };
+      const { avaliacao, erro } = await avaliarViabilidade({ fatos: input.fatos, area, teses: input.teses }, fontesCtx, chamar);
+      if (!avaliacao) {
+        return { disponivel: false, motivo: llmErro || erro || "Falha na avaliação.", avaliacao: null, fontes };
+      }
+      return { disponivel: true, motivo: null as string | null, avaliacao, fontes };
     }),
 
   /** [admin] Semeia a base revisional (global) e indexa os embeddings. */
