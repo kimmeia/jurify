@@ -673,6 +673,8 @@ export async function enviarMensagem(dados: {
   tipo?: string; conteudo: string; mediaUrl?: string;
   status?: "pendente" | "enviada" | "entregue" | "lida" | "falha";
   payload?: Record<string, unknown> | null;
+  /** Id da mensagem na Meta (Cloud API) — casa o webhook de status de entrega. */
+  idExterno?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
@@ -688,6 +690,7 @@ export async function enviarMensagem(dados: {
     conteudo: dados.conteudo,
     mediaUrl: dados.mediaUrl || null,
     status: dados.status ?? "enviada",
+    idExterno: dados.idExterno || null,
     payload: dados.payload ? JSON.stringify(dados.payload) : null,
   });
 

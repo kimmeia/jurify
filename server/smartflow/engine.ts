@@ -418,7 +418,15 @@ export interface SmartflowExecutores {
    */
   enviarWhatsAppTemplate?: (
     telefone: string,
-    template: { nome: string; idioma?: string; componentes?: any[] },
+    template: {
+      nome: string;
+      idioma?: string;
+      componentes?: any[];
+      /** Contato destinatário — usado pra persistir o envio na conversa (rastreio de entrega). */
+      contatoId?: number;
+      /** Prévia textual pra timeline (o corpo real vive aprovado na Meta). */
+      conteudoPreview?: string;
+    },
   ) => Promise<boolean | { ok: boolean; erro?: string }>;
   /**
    * Retorna a lista formatada de cobranças em aberto do cliente (PENDING /
@@ -1425,8 +1433,17 @@ async function enviarTemplateWhatsApp(
   if (faltando) {
     return { sucesso: false, contexto: ctx, mensagemErro: faltando };
   }
+  // Prévia pra timeline: o corpo aprovado vive na Meta, então mostramos o
+  // nome do template + os valores das variáveis interpolados, na ordem.
+  const corpoVals = (Array.isArray(cfg.templateCorpo) ? cfg.templateCorpo : [])
+    .map((v: string) => ip(v).trim())
+    .filter(Boolean);
+  const conteudoPreview = corpoVals.length
+    ? `[Template: ${nome}] ${corpoVals.join(" · ")}`
+    : `[Template: ${nome}]`;
+  const contatoId = typeof ctx.contatoId === "number" ? ctx.contatoId : undefined;
   try {
-    const r = await exec.enviarWhatsAppTemplate(telefone, { nome, idioma, componentes });
+    const r = await exec.enviarWhatsAppTemplate(telefone, { nome, idioma, componentes, contatoId, conteudoPreview });
     // Aceita boolean (compat) ou { ok, erro }. Quando vem o erro real (da
     // Meta / resolução de canal), mostra ele — em vez da mensagem genérica
     // que confundia (dizia "confira canal/template" mesmo quando o motivo

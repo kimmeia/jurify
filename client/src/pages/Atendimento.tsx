@@ -1494,11 +1494,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                       {m.direcao === "saida" && m.status === "pendente" && <Loader2 className="h-3 w-3 animate-spin" aria-label="Enviando" />}
                       {m.direcao === "saida" && (m.status === "enviada" || m.status === "entregue" || m.status === "lida") && <Check className="h-3 w-3" aria-label="Enviada" />}
                       {m.direcao === "saida" && m.status === "falha" && (
-                        <span title="Falha no envio — veja logs do WhatsApp">
+                        <span title={(m as any).erroEntrega || "Falha no envio — veja logs do WhatsApp"}>
                           <AlertTriangle className="h-3 w-3 text-red-200" aria-label="Falha no envio" />
                         </span>
                       )}
                     </div>
+                    {m.direcao === "saida" && m.status === "falha" && (m as any).erroEntrega && (
+                      <p className="text-[10px] mt-1 text-red-100/90 leading-snug break-words">
+                        ⚠ Não entregue — {(m as any).erroEntrega}
+                      </p>
+                    )}
                   </div>
                 </div>
                 )}
