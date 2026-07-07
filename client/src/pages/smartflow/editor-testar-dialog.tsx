@@ -57,6 +57,8 @@ export function EditorTestarDialog({
     respostas?: string[];
     execId?: number;
   } | null>(null);
+  // Número do próprio operador pra teste seguro: 1 envio controlado, não spam.
+  const [telefoneTeste, setTelefoneTeste] = useState("");
 
   const executarMut = (trpc as any).smartflow.executar.useMutation({
     onSuccess: (r: any) => {
@@ -89,6 +91,11 @@ export function EditorTestarDialog({
         return;
       }
     }
+    // Teste seguro: se informou o próprio número, sobrescreve o destinatário
+    // (telefoneCliente) — assim o template real chega SÓ no seu WhatsApp.
+    const tel = telefoneTeste.replace(/\D/g, "");
+    if (tel.length >= 10) contextoInicial.telefoneCliente = tel;
+
     setResultado(null);
     executarMut.mutate({ cenarioId, contextoInicial });
   };
@@ -124,6 +131,22 @@ export function EditorTestarDialog({
         )}
 
         <div className="space-y-3">
+          {/* Teste SEGURO: envia pro próprio número (1 mensagem, não é disparo em massa) */}
+          <div className="rounded-md border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+            <label className="text-xs font-semibold flex items-center gap-1.5 text-emerald-900 dark:text-emerald-200">
+              <Play className="h-3.5 w-3.5" /> Testar no SEU WhatsApp (seguro)
+            </label>
+            <input
+              value={telefoneTeste}
+              onChange={(e) => setTelefoneTeste(e.target.value)}
+              placeholder="55 85 99999-0000 (seu número, com DDI 55)"
+              className="mt-1.5 w-full rounded-md border border-emerald-300 bg-background px-2.5 py-1.5 text-sm"
+            />
+            <p className="text-[10.5px] text-emerald-800 dark:text-emerald-300 mt-1.5">
+              Preenchido, o template real chega <strong>só no seu número</strong> — 1 envio controlado (não é disparo em massa), seguro contra bloqueio. Deixe vazio pra usar o telefone do contexto abaixo.
+            </p>
+          </div>
+
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-semibold">
