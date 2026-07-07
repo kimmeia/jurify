@@ -31,6 +31,8 @@ import {
   parseVencimento,
   diasEntre,
   temHorarioConfigurado,
+  deveDispararProximo,
+  deveDispararVencido,
 } from "./dispatcher-helpers";
 import { createLogger } from "../_core/logger";
 import type {
@@ -246,6 +248,180 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
     log.error({ err: err.message }, "[Cobranças] Erro no ciclo");
     return { vencidas: 0, proximas: 0 };
   }
+}
+
+export interface DiagnosticoCobrancaItem {
+  pagamentoId: string | null;
+  descricao: string;
+  vencimento: string | null;
+  status: string;
+  diasAteVencer: number | null;
+  temVinculo: boolean;
+  elegivel: boolean;
+  motivo: string;
+}
+export interface DiagnosticoCobrancasResultado {
+  cenariosAtivos: number;
+  cobrancasNoBanco: number;
+  agora: string;
+  fuso: string;
+  itens: DiagnosticoCobrancaItem[];
+  resumo: string;
+}
+
+/**
+ * Dry-run do ciclo de cobranças pra UM escritório: NÃO envia nada, só explica —
+ * cobrança por cobrança — se dispararia agora e, se não, POR QUÊ. Espelha os
+ * gates de `rodarCicloCobrancas`. Serve pra diagnosticar "o SmartFlow de
+ * cobrança não disparou" sem ficar no escuro esperando o cron de 15min.
+ *
+ * NÃO checa o dedup por slot (jaDisparouPagamento) — é interno ao dispatcher e
+ * raramente é a causa num primeiro teste; sinalizado no texto do item elegível.
+ */
+export async function diagnosticarCobrancas(
+  escritorioId: number,
+): Promise<DiagnosticoCobrancasResultado> {
+  const db = await getDb();
+  const agora = new Date();
+  const hoje = new Date(agora);
+  hoje.setHours(0, 0, 0, 0);
+  const res: DiagnosticoCobrancasResultado = {
+    cenariosAtivos: 0,
+    cobrancasNoBanco: 0,
+    agora: agora.toISOString(),
+    fuso: FUSO_HORARIO_PADRAO,
+    itens: [],
+    resumo: "",
+  };
+  if (!db) {
+    res.resumo = "Banco indisponível.";
+    return res;
+  }
+
+  const cenarios = (await carregarCenariosAtivos()).filter((c) => c.escritorioId === escritorioId);
+  res.cenariosAtivos = cenarios.length;
+  if (cenarios.length === 0) {
+    res.resumo =
+      "Nenhum cenário ATIVO de cobrança (a vencer / vencido). Ative o cenário no SmartFlow — o cron só olha cenários ativos.";
+    return res;
+  }
+
+  const [escRow] = await db
+    .select({ fusoHorario: escritorios.fusoHorario })
+    .from(escritorios)
+    .where(eq(escritorios.id, escritorioId))
+    .limit(1);
+  const tz = escRow?.fusoHorario || FUSO_HORARIO_PADRAO;
+  res.fuso = tz;
+
+  const cobrancas = await carregarCobrancasDoEscritorio(escritorioId);
+  res.cobrancasNoBanco = cobrancas.length;
+  if (cobrancas.length === 0) {
+    res.resumo =
+      "Nenhuma cobrança PENDING/OVERDUE no banco local. Se você criou no Asaas e não aparece aqui, o webhook não sincronizou (Configurações → Asaas). Cobrança lançada MANUAL não entra no cron.";
+    return res;
+  }
+
+  const janelaMs = 14 * 24 * 60 * 60 * 1000;
+  const hhmm = (d: Date) =>
+    d.toLocaleTimeString("pt-BR", { timeZone: tz, hour: "2-digit", minute: "2-digit" });
+
+  for (const cb of cobrancas) {
+    const venc = parseVencimento(cb.vencimento);
+    const item: DiagnosticoCobrancaItem = {
+      pagamentoId: cb.asaasPaymentId ?? null,
+      descricao: cb.descricao || `Cobrança ${cb.asaasPaymentId ?? cb.id}`,
+      vencimento: cb.vencimento ?? null,
+      status: cb.status,
+      diasAteVencer: null,
+      temVinculo: false,
+      elegivel: false,
+      motivo: "",
+    };
+
+    if (!venc) {
+      item.motivo = "Vencimento inválido/ausente.";
+      res.itens.push(item);
+      continue;
+    }
+    const diasAteVencer = diasEntre(venc, hoje);
+    item.diasAteVencer = diasAteVencer;
+    if (STATUS_PAGO.has(cb.status)) {
+      item.motivo = `Já paga (status ${cb.status}) — não dispara.`;
+      res.itens.push(item);
+      continue;
+    }
+    if (!cb.asaasPaymentId || !cb.asaasCustomerId) {
+      item.motivo =
+        "Sem vínculo Asaas (asaasPaymentId) — cobrança MANUAL não passa pelo cron; só cobrança criada no Asaas.";
+      res.itens.push(item);
+      continue;
+    }
+
+    const vinc = await resolverVinculo(escritorioId, cb.asaasCustomerId);
+    item.temVinculo = !!vinc?.contatoId;
+
+    const venceuDif = venc.getTime() - hoje.getTime();
+    const motivos: string[] = [];
+    let casou = false;
+    for (const cen of cenarios) {
+      const cfg = cen.configGatilho as
+        | ConfigGatilhoPagamentoVencido
+        | ConfigGatilhoPagamentoProximoVencimento;
+      if (cen.gatilho === "pagamento_vencido") {
+        if (diasAteVencer >= 0) {
+          motivos.push("'vencido': ainda não venceu");
+          continue;
+        }
+        if (!deveDispararVencido(cfg, Math.abs(diasAteVencer))) {
+          motivos.push(`'vencido': atraso ${Math.abs(diasAteVencer)}d abaixo do configurado`);
+          continue;
+        }
+      } else {
+        if (venceuDif < 0) {
+          motivos.push("'a vencer': já venceu");
+          continue;
+        }
+        if (venceuDif > janelaMs) {
+          motivos.push("'a vencer': vence em mais de 14 dias");
+          continue;
+        }
+        if (!deveDispararProximo(cfg, diasAteVencer)) {
+          motivos.push(`'a vencer': faltam ${diasAteVencer}d, mais que os diasAntes configurados`);
+          continue;
+        }
+      }
+      if (temHorarioConfigurado(cfg)) {
+        const slots = calcularSlotsDoDia(cfg, hoje, tz);
+        const slot = acharSlotAtivo(slots, agora, TOLERANCIA_MIN);
+        if (!slot) {
+          motivos.push(
+            `fora do horário: slots de hoje [${slots.map(hhmm).join(", ") || "nenhum"}]; agora ${hhmm(agora)}; só dispara até ${TOLERANCIA_MIN}min após um slot`,
+          );
+          continue;
+        }
+      }
+      casou = true;
+      break;
+    }
+
+    if (casou) {
+      item.elegivel = item.temVinculo;
+      item.motivo = item.temVinculo
+        ? "ELEGÍVEL — deve disparar no próximo ciclo do cron (até 15min). Se já disparou hoje, respeita repetirPorDias."
+        : "Casaria o gatilho, MAS sem cliente vinculado (contatoId) — não há telefone pra enviar. Vincule o cliente à cobrança.";
+    } else {
+      item.motivo = motivos.length ? motivos.join(" | ") : "Nenhum cenário casou.";
+    }
+    res.itens.push(item);
+  }
+
+  const elegiveis = res.itens.filter((i) => i.elegivel).length;
+  res.resumo =
+    elegiveis > 0
+      ? `${elegiveis} cobrança(s) elegível(is) — devem disparar no próximo ciclo (até 15min).`
+      : "Nenhuma cobrança elegível agora — veja o motivo de cada uma abaixo.";
+  return res;
 }
 
 export function iniciarCobrancasSchedulerSmartFlow() {

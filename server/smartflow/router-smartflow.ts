@@ -258,6 +258,15 @@ export const smartflowRouter = router({
     return result;
   }),
 
+  /** Diagnóstico do gatilho de cobrança (dry-run): explica, cobrança por
+   *  cobrança, se dispararia AGORA e, se não, POR QUÊ. Não envia nada. */
+  diagnosticarCobrancas: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "smartflow", "ver");
+    if (!perm.allowed) throw new Error("Sem permissão para ver o SmartFlow.");
+    const { diagnosticarCobrancas } = await import("./cobrancas-scheduler");
+    return diagnosticarCobrancas(perm.escritorioId);
+  }),
+
   /** Cenário individual (com passos) — usado pelo editor */
   detalhe: protectedProcedure
     .input(z.object({ id: z.number() }))
