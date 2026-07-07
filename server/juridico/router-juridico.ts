@@ -595,4 +595,91 @@ export const juridicoRouter = router({
       });
       return { trechos: r.trechos, indexadas: r.indexadas, via: leitura.via };
     }),
+
+  /** [admin] Lista as fontes GLOBAIS (com filtro por área/tipo/busca) + áreas. */
+  listarFontesGlobais: adminProcedure
+    .input(z.object({
+      area: z.string().max(80).optional(),
+      tipo: z.enum(["sumula", "lei", "precedente", "tese"]).optional(),
+      busca: z.string().max(120).optional(),
+      limite: z.number().int().min(1).max(300).optional(),
+    }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { fontes: [], areas: [] as Array<{ area: string; n: number }> };
+      let where: any = isNull(fontesJuridicas.escritorioId);
+      if (input?.area) where = and(where, eq(fontesJuridicas.area, input.area));
+      if (input?.tipo) where = and(where, eq(fontesJuridicas.tipo, input.tipo));
+      if (input?.busca) {
+        const b = `%${input.busca}%`;
+        where = and(where, or(like(fontesJuridicas.identificador, b), like(fontesJuridicas.titulo, b), like(fontesJuridicas.texto, b)));
+      }
+      const fontes = await db
+        .select({
+          id: fontesJuridicas.id,
+          tipo: fontesJuridicas.tipo,
+          identificador: fontesJuridicas.identificador,
+          orgao: fontesJuridicas.orgao,
+          area: fontesJuridicas.area,
+          titulo: fontesJuridicas.titulo,
+          texto: fontesJuridicas.texto,
+          tags: fontesJuridicas.tags,
+          indexada: sql<number>`CASE WHEN ${fontesJuridicas.embedding} IS NULL THEN 0 ELSE 1 END`,
+        })
+        .from(fontesJuridicas)
+        .where(where)
+        .orderBy(desc(fontesJuridicas.createdAt))
+        .limit(input?.limite ?? 100);
+      const areas = await db
+        .select({ area: fontesJuridicas.area, n: sql<number>`COUNT(*)` })
+        .from(fontesJuridicas)
+        .where(isNull(fontesJuridicas.escritorioId))
+        .groupBy(fontesJuridicas.area);
+      return { fontes: fontes.map((f) => ({ ...f, indexada: Number(f.indexada) === 1 })), areas: areas.map((a) => ({ area: a.area, n: Number(a.n) })) };
+    }),
+
+  /** [admin] Edita uma fonte GLOBAL e reindexa. */
+  editarFonteGlobal: adminProcedure
+    .input(z.object({
+      id: z.number(),
+      tipo: z.enum(["sumula", "lei", "precedente", "tese"]),
+      identificador: z.string().min(2).max(160),
+      orgao: z.string().max(60).optional(),
+      area: z.string().max(80).optional(),
+      titulo: z.string().max(255).optional(),
+      texto: z.string().min(3).max(20000),
+      tags: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const key = await resolverChaveOpenAI(esc?.escritorio.id ?? 0);
+      const textoIndex = [input.identificador, input.titulo, input.texto].filter(Boolean).join(" — ");
+      const emb = key ? await gerarEmbeddingSeguro(textoIndex, key).catch(() => null) : null;
+      await db
+        .update(fontesJuridicas)
+        .set({
+          tipo: input.tipo,
+          identificador: input.identificador,
+          orgao: input.orgao ?? null,
+          area: input.area || AREA_REVISIONAL,
+          titulo: input.titulo ?? null,
+          texto: input.texto,
+          tags: input.tags ?? null,
+          embedding: emb ? JSON.stringify(emb) : null,
+        })
+        .where(and(eq(fontesJuridicas.id, input.id), isNull(fontesJuridicas.escritorioId)));
+      return { success: true, indexada: !!emb };
+    }),
+
+  /** [admin] Exclui uma fonte GLOBAL. */
+  excluirFonteGlobal: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(fontesJuridicas).where(and(eq(fontesJuridicas.id, input.id), isNull(fontesJuridicas.escritorioId)));
+      return { success: true };
+    }),
 });
