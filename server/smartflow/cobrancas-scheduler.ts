@@ -223,7 +223,12 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
           // Os slots são materializados no fuso do escritório.
           const params: Parameters<typeof dispararPagamentoVencido>[1] = { ...comuns };
           if (temHorarioConfigurado(cfg)) {
-            const slots = calcularSlotsDoDia(cfg, hoje, tz);
+            // `agora`, NÃO `hoje`: no servidor Railway (UTC), `hoje` é meia-noite
+            // UTC, que em fuso BR (UTC-3) vira o DIA ANTERIOR ao passar por
+            // ymdNoFuso — ancorava o slot em ontem e o cron nunca casava (o
+            // gatilho de cobrança por horário não disparava). `agora` dá o dia
+            // LOCAL correto do escritório.
+            const slots = calcularSlotsDoDia(cfg, agora, tz);
             const slot = acharSlotAtivo(slots, agora, TOLERANCIA_MIN);
             if (!slot) continue;
             params.slotTimestamp = slot;
@@ -392,7 +397,9 @@ export async function diagnosticarCobrancas(
         }
       }
       if (temHorarioConfigurado(cfg)) {
-        const slots = calcularSlotsDoDia(cfg, hoje, tz);
+        // `agora`, não `hoje` — ver nota em rodarCicloCobrancas: meia-noite UTC
+        // vira ontem no fuso BR e o slot nunca casa.
+        const slots = calcularSlotsDoDia(cfg, agora, tz);
         const slot = acharSlotAtivo(slots, agora, TOLERANCIA_MIN);
         if (!slot) {
           motivos.push(
