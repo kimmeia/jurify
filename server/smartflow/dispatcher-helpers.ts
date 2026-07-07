@@ -63,6 +63,27 @@ export function diasEntre(a: Date, b: Date): number {
   return Math.floor((a.getTime() - b.getTime()) / (24 * 60 * 60 * 1000));
 }
 
+/**
+ * Diferença em DIAS DE CALENDÁRIO entre hoje (no fuso `tz` do escritório) e a
+ * data de vencimento ("YYYY-MM-DD"). Positivo = vence no futuro; 0 = vence hoje;
+ * negativo = já venceu. Diferente de `diasEntre(venc, new Date())`, que faz floor
+ * da diferença em HORAS e subconta quando o dia já avançou (ex.: 07/07 20h →
+ * 09/07 dava 1, não 2 — e a cobrança "1 dia antes" disparava 2 dias antes).
+ * Aqui compara só o calendário local, então 07/07 → 09/07 = 2 em qualquer hora.
+ */
+export function diasCalendarioAteVencimento(
+  vencimentoIso: string,
+  agora: Date,
+  tz: string,
+): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(vencimentoIso || "");
+  if (!m) return 0;
+  const hoje = ymdNoFuso(agora, tz);
+  const msVenc = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const msHoje = Date.UTC(hoje.y, hoje.m - 1, hoje.d);
+  return Math.round((msVenc - msHoje) / (24 * 60 * 60 * 1000));
+}
+
 export function parseVencimento(iso: string | null | undefined): Date | null {
   if (!iso || typeof iso !== "string") return null;
   const d = new Date(`${iso}T00:00:00`);

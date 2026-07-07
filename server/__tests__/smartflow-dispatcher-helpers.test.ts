@@ -27,6 +27,7 @@ import {
   deveDispararVencido,
   deveReentrarNoWaitNode,
   diasEntre,
+  diasCalendarioAteVencimento,
   parseHoraHHMM,
   parseVencimento,
   slotTimestampChave,
@@ -431,6 +432,28 @@ describe("calcularSlotsDoDia com fuso horário", () => {
     expect(slots).toHaveLength(1);
     // Comportamento legado: setHours local. Só conferimos que retornou algo,
     // o teste do legado acima já cobre o comportamento exato.
+  });
+});
+
+describe("diasCalendarioAteVencimento (dias de CALENDÁRIO, não floor de horas)", () => {
+  const TZ = "America/Sao_Paulo";
+  it("07/07 20h SP → vencimento 09/07 = 2 dias (bug: diasEntre dava 1)", () => {
+    // Cenário exato do bug: às 20h de SP faltam ~25h pra meia-noite do 09;
+    // diasEntre fazia floor → 1. Calendário: 07 → 09 = 2.
+    const agora = new Date("2026-07-07T23:00:00.000Z"); // 20:00 em SP
+    expect(diasCalendarioAteVencimento("2026-07-09", agora, TZ)).toBe(2);
+  });
+  it("vence amanhã = 1 em qualquer hora do dia", () => {
+    expect(diasCalendarioAteVencimento("2026-07-08", new Date("2026-07-07T12:00:00.000Z"), TZ)).toBe(1); // 09h SP
+    expect(diasCalendarioAteVencimento("2026-07-08", new Date("2026-07-07T23:00:00.000Z"), TZ)).toBe(1); // 20h SP
+  });
+  it("vence hoje = 0; venceu ontem = -1", () => {
+    const agora = new Date("2026-07-07T15:00:00.000Z"); // 12h SP
+    expect(diasCalendarioAteVencimento("2026-07-07", agora, TZ)).toBe(0);
+    expect(diasCalendarioAteVencimento("2026-07-06", agora, TZ)).toBe(-1);
+  });
+  it("string inválida → 0 (não quebra)", () => {
+    expect(diasCalendarioAteVencimento("", new Date("2026-07-07T15:00:00.000Z"), TZ)).toBe(0);
   });
 });
 
