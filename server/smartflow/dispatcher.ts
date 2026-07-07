@@ -31,6 +31,7 @@ import {
   deveDispararVencido,
   deveReentrarNoWaitNode,
   diasEntre,
+  diasCalendarioAteVencimento,
   parseVencimento,
   slotTimestampChave,
   temHorarioConfigurado,
@@ -986,6 +987,8 @@ export async function dispararPagamentoVencido(
     clienteNome?: string;
     clienteAsaasId?: string;
     contatoId?: number;
+    /** Fuso do escritório (scheduler) — habilita dias por CALENDÁRIO. */
+    tz?: string;
     /**
      * Slot que motivou o disparo (vindo do scheduler em modo horário). Se
      * presente, o dedupe acontece por `(cenário, pagamento, slot)` — o
@@ -999,7 +1002,11 @@ export async function dispararPagamentoVencido(
     if (cenarios.length === 0) return { executou: false, cenariosDisparados: 0 };
 
     const vencimento = parseVencimento(params.vencimento);
-    const diasAtrasoAtual = vencimento ? diasEntre(new Date(), vencimento) : 0;
+    const diasAtrasoAtual = !vencimento
+      ? 0
+      : params.tz
+        ? -diasCalendarioAteVencimento(params.vencimento, new Date(), params.tz)
+        : diasEntre(new Date(), vencimento);
     const slotChave = params.slotTimestamp ? slotTimestampChave(params.slotTimestamp) : null;
 
     let disparados = 0;
@@ -1089,6 +1096,8 @@ export async function dispararProximoVencimento(
     clienteNome?: string;
     contatoId?: number;
     slotTimestamp?: Date;
+    /** Fuso do escritório (scheduler) — habilita dias por CALENDÁRIO. */
+    tz?: string;
   },
 ): Promise<{ executou: boolean; cenariosDisparados: number }> {
   try {
@@ -1097,7 +1106,9 @@ export async function dispararProximoVencimento(
 
     const vencimento = parseVencimento(params.vencimento);
     if (!vencimento) return { executou: false, cenariosDisparados: 0 };
-    const diasAteVencer = diasEntre(vencimento, new Date());
+    const diasAteVencer = params.tz
+      ? diasCalendarioAteVencimento(params.vencimento, new Date(), params.tz)
+      : diasEntre(vencimento, new Date());
     if (diasAteVencer < 0) return { executou: false, cenariosDisparados: 0 }; // já venceu
 
     const slotChave = params.slotTimestamp ? slotTimestampChave(params.slotTimestamp) : null;
