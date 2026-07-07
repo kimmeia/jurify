@@ -111,6 +111,16 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     mediaUrl: msg.mediaUrl || undefined,
     payload: msg.interactiveReply ? { interactiveReply: msg.interactiveReply } : null,
   });
+
+  // Evento `system` do WhatsApp (ex: cliente trocou de número): fica registrado
+  // na timeline como nota, mas NÃO é mensagem do cliente — não muda status, não
+  // vira toast "nova mensagem", não cria lead e não dispara SmartFlow/auto-reply.
+  // Sem esse corte o bot respondia o evento e, em troca de número, martelava o
+  // número velho (já morto) gerando 131026.
+  if (msg.tipo === "sistema") {
+    return { contatoId, conversaId, mensagemId };
+  }
+
   // Marca aguardando — MAS preserva em_atendimento (atendente assumiu, mantém
   // o controle; sobrescrever fazia o bot voltar a responder na próxima msg do
   // cliente, mesmo depois do atendente ter intervindo).
@@ -210,7 +220,7 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
           telefone: msg.telefone,
           nomeCliente: msg.nome || "",
           imagem: imagemVision,
-          tipoMensagem: msg.tipo,
+          tipoMensagem: msg.tipo === "sistema" ? undefined : msg.tipo,
           interactiveReply: msg.interactiveReply,
         });
         if (sf.executou) {
@@ -529,6 +539,6 @@ async function pegarContatoIdDaConversa(conversaId: number): Promise<number | nu
 }
 
 function mapTipo(tipo: WhatsappMensagemRecebida["tipo"]): any {
-  const m: Record<string, any> = { texto: "texto", imagem: "imagem", audio: "audio", video: "video", documento: "documento", localizacao: "localizacao", contato: "contato", sticker: "sticker" };
+  const m: Record<string, any> = { texto: "texto", imagem: "imagem", audio: "audio", video: "video", documento: "documento", localizacao: "localizacao", contato: "contato", sticker: "sticker", sistema: "sistema" };
   return m[tipo] || "texto";
 }

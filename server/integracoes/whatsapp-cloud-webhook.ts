@@ -142,6 +142,114 @@ function formatPhone(phone: string): string {
   return phone.replace(/\D/g, "");
 }
 
+export interface MensagemCloudParseada {
+  conteudo: string;
+  tipo: WhatsappMensagemRecebida["tipo"];
+  mediaId: string;
+  nomeOriginalArquivo: string | undefined;
+  interactiveReply: { tipo: "button" | "list"; id: string; titulo: string } | undefined;
+}
+
+/**
+ * Traduz o `message` cru do webhook Cloud API em {conteudo, tipo, mediaId, ...}.
+ * Isolado do handler Express de propósito, pra ser testável. `telefone` entra só
+ * pro log do evento `system` (ex: troca de número) — que NÃO é mensagem do
+ * cliente e por isso vira tipo "sistema" (o handler não dispara bot pra ele).
+ */
+export function parseMensagemCloud(message: any, telefone: string): MensagemCloudParseada {
+  let tipo: WhatsappMensagemRecebida["tipo"] = "texto";
+  let conteudo = "";
+  let mediaId = "";
+  let nomeOriginalArquivo: string | undefined;
+  let interactiveReply: { tipo: "button" | "list"; id: string; titulo: string } | undefined;
+
+  switch (message.type) {
+    case "text":
+      conteudo = message.text?.body || "";
+      tipo = "texto";
+      break;
+    case "interactive": {
+      const inter = (message as any).interactive;
+      if (inter?.type === "button_reply" && inter.button_reply) {
+        interactiveReply = {
+          tipo: "button",
+          id: String(inter.button_reply.id || ""),
+          titulo: String(inter.button_reply.title || ""),
+        };
+      } else if (inter?.type === "list_reply" && inter.list_reply) {
+        interactiveReply = {
+          tipo: "list",
+          id: String(inter.list_reply.id || ""),
+          titulo: String(inter.list_reply.title || ""),
+        };
+      }
+      // Conteúdo persistido = título do que foi clicado, pra UI do inbox mostrar
+      // de forma humana o que o cliente escolheu (ex: "📅 Quero agendar").
+      conteudo = interactiveReply?.titulo || "[interactive]";
+      tipo = "texto";
+      break;
+    }
+    case "image":
+      conteudo = message.image?.caption || "Imagem";
+      mediaId = message.image?.id || "";
+      tipo = "imagem";
+      break;
+    case "audio":
+      conteudo = "Audio";
+      mediaId = message.audio?.id || "";
+      tipo = "audio";
+      break;
+    case "video":
+      conteudo = message.video?.caption || "Video";
+      mediaId = message.video?.id || "";
+      tipo = "video";
+      break;
+    case "document":
+      conteudo = message.document?.filename || "Documento";
+      mediaId = message.document?.id || "";
+      nomeOriginalArquivo = message.document?.filename;
+      tipo = "documento";
+      break;
+    case "sticker":
+      conteudo = "Sticker";
+      mediaId = message.sticker?.id || "";
+      tipo = "sticker";
+      break;
+    case "location":
+      conteudo = `Localização: ${message.location?.latitude},${message.location?.longitude}`;
+      tipo = "localizacao";
+      break;
+    case "contacts":
+      conteudo = message.contacts?.[0]?.name?.formatted_name || "Contato";
+      tipo = "contato";
+      break;
+    case "system": {
+      // Evento do WhatsApp, NÃO mensagem do cliente. O caso comum é troca de
+      // número: a Meta manda o número novo em system.new_wa_id/wa_id. Antes caía
+      // no default e virava um cru "[system]" tratado como texto — o bot respondia
+      // o evento e, como o número velho já estava morto, martelava 131026. Marcar
+      // como tipo "sistema" tira do fluxo (textoFluxo fica "") e mostra legível.
+      const sys = (message as any).system || {};
+      const novoNumero = String(sys.new_wa_id || sys.wa_id || "").replace(/\D/g, "");
+      conteudo = novoNumero
+        ? `📱 Cliente mudou o número do WhatsApp (novo: ${formatPhone(novoNumero)})`
+        : sys.body
+          ? `📱 ${sys.body}`
+          : "📱 Evento do sistema WhatsApp";
+      tipo = "sistema";
+      log.info(
+        `[WhatsApp Cloud] Evento system de ${telefone}: type=${sys.type || "?"} novoNumero=${novoNumero || "-"} body="${sys.body || ""}"`,
+      );
+      break;
+    }
+    default:
+      conteudo = `[${message.type}]`;
+      tipo = "texto";
+  }
+
+  return { conteudo, tipo, mediaId, nomeOriginalArquivo, interactiveReply };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // WEBHOOK REGISTRATION
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -248,83 +356,11 @@ export function registerWhatsAppCloudWebhook(app: Express) {
               const telefone = formatPhone(message.from);
               const nome = contact?.profile?.name || telefone;
 
-              let tipo: WhatsappMensagemRecebida["tipo"] = "texto";
-              let conteudo = "";
-              // mediaId: ID opaco da Meta (usado pra baixar). mediaUrl: path
-              // público local após download (vai pro DB).
-              let mediaId = "";
+              // Parsing isolado em parseMensagemCloud (testável). mediaUrl fica
+              // aqui porque é preenchido só depois, pelo download da mídia.
+              const { conteudo, tipo, mediaId, nomeOriginalArquivo, interactiveReply } =
+                parseMensagemCloud(message, telefone);
               let mediaUrl = "";
-              let nomeOriginalArquivo: string | undefined;
-              // Preenchido SÓ pra type=interactive (resposta a botão/lista
-              // enviada via `enviarBotoes`/`enviarLista`). Vai pro contexto
-              // SmartFlow pra roteamento por id (sem ambiguidade de texto).
-              let interactiveReply: { tipo: "button" | "list"; id: string; titulo: string } | undefined;
-
-              switch (message.type) {
-                case "text":
-                  conteudo = message.text?.body || "";
-                  tipo = "texto";
-                  break;
-                case "interactive": {
-                  const inter = (message as any).interactive;
-                  if (inter?.type === "button_reply" && inter.button_reply) {
-                    interactiveReply = {
-                      tipo: "button",
-                      id: String(inter.button_reply.id || ""),
-                      titulo: String(inter.button_reply.title || ""),
-                    };
-                  } else if (inter?.type === "list_reply" && inter.list_reply) {
-                    interactiveReply = {
-                      tipo: "list",
-                      id: String(inter.list_reply.id || ""),
-                      titulo: String(inter.list_reply.title || ""),
-                    };
-                  }
-                  // Conteúdo da mensagem persistida = título do que foi clicado,
-                  // pra UI do inbox mostrar de forma humana o que o cliente
-                  // escolheu (ex: "📅 Quero agendar") em vez de "[interactive]".
-                  conteudo = interactiveReply?.titulo || "[interactive]";
-                  tipo = "texto";
-                  break;
-                }
-                case "image":
-                  conteudo = message.image?.caption || "Imagem";
-                  mediaId = message.image?.id || "";
-                  tipo = "imagem";
-                  break;
-                case "audio":
-                  conteudo = "Audio";
-                  mediaId = message.audio?.id || "";
-                  tipo = "audio";
-                  break;
-                case "video":
-                  conteudo = message.video?.caption || "Video";
-                  mediaId = message.video?.id || "";
-                  tipo = "video";
-                  break;
-                case "document":
-                  conteudo = message.document?.filename || "Documento";
-                  mediaId = message.document?.id || "";
-                  nomeOriginalArquivo = message.document?.filename;
-                  tipo = "documento";
-                  break;
-                case "sticker":
-                  conteudo = "Sticker";
-                  mediaId = message.sticker?.id || "";
-                  tipo = "sticker";
-                  break;
-                case "location":
-                  conteudo = `Localização: ${message.location?.latitude},${message.location?.longitude}`;
-                  tipo = "localizacao";
-                  break;
-                case "contacts":
-                  conteudo = message.contacts?.[0]?.name?.formatted_name || "Contato";
-                  tipo = "contato";
-                  break;
-                default:
-                  conteudo = `[${message.type}]`;
-                  tipo = "texto";
-              }
 
               // Baixa mídia da Cloud API e persiste local. Sem isso, o
               // frontend renderiza só o ícone/label (regex de [media:/path]
