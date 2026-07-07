@@ -245,6 +245,8 @@ export const escritorios = mysqlTable("escritorios", {
   id: int("id").autoincrement().primaryKey(),
   nome: varchar("nome", { length: 255 }).notNull(),
   cnpj: varchar("cnpj", { length: 18 }),
+  // OAB do advogado responsável — bloco de assinatura das peças do Agente Jurídico.
+  oab: varchar("oab", { length: 32 }),
   telefone: varchar("telefone", { length: 20 }),
   email: varchar("email", { length: 320 }),
   endereco: text("endereco"),

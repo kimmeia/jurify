@@ -354,6 +354,7 @@ export default function Configuracoes() {
     setFormPerfil({
       nome: escritorio.nome,
       cnpj: escritorio.cnpj || "",
+      oab: (escritorio as any).oab || "",
       telefone: escritorio.telefone || "",
       email: escritorio.email || "",
       endereco: escritorio.endereco || "",
@@ -524,6 +525,7 @@ export default function Configuracoes() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5"><Label className="text-[11px]">Nome *</Label><Input value={formPerfil.nome} onChange={(e) => setFormPerfil({ ...formPerfil, nome: e.target.value })} /></div>
                   <div className="space-y-1.5"><Label className="text-[11px]">CNPJ</Label><Input placeholder="00.000.000/0001-00" value={formPerfil.cnpj} onChange={(e) => setFormPerfil({ ...formPerfil, cnpj: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-[11px]">OAB do responsável</Label><Input placeholder="OAB/CE 12.345" value={formPerfil.oab} onChange={(e) => setFormPerfil({ ...formPerfil, oab: e.target.value })} /></div>
                   <div className="space-y-1.5"><Label className="text-[11px]">Telefone</Label><Input placeholder="(85) 99999-0000" value={formPerfil.telefone} onChange={(e) => setFormPerfil({ ...formPerfil, telefone: e.target.value })} /></div>
                   <div className="space-y-1.5"><Label className="text-[11px]">Email</Label><Input type="email" value={formPerfil.email} onChange={(e) => setFormPerfil({ ...formPerfil, email: e.target.value })} /></div>
                   <div className="space-y-1.5 sm:col-span-2"><Label className="text-[11px]">Endereço</Label><Input value={formPerfil.endereco} onChange={(e) => setFormPerfil({ ...formPerfil, endereco: e.target.value })} /></div>

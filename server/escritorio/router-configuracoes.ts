@@ -221,6 +221,7 @@ export const configuracoesRouter = router({
     .input(z.object({
       nome: z.string().min(2).max(255).optional(),
       cnpj: z.string().max(18).optional(),
+      oab: z.string().max(32).optional(),
       telefone: z.string().max(20).optional(),
       email: z.string().email().optional().or(z.literal("")),
       endereco: z.string().max(500).optional(),
