@@ -36,6 +36,7 @@ import {
   listarAuditLog,
   obterAutoReplyCanal,
   atualizarAutoReplyCanal,
+  definirCanalPadraoEnvio,
 } from "./db-canais";
 import { checkPermission } from "./check-permission";
 import type { CargoColaborador } from "../../shared/escritorio-types";
@@ -930,6 +931,28 @@ export const configuracoesRouter = router({
         colaboradorId: esc.colaborador.id,
         canalId: input.canalId,
         acao: "desconectou",
+      });
+      return { success: true };
+    }),
+
+  /** Define qual número WhatsApp oficial (Cloud API) envia as mensagens.
+   *  Exclusivo por escritório — o envio (getCanalCloudApi) prioriza o marcado. */
+  definirCanalPadraoEnvio: protectedProcedure
+    .input(z.object({ canalId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      await exigirPermissao(
+        ctx.user.id, "configuracoes", "editar",
+        "Sem permissão para configurar canais.",
+      );
+
+      await definirCanalPadraoEnvio(input.canalId, esc.escritorio.id);
+      await registrarAudit({
+        escritorioId: esc.escritorio.id,
+        colaboradorId: esc.colaborador.id,
+        canalId: input.canalId,
+        acao: "editou_config",
       });
       return { success: true };
     }),
