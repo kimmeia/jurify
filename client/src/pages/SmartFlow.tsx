@@ -99,6 +99,8 @@ export default function SmartFlow() {
   const [busca, setBusca] = useState("");
   const [categoriaFilter, setCategoriaFilter] = useState<FiltroCategoria>("todas");
   const [statusFilter, setStatusFilter] = useState<"todos" | StatusExecucao>("todos");
+  const [diagOpen, setDiagOpen] = useState(false);
+  const diagQ = trpc.smartflow.diagnosticarCobrancas.useQuery(undefined, { enabled: diagOpen });
   const [cenarioFilter, setCenarioFilter] = useState<number | "todos">("todos");
 
   const { data: cenarios, isLoading, refetch } = (trpc as any).smartflow.listar.useQuery();
@@ -195,6 +197,12 @@ export default function SmartFlow() {
   return (
     <div className="space-y-5">
       <SmartFlowHero onNovoCenario={() => setGaleriaOpen(true)} />
+
+      <div className="flex justify-end -mt-2">
+        <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => setDiagOpen(true)}>
+          <Activity className="h-3.5 w-3.5" /> Diagnosticar gatilho de cobrança
+        </Button>
+      </div>
 
       <GaleriaTemplatesDialog open={galeriaOpen} onOpenChange={setGaleriaOpen} />
 
@@ -460,6 +468,50 @@ export default function SmartFlow() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={diagOpen} onOpenChange={setDiagOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Diagnóstico — gatilho de cobrança</DialogTitle>
+            <DialogDescription>
+              Simulação do ciclo AGORA (não envia nada). Mostra, por cobrança, se dispararia e, se não, por quê.
+            </DialogDescription>
+          </DialogHeader>
+          {diagQ.isLoading ? (
+            <div className="py-8 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+          ) : diagQ.data ? (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+              <div className="text-xs text-muted-foreground">
+                Cenários ativos de cobrança: <strong>{diagQ.data.cenariosAtivos}</strong> · Cobranças no banco (PENDING/OVERDUE): <strong>{diagQ.data.cobrancasNoBanco}</strong> · Fuso: {diagQ.data.fuso}
+              </div>
+              <div className={"text-sm rounded-lg border p-3 " + (diagQ.data.itens.some((i) => i.elegivel) ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-amber-50 border-amber-200 text-amber-800")}>
+                {diagQ.data.resumo}
+              </div>
+              {diagQ.data.itens.map((it, idx) => (
+                <div key={idx} className={"rounded-lg border p-3 text-xs " + (it.elegivel ? "border-emerald-200" : "border-border")}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium truncate">{it.descricao}</span>
+                    <Badge variant="outline" className={"text-[10px] shrink-0 " + (it.elegivel ? "text-emerald-600 bg-emerald-50 border-emerald-200" : "text-amber-600 bg-amber-50 border-amber-200")}>
+                      {it.elegivel ? "Elegível" : "Não dispara"}
+                    </Badge>
+                  </div>
+                  <div className="text-muted-foreground mt-1">
+                    Venc: {it.vencimento ?? "—"} · {it.status} · {it.diasAteVencer != null ? `${it.diasAteVencer}d p/ vencer` : "—"} · {it.temVinculo ? "cliente vinculado" : "sem cliente"}
+                  </div>
+                  <div className="mt-1 leading-snug">{it.motivo}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground py-4">Não foi possível carregar o diagnóstico.</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => diagQ.refetch()} disabled={diagQ.isFetching}>
+              {diagQ.isFetching ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : null} Rodar de novo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

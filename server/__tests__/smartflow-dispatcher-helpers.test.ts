@@ -404,6 +404,24 @@ describe("calcularSlotsDoDia com fuso horário", () => {
     expect(slotsManaus[0].getTime() - slotsSP[0].getTime()).toBe(60 * 60 * 1000);
   });
 
+  it("servidor UTC + fuso BR: passar o INSTANTE atual ancora o slot no dia LOCAL (regressão: cron de cobrança não disparava)", () => {
+    // 18:45 em America/Sao_Paulo (UTC-3) = 21:45 UTC.
+    const agora = new Date("2026-07-07T21:45:00.000Z");
+    const cfg = { horarioInicial: "18:45", disparosPorDia: 1, intervaloMinutos: 15 };
+
+    // CORRETO: passar `agora` → slot é HOJE (07/07) 18:45 SP = 21:45 UTC, e casa.
+    const slotsOk = calcularSlotsDoDia(cfg, agora, "America/Sao_Paulo");
+    expect(slotsOk[0].toISOString()).toBe("2026-07-07T21:45:00.000Z");
+    expect(acharSlotAtivo(slotsOk, agora, 15)).not.toBeNull();
+
+    // BUG (documentado): meia-noite UTC (o que o cron passava como `hoje`) vira
+    // 06/07 (ontem em SP) → slot ancorado em ontem → acharSlotAtivo nunca casa.
+    const hojeUtcMidnight = new Date("2026-07-07T00:00:00.000Z");
+    const slotsBug = calcularSlotsDoDia(cfg, hojeUtcMidnight, "America/Sao_Paulo");
+    expect(slotsBug[0].toISOString()).toBe("2026-07-06T21:45:00.000Z");
+    expect(acharSlotAtivo(slotsBug, agora, 15)).toBeNull();
+  });
+
   it("sem tz preserva comportamento legado (usa TZ do processo)", () => {
     const baseDia = new Date("2026-04-21T15:00:00.000Z");
     const slots = calcularSlotsDoDia(

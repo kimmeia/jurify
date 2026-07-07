@@ -223,15 +223,18 @@ async function registrarEventoChamada(canalInfo: CanalChamada, call: EventoChama
     await emitirParaEscritorio(canalInfo.escritorioId, montarSinalFila(ev.callId, "removida", ctxFila));
   }
 
-  // ── Chamada recebida perdida (ninguém atendeu, não foi recusa) → WhatsApp ──
-  if (
-    ev.evento === "terminate" &&
-    ev.direcao === "entrada" &&
-    existente &&
-    !existente.atendidaEm &&
-    existente.status !== "rejeitada"
-  ) {
-    await avisarPerdidaPorWhatsapp(canalInfo, ev.telefone, conversaId);
+  // ── Chamada recebida perdida (NO_ANSWER da Meta) → WhatsApp automático ──
+  // Dispara SÓ quando a Meta reporta que ninguém atendeu (status "perdida").
+  // Antes o gatilho era `!atendidaEm` (só setado no aceite DENTRO do app): uma
+  // chamada COMPLETED atendida FORA do app (no WhatsApp do celular) fica
+  // "encerrada" com atendidaEm null e disparava o aviso ERRADO ("não atendemos"
+  // numa chamada atendida). E agora é opt-in por escritório, DESLIGADO por
+  // padrão — nada de disparo automático não solicitado.
+  if (ev.evento === "terminate" && ev.direcao === "entrada" && ev.status === "perdida") {
+    const cfgChamada = await obterConfigChamada(canalInfo.escritorioId);
+    if (cfgChamada.avisoPerdidaAtivo) {
+      await avisarPerdidaPorWhatsapp(canalInfo, ev.telefone, conversaId);
+    }
   }
 }
 

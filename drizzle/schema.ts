@@ -850,6 +850,8 @@ export const chamadaConfig = mysqlTable(
     escritorioId: int("escritorioIdChamCfg").notNull(),
     transbordoAtivo: boolean("transbordoAtivoChamCfg").default(false).notNull(),
     modoJanela: varchar("modoJanelaChamCfg", { length: 20 }).default("overlay").notNull(),
+    // Aviso automático de chamada perdida por WhatsApp — opt-in, default OFF.
+    avisoPerdidaAtivo: boolean("avisoPerdidaAtivoChamCfg").default(false).notNull(),
     atualizadoEm: timestamp("atualizadoEmChamCfg").defaultNow().onUpdateNow().notNull(),
   },
   (t) => ({
