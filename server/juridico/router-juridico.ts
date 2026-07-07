@@ -303,7 +303,7 @@ export const juridicoRouter = router({
       // 3. Timbre do escritório + advogado (assinatura).
       const { escritorios } = await import("../../drizzle/schema");
       const [escRow] = await db
-        .select({ nome: escritorios.nome, endereco: escritorios.endereco, cnpj: escritorios.cnpj, telefone: escritorios.telefone, email: escritorios.email })
+        .select({ nome: escritorios.nome, endereco: escritorios.endereco, cnpj: escritorios.cnpj, oab: escritorios.oab, telefone: escritorios.telefone, email: escritorios.email })
         .from(escritorios)
         .where(eq(escritorios.id, esc.escritorio.id))
         .limit(1);
@@ -311,6 +311,7 @@ export const juridicoRouter = router({
       const system = montarSystemPromptAgente({
         escritorio: escRow ?? { nome: esc.escritorio.nome },
         advogado: (ctx.user as any)?.name ?? null,
+        oab: escRow?.oab ?? null,
         dossie: dossie ?? undefined,
         movimentacao,
         jurisprudencia,

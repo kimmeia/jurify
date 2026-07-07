@@ -68,6 +68,7 @@ export async function atualizarEscritorio(
   dados: {
     nome?: string;
     cnpj?: string;
+    oab?: string;
     telefone?: string;
     email?: string;
     endereco?: string;
@@ -89,6 +90,7 @@ export async function atualizarEscritorio(
   const updateData: Record<string, unknown> = {};
   if (dados.nome !== undefined) updateData.nome = dados.nome;
   if (dados.cnpj !== undefined) updateData.cnpj = dados.cnpj || null;
+  if (dados.oab !== undefined) updateData.oab = dados.oab || null;
   if (dados.telefone !== undefined) updateData.telefone = dados.telefone || null;
   if (dados.email !== undefined) updateData.email = dados.email || null;
   if (dados.endereco !== undefined) updateData.endereco = dados.endereco || null;
