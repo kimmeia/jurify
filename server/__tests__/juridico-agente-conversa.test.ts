@@ -9,6 +9,10 @@ describe("montarSystemPromptAgente", () => {
     expect(s).toMatch(/ESTRAT[ÉE]GIA/i);
     expect(s).toMatch(/CAIXA ALTA/);
     expect(s).toContain("«");
+    // Catálogo de peças embutido (Fase 3).
+    expect(s).toContain("CATÁLOGO DE PEÇAS");
+    expect(s).toContain("Embargos de Declaração");
+    expect(s).toContain("art. 1.022 do CPC");
   });
 
   it("injeta timbre do escritório, dossiê, movimentação e jurisprudência", () => {
