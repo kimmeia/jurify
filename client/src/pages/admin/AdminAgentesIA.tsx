@@ -751,7 +751,7 @@ export default function AdminAgentesIA() {
     onSuccess: (r: any) => {
       toast.success("Decisão adicionada à base", { description: `${r.trechos} trecho(s), ${r.indexadas} indexado(s) (via ${r.via}).` });
       setDecisaoFile(null); setDecisaoLink(""); setDecisaoId(""); setDecisaoTitulo("");
-      refetchBase();
+      refetchBase(); fontesGlobaisQ.refetch();
     },
     onError: (err: any) => toast.error("Erro ao subir decisão", { description: err.message }),
   });
@@ -769,6 +769,24 @@ export default function AdminAgentesIA() {
     }
     subirDecisaoMut.mutate({ identificador: decisaoId.trim(), titulo: decisaoTitulo.trim() || undefined, base64, nomeArquivo, link: decisaoLink.trim() || undefined });
   }
+
+  // Gestão da base: filtro por área, busca, editar/excluir.
+  const [baseArea, setBaseArea] = useState<string>("");
+  const [baseBusca, setBaseBusca] = useState("");
+  const fontesGlobaisQ = (trpc as any).juridico.listarFontesGlobais.useQuery(
+    { area: baseArea || undefined, busca: baseBusca.trim() || undefined },
+    { retry: false },
+  );
+  const [fonteEdit, setFonteEdit] = useState<any | null>(null);
+  const editarFonteMut = (trpc as any).juridico.editarFonteGlobal.useMutation({
+    onSuccess: () => { toast.success("Fonte atualizada"); setFonteEdit(null); fontesGlobaisQ.refetch(); refetchBase(); },
+    onError: (e: any) => toast.error("Erro", { description: e.message }),
+  });
+  const [fonteExcluir, setFonteExcluir] = useState<any | null>(null);
+  const excluirFonteMut = (trpc as any).juridico.excluirFonteGlobal.useMutation({
+    onSuccess: () => { toast.success("Fonte excluída"); setFonteExcluir(null); fontesGlobaisQ.refetch(); refetchBase(); },
+    onError: (e: any) => toast.error("Erro", { description: e.message }),
+  });
 
   return (
     <div className="space-y-6">
@@ -885,8 +903,108 @@ export default function AdminAgentesIA() {
               PDF/DOCX/TXT (texto) ou imagem/escaneado (Vision). O conteúdo é fatiado, indexado e passa a valer pra todos os escritórios.
             </p>
           </div>
+
+          {/* Gestão das fontes: filtro por área, busca, editar/excluir */}
+          <div className="w-full border-t pt-3 mt-1">
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fontes da base ({fontesGlobaisQ.data?.fontes?.length ?? 0})</p>
+              <Button size="sm" variant="outline" onClick={() => setFonteEdit({ id: null, tipo: "sumula", identificador: "", orgao: "", area: baseArea || "", titulo: "", texto: "", tags: "" })}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Nova fonte
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              <button className={"text-[11px] px-2.5 py-1 rounded-full border " + (!baseArea ? "bg-violet-600 text-white border-violet-600" : "bg-background")} onClick={() => setBaseArea("")}>Todas</button>
+              {(fontesGlobaisQ.data?.areas ?? []).map((a: any) => (
+                <button key={a.area} className={"text-[11px] px-2.5 py-1 rounded-full border " + (baseArea === a.area ? "bg-violet-600 text-white border-violet-600" : "bg-background")} onClick={() => setBaseArea(a.area)}>
+                  {a.area} <span className="opacity-60">{a.n}</span>
+                </button>
+              ))}
+            </div>
+            <Input className="h-9 mb-2" placeholder="Buscar por identificador, texto ou tag…" value={baseBusca} onChange={(e) => setBaseBusca(e.target.value)} />
+            <div className="border rounded-lg divide-y max-h-80 overflow-y-auto">
+              {fontesGlobaisQ.isLoading && <p className="text-xs text-muted-foreground p-3">Carregando…</p>}
+              {(fontesGlobaisQ.data?.fontes ?? []).map((f: any) => (
+                <div key={f.id} className="flex items-start gap-2 p-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold truncate">{f.identificador}</span>
+                      <span className="text-[10px] px-1.5 rounded bg-muted">{f.tipo}</span>
+                      <span className="text-[10px] text-muted-foreground">{f.area}</span>
+                      {!f.indexada && <span className="text-[10px] text-amber-600">não indexada</span>}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground line-clamp-1">{f.titulo || f.texto}</p>
+                  </div>
+                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setFonteEdit({ ...f, orgao: f.orgao || "", titulo: f.titulo || "", tags: f.tags || "" })}><Edit className="h-3.5 w-3.5" /></Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 hover:text-rose-600" onClick={() => setFonteExcluir(f)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
+              ))}
+              {!fontesGlobaisQ.isLoading && (fontesGlobaisQ.data?.fontes?.length ?? 0) === 0 && (
+                <p className="text-xs text-muted-foreground p-3">Nenhuma fonte {baseArea ? `na área "${baseArea}"` : "ainda"}.</p>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Editar / criar fonte (dialog) */}
+      <Dialog open={!!fonteEdit} onOpenChange={(o) => !o && setFonteEdit(null)}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{fonteEdit?.id ? "Editar fonte" : "Nova fonte"}</DialogTitle></DialogHeader>
+          {fonteEdit && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div><Label className="text-xs">Tipo</Label>
+                  <Select value={fonteEdit.tipo} onValueChange={(v) => setFonteEdit({ ...fonteEdit, tipo: v })}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sumula">Súmula</SelectItem>
+                      <SelectItem value="lei">Lei / artigo</SelectItem>
+                      <SelectItem value="precedente">Precedente</SelectItem>
+                      <SelectItem value="tese">Tese / modelo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div><Label className="text-xs">Área</Label><Input className="mt-1" value={fonteEdit.area} onChange={(e) => setFonteEdit({ ...fonteEdit, area: e.target.value })} placeholder="Ex.: revisional_bancaria" /></div>
+              </div>
+              <div><Label className="text-xs">Identificador *</Label><Input className="mt-1" value={fonteEdit.identificador} onChange={(e) => setFonteEdit({ ...fonteEdit, identificador: e.target.value })} placeholder="Ex.: Súmula 297/STJ" /></div>
+              <div><Label className="text-xs">Título</Label><Input className="mt-1" value={fonteEdit.titulo} onChange={(e) => setFonteEdit({ ...fonteEdit, titulo: e.target.value })} /></div>
+              <div><Label className="text-xs">Texto *</Label><Textarea className="mt-1 min-h-[90px]" value={fonteEdit.texto} onChange={(e) => setFonteEdit({ ...fonteEdit, texto: e.target.value })} /></div>
+              <div><Label className="text-xs">Tags</Label><Input className="mt-1" value={fonteEdit.tags} onChange={(e) => setFonteEdit({ ...fonteEdit, tags: e.target.value })} /></div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFonteEdit(null)}>Cancelar</Button>
+            <Button
+              disabled={editarFonteMut.isPending || subirDecisaoMut.isPending || !fonteEdit || fonteEdit.identificador.trim().length < 2 || fonteEdit.texto.trim().length < 3}
+              onClick={() => {
+                if (fonteEdit.id) {
+                  editarFonteMut.mutate({ id: fonteEdit.id, tipo: fonteEdit.tipo, identificador: fonteEdit.identificador.trim(), orgao: fonteEdit.orgao || undefined, area: fonteEdit.area || undefined, titulo: fonteEdit.titulo || undefined, texto: fonteEdit.texto.trim(), tags: fonteEdit.tags || undefined });
+                } else {
+                  subirDecisaoMut.mutate({ identificador: fonteEdit.identificador.trim(), titulo: fonteEdit.titulo || undefined, area: fonteEdit.area || undefined, tipo: fonteEdit.tipo, texto: fonteEdit.texto.trim() }, { onSuccess: () => setFonteEdit(null) });
+                }
+              }}
+            >
+              {(editarFonteMut.isPending || subirDecisaoMut.isPending) ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : null} Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Excluir fonte (confirmação) */}
+      <AlertDialog open={!!fonteExcluir} onOpenChange={(o) => !o && setFonteExcluir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir fonte?</AlertDialogTitle>
+            <AlertDialogDescription>Remove <strong>{fonteExcluir?.identificador}</strong> da base global. O agente deixa de citá-la.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirFonteMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={excluirFonteMut.isPending} onClick={(e) => { e.preventDefault(); if (fonteExcluir) excluirFonteMut.mutate({ id: fonteExcluir.id }); }}>
+              {excluirFonteMut.isPending ? "Excluindo…" : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Lista de agentes */}
       {isLoading ? (
