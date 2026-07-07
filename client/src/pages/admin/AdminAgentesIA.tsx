@@ -742,6 +742,29 @@ export default function AdminAgentesIA() {
     onError: (err: any) => toast.error("Erro", { description: err.message }),
   });
 
+  // Subir decisão/jurisprudência pra base GLOBAL (RAG) — amplia o conhecimento.
+  const [decisaoFile, setDecisaoFile] = useState<File | null>(null);
+  const [decisaoId, setDecisaoId] = useState("");
+  const [decisaoTitulo, setDecisaoTitulo] = useState("");
+  const subirDecisaoMut = (trpc as any).juridico.subirDecisao.useMutation({
+    onSuccess: (r: any) => {
+      toast.success("Decisão adicionada à base", { description: `${r.trechos} trecho(s), ${r.indexadas} indexado(s) (via ${r.via}).` });
+      setDecisaoFile(null); setDecisaoId(""); setDecisaoTitulo("");
+      refetchBase();
+    },
+    onError: (err: any) => toast.error("Erro ao subir decisão", { description: err.message }),
+  });
+  async function enviarDecisao() {
+    if (!decisaoFile || decisaoId.trim().length < 2) return;
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+      reader.onerror = reject;
+      reader.readAsDataURL(decisaoFile);
+    });
+    subirDecisaoMut.mutate({ nomeArquivo: decisaoFile.name, base64, identificador: decisaoId.trim(), titulo: decisaoTitulo.trim() || undefined });
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -822,6 +845,36 @@ export default function AdminAgentesIA() {
               Há fontes não indexadas — clique pra indexar (precisa de chave OpenAI configurada).
             </span>
           )}
+
+          {/* Subir decisão/jurisprudência — amplia o conhecimento do Agente (RAG) */}
+          <div className="w-full border-t pt-3 mt-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              Subir decisão / jurisprudência
+            </p>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex-1 min-w-[180px]">
+                <Label className="text-xs">Identificador *</Label>
+                <Input className="mt-1 h-9" placeholder="Ex.: REsp 1.061.530/RS" value={decisaoId} onChange={(e) => setDecisaoId(e.target.value)} />
+              </div>
+              <div className="flex-1 min-w-[180px]">
+                <Label className="text-xs">Título (opcional)</Label>
+                <Input className="mt-1 h-9" placeholder="Resumo curto" value={decisaoTitulo} onChange={(e) => setDecisaoTitulo(e.target.value)} />
+              </div>
+              <input
+                type="file"
+                accept=".pdf,.docx,.txt,.png,.jpg,.jpeg"
+                onChange={(e) => setDecisaoFile(e.target.files?.[0] ?? null)}
+                className="text-xs max-w-[220px]"
+              />
+              <Button size="sm" disabled={!decisaoFile || decisaoId.trim().length < 2 || subirDecisaoMut.isPending} onClick={enviarDecisao}>
+                {subirDecisaoMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Plus className="h-4 w-4 mr-1.5" />}
+                Subir decisão
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1.5">
+              PDF/DOCX/TXT (texto) ou imagem/escaneado (Vision). O conteúdo é fatiado, indexado e passa a valer pra todos os escritórios.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
