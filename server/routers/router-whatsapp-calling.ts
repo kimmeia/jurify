@@ -419,6 +419,7 @@ export const whatsappCallingRouter = router({
       z.object({
         transbordoAtivo: z.boolean().optional(),
         modoJanela: z.enum(["overlay", "discreto"]).optional(),
+        avisoPerdidaAtivo: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

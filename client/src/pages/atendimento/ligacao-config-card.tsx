@@ -22,6 +22,7 @@ export function LigacaoConfigCard({ canEdit }: { canEdit: boolean }) {
 
   const transbordo = q.data?.transbordoAtivo ?? false;
   const modo = q.data?.modoJanela ?? "overlay";
+  const avisoPerdida = q.data?.avisoPerdidaAtivo ?? false;
   const disabled = !canEdit || mut.isPending || q.isLoading;
 
   const opcao = (valor: "overlay" | "discreto", titulo: string, desc: string) => (
@@ -59,6 +60,20 @@ export function LigacaoConfigCard({ canEdit }: { canEdit: boolean }) {
             checked={transbordo}
             disabled={disabled}
             onCheckedChange={(v) => mut.mutate({ transbordoAtivo: v })}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium">Aviso de chamada perdida</p>
+            <p className="text-xs text-muted-foreground">
+              Quando ninguém atende uma chamada recebida, envia um WhatsApp automático avisando que vai retornar. Desligado por padrão — só liga se quiser esse disparo automático.
+            </p>
+          </div>
+          <Switch
+            checked={avisoPerdida}
+            disabled={disabled}
+            onCheckedChange={(v) => mut.mutate({ avisoPerdidaAtivo: v })}
           />
         </div>
 
