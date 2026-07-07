@@ -465,3 +465,21 @@ describe("calcularMomentoLembrete com fuso horário", () => {
     expect(momento?.toISOString()).toBe("2026-04-21T22:00:00.000Z");
   });
 });
+
+describe("calcularSlotsDoDia — teto anti-spam (MAX_DISPAROS_DIA)", () => {
+  it("limita disparosPorDia alto ao teto (20 → 3 slots)", () => {
+    const slots = calcularSlotsDoDia(
+      { horarioInicial: "09:00", disparosPorDia: 20, intervaloMinutos: 60 },
+      new Date("2026-05-01T12:00:00.000Z"),
+    );
+    expect(slots.length).toBe(3);
+  });
+
+  it("respeita 1×/dia (recomendado pra cobrança)", () => {
+    const slots = calcularSlotsDoDia(
+      { horarioInicial: "09:00", disparosPorDia: 1 },
+      new Date("2026-05-01T12:00:00.000Z"),
+    );
+    expect(slots.length).toBe(1);
+  });
+});

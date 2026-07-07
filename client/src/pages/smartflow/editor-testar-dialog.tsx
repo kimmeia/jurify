@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +46,11 @@ export function EditorTestarDialog({
   dirty: boolean;
 }) {
   const [contextoJson, setContextoJson] = useState(() => exemploContexto(gatilho));
+  // Recarrega o exemplo CERTO do gatilho toda vez que o dialog abre — sem isso
+  // ficava um exemplo velho/errado (ex.: atendimento no lugar de cobrança).
+  useEffect(() => {
+    if (open) setContextoJson(exemploContexto(gatilho));
+  }, [open, gatilho]);
   const [resultado, setResultado] = useState<{
     sucesso: boolean;
     erro?: string;

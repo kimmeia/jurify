@@ -211,6 +211,14 @@ export function temHorarioConfigurado(cfg: JanelaDisparo | undefined | null): bo
 }
 
 /**
+ * Teto de disparos por dia (por pagamento) — trava anti-spam. Um cenário salvo
+ * com valor alto (ex.: 20/dia) causou ban da Meta por "Sending spam"; aqui
+ * limitamos no motor pra proteger inclusive fluxos já criados. 1/dia é o ideal
+ * pra cobrança. A UI usa o mesmo teto no input.
+ */
+export const MAX_DISPAROS_DIA = 3;
+
+/**
  * Dada uma janela de disparo e uma data-base (início do dia), retorna os
  * `disparosPorDia` slots como instâncias Date — cada um é o inicio do
  * horário de disparo naquele dia. Ex: `horarioInicial="09:00"`,
@@ -232,7 +240,11 @@ export function calcularSlotsDoDia(
   const hora = cfg ? parseHoraHHMM(cfg.horarioInicial) : null;
   if (!hora) return [];
 
-  const disparos = Math.max(1, Math.floor(Number(cfg?.disparosPorDia ?? 1)));
+  // Teto anti-spam: por mais que o cenário esteja salvo com um número alto
+  // (ex.: 20/dia — causou ban da Meta por "Sending spam"), NUNCA dispara mais
+  // que MAX_DISPAROS_DIA por dia pro mesmo pagamento. Protege inclusive fluxos
+  // já criados. 1/dia é o recomendado pra cobrança.
+  const disparos = Math.min(MAX_DISPAROS_DIA, Math.max(1, Math.floor(Number(cfg?.disparosPorDia ?? 1))));
   const intervaloMin = Math.max(1, Math.floor(Number(cfg?.intervaloMinutos ?? 120)));
 
   const slots: Date[] = [];
