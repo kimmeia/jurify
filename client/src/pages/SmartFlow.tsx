@@ -484,23 +484,36 @@ export default function SmartFlow() {
               <div className="text-xs text-muted-foreground">
                 Cenários ativos de cobrança: <strong>{diagQ.data.cenariosAtivos}</strong> · Cobranças no banco (PENDING/OVERDUE): <strong>{diagQ.data.cobrancasNoBanco}</strong> · Fuso: {diagQ.data.fuso}
               </div>
-              <div className={"text-sm rounded-lg border p-3 " + (diagQ.data.itens.some((i) => i.elegivel) ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-amber-50 border-amber-200 text-amber-800")}>
+              <div className="flex flex-wrap gap-1.5 text-[10px]">
+                <Badge variant="outline" className="text-emerald-600 bg-emerald-50 border-emerald-200">Elegível: {diagQ.data.contadores.elegivel}</Badge>
+                <Badge variant="outline" className="text-blue-600 bg-blue-50 border-blue-200">Aguardando horário: {diagQ.data.contadores.aguardandoHorario}</Badge>
+                <Badge variant="outline" className="text-muted-foreground">Não se aplica: {diagQ.data.contadores.fora}</Badge>
+              </div>
+              <div className={"text-sm rounded-lg border p-3 " + (diagQ.data.contadores.elegivel > 0 || diagQ.data.contadores.aguardandoHorario > 0 ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-amber-50 border-amber-200 text-amber-800")}>
                 {diagQ.data.resumo}
               </div>
-              {diagQ.data.itens.map((it, idx) => (
-                <div key={idx} className={"rounded-lg border p-3 text-xs " + (it.elegivel ? "border-emerald-200" : "border-border")}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium truncate">{it.descricao}</span>
-                    <Badge variant="outline" className={"text-[10px] shrink-0 " + (it.elegivel ? "text-emerald-600 bg-emerald-50 border-emerald-200" : "text-amber-600 bg-amber-50 border-amber-200")}>
-                      {it.elegivel ? "Elegível" : "Não dispara"}
-                    </Badge>
+              {diagQ.data.totalItens > diagQ.data.itens.length && (
+                <p className="text-[10px] text-muted-foreground">Mostrando as {diagQ.data.itens.length} mais relevantes de {diagQ.data.totalItens}.</p>
+              )}
+              {diagQ.data.itens.map((it, idx) => {
+                const cor = it.categoria === "elegivel"
+                  ? { b: "border-emerald-200", t: "text-emerald-600 bg-emerald-50 border-emerald-200", label: "Elegível" }
+                  : it.categoria === "aguardando_horario"
+                    ? { b: "border-blue-200", t: "text-blue-600 bg-blue-50 border-blue-200", label: "Aguardando horário" }
+                    : { b: "border-border", t: "text-muted-foreground", label: "Não se aplica" };
+                return (
+                  <div key={idx} className={"rounded-lg border p-3 text-xs " + cor.b}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium truncate">{it.descricao}</span>
+                      <Badge variant="outline" className={"text-[10px] shrink-0 " + cor.t}>{cor.label}</Badge>
+                    </div>
+                    <div className="text-muted-foreground mt-1">
+                      Venc: {it.vencimento ?? "—"} · {it.status} · {it.diasAteVencer != null ? `${it.diasAteVencer}d p/ vencer` : "—"} · {it.temVinculo ? "cliente vinculado" : "sem cliente"}
+                    </div>
+                    <div className="mt-1 leading-snug">{it.motivo}</div>
                   </div>
-                  <div className="text-muted-foreground mt-1">
-                    Venc: {it.vencimento ?? "—"} · {it.status} · {it.diasAteVencer != null ? `${it.diasAteVencer}d p/ vencer` : "—"} · {it.temVinculo ? "cliente vinculado" : "sem cliente"}
-                  </div>
-                  <div className="mt-1 leading-snug">{it.motivo}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground py-4">Não foi possível carregar o diagnóstico.</p>

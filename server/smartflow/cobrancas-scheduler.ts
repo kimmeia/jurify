@@ -30,6 +30,7 @@ import {
   calcularSlotsDoDia,
   parseVencimento,
   diasEntre,
+  diasCalendarioAteVencimento,
   temHorarioConfigurado,
   deveDispararProximo,
   deveDispararVencido,
@@ -202,6 +203,9 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
           clienteNome: vinc?.nome || undefined,
           contatoId: vinc?.contatoId || undefined,
           clienteAsaasId: cb.asaasCustomerId,
+          // Fuso do escritório → dias por CALENDÁRIO no dispatcher (não floor de
+          // horas, que fazia "1 dia antes" disparar 2 dias antes).
+          tz,
         };
 
         for (const cen of cenariosDoEscritorio) {
@@ -262,7 +266,7 @@ export interface DiagnosticoCobrancaItem {
   status: string;
   diasAteVencer: number | null;
   temVinculo: boolean;
-  elegivel: boolean;
+  categoria: "elegivel" | "aguardando_horario" | "fora";
   motivo: string;
 }
 export interface DiagnosticoCobrancasResultado {
@@ -270,6 +274,8 @@ export interface DiagnosticoCobrancasResultado {
   cobrancasNoBanco: number;
   agora: string;
   fuso: string;
+  contadores: { elegivel: number; aguardandoHorario: number; fora: number };
+  totalItens: number;
   itens: DiagnosticoCobrancaItem[];
   resumo: string;
 }
@@ -295,6 +301,8 @@ export async function diagnosticarCobrancas(
     cobrancasNoBanco: 0,
     agora: agora.toISOString(),
     fuso: FUSO_HORARIO_PADRAO,
+    contadores: { elegivel: 0, aguardandoHorario: 0, fora: 0 },
+    totalItens: 0,
     itens: [],
     resumo: "",
   };
@@ -340,7 +348,7 @@ export async function diagnosticarCobrancas(
       status: cb.status,
       diasAteVencer: null,
       temVinculo: false,
-      elegivel: false,
+      categoria: "fora",
       motivo: "",
     };
 
@@ -349,7 +357,9 @@ export async function diagnosticarCobrancas(
       res.itens.push(item);
       continue;
     }
-    const diasAteVencer = diasEntre(venc, hoje);
+    // Dias de CALENDÁRIO no fuso do escritório — mesmo cálculo (corrigido) do
+    // dispararProximoVencimento. Vence amanhã = 1 em qualquer hora do dia.
+    const diasAteVencer = diasCalendarioAteVencimento(cb.vencimento ?? "", agora, tz);
     item.diasAteVencer = diasAteVencer;
     if (STATUS_PAGO.has(cb.status)) {
       item.motivo = `Já paga (status ${cb.status}) — não dispara.`;
@@ -368,7 +378,7 @@ export async function diagnosticarCobrancas(
 
     const venceuDif = venc.getTime() - hoje.getTime();
     const motivos: string[] = [];
-    let casou = false;
+    let slotInfo = "";
     for (const cen of cenarios) {
       const cfg = cen.configGatilho as
         | ConfigGatilhoPagamentoVencido
@@ -391,43 +401,64 @@ export async function diagnosticarCobrancas(
           motivos.push("'a vencer': vence em mais de 14 dias");
           continue;
         }
-        if (!deveDispararProximo(cfg, diasAteVencer)) {
-          motivos.push(`'a vencer': faltam ${diasAteVencer}d, mais que os diasAntes configurados`);
+        if (diasAteVencer < 0 || !deveDispararProximo(cfg, diasAteVencer)) {
+          motivos.push(`'a vencer': faltam ${diasAteVencer}d (fora do diasAntes configurado)`);
           continue;
         }
       }
+      // Critérios de data OK. Sem vínculo não envia (não há telefone).
+      if (!item.temVinculo) {
+        motivos.push("casaria o gatilho, mas SEM cliente vinculado — não há telefone pra enviar");
+        continue;
+      }
       if (temHorarioConfigurado(cfg)) {
-        // `agora`, não `hoje` — ver nota em rodarCicloCobrancas: meia-noite UTC
-        // vira ontem no fuso BR e o slot nunca casa.
         const slots = calcularSlotsDoDia(cfg, agora, tz);
         const slot = acharSlotAtivo(slots, agora, TOLERANCIA_MIN);
         if (!slot) {
-          motivos.push(
-            `fora do horário: slots de hoje [${slots.map(hhmm).join(", ") || "nenhum"}]; agora ${hhmm(agora)}; só dispara até ${TOLERANCIA_MIN}min após um slot`,
-          );
+          // Casa TUDO menos o minuto do slot → candidata que dispara no horário.
+          if (item.categoria === "fora") item.categoria = "aguardando_horario";
+          slotInfo = `Dispara nos horários [${slots.map(hhmm).join(", ") || "—"}] (janela de ${TOLERANCIA_MIN}min). Agora: ${hhmm(agora)}.`;
           continue;
         }
       }
-      casou = true;
+      item.categoria = "elegivel";
       break;
     }
 
-    if (casou) {
-      item.elegivel = item.temVinculo;
-      item.motivo = item.temVinculo
-        ? "ELEGÍVEL — deve disparar no próximo ciclo do cron (até 15min). Se já disparou hoje, respeita repetirPorDias."
-        : "Casaria o gatilho, MAS sem cliente vinculado (contatoId) — não há telefone pra enviar. Vincule o cliente à cobrança.";
+    if (item.categoria === "elegivel") {
+      item.motivo = "ELEGÍVEL — dispara no próximo ciclo do cron (até 15min).";
+    } else if (item.categoria === "aguardando_horario") {
+      item.motivo = `Candidata — casa o cenário, só falta chegar o horário. ${slotInfo}`;
     } else {
-      item.motivo = motivos.length ? motivos.join(" | ") : "Nenhum cenário casou.";
+      item.motivo = motivos.length ? Array.from(new Set(motivos)).join(" | ") : "Não se aplica a nenhum cenário ativo.";
     }
     res.itens.push(item);
   }
 
-  const elegiveis = res.itens.filter((i) => i.elegivel).length;
-  res.resumo =
-    elegiveis > 0
-      ? `${elegiveis} cobrança(s) elegível(is) — devem disparar no próximo ciclo (até 15min).`
-      : "Nenhuma cobrança elegível agora — veja o motivo de cada uma abaixo.";
+  res.totalItens = res.itens.length;
+  res.contadores = {
+    elegivel: res.itens.filter((i) => i.categoria === "elegivel").length,
+    aguardandoHorario: res.itens.filter((i) => i.categoria === "aguardando_horario").length,
+    fora: res.itens.filter((i) => i.categoria === "fora").length,
+  };
+  // Pode haver milhares de cobranças: ordena por relevância (elegível →
+  // aguardando horário → fora) e devolve só as primeiras, com os contadores.
+  const prioridade: Record<DiagnosticoCobrancaItem["categoria"], number> = {
+    elegivel: 0,
+    aguardando_horario: 1,
+    fora: 2,
+  };
+  res.itens.sort((a, b) => prioridade[a.categoria] - prioridade[b.categoria]);
+  res.itens = res.itens.slice(0, 40);
+
+  const c = res.contadores;
+  if (c.elegivel > 0) {
+    res.resumo = `${c.elegivel} elegível(is) agora${c.aguardandoHorario ? ` + ${c.aguardandoHorario} aguardando o horário` : ""} — devem disparar no próximo ciclo.`;
+  } else if (c.aguardandoHorario > 0) {
+    res.resumo = `${c.aguardandoHorario} cobrança(s) CASAM o cenário e disparam no horário configurado — nenhuma no minuto exato de agora. ${c.fora} não se aplicam.`;
+  } else {
+    res.resumo = `Nenhuma cobrança se aplica ao cenário ativo. ${c.fora} fora — a maioria já venceu, e o cenário ativo é 'a vencer' (cobrança vencida não entra nele).`;
+  }
   return res;
 }
 
