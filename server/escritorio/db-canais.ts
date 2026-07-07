@@ -48,6 +48,7 @@ export async function listarCanais(escritorioId: number) {
       mensagemErro: r.mensagemErro || undefined,
       temConfig: !!(r.configEncrypted && r.configIv && r.configTag),
       registradoCloudApi: !!r.registradoCloudApi,
+      padraoEnvio: !!r.padraoEnvio,
       createdAt: toIsoString(r.createdAt) ?? "",
     }));
 }
@@ -214,6 +215,32 @@ export async function atualizarAutoReplyCanal(
     .update(canaisIntegrados)
     .set({ autoReplyFallback: valor })
     .where(and(eq(canaisIntegrados.id, canalId), eq(canaisIntegrados.escritorioId, escritorioId)));
+}
+
+/** Define o canal WhatsApp oficial (Cloud API) usado pra ENVIAR mensagens.
+ *  Exclusivo por escritório: desmarca os outros whatsapp_api e marca só o
+ *  escolhido. Escopado por escritorioId (isolamento de tenant). */
+export async function definirCanalPadraoEnvio(
+  canalId: number,
+  escritorioId: number,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+
+  await db
+    .update(canaisIntegrados)
+    .set({ padraoEnvio: false })
+    .where(and(eq(canaisIntegrados.escritorioId, escritorioId), eq(canaisIntegrados.tipo, "whatsapp_api")));
+  await db
+    .update(canaisIntegrados)
+    .set({ padraoEnvio: true })
+    .where(
+      and(
+        eq(canaisIntegrados.id, canalId),
+        eq(canaisIntegrados.escritorioId, escritorioId),
+        eq(canaisIntegrados.tipo, "whatsapp_api"),
+      ),
+    );
 }
 
 /** Atualiza status do canal */
