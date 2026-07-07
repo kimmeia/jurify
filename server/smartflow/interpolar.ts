@@ -165,7 +165,8 @@ const VARS_COBRANCA_LINKS: CatalogoVariavel[] = [
 ];
 
 const VARS_PAGAMENTO_VENCIDO: CatalogoVariavel[] = [
-  { path: "pagamentoValor", label: "Valor da cobrança vencida", exemplo: "1500.00", categoria: "pagamento" },
+  { path: "pagamentoValorFormatado", label: "Valor da cobrança (R$ formatado)", exemplo: "R$ 1.500,00", categoria: "pagamento" },
+  { path: "pagamentoValor", label: "Valor bruto (centavos — use o formatado no texto)", exemplo: "150000", categoria: "pagamento" },
   { path: "pagamentoDescricao", label: "Descrição da cobrança", exemplo: "Honorários", categoria: "pagamento" },
   { path: "vencimento", label: "Data de vencimento", exemplo: "2026-04-01", categoria: "pagamento" },
   { path: "diasAtraso", label: "Dias de atraso", exemplo: "5", categoria: "pagamento" },
@@ -173,7 +174,8 @@ const VARS_PAGAMENTO_VENCIDO: CatalogoVariavel[] = [
 ];
 
 const VARS_PAGAMENTO_PROXIMO: CatalogoVariavel[] = [
-  { path: "pagamentoValor", label: "Valor da cobrança", exemplo: "1500.00", categoria: "pagamento" },
+  { path: "pagamentoValorFormatado", label: "Valor da cobrança (R$ formatado)", exemplo: "R$ 1.500,00", categoria: "pagamento" },
+  { path: "pagamentoValor", label: "Valor bruto (centavos — use o formatado no texto)", exemplo: "150000", categoria: "pagamento" },
   { path: "pagamentoDescricao", label: "Descrição da cobrança", exemplo: "Honorários", categoria: "pagamento" },
   { path: "vencimento", label: "Data de vencimento", exemplo: "2026-05-25", categoria: "pagamento" },
   { path: "diasAteVencer", label: "Dias até vencer", exemplo: "3", categoria: "pagamento" },
