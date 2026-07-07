@@ -1,7 +1,7 @@
 /**
  * Chamada de LLM no modelo que o ESCRITÓRIO configurou (OpenAI ou Anthropic),
- * com a chave dele (fallback plataforma). Uma chamada "one-shot" system+user
- * que devolve o texto — usada pela avaliação de sucesso e pela redação.
+ * com a chave dele (fallback plataforma). Usada pela avaliação, pela redação e
+ * pela conversa do Agente Jurídico.
  */
 import { resolverAPIKey, providerDoModelo } from "../integracoes/router-agentes-ia";
 import { montarBodyOpenAIChat } from "../_core/openai-model-params";
@@ -10,48 +10,43 @@ import { createLogger } from "../_core/logger";
 const log = createLogger("juridico-llm");
 
 export type LLMResultado = { texto: string | null; erro?: string };
+export type MensagemChat = { role: "user" | "assistant"; content: string };
 
-/**
- * Chama o modelo do escritório com um prompt system + user. Resolve provider
- * pelo nome do modelo e a chave via `resolverAPIKey`. Se a chave disponível
- * não bate com o provider do modelo, retorna erro claro (não silencia).
- */
-export async function chamarLLMEscritorio(
+/** Resolve provider + chave pro modelo; erro claro se a chave não bate. */
+async function resolverProviderKey(
   escritorioId: number,
-  opts: { system: string; user: string; modelo: string; maxTokens?: number; temperatura?: number; timeoutMs?: number },
-): Promise<LLMResultado> {
-  const provider = providerDoModelo(opts.modelo);
+  modelo: string,
+): Promise<{ provider: "openai" | "anthropic"; key: string } | { erro: string }> {
+  const provider = providerDoModelo(modelo);
   const resolved = await resolverAPIKey(escritorioId, null, provider);
-  if (!resolved) {
-    return { texto: null, erro: "Nenhuma chave de IA configurada. Configure OpenAI ou Anthropic em Integrações." };
-  }
+  if (!resolved) return { erro: "Nenhuma chave de IA configurada. Configure OpenAI ou Anthropic em Integrações." };
   if (resolved.provider !== provider) {
     const querido = provider === "anthropic" ? "Claude (Anthropic)" : "OpenAI";
     const tem = resolved.provider === "anthropic" ? "Claude" : "OpenAI";
-    return { texto: null, erro: `O modelo "${opts.modelo}" exige ${querido}, mas só há chave ${tem} configurada.` };
+    return { erro: `O modelo "${modelo}" exige ${querido}, mas só há chave ${tem} configurada.` };
   }
+  return { provider, key: resolved.key };
+}
 
-  const maxTokens = opts.maxTokens ?? 2000;
-  const temperatura = opts.temperatura ?? 0.2;
-  const timeoutMs = opts.timeoutMs ?? 60000;
-
+/** Núcleo: chama o provider com system + histórico de mensagens. */
+async function chamarChat(
+  provider: "openai" | "anthropic",
+  key: string,
+  opts: { system: string; mensagens: MensagemChat[]; modelo: string; maxTokens: number; temperatura: number; timeoutMs: number },
+): Promise<LLMResultado> {
   try {
     if (provider === "anthropic") {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": resolved.key,
-          "anthropic-version": "2023-06-01",
-        },
+        headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({
           model: opts.modelo,
           system: opts.system,
-          messages: [{ role: "user", content: opts.user }],
-          max_tokens: maxTokens,
-          temperature: temperatura,
+          messages: opts.mensagens,
+          max_tokens: opts.maxTokens,
+          temperature: opts.temperatura,
         }),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.timeout(opts.timeoutMs),
       });
       if (!res.ok) {
         const d = await res.text().catch(() => "");
@@ -64,17 +59,14 @@ export async function chamarLLMEscritorio(
     // OpenAI
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${resolved.key}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify(montarBodyOpenAIChat({
         model: opts.modelo,
-        messages: [
-          { role: "system", content: opts.system },
-          { role: "user", content: opts.user },
-        ],
-        maxTokens,
-        temperature: temperatura,
+        messages: [{ role: "system", content: opts.system }, ...opts.mensagens],
+        maxTokens: opts.maxTokens,
+        temperature: opts.temperatura,
       } as any)),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(opts.timeoutMs),
     });
     if (!res.ok) {
       const d = await res.text().catch(() => "");
@@ -86,6 +78,40 @@ export async function chamarLLMEscritorio(
     log.warn({ err: err?.message }, "Falha na chamada de LLM");
     return { texto: null, erro: err?.message || "Falha na chamada de IA" };
   }
+}
+
+/** Chamada one-shot system + user (avaliação, redação). */
+export async function chamarLLMEscritorio(
+  escritorioId: number,
+  opts: { system: string; user: string; modelo: string; maxTokens?: number; temperatura?: number; timeoutMs?: number },
+): Promise<LLMResultado> {
+  const rk = await resolverProviderKey(escritorioId, opts.modelo);
+  if ("erro" in rk) return { texto: null, erro: rk.erro };
+  return chamarChat(rk.provider, rk.key, {
+    system: opts.system,
+    mensagens: [{ role: "user", content: opts.user }],
+    modelo: opts.modelo,
+    maxTokens: opts.maxTokens ?? 2000,
+    temperatura: opts.temperatura ?? 0.2,
+    timeoutMs: opts.timeoutMs ?? 60000,
+  });
+}
+
+/** Conversa multi-turno (Agente Jurídico em chat): system + histórico. */
+export async function conversarLLMEscritorio(
+  escritorioId: number,
+  opts: { system: string; mensagens: MensagemChat[]; modelo: string; maxTokens?: number; temperatura?: number; timeoutMs?: number },
+): Promise<LLMResultado> {
+  const rk = await resolverProviderKey(escritorioId, opts.modelo);
+  if ("erro" in rk) return { texto: null, erro: rk.erro };
+  return chamarChat(rk.provider, rk.key, {
+    system: opts.system,
+    mensagens: opts.mensagens,
+    modelo: opts.modelo,
+    maxTokens: opts.maxTokens ?? 3000,
+    temperatura: opts.temperatura ?? 0.3,
+    timeoutMs: opts.timeoutMs ?? 90000,
+  });
 }
 
 const INSTRUCAO_TRANSCRICAO =
@@ -104,24 +130,20 @@ export async function transcreverDocumentoVision(
   escritorioId: number,
   opts: { modelo: string; base64: string; mime: string; ehPdf: boolean; instrucao?: string; maxTokens?: number; timeoutMs?: number },
 ): Promise<LLMResultado> {
-  const provider = providerDoModelo(opts.modelo);
-  const resolved = await resolverAPIKey(escritorioId, null, provider);
-  if (!resolved) return { texto: null, erro: "Nenhuma chave de IA configurada." };
-  if (resolved.provider !== provider) {
-    return { texto: null, erro: `O modelo "${opts.modelo}" exige ${provider === "anthropic" ? "Claude" : "OpenAI"}, mas a chave configurada é de outro provider.` };
-  }
+  const rk = await resolverProviderKey(escritorioId, opts.modelo);
+  if ("erro" in rk) return { texto: null, erro: rk.erro };
   const instrucao = opts.instrucao || INSTRUCAO_TRANSCRICAO;
   const maxTokens = opts.maxTokens ?? 2000;
   const timeoutMs = opts.timeoutMs ?? 90000;
 
   try {
-    if (provider === "anthropic") {
+    if (rk.provider === "anthropic") {
       const bloco = opts.ehPdf
         ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: opts.base64 } }
         : { type: "image", source: { type: "base64", media_type: opts.mime, data: opts.base64 } };
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": resolved.key, "anthropic-version": "2023-06-01" },
+        headers: { "Content-Type": "application/json", "x-api-key": rk.key, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({
           model: opts.modelo,
           max_tokens: maxTokens,
@@ -143,7 +165,7 @@ export async function transcreverDocumentoVision(
     }
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${resolved.key}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${rk.key}` },
       body: JSON.stringify(montarBodyOpenAIChat({
         model: opts.modelo,
         messages: [{

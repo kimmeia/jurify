@@ -7,7 +7,7 @@
  * ao banco. A leitura do TEXTO dos documentos (Vision) é etapa separada — aqui
  * só listamos os arquivos disponíveis.
  */
-import { contatos, clienteProcessos, clienteProcessoAnotacoes, clienteArquivos } from "../../drizzle/schema";
+import { contatos, clienteProcessos, clienteProcessoAnotacoes, clienteArquivos, eventosProcesso } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 
 const ESTADO_CIVIL: Record<string, string> = {
@@ -90,10 +90,45 @@ export interface DocumentoDossie {
 export interface Dossie {
   qualificacao?: string;
   processo?: string;
+  /** CNJ do processo escolhido — usado pra ler a movimentação processual. */
+  cnj?: string;
   /** Anotações do processo, como contexto factual adicional. */
   fatosContexto?: string;
   /** Arquivos do cliente — pra seleção/leitura (texto vem na etapa Vision). */
   documentos: DocumentoDossie[];
+}
+
+/**
+ * Lê a movimentação processual (eventos do tribunal) de um CNJ, do mais
+ * recente pro mais antigo, já formatada pro contexto do agente. Vazio se não
+ * há eventos capturados pra esse processo.
+ */
+export async function montarMovimentacao(
+  db: any,
+  escritorioId: number,
+  cnj: string,
+  limite = 15,
+): Promise<string> {
+  if (!cnj) return "";
+  const eventos = await db
+    .select({
+      tipo: eventosProcesso.tipo,
+      dataEvento: eventosProcesso.dataEvento,
+      conteudo: eventosProcesso.conteudo,
+      resumoIa: eventosProcesso.resumoIa,
+    })
+    .from(eventosProcesso)
+    .where(and(eq(eventosProcesso.escritorioId, escritorioId), eq(eventosProcesso.cnjAfetado, cnj)))
+    .orderBy(desc(eventosProcesso.dataEvento))
+    .limit(limite);
+  if (!eventos.length) return "";
+  return eventos
+    .map((e: any) => {
+      const d = e.dataEvento ? new Date(e.dataEvento).toLocaleDateString("pt-BR") : "";
+      const txt = String(e.resumoIa || e.conteudo || e.tipo || "").replace(/\s+/g, " ").trim().slice(0, 300);
+      return `- ${d}${e.tipo ? ` [${e.tipo}]` : ""}: ${txt}`;
+    })
+    .join("\n");
 }
 
 /**
@@ -145,6 +180,7 @@ export async function montarDossie(
   const proc = processoId ? procs.find((p: any) => p.id === processoId) : procs[0];
   if (proc) {
     dossie.processo = montarResumoProcesso(proc);
+    dossie.cnj = proc.numeroCnj || undefined;
     const anots = await db
       .select({ conteudo: clienteProcessoAnotacoes.conteudo })
       .from(clienteProcessoAnotacoes)

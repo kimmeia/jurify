@@ -17,12 +17,13 @@ import { gerarEmbedding, gerarEmbeddingSeguro } from "./embeddings";
 import { recuperarFontes, seedFontesRevisional, reindexarEmbeddings } from "./base";
 import { checkPermission } from "../escritorio/check-permission";
 import { AREA_REVISIONAL } from "./fontes-revisional";
-import { chamarLLMEscritorio } from "./llm";
+import { chamarLLMEscritorio, conversarLLMEscritorio } from "./llm";
 import { avaliarViabilidade, type FonteContexto } from "./avaliacao";
 import { gerarPeca, TIPOS_PECA } from "./peca";
 import { montarPecaDocx } from "./docx";
-import { montarDossie } from "./dossie";
+import { montarDossie, montarMovimentacao } from "./dossie";
 import { montarConteudoDocumentos, lerConteudoBuffer, chunkTexto } from "./leitura-documento";
+import { montarSystemPromptAgente } from "./agente-conversa";
 
 /** Resolve a chave OpenAI (embeddings sempre via OpenAI). null se não houver. */
 async function resolverChaveOpenAI(escritorioId: number): Promise<string | null> {
@@ -255,6 +256,75 @@ export const juridicoRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       return montarDossie(db, perm.escritorioId, input.contatoId, input.processoId);
+    }),
+
+  /**
+   * Conversa do Agente Jurídico: analisa o caso (dossiê + MOVIMENTAÇÃO
+   * processual), pesquisa jurisprudência na base (RAG na última fala) e
+   * responde com estratégia/peça no modelo do escritório. Multi-turno.
+   */
+  conversar: protectedProcedure
+    .input(z.object({
+      contatoId: z.number().optional(),
+      processoId: z.number().optional(),
+      mensagens: z.array(z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(8000),
+      })).min(1).max(40),
+      modelo: z.string().max(64).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Escritório não encontrado." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const modelo = input.modelo || "gpt-4o-mini";
+
+      // 1. Dossiê + movimentação processual (dados reais do caso).
+      const dossie = input.contatoId
+        ? await montarDossie(db, esc.escritorio.id, input.contatoId, input.processoId)
+        : null;
+      const movimentacao = dossie?.cnj ? await montarMovimentacao(db, esc.escritorio.id, dossie.cnj) : "";
+
+      // 2. Jurisprudência: RAG na última fala do usuário (+ resumo do processo).
+      const ultimaUser = [...input.mensagens].reverse().find((m) => m.role === "user")?.content || "";
+      let jurisprudencia: Array<{ identificador: string; titulo: string | null; texto: string }> = [];
+      const key = await resolverChaveOpenAI(esc.escritorio.id);
+      if (key && ultimaUser) {
+        try {
+          const emb = await gerarEmbedding([ultimaUser, dossie?.processo].filter(Boolean).join("\n"), key);
+          const fontes = await recuperarFontes(db, emb, { escritorioId: esc.escritorio.id, topK: 6 });
+          jurisprudencia = fontes.map((f) => ({ identificador: f.identificador, titulo: f.titulo, texto: f.texto }));
+        } catch { /* sem jurisprudência não impede a conversa */ }
+      }
+
+      // 3. Timbre do escritório + advogado (assinatura).
+      const { escritorios } = await import("../../drizzle/schema");
+      const [escRow] = await db
+        .select({ nome: escritorios.nome, endereco: escritorios.endereco, cnpj: escritorios.cnpj, telefone: escritorios.telefone, email: escritorios.email })
+        .from(escritorios)
+        .where(eq(escritorios.id, esc.escritorio.id))
+        .limit(1);
+
+      const system = montarSystemPromptAgente({
+        escritorio: escRow ?? { nome: esc.escritorio.nome },
+        advogado: (ctx.user as any)?.name ?? null,
+        dossie: dossie ?? undefined,
+        movimentacao,
+        jurisprudencia,
+      });
+
+      const r = await conversarLLMEscritorio(esc.escritorio.id, { system, mensagens: input.mensagens, modelo });
+      return {
+        resposta: r.texto,
+        erro: r.texto ? null : (r.erro || "A IA não respondeu. Tente de novo ou troque o modelo."),
+        contexto: {
+          andamentos: movimentacao ? movimentacao.split("\n").filter(Boolean).length : 0,
+          precedentes: jurisprudencia.length,
+          temDossie: !!dossie?.qualificacao,
+          temProcesso: !!dossie?.processo,
+        },
+      };
     }),
 
   gerarPeca: protectedProcedure
