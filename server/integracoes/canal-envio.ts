@@ -14,7 +14,7 @@
 
 import { getDb } from "../db";
 import { canaisIntegrados } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, asc } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 import { isLidJid, jidToPhone } from "../../shared/whatsapp-types";
 
@@ -126,6 +126,10 @@ export async function getCanalCloudApi(
         eq(canaisIntegrados.status, "conectado"),
       ),
     )
+    // Respeita o número de envio escolhido (padraoEnvio) — só entre os
+    // CONECTADOS (filtro acima). Se o escolhido cair, o fallback é o
+    // conectado de menor id (determinístico, não mais "o primeiro" arbitrário).
+    .orderBy(desc(canaisIntegrados.padraoEnvio), asc(canaisIntegrados.id))
     .limit(1);
   if (!canal || !canal.configEncrypted || !canal.configIv || !canal.configTag) return null;
   const { decryptConfig } = await import("../escritorio/crypto-utils");

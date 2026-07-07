@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   Settings, Building2, Users, Loader2, Plus, Trash2, Mail,
   Copy, CheckCircle, AlertTriangle, Shield, UserPlus, Clock, Link2,
-  MessageCircle, Instagram, Phone, Facebook, Wifi, WifiOff, Eye, X,
+  MessageCircle, Instagram, Phone, Facebook, Wifi, WifiOff, Eye, X, Send,
   ChevronDown, ChevronUp, Calendar, DollarSign, Plug, Tag as TagIcon, Sparkles,
   Database, CreditCard as CreditCardIcon, Megaphone, Pencil, Stethoscope, MessageSquare,
 } from "lucide-react";
@@ -1672,6 +1672,10 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
     onSuccess: () => { toast.success("Canal excluído."); refetch(); setExcluirCanalInfo(null); },
     onError: (e: any) => toast.error(e.message),
   });
+  const definirPadraoEnvioMut = trpc.configuracoes.definirCanalPadraoEnvio.useMutation({
+    onSuccess: () => { toast.success("Número de envio atualizado."); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const [legacyDialog, setLegacyDialog] = useState<string | null>(null);
   const [showAvancado, setShowAvancado] = useState(false);
   const { data: canaisData, refetch } = trpc.configuracoes.listarCanais.useQuery();
@@ -1877,6 +1881,31 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                       >
                         Não conectado
                       </Badge>
+                    )}
+                    {/* Número de envio (Cloud API): mostra qual número dispara e
+                        deixa trocar quando há mais de um oficial conectado. */}
+                    {!canal.isAdicionar && canal.conectado && canal.canal?.tipo === "whatsapp_api" && (
+                      canal.canal?.padraoEnvio ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] text-indigo-600 bg-indigo-50 border-indigo-200"
+                        >
+                          <Send className="h-3 w-3 mr-1" />
+                          Número de envio
+                        </Badge>
+                      ) : whatsappCanais.length > 1 && canEdit ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            definirPadraoEnvioMut.mutate({ canalId: canal.canal!.id });
+                          }}
+                          disabled={definirPadraoEnvioMut.isPending}
+                          className="text-[10px] text-indigo-600 hover:underline disabled:opacity-50"
+                        >
+                          Usar p/ envio
+                        </button>
+                      ) : null
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">{canal.descricao}</p>

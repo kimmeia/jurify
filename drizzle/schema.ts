@@ -591,6 +591,9 @@ export const canaisIntegrados = mysqlTable("canais_integrados", {
   // Texto fixo enviado quando uma mensagem chega e o SmartFlow não tem cenário
   // para responder. Se null/vazio, nada é enviado (operador atende manual).
   autoReplyFallback: text("autoReplyFallback"),
+  // Número de envio padrão do escritório entre os canais WhatsApp oficiais
+  // (Cloud API). Com >1 número conectado, define POR QUAL as mensagens saem.
+  padraoEnvio: boolean("padraoEnvio").default(false).notNull(),
   // WhatsApp Cloud API: número fica "Pendente" na Meta até receber
   // POST /{phone-number-id}/register. Sem isso, POST /messages falha.
   registradoCloudApi: boolean("registradoCloudApi").default(false).notNull(),
