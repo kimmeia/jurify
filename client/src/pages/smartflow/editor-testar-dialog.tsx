@@ -301,6 +301,7 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
     pagamento_vencido: {
       pagamentoId: "pay_TESTE_456",
       pagamentoValor: 80000,
+      pagamentoValorFormatado: "R$ 800,00",
       pagamentoDescricao: "Mensalidade abril",
       vencimento: "2026-04-01",
       diasAtraso: 5,
@@ -308,11 +309,13 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
       // Troque por um número real (55 + DDD + número) pra receber o teste.
       telefoneCliente: "5511999990000",
       emailCliente: "joao@example.com",
+      linkPagamento: "https://www.asaas.com/i/teste123",
       contatoId: 42,
     },
     pagamento_proximo_vencimento: {
       pagamentoId: "pay_TESTE_789",
       pagamentoValor: 80000,
+      pagamentoValorFormatado: "R$ 800,00",
       pagamentoDescricao: "Mensalidade maio",
       vencimento: "2026-05-25",
       diasAteVencer: 3,
@@ -320,6 +323,7 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
       // Troque por um número real (55 + DDD + número) pra receber o teste.
       telefoneCliente: "5511999990000",
       emailCliente: "joao@example.com",
+      linkPagamento: "https://www.asaas.com/i/teste123",
       contatoId: 42,
     },
     agendamento_criado: {

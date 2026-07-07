@@ -729,6 +729,7 @@ export async function dispararPagamentoRecebido(
       mensagem: `Pagamento recebido: ${params.descricao}`,
       pagamentoId: params.pagamentoId,
       pagamentoValor: params.valor,
+      pagamentoValorFormatado: fmtCentavosBRL(params.valor),
       pagamentoDescricao: params.descricao,
       pagamentoTipo: params.tipo,
       assinaturaId: params.assinaturaId || "",
@@ -886,6 +887,12 @@ async function diasDistintosDisparados(
  * Asaas sob demanda e cacheia (best-effort). Nunca lança — em qualquer falha
  * devolve o que tiver (campos vazios), pra não derrubar o disparo da mensagem.
  */
+/** Formata centavos (int) como moeda BR — ex.: 80000 → "R$ 800,00". */
+function fmtCentavosBRL(centavos: number): string {
+  const reais = (Number(centavos) || 0) / 100;
+  return "R$ " + reais.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 async function enriquecerLinksCobranca(
   escritorioId: number,
   pagamentoId: string,
@@ -1036,6 +1043,7 @@ export async function dispararPagamentoVencido(
         mensagem: `Cobrança vencida: ${params.descricao}`,
         pagamentoId: params.pagamentoId,
         pagamentoValor: params.valor,
+        pagamentoValorFormatado: fmtCentavosBRL(params.valor),
         pagamentoDescricao: params.descricao,
         vencimento: params.vencimento,
         diasAtraso: diasAtrasoAtual,
@@ -1119,6 +1127,7 @@ export async function dispararProximoVencimento(
         mensagem: `Cobrança vence em ${diasAteVencer} dia(s): ${params.descricao}`,
         pagamentoId: params.pagamentoId,
         pagamentoValor: params.valor,
+        pagamentoValorFormatado: fmtCentavosBRL(params.valor),
         pagamentoDescricao: params.descricao,
         vencimento: params.vencimento,
         diasAteVencer,
