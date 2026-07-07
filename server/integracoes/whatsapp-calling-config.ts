@@ -13,9 +13,11 @@ export type ModoJanela = "overlay" | "discreto";
 export interface ConfigChamada {
   transbordoAtivo: boolean;
   modoJanela: ModoJanela;
+  /** Aviso automático de "chamada perdida" por WhatsApp. Default false. */
+  avisoPerdidaAtivo: boolean;
 }
 
-const PADRAO: ConfigChamada = { transbordoAtivo: false, modoJanela: "overlay" };
+const PADRAO: ConfigChamada = { transbordoAtivo: false, modoJanela: "overlay", avisoPerdidaAtivo: false };
 
 export async function obterConfigChamada(escritorioId: number): Promise<ConfigChamada> {
   const db = await getDb();
@@ -29,6 +31,7 @@ export async function obterConfigChamada(escritorioId: number): Promise<ConfigCh
   return {
     transbordoAtivo: !!row.transbordoAtivo,
     modoJanela: row.modoJanela === "discreto" ? "discreto" : "overlay",
+    avisoPerdidaAtivo: !!row.avisoPerdidaAtivo,
   };
 }
 
@@ -47,12 +50,12 @@ export async function salvarConfigChamada(
   if (existe) {
     await db
       .update(chamadaConfig)
-      .set({ transbordoAtivo: novo.transbordoAtivo, modoJanela: novo.modoJanela })
+      .set({ transbordoAtivo: novo.transbordoAtivo, modoJanela: novo.modoJanela, avisoPerdidaAtivo: novo.avisoPerdidaAtivo })
       .where(eq(chamadaConfig.escritorioId, escritorioId));
   } else {
     await db
       .insert(chamadaConfig)
-      .values({ escritorioId, transbordoAtivo: novo.transbordoAtivo, modoJanela: novo.modoJanela });
+      .values({ escritorioId, transbordoAtivo: novo.transbordoAtivo, modoJanela: novo.modoJanela, avisoPerdidaAtivo: novo.avisoPerdidaAtivo });
   }
   return novo;
 }
