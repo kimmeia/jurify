@@ -110,7 +110,7 @@ export default function AgenteJuridico() {
           <span className="text-[10px] font-bold text-white bg-gradient-to-br from-violet-600 to-purple-700 px-2 py-0.5 rounded-full">IA jurídica</span>
         </h1>
         <div className="flex-1" />
-        <Button variant="outline" size="sm" onClick={() => setFontesOpen(true)}><Library className="h-4 w-4 mr-1.5" /> Fontes</Button>
+        <Button variant="outline" size="sm" onClick={() => setFontesOpen(true)}><Library className="h-4 w-4 mr-1.5" /> Configurar</Button>
         <Button variant="outline" size="sm" onClick={novaConversa}><Plus className="h-4 w-4 mr-1.5" /> Nova conversa</Button>
       </div>
 
@@ -278,13 +278,36 @@ function FontesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
 
+  // Instruções personalizadas do agente (edita o "prompt"/comportamento).
+  const instrQ = (trpc as any).juridico.obterInstrucoesAgente.useQuery(undefined, { retry: false, enabled: open });
+  const [instr, setInstr] = useState("");
+  useEffect(() => { if (instrQ.data) setInstr(instrQ.data.instrucoes || ""); }, [instrQ.data]);
+  const salvarInstrMut = (trpc as any).juridico.salvarInstrucoesAgente.useMutation({
+    onSuccess: () => toast.success("Instruções do agente salvas"),
+    onError: (e: any) => toast.error("Erro", { description: e.message }),
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Library className="h-5 w-5 text-violet-600" /> Fontes do escritório</DialogTitle>
-          <DialogDescription>Além da base global, cadastre súmulas, jurisprudências ou modelos próprios — o agente usa nas respostas e peças.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2"><Library className="h-5 w-5 text-violet-600" /> Configurar o Agente Jurídico</DialogTitle>
+          <DialogDescription>Ajuste como o agente se comporta e cadastre fontes próprias — ele usa tudo nas respostas e peças.</DialogDescription>
         </DialogHeader>
+
+        {/* Instruções do agente (edita o comportamento/prompt) */}
+        <div className="space-y-2 rounded-lg border p-3">
+          <Label className="text-xs font-semibold">Instruções do agente <span className="text-muted-foreground font-normal">(tom, cláusulas padrão, preferências de redação)</span></Label>
+          <Textarea
+            className="min-h-[90px] text-sm"
+            placeholder="Ex.: Sempre pedir tutela de urgência quando cabível. Usar linguagem sóbria. Incluir o número da OAB no rodapé. Priorizar teses do TJCE."
+            value={instr}
+            onChange={(e) => setInstr(e.target.value)}
+          />
+          <Button size="sm" disabled={salvarInstrMut.isPending} onClick={() => salvarInstrMut.mutate({ instrucoes: instr })}>
+            {salvarInstrMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : null} Salvar instruções
+          </Button>
+        </div>
         <div className="space-y-2 rounded-lg border p-3">
           <div className="grid grid-cols-2 gap-2">
             <div>

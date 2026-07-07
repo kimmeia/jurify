@@ -10,7 +10,7 @@ import { TRPCError } from "@trpc/server";
 import { and, eq, isNull, or, sql, desc, like } from "drizzle-orm";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { fontesJuridicas } from "../../drizzle/schema";
+import { fontesJuridicas, escritorios } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { resolverAPIKey } from "../integracoes/router-agentes-ia";
 import { gerarEmbedding, gerarEmbeddingSeguro } from "./embeddings";
@@ -260,6 +260,35 @@ export const juridicoRouter = router({
       return { ...dossie, movimentacao };
     }),
 
+  /** Lê as instruções personalizadas do Agente Jurídico (comportamento). */
+  obterInstrucoesAgente: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return { instrucoes: "" };
+    const db = await getDb();
+    if (!db) return { instrucoes: "" };
+    const [row] = await db
+      .select({ instrucoes: escritorios.instrucoesAgenteJuridico })
+      .from(escritorios)
+      .where(eq(escritorios.id, esc.escritorio.id))
+      .limit(1);
+    return { instrucoes: row?.instrucoes ?? "" };
+  }),
+
+  /** Salva as instruções personalizadas do agente (dono/gestor). */
+  salvarInstrucoesAgente: protectedProcedure
+    .input(z.object({ instrucoes: z.string().max(4000) }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "processos", "editar");
+      if (!perm.editar) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão pra editar o agente." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db
+        .update(escritorios)
+        .set({ instrucoesAgenteJuridico: input.instrucoes.trim() || null })
+        .where(eq(escritorios.id, perm.escritorioId));
+      return { success: true };
+    }),
+
   /**
    * Conversa do Agente Jurídico: analisa o caso (dossiê + MOVIMENTAÇÃO
    * processual), pesquisa jurisprudência na base (RAG na última fala) e
@@ -307,9 +336,8 @@ export const juridicoRouter = router({
       }
 
       // 3. Timbre do escritório + advogado (assinatura).
-      const { escritorios } = await import("../../drizzle/schema");
       const [escRow] = await db
-        .select({ nome: escritorios.nome, endereco: escritorios.endereco, cnpj: escritorios.cnpj, oab: escritorios.oab, telefone: escritorios.telefone, email: escritorios.email })
+        .select({ nome: escritorios.nome, endereco: escritorios.endereco, cnpj: escritorios.cnpj, oab: escritorios.oab, telefone: escritorios.telefone, email: escritorios.email, instrucoes: escritorios.instrucoesAgenteJuridico })
         .from(escritorios)
         .where(eq(escritorios.id, esc.escritorio.id))
         .limit(1);
@@ -318,6 +346,7 @@ export const juridicoRouter = router({
         escritorio: escRow ?? { nome: esc.escritorio.nome },
         advogado: (ctx.user as any)?.name ?? null,
         oab: escRow?.oab ?? null,
+        instrucoes: escRow?.instrucoes ?? null,
         dossie: dossie ?? undefined,
         movimentacao,
         documentos: docsCtx.texto || undefined,

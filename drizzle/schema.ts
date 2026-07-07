@@ -247,6 +247,8 @@ export const escritorios = mysqlTable("escritorios", {
   cnpj: varchar("cnpj", { length: 18 }),
   // OAB do advogado responsável — bloco de assinatura das peças do Agente Jurídico.
   oab: varchar("oab", { length: 32 }),
+  // Instruções personalizadas do escritório pro Agente Jurídico (comportamento).
+  instrucoesAgenteJuridico: text("instrucoesAgenteJuridico"),
   telefone: varchar("telefone", { length: 20 }),
   email: varchar("email", { length: 320 }),
   endereco: text("endereco"),

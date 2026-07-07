@@ -19,6 +19,8 @@ export interface ContextoAgente {
   escritorio?: { nome?: string | null; endereco?: string | null; cnpj?: string | null; telefone?: string | null; email?: string | null };
   advogado?: string | null;
   oab?: string | null;
+  /** Instruções personalizadas do escritório (editáveis) — comportamento do agente. */
+  instrucoes?: string | null;
   dossie?: { qualificacao?: string; processo?: string; fatosContexto?: string };
   /** Movimentação processual já formatada (mais recente primeiro). */
   movimentacao?: string;
@@ -50,6 +52,10 @@ export function montarSystemPromptAgente(ctx: ContextoAgente): string {
       formatarCatalogoParaPrompt() +
       "\n(Não listado? redija mesmo assim, no padrão forense e citando a base legal cabível.)",
   );
+
+  if (ctx.instrucoes && ctx.instrucoes.trim()) {
+    p.push(`INSTRUÇÕES DO ESCRITÓRIO (o advogado configurou — siga, além das regras acima):\n${ctx.instrucoes.trim()}`);
+  }
 
   const e = ctx.escritorio;
   if (e?.nome) {
