@@ -7,6 +7,8 @@
  * procedure `conversar` do router.
  */
 
+import { formatarCatalogoParaPrompt } from "./catalogo-pecas";
+
 export interface FonteAgente {
   identificador: string;
   titulo?: string | null;
@@ -39,6 +41,12 @@ export function montarSystemPromptAgente(ctx: ContextoAgente): string {
       "- Ao redigir uma peça, use o PADRÃO FORENSE: endereçamento, nome da ação e títulos de seção em CAIXA ALTA; transcrição de jurisprudência entre « e »; TIMBRE do escritório no topo; e assinatura do advogado ao final.\n" +
       "- Toda peça é MINUTA — lembre que exige revisão e assinatura do advogado antes de protocolar. Não prometa resultado.\n" +
       "- Seja objetivo e técnico. Se faltar um dado essencial, PERGUNTE antes de redigir.",
+  );
+
+  p.push(
+    "CATÁLOGO DE PEÇAS (ao redigir, use a ESTRUTURA e o FUNDAMENTO do tipo pedido; se faltar um requisito, PERGUNTE antes de redigir; observe o prazo):\n" +
+      formatarCatalogoParaPrompt() +
+      "\n(Não listado? redija mesmo assim, no padrão forense e citando a base legal cabível.)",
   );
 
   const e = ctx.escritorio;
