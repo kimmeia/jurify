@@ -143,6 +143,47 @@ export async function lerConteudoBuffer(
   return { nome, texto: null, via: "erro", nota: `tipo não suportado (${mime})` };
 }
 
+/**
+ * Garante o conteúdo (texto/Vision) dos documentos do cliente pro contexto do
+ * agente, com CACHE: docs com `conteudo` já preenchido reusam; os sem cache são
+ * lidos (extração/Vision) e persistidos. Devolve o texto orçado + notas. Assim a
+ * conversa não reprocessa os documentos a cada mensagem.
+ */
+export async function garantirConteudoDocs(
+  db: any,
+  escritorioId: number,
+  contatoId: number,
+  modelo: string,
+  maxDocs = 8,
+): Promise<{ texto: string; lidos: number; notas: string[] }> {
+  const arquivos = await db
+    .select({ id: clienteArquivos.id, nome: clienteArquivos.nome, url: clienteArquivos.url, conteudo: clienteArquivos.conteudo })
+    .from(clienteArquivos)
+    .where(and(eq(clienteArquivos.escritorioId, escritorioId), eq(clienteArquivos.contatoId, contatoId)))
+    .limit(maxDocs);
+
+  const comTexto: Array<{ nome: string; conteudo: string }> = [];
+  const notas: string[] = [];
+  for (const a of arquivos) {
+    if (a.conteudo && String(a.conteudo).trim()) {
+      comTexto.push({ nome: a.nome, conteudo: a.conteudo });
+      continue;
+    }
+    const r = await lerConteudoDocumento(escritorioId, { nome: a.nome, url: a.url }, modelo);
+    if (r.texto) {
+      comTexto.push({ nome: a.nome, conteudo: r.texto });
+      await db
+        .update(clienteArquivos)
+        .set({ conteudo: r.texto.slice(0, 60000), conteudoEm: new Date() })
+        .where(eq(clienteArquivos.id, a.id))
+        .catch(() => {});
+    } else {
+      notas.push(`${a.nome}: ${r.nota || "não lido"}`);
+    }
+  }
+  return { texto: particionarContexto(comTexto, 12000, 4000), lidos: comTexto.length, notas };
+}
+
 /** Lê o conteúdo de UM documento (por url): extração ou Vision. */
 export async function lerConteudoDocumento(
   escritorioId: number,

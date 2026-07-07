@@ -1071,6 +1071,9 @@ export const clienteArquivos = mysqlTable("cliente_arquivos", {
   tamanho: int("tamanho"),
   url: text("url").notNull(),
   uploadPor: int("uploadPor"),
+  // Cache do texto extraído/transcrito (Agente Jurídico) — NULL = ainda não lido.
+  conteudo: text("conteudo"),
+  conteudoEm: timestamp("conteudoEm"),
   createdAt: timestamp("createdAtArquivo").defaultNow().notNull(),
 });
 

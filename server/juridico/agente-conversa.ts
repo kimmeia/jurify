@@ -22,6 +22,8 @@ export interface ContextoAgente {
   dossie?: { qualificacao?: string; processo?: string; fatosContexto?: string };
   /** Movimentação processual já formatada (mais recente primeiro). */
   movimentacao?: string;
+  /** Conteúdo (texto/Vision) dos documentos do cliente, já orçado. */
+  documentos?: string;
   jurisprudencia?: FonteAgente[];
 }
 
@@ -64,6 +66,7 @@ export function montarSystemPromptAgente(ctx: ContextoAgente): string {
   if (ctx.dossie?.processo) p.push(`PROCESSO:\n${ctx.dossie.processo}`);
   if (ctx.dossie?.fatosContexto) p.push(ctx.dossie.fatosContexto);
   if (ctx.movimentacao) p.push(`MOVIMENTAÇÃO PROCESSUAL (mais recente primeiro):\n${ctx.movimentacao}`);
+  if (ctx.documentos) p.push(`CONTEÚDO DOS DOCUMENTOS DO CLIENTE (use como fatos; não invente além disto):\n${ctx.documentos}`);
 
   if (ctx.jurisprudencia?.length) {
     p.push(

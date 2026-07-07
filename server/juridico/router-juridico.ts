@@ -22,7 +22,7 @@ import { avaliarViabilidade, type FonteContexto } from "./avaliacao";
 import { gerarPeca, TIPOS_PECA } from "./peca";
 import { montarPecaDocx } from "./docx";
 import { montarDossie, montarMovimentacao } from "./dossie";
-import { montarConteudoDocumentos, lerConteudoBuffer, chunkTexto } from "./leitura-documento";
+import { montarConteudoDocumentos, garantirConteudoDocs, lerConteudoBuffer, chunkTexto } from "./leitura-documento";
 import { montarSystemPromptAgente } from "./agente-conversa";
 
 /** Resolve a chave OpenAI (embeddings sempre via OpenAI). null se não houver. */
@@ -288,6 +288,12 @@ export const juridicoRouter = router({
         : null;
       const movimentacao = dossie?.cnj ? await montarMovimentacao(db, esc.escritorio.id, dossie.cnj) : "";
 
+      // 1b. Conteúdo dos documentos do cliente (texto/Vision, com cache) — pra o
+      // agente LER os documentos na conversa, não só saber que existem.
+      const docsCtx = input.contatoId
+        ? await garantirConteudoDocs(db, esc.escritorio.id, input.contatoId, modelo)
+        : { texto: "" };
+
       // 2. Jurisprudência: RAG na última fala do usuário (+ resumo do processo).
       const ultimaUser = [...input.mensagens].reverse().find((m) => m.role === "user")?.content || "";
       let jurisprudencia: Array<{ identificador: string; titulo: string | null; texto: string }> = [];
@@ -314,6 +320,7 @@ export const juridicoRouter = router({
         oab: escRow?.oab ?? null,
         dossie: dossie ?? undefined,
         movimentacao,
+        documentos: docsCtx.texto || undefined,
         jurisprudencia,
       });
 
@@ -324,6 +331,7 @@ export const juridicoRouter = router({
         contexto: {
           andamentos: movimentacao ? movimentacao.split("\n").filter(Boolean).length : 0,
           precedentes: jurisprudencia.length,
+          documentos: (docsCtx as { lidos?: number }).lidos ?? 0,
           temDossie: !!dossie?.qualificacao,
           temProcesso: !!dossie?.processo,
         },

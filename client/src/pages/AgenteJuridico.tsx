@@ -24,7 +24,7 @@ const MODELOS = [
   { v: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (Anthropic)" },
 ];
 
-type Msg = { role: "user" | "assistant"; content: string; contexto?: { andamentos: number; precedentes: number } };
+type Msg = { role: "user" | "assistant"; content: string; contexto?: { andamentos: number; precedentes: number; documentos?: number } };
 
 const SUGESTOES = [
   "Analise a estratégia deste caso.",
@@ -209,9 +209,10 @@ export default function AgenteJuridico() {
                   {m.role === "user" ? "🧑" : "⚖️"}
                 </div>
                 <div className="min-w-0">
-                  {m.role === "assistant" && m.contexto && (m.contexto.andamentos > 0 || m.contexto.precedentes > 0) && (
+                  {m.role === "assistant" && m.contexto && (m.contexto.andamentos > 0 || m.contexto.precedentes > 0 || (m.contexto.documentos ?? 0) > 0) && (
                     <div className="flex flex-wrap gap-1.5 mb-1.5">
                       {m.contexto.andamentos > 0 && <span className="text-[10.5px] bg-muted border rounded-full px-2 py-0.5">🔎 {m.contexto.andamentos} andamentos</span>}
+                      {(m.contexto.documentos ?? 0) > 0 && <span className="text-[10.5px] bg-muted border rounded-full px-2 py-0.5">📄 {m.contexto.documentos} documentos</span>}
                       {m.contexto.precedentes > 0 && <span className="text-[10.5px] bg-muted border rounded-full px-2 py-0.5">⚖️ {m.contexto.precedentes} precedentes</span>}
                     </div>
                   )}
