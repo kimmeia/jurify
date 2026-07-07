@@ -19,9 +19,13 @@ export interface ContextoAgente {
   escritorio?: { nome?: string | null; endereco?: string | null; cnpj?: string | null; telefone?: string | null; email?: string | null };
   advogado?: string | null;
   oab?: string | null;
+  /** Instruções personalizadas do escritório (editáveis) — comportamento do agente. */
+  instrucoes?: string | null;
   dossie?: { qualificacao?: string; processo?: string; fatosContexto?: string };
   /** Movimentação processual já formatada (mais recente primeiro). */
   movimentacao?: string;
+  /** Conteúdo (texto/Vision) dos documentos do cliente, já orçado. */
+  documentos?: string;
   jurisprudencia?: FonteAgente[];
 }
 
@@ -49,6 +53,10 @@ export function montarSystemPromptAgente(ctx: ContextoAgente): string {
       "\n(Não listado? redija mesmo assim, no padrão forense e citando a base legal cabível.)",
   );
 
+  if (ctx.instrucoes && ctx.instrucoes.trim()) {
+    p.push(`INSTRUÇÕES DO ESCRITÓRIO (o advogado configurou — siga, além das regras acima):\n${ctx.instrucoes.trim()}`);
+  }
+
   const e = ctx.escritorio;
   if (e?.nome) {
     const linha = [e.nome, e.endereco, e.telefone, e.email, e.cnpj ? `CNPJ ${e.cnpj}` : null]
@@ -64,6 +72,7 @@ export function montarSystemPromptAgente(ctx: ContextoAgente): string {
   if (ctx.dossie?.processo) p.push(`PROCESSO:\n${ctx.dossie.processo}`);
   if (ctx.dossie?.fatosContexto) p.push(ctx.dossie.fatosContexto);
   if (ctx.movimentacao) p.push(`MOVIMENTAÇÃO PROCESSUAL (mais recente primeiro):\n${ctx.movimentacao}`);
+  if (ctx.documentos) p.push(`CONTEÚDO DOS DOCUMENTOS DO CLIENTE (use como fatos; não invente além disto):\n${ctx.documentos}`);
 
   if (ctx.jurisprudencia?.length) {
     p.push(

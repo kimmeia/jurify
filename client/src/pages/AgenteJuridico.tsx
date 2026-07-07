@@ -24,7 +24,7 @@ const MODELOS = [
   { v: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (Anthropic)" },
 ];
 
-type Msg = { role: "user" | "assistant"; content: string; contexto?: { andamentos: number; precedentes: number } };
+type Msg = { role: "user" | "assistant"; content: string; contexto?: { andamentos: number; precedentes: number; documentos?: number } };
 
 const SUGESTOES = [
   "Analise a estratégia deste caso.",
@@ -110,7 +110,7 @@ export default function AgenteJuridico() {
           <span className="text-[10px] font-bold text-white bg-gradient-to-br from-violet-600 to-purple-700 px-2 py-0.5 rounded-full">IA jurídica</span>
         </h1>
         <div className="flex-1" />
-        <Button variant="outline" size="sm" onClick={() => setFontesOpen(true)}><Library className="h-4 w-4 mr-1.5" /> Fontes</Button>
+        <Button variant="outline" size="sm" onClick={() => setFontesOpen(true)}><Library className="h-4 w-4 mr-1.5" /> Configurar</Button>
         <Button variant="outline" size="sm" onClick={novaConversa}><Plus className="h-4 w-4 mr-1.5" /> Nova conversa</Button>
       </div>
 
@@ -209,9 +209,10 @@ export default function AgenteJuridico() {
                   {m.role === "user" ? "🧑" : "⚖️"}
                 </div>
                 <div className="min-w-0">
-                  {m.role === "assistant" && m.contexto && (m.contexto.andamentos > 0 || m.contexto.precedentes > 0) && (
+                  {m.role === "assistant" && m.contexto && (m.contexto.andamentos > 0 || m.contexto.precedentes > 0 || (m.contexto.documentos ?? 0) > 0) && (
                     <div className="flex flex-wrap gap-1.5 mb-1.5">
                       {m.contexto.andamentos > 0 && <span className="text-[10.5px] bg-muted border rounded-full px-2 py-0.5">🔎 {m.contexto.andamentos} andamentos</span>}
+                      {(m.contexto.documentos ?? 0) > 0 && <span className="text-[10.5px] bg-muted border rounded-full px-2 py-0.5">📄 {m.contexto.documentos} documentos</span>}
                       {m.contexto.precedentes > 0 && <span className="text-[10.5px] bg-muted border rounded-full px-2 py-0.5">⚖️ {m.contexto.precedentes} precedentes</span>}
                     </div>
                   )}
@@ -265,8 +266,9 @@ export default function AgenteJuridico() {
 
 /** Diálogo de fontes próprias do escritório (base RAG do escritório). */
 function FontesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const NF_VAZIO = { tipo: "sumula", identificador: "", titulo: "", texto: "", tags: "" };
+  const NF_VAZIO = { tipo: "sumula", identificador: "", titulo: "", texto: "", link: "", tags: "" };
   const [nf, setNf] = useState(NF_VAZIO);
+  const [arquivo, setArquivo] = useState<File | null>(null);
   const minhasFontesQ = (trpc as any).juridico.listarFontes.useQuery({ origem: "minhas" }, { retry: false, enabled: open });
   const addFonteMut = (trpc as any).juridico.adicionarFonte.useMutation({
     onSuccess: (r: any) => { toast.success(r.indexada ? "Fonte adicionada e indexada" : "Fonte adicionada (configure a chave OpenAI pra indexar)"); setNf(NF_VAZIO); minhasFontesQ.refetch(); },
@@ -277,13 +279,36 @@ function FontesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
 
+  // Instruções personalizadas do agente (edita o "prompt"/comportamento).
+  const instrQ = (trpc as any).juridico.obterInstrucoesAgente.useQuery(undefined, { retry: false, enabled: open });
+  const [instr, setInstr] = useState("");
+  useEffect(() => { if (instrQ.data) setInstr(instrQ.data.instrucoes || ""); }, [instrQ.data]);
+  const salvarInstrMut = (trpc as any).juridico.salvarInstrucoesAgente.useMutation({
+    onSuccess: () => toast.success("Instruções do agente salvas"),
+    onError: (e: any) => toast.error("Erro", { description: e.message }),
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Library className="h-5 w-5 text-violet-600" /> Fontes do escritório</DialogTitle>
-          <DialogDescription>Além da base global, cadastre súmulas, jurisprudências ou modelos próprios — o agente usa nas respostas e peças.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2"><Library className="h-5 w-5 text-violet-600" /> Configurar o Agente Jurídico</DialogTitle>
+          <DialogDescription>Ajuste como o agente se comporta e cadastre fontes próprias — ele usa tudo nas respostas e peças.</DialogDescription>
         </DialogHeader>
+
+        {/* Instruções do agente (edita o comportamento/prompt) */}
+        <div className="space-y-2 rounded-lg border p-3">
+          <Label className="text-xs font-semibold">Instruções do agente <span className="text-muted-foreground font-normal">(tom, cláusulas padrão, preferências de redação)</span></Label>
+          <Textarea
+            className="min-h-[90px] text-sm"
+            placeholder="Ex.: Sempre pedir tutela de urgência quando cabível. Usar linguagem sóbria. Incluir o número da OAB no rodapé. Priorizar teses do TJCE."
+            value={instr}
+            onChange={(e) => setInstr(e.target.value)}
+          />
+          <Button size="sm" disabled={salvarInstrMut.isPending} onClick={() => salvarInstrMut.mutate({ instrucoes: instr })}>
+            {salvarInstrMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : null} Salvar instruções
+          </Button>
+        </div>
         <div className="space-y-2 rounded-lg border p-3">
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -301,9 +326,24 @@ function FontesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
             <div><Label className="text-xs">Identificador</Label><Input className="mt-1" value={nf.identificador} onChange={(e) => setNf({ ...nf, identificador: e.target.value })} placeholder="Ex.: Súmula 297/STJ" /></div>
           </div>
           <div><Label className="text-xs">Título (opcional)</Label><Input className="mt-1" value={nf.titulo} onChange={(e) => setNf({ ...nf, titulo: e.target.value })} placeholder="Resumo curto" /></div>
-          <div><Label className="text-xs">Texto</Label><Textarea className="mt-1 min-h-[70px]" value={nf.texto} onChange={(e) => setNf({ ...nf, texto: e.target.value })} placeholder="Enunciado / conteúdo que o agente pode citar" /></div>
-          <Button size="sm" disabled={addFonteMut.isPending || nf.identificador.trim().length < 2 || nf.texto.trim().length < 5}
-            onClick={() => addFonteMut.mutate({ tipo: nf.tipo, identificador: nf.identificador.trim(), titulo: nf.titulo.trim() || undefined, texto: nf.texto.trim(), tags: nf.tags.trim() || undefined })}>
+          <p className="text-[10.5px] text-muted-foreground">Preencha <b>um</b>: cole o texto, informe o link (ex.: súmula) ou anexe o arquivo (PDF/DOCX/imagem) — a IA lê o conteúdo.</p>
+          <div><Label className="text-xs">Texto</Label><Textarea className="mt-1 min-h-[60px]" value={nf.texto} onChange={(e) => setNf({ ...nf, texto: e.target.value })} placeholder="Enunciado / conteúdo…" /></div>
+          <div><Label className="text-xs">Link</Label><Input className="mt-1" value={nf.link} onChange={(e) => setNf({ ...nf, link: e.target.value })} placeholder="https://... (súmula, acórdão)" /></div>
+          <div><Label className="text-xs">Arquivo</Label><input type="file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg" className="mt-1 text-xs block" onChange={(e) => setArquivo(e.target.files?.[0] ?? null)} /></div>
+          <Button size="sm" disabled={addFonteMut.isPending || nf.identificador.trim().length < 2 || (!nf.texto.trim() && !nf.link.trim() && !arquivo)}
+            onClick={async () => {
+              let arquivoBase64: string | undefined; let nomeArquivo: string | undefined;
+              if (arquivo) {
+                nomeArquivo = arquivo.name;
+                arquivoBase64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] || ""); r.onerror = rej; r.readAsDataURL(arquivo); });
+              }
+              addFonteMut.mutate({
+                tipo: nf.tipo, identificador: nf.identificador.trim(), titulo: nf.titulo.trim() || undefined,
+                texto: nf.texto.trim() || undefined, link: nf.link.trim() || undefined,
+                arquivoBase64, nomeArquivo, tags: nf.tags.trim() || undefined,
+              });
+              setArquivo(null);
+            }}>
             {addFonteMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Plus className="h-4 w-4 mr-1.5" />} Adicionar fonte
           </Button>
         </div>

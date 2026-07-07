@@ -44,4 +44,10 @@ describe("montarSystemPromptAgente", () => {
     expect(s).toContain("Dra. Ana");
     expect(s).toMatch(/OAB _____/);
   });
+
+  it("injeta instruções personalizadas do escritório quando há", () => {
+    const s = montarSystemPromptAgente({ instrucoes: "Sempre pedir tutela de urgência." });
+    expect(s).toContain("INSTRUÇÕES DO ESCRITÓRIO");
+    expect(s).toContain("tutela de urgência");
+  });
 });

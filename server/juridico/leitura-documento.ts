@@ -101,6 +101,86 @@ export interface ArquivoRef {
   url: string;
 }
 
+/** Extrai texto legível de HTML (súmula/jurisprudência) — strip simples. */
+export function stripHtml(html: string): string {
+  return String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<\/(p|div|br|li|h[1-6]|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Bloqueia link não-http(s) ou pra host interno/privado (anti-SSRF). */
+export function linkPermitido(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    const h = u.hostname.toLowerCase();
+    if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal")) return false;
+    if (/^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(h)) return false;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Lê o conteúdo de um LINK: PDF (extrai/Vision), imagem (Vision) ou HTML (texto). */
+export async function lerConteudoLink(
+  escritorioId: number,
+  url: string,
+  modelo: string,
+): Promise<LeituraDocumento> {
+  if (!linkPermitido(url)) return { nome: url, texto: null, via: "erro", nota: "link inválido ou não permitido" };
+  const nome = url.split("/").pop()?.split("?")[0] || "link";
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(20000),
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; JuridFlow/1.0)" },
+    });
+    if (!res.ok) return { nome: url, texto: null, via: "erro", nota: `HTTP ${res.status}` };
+    const ct = (res.headers.get("content-type") || "").toLowerCase();
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > MAX_BYTES) return { nome: url, texto: null, via: "erro", nota: "conteúdo grande demais" };
+
+    if (ct.includes("application/pdf")) {
+      const r = await extrairTextoDocumento(buf, "application/pdf");
+      if (r.texto) return { nome, texto: r.texto, via: "extracao" };
+      const v = await transcreverDocumentoVision(escritorioId, { modelo, base64: buf.toString("base64"), mime: "application/pdf", ehPdf: true });
+      return v.texto ? { nome, texto: v.texto, via: "vision" } : { nome, texto: null, via: "erro", nota: v.erro || "PDF sem leitura" };
+    }
+    if (ct.startsWith("image/")) {
+      const v = await transcreverDocumentoVision(escritorioId, { modelo, base64: buf.toString("base64"), mime: ct.split(";")[0], ehPdf: false });
+      return v.texto ? { nome, texto: v.texto, via: "vision" } : { nome, texto: null, via: "erro", nota: v.erro || "imagem sem leitura" };
+    }
+    const texto = stripHtml(buf.toString("utf-8"));
+    return texto.length > 20 ? { nome, texto, via: "extracao" } : { nome, texto: null, via: "erro", nota: "página sem texto aproveitável" };
+  } catch (e: any) {
+    return { nome: url, texto: null, via: "erro", nota: e?.message || "falha ao acessar o link" };
+  }
+}
+
+/** Resolve o conteúdo de uma fonte a partir de texto, link OU arquivo (base64). */
+export async function resolverConteudoFonte(
+  escritorioId: number,
+  opts: { texto?: string; link?: string; arquivoBase64?: string; nomeArquivo?: string; modelo: string },
+): Promise<LeituraDocumento> {
+  if (opts.texto && opts.texto.trim()) return { nome: "texto", texto: opts.texto.trim(), via: "extracao" };
+  if (opts.link) return lerConteudoLink(escritorioId, opts.link, opts.modelo);
+  if (opts.arquivoBase64 && opts.nomeArquivo) {
+    const b64 = opts.arquivoBase64.includes(",") ? opts.arquivoBase64.split(",")[1] : opts.arquivoBase64;
+    return lerConteudoBuffer(escritorioId, Buffer.from(b64, "base64"), opts.nomeArquivo, opts.modelo);
+  }
+  return { nome: "?", texto: null, via: "erro", nota: "informe texto, link ou arquivo" };
+}
+
 export interface LeituraDocumento {
   nome: string;
   texto: string | null;
@@ -141,6 +221,47 @@ export async function lerConteudoBuffer(
   }
 
   return { nome, texto: null, via: "erro", nota: `tipo não suportado (${mime})` };
+}
+
+/**
+ * Garante o conteúdo (texto/Vision) dos documentos do cliente pro contexto do
+ * agente, com CACHE: docs com `conteudo` já preenchido reusam; os sem cache são
+ * lidos (extração/Vision) e persistidos. Devolve o texto orçado + notas. Assim a
+ * conversa não reprocessa os documentos a cada mensagem.
+ */
+export async function garantirConteudoDocs(
+  db: any,
+  escritorioId: number,
+  contatoId: number,
+  modelo: string,
+  maxDocs = 8,
+): Promise<{ texto: string; lidos: number; notas: string[] }> {
+  const arquivos = await db
+    .select({ id: clienteArquivos.id, nome: clienteArquivos.nome, url: clienteArquivos.url, conteudo: clienteArquivos.conteudo })
+    .from(clienteArquivos)
+    .where(and(eq(clienteArquivos.escritorioId, escritorioId), eq(clienteArquivos.contatoId, contatoId)))
+    .limit(maxDocs);
+
+  const comTexto: Array<{ nome: string; conteudo: string }> = [];
+  const notas: string[] = [];
+  for (const a of arquivos) {
+    if (a.conteudo && String(a.conteudo).trim()) {
+      comTexto.push({ nome: a.nome, conteudo: a.conteudo });
+      continue;
+    }
+    const r = await lerConteudoDocumento(escritorioId, { nome: a.nome, url: a.url }, modelo);
+    if (r.texto) {
+      comTexto.push({ nome: a.nome, conteudo: r.texto });
+      await db
+        .update(clienteArquivos)
+        .set({ conteudo: r.texto.slice(0, 60000), conteudoEm: new Date() })
+        .where(eq(clienteArquivos.id, a.id))
+        .catch(() => {});
+    } else {
+      notas.push(`${a.nome}: ${r.nota || "não lido"}`);
+    }
+  }
+  return { texto: particionarContexto(comTexto, 12000, 4000), lidos: comTexto.length, notas };
 }
 
 /** Lê o conteúdo de UM documento (por url): extração ou Vision. */
