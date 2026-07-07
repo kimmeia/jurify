@@ -255,7 +255,9 @@ export const juridicoRouter = router({
       if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão pra ver clientes." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return montarDossie(db, perm.escritorioId, input.contatoId, input.processoId);
+      const dossie = await montarDossie(db, perm.escritorioId, input.contatoId, input.processoId);
+      const movimentacao = dossie.cnj ? await montarMovimentacao(db, perm.escritorioId, dossie.cnj) : "";
+      return { ...dossie, movimentacao };
     }),
 
   /**
