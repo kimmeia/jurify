@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mimeDoNome, chunkTexto } from "../juridico/leitura-documento";
+import { mimeDoNome, chunkTexto, stripHtml, linkPermitido } from "../juridico/leitura-documento";
 
 describe("mimeDoNome", () => {
   it("detecta tipos por extensão", () => {
@@ -37,5 +37,31 @@ describe("chunkTexto", () => {
     const semPontos = "a".repeat(5000);
     const chunks = chunkTexto(semPontos, 1000, 100);
     expect(chunks.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe("stripHtml", () => {
+  it("extrai o texto e remove tags/scripts/styles", () => {
+    const html = "<html><head><style>x{}</style><script>alert(1)</script></head><body><h1>Súmula 297</h1><p>O CDC &eacute; aplic&aacute;vel aos bancos.</p></body></html>";
+    const t = stripHtml(html);
+    expect(t).toContain("Súmula 297");
+    expect(t).toContain("bancos");
+    expect(t).not.toContain("<");
+    expect(t).not.toContain("alert(1)");
+  });
+});
+
+describe("linkPermitido (anti-SSRF)", () => {
+  it("aceita http(s) público", () => {
+    expect(linkPermitido("https://www.stj.jus.br/sumula/297")).toBe(true);
+    expect(linkPermitido("http://exemplo.com/doc.pdf")).toBe(true);
+  });
+  it("bloqueia interno / não-http", () => {
+    expect(linkPermitido("http://localhost:8080")).toBe(false);
+    expect(linkPermitido("http://127.0.0.1/x")).toBe(false);
+    expect(linkPermitido("http://192.168.0.1/x")).toBe(false);
+    expect(linkPermitido("http://10.0.0.5/x")).toBe(false);
+    expect(linkPermitido("file:///etc/passwd")).toBe(false);
+    expect(linkPermitido("nao-e-url")).toBe(false);
   });
 });

@@ -744,25 +744,30 @@ export default function AdminAgentesIA() {
 
   // Subir decisão/jurisprudência pra base GLOBAL (RAG) — amplia o conhecimento.
   const [decisaoFile, setDecisaoFile] = useState<File | null>(null);
+  const [decisaoLink, setDecisaoLink] = useState("");
   const [decisaoId, setDecisaoId] = useState("");
   const [decisaoTitulo, setDecisaoTitulo] = useState("");
   const subirDecisaoMut = (trpc as any).juridico.subirDecisao.useMutation({
     onSuccess: (r: any) => {
       toast.success("Decisão adicionada à base", { description: `${r.trechos} trecho(s), ${r.indexadas} indexado(s) (via ${r.via}).` });
-      setDecisaoFile(null); setDecisaoId(""); setDecisaoTitulo("");
+      setDecisaoFile(null); setDecisaoLink(""); setDecisaoId(""); setDecisaoTitulo("");
       refetchBase();
     },
     onError: (err: any) => toast.error("Erro ao subir decisão", { description: err.message }),
   });
   async function enviarDecisao() {
-    if (!decisaoFile || decisaoId.trim().length < 2) return;
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
-      reader.onerror = reject;
-      reader.readAsDataURL(decisaoFile);
-    });
-    subirDecisaoMut.mutate({ nomeArquivo: decisaoFile.name, base64, identificador: decisaoId.trim(), titulo: decisaoTitulo.trim() || undefined });
+    if (decisaoId.trim().length < 2 || (!decisaoFile && !decisaoLink.trim())) return;
+    let base64: string | undefined; let nomeArquivo: string | undefined;
+    if (decisaoFile) {
+      nomeArquivo = decisaoFile.name;
+      base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+        reader.onerror = reject;
+        reader.readAsDataURL(decisaoFile);
+      });
+    }
+    subirDecisaoMut.mutate({ identificador: decisaoId.trim(), titulo: decisaoTitulo.trim() || undefined, base64, nomeArquivo, link: decisaoLink.trim() || undefined });
   }
 
   return (
@@ -860,17 +865,22 @@ export default function AdminAgentesIA() {
                 <Label className="text-xs">Título (opcional)</Label>
                 <Input className="mt-1 h-9" placeholder="Resumo curto" value={decisaoTitulo} onChange={(e) => setDecisaoTitulo(e.target.value)} />
               </div>
+              <div className="flex-1 min-w-[180px]">
+                <Label className="text-xs">Link (opcional)</Label>
+                <Input className="mt-1 h-9" placeholder="https://... (súmula/acórdão)" value={decisaoLink} onChange={(e) => setDecisaoLink(e.target.value)} />
+              </div>
               <input
                 type="file"
                 accept=".pdf,.docx,.txt,.png,.jpg,.jpeg"
                 onChange={(e) => setDecisaoFile(e.target.files?.[0] ?? null)}
                 className="text-xs max-w-[220px]"
               />
-              <Button size="sm" disabled={!decisaoFile || decisaoId.trim().length < 2 || subirDecisaoMut.isPending} onClick={enviarDecisao}>
+              <Button size="sm" disabled={(!decisaoFile && !decisaoLink.trim()) || decisaoId.trim().length < 2 || subirDecisaoMut.isPending} onClick={enviarDecisao}>
                 {subirDecisaoMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Plus className="h-4 w-4 mr-1.5" />}
                 Subir decisão
               </Button>
             </div>
+            <p className="text-[10px] text-muted-foreground mt-1.5">Arquivo (PDF/DOCX/imagem — Vision), link (súmula/jurisprudência) ou os dois. O conteúdo é lido, fatiado e indexado.</p>
             <p className="text-[10px] text-muted-foreground mt-1.5">
               PDF/DOCX/TXT (texto) ou imagem/escaneado (Vision). O conteúdo é fatiado, indexado e passa a valer pra todos os escritórios.
             </p>

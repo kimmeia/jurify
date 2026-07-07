@@ -266,8 +266,9 @@ export default function AgenteJuridico() {
 
 /** Diálogo de fontes próprias do escritório (base RAG do escritório). */
 function FontesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const NF_VAZIO = { tipo: "sumula", identificador: "", titulo: "", texto: "", tags: "" };
+  const NF_VAZIO = { tipo: "sumula", identificador: "", titulo: "", texto: "", link: "", tags: "" };
   const [nf, setNf] = useState(NF_VAZIO);
+  const [arquivo, setArquivo] = useState<File | null>(null);
   const minhasFontesQ = (trpc as any).juridico.listarFontes.useQuery({ origem: "minhas" }, { retry: false, enabled: open });
   const addFonteMut = (trpc as any).juridico.adicionarFonte.useMutation({
     onSuccess: (r: any) => { toast.success(r.indexada ? "Fonte adicionada e indexada" : "Fonte adicionada (configure a chave OpenAI pra indexar)"); setNf(NF_VAZIO); minhasFontesQ.refetch(); },
@@ -325,9 +326,24 @@ function FontesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
             <div><Label className="text-xs">Identificador</Label><Input className="mt-1" value={nf.identificador} onChange={(e) => setNf({ ...nf, identificador: e.target.value })} placeholder="Ex.: Súmula 297/STJ" /></div>
           </div>
           <div><Label className="text-xs">Título (opcional)</Label><Input className="mt-1" value={nf.titulo} onChange={(e) => setNf({ ...nf, titulo: e.target.value })} placeholder="Resumo curto" /></div>
-          <div><Label className="text-xs">Texto</Label><Textarea className="mt-1 min-h-[70px]" value={nf.texto} onChange={(e) => setNf({ ...nf, texto: e.target.value })} placeholder="Enunciado / conteúdo que o agente pode citar" /></div>
-          <Button size="sm" disabled={addFonteMut.isPending || nf.identificador.trim().length < 2 || nf.texto.trim().length < 5}
-            onClick={() => addFonteMut.mutate({ tipo: nf.tipo, identificador: nf.identificador.trim(), titulo: nf.titulo.trim() || undefined, texto: nf.texto.trim(), tags: nf.tags.trim() || undefined })}>
+          <p className="text-[10.5px] text-muted-foreground">Preencha <b>um</b>: cole o texto, informe o link (ex.: súmula) ou anexe o arquivo (PDF/DOCX/imagem) — a IA lê o conteúdo.</p>
+          <div><Label className="text-xs">Texto</Label><Textarea className="mt-1 min-h-[60px]" value={nf.texto} onChange={(e) => setNf({ ...nf, texto: e.target.value })} placeholder="Enunciado / conteúdo…" /></div>
+          <div><Label className="text-xs">Link</Label><Input className="mt-1" value={nf.link} onChange={(e) => setNf({ ...nf, link: e.target.value })} placeholder="https://... (súmula, acórdão)" /></div>
+          <div><Label className="text-xs">Arquivo</Label><input type="file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg" className="mt-1 text-xs block" onChange={(e) => setArquivo(e.target.files?.[0] ?? null)} /></div>
+          <Button size="sm" disabled={addFonteMut.isPending || nf.identificador.trim().length < 2 || (!nf.texto.trim() && !nf.link.trim() && !arquivo)}
+            onClick={async () => {
+              let arquivoBase64: string | undefined; let nomeArquivo: string | undefined;
+              if (arquivo) {
+                nomeArquivo = arquivo.name;
+                arquivoBase64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] || ""); r.onerror = rej; r.readAsDataURL(arquivo); });
+              }
+              addFonteMut.mutate({
+                tipo: nf.tipo, identificador: nf.identificador.trim(), titulo: nf.titulo.trim() || undefined,
+                texto: nf.texto.trim() || undefined, link: nf.link.trim() || undefined,
+                arquivoBase64, nomeArquivo, tags: nf.tags.trim() || undefined,
+              });
+              setArquivo(null);
+            }}>
             {addFonteMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Plus className="h-4 w-4 mr-1.5" />} Adicionar fonte
           </Button>
         </div>
