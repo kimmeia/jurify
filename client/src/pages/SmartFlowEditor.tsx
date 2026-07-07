@@ -2147,10 +2147,15 @@ function JanelaDisparoFields({
           <Input
             type="number"
             min={1}
-            max={10}
+            max={3}
             value={Number(cfg.disparosPorDia ?? 1)}
-            onChange={(e) => onChange({ disparosPorDia: Math.max(1, Number(e.target.value) || 1) })}
+            onChange={(e) => onChange({ disparosPorDia: Math.min(3, Math.max(1, Number(e.target.value) || 1)) })}
           />
+          {Number(cfg.disparosPorDia ?? 1) > 1 && (
+            <p className="text-[10px] text-amber-600 mt-1">
+              Mais de 1×/dia pro mesmo cliente pode ser marcado como <b>spam</b> pela Meta (risco de bloqueio). Recomendado: 1.
+            </p>
+          )}
         </div>
         <div>
           <Label className="text-xs">Intervalo (min)</Label>
