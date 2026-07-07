@@ -17,11 +17,13 @@ import { gerarEmbedding, gerarEmbeddingSeguro } from "./embeddings";
 import { recuperarFontes, seedFontesRevisional, reindexarEmbeddings } from "./base";
 import { checkPermission } from "../escritorio/check-permission";
 import { AREA_REVISIONAL } from "./fontes-revisional";
-import { chamarLLMEscritorio } from "./llm";
+import { chamarLLMEscritorio, conversarLLMEscritorio } from "./llm";
 import { avaliarViabilidade, type FonteContexto } from "./avaliacao";
 import { gerarPeca, TIPOS_PECA } from "./peca";
 import { montarPecaDocx } from "./docx";
-import { montarDossie } from "./dossie";
+import { montarDossie, montarMovimentacao } from "./dossie";
+import { montarConteudoDocumentos, lerConteudoBuffer, chunkTexto } from "./leitura-documento";
+import { montarSystemPromptAgente } from "./agente-conversa";
 
 /** Resolve a chave OpenAI (embeddings sempre via OpenAI). null se não houver. */
 async function resolverChaveOpenAI(escritorioId: number): Promise<string | null> {
@@ -253,7 +255,78 @@ export const juridicoRouter = router({
       if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão pra ver clientes." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return montarDossie(db, perm.escritorioId, input.contatoId, input.processoId);
+      const dossie = await montarDossie(db, perm.escritorioId, input.contatoId, input.processoId);
+      const movimentacao = dossie.cnj ? await montarMovimentacao(db, perm.escritorioId, dossie.cnj) : "";
+      return { ...dossie, movimentacao };
+    }),
+
+  /**
+   * Conversa do Agente Jurídico: analisa o caso (dossiê + MOVIMENTAÇÃO
+   * processual), pesquisa jurisprudência na base (RAG na última fala) e
+   * responde com estratégia/peça no modelo do escritório. Multi-turno.
+   */
+  conversar: protectedProcedure
+    .input(z.object({
+      contatoId: z.number().optional(),
+      processoId: z.number().optional(),
+      mensagens: z.array(z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(8000),
+      })).min(1).max(40),
+      modelo: z.string().max(64).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Escritório não encontrado." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const modelo = input.modelo || "gpt-4o-mini";
+
+      // 1. Dossiê + movimentação processual (dados reais do caso).
+      const dossie = input.contatoId
+        ? await montarDossie(db, esc.escritorio.id, input.contatoId, input.processoId)
+        : null;
+      const movimentacao = dossie?.cnj ? await montarMovimentacao(db, esc.escritorio.id, dossie.cnj) : "";
+
+      // 2. Jurisprudência: RAG na última fala do usuário (+ resumo do processo).
+      const ultimaUser = [...input.mensagens].reverse().find((m) => m.role === "user")?.content || "";
+      let jurisprudencia: Array<{ identificador: string; titulo: string | null; texto: string }> = [];
+      const key = await resolverChaveOpenAI(esc.escritorio.id);
+      if (key && ultimaUser) {
+        try {
+          const emb = await gerarEmbedding([ultimaUser, dossie?.processo].filter(Boolean).join("\n"), key);
+          const fontes = await recuperarFontes(db, emb, { escritorioId: esc.escritorio.id, topK: 6 });
+          jurisprudencia = fontes.map((f) => ({ identificador: f.identificador, titulo: f.titulo, texto: f.texto }));
+        } catch { /* sem jurisprudência não impede a conversa */ }
+      }
+
+      // 3. Timbre do escritório + advogado (assinatura).
+      const { escritorios } = await import("../../drizzle/schema");
+      const [escRow] = await db
+        .select({ nome: escritorios.nome, endereco: escritorios.endereco, cnpj: escritorios.cnpj, telefone: escritorios.telefone, email: escritorios.email })
+        .from(escritorios)
+        .where(eq(escritorios.id, esc.escritorio.id))
+        .limit(1);
+
+      const system = montarSystemPromptAgente({
+        escritorio: escRow ?? { nome: esc.escritorio.nome },
+        advogado: (ctx.user as any)?.name ?? null,
+        dossie: dossie ?? undefined,
+        movimentacao,
+        jurisprudencia,
+      });
+
+      const r = await conversarLLMEscritorio(esc.escritorio.id, { system, mensagens: input.mensagens, modelo });
+      return {
+        resposta: r.texto,
+        erro: r.texto ? null : (r.erro || "A IA não respondeu. Tente de novo ou troque o modelo."),
+        contexto: {
+          andamentos: movimentacao ? movimentacao.split("\n").filter(Boolean).length : 0,
+          precedentes: jurisprudencia.length,
+          temDossie: !!dossie?.qualificacao,
+          temProcesso: !!dossie?.processo,
+        },
+      };
     }),
 
   gerarPeca: protectedProcedure
@@ -268,6 +341,9 @@ export const juridicoRouter = router({
       // cliente/processo (qualificação, CNJ, valor, anotações) em vez de genérica.
       contatoId: z.number().optional(),
       processoId: z.number().optional(),
+      // Documentos do cliente a LER (id de cliente_arquivos) — texto/Vision entra
+      // como fato na peça.
+      documentoIds: z.array(z.number()).max(20).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -277,6 +353,8 @@ export const juridicoRouter = router({
       const tipo = TIPOS_PECA[input.tipo];
       if (!tipo) throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo de peça inválido." });
 
+      const modelo = input.modelo || "gpt-4o-mini";
+
       // Dossiê real do cliente/processo (qualificação, processo, anotações).
       const dossie = input.contatoId
         ? await montarDossie(db, esc.escritorio.id, input.contatoId, input.processoId)
@@ -285,7 +363,12 @@ export const juridicoRouter = router({
         ? `${input.fatos}\n\n${dossie.fatosContexto}`
         : input.fatos;
 
-      const modelo = input.modelo || "gpt-4o-mini";
+      // Leitura dos documentos selecionados (extração/Vision, modelo do escritório).
+      let docsTexto = "";
+      if (input.contatoId && input.documentoIds?.length) {
+        const r = await montarConteudoDocumentos(db, esc.escritorio.id, input.contatoId, input.documentoIds, modelo);
+        docsTexto = r.texto;
+      }
       const key = await resolverChaveOpenAI(esc.escritorio.id);
       if (!key) {
         return { disponivel: false, motivo: "Sem chave OpenAI pra recuperar as fontes (embeddings). Configure em Integrações.", texto: null, fontes: [] as Awaited<ReturnType<typeof recuperarFontes>>, verificacao: null };
@@ -314,6 +397,7 @@ export const juridicoRouter = router({
           resumoAvaliacao: input.resumoAvaliacao,
           qualificacao: dossie?.qualificacao,
           processo: dossie?.processo,
+          documentos: docsTexto || undefined,
         },
         fontesCtx, tipo, chamar,
       );
@@ -385,4 +469,60 @@ export const juridicoRouter = router({
     }
     return { total: rows.length, indexadas, porTipo };
   }),
+
+  /**
+   * [admin] Sobe uma DECISÃO/jurisprudência pra base GLOBAL: lê o arquivo
+   * (extração ou Vision), fatia em trechos, embedda cada um e insere como fonte
+   * global (escritorioId NULL) — amplia o conhecimento do Agente pra todos os
+   * escritórios. É o "subir decisão" (vs. só sincronizar a base fixa).
+   */
+  subirDecisao: adminProcedure
+    .input(z.object({
+      nomeArquivo: z.string().min(1).max(200),
+      base64: z.string().min(10),
+      identificador: z.string().min(2).max(160),
+      titulo: z.string().max(255).optional(),
+      area: z.string().max(80).optional(),
+      tipo: z.enum(["sumula", "lei", "precedente", "tese"]).optional(),
+      modelo: z.string().max(64).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const key = await resolverChaveOpenAI(esc?.escritorio.id ?? 0);
+      if (!key) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Sem chave OpenAI pra indexar (configure a chave da plataforma ou do escritório)." });
+
+      const base64 = input.base64.includes(",") ? input.base64.split(",")[1] : input.base64;
+      const buffer = Buffer.from(base64, "base64");
+      const modelo = input.modelo || "claude-sonnet-4-20250514"; // Claude lê PDF nativo (escaneado)
+      const leitura = await lerConteudoBuffer(esc?.escritorio.id ?? 0, buffer, input.nomeArquivo, modelo);
+      if (!leitura.texto) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Não foi possível ler o documento: ${leitura.nota || "sem texto"}` });
+      }
+
+      const trechos = chunkTexto(leitura.texto);
+      if (!trechos.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Documento sem conteúdo aproveitável." });
+
+      const area = input.area || AREA_REVISIONAL;
+      const tipo = input.tipo || "precedente";
+      let indexadas = 0;
+      for (let i = 0; i < trechos.length; i++) {
+        const textoIndex = [input.identificador, input.titulo, trechos[i]].filter(Boolean).join(" — ");
+        const emb = await gerarEmbeddingSeguro(textoIndex, key).catch(() => null);
+        await db.insert(fontesJuridicas).values({
+          escritorioId: null, // global — vale pra todos os escritórios
+          tipo,
+          identificador: trechos.length > 1 ? `${input.identificador} [${i + 1}/${trechos.length}]` : input.identificador,
+          orgao: null,
+          area,
+          titulo: input.titulo ?? null,
+          texto: trechos[i],
+          tags: null,
+          embedding: emb ? JSON.stringify(emb) : null,
+        });
+        if (emb) indexadas++;
+      }
+      return { trechos: trechos.length, indexadas, via: leitura.via };
+    }),
 });
