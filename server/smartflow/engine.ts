@@ -51,6 +51,8 @@ export interface SmartflowContexto {
   /** Dados de pagamento (gatilho pagamento_recebido) */
   pagamentoId?: string;
   pagamentoValor?: number;
+  /** Valor já formatado como moeda ("R$ 800,00") — pro texto do template/mensagem. */
+  pagamentoValorFormatado?: string;
   pagamentoDescricao?: string;
   pagamentoTipo?: string; // "BOLETO", "PIX", etc
   assinaturaId?: string; // se tiver = é assinatura
