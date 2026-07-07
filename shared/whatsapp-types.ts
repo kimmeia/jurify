@@ -27,7 +27,7 @@ export interface WhatsappMensagemRecebida {
   nome: string;
   telefone: string;
   conteudo: string;
-  tipo: "texto" | "imagem" | "audio" | "video" | "documento" | "sticker" | "localizacao" | "contato";
+  tipo: "texto" | "imagem" | "audio" | "video" | "documento" | "sticker" | "localizacao" | "contato" | "sistema";
   mediaUrl?: string;
   timestamp: number;
   messageId: string;
