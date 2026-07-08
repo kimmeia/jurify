@@ -176,6 +176,10 @@ export function ConfigWhatsappTemplateBuilder({ cfg, onChange }: { cfg: any; onC
       templateHeader: header,
       templateCorpo: Array.from({ length: e.bodyVars }, () => ""),
       templateBotoes: botoes,
+      // Texto do corpo aprovado (com {{1}}..{{n}}) — guardado pra reconstruir a
+      // mensagem REAL na timeline de Atendimentos (o corpo vive na Meta; sem
+      // guardar, a timeline só teria o resumo "[Template: nome] valores").
+      templateCorpoTexto: e.bodyText,
     });
   };
 
