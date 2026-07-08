@@ -288,24 +288,32 @@ export function calcularSlotsDoDia(
 }
 
 /**
- * Procura o slot (dentre os calculados) cujo horário cai na janela de
- * tolerância (`[agora - toleranciaMin, agora]`). A tolerância equivale ao
- * intervalo do cron (ex: 15min) — garante que nenhum slot é perdido se o
- * cron atrasar.
+ * Retorna o slot que deve disparar AGORA: o mais recente que já passou hoje
+ * (`slot <= agora`). Se nenhum passou ainda, retorna null.
+ *
+ * Antes exigia o slot dentro de `[agora - toleranciaMin, agora]` — uma janela
+ * de 15min IGUAL ao intervalo do cron, com margem ZERO. Qualquer atraso (deploy/
+ * restart do cron, drift do setInterval, container pausado) fazia o horário cair
+ * no vão entre dois ticks e ser PERDIDO no dia inteiro ("roda quando quer").
+ * Agora dispara no PRIMEIRO tick a partir do horário; como os slots vêm do dia
+ * corrente (calcularSlotsDoDia usa o fuso do escritório), "já passou" nunca vaza
+ * pro dia anterior, e o dedupe por (cenário, pagamento, slot) garante 1× por
+ * slot/dia mesmo que o disparo aconteça em qualquer tick posterior ao horário.
+ *
+ * `toleranciaMin` mantida na assinatura por compat (ignorada).
  */
 export function acharSlotAtivo(
   slots: Date[],
   agora: Date,
-  toleranciaMin: number,
+  _toleranciaMin?: number,
 ): Date | null {
-  const inicioJanela = new Date(agora.getTime() - toleranciaMin * 60 * 1000);
-  // Varre do último pro primeiro — se houver dois slots muito próximos
-  // (config inconsistente), escolhe o mais recente.
-  for (let i = slots.length - 1; i >= 0; i--) {
-    const s = slots[i];
-    if (s >= inicioJanela && s <= agora) return s;
+  let melhor: Date | null = null;
+  for (const s of slots) {
+    if (s.getTime() <= agora.getTime() && (!melhor || s.getTime() > melhor.getTime())) {
+      melhor = s;
+    }
   }
-  return null;
+  return melhor;
 }
 
 /**
