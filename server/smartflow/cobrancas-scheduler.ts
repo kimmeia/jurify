@@ -415,9 +415,9 @@ export async function diagnosticarCobrancas(
         const slots = calcularSlotsDoDia(cfg, agora, tz);
         const slot = acharSlotAtivo(slots, agora, TOLERANCIA_MIN);
         if (!slot) {
-          // Casa TUDO menos o minuto do slot → candidata que dispara no horário.
+          // Casa o cenário, mas o horário do slot ainda não chegou hoje.
           if (item.categoria === "fora") item.categoria = "aguardando_horario";
-          slotInfo = `Dispara nos horários [${slots.map(hhmm).join(", ") || "—"}] (janela de ${TOLERANCIA_MIN}min). Agora: ${hhmm(agora)}.`;
+          slotInfo = `Dispara a partir de [${slots.map(hhmm).join(", ") || "—"}]. Agora: ${hhmm(agora)} — o horário ainda não chegou.`;
           continue;
         }
       }
