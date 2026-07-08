@@ -147,8 +147,17 @@ async function resolverVinculo(
   return vinc ?? null;
 }
 
-/** Roda 1 ciclo — público pra testes/ações admin. */
-export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proximas: number }> {
+/**
+ * Roda 1 ciclo. `opts` habilita o disparo SOB DEMANDA ("Disparar agora"):
+ *  - forcar: ignora o horário do slot e o dedupe (dispara na hora, de novo);
+ *  - telefoneTeste: redireciona TODO envio pra 1 número (teste seguro — clientes
+ *    reais não recebem);
+ *  - limite: para depois de N disparos (teste usa 1).
+ * Sem `opts` é o comportamento normal do cron.
+ */
+export async function rodarCicloCobrancas(
+  opts: { forcar?: boolean; telefoneTeste?: string; limite?: number; escritorioId?: number } = {},
+): Promise<{ vencidas: number; proximas: number }> {
   const db = await getDb();
   if (!db) return { vencidas: 0, proximas: 0 };
 
@@ -156,7 +165,9 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
     const cenarios = await carregarCenariosAtivos();
     if (cenarios.length === 0) return { vencidas: 0, proximas: 0 };
 
-    const escritoriosIds = Array.from(new Set(cenarios.map((c) => c.escritorioId)));
+    let escritoriosIds = Array.from(new Set(cenarios.map((c) => c.escritorioId)));
+    // Disparo sob demanda é ESCOPADO a um escritório — nunca dispara os outros.
+    if (opts.escritorioId) escritoriosIds = escritoriosIds.filter((id) => id === opts.escritorioId);
     const agora = new Date();
     const hoje = new Date(agora);
     hoje.setHours(0, 0, 0, 0);
@@ -175,7 +186,7 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
     let vencidas = 0;
     let proximas = 0;
 
-    for (const escritorioId of escritoriosIds) {
+    outer: for (const escritorioId of escritoriosIds) {
       const cobrancas = await carregarCobrancasDoEscritorio(escritorioId);
       const cenariosDoEscritorio = cenarios.filter((c) => c.escritorioId === escritorioId);
       const tz = fusoPorEscritorio.get(escritorioId) || FUSO_HORARIO_PADRAO;
@@ -206,6 +217,10 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
           // Fuso do escritório → dias por CALENDÁRIO no dispatcher (não floor de
           // horas, que fazia "1 dia antes" disparar 2 dias antes).
           tz,
+          // Disparo sob demanda: redireciona o envio pro número de teste e/ou
+          // ignora o dedupe (deixa re-disparar a mesma cobrança).
+          telefoneTeste: opts.telefoneTeste,
+          ignorarDedup: !!opts.forcar,
         };
 
         for (const cen of cenariosDoEscritorio) {
@@ -226,7 +241,8 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
           // Modo legado: dispara sem slot (dedupe 24h).
           // Os slots são materializados no fuso do escritório.
           const params: Parameters<typeof dispararPagamentoVencido>[1] = { ...comuns };
-          if (temHorarioConfigurado(cfg)) {
+          // Sob demanda (opts.forcar): ignora o horário do slot e dispara agora.
+          if (temHorarioConfigurado(cfg) && !opts.forcar) {
             // `agora`, NÃO `hoje`: no servidor Railway (UTC), `hoje` é meia-noite
             // UTC, que em fuso BR (UTC-3) vira o DIA ANTERIOR ao passar por
             // ymdNoFuso — ancorava o slot em ontem e o cron nunca casava (o
@@ -245,6 +261,8 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
             const r = await dispararProximoVencimento(escritorioId, params);
             if (r.cenariosDisparados > 0) proximas += r.cenariosDisparados;
           }
+          // Limite (teste "só meu número" usa 1): para ao atingir o total.
+          if (opts.limite && vencidas + proximas >= opts.limite) break outer;
         }
       }
     }
