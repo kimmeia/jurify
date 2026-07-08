@@ -258,35 +258,6 @@ export const smartflowRouter = router({
     return result;
   }),
 
-  /** Diagnóstico do gatilho de cobrança (dry-run): explica, cobrança por
-   *  cobrança, se dispararia AGORA e, se não, POR QUÊ. Não envia nada. */
-  diagnosticarCobrancas: protectedProcedure.query(async ({ ctx }) => {
-    const perm = await checkPermission(ctx.user.id, "smartflow", "ver");
-    if (!perm.allowed) throw new Error("Sem permissão para ver o SmartFlow.");
-    const { diagnosticarCobrancas } = await import("./cobrancas-scheduler");
-    return diagnosticarCobrancas(perm.escritorioId);
-  }),
-
-  /** Dispara o ciclo de cobrança AGORA, sem esperar o cron. Escopado ao
-   *  escritório do usuário. Com telefoneTeste (>= 10 díg): envia SÓ pra esse
-   *  número, 1 disparo (teste seguro). Sem: dispara de verdade pra todos que
-   *  casam o gatilho (produção sob demanda). */
-  dispararCobrancasAgora: protectedProcedure
-    .input(z.object({ telefoneTeste: z.string().optional() }))
-    .mutation(async ({ ctx, input }) => {
-      const perm = await checkPermission(ctx.user.id, "smartflow", "editar");
-      if (!perm.allowed) throw new Error("Sem permissão para disparar cobranças.");
-      const tel = (input.telefoneTeste || "").replace(/\D/g, "");
-      const teste = tel.length >= 10;
-      const { rodarCicloCobrancas } = await import("./cobrancas-scheduler");
-      const r = await rodarCicloCobrancas(
-        teste
-          ? { forcar: true, telefoneTeste: tel, limite: 1, escritorioId: perm.escritorioId }
-          : { forcar: true, escritorioId: perm.escritorioId },
-      );
-      return { ...r, modo: teste ? ("teste" as const) : ("real" as const), telefoneTeste: teste ? tel : null };
-    }),
-
   /** Cenário individual (com passos) — usado pelo editor */
   detalhe: protectedProcedure
     .input(z.object({ id: z.number() }))
