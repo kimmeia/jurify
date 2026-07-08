@@ -231,7 +231,13 @@ export async function rodarCicloCobrancas(
           if (cen.gatilho === "pagamento_vencido") {
             if (diffDias >= 0) continue; // ainda não venceu
           } else {
-            if (venceuDif < 0) continue; // já venceu
+            // Tolerância de 1 dia no piso: `hoje` é meia-noite UTC e `venc` pode
+            // ser lido em UTC, então uma cobrança "vence hoje" (diasAntes=0) no
+            // fuso BR, lida à noite (já é o dia seguinte em UTC), teria
+            // venceuDif = -1 dia e seria descartada como "já venceu". O gate
+            // REAL é o deveDispararProximo (dias por calendário no fuso) lá no
+            // dispatcher — aqui é só uma peneira grossa.
+            if (venceuDif < -24 * 60 * 60 * 1000) continue; // já venceu (com folga de 1d p/ fuso)
             if (venceuDif > janelaMs) continue; // fora da janela max
           }
 
