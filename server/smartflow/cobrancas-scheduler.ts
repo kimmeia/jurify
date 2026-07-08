@@ -157,7 +157,7 @@ async function resolverVinculo(
  */
 export async function rodarCicloCobrancas(
   opts: { forcar?: boolean; telefoneTeste?: string; limite?: number; escritorioId?: number } = {},
-): Promise<{ vencidas: number; proximas: number }> {
+): Promise<{ vencidas: number; proximas: number; erro?: string }> {
   const db = await getDb();
   if (!db) return { vencidas: 0, proximas: 0 };
 
@@ -185,6 +185,7 @@ export async function rodarCicloCobrancas(
 
     let vencidas = 0;
     let proximas = 0;
+    let ultimoErroEnvio: string | undefined;
 
     outer: for (const escritorioId of escritoriosIds) {
       const cobrancas = await carregarCobrancasDoEscritorio(escritorioId);
@@ -257,9 +258,11 @@ export async function rodarCicloCobrancas(
           if (cen.gatilho === "pagamento_vencido") {
             const r = await dispararPagamentoVencido(escritorioId, params);
             if (r.cenariosDisparados > 0) vencidas += r.cenariosDisparados;
+            if (r.erro) ultimoErroEnvio = r.erro;
           } else {
             const r = await dispararProximoVencimento(escritorioId, params);
             if (r.cenariosDisparados > 0) proximas += r.cenariosDisparados;
+            if (r.erro) ultimoErroEnvio = r.erro;
           }
           // Limite (teste "só meu número" usa 1): para ao atingir o total.
           if (opts.limite && vencidas + proximas >= opts.limite) break outer;
@@ -270,7 +273,7 @@ export async function rodarCicloCobrancas(
     if (vencidas > 0 || proximas > 0) {
       log.info({ vencidas, proximas }, "[Cobranças] Ciclo concluído");
     }
-    return { vencidas, proximas };
+    return { vencidas, proximas, erro: ultimoErroEnvio };
   } catch (err: any) {
     log.error({ err: err.message }, "[Cobranças] Erro no ciclo");
     return { vencidas: 0, proximas: 0 };

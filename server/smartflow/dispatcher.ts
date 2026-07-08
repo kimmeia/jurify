@@ -355,7 +355,7 @@ async function executarCenarioCarregado(
   contexto: SmartflowContexto,
   refs?: { contatoId?: number; conversaId?: number },
   imagem?: ImagemAnexa,
-): Promise<{ executou: boolean; respostas: string[]; execId?: number }> {
+): Promise<{ executou: boolean; respostas: string[]; execId?: number; erro?: string; sucesso?: boolean }> {
   // Limite por contato: cenários "1x na vida", "1x por dia", etc. pulam se já
   // rodaram dentro da janela pra este contato.
   if (await atingiuLimitePorContato(cenario, refs?.contatoId)) {
@@ -388,7 +388,7 @@ async function executarCenarioCarregado(
     `SmartFlow: cenário "${cenario.nome}" executado (${cenario.gatilho})`,
   );
 
-  return { executou: true, respostas: resultado.respostas, execId };
+  return { executou: true, respostas: resultado.respostas, execId, erro: resultado.erro, sucesso: resultado.sucesso };
 }
 
 /**
@@ -1000,7 +1000,8 @@ export async function dispararPagamentoVencido(
     /** Disparo sob demanda: pula o dedupe/limite (deixa re-disparar). */
     ignorarDedup?: boolean;
   },
-): Promise<{ executou: boolean; cenariosDisparados: number }> {
+): Promise<{ executou: boolean; cenariosDisparados: number; erro?: string }> {
+  let ultimoErro: string | undefined;
   try {
     const cenarios = await carregarCenariosAtivos(escritorioId, ["pagamento_vencido"]);
     if (cenarios.length === 0) return { executou: false, cenariosDisparados: 0 };
@@ -1070,12 +1071,13 @@ export async function dispararPagamentoVencido(
         ...(slotChave ? { slotTimestamp: slotChave } : {}),
       };
 
-      await executarCenarioCarregado(escritorioId, c, contexto, {
+      const rc = await executarCenarioCarregado(escritorioId, c, contexto, {
         contatoId: contato.contatoId ?? params.contatoId,
       });
+      if (rc.sucesso === false && rc.erro) ultimoErro = rc.erro;
       disparados++;
     }
-    return { executou: disparados > 0, cenariosDisparados: disparados };
+    return { executou: disparados > 0, cenariosDisparados: disparados, erro: ultimoErro };
   } catch (err: any) {
     log.error({ err: err.message }, "SmartFlow: erro em dispararPagamentoVencido");
     return { executou: false, cenariosDisparados: 0 };
@@ -1107,7 +1109,8 @@ export async function dispararProximoVencimento(
     /** Disparo sob demanda: pula o dedupe/limite (deixa re-disparar). */
     ignorarDedup?: boolean;
   },
-): Promise<{ executou: boolean; cenariosDisparados: number }> {
+): Promise<{ executou: boolean; cenariosDisparados: number; erro?: string }> {
+  let ultimoErro: string | undefined;
   try {
     const cenarios = await carregarCenariosAtivos(escritorioId, ["pagamento_proximo_vencimento"]);
     if (cenarios.length === 0) return { executou: false, cenariosDisparados: 0 };
@@ -1162,12 +1165,13 @@ export async function dispararProximoVencimento(
         ...(slotChave ? { slotTimestamp: slotChave } : {}),
       };
 
-      await executarCenarioCarregado(escritorioId, c, contexto, {
+      const rc = await executarCenarioCarregado(escritorioId, c, contexto, {
         contatoId: contato.contatoId ?? params.contatoId,
       });
+      if (rc.sucesso === false && rc.erro) ultimoErro = rc.erro;
       disparados++;
     }
-    return { executou: disparados > 0, cenariosDisparados: disparados };
+    return { executou: disparados > 0, cenariosDisparados: disparados, erro: ultimoErro };
   } catch (err: any) {
     log.error({ err: err.message }, "SmartFlow: erro em dispararProximoVencimento");
     return { executou: false, cenariosDisparados: 0 };

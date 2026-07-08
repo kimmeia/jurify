@@ -127,16 +127,24 @@ describe("deveDispararProximo (gatilho pagamento_proximo_vencimento)", () => {
     expect(deveDispararProximo({ diasAntes: 10 }, -5)).toBe(false);
   });
 
-  it("dispara dentro da janela configurada", () => {
+  it("dispara EXATAMENTE N dias antes — não no vencimento (0) nem antes/depois", () => {
     const cfg = { diasAntes: 3 };
-    expect(deveDispararProximo(cfg, 0)).toBe(true); // vence hoje
-    expect(deveDispararProximo(cfg, 3)).toBe(true); // no limite
-    expect(deveDispararProximo(cfg, 4)).toBe(false);
+    expect(deveDispararProximo(cfg, 3)).toBe(true); // exatamente 3 dias antes
+    expect(deveDispararProximo(cfg, 0)).toBe(false); // vence hoje → NÃO
+    expect(deveDispararProximo(cfg, 2)).toBe(false); // 2 dias — ainda não
+    expect(deveDispararProximo(cfg, 4)).toBe(false); // 4 dias — cedo demais
+  });
+
+  it("'1 dia antes' dispara só na véspera (1), não no vencimento (0)", () => {
+    const cfg = { diasAntes: 1 };
+    expect(deveDispararProximo(cfg, 1)).toBe(true);
+    expect(deveDispararProximo(cfg, 0)).toBe(false);
+    expect(deveDispararProximo(cfg, 2)).toBe(false);
   });
 
   it("usa default 3 quando diasAntes não está configurado", () => {
-    expect(deveDispararProximo({}, 2)).toBe(true);
     expect(deveDispararProximo({}, 3)).toBe(true);
+    expect(deveDispararProximo({}, 2)).toBe(false);
     expect(deveDispararProximo({}, 4)).toBe(false);
   });
 });

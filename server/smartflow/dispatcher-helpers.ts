@@ -37,16 +37,18 @@ export function deveDispararVencido(
 
 /**
  * Dispara `pagamento_proximo_vencimento`?
- * Só se faltar no máximo `diasAntes` (default 3) dias para o vencimento,
- * e o pagamento ainda não tiver vencido.
+ * Só quando faltarem EXATAMENTE `diasAntes` (default 3) dias pro vencimento —
+ * "1 dia antes" dispara SÓ na véspera, não no dia do vencimento (0 dias) nem 2
+ * dias antes. Antes era "até N dias" (`<= diasAntes`), que disparava em 0..N e
+ * confundia (ex.: "1 dia antes" disparava também no dia do vencimento).
  */
 export function deveDispararProximo(
   cfg: ConfigGatilhoPagamentoProximoVencimento | undefined,
   diasAteVencer: number,
 ): boolean {
   if (diasAteVencer < 0) return false;
-  const max = Math.max(0, Number(cfg?.diasAntes ?? 3));
-  return diasAteVencer <= max;
+  const alvo = Math.max(0, Number(cfg?.diasAntes ?? 3));
+  return diasAteVencer === alvo;
 }
 
 /**
