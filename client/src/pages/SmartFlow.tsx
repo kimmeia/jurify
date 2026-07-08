@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/select";
 import {
   Activity, AlertTriangle, CheckCircle2, Clock,
-  FileText, Filter, Loader2, Search, XCircle, Zap,
+  FileText, Filter, Loader2, Search, Send, XCircle, Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -101,6 +101,17 @@ export default function SmartFlow() {
   const [statusFilter, setStatusFilter] = useState<"todos" | StatusExecucao>("todos");
   const [diagOpen, setDiagOpen] = useState(false);
   const diagQ = trpc.smartflow.diagnosticarCobrancas.useQuery(undefined, { enabled: diagOpen });
+  const [dispararOpen, setDispararOpen] = useState(false);
+  const [telTeste, setTelTeste] = useState("");
+  const dispararMut = trpc.smartflow.dispararCobrancasAgora.useMutation({
+    onSuccess: (r: any) => {
+      const total = (r.vencidas || 0) + (r.proximas || 0);
+      toast.success(total > 0
+        ? `Disparado: ${total} envio(s) para ${r.telefoneTeste}. Confira seu WhatsApp.`
+        : "Rodou, mas nenhuma cobrança casou o gatilho agora — veja o diagnóstico pra entender.");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
   const [cenarioFilter, setCenarioFilter] = useState<number | "todos">("todos");
 
   const { data: cenarios, isLoading, refetch } = (trpc as any).smartflow.listar.useQuery();
@@ -198,9 +209,12 @@ export default function SmartFlow() {
     <div className="space-y-5">
       <SmartFlowHero onNovoCenario={() => setGaleriaOpen(true)} />
 
-      <div className="flex justify-end -mt-2">
+      <div className="flex justify-end gap-2 -mt-2">
         <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => setDiagOpen(true)}>
           <Activity className="h-3.5 w-3.5" /> Diagnosticar gatilho de cobrança
+        </Button>
+        <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => setDispararOpen(true)}>
+          <Send className="h-3.5 w-3.5" /> Testar cobrança agora
         </Button>
       </div>
 
@@ -521,6 +535,37 @@ export default function SmartFlow() {
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => diagQ.refetch()} disabled={diagQ.isFetching}>
               {diagQ.isFetching ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : null} Rodar de novo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dispararOpen} onOpenChange={setDispararOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Testar cobrança agora</DialogTitle>
+            <DialogDescription>
+              Roda o gatilho na hora (sem esperar o horário) e envia SÓ pro número abaixo — clientes reais não recebem. Teste seguro.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Input
+              placeholder="Seu WhatsApp (ex: 5585996042189)"
+              value={telTeste}
+              onChange={(e) => setTelTeste(e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Pega a 1ª cobrança que casa o gatilho (dados reais dela) e manda pra você. Se nenhuma casar agora, o aviso explica — use o diagnóstico pra ver o porquê.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              size="sm"
+              disabled={dispararMut.isPending || telTeste.replace(/\D/g, "").length < 10}
+              onClick={() => dispararMut.mutate({ telefoneTeste: telTeste })}
+            >
+              {dispararMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1" />}
+              Disparar no meu número
             </Button>
           </DialogFooter>
         </DialogContent>
