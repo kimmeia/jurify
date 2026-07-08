@@ -995,6 +995,10 @@ export async function dispararPagamentoVencido(
      * mesmo pagamento pode disparar em múltiplos slots do mesmo dia.
      */
     slotTimestamp?: Date;
+    /** Disparo sob demanda: redireciona o envio pra este número (teste seguro). */
+    telefoneTeste?: string;
+    /** Disparo sob demanda: pula o dedupe/limite (deixa re-disparar). */
+    ignorarDedup?: boolean;
   },
 ): Promise<{ executou: boolean; cenariosDisparados: number }> {
   try {
@@ -1021,14 +1025,14 @@ export async function dispararPagamentoVencido(
         continue;
       }
 
-      if (await jaDisparouPagamento(c.cenarioId, params.pagamentoId, slotChave)) {
+      if (!params.ignorarDedup && await jaDisparouPagamento(c.cenarioId, params.pagamentoId, slotChave)) {
         log.debug({ cenarioId: c.cenarioId, pagamentoId: params.pagamentoId, slotChave }, "SmartFlow: pagamento_vencido já disparado — skip");
         continue;
       }
 
       // Controle `repetirPorDias`: para de lembrar depois de N dias.
       const limite = Math.max(1, Math.floor(Number(cfg?.repetirPorDias ?? 1)));
-      if (temHorarioConfigurado(cfg)) {
+      if (temHorarioConfigurado(cfg) && !params.ignorarDedup) {
         const disparadosDias = await diasDistintosDisparados(c.cenarioId, params.pagamentoId);
         if (disparadosDias >= limite) {
           log.debug({ cenarioId: c.cenarioId, pagamentoId: params.pagamentoId, limite }, "SmartFlow: pagamento_vencido atingiu repetirPorDias");
@@ -1056,7 +1060,7 @@ export async function dispararPagamentoVencido(
         diasAtraso: diasAtrasoAtual,
         ...links,
         nomeCliente: params.clienteNome || contato.nome,
-        telefoneCliente: contato.telefone,
+        telefoneCliente: params.telefoneTeste || contato.telefone,
         emailCliente: contato.email,
         contatoId: contato.contatoId ?? params.contatoId,
         atendenteResponsavelId: contato.atendenteResponsavelId,
@@ -1098,6 +1102,10 @@ export async function dispararProximoVencimento(
     slotTimestamp?: Date;
     /** Fuso do escritório (scheduler) — habilita dias por CALENDÁRIO. */
     tz?: string;
+    /** Disparo sob demanda: redireciona o envio pra este número (teste seguro). */
+    telefoneTeste?: string;
+    /** Disparo sob demanda: pula o dedupe/limite (deixa re-disparar). */
+    ignorarDedup?: boolean;
   },
 ): Promise<{ executou: boolean; cenariosDisparados: number }> {
   try {
@@ -1118,10 +1126,10 @@ export async function dispararProximoVencimento(
       const cfg = c.configGatilho as ConfigGatilhoPagamentoProximoVencimento;
       if (!deveDispararProximo(cfg, diasAteVencer)) continue;
 
-      if (await jaDisparouPagamento(c.cenarioId, params.pagamentoId, slotChave)) continue;
+      if (!params.ignorarDedup && await jaDisparouPagamento(c.cenarioId, params.pagamentoId, slotChave)) continue;
 
       const limite = Math.max(1, Math.floor(Number(cfg?.repetirPorDias ?? 1)));
-      if (temHorarioConfigurado(cfg)) {
+      if (temHorarioConfigurado(cfg) && !params.ignorarDedup) {
         const disparadosDias = await diasDistintosDisparados(c.cenarioId, params.pagamentoId);
         if (disparadosDias >= limite) continue;
       }
@@ -1144,7 +1152,7 @@ export async function dispararProximoVencimento(
         diasAteVencer,
         ...links,
         nomeCliente: params.clienteNome || contato.nome,
-        telefoneCliente: contato.telefone,
+        telefoneCliente: params.telefoneTeste || contato.telefone,
         emailCliente: contato.email,
         contatoId: contato.contatoId ?? params.contatoId,
         atendenteResponsavelId: contato.atendenteResponsavelId,
