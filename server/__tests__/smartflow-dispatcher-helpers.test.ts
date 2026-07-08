@@ -142,6 +142,13 @@ describe("deveDispararProximo (gatilho pagamento_proximo_vencimento)", () => {
     expect(deveDispararProximo(cfg, 2)).toBe(false);
   });
 
+  it("'vence hoje' (diasAntes 0) dispara SÓ no dia do vencimento (0)", () => {
+    const cfg = { diasAntes: 0 };
+    expect(deveDispararProximo(cfg, 0)).toBe(true); // vence hoje → SIM
+    expect(deveDispararProximo(cfg, 1)).toBe(false); // véspera → não
+    expect(deveDispararProximo(cfg, 3)).toBe(false);
+  });
+
   it("usa default 3 quando diasAntes não está configurado", () => {
     expect(deveDispararProximo({}, 3)).toBe(true);
     expect(deveDispararProximo({}, 2)).toBe(false);
