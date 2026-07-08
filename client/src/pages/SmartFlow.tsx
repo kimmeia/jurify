@@ -106,9 +106,13 @@ export default function SmartFlow() {
   const dispararMut = trpc.smartflow.dispararCobrancasAgora.useMutation({
     onSuccess: (r: any) => {
       const total = (r.vencidas || 0) + (r.proximas || 0);
-      toast.success(total > 0
-        ? `Disparado: ${total} envio(s) para ${r.telefoneTeste}. Confira seu WhatsApp.`
-        : "Rodou, mas nenhuma cobrança casou o gatilho agora — veja o diagnóstico pra entender.");
+      if (r.erro) {
+        toast.error(`Disparou, mas o ENVIO falhou: ${r.erro}`);
+      } else if (total > 0) {
+        toast.success(`Enviado: ${total} para ${r.telefoneTeste}. Confira seu WhatsApp.`);
+      } else {
+        toast.success("Rodou, mas nenhuma cobrança casou o gatilho agora — veja o diagnóstico.");
+      }
     },
     onError: (e: any) => toast.error(e.message),
   });
