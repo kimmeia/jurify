@@ -94,7 +94,17 @@ export function EditorTestarDialog({
     // Teste seguro: se informou o próprio número, sobrescreve o destinatário
     // (telefoneCliente) — assim o template real chega SÓ no seu WhatsApp.
     const tel = telefoneTeste.replace(/\D/g, "");
-    if (tel.length >= 10) contextoInicial.telefoneCliente = tel;
+    if (tel.length >= 10) {
+      contextoInicial.telefoneCliente = tel;
+      // If/else que roteia por número ("só envia pra mim") lê cliente.telefone —
+      // sobrescreve junto, senão o teste seguro cai no ramo errado (fallback).
+      const c =
+        contextoInicial.cliente && typeof contextoInicial.cliente === "object"
+          ? (contextoInicial.cliente as Record<string, unknown>)
+          : {};
+      c.telefone = tel;
+      contextoInicial.cliente = c;
+    }
 
     setResultado(null);
     executarMut.mutate({ cenarioId, contextoInicial });
@@ -272,6 +282,7 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
       telefoneCliente: "(11) 99999-0000",
       contatoId: 42,
       atendenteResponsavelId: 1,
+      cliente: { nome: "João Silva", telefone: "(11) 99999-0000", campos: {} },
     },
     mensagem_canal: {
       mensagem: "Olá, gostaria de agendar uma consulta",
@@ -280,6 +291,7 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
       canalTipo: "whatsapp_qr",
       contatoId: 42,
       atendenteResponsavelId: 1,
+      cliente: { nome: "João Silva", telefone: "(11) 99999-0000", campos: {} },
     },
     novo_lead: {
       contatoId: 42,
@@ -287,6 +299,7 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
       telefoneCliente: "(11) 98888-1111",
       emailCliente: "maria@example.com",
       origemLead: "site",
+      cliente: { nome: "Maria Souza", telefone: "(11) 98888-1111", campos: {} },
     },
     pagamento_recebido: {
       pagamentoId: "pay_TESTE_123",
@@ -294,9 +307,11 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
       pagamentoDescricao: "Honorários iniciais",
       pagamentoTipo: "PIX",
       nomeCliente: "João Silva",
+      telefoneCliente: "5511999990000",
       contatoId: 42,
       primeiraCobrancaDoCliente: true,
       percentualPago: 50,
+      cliente: { nome: "João Silva", telefone: "5511999990000", campos: {} },
     },
     pagamento_vencido: {
       pagamentoId: "pay_TESTE_456",
@@ -311,6 +326,9 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
       emailCliente: "joao@example.com",
       linkPagamento: "https://www.asaas.com/i/teste123",
       contatoId: 42,
+      // Mesmo shape que o gatilho real monta: condições de If/else leem
+      // `cliente.telefone` / `cliente.nome`, não só o `telefoneCliente` solto.
+      cliente: { nome: "João Silva", telefone: "5511999990000", campos: {} },
     },
     pagamento_proximo_vencimento: {
       pagamentoId: "pay_TESTE_789",
@@ -325,6 +343,9 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
       emailCliente: "joao@example.com",
       linkPagamento: "https://www.asaas.com/i/teste123",
       contatoId: 42,
+      // Mesmo shape que o gatilho real monta: condições de If/else leem
+      // `cliente.telefone` / `cliente.nome`, não só o `telefoneCliente` solto.
+      cliente: { nome: "João Silva", telefone: "5511999990000", campos: {} },
     },
     agendamento_criado: {
       agendamentoId: "booking_TESTE_123",

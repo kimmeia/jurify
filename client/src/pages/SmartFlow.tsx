@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/select";
 import {
   Activity, AlertTriangle, CheckCircle2, Clock,
-  FileText, Filter, Loader2, Search, Send, XCircle, Zap,
+  FileText, Filter, Loader2, Search, XCircle, Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -99,23 +99,6 @@ export default function SmartFlow() {
   const [busca, setBusca] = useState("");
   const [categoriaFilter, setCategoriaFilter] = useState<FiltroCategoria>("todas");
   const [statusFilter, setStatusFilter] = useState<"todos" | StatusExecucao>("todos");
-  const [diagOpen, setDiagOpen] = useState(false);
-  const diagQ = trpc.smartflow.diagnosticarCobrancas.useQuery(undefined, { enabled: diagOpen });
-  const [dispararOpen, setDispararOpen] = useState(false);
-  const [telTeste, setTelTeste] = useState("");
-  const dispararMut = trpc.smartflow.dispararCobrancasAgora.useMutation({
-    onSuccess: (r: any) => {
-      const total = (r.vencidas || 0) + (r.proximas || 0);
-      if (r.erro) {
-        toast.error(`Disparou, mas o ENVIO falhou: ${r.erro}`);
-      } else if (total > 0) {
-        toast.success(`Enviado: ${total} para ${r.telefoneTeste}. Confira seu WhatsApp.`);
-      } else {
-        toast.success("Rodou, mas nenhuma cobrança casou o gatilho agora — veja o diagnóstico.");
-      }
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
   const [cenarioFilter, setCenarioFilter] = useState<number | "todos">("todos");
 
   const { data: cenarios, isLoading, refetch } = (trpc as any).smartflow.listar.useQuery();
@@ -212,15 +195,6 @@ export default function SmartFlow() {
   return (
     <div className="space-y-5">
       <SmartFlowHero onNovoCenario={() => setGaleriaOpen(true)} />
-
-      <div className="flex justify-end gap-2 -mt-2">
-        <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => setDiagOpen(true)}>
-          <Activity className="h-3.5 w-3.5" /> Diagnosticar gatilho de cobrança
-        </Button>
-        <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => setDispararOpen(true)}>
-          <Send className="h-3.5 w-3.5" /> Testar cobrança agora
-        </Button>
-      </div>
 
       <GaleriaTemplatesDialog open={galeriaOpen} onOpenChange={setGaleriaOpen} />
 
@@ -486,94 +460,6 @@ export default function SmartFlow() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <Dialog open={diagOpen} onOpenChange={setDiagOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Diagnóstico — gatilho de cobrança</DialogTitle>
-            <DialogDescription>
-              Simulação do ciclo AGORA (não envia nada). Mostra, por cobrança, se dispararia e, se não, por quê.
-            </DialogDescription>
-          </DialogHeader>
-          {diagQ.isLoading ? (
-            <div className="py-8 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-          ) : diagQ.data ? (
-            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-              <div className="text-xs text-muted-foreground">
-                Cenários ativos de cobrança: <strong>{diagQ.data.cenariosAtivos}</strong> · Cobranças no banco (PENDING/OVERDUE): <strong>{diagQ.data.cobrancasNoBanco}</strong> · Fuso: {diagQ.data.fuso}
-              </div>
-              <div className="flex flex-wrap gap-1.5 text-[10px]">
-                <Badge variant="outline" className="text-emerald-600 bg-emerald-50 border-emerald-200">Elegível: {diagQ.data.contadores.elegivel}</Badge>
-                <Badge variant="outline" className="text-blue-600 bg-blue-50 border-blue-200">Aguardando horário: {diagQ.data.contadores.aguardandoHorario}</Badge>
-                <Badge variant="outline" className="text-muted-foreground">Não se aplica: {diagQ.data.contadores.fora}</Badge>
-              </div>
-              <div className={"text-sm rounded-lg border p-3 " + (diagQ.data.contadores.elegivel > 0 || diagQ.data.contadores.aguardandoHorario > 0 ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-amber-50 border-amber-200 text-amber-800")}>
-                {diagQ.data.resumo}
-              </div>
-              {diagQ.data.totalItens > diagQ.data.itens.length && (
-                <p className="text-[10px] text-muted-foreground">Mostrando as {diagQ.data.itens.length} mais relevantes de {diagQ.data.totalItens}.</p>
-              )}
-              {diagQ.data.itens.map((it, idx) => {
-                const cor = it.categoria === "elegivel"
-                  ? { b: "border-emerald-200", t: "text-emerald-600 bg-emerald-50 border-emerald-200", label: "Elegível" }
-                  : it.categoria === "aguardando_horario"
-                    ? { b: "border-blue-200", t: "text-blue-600 bg-blue-50 border-blue-200", label: "Aguardando horário" }
-                    : { b: "border-border", t: "text-muted-foreground", label: "Não se aplica" };
-                return (
-                  <div key={idx} className={"rounded-lg border p-3 text-xs " + cor.b}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium truncate">{it.descricao}</span>
-                      <Badge variant="outline" className={"text-[10px] shrink-0 " + cor.t}>{cor.label}</Badge>
-                    </div>
-                    <div className="text-muted-foreground mt-1">
-                      Venc: {it.vencimento ?? "—"} · {it.status} · {it.diasAteVencer != null ? `${it.diasAteVencer}d p/ vencer` : "—"} · {it.temVinculo ? "cliente vinculado" : "sem cliente"}
-                    </div>
-                    <div className="mt-1 leading-snug">{it.motivo}</div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground py-4">Não foi possível carregar o diagnóstico.</p>
-          )}
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => diagQ.refetch()} disabled={diagQ.isFetching}>
-              {diagQ.isFetching ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : null} Rodar de novo
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={dispararOpen} onOpenChange={setDispararOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Testar cobrança agora</DialogTitle>
-            <DialogDescription>
-              Roda o gatilho na hora (sem esperar o horário) e envia SÓ pro número abaixo — clientes reais não recebem. Teste seguro.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Input
-              placeholder="Seu WhatsApp (ex: 5585996042189)"
-              value={telTeste}
-              onChange={(e) => setTelTeste(e.target.value)}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Pega a 1ª cobrança que casa o gatilho (dados reais dela) e manda pra você. Se nenhuma casar agora, o aviso explica — use o diagnóstico pra ver o porquê.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              size="sm"
-              disabled={dispararMut.isPending || telTeste.replace(/\D/g, "").length < 10}
-              onClick={() => dispararMut.mutate({ telefoneTeste: telTeste })}
-            >
-              {dispararMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1" />}
-              Disparar no meu número
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

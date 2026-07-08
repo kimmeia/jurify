@@ -312,6 +312,79 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  // Regressão do caso real do dono: If/else "cliente.telefone igual 558596042189"
+  // (número que o app EXIBE) tem que casar com o que o CRM SALVA ("85996042189")
+  // e variações (9º dígito, DDI, pontuação). Antes era match EXATO de string →
+  // nunca casava → o "só envia pra mim" caía sempre no fallback e nada saía.
+  describe("Condição por telefone tolera formato (DDI/9º dígito/pontuação)", () => {
+    const cenario = (): Passo[] => [
+      {
+        id: 1, ordem: 1, tipo: "condicional", clienteId: "cond",
+        proximoSe: { cond_meu: "sim", fallback: "nao" },
+        config: { condicoes: [{ id: "meu", campo: "cliente.telefone", operador: "igual", valor: "558596042189" }] },
+      },
+      { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "sim", config: { template: "TESTE OK" } },
+      { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "nao", config: { template: "(fallback)" } },
+    ];
+
+    const casosQueCasam: [string, string][] = [
+      ["como o CRM salva (sem DDI, com 9)", "85996042189"],
+      ["com DDI + 9º dígito", "5585996042189"],
+      ["como o app exibe (DDI, sem 9)", "558596042189"],
+      ["formatado com pontuação", "+55 (85) 99604-2189"],
+      ["sem DDI e sem 9", "8596042189"],
+    ];
+
+    for (const [desc, telefone] of casosQueCasam) {
+      it(`casa quando cliente.telefone vem ${desc}`, async () => {
+        const exec = criarMockExecutores();
+        const r = await executarCenario(cenario(), { cliente: { telefone } }, exec);
+        expect(r.respostas).toContain("TESTE OK");
+        expect(r.respostas).not.toContain("(fallback)");
+      });
+    }
+
+    it("NÃO casa com outro número — não envia pra quem não devia", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario(cenario(), { cliente: { telefone: "11951362106" } }, exec);
+      expect(r.respostas).toContain("(fallback)");
+      expect(r.respostas).not.toContain("TESTE OK");
+    });
+
+    it("'diferente' herda a mesma tolerância (mesmo número em outro formato = igual)", async () => {
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional", clienteId: "cond",
+          proximoSe: { cond_out: "sim", fallback: "nao" },
+          config: { condicoes: [{ id: "out", campo: "cliente.telefone", operador: "diferente", valor: "558596042189" }] },
+        },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "sim", config: { template: "OUTRO" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "nao", config: { template: "(mesmo)" } },
+      ];
+      const exec = criarMockExecutores();
+      // 85996042189 é o MESMO número em outro formato → diferente = false → fallback.
+      const r = await executarCenario(passos, { cliente: { telefone: "85996042189" } }, exec);
+      expect(r.respostas).toContain("(mesmo)");
+      expect(r.respostas).not.toContain("OUTRO");
+    });
+
+    it("campo NÃO-telefone continua match EXATO (não normaliza dígitos à toa)", async () => {
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional", clienteId: "cond",
+          proximoSe: { cond_c: "sim", fallback: "nao" },
+          config: { condicoes: [{ id: "c", campo: "cliente.campos.codigo", operador: "igual", valor: "558596042189" }] },
+        },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "sim", config: { template: "COD OK" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "nao", config: { template: "(cod dif)" } },
+      ];
+      const exec = criarMockExecutores();
+      const r = await executarCenario(passos, { cliente: { campos: { codigo: "85996042189" } } }, exec);
+      expect(r.respostas).toContain("(cod dif)");
+      expect(r.respostas).not.toContain("COD OK");
+    });
+  });
+
   describe("ia_consultar (consulta interna — NÃO envia ao cliente)", () => {
     it("salva a resposta no campo escolhido e NÃO manda pro cliente", async () => {
       const chamarIA = vi.fn().mockResolvedValue("Sugiro terça 14h, quarta 10h e quinta 16h.");
