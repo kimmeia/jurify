@@ -541,7 +541,7 @@ export const financeiroRouter = router({
       .select({
         semCategoria: sql<number>`SUM(CASE WHEN ${asaasCobrancas.categoriaId} IS NULL THEN 1 ELSE 0 END)`,
         semAtendente: sql<number>`SUM(CASE WHEN ${asaasCobrancas.atendenteId} IS NULL THEN 1 ELSE 0 END)`,
-        semContato: sql<number>`SUM(CASE WHEN ${asaasCobrancas.contatoId} IS NULL THEN 1 ELSE 0 END)`,
+        semContato: sql<number>`SUM(CASE WHEN ${asaasCobrancas.contatoId} IS NULL AND ${asaasCobrancas.contatoBeneficiarioId} IS NULL THEN 1 ELSE 0 END)`,
       })
       .from(asaasCobrancas)
       .where(eq(asaasCobrancas.escritorioId, esc.escritorio.id));
@@ -584,6 +584,10 @@ export const financeiroRouter = router({
         and(
           eq(asaasCobrancas.escritorioId, esc.escritorio.id),
           isNull(asaasCobrancas.contatoId),
+          // Órfã de verdade = sem contato E sem beneficiário. Cobrança já
+          // atribuída como pagamento de terceiro (contatoBeneficiarioId) não é
+          // órfã — aparecia aqui e na ficha do cliente ao mesmo tempo.
+          isNull(asaasCobrancas.contatoBeneficiarioId),
         ),
       )
       .groupBy(asaasCobrancas.asaasCustomerId)
