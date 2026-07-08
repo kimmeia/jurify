@@ -1970,6 +1970,45 @@ async function handleDistribuirAtendimento(
 }
 
 /**
+ * Normaliza um telefone BR pra comparação tolerante: só dígitos, sem o código
+ * do país (55) e sem o "9" extra de celular. Assim o MESMO número casa venha
+ * como o app EXIBE ("558596042189"), como o CRM SALVA ("85996042189"), com o
+ * 9º dígito ("5585996042189") ou formatado ("(85) 99604-2189"). Retorna null
+ * se não parece telefone — aí o comparador mantém o match exato de string.
+ */
+function normalizarTelefoneBR(valor: string): string | null {
+  let d = valor.replace(/\D/g, "");
+  if (d.length < 10 || d.length > 13) return null;
+  if (d.length >= 12 && d.startsWith("55")) d = d.slice(2); // tira DDI 55
+  if (d.length !== 10 && d.length !== 11) return null; // esperado DDD(2) + 8|9
+  if (d.length === 11 && d[2] === "9") d = d.slice(0, 2) + d.slice(3); // tira 9 extra de celular
+  return d;
+}
+
+/** Campos que guardam telefone — recebem comparação tolerante em `igual`/`diferente`. */
+function campoEhTelefone(campo: string): boolean {
+  return /telefone|whatsapp|celular|phone/i.test(campo);
+}
+
+/**
+ * Igualdade de uma condição If/else. Tenta match exato de string primeiro; se
+ * o campo é de telefone, cai pra comparação normalizada (ignora DDI, 9º dígito
+ * e pontuação). Sem isso, o número certo escrito em outro formato — ex.: o que
+ * o app mostra vs. o que o CRM salva — reprova a condição e o fluxo desvia pro
+ * ramo errado (o "só envia pra mim" nunca casava).
+ */
+function condicaoIgual(campo: string, valorAtual: unknown, valor: string): boolean {
+  const s = String(valorAtual ?? "");
+  if (s === valor) return true;
+  if (campoEhTelefone(campo)) {
+    const a = normalizarTelefoneBR(s);
+    const b = normalizarTelefoneBR(valor);
+    if (a != null && b != null) return a === b;
+  }
+  return false;
+}
+
+/**
  * Avalia uma única condição sobre um contexto. Retorna `true` se bate.
  * Operadores `maior`, `menor`, `entre` são numéricos; `contem` é string-case
  * insensitive; os demais preservam semântica legada.
@@ -2003,9 +2042,9 @@ function avaliarCondicao(
 
   switch (operador) {
     case "igual":
-      return String(valorAtual ?? "") === valor;
+      return condicaoIgual(campo, valorAtual, valor);
     case "diferente":
-      return String(valorAtual ?? "") !== valor;
+      return !condicaoIgual(campo, valorAtual, valor);
     case "existe":
       return !!valorAtual && valorAtual !== "" && valorAtual !== "0" && valorAtual !== "false";
     case "nao_existe":
@@ -2052,7 +2091,7 @@ function avaliarCondicao(
     default:
       // Operador desconhecido — fallback `igual` para não quebrar cenários
       // legados que salvaram strings estranhas no campo.
-      return String(valorAtual ?? "") === valor;
+      return condicaoIgual(campo, valorAtual, valor);
   }
 }
 
