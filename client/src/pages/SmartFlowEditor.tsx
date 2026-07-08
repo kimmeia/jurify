@@ -2308,7 +2308,7 @@ function ConfigGatilhoFields({
             onChange={(e) => onChange({ diasAntes: Math.max(1, Number(e.target.value) || 1) })}
           />
           <p className="text-[10px] text-muted-foreground mt-1">
-            Dispara quando a cobrança vence em até N dias.
+            Dispara EXATAMENTE N dias antes do vencimento (1 = na véspera). Não dispara no dia do vencimento.
           </p>
         </div>
         <JanelaDisparoFields cfg={cfg} onChange={onChange} rotuloDias="Lembrar por (dias)" />
