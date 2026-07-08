@@ -270,17 +270,20 @@ describe("acharSlotAtivo", () => {
     base,
   );
 
-  it("acha o slot se agora estiver na janela de tolerância", () => {
-    // Scheduler roda 09:05, tolerância 15min → slot 09:00 bate
+  it("acha o slot quando o horário já passou (dispara a partir do horário)", () => {
+    // Scheduler roda 09:05 → slot 09:00 já passou → dispara
     const agora = new Date("2026-04-20T09:05:00");
     expect(acharSlotAtivo(slots, agora, 15)).not.toBeNull();
     expect(acharSlotAtivo(slots, agora, 15)!.getHours()).toBe(9);
   });
 
-  it("ignora slot já passado há muito tempo", () => {
-    // 10:00 está 60min depois do slot 09:00, fora da janela de 15min
+  it("faz catch-up: dispara o slot que já passou mesmo se o tick atrasou (não perde no dia)", () => {
+    // 10:00 está 60min depois do slot 09:00. Antes retornava null (janela de
+    // 15min) e o horário morria no dia. Agora dispara — o dedupe garante 1×.
     const agora = new Date("2026-04-20T10:00:00");
-    expect(acharSlotAtivo(slots, agora, 15)).toBeNull();
+    const achado = acharSlotAtivo(slots, agora, 15);
+    expect(achado).not.toBeNull();
+    expect(achado!.getHours()).toBe(9);
   });
 
   it("ignora slot futuro (agora < slot)", () => {
@@ -288,12 +291,11 @@ describe("acharSlotAtivo", () => {
     expect(acharSlotAtivo(slots, agora, 15)).toBeNull();
   });
 
-  it("escolhe o slot mais recente quando vários caem na janela", () => {
-    // Tolerância alta absorve 2 slots — deve retornar o mais próximo de agora.
+  it("escolhe o slot mais recente que já passou (11:00, não 09:00)", () => {
     const agora = new Date("2026-04-20T11:05:00");
-    const achado = acharSlotAtivo(slots, agora, 300); // 5h
+    const achado = acharSlotAtivo(slots, agora);
     expect(achado).not.toBeNull();
-    expect(achado!.getHours()).toBe(11); // slot 11:00, não 09:00
+    expect(achado!.getHours()).toBe(11); // slot 11:00, o mais recente <= agora
   });
 });
 
@@ -415,12 +417,12 @@ describe("calcularSlotsDoDia com fuso horário", () => {
     expect(slotsOk[0].toISOString()).toBe("2026-07-07T21:45:00.000Z");
     expect(acharSlotAtivo(slotsOk, agora, 15)).not.toBeNull();
 
-    // BUG (documentado): meia-noite UTC (o que o cron passava como `hoje`) vira
-    // 06/07 (ontem em SP) → slot ancorado em ontem → acharSlotAtivo nunca casa.
+    // Documenta a origem do bug do dia: meia-noite UTC (o que o cron passava
+    // como `hoje`) vira 06/07 (ontem em SP) — por isso passamos `agora`, não
+    // `hoje`, no calcularSlotsDoDia.
     const hojeUtcMidnight = new Date("2026-07-07T00:00:00.000Z");
     const slotsBug = calcularSlotsDoDia(cfg, hojeUtcMidnight, "America/Sao_Paulo");
     expect(slotsBug[0].toISOString()).toBe("2026-07-06T21:45:00.000Z");
-    expect(acharSlotAtivo(slotsBug, agora, 15)).toBeNull();
   });
 
   it("sem tz preserva comportamento legado (usa TZ do processo)", () => {
