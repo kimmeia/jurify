@@ -77,7 +77,7 @@ function resumirGatilho(c: any): string | null {
     let cfg: any = c.configGatilho;
     if (typeof cfg === "string") { try { cfg = JSON.parse(cfg); } catch { cfg = null; } }
     const d = Number(cfg?.diasAntes ?? 3);
-    return `${d} dia(s) antes`;
+    return d === 0 ? "No dia do vencimento" : `${d} dia(s) antes`;
   }
   return null;
 }

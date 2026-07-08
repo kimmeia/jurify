@@ -4201,6 +4201,39 @@ describe("SmartFlow Engine", () => {
       expect(tpl.conteudoPreview).toContain("https://asaas.com/i/abc");
     });
 
+    it("reconstrói a MENSAGEM REAL na timeline quando o corpo do template foi guardado", async () => {
+      const enviarWhatsAppTemplate = vi.fn().mockResolvedValue({ ok: true });
+      const exec = criarMockExecutores({ enviarWhatsAppTemplate });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "whatsapp_enviar", clienteId: "n1",
+          config: {
+            modo: "template",
+            templateNome: "1d_antes_pagamento",
+            templateIdioma: "pt_BR",
+            templateCorpo: ["{{nomeCliente}}", "{{pagamentoValor}}", "{{linkPagamento}}"],
+            templateCorpoTexto: "Olá {{1}}, sua parcela de {{2}} vence amanhã. Pague em {{3}}.",
+          },
+        },
+      ];
+      const r = await executarCenario(
+        passos,
+        {
+          mensagem: "x", contatoId: 42, telefoneCliente: "5585999998888",
+          nomeCliente: "Rafael", pagamentoValor: "800,00", linkPagamento: "https://asaas.com/i/abc",
+        },
+        exec,
+      );
+
+      expect(r.sucesso).toBe(true);
+      const [, tpl] = (enviarWhatsAppTemplate as any).mock.calls[0];
+      // Timeline recebe a mensagem MONTADA (igual à que o cliente vê), não o resumo.
+      expect(tpl.conteudoPreview).toBe(
+        "Olá Rafael, sua parcela de 800,00 vence amanhã. Pague em https://asaas.com/i/abc.",
+      );
+      expect(tpl.conteudoPreview).not.toContain("[Template:");
+    });
+
     it("barra o envio (e NÃO persiste) quando uma variável do corpo fica vazia", async () => {
       const enviarWhatsAppTemplate = vi.fn().mockResolvedValue({ ok: true });
       const exec = criarMockExecutores({ enviarWhatsAppTemplate });

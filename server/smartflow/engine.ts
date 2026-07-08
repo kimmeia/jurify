@@ -1435,14 +1435,25 @@ async function enviarTemplateWhatsApp(
   if (faltando) {
     return { sucesso: false, contexto: ctx, mensagemErro: faltando };
   }
-  // Prévia pra timeline: o corpo aprovado vive na Meta, então mostramos o
-  // nome do template + os valores das variáveis interpolados, na ordem.
-  const corpoVals = (Array.isArray(cfg.templateCorpo) ? cfg.templateCorpo : [])
-    .map((v: string) => ip(v).trim())
-    .filter(Boolean);
-  const conteudoPreview = corpoVals.length
-    ? `[Template: ${nome}] ${corpoVals.join(" · ")}`
-    : `[Template: ${nome}]`;
+  // Conteúdo pra timeline de Atendimentos. Quando o corpo aprovado foi
+  // guardado (`templateCorpoTexto`, com {{1}}..{{n}}), reconstrói a MENSAGEM
+  // REAL — preenche cada {{k}} com o valor interpolado — igual ao que o
+  // cliente recebe. Sem o corpo guardado (cenários antigos), cai no resumo
+  // compacto "[Template: nome] valores".
+  const corpoValsRaw: string[] = Array.isArray(cfg.templateCorpo) ? cfg.templateCorpo : [];
+  const corpoTexto = typeof cfg.templateCorpoTexto === "string" ? cfg.templateCorpoTexto : "";
+  let conteudoPreview: string;
+  if (corpoTexto) {
+    conteudoPreview = corpoTexto.replace(/\{\{\s*(\d+)\s*\}\}/g, (_m: string, d: string) => {
+      const idx = Number(d) - 1;
+      return idx >= 0 && idx < corpoValsRaw.length ? ip(corpoValsRaw[idx]) : "";
+    });
+  } else {
+    const corpoVals = corpoValsRaw.map((v: string) => ip(v).trim()).filter(Boolean);
+    conteudoPreview = corpoVals.length
+      ? `[Template: ${nome}] ${corpoVals.join(" · ")}`
+      : `[Template: ${nome}]`;
+  }
   const contatoId = typeof ctx.contatoId === "number" ? ctx.contatoId : undefined;
   try {
     const r = await exec.enviarWhatsAppTemplate(telefone, { nome, idioma, componentes, contatoId, conteudoPreview });

@@ -616,6 +616,32 @@ export const financeiroRouter = router({
       );
     }
 
+    // Órfã, por definição, NÃO está em asaas_clientes — então o nome quase
+    // sempre falta acima e a tela mostrava tudo como "(pagador desconhecido)",
+    // inutilizando a revisão (não dá pra saber quem vincular). Busca o nome do
+    // pagador direto no Asaas (fonte real) pros customers sem nome local. Cap +
+    // allSettled: o rate guard do AsaasClient throttla, e 404/429/falha
+    // individual só mantém o genérico daquele item.
+    const semNome = customerIds.filter((c) => !nomesMap[c]).slice(0, 30);
+    if (semNome.length > 0) {
+      try {
+        const { getAsaasClient } = await import("../integracoes/router-asaas");
+        const client = await getAsaasClient(esc.escritorio.id);
+        if (client) {
+          const res = await Promise.allSettled(
+            semNome.map((cid) => client.buscarCliente(cid)),
+          );
+          res.forEach((r, i) => {
+            if (r.status === "fulfilled" && r.value?.name?.trim()) {
+              nomesMap[semNome[i]] = r.value.name.trim();
+            }
+          });
+        }
+      } catch {
+        /* Asaas indisponível → mantém o comportamento antigo (genérico) */
+      }
+    }
+
     return rows.map((r) => ({
       asaasCustomerId: r.asaasCustomerId,
       nomeCustomer: r.asaasCustomerId ? (nomesMap[r.asaasCustomerId] ?? null) : null,

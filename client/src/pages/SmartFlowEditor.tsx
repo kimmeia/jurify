@@ -854,7 +854,9 @@ function resumirConfigGatilho(g: GatilhoSmartflow, cfg: Record<string, unknown>)
         ? Number(cfg.diasAtraso ?? 0) > 0
           ? `≥ ${Number(cfg.diasAtraso)} dia(s) atraso`
           : "qualquer atraso"
-        : `${Number(cfg.diasAntes ?? 3)} dia(s) antes`;
+        : Number(cfg.diasAntes ?? 3) === 0
+          ? "no dia (vence hoje)"
+          : `${Number(cfg.diasAntes ?? 3)} dia(s) antes`;
     const horario = typeof cfg.horarioInicial === "string" ? cfg.horarioInicial : "";
     if (!horario) return base;
     const disparos = Number(cfg.disparosPorDia ?? 1);
@@ -2302,13 +2304,13 @@ function ConfigGatilhoFields({
           <Label className="text-xs">Dias antes do vencimento</Label>
           <Input
             type="number"
-            min={1}
+            min={0}
             max={60}
             value={Number(cfg.diasAntes ?? 3)}
-            onChange={(e) => onChange({ diasAntes: Math.max(1, Number(e.target.value) || 1) })}
+            onChange={(e) => onChange({ diasAntes: Math.max(0, Number(e.target.value) || 0) })}
           />
           <p className="text-[10px] text-muted-foreground mt-1">
-            Dispara EXATAMENTE N dias antes do vencimento (1 = na véspera). Não dispara no dia do vencimento.
+            Dispara EXATAMENTE N dias antes do vencimento. <strong>0</strong> = no dia do vencimento (vence hoje); <strong>1</strong> = na véspera.
           </p>
         </div>
         <JanelaDisparoFields cfg={cfg} onChange={onChange} rotuloDias="Lembrar por (dias)" />
