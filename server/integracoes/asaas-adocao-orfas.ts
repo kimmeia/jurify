@@ -32,7 +32,7 @@ import { getDb } from "../db";
 import { asaasClientes, asaasCobrancas, contatos } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
 import type { AsaasClient } from "./asaas-client";
-import { inserirVinculoAsaasIdempotente } from "./asaas-sync";
+import { inserirVinculoAsaasIdempotente, backfillContatoPorVinculo } from "./asaas-sync";
 
 const log = createLogger("asaas-adocao-orfas");
 
@@ -187,6 +187,13 @@ export async function adotarCobrancasOrfas(
       customersFalhados++;
       processados++;
     }
+  }
+
+  // Recém-criados os vínculos, amarra AGORA as cobranças órfãs desses customers
+  // ao contato — antes ficava "pro próximo sync achar via mapa", deixando a
+  // cobrança órfã no intervalo. Non-fatal.
+  if (novosContatos + vinculadosExistentes > 0) {
+    await backfillContatoPorVinculo(escritorioId).catch(() => {});
   }
 
   const restantesEstimado = Math.max(0, totalOrfaos - processados);

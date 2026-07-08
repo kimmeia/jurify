@@ -13,7 +13,7 @@
 
 import { getDb } from "../db";
 import { asaasConfig, asaasClientes, asaasCobrancas, contatos, colaboradores, notificacoes } from "../../drizzle/schema";
-import { eq, and, inArray, isNull, ne, or, lt } from "drizzle-orm";
+import { eq, and, inArray, isNull, ne, or, lt, sql } from "drizzle-orm";
 import { decrypt } from "../escritorio/crypto-utils";
 import { AsaasClient, type AsaasPayment } from "./asaas-client";
 import { mapearFormaPagamento } from "./asaas-forma-pagamento";
@@ -605,6 +605,47 @@ async function desativarVinculoPor403(
 // que usa listagem paginada (~1-2 requests por cliente) e cobre o mesmo
 // caso de uso (refresh de status de cobranças recentes).
 
+/**
+ * Amarra cobranças órfãs (`contatoId IS NULL`) ao contato dono quando o
+ * `asaasCustomerId` já tem vínculo em `asaas_clientes`.
+ *
+ * Fecha o buraco estrutural: a cobrança pode sincronizar ANTES do cliente
+ * estar vinculado ao Asaas → nasce com `contatoId` nulo e o webhook só
+ * re-adota no PRÓXIMO evento daquele pagamento (que pode nunca vir). Sem isso,
+ * a cobrança fica "órfã" pra sempre no módulo Financeiro mesmo o cliente
+ * existindo, e o SmartFlow de cobrança não acha telefone.
+ *
+ * Idempotente (só toca linhas com `contatoId` nulo). Se o mesmo customer tem
+ * mais de um vínculo (a tabela não tem UNIQUE por customer), escolhe de forma
+ * determinística: `primario` primeiro, empate pelo menor id.
+ */
+export async function backfillContatoPorVinculo(escritorioId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const res: any = await db.execute(sql`
+    UPDATE asaas_cobrancas c
+    SET c.contatoIdAsaasCob = (
+      SELECT ac.contatoIdAsaas FROM asaas_clientes ac
+      WHERE ac.asaasCustomerId = c.asaasCustomerIdCob
+        AND ac.escritorioIdAsaasCli = c.escritorioIdAsaasCob
+      ORDER BY ac.primarioAsaasCli DESC, ac.id ASC
+      LIMIT 1
+    )
+    WHERE c.contatoIdAsaasCob IS NULL
+      AND c.escritorioIdAsaasCob = ${escritorioId}
+      AND EXISTS (
+        SELECT 1 FROM asaas_clientes ac2
+        WHERE ac2.asaasCustomerId = c.asaasCustomerIdCob
+          AND ac2.escritorioIdAsaasCli = c.escritorioIdAsaasCob
+      )
+  `);
+  const n = Number(res?.[0]?.affectedRows ?? res?.affectedRows ?? 0);
+  if (n > 0) {
+    log.info(`[Asaas Sync] Backfill: ${n} cobrança(s) órfã(s) amarrada(s) ao contato do vínculo (escritório ${escritorioId})`);
+  }
+  return n;
+}
+
 export async function syncCobrancasEscritorio(
   escritorioId: number,
   opts?: {
@@ -739,6 +780,12 @@ export async function syncCobrancasEscritorio(
       .set({ saldo: saldo.balance.toString(), ultimoTeste: new Date() })
       .where(eq(asaasConfig.escritorioId, escritorioId));
   } catch {}
+
+  // Amarra órfãs cujo customer já tem vínculo (cobrança que sincronizou antes
+  // do cliente ser vinculado). Non-fatal — não derruba o sync se falhar.
+  await backfillContatoPorVinculo(escritorioId).catch((err) =>
+    log.warn(`[Asaas Sync] Backfill de órfãs falhou (escritório ${escritorioId}): ${err?.message || err}`),
+  );
 
   return { clientes: vinculos.length, ...totais };
 }
