@@ -25,6 +25,7 @@ import { eq, and, inArray } from "drizzle-orm";
 import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { captureError } from "../_core/sentry";
 import { dispararPagamentoVencido, dispararProximoVencimento } from "./dispatcher";
+import { verificarCobrancaAtivaNoAsaas } from "../integracoes/asaas-sync";
 import {
   acharSlotAtivo,
   calcularSlotsDoDia,
@@ -221,6 +222,12 @@ export async function rodarCicloCobrancas(
           ignorarDedup: !!opts.forcar,
         };
 
+        // Verificação pré-envio: conferida 1× por cobrança, só quando ela
+        // realmente vai disparar. Impede cobrar cobrança excluída/paga cuja
+        // deleção o webhook não sincronizou.
+        let asaasVerificado = false;
+        let cobrancaPulada = false;
+
         for (const cen of cenariosDoEscritorio) {
           const cfg = cen.configGatilho as
             | ConfigGatilhoPagamentoVencido
@@ -257,6 +264,23 @@ export async function rodarCicloCobrancas(
             if (!slot) continue;
             params.slotTimestamp = slot;
           }
+
+          // Rede de segurança: confere no Asaas ANTES de disparar. Se a
+          // cobrança foi excluída/paga (e o webhook não sincronizou), não
+          // cobra — apaga/atualiza a cópia local e pula a cobrança inteira.
+          // 1× por cobrança (não por cenário), só quando já vai disparar.
+          if (!asaasVerificado) {
+            asaasVerificado = true;
+            const estado = await verificarCobrancaAtivaNoAsaas(escritorioId, cb.asaasPaymentId);
+            if (estado === "excluida" || estado === "paga") {
+              log.info(
+                { paymentId: cb.asaasPaymentId, estado },
+                "[Cobranças] cobrança não está mais em aberto no Asaas — disparo cancelado",
+              );
+              cobrancaPulada = true;
+            }
+          }
+          if (cobrancaPulada) break;
 
           if (cen.gatilho === "pagamento_vencido") {
             const r = await dispararPagamentoVencido(escritorioId, params);

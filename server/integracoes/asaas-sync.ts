@@ -1088,25 +1088,74 @@ export async function reconciliarCobrancasFantasmasEscritorio(
 }
 
 /**
- * Orquestrador da reconciliação SEMANAL — itera escritórios conectados e
- * roda `reconciliarCobrancasFantasmasEscritorio` em cada um onde já
- * passaram 7 dias desde a última rodada (ou nunca rodou).
+ * Confere no Asaas se uma cobrança ainda deve ser cobrada, ANTES de a régua
+ * de cobrança disparar. É a rede de segurança que impede cobrar uma cobrança
+ * excluída/paga cuja sincronização o webhook `PAYMENT_DELETED` perdeu.
  *
- * Antes era mensal (30d). Subiu pra semanal porque fantasma 30d divergia
- * demais com o painel Asaas — caso típico: cobrança deletada no Asaas
- * dia 1 só era apagada no JuridFlow dia 31. Painel financeiro mostrava
- * "a receber" estagnado por um mês.
+ * GET /payments/{id}:
+ *  - `deleted` ou 404 → excluída no Asaas: apaga a cópia local e retorna
+ *    "excluida".
+ *  - status pago/estornado → atualiza o status local (não re-dispara) e
+ *    retorna "paga".
+ *  - senão → "aberta" (pode cobrar).
  *
- * Roda só 1 escritório por chamada — distribui custo no tempo. Cron
- * diário chama essa função; com 7+ escritórios, todos rodam dentro da
- * semana.
+ * Erro transitório (rede/429) → "erro": o chamador segue enviando (fail-open),
+ * pra instabilidade do Asaas não travar toda a régua. Deleção confirmada volta
+ * como 404/`deleted` (não como erro de rede), então o caso perigoso — cobrar
+ * algo excluído — é sempre pego quando o Asaas está acessível.
+ */
+export async function verificarCobrancaAtivaNoAsaas(
+  escritorioId: number,
+  paymentId: string,
+): Promise<"aberta" | "excluida" | "paga" | "erro"> {
+  const db = await getDb();
+  if (!db) return "erro";
+  const client = await getAsaasClientForEscritorio(escritorioId);
+  if (!client) return "erro";
+  const onde = and(
+    eq(asaasCobrancas.escritorioId, escritorioId),
+    eq(asaasCobrancas.asaasPaymentId, paymentId),
+  );
+  try {
+    const pg = await client.buscarCobranca(paymentId);
+    if (pg?.deleted) {
+      await db.delete(asaasCobrancas).where(onde);
+      return "excluida";
+    }
+    if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH", "REFUNDED"].includes(pg.status)) {
+      await db.update(asaasCobrancas).set({ status: pg.status }).where(onde);
+      return "paga";
+    }
+    return "aberta";
+  } catch (err: any) {
+    const st = err?.response?.status ?? err?.cause?.response?.status;
+    if (st === 404) {
+      await db.delete(asaasCobrancas).where(onde);
+      return "excluida";
+    }
+    return "erro";
+  }
+}
+
+/**
+ * Orquestrador da reconciliação DIÁRIA — itera escritórios conectados e roda
+ * `reconciliarCobrancasFantasmasEscritorio` em cada um onde já passou 1 dia
+ * desde a última rodada (ou nunca rodou).
+ *
+ * Histórico: mensal (30d) → semanal (7d) → diário (1d). Combinado com a
+ * verificação pré-envio (`verificarCobrancaAtivaNoAsaas`), que já impede
+ * cobrar cobrança excluída na hora, a faxina diária mantém o painel
+ * financeiro limpo em até 24h em vez de uma semana.
+ *
+ * Roda só 1 escritório por chamada — distribui custo no tempo. Cron diário
+ * chama essa função.
  */
 export async function executarReconciliacaoFantasmasJob(): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
-  const seteDiasAtras = new Date();
-  seteDiasAtras.setUTCDate(seteDiasAtras.getUTCDate() - 7);
+  const umDiaAtras = new Date();
+  umDiaAtras.setUTCDate(umDiaAtras.getUTCDate() - 1);
 
   const candidatos = await db
     .select({
@@ -1118,7 +1167,7 @@ export async function executarReconciliacaoFantasmasJob(): Promise<void> {
       eq(asaasConfig.status, "conectado"),
       or(
         isNull(asaasConfig.ultimaReconciliacaoFantasmasEm),
-        lt(asaasConfig.ultimaReconciliacaoFantasmasEm, seteDiasAtras),
+        lt(asaasConfig.ultimaReconciliacaoFantasmasEm, umDiaAtras),
       ),
     ));
 
