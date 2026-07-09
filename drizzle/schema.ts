@@ -1595,6 +1595,13 @@ export const asaasCobrancas = mysqlTable(
     ]).notNull(),
     status: varchar("statusAsaasCob", { length: 64 }).notNull(),
     descricao: varchar("descricaoAsaas", { length: 512 }),
+    /**
+     * Cache do nome do pagador (customer Asaas). Cobrança órfã não está em
+     * asaas_clientes, então a revisão preenche isto buscando 1x no Asaas
+     * (sequencial, rate-safe) e reusa depois — sem estourar rate limit. NULL
+     * até a primeira busca.
+     */
+    nomePagador: varchar("nomePagadorAsaasCob", { length: 255 }),
     invoiceUrl: text("invoiceUrlAsaas"),
     bankSlipUrl: text("bankSlipUrlAsaas"),
     pixQrCodePayload: text("pixQrCodePayload"),
