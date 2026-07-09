@@ -185,6 +185,8 @@ export default function Financeiro() {
       {
         status: filtroStatus.length > 0 ? filtroStatus : undefined,
         formaPagamento: filtroForma.length > 0 ? filtroForma : undefined,
+        // Busca no servidor (banco inteiro), não só na página carregada.
+        busca: busca.trim() || undefined,
         pagamentoInicio: rangeEfetivo.inicio,
         pagamentoFim: rangeEfetivo.fim,
         categoriaIds: filtrosAvancados.categoriaIds.length > 0
@@ -216,6 +218,7 @@ export default function Financeiro() {
     filtrosAvancados,
     rangeEfetivo.inicio,
     rangeEfetivo.fim,
+    busca,
   ]);
   const { data: clientesVinculados, refetch: refetchClientes } =
     trpc.asaas.listarClientesVinculados.useQuery(
@@ -365,15 +368,11 @@ export default function Financeiro() {
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
-  // Filtra cobranças visíveis (filtros client-side adicionais).
-  // Forma já vai pro backend, mas mantemos o filtro de busca livre.
-  const cobrancasFiltradas = useMemo(() => {
-    if (!cobrancas?.items) return [];
-    return cobrancas.items.filter((c: any) => {
-      if (busca && !`${c.nomeContato} ${c.descricao || ""}`.toLowerCase().includes(busca.toLowerCase())) return false;
-      return true;
-    });
-  }, [cobrancas, busca]);
+  // A busca agora é SERVER-SIDE (banco inteiro, por descrição + nome do
+  // contato + nome do pagador). Não refiltra no client — senão esconderia
+  // resultados que o servidor achou por um campo que o client não checa
+  // (ex.: nome do pagador em cache).
+  const cobrancasFiltradas = useMemo(() => cobrancas?.items ?? [], [cobrancas]);
 
   const toggleSelecionada = (id: string) => {
     setSelecionadas((prev) => {

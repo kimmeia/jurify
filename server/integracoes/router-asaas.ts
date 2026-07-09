@@ -2849,6 +2849,33 @@ export const asaasRouter = router({
           conditions.push(sql`CAST(${asaasCobrancas.valor} AS DECIMAL(10,2)) <= ${input.valorMax}`);
         }
 
+        // Busca textual no BANCO INTEIRO — antes o parâmetro `busca` existia mas
+        // NÃO era aplicado aqui; o módulo filtrava client-side só na página
+        // carregada (25 itens), então cobrança em página posterior "sumia"
+        // mesmo existindo (era o caso do "não acho o Rodrigo"). Procura em
+        // descrição, nome do pagador (cache) e nome do contato vinculado.
+        if (input?.busca && input.busca.trim()) {
+          const b = `%${input.busca.trim().replace(/[%_\\]/g, (m) => "\\" + m)}%`;
+          conditions.push(
+            or(
+              like(asaasCobrancas.descricao, b),
+              like(asaasCobrancas.nomePagador, b),
+              inArray(
+                asaasCobrancas.contatoId,
+                db
+                  .select({ id: contatos.id })
+                  .from(contatos)
+                  .where(
+                    and(
+                      eq(contatos.escritorioId, esc.escritorio.id),
+                      like(contatos.nome, b),
+                    ),
+                  ),
+              ),
+            )!,
+          );
+        }
+
         if (input?.vencimentoInicio && input?.vencimentoFim) {
           conditions.push(between(asaasCobrancas.vencimento, input.vencimentoInicio, input.vencimentoFim));
         } else if (input?.vencimentoInicio) {

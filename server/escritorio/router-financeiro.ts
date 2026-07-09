@@ -578,6 +578,7 @@ export const financeiroRouter = router({
         valorTotal: sql<number>`SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(10,2)))`,
         primeiraData: sql<string>`MIN(COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento}))`,
         ultimaData: sql<string>`MAX(COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento}))`,
+        nomeCache: sql<string | null>`MAX(${asaasCobrancas.nomePagador})`,
       })
       .from(asaasCobrancas)
       .where(
@@ -601,8 +602,17 @@ export const financeiroRouter = router({
     const customerIds = rows
       .map((r) => r.asaasCustomerId)
       .filter((c): c is string => !!c);
-    let nomesMap: Record<string, string> = {};
-    if (customerIds.length > 0) {
+
+    // 1) Nome já em CACHE na própria cobrança (nomePagador, de busca anterior).
+    const nomesMap: Record<string, string> = {};
+    for (const r of rows) {
+      const nome = r.nomeCache?.trim();
+      if (r.asaasCustomerId && nome) nomesMap[r.asaasCustomerId] = nome;
+    }
+
+    // 2) Nome do vínculo (asaas_clientes) pros que ainda faltam.
+    const faltamCliente = customerIds.filter((c) => !nomesMap[c]);
+    if (faltamCliente.length > 0) {
       const nomes = await db
         .select({
           customerId: asaasClientes.asaasCustomerId,
@@ -612,34 +622,46 @@ export const financeiroRouter = router({
         .where(
           and(
             eq(asaasClientes.escritorioId, esc.escritorio.id),
-            inArray(asaasClientes.asaasCustomerId, customerIds),
+            inArray(asaasClientes.asaasCustomerId, faltamCliente),
           ),
         );
-      nomesMap = Object.fromEntries(
-        nomes.filter((n) => n.nome).map((n) => [n.customerId, n.nome!]),
-      );
+      for (const n of nomes) {
+        if (n.nome) nomesMap[n.customerId] = n.nome;
+      }
     }
 
-    // Órfã, por definição, NÃO está em asaas_clientes — então o nome quase
-    // sempre falta acima e a tela mostrava tudo como "(pagador desconhecido)",
-    // inutilizando a revisão (não dá pra saber quem vincular). Busca o nome do
-    // pagador direto no Asaas (fonte real) pros customers sem nome local. Cap +
-    // allSettled: o rate guard do AsaasClient throttla, e 404/429/falha
-    // individual só mantém o genérico daquele item.
-    const semNome = customerIds.filter((c) => !nomesMap[c]).slice(0, 30);
+    // 3) Ainda sem nome (órfã de verdade, fora de asaas_clientes) → busca no
+    // Asaas SEQUENCIALMENTE e GUARDA em nomePagador. O paralelo anterior
+    // estourava o rate limit e deixava quase tudo "(pagador desconhecido)".
+    // Cap por abertura — o cache faz o resto preencher nas próximas. Para no
+    // primeiro 429 pra não cascatear erro.
+    const semNome = customerIds.filter((c) => !nomesMap[c]).slice(0, 25);
     if (semNome.length > 0) {
       try {
         const { getAsaasClient } = await import("../integracoes/router-asaas");
         const client = await getAsaasClient(esc.escritorio.id);
         if (client) {
-          const res = await Promise.allSettled(
-            semNome.map((cid) => client.buscarCliente(cid)),
-          );
-          res.forEach((r, i) => {
-            if (r.status === "fulfilled" && r.value?.name?.trim()) {
-              nomesMap[semNome[i]] = r.value.name.trim();
+          for (const cid of semNome) {
+            try {
+              const cli = await client.buscarCliente(cid);
+              const nome = cli?.name?.trim();
+              if (!nome) continue;
+              nomesMap[cid] = nome;
+              await db
+                .update(asaasCobrancas)
+                .set({ nomePagador: nome })
+                .where(
+                  and(
+                    eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+                    eq(asaasCobrancas.asaasCustomerId, cid),
+                    isNull(asaasCobrancas.contatoId),
+                  ),
+                );
+            } catch (e: any) {
+              const st = e?.response?.status ?? e?.cause?.response?.status;
+              if (st === 429) break; // rate limit → para; resto fica pra próxima abertura
             }
-          });
+          }
         }
       } catch {
         /* Asaas indisponível → mantém o comportamento antigo (genérico) */
