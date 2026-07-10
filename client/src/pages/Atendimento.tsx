@@ -1356,45 +1356,11 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         )}
         <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-xs font-bold text-primary shrink-0">{initials(conv?.contatoNome || "?")}</div>
         <div className="flex-1 min-w-0">
+          {/* Linha 1: nome + status + bot (controle). Antes o nome dividia espaço
+              com 5 badges coloridos; o resto do contexto foi pro subtítulo abaixo. */}
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-semibold truncate">{conv?.contatoNome || "Contato"}</p>
             <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
-            {/* Badge do atendente responsável — bem visível em azul.
-                Ajuda gestor/dono a identificar de quem é a conversa */}
-            {(conv as any)?.atendenteNome ? (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200 gap-1 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-800"
-              >
-                <User className="h-3 w-3" />
-                {(conv as any).atendenteNome}
-              </Badge>
-            ) : (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800"
-              >
-                Sem atendente
-              </Badge>
-            )}
-            {conv?.contatoId && <FinanceiroBadge contatoId={conv.contatoId} />}
-            {/* Badge do canal: mostra de qual número WhatsApp veio a conversa.
-                Importante quando o escritório tem MÚLTIPLOS números conectados
-                — sem isso, atendente não sabe por onde responder o cliente. */}
-            {(conv as any)?.canalNome && (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200 gap-1 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800"
-                title={`Conversa recebida via ${(conv as any).canalNome || "canal"}${(conv as any).canalTelefone ? ` · ${(conv as any).canalTelefone}` : ""}`}
-              >
-                {(conv as any).canalTipo?.startsWith("whatsapp") ? "💬"
-                  : (conv as any).canalTipo === "instagram" ? "📷"
-                  : (conv as any).canalTipo === "facebook" ? "🟪"
-                  : "📡"}
-                {/* Mostra o NÚMERO (distingue múltiplos WhatsApp); cai pro nome se não houver. */}
-                {(conv as any).canalTelefone || (conv as any).canalNome}
-              </Badge>
-            )}
             {/* Pill do bot: indicador + toggle rápido. O controle completo vive no
                 Customer 360, mas este atalho garante visibilidade com o painel colapsado. */}
             {bot.managed && conv && (
@@ -1416,11 +1382,37 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               </button>
             )}
           </div>
-          {(conv?.contatoTelefone || conv?.chatIdExterno) && (
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              {conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "")}
-            </p>
-          )}
+          {/* Linha 2 (subtítulo discreto): atendente · canal/número · telefone ·
+              financeiro. Mesma informação dos badges de antes, sem o ruído visual. */}
+          <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap mt-0.5 text-[10px] text-muted-foreground">
+            {(conv as any)?.atendenteNome ? (
+              <span className="inline-flex items-center gap-1" title={`Responsável: ${(conv as any).atendenteNome}`}>
+                <User className="h-3 w-3" />{(conv as any).atendenteNome}
+              </span>
+            ) : (
+              <span className="text-amber-600 dark:text-amber-400 font-medium">Sem atendente</span>
+            )}
+            {(conv as any)?.canalNome && (
+              <span
+                className="inline-flex items-center gap-1"
+                title={`Conversa recebida via ${(conv as any).canalNome || "canal"}${(conv as any).canalTelefone ? ` · ${(conv as any).canalTelefone}` : ""}`}
+              >
+                <span className="text-muted-foreground/40">·</span>
+                {(conv as any).canalTipo?.startsWith("whatsapp") ? "💬"
+                  : (conv as any).canalTipo === "instagram" ? "📷"
+                  : (conv as any).canalTipo === "facebook" ? "🟪"
+                  : "📡"}
+                {(conv as any).canalTelefone || (conv as any).canalNome}
+              </span>
+            )}
+            {(conv?.contatoTelefone || conv?.chatIdExterno) && (
+              <span className="inline-flex items-center gap-1">
+                <span className="text-muted-foreground/40">·</span>
+                {conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "")}
+              </span>
+            )}
+            {conv?.contatoId && <FinanceiroBadge contatoId={conv.contatoId} />}
+          </div>
         </div>
         {(conv?.contatoTelefone || conv?.chatIdExterno) && (onWA || onTel || onLigarWhatsApp) && (() => {
           const tel = conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "") || "";
@@ -1434,24 +1426,27 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           );
         })()}
       </div>
-      {/* Header linha 2: acoes */}
+      {/* Header linha 2: ações. Cores acalmadas — antes cada botão tinha uma cor
+          (indigo/violet/blue/orange…) e a barra parecia um arco-íris. Agora as
+          ações de contexto ficam neutras; só Resolver (verde) e Excluir (vermelho)
+          mantêm cor, porque são as decisões que importam. */}
       <div className="flex items-center gap-1 mt-1.5 -mb-0.5 overflow-x-auto">
         {onAbrirLinhaTempo && (
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 text-[10px] px-2 text-indigo-600 shrink-0 font-semibold"
+            className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground shrink-0"
             onClick={onAbrirLinhaTempo}
             title="Toda a vida jurídica do cliente em uma timeline"
           >
             <ScrollText className="h-3 w-3 mr-1" />Linha do Tempo
           </Button>
         )}
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-violet-600 shrink-0" onClick={() => setShowAddLead(true)}><TrendingUp className="h-3 w-3 mr-1" />Pipeline</Button>
+        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowAddLead(true)}><TrendingUp className="h-3 w-3 mr-1" />Pipeline</Button>
         {conv?.contatoId && <FinanceiroPopover contatoId={conv.contatoId} />}
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-blue-600 shrink-0" onClick={() => setShowAgendar(true)}><Calendar className="h-3 w-3 mr-1" />Agendar</Button>
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-orange-600 shrink-0" onClick={() => setShowTransferir(true)}><ArrowRightLeft className="h-3 w-3 mr-1" />Transferir</Button>
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-indigo-600 shrink-0" onClick={() => setShowVincular(true)}><Link2 className="h-3 w-3 mr-1" />Vincular</Button>
+        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowAgendar(true)}><Calendar className="h-3 w-3 mr-1" />Agendar</Button>
+        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowTransferir(true)}><ArrowRightLeft className="h-3 w-3 mr-1" />Transferir</Button>
+        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowVincular(true)}><Link2 className="h-3 w-3 mr-1" />Vincular</Button>
         <div className="flex-1" />
         <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-emerald-600 shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-3 w-3 mr-1" />Resolver</Button>
         <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-3 w-3 mr-1" />Fechar</Button>
