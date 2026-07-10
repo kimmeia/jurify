@@ -59,7 +59,7 @@ import { FilaChamadas } from "./atendimento/fila-chamadas";
 import { CartaoLigacao } from "./atendimento/cartao-ligacao";
 import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
-import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen } from "lucide-react";
+import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen, ChevronDown } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 function timeAgo(d: string) { if (!d) return ""; const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "agora"; if (m < 60) return m + "min"; const h = Math.floor(m / 60); if (h < 24) return h + "h"; return Math.floor(h / 24) + "d"; }
@@ -1426,31 +1426,29 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           );
         })()}
       </div>
-      {/* Header linha 2: ações. Cores acalmadas — antes cada botão tinha uma cor
-          (indigo/violet/blue/orange…) e a barra parecia um arco-íris. Agora as
-          ações de contexto ficam neutras; só Resolver (verde) e Excluir (vermelho)
-          mantêm cor, porque são as decisões que importam. */}
-      <div className="flex items-center gap-1 mt-1.5 -mb-0.5 overflow-x-auto">
-        {onAbrirLinhaTempo && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground shrink-0"
-            onClick={onAbrirLinhaTempo}
-            title="Toda a vida jurídica do cliente em uma timeline"
-          >
-            <ScrollText className="h-3 w-3 mr-1" />Linha do Tempo
-          </Button>
-        )}
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowAddLead(true)}><TrendingUp className="h-3 w-3 mr-1" />Pipeline</Button>
+      {/* Header linha 2: ações — enxuto. Só Transferir, Resolver e Fechar ficam
+          visíveis; o resto (Linha do Tempo, Pipeline, Agendar, Vincular, Excluir)
+          entra no menu "Mais". Nada foi removido, só reorganizado. Resolver ganha
+          fundo verde por ser a decisão mais comum. */}
+      <div className="flex items-center gap-1.5 mt-2 overflow-x-auto">
         {conv?.contatoId && <FinanceiroPopover contatoId={conv.contatoId} />}
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowAgendar(true)}><Calendar className="h-3 w-3 mr-1" />Agendar</Button>
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowTransferir(true)}><ArrowRightLeft className="h-3 w-3 mr-1" />Transferir</Button>
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowVincular(true)}><Link2 className="h-3 w-3 mr-1" />Vincular</Button>
         <div className="flex-1" />
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-emerald-600 shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-3 w-3 mr-1" />Resolver</Button>
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-3 w-3 mr-1" />Fechar</Button>
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" title="Excluir" onClick={handleDelete}><Trash2 className="h-3 w-3" /></Button>
+        <Button variant="ghost" size="sm" className="h-7 text-[11px] px-2.5 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowTransferir(true)}><ArrowRightLeft className="h-3.5 w-3.5 mr-1" />Transferir</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-[11px] px-3 shrink-0 font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800 dark:text-emerald-300 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60" onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-3.5 w-3.5 mr-1" />Resolver</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-[11px] px-2.5 text-muted-foreground hover:text-foreground shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-3.5 w-3.5 mr-1" />Fechar</Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground shrink-0" title="Mais ações" aria-label="Mais ações"><MoreVertical className="h-4 w-4" /></Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            {onAbrirLinhaTempo && <DropdownMenuItem onClick={onAbrirLinhaTempo}><ScrollText className="h-4 w-4 mr-2" />Linha do Tempo</DropdownMenuItem>}
+            <DropdownMenuItem onClick={() => setShowAddLead(true)}><TrendingUp className="h-4 w-4 mr-2" />Pipeline</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowAgendar(true)}><Calendar className="h-4 w-4 mr-2" />Agendar</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowVincular(true)}><Link2 className="h-4 w-4 mr-2" />Vincular</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive"><Trash2 className="h-4 w-4 mr-2" />Excluir</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
     )}
@@ -1553,24 +1551,6 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           desktop. No celular fica atrás do ✨ do composer (mantém o chat limpo). */}
       {!mobile && (
       <div className="px-3 pt-2 pb-1.5 flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide shrink-0">Tom:</span>
-        <div className="inline-flex bg-background border rounded-lg p-0.5 gap-0 shadow-sm">
-          {(["formal", "direto", "empatico", "amigavel"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTom(t)}
-              className={
-                "px-2.5 py-1 rounded-md text-[11px] font-medium transition " +
-                (tom === t
-                  ? "bg-violet-100 text-violet-700 font-semibold"
-                  : "text-muted-foreground hover:text-foreground")
-              }
-            >
-              {t === "formal" ? "Formal" : t === "direto" ? "Direto" : t === "empatico" ? "Empático" : "Amigável"}
-            </button>
-          ))}
-        </div>
         <Button
           variant="outline"
           size="sm"
@@ -1585,6 +1565,28 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           }
           Compor com IA
         </Button>
+        {/* Tom da IA: eram 4 chips ocupando a linha inteira; virou um seletor
+            único com lista suspensa — mesma escolha, sem ocupar espaço. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-7 text-[11px] px-2.5 gap-1 text-muted-foreground font-normal">
+              Tom: <span className="font-semibold text-foreground">{tom === "formal" ? "Formal" : tom === "direto" ? "Direto" : tom === "empatico" ? "Empático" : "Amigável"}</span>
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-40">
+            {(["formal", "direto", "empatico", "amigavel"] as const).map((t) => (
+              <DropdownMenuItem
+                key={t}
+                onClick={() => setTom(t)}
+                className={tom === t ? "font-semibold text-violet-700 dark:text-violet-300" : ""}
+              >
+                {t === "formal" ? "Formal" : t === "direto" ? "Direto" : t === "empatico" ? "Empático" : "Amigável"}
+                {tom === t && <Check className="ml-auto h-3.5 w-3.5" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <div className="flex-1" />
         <ComplianceGuardBadge />
       </div>
