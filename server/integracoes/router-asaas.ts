@@ -37,6 +37,7 @@ import {
   syncCobrancasEscritorio,
   syncCobrancasPorVencimentoEscritorio,
   syncTodasCobrancasDoContato,
+  reconciliarCobrancasFantasmasEscritorio,
   agregarVinculosPorContato,
   inserirVinculoAsaasIdempotente,
   type VinculoLinha,
@@ -1418,6 +1419,18 @@ export const asaasRouter = router({
       cobRemovidas = result.removidas;
     } catch (err: any) {
       log.warn(`[Asaas] Erro ao atualizar cobranças locais: ${err.message}`);
+    }
+
+    // Faxina de fantasmas ON-DEMAND: o refresh acima usa janela de 24h e NÃO
+    // remove cobrança excluída no Asaas. Aqui listamos tudo do Asaas e apagamos
+    // as que sumiram de lá — assim "Sincronizar" limpa as excluídas na hora, em
+    // vez de depender do cron diário. Best-effort: erro/rate-limit não derruba o
+    // sync (só apaga quando o Set do Asaas veio completo).
+    try {
+      const rec = await reconciliarCobrancasFantasmasEscritorio(esc.escritorio.id);
+      if (rec.ok && rec.fantasmas > 0) cobRemovidas += rec.fantasmas;
+    } catch (err: any) {
+      log.warn(`[Asaas] Reconciliação de fantasmas no Sincronizar falhou: ${err.message}`);
     }
 
     return {
