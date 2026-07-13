@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, useId, Fragment } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +49,6 @@ import type { StatusConversa, EtapaFunil } from "@shared/crm-types";
 import { parseValorBR } from "@shared/valor-br";
 import { FUSO_HORARIO_PADRAO, dataHojeBR, rotuloDataConversa } from "@shared/escritorio-types";
 import { RespostaRapidaAutocomplete } from "@/components/atendimento/RespostaRapidaAutocomplete";
-import { MagicBrief, ContextoRecolhidoBar } from "./atendimento/magic-brief";
 import { ConversationDiff } from "./atendimento/conversation-diff";
 import { AIActionCards } from "./atendimento/ai-action-cards";
 import { ComplianceGuard, ComplianceGuardBadge } from "./atendimento/compliance-guard";
@@ -59,7 +59,7 @@ import { FilaChamadas } from "./atendimento/fila-chamadas";
 import { CartaoLigacao } from "./atendimento/cartao-ligacao";
 import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
-import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen } from "lucide-react";
+import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen, ChevronDown } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 function timeAgo(d: string) { if (!d) return ""; const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "agora"; if (m < 60) return m + "min"; const h = Math.floor(m / 60); if (h < 24) return h + "h"; return Math.floor(h / 24) + "d"; }
@@ -82,6 +82,49 @@ function colorFromName(name: string) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = ((h << 5) - h) + name.charCodeAt(i);
   return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length];
+}
+
+/** Logo oficial do canal da conversa (WhatsApp / Instagram / Facebook), em SVG
+ *  embutido. Substitui o balãozinho genérico. Canal sem logo próprio (ex.:
+ *  telefone) cai num ícone neutro de mensagem. */
+function CanalLogo({ tipo, className }: { tipo?: string | null; className?: string }) {
+  const gid = useId();
+  const t = tipo || "";
+  if (t.startsWith("whatsapp")) {
+    return (
+      <svg viewBox="0 0 24 24" className={className} role="img" aria-label="WhatsApp">
+        <path fill="#25D366" d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01C17.18 3.03 14.69 2 12.04 2z" />
+        <path fill="#fff" d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.14-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.49s1.07 2.89 1.22 3.09c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.42-.07-.13-.27-.2-.57-.35z" />
+      </svg>
+    );
+  }
+  if (t === "instagram") {
+    return (
+      <svg viewBox="0 0 24 24" className={className} role="img" aria-label="Instagram">
+        <defs>
+          <linearGradient id={gid} x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stopColor="#feda75" />
+            <stop offset="0.35" stopColor="#fa7e1e" />
+            <stop offset="0.6" stopColor="#d62976" />
+            <stop offset="1" stopColor="#6228d7" />
+          </linearGradient>
+        </defs>
+        <rect x="1.5" y="1.5" width="21" height="21" rx="6.5" fill={`url(#${gid})`} />
+        <rect x="5.6" y="5.6" width="12.8" height="12.8" rx="4" fill="none" stroke="#fff" strokeWidth="1.7" />
+        <circle cx="12" cy="12" r="3.3" fill="none" stroke="#fff" strokeWidth="1.7" />
+        <circle cx="16.6" cy="7.4" r="1.15" fill="#fff" />
+      </svg>
+    );
+  }
+  if (t === "facebook") {
+    return (
+      <svg viewBox="0 0 24 24" className={className} role="img" aria-label="Facebook">
+        <circle cx="12" cy="12" r="11" fill="#1877F2" />
+        <path fill="#fff" d="M15.9 12.5l.5-3.2h-3.1V7.24c0-.88.43-1.73 1.8-1.73h1.42V2.79s-1.29-.22-2.52-.22c-2.57 0-4.25 1.56-4.25 4.38V9.3H6.9v3.2h2.85V20h3.5v-7.5z" />
+      </svg>
+    );
+  }
+  return <MessageCircle className={className} />;
 }
 
 /** Preview rico da última mensagem da conversa — adiciona ícone do tipo de mídia
@@ -883,11 +926,7 @@ export default function Atendimento() {
                                 className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-background border-2 border-background flex items-center justify-center text-[8px]"
                                 title={`${(c as any).canalNome || (c as any).canalTipo}${(c as any).canalTelefone ? ` · ${(c as any).canalTelefone}` : ""}`}
                               >
-                                {(c as any).canalTipo?.startsWith("whatsapp") ? "💬"
-                                  : (c as any).canalTipo === "instagram" ? "📷"
-                                  : (c as any).canalTipo === "facebook" ? "🟪"
-                                  : (c as any).canalTipo === "telefone_voip" ? "📞"
-                                  : "💬"}
+                                <CanalLogo tipo={(c as any).canalTipo} className="w-3 h-3" />
                               </div>
                             )}
                           </div>
@@ -1070,6 +1109,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   // texto e perdia a mídia.
   const [pendingMedia, setPendingMedia] = useState<{ url: string; tipo: "imagem" | "video" | "audio" | "documento"; nome?: string; tamanho?: number } | null>(null);
   const [showAddLead, setShowAddLead] = useState(false);
+  const [, setLocation] = useLocation();
   const [showAgendar, setShowAgendar] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [maisMenuAberto, setMaisMenuAberto] = useState(false);
@@ -1079,21 +1119,6 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const [tom, setTom] = useState<"formal" | "direto" | "empatico" | "amigavel">("empatico");
   const [confirmExcluirConversa, setConfirmExcluirConversa] = useState(false);
   const [metaParamsDialog, setMetaParamsDialog] = useState<{ template: any; preview: string } | null>(null);
-  // Bloco de contexto (Brief + Diff + ActionCards) recolhível — preferência
-  // do atendente persistida no navegador, vale pra todas as conversas.
-  const [ctxRecolhido, setCtxRecolhido] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("jurify:atendimento:ctxRecolhido");
-      if (saved !== null) return saved === "1";
-    } catch { /* modo privado */ }
-    // Sem preferência salva: recolhido no celular (chat limpo), expandido no desktop.
-    return !!onVoltar;
-  });
-  const toggleCtxRecolhido = (v: boolean) => {
-    setCtxRecolhido(v);
-    try { localStorage.setItem("jurify:atendimento:ctxRecolhido", v ? "1" : "0"); } catch { /* modo privado */ }
-  };
-
   // Compor com IA — gera sugestão no tom escolhido
   const composerSugestao = trpc.atendimentoIa.composerSugestao.useMutation({
     onSuccess: (data) => {
@@ -1356,45 +1381,22 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         )}
         <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-xs font-bold text-primary shrink-0">{initials(conv?.contatoNome || "?")}</div>
         <div className="flex-1 min-w-0">
+          {/* Linha 1: nome + status + bot (controle). Antes o nome dividia espaço
+              com 5 badges coloridos; o resto do contexto foi pro subtítulo abaixo. */}
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold truncate">{conv?.contatoNome || "Contato"}</p>
-            <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
-            {/* Badge do atendente responsável — bem visível em azul.
-                Ajuda gestor/dono a identificar de quem é a conversa */}
-            {(conv as any)?.atendenteNome ? (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200 gap-1 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-800"
+            {conv?.contatoId ? (
+              <button
+                type="button"
+                onClick={() => setLocation(`/clientes?id=${conv.contatoId}`)}
+                title="Abrir cadastro do contato (cliente/lead)"
+                className="text-sm font-semibold truncate text-left hover:text-violet-600 hover:underline dark:hover:text-violet-400"
               >
-                <User className="h-3 w-3" />
-                {(conv as any).atendenteNome}
-              </Badge>
+                {conv?.contatoNome || "Contato"}
+              </button>
             ) : (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800"
-              >
-                Sem atendente
-              </Badge>
+              <p className="text-sm font-semibold truncate">{conv?.contatoNome || "Contato"}</p>
             )}
-            {conv?.contatoId && <FinanceiroBadge contatoId={conv.contatoId} />}
-            {/* Badge do canal: mostra de qual número WhatsApp veio a conversa.
-                Importante quando o escritório tem MÚLTIPLOS números conectados
-                — sem isso, atendente não sabe por onde responder o cliente. */}
-            {(conv as any)?.canalNome && (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200 gap-1 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800"
-                title={`Conversa recebida via ${(conv as any).canalNome || "canal"}${(conv as any).canalTelefone ? ` · ${(conv as any).canalTelefone}` : ""}`}
-              >
-                {(conv as any).canalTipo?.startsWith("whatsapp") ? "💬"
-                  : (conv as any).canalTipo === "instagram" ? "📷"
-                  : (conv as any).canalTipo === "facebook" ? "🟪"
-                  : "📡"}
-                {/* Mostra o NÚMERO (distingue múltiplos WhatsApp); cai pro nome se não houver. */}
-                {(conv as any).canalTelefone || (conv as any).canalNome}
-              </Badge>
-            )}
+            <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
             {/* Pill do bot: indicador + toggle rápido. O controle completo vive no
                 Customer 360, mas este atalho garante visibilidade com o painel colapsado. */}
             {bot.managed && conv && (
@@ -1416,11 +1418,34 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               </button>
             )}
           </div>
-          {(conv?.contatoTelefone || conv?.chatIdExterno) && (
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              {conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "")}
-            </p>
-          )}
+          {/* Linha 2 (subtítulo discreto): atendente · canal/número · telefone ·
+              financeiro. Mesma informação dos badges de antes, sem o ruído visual. */}
+          <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap mt-0.5 text-[10px] text-muted-foreground">
+            {(conv as any)?.atendenteNome ? (
+              <span className="inline-flex items-center gap-1" title={`Responsável: ${(conv as any).atendenteNome}`}>
+                <User className="h-3 w-3" />{(conv as any).atendenteNome}
+              </span>
+            ) : (
+              <span className="text-amber-600 dark:text-amber-400 font-medium">Sem atendente</span>
+            )}
+            {(conv as any)?.canalNome && (
+              <span
+                className="inline-flex items-center gap-1"
+                title={`Conversa recebida via ${(conv as any).canalNome || "canal"}${(conv as any).canalTelefone ? ` · ${(conv as any).canalTelefone}` : ""}`}
+              >
+                <span className="text-muted-foreground/40">·</span>
+                <CanalLogo tipo={(conv as any).canalTipo} className="w-3.5 h-3.5" />
+                {(conv as any).canalTelefone || (conv as any).canalNome}
+              </span>
+            )}
+            {(conv?.contatoTelefone || conv?.chatIdExterno) && (
+              <span className="inline-flex items-center gap-1">
+                <span className="text-muted-foreground/40">·</span>
+                {conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "")}
+              </span>
+            )}
+            {conv?.contatoId && <FinanceiroBadge contatoId={conv.contatoId} />}
+          </div>
         </div>
         {(conv?.contatoTelefone || conv?.chatIdExterno) && (onWA || onTel || onLigarWhatsApp) && (() => {
           const tel = conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "") || "";
@@ -1434,54 +1459,40 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           );
         })()}
       </div>
-      {/* Header linha 2: acoes */}
-      <div className="flex items-center gap-1 mt-1.5 -mb-0.5 overflow-x-auto">
-        {onAbrirLinhaTempo && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 text-[10px] px-2 text-indigo-600 shrink-0 font-semibold"
-            onClick={onAbrirLinhaTempo}
-            title="Toda a vida jurídica do cliente em uma timeline"
-          >
-            <ScrollText className="h-3 w-3 mr-1" />Linha do Tempo
-          </Button>
-        )}
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-violet-600 shrink-0" onClick={() => setShowAddLead(true)}><TrendingUp className="h-3 w-3 mr-1" />Pipeline</Button>
+      {/* Header linha 2: ações — enxuto. Só Transferir, Resolver e Fechar ficam
+          visíveis; o resto (Linha do Tempo, Pipeline, Agendar, Vincular, Excluir)
+          entra no menu "Mais". Nada foi removido, só reorganizado. Resolver ganha
+          fundo verde por ser a decisão mais comum. */}
+      <div className="flex items-center gap-1.5 mt-2 overflow-x-auto">
         {conv?.contatoId && <FinanceiroPopover contatoId={conv.contatoId} />}
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-blue-600 shrink-0" onClick={() => setShowAgendar(true)}><Calendar className="h-3 w-3 mr-1" />Agendar</Button>
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-orange-600 shrink-0" onClick={() => setShowTransferir(true)}><ArrowRightLeft className="h-3 w-3 mr-1" />Transferir</Button>
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-indigo-600 shrink-0" onClick={() => setShowVincular(true)}><Link2 className="h-3 w-3 mr-1" />Vincular</Button>
         <div className="flex-1" />
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-emerald-600 shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-3 w-3 mr-1" />Resolver</Button>
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-3 w-3 mr-1" />Fechar</Button>
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" title="Excluir" onClick={handleDelete}><Trash2 className="h-3 w-3" /></Button>
+        <Button variant="ghost" size="sm" className="h-7 text-[11px] px-2.5 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowTransferir(true)}><ArrowRightLeft className="h-3.5 w-3.5 mr-1" />Transferir</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-[11px] px-3 shrink-0 font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800 dark:text-emerald-300 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60" onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-3.5 w-3.5 mr-1" />Resolver</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-[11px] px-2.5 text-muted-foreground hover:text-foreground shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-3.5 w-3.5 mr-1" />Fechar</Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground shrink-0" title="Mais ações" aria-label="Mais ações"><MoreVertical className="h-4 w-4" /></Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            {onAbrirLinhaTempo && <DropdownMenuItem onClick={onAbrirLinhaTempo}><ScrollText className="h-4 w-4 mr-2" />Linha do Tempo</DropdownMenuItem>}
+            <DropdownMenuItem onClick={() => setShowAddLead(true)}><TrendingUp className="h-4 w-4 mr-2" />Pipeline</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowAgendar(true)}><Calendar className="h-4 w-4 mr-2" />Agendar</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowVincular(true)}><Link2 className="h-4 w-4 mr-2" />Vincular</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive"><Trash2 className="h-4 w-4 mr-2" />Excluir</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
     )}
-    {/* Bloco de contexto recolhível: Brief + Diff + Action Cards. O ✕ no
-        brief recolhe tudo numa barrinha de resumo (SLA crítico continua
-        visível em vermelho); o ⌄ da barrinha expande de volta. */}
-    {ctxRecolhido ? (
-      <ContextoRecolhidoBar
-        conversaId={cid}
-        slaCritico={!!(conv as any)?.temAtraso}
-        onExpandir={() => toggleCtxRecolhido(false)}
-      />
-    ) : (
-      <>
-        {/* 🌟 Killer feature: Magic Brief Instantâneo (IA prevê motivo da conversa) */}
-        <MagicBrief conversaId={cid} onRecolher={() => toggleCtxRecolhido(true)} />
-        {/* 🌟 Killer feature: Conversation Diff (o que mudou desde sua última resposta) */}
-        <ConversationDiff conversaId={cid} />
-        {/* 🌟 Killer feature: AI Action Cards (detecta intenção e oferece workflow 1-click) */}
-        <AIActionCards
-          conversaId={cid}
-          contatoNome={conv?.contatoNome || "Cliente"}
-          onEnviarMensagem={(texto) => setMsg(texto)}
-        />
-      </>
-    )}
+    {/* Diff + Action Cards. O Brief foi pro Customer 360° (rail); aqui ficam só
+        o "o que mudou" e os cards de ação, que já aparecem só quando há conteúdo. */}
+    <ConversationDiff conversaId={cid} />
+    <AIActionCards
+      conversaId={cid}
+      contatoNome={conv?.contatoNome || "Cliente"}
+      onEnviarMensagem={(texto) => setMsg(texto)}
+    />
     <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0">
       {maybeMore && (msgs?.length ?? 0) > 0 && (
         <div className="flex justify-center pb-2">
@@ -1558,24 +1569,6 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           desktop. No celular fica atrás do ✨ do composer (mantém o chat limpo). */}
       {!mobile && (
       <div className="px-3 pt-2 pb-1.5 flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide shrink-0">Tom:</span>
-        <div className="inline-flex bg-background border rounded-lg p-0.5 gap-0 shadow-sm">
-          {(["formal", "direto", "empatico", "amigavel"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTom(t)}
-              className={
-                "px-2.5 py-1 rounded-md text-[11px] font-medium transition " +
-                (tom === t
-                  ? "bg-violet-100 text-violet-700 font-semibold"
-                  : "text-muted-foreground hover:text-foreground")
-              }
-            >
-              {t === "formal" ? "Formal" : t === "direto" ? "Direto" : t === "empatico" ? "Empático" : "Amigável"}
-            </button>
-          ))}
-        </div>
         <Button
           variant="outline"
           size="sm"
@@ -1590,6 +1583,28 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           }
           Compor com IA
         </Button>
+        {/* Tom da IA: eram 4 chips ocupando a linha inteira; virou um seletor
+            único com lista suspensa — mesma escolha, sem ocupar espaço. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-7 text-[11px] px-2.5 gap-1 text-muted-foreground font-normal">
+              Tom: <span className="font-semibold text-foreground">{tom === "formal" ? "Formal" : tom === "direto" ? "Direto" : tom === "empatico" ? "Empático" : "Amigável"}</span>
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-40">
+            {(["formal", "direto", "empatico", "amigavel"] as const).map((t) => (
+              <DropdownMenuItem
+                key={t}
+                onClick={() => setTom(t)}
+                className={tom === t ? "font-semibold text-violet-700 dark:text-violet-300" : ""}
+              >
+                {t === "formal" ? "Formal" : t === "direto" ? "Direto" : t === "empatico" ? "Empático" : "Amigável"}
+                {tom === t && <Check className="ml-auto h-3.5 w-3.5" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <div className="flex-1" />
         <ComplianceGuardBadge />
       </div>

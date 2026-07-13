@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -38,6 +40,7 @@ import {
 import { toast } from "sonner";
 import { parseValorBR } from "@shared/valor-br";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
+import { MagicBrief } from "./magic-brief";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -96,6 +99,11 @@ export function CustomerPanel({
     { contatoId },
     { refetchInterval: 30_000 }, // refresh a cada 30s
   );
+  const [, setLocation] = useLocation();
+  // Nota aberta no diálogo (a nota na coluna é cortada em 3 linhas; clicar abre inteira).
+  const [notaAberta, setNotaAberta] = useState<
+    { id: number; titulo?: string | null; conteudo: string; createdAt: string | null } | null
+  >(null);
 
   if (isLoading) {
     return (
@@ -127,93 +135,6 @@ export function CustomerPanel({
 
   return (
     <div className="h-full overflow-y-auto space-y-3 pb-4">
-      {/* ─── Controle do bot (pausar/reativar atendimento automático) ─── */}
-      {botManaged && onToggleBot && (
-        <div className="px-4 pt-4">
-          <div
-            className={
-              "rounded-xl border p-3 " +
-              (botPausado
-                ? "bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900"
-                : "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900")
-            }
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div
-                  className={
-                    "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 " +
-                    (botPausado
-                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
-                      : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300")
-                  }
-                >
-                  <Bot className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <p
-                    className={
-                      "text-xs font-bold leading-tight " +
-                      (botPausado ? "text-amber-800 dark:text-amber-200" : "text-emerald-800 dark:text-emerald-200")
-                    }
-                  >
-                    {botPausado ? "Bot pausado" : "Bot ativo"}
-                  </p>
-                  <p
-                    className={
-                      "text-[10px] leading-tight " +
-                      (botPausado ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")
-                    }
-                  >
-                    {botPausado ? "Você conduz o atendimento" : "Fluxo responde automaticamente"}
-                  </p>
-                </div>
-              </div>
-              {/* switch (ligado = bot ativo) */}
-              <button
-                onClick={onToggleBot}
-                disabled={togglingBot}
-                title="Pausar / reativar o bot"
-                className={
-                  "relative w-11 h-6 rounded-full transition shrink-0 disabled:opacity-50 " +
-                  (botPausado ? "bg-slate-300 dark:bg-slate-700" : "bg-emerald-500")
-                }
-              >
-                <span
-                  className={
-                    "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all " +
-                    (botPausado ? "left-0.5" : "left-[22px]")
-                  }
-                />
-              </button>
-            </div>
-            <p
-              className={
-                "text-[10px] mt-2 leading-snug " +
-                (botPausado ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300")
-              }
-            >
-              {botPausado
-                ? "O fluxo não responde enquanto você está no comando. Reative para devolver o atendimento ao bot na próxima mensagem."
-                : "O bot responde sozinho. Pause para assumir você mesmo — também pausa automaticamente quando você envia uma mensagem."}
-            </p>
-            <button
-              onClick={onToggleBot}
-              disabled={togglingBot}
-              className={
-                "w-full mt-2 h-8 rounded-lg text-[11px] font-semibold border transition disabled:opacity-50 inline-flex items-center justify-center gap-1 " +
-                (botPausado
-                  ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
-                  : "bg-transparent text-amber-700 border-amber-300 hover:bg-amber-100 dark:text-amber-200 dark:border-amber-800 dark:hover:bg-amber-900/40")
-              }
-            >
-              {togglingBot && <Loader2 className="h-3 w-3 animate-spin" />}
-              {botPausado ? "Reativar bot" : "Pausar bot (assumir)"}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ─── Card 1: Resumo (sempre aberto) ─── */}
       <div className="px-4 pt-4">
         <div className="flex items-start gap-3 mb-3">
@@ -222,7 +143,15 @@ export function CustomerPanel({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <p className="text-sm font-semibold truncate">{contato.nome}</p>
+              <button
+                type="button"
+                onClick={() => setLocation(`/clientes?id=${contatoId}`)}
+                title="Abrir cadastro do contato (cliente/lead)"
+                className="text-sm font-semibold truncate text-left inline-flex items-center gap-1 hover:text-violet-600 hover:underline dark:hover:text-violet-400 rounded"
+              >
+                {contato.nome}
+                <ExternalLink className="h-3 w-3 opacity-50 shrink-0" />
+              </button>
               {isVip && <Star className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
             </div>
             {contato.telefone && (
@@ -495,7 +424,13 @@ export function CustomerPanel({
         ) : (
           <div className="space-y-1.5">
             {anotacoes.map((n) => (
-              <div key={n.id} className="text-[11px] rounded border bg-amber-50/50 px-2 py-1.5">
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => setNotaAberta(n)}
+                title="Abrir para ler a nota inteira"
+                className="w-full text-left text-[11px] rounded border bg-amber-50/50 dark:bg-amber-950/20 px-2 py-1.5 transition-colors hover:border-violet-300 hover:bg-amber-50 dark:hover:border-violet-800 cursor-pointer"
+              >
                 {n.titulo && <p className="font-medium">{n.titulo}</p>}
                 <p className="text-muted-foreground whitespace-pre-wrap line-clamp-3">
                   {n.conteudo}
@@ -503,11 +438,75 @@ export function CustomerPanel({
                 <p className="text-[9px] text-muted-foreground/60 mt-0.5">
                   {formatDate(n.createdAt)}
                 </p>
-              </div>
+              </button>
             ))}
           </div>
         )}
       </Section>
+
+      {/* Brief da IA — movido do chat pra cá, logo acima do controle do bot.
+          Aparece quando o painel Customer 360° está aberto. */}
+      {conversaId && <MagicBrief conversaId={conversaId} />}
+
+      {/* ─── Bot: liga/desliga no fim da coluna (antes era um card grande no topo,
+          que empurrava o perfil do cliente pra baixo). Mesma ação: ligado = bot
+          responde sozinho; desliga pra assumir. ─── */}
+      {botManaged && onToggleBot && (
+        <div className="px-4 pt-1">
+          <div className="border-t pt-3 flex items-center gap-2.5">
+            <div
+              className={
+                "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 " +
+                (botPausado
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
+                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300")
+              }
+            >
+              <Bot className="h-4 w-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold leading-tight">{botPausado ? "Bot pausado" : "Bot ativo"}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">
+                {botPausado ? "Você conduz o atendimento" : "Responde automaticamente"}
+              </p>
+            </div>
+            <button
+              onClick={onToggleBot}
+              disabled={togglingBot}
+              title="Pausar / reativar o bot"
+              className={
+                "relative w-11 h-6 rounded-full transition shrink-0 disabled:opacity-50 " +
+                (botPausado ? "bg-slate-300 dark:bg-slate-700" : "bg-emerald-500")
+              }
+            >
+              <span
+                className={
+                  "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all " +
+                  (botPausado ? "left-0.5" : "left-[22px]")
+                }
+              />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Diálogo pra ler a anotação inteira (a nota na coluna é cortada em 3 linhas). */}
+      <Dialog open={!!notaAberta} onOpenChange={(o) => { if (!o) setNotaAberta(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <StickyNote className="h-4 w-4 text-amber-500" />
+              {notaAberta?.titulo || "Anotação"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-sm whitespace-pre-wrap break-words max-h-[55vh] overflow-y-auto leading-relaxed">
+            {notaAberta?.conteudo}
+          </div>
+          {notaAberta && (
+            <p className="text-[11px] text-muted-foreground pt-1">{formatDate(notaAberta.createdAt)}</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
