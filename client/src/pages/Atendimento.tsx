@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, useId, Fragment } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +48,6 @@ import type { StatusConversa, EtapaFunil } from "@shared/crm-types";
 import { parseValorBR } from "@shared/valor-br";
 import { FUSO_HORARIO_PADRAO, dataHojeBR, rotuloDataConversa } from "@shared/escritorio-types";
 import { RespostaRapidaAutocomplete } from "@/components/atendimento/RespostaRapidaAutocomplete";
-import { MagicBrief, ContextoRecolhidoBar } from "./atendimento/magic-brief";
 import { ConversationDiff } from "./atendimento/conversation-diff";
 import { AIActionCards } from "./atendimento/ai-action-cards";
 import { ComplianceGuard, ComplianceGuardBadge } from "./atendimento/compliance-guard";
@@ -82,6 +81,49 @@ function colorFromName(name: string) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = ((h << 5) - h) + name.charCodeAt(i);
   return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length];
+}
+
+/** Logo oficial do canal da conversa (WhatsApp / Instagram / Facebook), em SVG
+ *  embutido. Substitui o balãozinho genérico. Canal sem logo próprio (ex.:
+ *  telefone) cai num ícone neutro de mensagem. */
+function CanalLogo({ tipo, className }: { tipo?: string | null; className?: string }) {
+  const gid = useId();
+  const t = tipo || "";
+  if (t.startsWith("whatsapp")) {
+    return (
+      <svg viewBox="0 0 24 24" className={className} role="img" aria-label="WhatsApp">
+        <path fill="#25D366" d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01C17.18 3.03 14.69 2 12.04 2z" />
+        <path fill="#fff" d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.14-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.49s1.07 2.89 1.22 3.09c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.42-.07-.13-.27-.2-.57-.35z" />
+      </svg>
+    );
+  }
+  if (t === "instagram") {
+    return (
+      <svg viewBox="0 0 24 24" className={className} role="img" aria-label="Instagram">
+        <defs>
+          <linearGradient id={gid} x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stopColor="#feda75" />
+            <stop offset="0.35" stopColor="#fa7e1e" />
+            <stop offset="0.6" stopColor="#d62976" />
+            <stop offset="1" stopColor="#6228d7" />
+          </linearGradient>
+        </defs>
+        <rect x="1.5" y="1.5" width="21" height="21" rx="6.5" fill={`url(#${gid})`} />
+        <rect x="5.6" y="5.6" width="12.8" height="12.8" rx="4" fill="none" stroke="#fff" strokeWidth="1.7" />
+        <circle cx="12" cy="12" r="3.3" fill="none" stroke="#fff" strokeWidth="1.7" />
+        <circle cx="16.6" cy="7.4" r="1.15" fill="#fff" />
+      </svg>
+    );
+  }
+  if (t === "facebook") {
+    return (
+      <svg viewBox="0 0 24 24" className={className} role="img" aria-label="Facebook">
+        <circle cx="12" cy="12" r="11" fill="#1877F2" />
+        <path fill="#fff" d="M15.9 12.5l.5-3.2h-3.1V7.24c0-.88.43-1.73 1.8-1.73h1.42V2.79s-1.29-.22-2.52-.22c-2.57 0-4.25 1.56-4.25 4.38V9.3H6.9v3.2h2.85V20h3.5v-7.5z" />
+      </svg>
+    );
+  }
+  return <MessageCircle className={className} />;
 }
 
 /** Preview rico da última mensagem da conversa — adiciona ícone do tipo de mídia
@@ -883,11 +925,7 @@ export default function Atendimento() {
                                 className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-background border-2 border-background flex items-center justify-center text-[8px]"
                                 title={`${(c as any).canalNome || (c as any).canalTipo}${(c as any).canalTelefone ? ` · ${(c as any).canalTelefone}` : ""}`}
                               >
-                                {(c as any).canalTipo?.startsWith("whatsapp") ? "💬"
-                                  : (c as any).canalTipo === "instagram" ? "📷"
-                                  : (c as any).canalTipo === "facebook" ? "🟪"
-                                  : (c as any).canalTipo === "telefone_voip" ? "📞"
-                                  : "💬"}
+                                <CanalLogo tipo={(c as any).canalTipo} className="w-3 h-3" />
                               </div>
                             )}
                           </div>
@@ -1079,21 +1117,6 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const [tom, setTom] = useState<"formal" | "direto" | "empatico" | "amigavel">("empatico");
   const [confirmExcluirConversa, setConfirmExcluirConversa] = useState(false);
   const [metaParamsDialog, setMetaParamsDialog] = useState<{ template: any; preview: string } | null>(null);
-  // Bloco de contexto (Brief + Diff + ActionCards) recolhível — preferência
-  // do atendente persistida no navegador, vale pra todas as conversas.
-  const [ctxRecolhido, setCtxRecolhido] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("jurify:atendimento:ctxRecolhido");
-      if (saved !== null) return saved === "1";
-    } catch { /* modo privado */ }
-    // Sem preferência salva: recolhido no celular (chat limpo), expandido no desktop.
-    return !!onVoltar;
-  });
-  const toggleCtxRecolhido = (v: boolean) => {
-    setCtxRecolhido(v);
-    try { localStorage.setItem("jurify:atendimento:ctxRecolhido", v ? "1" : "0"); } catch { /* modo privado */ }
-  };
-
   // Compor com IA — gera sugestão no tom escolhido
   const composerSugestao = trpc.atendimentoIa.composerSugestao.useMutation({
     onSuccess: (data) => {
@@ -1398,10 +1421,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 title={`Conversa recebida via ${(conv as any).canalNome || "canal"}${(conv as any).canalTelefone ? ` · ${(conv as any).canalTelefone}` : ""}`}
               >
                 <span className="text-muted-foreground/40">·</span>
-                {(conv as any).canalTipo?.startsWith("whatsapp") ? "💬"
-                  : (conv as any).canalTipo === "instagram" ? "📷"
-                  : (conv as any).canalTipo === "facebook" ? "🟪"
-                  : "📡"}
+                <CanalLogo tipo={(conv as any).canalTipo} className="w-3.5 h-3.5" />
                 {(conv as any).canalTelefone || (conv as any).canalNome}
               </span>
             )}
@@ -1452,29 +1472,14 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       </div>
     </div>
     )}
-    {/* Bloco de contexto recolhível: Brief + Diff + Action Cards. O ✕ no
-        brief recolhe tudo numa barrinha de resumo (SLA crítico continua
-        visível em vermelho); o ⌄ da barrinha expande de volta. */}
-    {ctxRecolhido ? (
-      <ContextoRecolhidoBar
-        conversaId={cid}
-        slaCritico={!!(conv as any)?.temAtraso}
-        onExpandir={() => toggleCtxRecolhido(false)}
-      />
-    ) : (
-      <>
-        {/* 🌟 Killer feature: Magic Brief Instantâneo (IA prevê motivo da conversa) */}
-        <MagicBrief conversaId={cid} onRecolher={() => toggleCtxRecolhido(true)} />
-        {/* 🌟 Killer feature: Conversation Diff (o que mudou desde sua última resposta) */}
-        <ConversationDiff conversaId={cid} />
-        {/* 🌟 Killer feature: AI Action Cards (detecta intenção e oferece workflow 1-click) */}
-        <AIActionCards
-          conversaId={cid}
-          contatoNome={conv?.contatoNome || "Cliente"}
-          onEnviarMensagem={(texto) => setMsg(texto)}
-        />
-      </>
-    )}
+    {/* Diff + Action Cards. O Brief foi pro Customer 360° (rail); aqui ficam só
+        o "o que mudou" e os cards de ação, que já aparecem só quando há conteúdo. */}
+    <ConversationDiff conversaId={cid} />
+    <AIActionCards
+      conversaId={cid}
+      contatoNome={conv?.contatoNome || "Cliente"}
+      onEnviarMensagem={(texto) => setMsg(texto)}
+    />
     <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0">
       {maybeMore && (msgs?.length ?? 0) > 0 && (
         <div className="flex justify-center pb-2">

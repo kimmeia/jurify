@@ -38,6 +38,7 @@ import {
 import { toast } from "sonner";
 import { parseValorBR } from "@shared/valor-br";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
+import { MagicBrief } from "./magic-brief";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -421,6 +422,10 @@ export function CustomerPanel({
           </div>
         )}
       </Section>
+
+      {/* Brief da IA — movido do chat pra cá, logo acima do controle do bot.
+          Aparece quando o painel Customer 360° está aberto. */}
+      {conversaId && <MagicBrief conversaId={conversaId} />}
 
       {/* ─── Bot: liga/desliga no fim da coluna (antes era um card grande no topo,
           que empurrava o perfil do cliente pra baixo). Mesma ação: ligado = bot
