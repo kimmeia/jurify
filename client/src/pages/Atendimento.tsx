@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, useId, Fragment } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1108,6 +1109,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   // texto e perdia a mídia.
   const [pendingMedia, setPendingMedia] = useState<{ url: string; tipo: "imagem" | "video" | "audio" | "documento"; nome?: string; tamanho?: number } | null>(null);
   const [showAddLead, setShowAddLead] = useState(false);
+  const [, setLocation] = useLocation();
   const [showAgendar, setShowAgendar] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [maisMenuAberto, setMaisMenuAberto] = useState(false);
@@ -1382,7 +1384,18 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           {/* Linha 1: nome + status + bot (controle). Antes o nome dividia espaço
               com 5 badges coloridos; o resto do contexto foi pro subtítulo abaixo. */}
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold truncate">{conv?.contatoNome || "Contato"}</p>
+            {conv?.contatoId ? (
+              <button
+                type="button"
+                onClick={() => setLocation(`/clientes?id=${conv.contatoId}`)}
+                title="Abrir cadastro do contato (cliente/lead)"
+                className="text-sm font-semibold truncate text-left hover:text-violet-600 hover:underline dark:hover:text-violet-400"
+              >
+                {conv?.contatoNome || "Contato"}
+              </button>
+            ) : (
+              <p className="text-sm font-semibold truncate">{conv?.contatoNome || "Contato"}</p>
+            )}
             <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
             {/* Pill do bot: indicador + toggle rápido. O controle completo vive no
                 Customer 360, mas este atalho garante visibilidade com o painel colapsado. */}

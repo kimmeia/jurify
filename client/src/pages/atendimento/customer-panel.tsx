@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -97,6 +99,11 @@ export function CustomerPanel({
     { contatoId },
     { refetchInterval: 30_000 }, // refresh a cada 30s
   );
+  const [, setLocation] = useLocation();
+  // Nota aberta no diálogo (a nota na coluna é cortada em 3 linhas; clicar abre inteira).
+  const [notaAberta, setNotaAberta] = useState<
+    { id: number; titulo?: string | null; conteudo: string; createdAt: string | null } | null
+  >(null);
 
   if (isLoading) {
     return (
@@ -136,7 +143,15 @@ export function CustomerPanel({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <p className="text-sm font-semibold truncate">{contato.nome}</p>
+              <button
+                type="button"
+                onClick={() => setLocation(`/clientes?id=${contatoId}`)}
+                title="Abrir cadastro do contato (cliente/lead)"
+                className="text-sm font-semibold truncate text-left inline-flex items-center gap-1 hover:text-violet-600 hover:underline dark:hover:text-violet-400 rounded"
+              >
+                {contato.nome}
+                <ExternalLink className="h-3 w-3 opacity-50 shrink-0" />
+              </button>
               {isVip && <Star className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
             </div>
             {contato.telefone && (
@@ -409,7 +424,13 @@ export function CustomerPanel({
         ) : (
           <div className="space-y-1.5">
             {anotacoes.map((n) => (
-              <div key={n.id} className="text-[11px] rounded border bg-amber-50/50 px-2 py-1.5">
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => setNotaAberta(n)}
+                title="Abrir para ler a nota inteira"
+                className="w-full text-left text-[11px] rounded border bg-amber-50/50 dark:bg-amber-950/20 px-2 py-1.5 transition-colors hover:border-violet-300 hover:bg-amber-50 dark:hover:border-violet-800 cursor-pointer"
+              >
                 {n.titulo && <p className="font-medium">{n.titulo}</p>}
                 <p className="text-muted-foreground whitespace-pre-wrap line-clamp-3">
                   {n.conteudo}
@@ -417,7 +438,7 @@ export function CustomerPanel({
                 <p className="text-[9px] text-muted-foreground/60 mt-0.5">
                   {formatDate(n.createdAt)}
                 </p>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -468,6 +489,24 @@ export function CustomerPanel({
           </div>
         </div>
       )}
+
+      {/* Diálogo pra ler a anotação inteira (a nota na coluna é cortada em 3 linhas). */}
+      <Dialog open={!!notaAberta} onOpenChange={(o) => { if (!o) setNotaAberta(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <StickyNote className="h-4 w-4 text-amber-500" />
+              {notaAberta?.titulo || "Anotação"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-sm whitespace-pre-wrap break-words max-h-[55vh] overflow-y-auto leading-relaxed">
+            {notaAberta?.conteudo}
+          </div>
+          {notaAberta && (
+            <p className="text-[11px] text-muted-foreground pt-1">{formatDate(notaAberta.createdAt)}</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
