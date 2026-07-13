@@ -1263,6 +1263,7 @@ export const clientesRouter = router({
     const ZERO = {
       total: 0,
       totalClientes: 0,
+      clientesAtivos: 0,
       totalLeads: 0,
       novosHoje: 0,
       comTelefone: 0,
@@ -1301,6 +1302,10 @@ export const clientesRouter = router({
       .select({
         total: sql<number | string>`COUNT(*)`,
         totalClientes: sql<number | string>`SUM(CASE WHEN ${contatos.estagio} = 'cliente' THEN 1 ELSE 0 END)`,
+        // "Clientes ativos" = estágio cliente E serviço ativo (ou sem situação
+        // definida = ativo por default). Exclui suspensos e encerrados/cancelados
+        // — quem está fora de serviço não conta como cliente ativo.
+        clientesAtivos: sql<number | string>`SUM(CASE WHEN ${contatos.estagio} = 'cliente' AND (${contatos.situacaoServico} = 'ativo' OR ${contatos.situacaoServico} IS NULL) THEN 1 ELSE 0 END)`,
         totalLeads: sql<number | string>`SUM(CASE WHEN ${contatos.estagio} = 'lead' THEN 1 ELSE 0 END)`,
         novosHoje: sql<number | string>`SUM(CASE WHEN ${contatos.createdAt} >= ${inicioHoje} AND ${contatos.createdAt} < ${fimHoje} THEN 1 ELSE 0 END)`,
         comTelefone: sql<number | string>`SUM(CASE WHEN ${contatos.telefone} IS NOT NULL AND ${contatos.telefone} <> '' THEN 1 ELSE 0 END)`,
@@ -1348,6 +1353,7 @@ export const clientesRouter = router({
     return {
       total: Number(stats?.total ?? 0),
       totalClientes: Number(stats?.totalClientes ?? 0),
+      clientesAtivos: Number(stats?.clientesAtivos ?? 0),
       totalLeads: Number(stats?.totalLeads ?? 0),
       novosHoje: Number(stats?.novosHoje ?? 0),
       comTelefone: Number(stats?.comTelefone ?? 0),
