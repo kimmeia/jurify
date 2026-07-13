@@ -612,10 +612,10 @@ export default function Clientes() {
 
               <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
                 <div className="lg:col-span-6">
-                  <p className="text-sm font-medium text-white/85 mb-1">Total de clientes</p>
+                  <p className="text-sm font-medium text-white/85 mb-1">Clientes ativos</p>
                   <div className="flex items-baseline gap-3 flex-wrap">
                     <span className="text-5xl font-extrabold tracking-tight tabular-nums leading-none">
-                      {stats?.total ?? "—"}
+                      {stats?.clientesAtivos ?? "—"}
                     </span>
                     {stats?.novosHoje ? (
                       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-400/25 text-emerald-50 border border-emerald-300/30">
@@ -625,9 +625,14 @@ export default function Clientes() {
                     ) : null}
                   </div>
                   {stats && (
-                    <p className="text-xs text-white/65 mt-2 tabular-nums">
-                      <b className="text-white">{stats.comTelefone}</b> com telefone ·{" "}
-                      <b className="text-white">{stats.comEmail}</b> com e-mail
+                    <p className="text-xs text-white/70 mt-2 tabular-nums">
+                      de <b className="text-white">{stats.totalClientes}</b> clientes
+                      {stats.suspensos > 0 && (
+                        <> · <span className="text-amber-100 font-medium">{stats.suspensos} suspenso{stats.suspensos !== 1 ? "s" : ""}</span></>
+                      )}
+                      {stats.encerrados > 0 && (
+                        <> · <span className="text-rose-100 font-medium">{stats.encerrados} encerrado{stats.encerrados !== 1 ? "s" : ""}/cancelado{stats.encerrados !== 1 ? "s" : ""}</span></>
+                      )}
                     </p>
                   )}
                 </div>
@@ -668,7 +673,7 @@ export default function Clientes() {
             >
               Clientes
               <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${aba === "cliente" ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-600"}`}>
-                {stats?.totalClientes ?? "—"}
+                {stats?.clientesAtivos ?? "—"}
               </span>
             </button>
             <button
@@ -697,7 +702,7 @@ export default function Clientes() {
             <div className="flex gap-2 flex-wrap">
               <ChipSegmento ativo={segmento === "todos"} onClick={() => setSegmento("todos")}>
                 Todos
-                <CountPill ativo={segmento === "todos"}>{stats?.total ?? "—"}</CountPill>
+                <CountPill ativo={segmento === "todos"}>{(aba === "lead" ? stats?.totalLeads : stats?.totalClientes) ?? "—"}</CountPill>
               </ChipSegmento>
               {(stats?.aguardandoDocumentacao ?? 0) > 0 && (
                 <ChipSegmento
