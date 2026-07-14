@@ -63,10 +63,13 @@ vi.mock("../integracoes/whatsapp-cloud", () => ({
 }));
 
 // axios: usado pelo subscribeAppToWaba (real) — capturamos a inscrição.
+// `get` cobre o appDoToken (GET /app) da validação de app do token.
 const axiosPostMock = vi.fn(async () => ({ data: {} }));
+const axiosGetMock = vi.fn(async () => ({ data: {} }));
 vi.mock("axios", () => ({
   default: {
     post: axiosPostMock,
+    get: axiosGetMock,
     create: vi.fn(() => ({ get: vi.fn(), post: vi.fn(), delete: vi.fn() })),
   },
 }));
@@ -97,6 +100,9 @@ beforeEach(() => {
     ok: true, nome: "Escritório Teste", telefone: "5585999999999",
   });
   axiosPostMock.mockResolvedValue({ data: {} });
+  axiosGetMock.mockResolvedValue({ data: {} });
+  delete process.env.META_APP_ID;
+  delete process.env.META_APP_SECRET;
 });
 
 describe("conectarWhatsappCloudManual", () => {
@@ -153,5 +159,27 @@ describe("conectarWhatsappCloudManual", () => {
     await expect(caller.conectarWhatsappCloudManual(INPUT_OK)).rejects.toThrow(/validar credenciais|Invalid OAuth/i);
     expect(criarCanalMock).not.toHaveBeenCalled();
     expect(axiosPostMock).not.toHaveBeenCalled();
+  });
+
+  it("recusa token de OUTRO app (canal enviaria mas nunca receberia)", async () => {
+    // Regressão do incidente BM2/"Bruno Boyadjian": token gerado pelo app do
+    // BM (1641...) em vez do app do sistema — conectava, enviava, mas o
+    // webhook ia pro app errado e nada chegava no Atendimento.
+    process.env.META_APP_ID = "1295936199370409";
+    process.env.META_APP_SECRET = "segredo-teste";
+    axiosGetMock.mockResolvedValueOnce({ data: { id: "1641836240205895", name: "Outro App" } });
+
+    const caller = configuracoesRouter.createCaller(fakeCtx());
+    await expect(caller.conectarWhatsappCloudManual(INPUT_OK)).rejects.toThrow(/pertence ao app/i);
+    expect(criarCanalMock).not.toHaveBeenCalled();
+  });
+
+  it("NÃO bloqueia quando a checagem de app é inconclusiva (best-effort)", async () => {
+    // Sem app configurado no sistema (ou GET /app falhou) não dá pra afirmar
+    // divergência — o cadastro segue normal.
+    axiosGetMock.mockRejectedValueOnce(new Error("network"));
+    const caller = configuracoesRouter.createCaller(fakeCtx());
+    const res = await caller.conectarWhatsappCloudManual(INPUT_OK);
+    expect(res.id).toBe(555);
   });
 });
