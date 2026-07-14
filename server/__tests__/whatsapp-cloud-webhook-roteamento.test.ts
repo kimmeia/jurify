@@ -39,7 +39,7 @@ vi.mock("../integracoes/whatsapp-handler", () => ({
   processarMensagemRecebida: vi.fn(),
 }));
 
-const { resolverCanalDaMensagem } = await import("../integracoes/whatsapp-cloud-webhook");
+const { resolverCanalDaMensagem, detectarRestricaoConta } = await import("../integracoes/whatsapp-cloud-webhook");
 
 describe("resolverCanalDaMensagem — isolamento por número", () => {
   it("acha o canal pelo phone_number_id exato", async () => {
@@ -65,5 +65,32 @@ describe("resolverCanalDaMensagem — isolamento por número", () => {
   it("retorna null sem phone_number_id", async () => {
     expect(await resolverCanalDaMensagem(undefined)).toBeNull();
     expect(await resolverCanalDaMensagem("")).toBeNull();
+  });
+});
+
+describe("detectarRestricaoConta — evento account_update", () => {
+  it("detecta desativação/restrição da conta e monta motivo legível", () => {
+    const r = detectarRestricaoConta({
+      event: "DISABLED_UPDATE",
+      ban_info: { ban_state: "SCHEDULED_FOR_DISABLE" },
+    });
+    expect(r.restritivo).toBe(true);
+    expect(r.motivo).toContain("DISABLED_UPDATE");
+    expect(r.motivo).toContain("SCHEDULED_FOR_DISABLE");
+  });
+
+  it("detecta ACCOUNT_RESTRICTION com restriction_info", () => {
+    const r = detectarRestricaoConta({
+      event: "ACCOUNT_RESTRICTION",
+      restriction_info: [{ restriction_type: "RESTRICTED_ADD_PHONE_NUMBER" }],
+    });
+    expect(r.restritivo).toBe(true);
+    expect(r.motivo).toContain("RESTRICTED_ADD_PHONE_NUMBER");
+  });
+
+  it("NÃO trata eventos informativos como restrição", () => {
+    expect(detectarRestricaoConta({ event: "ACCOUNT_UPDATE" }).restritivo).toBe(false);
+    expect(detectarRestricaoConta({ event: "PARTNER_ADDED" }).restritivo).toBe(false);
+    expect(detectarRestricaoConta({}).restritivo).toBe(false);
   });
 });

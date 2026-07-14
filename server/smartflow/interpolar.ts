@@ -144,7 +144,7 @@ const VARS_CLIENTE: CatalogoVariavel[] = [
 const VARS_MENSAGEM: CatalogoVariavel[] = [
   { path: "mensagem", label: "Mensagem original do cliente", exemplo: "Quero agendar", categoria: "mensagem" },
   { path: "respostaUsuario", label: "Resposta do cliente (após aguardar)", exemplo: "Sim, pode ser 14h", categoria: "mensagem" },
-  { path: "canalTipo", label: "Canal de origem", exemplo: "whatsapp_qr", categoria: "mensagem" },
+  { path: "canalTipo", label: "Canal de origem", exemplo: "whatsapp_api", categoria: "mensagem" },
 ];
 
 const VARS_PAGAMENTO_RECEBIDO: CatalogoVariavel[] = [

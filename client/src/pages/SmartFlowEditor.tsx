@@ -2352,7 +2352,7 @@ function ConfigGatilhoFields({
   if (node.data.gatilho === "whatsapp_mensagem") {
     return (
       <p className="text-xs text-muted-foreground">
-        Gatilho legado, restrito a WhatsApp QR (Baileys). Prefira o gatilho
+        Gatilho legado de WhatsApp. Prefira o gatilho
         <strong> Mensagem recebida </strong>, que aceita qualquer canal.
       </p>
     );

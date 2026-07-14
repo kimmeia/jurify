@@ -81,22 +81,22 @@ describe("avaliarDiaSemana (condição por dia da semana)", () => {
 
 describe("aceitaCanal (gatilho mensagem_canal)", () => {
   it("aceita qualquer canal quando config.canais está vazio", () => {
-    expect(aceitaCanal({}, "whatsapp_qr")).toBe(true);
+    expect(aceitaCanal({}, "whatsapp_api")).toBe(true);
     expect(aceitaCanal({ canais: [] }, "whatsapp_api")).toBe(true);
     expect(aceitaCanal(undefined, "instagram")).toBe(true);
   });
 
   it("filtra por canal quando canais está populado", () => {
-    const cfg = { canais: ["whatsapp_qr" as const] };
-    expect(aceitaCanal(cfg, "whatsapp_qr")).toBe(true);
-    expect(aceitaCanal(cfg, "whatsapp_api")).toBe(false);
+    const cfg = { canais: ["whatsapp_api" as const] };
+    expect(aceitaCanal(cfg, "whatsapp_api")).toBe(true);
     expect(aceitaCanal(cfg, "instagram")).toBe(false);
+    expect(aceitaCanal(cfg, "facebook")).toBe(false);
   });
 
   it("aceita múltiplos canais simultâneos", () => {
-    const cfg = { canais: ["whatsapp_qr" as const, "whatsapp_api" as const] };
-    expect(aceitaCanal(cfg, "whatsapp_qr")).toBe(true);
+    const cfg = { canais: ["whatsapp_api" as const, "instagram" as const] };
     expect(aceitaCanal(cfg, "whatsapp_api")).toBe(true);
+    expect(aceitaCanal(cfg, "instagram")).toBe(true);
     expect(aceitaCanal(cfg, "facebook")).toBe(false);
   });
 });

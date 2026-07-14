@@ -1243,14 +1243,12 @@ export async function dispararAgendamentoLembrete(
 }
 
 /**
- * Dispara cenários quando chega uma mensagem em qualquer canal (WhatsApp QR,
- * WhatsApp Cloud, Instagram, Facebook).
+ * Dispara cenários quando chega uma mensagem em qualquer canal (WhatsApp
+ * Cloud, Instagram, Facebook).
  *
- * Seleção de cenário:
- *   1. Cenários com gatilho `mensagem_canal` cujo `configGatilho.canais`
- *      inclua o canalTipo (ou esteja vazio = aceita qualquer canal).
- *   2. Se nenhum `mensagem_canal` bater e `canalTipo === 'whatsapp_qr'`,
- *      faz fallback para cenários `whatsapp_mensagem` (backward-compat).
+ * Seleção de cenário: cenários com gatilho `mensagem_canal` cujo
+ * `configGatilho.canais` inclua o canalTipo (ou esteja vazio = aceita
+ * qualquer canal).
  *
  * Retorna `executou=true` se algum cenário rodou — nesse caso o chatbot
  * padrão NÃO deve responder.
@@ -1389,18 +1387,6 @@ export async function dispararMensagemCanal(
       );
     }
 
-    // 2. Fallback: cenário antigo `whatsapp_mensagem` só pra WhatsApp QR
-    if (params.canalTipo === "whatsapp_qr") {
-      const r = await executarCenarioPorGatilho(
-        escritorioId,
-        "whatsapp_mensagem",
-        contexto,
-        { contatoId: params.contatoId, conversaId: params.conversaId },
-        params.imagem,
-      );
-      return { executou: r.executou, respostas: r.respostas, execId: r.execId };
-    }
-
     return { executou: false, respostas: [] };
   } catch (err: any) {
     log.error({ err: err.message, escritorioId, canalTipo: params.canalTipo }, "SmartFlow: erro em dispararMensagemCanal");
@@ -1410,7 +1396,7 @@ export async function dispararMensagemCanal(
 
 /**
  * @deprecated Use `dispararMensagemCanal` com `canalTipo` explícito.
- * Mantido por compatibilidade: assume canalTipo='whatsapp_qr'.
+ * Mantido por compatibilidade: assume canalTipo='whatsapp_api'.
  */
 export async function tentarSmartFlow(
   escritorioId: number,
@@ -1422,7 +1408,7 @@ export async function tentarSmartFlow(
   nomeCliente: string,
 ): Promise<{ executou: boolean; respostas: string[] }> {
   return dispararMensagemCanal(escritorioId, {
-    canalTipo: "whatsapp_qr",
+    canalTipo: "whatsapp_api",
     canalId,
     conversaId,
     contatoId,

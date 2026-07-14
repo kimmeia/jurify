@@ -27,14 +27,6 @@ vi.mock("../escritorio/db-crm", () => ({
   distribuirLead: vi.fn(),
 }));
 
-// O handler faz `await import("./whatsapp-baileys")` dentro de enviarResposta
-vi.mock("../integracoes/whatsapp-baileys", () => ({
-  getWhatsappManager: vi.fn(() => ({
-    isConectado: () => true,
-    enviarMensagemJid: vi.fn(),
-  })),
-}));
-
 import { enviarAutoReply } from "../integracoes/whatsapp-handler";
 import { obterAutoReplyCanal } from "../escritorio/db-canais";
 import { enviarMensagem as salvarMensagem } from "../escritorio/db-crm";

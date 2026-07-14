@@ -1114,15 +1114,19 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
       }
     },
 
-    async enviarWhatsApp(telefone: string, mensagem: string): Promise<boolean> {
-      // Roteia pelo helper que abstrai whatsapp_qr (Baileys) vs whatsapp_api
-      // (Cloud API oficial Meta). Antes esta função buscava só canais
-      // whatsapp_qr — ignorava canais Cloud, fazendo SmartFlow falhar em
-      // escritórios que usam só o WhatsApp oficial.
+    async enviarWhatsApp(
+      telefone: string,
+      mensagem: string,
+      opts?: { contatoId?: number; proativo?: boolean },
+    ): Promise<boolean> {
+      // Envio proativo (SmartFlow/scheduler) pelo canal WhatsApp oficial (Cloud
+      // API Meta). `proativo` ativa as travas anti-ban (disjuntor/teto diário/
+      // rate/opt-in) no helper; sem isso o disparo em massa de texto escapava
+      // de todas as proteções e podia derrubar a conta.
       try {
         const { getDb } = await import("../db");
         const { canaisIntegrados } = await import("../../drizzle/schema");
-        const { eq, and, or } = await import("drizzle-orm");
+        const { eq, and } = await import("drizzle-orm");
         const db = await getDb();
         if (!db) return false;
 
@@ -1130,10 +1134,7 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
           .where(and(
             eq(canaisIntegrados.escritorioId, escritorioId),
             eq(canaisIntegrados.status, "conectado"),
-            or(
-              eq(canaisIntegrados.tipo, "whatsapp_qr"),
-              eq(canaisIntegrados.tipo, "whatsapp_api"),
-            ),
+            eq(canaisIntegrados.tipo, "whatsapp_api"),
           ))
           .limit(1);
 
@@ -1173,10 +1174,15 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
             canalId,
             telefone,
             conteudo: partes[i],
+            proativo: opts?.proativo,
+            contatoId: opts?.contatoId,
+            // Proativo (iniciado pela empresa) exige opt-in — não manda texto
+            // "frio" pra quem nunca falou com o escritório nem é cliente.
+            exigirOptin: opts?.proativo,
           });
           if (!r.ok) {
             log.warn(
-              { canalId, erro: r.erro, provider: r.provider, parte: i + 1, totalPartes: partes.length },
+              { canalId, erro: r.erro, provider: r.provider, bloqueio: r.bloqueio, parte: i + 1, totalPartes: partes.length },
               "SmartFlow: envio WhatsApp falhou",
             );
             okTodas = false;

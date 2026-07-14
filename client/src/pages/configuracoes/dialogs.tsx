@@ -26,7 +26,6 @@ import {
   History, RotateCcw, Receipt, Gauge,
 } from "lucide-react";
 import { toast } from "sonner";
-import WhatsappQR from "@/components/integracoes/WhatsappQR";
 
 /**
  * Sub-seção do AsaasDialog: visibilidade da cota local do rate guard e
@@ -952,57 +951,6 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
                 {conectarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plug className="h-4 w-4 mr-2" />}
                 Conectar
               </Button>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ─── WhatsApp QR Dialog ────────────────────────────────────────────────────
-
-export function WhatsAppQRDialog({ open, onClose, canal, canEdit, isDono, onRefresh }: { open: boolean; onClose: () => void; canal?: any; canEdit: boolean; isDono: boolean; onRefresh: () => void }) {
-  const [showNewForm, setShowNewForm] = useState(false);
-  const [newNome, setNewNome] = useState("");
-  const criarMut = trpc.configuracoes.criarCanal.useMutation({
-    onSuccess: () => { toast.success("Canal WhatsApp criado!"); setNewNome(""); setShowNewForm(false); onRefresh(); },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-xl shadow">💬</div>
-            WhatsApp — Conexão QR Code
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          {canal ? (
-            <WhatsappQR canalId={canal.id} canalNome={canal.nome || "WhatsApp"} statusInicial={canal.status} />
-          ) : (
-            <div className="text-center py-6 space-y-3">
-              <MessageCircle className="h-10 w-10 text-muted-foreground/30 mx-auto" />
-              <p className="text-sm text-muted-foreground">Nenhum canal WhatsApp QR configurado.</p>
-              {canEdit && !showNewForm && (
-                <Button size="sm" onClick={() => setShowNewForm(true)}><Plus className="h-4 w-4 mr-1" /> Criar Canal</Button>
-              )}
-            </div>
-          )}
-          {showNewForm && (
-            <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
-              <div className="space-y-1.5">
-                <Label>Nome do canal *</Label>
-                <Input placeholder="WhatsApp Comercial" value={newNome} onChange={(e) => setNewNome(e.target.value)} />
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => criarMut.mutate({ tipo: "whatsapp_qr", nome: newNome })} disabled={!newNome || criarMut.isPending}>
-                  {criarMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Criar
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setShowNewForm(false)}>Cancelar</Button>
-              </div>
             </div>
           )}
         </div>

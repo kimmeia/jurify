@@ -1250,7 +1250,7 @@ export async function runMigrations(): Promise<void> {
     // Atualizar enum tipoCanal para incluir calcom e chatgpt
     try {
       await connection.query(
-        `ALTER TABLE canais_integrados MODIFY COLUMN tipoCanal ENUM('whatsapp_qr','whatsapp_api','instagram','facebook','telefone_voip','calcom','chatgpt','claude') NOT NULL`,
+        `ALTER TABLE canais_integrados MODIFY COLUMN tipoCanal ENUM('whatsapp_api','instagram','facebook','telefone_voip','calcom','chatgpt','claude') NOT NULL`,
       );
     } catch (err: any) {
       if (!isHarmlessError(err.message || String(err))) {
@@ -1353,6 +1353,13 @@ export async function runMigrations(): Promise<void> {
     } catch (err: any) {
       if (!isHarmlessError(err.message || String(err))) log.warn({ err: err.message }, "Falha ao atualizar enums SmartFlow");
     }
+
+    // Anti-ban WhatsApp — saúde do número (Meta) + contador diário persistido.
+    // Idempotente: catch silencioso se a coluna já existe.
+    try { await connection.query(`ALTER TABLE canais_integrados ADD COLUMN qualidadeMeta VARCHAR(16) NULL`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE canais_integrados ADD COLUMN tierMensagens VARCHAR(24) NULL`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE canais_integrados ADD COLUMN disparosDia INT NOT NULL DEFAULT 0`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE canais_integrados ADD COLUMN disparosDiaEm VARCHAR(10) NULL`); } catch { /* exists */ }
 
     // SmartFlow scheduler — coluna retomarEmExec p/ retomar passos "esperar"
     try { await connection.query(`ALTER TABLE smartflow_execucoes ADD COLUMN retomarEmExec TIMESTAMP NULL`); } catch { /* exists */ }

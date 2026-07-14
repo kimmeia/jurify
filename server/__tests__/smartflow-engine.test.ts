@@ -11,7 +11,7 @@
  *   - Tratamento de erros
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   executarCenario,
   interpretarSaidaAtendente,
@@ -19,11 +19,16 @@ import {
   gerarSlotsLivres,
   formatarHorariosLivres,
   formatarISOComOffset,
+  _setThrottleParaCadaItem,
   SmartflowContexto,
   SmartflowExecutores,
   Passo,
 } from "../smartflow/engine";
 import { TIPO_PASSO_META } from "../../shared/smartflow-types";
+
+// Zera o throttle anti-rajada do para_cada_item pra os testes rodarem rápido e
+// determinísticos (o valor real de produção é coberto pela lógica, não pelo teste).
+beforeEach(() => _setThrottleParaCadaItem(0));
 
 // ─── Mock executores ────────────────────────────────────────────────────────
 
@@ -975,7 +980,7 @@ describe("SmartFlow Engine", () => {
       expect(resultado.contexto.aguardandoMensagem).toBe(true);
       expect(resultado.contexto.aguardandoContatoId).toBe(42);
       expect(resultado.contexto.aguardandoTimeoutMinutos).toBe(60);
-      expect(enviarWhatsApp).toHaveBeenCalledWith("11999", "Sobre qual ação?");
+      expect(enviarWhatsApp).toHaveBeenCalledWith("11999", "Sobre qual ação?", expect.objectContaining({ proativo: true }));
     });
 
     it("anexa menu numerado quando há opções", async () => {
@@ -1153,7 +1158,7 @@ describe("SmartFlow Engine", () => {
       const r = await executarCenario(passos, { telefoneCliente: "5585", cliente: { nome: "Ana" } }, exec);
       expect(r.sucesso).toBe(true);
       expect(enviarWhatsAppTemplate).not.toHaveBeenCalled();
-      expect(enviarWhatsApp).toHaveBeenCalledWith("5585", "Oi Ana");
+      expect(enviarWhatsApp).toHaveBeenCalledWith("5585", "Oi Ana", expect.objectContaining({ proativo: true }));
     });
   });
 
@@ -2836,7 +2841,7 @@ describe("SmartFlow Engine", () => {
       const r = await executarCenario(passos, { nomeCliente: "João", telefoneCliente: "5511999" }, exec);
 
       expect(r.sucesso).toBe(true);
-      expect(enviarWhatsApp).toHaveBeenCalledWith("5511999", "Olá João");
+      expect(enviarWhatsApp).toHaveBeenCalledWith("5511999", "Olá João", expect.objectContaining({ proativo: true }));
     });
 
     it("NÃO chama exec.enviarWhatsApp quando canalId está no contexto (mensagem recebida)", async () => {
@@ -2971,7 +2976,7 @@ describe("SmartFlow Engine", () => {
       );
 
       expect(resultado.sucesso).toBe(true);
-      expect(enviarWhatsApp).toHaveBeenCalledWith("5585999990000", "Bem-vindo!");
+      expect(enviarWhatsApp).toHaveBeenCalledWith("5585999990000", "Bem-vindo!", expect.objectContaining({ proativo: true }));
     });
 
     it("falha quando chave está vazia", async () => {

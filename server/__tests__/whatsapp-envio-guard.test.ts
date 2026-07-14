@@ -4,8 +4,13 @@ import {
   verificarRateLimit,
   registrarDisparoRate,
   podeDispararTemplate,
+  podeEnviar,
   registrarFalhaTemplate,
   registrarSucessoTemplate,
+  registrarSucessoEnvio,
+  limiteDiarioPorTier,
+  verificarLimiteDiario,
+  bucketDia,
   _resetRateLimit,
 } from "../integracoes/whatsapp-envio-guard";
 
@@ -174,5 +179,75 @@ describe("registrarSucessoTemplate (rearma o disjuntor)", () => {
     expect(captured.restritoMeta).toBe(false);
     // disparo entrou no rate limit
     expect(verificarRateLimit(9, 5000)).toBeTruthy();
+  });
+});
+
+describe("teto diário por tier (anti-ban)", () => {
+  it("mapeia o messaging tier da Meta no teto por 24h", () => {
+    expect(limiteDiarioPorTier("TIER_250")).toBe(250);
+    expect(limiteDiarioPorTier("TIER_1K")).toBe(1_000);
+    expect(limiteDiarioPorTier("TIER_10K")).toBe(10_000);
+    expect(limiteDiarioPorTier("TIER_UNLIMITED")).toBe(Number.POSITIVE_INFINITY);
+    expect(limiteDiarioPorTier(null)).toBe(1_000); // default conservador
+    expect(limiteDiarioPorTier("xpto")).toBe(1_000);
+  });
+
+  it("bloqueia quando o contador do dia atinge o teto do tier", () => {
+    const t = Date.parse("2026-07-14T10:00:00Z");
+    const hoje = bucketDia(t);
+    expect(verificarLimiteDiario({ disparosDia: 250, disparosDiaEm: hoje, tier: "TIER_250" }, t).ok).toBe(false);
+    expect(verificarLimiteDiario({ disparosDia: 249, disparosDiaEm: hoje, tier: "TIER_250" }, t).ok).toBe(true);
+  });
+
+  it("zera na virada do dia (bucket diferente conta como 0)", () => {
+    const t = Date.parse("2026-07-14T10:00:00Z");
+    // contador cheio, mas de ONTEM → hoje começa do zero
+    expect(verificarLimiteDiario({ disparosDia: 999, disparosDiaEm: "2026-07-13", tier: "TIER_250" }, t).ok).toBe(true);
+  });
+
+  it("tier ilimitado nunca bloqueia por volume", () => {
+    const t = Date.parse("2026-07-14T10:00:00Z");
+    expect(verificarLimiteDiario({ disparosDia: 999_999, disparosDiaEm: bucketDia(t), tier: "TIER_UNLIMITED" }, t).ok).toBe(true);
+  });
+});
+
+describe("podeEnviar — proativo vs. resposta", () => {
+  beforeEach(() => _resetRateLimit());
+
+  it("proativo é bloqueado ao estourar o teto diário", async () => {
+    const t = Date.parse("2026-07-14T10:00:00Z");
+    const db = fakeDb({ selectQueue: [[{ restrito: false, disparosDia: 250, disparosDiaEm: bucketDia(t), tier: "TIER_250" }]] });
+    const r = await podeEnviar({ db, canalId: 1, proativo: true, agoraMs: t });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.tipo).toBe("diario");
+  });
+
+  it("resposta (não-proativo) IGNORA teto de volume, mas respeita o disjuntor", async () => {
+    const t = Date.parse("2026-07-14T10:00:00Z");
+    // Mesmo com o dia estourado, resposta manual/auto-reply passa (não conta volume).
+    const db1 = fakeDb({ selectQueue: [[{ restrito: false, disparosDia: 9999, disparosDiaEm: bucketDia(t), tier: "TIER_250" }]] });
+    expect((await podeEnviar({ db: db1, canalId: 1, proativo: false, agoraMs: t })).ok).toBe(true);
+    // Mas conta restrita bloqueia TUDO, inclusive resposta.
+    const db2 = fakeDb({ selectQueue: [[{ restrito: true, motivo: "131031" }]] });
+    const r = await podeEnviar({ db: db2, canalId: 1, proativo: false, agoraMs: t });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.tipo).toBe("restrito");
+  });
+});
+
+describe("registrarSucessoEnvio — contagem só no proativo", () => {
+  beforeEach(() => _resetRateLimit());
+
+  it("proativo entra no rate limit; resposta não", async () => {
+    const db = fakeDb();
+    await registrarSucessoEnvio({ db, canalId: 20, proativo: true, agoraMs: 1000 });
+    expect(verificarRateLimit(20, 1000).ok).toBe(true); // registrado (ainda sob o teto)
+    // 9 restantes no minuto → 10 no total → bloqueia o 11º
+    for (let i = 0; i < 9; i++) await registrarSucessoEnvio({ db, canalId: 20, proativo: true, agoraMs: 1000 });
+    expect(verificarRateLimit(20, 1000).ok).toBe(false);
+
+    // Resposta não conta no rate limit.
+    await registrarSucessoEnvio({ db, canalId: 21, proativo: false, agoraMs: 1000 });
+    expect(verificarRateLimit(21, 1000).ok).toBe(true);
   });
 });

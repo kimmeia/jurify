@@ -945,15 +945,48 @@ export const metaChannelsRouter = router({
       const { decryptConfig } = await import("../escritorio/crypto-utils");
       const config = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
 
+      // WhatsApp oficial: health-check completo (qualidade + tier + status do
+      // número). Persiste pra UI/teto anti-ban e, se a Meta reportar número
+      // restrito/desativado, tripa o disjuntor em vez de dizer "conectado".
+      if (canal.tipo === "whatsapp_api" && config.phoneNumberId && config.accessToken) {
+        const { WhatsAppCloudClient } = await import("../integracoes/whatsapp-cloud");
+        const client = new WhatsAppCloudClient({
+          accessToken: config.accessToken,
+          phoneNumberId: config.phoneNumberId,
+        });
+        const saude = await client.getSaudeNumero();
+        const guard = await import("../integracoes/whatsapp-envio-guard");
+        if (!saude.contaOk) {
+          await guard.marcarCanalRestrito(db, input.canalId, saude.motivo || "Número restrito na Meta");
+          await db
+            .update(canaisIntegrados)
+            .set({
+              status: "banido",
+              mensagemErro: (saude.motivo || "Número restrito/desativado na Meta").slice(0, 500),
+              ...(saude.qualityRating ? { qualidadeMeta: saude.qualityRating } : {}),
+              ...(saude.tier ? { tierMensagens: saude.tier } : {}),
+            })
+            .where(eq(canaisIntegrados.id, input.canalId));
+          return { ok: false, error: saude.motivo || "Número restrito/desativado na Meta" };
+        }
+        // Número saudável: rearma disjuntor + atualiza qualidade/tier.
+        await guard.limparCanalRestrito(db, input.canalId);
+        await db
+          .update(canaisIntegrados)
+          .set({
+            status: "conectado",
+            mensagemErro: null,
+            ultimaSync: new Date(),
+            ...(saude.qualityRating ? { qualidadeMeta: saude.qualityRating } : {}),
+            ...(saude.tier ? { tierMensagens: saude.tier } : {}),
+          })
+          .where(eq(canaisIntegrados.id, input.canalId));
+        return { ok: true, qualityRating: saude.qualityRating, tier: saude.tier };
+      }
+
       const axios = (await import("axios")).default;
       try {
-        if (canal.tipo === "whatsapp_api" && config.phoneNumberId && config.accessToken) {
-          await axios.get(`https://graph.facebook.com/v21.0/${config.phoneNumberId}`, {
-            params: { fields: "display_phone_number" },
-            headers: { Authorization: `Bearer ${config.accessToken}` },
-            timeout: 8000,
-          });
-        } else if (canal.tipo === "instagram" && config.igUserId && config.pageAccessToken) {
+        if (canal.tipo === "instagram" && config.igUserId && config.pageAccessToken) {
           await axios.get(`https://graph.facebook.com/v21.0/${config.igUserId}`, {
             params: { fields: "username", access_token: config.pageAccessToken },
             timeout: 8000,
