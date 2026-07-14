@@ -318,7 +318,7 @@ export const crmRouter = router({
       // Marcar conversa como em_atendimento se estava aguardando
       await atualizarConversa(input.conversaId, esc.escritorio.id, { status: "em_atendimento" });
 
-      // Enviar via WhatsApp se a conversa for de um canal whatsapp_qr
+      // Enviar via WhatsApp se a conversa for de um canal WhatsApp
       try {
         const { getDb } = await import("../db");
         const { conversas, contatos, canaisIntegrados } = await import("../../drizzle/schema");
@@ -346,38 +346,7 @@ export const crmRouter = router({
             chatIdExterno: convData?.chatIdExterno,
           }, "Dados da conversa");
 
-          if (convData && convData.canalTipo === "whatsapp_qr") {
-            const { getWhatsappManager } = await import("../integracoes/whatsapp-baileys");
-            const manager = getWhatsappManager();
-
-            if (manager.isConectado(convData.canalId)) {
-              // Preferência por chatIdExterno (já é JID de conversa existente).
-              // Fallback pro telefone — enviarMensagemJid resolve a quirk BR
-              // com/sem "9" via onWhatsApp() automaticamente.
-              const destinatario = convData.chatIdExterno || convData.telefone;
-              if (destinatario) {
-                // Para mídia, resolve o path local antes de mandar pro Baileys:
-                // upload devolve "/uploads/escritorio_X/foo.webm" mas o socket
-                // precisa de path absoluto OU URL HTTP. Texto puro ignora.
-                const mediaParaBaileys = input.mediaUrl
-                  ? resolverMediaPathLocal(input.mediaUrl)
-                  : undefined;
-                await manager.enviarMensagemJid(
-                  convData.canalId,
-                  destinatario,
-                  input.conteudo,
-                  input.tipo,
-                  mediaParaBaileys,
-                  undefined,
-                );
-                log.info(`[CRM] Mensagem enviada via WhatsApp QR para ${destinatario}`);
-              } else {
-                log.warn(`[CRM] Sem destinatário para conversa ${input.conversaId}`);
-              }
-            } else {
-              log.warn(`[CRM] Canal WhatsApp QR ${convData.canalId} não conectado`);
-            }
-          } else if (convData && convData.canalTipo === "whatsapp_api") {
+          if (convData && convData.canalTipo === "whatsapp_api") {
             // Cloud API (CoEx) — enviar via API oficial
             try {
               const [canalRow] = await db.select().from(canaisIntegrados).where(eq(canaisIntegrados.id, convData.canalId)).limit(1);
@@ -525,20 +494,9 @@ export const crmRouter = router({
         origem: "whatsapp",
       });
 
-      // 2. Resolver JID via Baileys (resolve a quirk BR com/sem "9").
-      //    Se o canal não estiver conectado, cai no JID literal — a mensagem
-      //    falhará depois mas a conversa fica criada pra atendimento manual.
-      const { getWhatsappManager } = await import("../integracoes/whatsapp-baileys");
-      const manager = getWhatsappManager();
-      let jid = `${cleanPhone}@s.whatsapp.net`;
-      if (manager.isConectado(input.canalId)) {
-        try {
-          const resolvido = await manager.resolverJid(input.canalId, cleanPhone);
-          if (resolvido) jid = resolvido;
-        } catch (e: any) {
-          log.warn({ err: e.message, telefone: cleanPhone }, "[CRM] Falha resolver JID, usando literal");
-        }
-      }
+      // 2. JID literal a partir do telefone normalizado. A Cloud API resolve
+      //    o destinatário pelo próprio wa_id — não há resolução de sessão aqui.
+      const jid = `${cleanPhone}@s.whatsapp.net`;
 
       // 3. Verificar se já existe conversa aberta com este contato+canal
       const existingConvs = await listarConversas(esc.escritorio.id, {});
@@ -582,11 +540,20 @@ export const crmRouter = router({
         conteudo: input.mensagem,
       });
 
-      // 5. Enviar via WhatsApp (jid já resolvido acima)
+      // 5. Enviar via WhatsApp pelo canal (Cloud API). Best-effort: se falhar,
+      //    a conversa já está criada pra atendimento manual.
       try {
-        if (manager.isConectado(input.canalId)) {
-          await manager.enviarMensagemJid(input.canalId, jid, input.mensagem);
+        const { enviarMensagemPeloCanal } = await import("../integracoes/canal-envio");
+        const r = await enviarMensagemPeloCanal({
+          canalId: input.canalId,
+          telefone: cleanPhone,
+          chatIdExterno: jid,
+          conteudo: input.mensagem,
+        });
+        if (r.ok) {
           log.info(`[CRM] Nova conversa iniciada com ${cleanPhone} via WhatsApp (jid=${jid})`);
+        } else {
+          log.warn({ err: r.erro, canalId: input.canalId }, "[CRM] Falha ao enviar 1ª mensagem");
         }
       } catch (err: any) {
         log.error(`[CRM] Erro ao enviar 1ª mensagem:`, err.message);

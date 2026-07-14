@@ -322,10 +322,10 @@ function IniciarConversaDialog({
 }) {
   const [tel, setTel] = useState(""); const [nome, setNome] = useState(""); const [msg, setMsg] = useState(""); const [canalId, setCanalId] = useState<number | null>(null);
   const { data: canais } = trpc.configuracoes.listarCanais.useQuery();
-  // Inclui whatsapp_api (Cloud API) E whatsapp_qr (Baileys legado).
-  // Quando há múltiplos números conectados, exige escolha explícita.
+  // Canais WhatsApp (Cloud API) conectados. Quando há múltiplos números
+  // conectados, exige escolha explícita.
   const waCh = (canais?.canais || []).filter(
-    (c: any) => (c.tipo === "whatsapp_api" || c.tipo === "whatsapp_qr") && c.status === "conectado",
+    (c: any) => c.tipo === "whatsapp_api" && c.status === "conectado",
   );
   useEffect(() => { if (waCh.length > 0 && !canalId) setCanalId(waCh[0].id); }, [waCh, canalId]);
   // Ao abrir com dados vindos do CRM, pré-popula os campos.
@@ -569,7 +569,7 @@ export default function Atendimento() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const hasWhatsapp = (canaisData?.canais || []).some((c: any) => (c.tipo === "whatsapp_qr" || c.tipo === "whatsapp_api") && c.status === "conectado");
+  const hasWhatsapp = (canaisData?.canais || []).some((c: any) => c.tipo === "whatsapp_api" && c.status === "conectado");
   const hasTwilio = (canaisData?.canais || []).some((c: any) => c.tipo === "telefone_voip" && (c.status === "conectado" || c.temConfig));
 
   // Consome o contatoId da URL assim que `convs` carregou. Roda uma vez só

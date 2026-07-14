@@ -82,7 +82,7 @@ export function validarConfigCanalPorTipo(
 ): void {
   // Tipos sem requisitos diretos no criarCanal — a conexão real
   // acontece via outro fluxo (QR code, Embedded Signup, OAuth Cal.com).
-  const tiposOpcionais = new Set(["whatsapp_qr", "whatsapp_api", "instagram", "facebook", "calcom"]);
+  const tiposOpcionais = new Set(["whatsapp_api", "instagram", "facebook", "calcom"]);
   if (tiposOpcionais.has(tipo)) return;
 
   const obrigatorios: Record<string, string[]> = {
@@ -646,7 +646,6 @@ export const configuracoesRouter = router({
   criarCanal: protectedProcedure
     .input(z.object({
       tipo: z.enum([
-        "whatsapp_qr",
         "whatsapp_api",
         "instagram",
         "facebook",
@@ -677,7 +676,7 @@ export const configuracoesRouter = router({
       // Enforce de limite de conexões WhatsApp do plano (Fase 4 — antes
       // estava comentado). Lê `maxConexoesWhatsapp` do plano via cortesia/
       // resolver de subscription (não do campo stale em escritorios).
-      if (input.tipo === "whatsapp_qr" || input.tipo === "whatsapp_api") {
+      if (input.tipo === "whatsapp_api") {
         const { getActiveSubscriptionComHeranca } = await import("../db");
         const { getPlanoBySlug } = await import("../billing/planos-repo");
 

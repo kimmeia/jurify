@@ -283,7 +283,7 @@ export async function contarCanaisPorTipo(escritorioId: number): Promise<Record<
   const contagem: Record<string, number> = {};
   for (const r of rows) {
     const tipo = r.tipo as string;
-    const isWhatsapp = tipo === "whatsapp_qr" || tipo === "whatsapp_api";
+    const isWhatsapp = tipo === "whatsapp_api";
     const key = isWhatsapp ? "whatsapp" : tipo;
     contagem[key] = (contagem[key] || 0) + 1;
   }

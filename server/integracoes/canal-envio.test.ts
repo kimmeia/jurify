@@ -1,7 +1,6 @@
 /**
  * Testes do roteamento de envio por tipo de canal. Mocka:
  *   - getDb → devolve um stub que retorna a row do canal
- *   - whatsapp-baileys → mockado (isConectado/enviarMensagemJid)
  *   - whatsapp-cloud → mockado (enviarTexto)
  *   - crypto-utils.decryptConfig → mockado pra devolver config plain
  */
@@ -18,14 +17,6 @@ const dbStub = {
 
 vi.mock("../db", () => ({ getDb: async () => dbStub }));
 
-const baileysMock = {
-  isConectado: vi.fn(),
-  enviarMensagemJid: vi.fn(),
-};
-vi.mock("./whatsapp-baileys", () => ({
-  getWhatsappManager: () => baileysMock,
-}));
-
 const cloudClientMock = {
   enviarTexto: vi.fn(),
 };
@@ -36,6 +27,17 @@ vi.mock("./whatsapp-cloud", () => ({
 
 vi.mock("../escritorio/crypto-utils", () => ({
   decryptConfig: vi.fn(() => ({ accessToken: "TOKEN_TEST", phoneNumberId: "PHONE_TEST" })),
+}));
+
+// Travas anti-ban têm suíte própria (whatsapp-envio-guard.test.ts). Aqui
+// mockamos como "permite tudo" pra isolar o roteamento de envio.
+vi.mock("./whatsapp-envio-guard", () => ({
+  podeEnviar: vi.fn(async () => ({ ok: true })),
+  podeDispararTemplate: vi.fn(async () => ({ ok: true })),
+  registrarSucessoEnvio: vi.fn(async () => {}),
+  registrarFalhaEnvio: vi.fn(async () => {}),
+  registrarSucessoTemplate: vi.fn(async () => {}),
+  registrarFalhaTemplate: vi.fn(async () => {}),
 }));
 
 import { enviarMensagemPeloCanal } from "./canal-envio";
@@ -65,87 +67,6 @@ describe("enviarMensagemPeloCanal — guards", () => {
     expect(r.ok).toBe(false);
     expect(r.provider).toBe("outro");
     expect(r.erro).toContain("instagram");
-  });
-});
-
-describe("enviarMensagemPeloCanal — whatsapp_qr (Baileys)", () => {
-  beforeEach(() => {
-    dbStub.selectRows = [{ id: 5, tipo: "whatsapp_qr" }];
-  });
-
-  it("envia com sucesso quando Baileys conectado", async () => {
-    baileysMock.isConectado.mockReturnValue(true);
-    baileysMock.enviarMensagemJid.mockResolvedValue(undefined);
-
-    const r = await enviarMensagemPeloCanal({
-      canalId: 5,
-      chatIdExterno: "5511999@s.whatsapp.net",
-      telefone: "5511999",
-      conteudo: "olá",
-    });
-
-    expect(r.ok).toBe(true);
-    expect(r.provider).toBe("whatsapp_qr");
-    expect(baileysMock.enviarMensagemJid).toHaveBeenCalledWith(
-      5,
-      "5511999@s.whatsapp.net",
-      "olá",
-    );
-  });
-
-  it("retorna erro quando sessão desconectada", async () => {
-    baileysMock.isConectado.mockReturnValue(false);
-
-    const r = await enviarMensagemPeloCanal({
-      canalId: 5,
-      telefone: "5511999",
-      conteudo: "olá",
-    });
-
-    expect(r.ok).toBe(false);
-    expect(r.erro).toContain("desconectada");
-    expect(baileysMock.enviarMensagemJid).not.toHaveBeenCalled();
-  });
-
-  it("converte LID pra PN quando tem telefone disponível", async () => {
-    baileysMock.isConectado.mockReturnValue(true);
-    baileysMock.enviarMensagemJid.mockResolvedValue(undefined);
-
-    await enviarMensagemPeloCanal({
-      canalId: 5,
-      chatIdExterno: "1234567890@lid",
-      telefone: "5511988887777",
-      conteudo: "olá",
-    });
-
-    expect(baileysMock.enviarMensagemJid).toHaveBeenCalledWith(
-      5,
-      "5511988887777@s.whatsapp.net",
-      "olá",
-    );
-  });
-
-  it("captura erro do Baileys e devolve ok=false", async () => {
-    baileysMock.isConectado.mockReturnValue(true);
-    baileysMock.enviarMensagemJid.mockRejectedValue(new Error("Chat not found"));
-
-    const r = await enviarMensagemPeloCanal({
-      canalId: 5,
-      telefone: "5511999",
-      conteudo: "olá",
-    });
-
-    expect(r.ok).toBe(false);
-    expect(r.erro).toBe("Chat not found");
-  });
-
-  it("falha sem destinatário (sem telefone nem chatId)", async () => {
-    baileysMock.isConectado.mockReturnValue(true);
-
-    const r = await enviarMensagemPeloCanal({ canalId: 5, conteudo: "olá" });
-
-    expect(r.ok).toBe(false);
-    expect(r.erro).toContain("Sem destinatário");
   });
 });
 

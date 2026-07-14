@@ -33,7 +33,6 @@ export type GatilhoSmartflow =
  * Alinhado com o enum `tipoCanal` em `canais_integrados` (drizzle/schema.ts).
  */
 export type TipoCanalMensagem =
-  | "whatsapp_qr"
   | "whatsapp_api"
   | "instagram"
   | "facebook";
@@ -480,8 +479,8 @@ export interface ConfigWhatsappAguardarResposta {
  * saídas universais: `outra_resposta` (cliente digitou texto fora das opções)
  * e `sem_resposta` (timeout).
  *
- * SÓ funciona em canal `whatsapp_api` (Meta Cloud) — o passo falha cedo se
- * o contato está num canal QR (Baileys), com mensagem clara pro operador.
+ * SÓ funciona em canal `whatsapp_api` (Meta Cloud) — o passo falha cedo em
+ * canais que não suportam interativo, com mensagem clara pro operador.
  *
  * Limites Meta:
  *   - Botões: até 3, label ≤ 20 chars
@@ -949,7 +948,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "agenda_criar", label: "Agendamento", descricao: "Mexe na Agenda do escritório: marcar consulta, ver horários livres, editar/remarcar e cancelar. Atribui a um responsável e vincula ao cliente.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "acoes" },
   { id: "whatsapp_enviar", label: "Enviar mensagem", descricao: "Envia mensagem pelo WhatsApp.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
   { id: "whatsapp_aguardar_resposta", label: "Aguardar resposta", descricao: "Pausa o fluxo até o cliente responder (com timeout). Use pra menus ('digite 1'), confirmações e coletar UMA resposta. Não precisa dele depois do Atendente IA — esse já espera o cliente sozinho.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
-  { id: "whatsapp_pergunta_opcoes", label: "Pergunta com opções", descricao: "Envia BOTÕES clicáveis (até 3) ou LISTA suspensa (até 10) pelo WhatsApp oficial. Cliente clica em vez de digitar — cada opção vira uma saída do bloco. Saídas extras: 'outra_resposta' (digitou texto) e 'sem_resposta' (timeout). SÓ funciona em canal Cloud API (não Baileys QR).", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
+  { id: "whatsapp_pergunta_opcoes", label: "Pergunta com opções", descricao: "Envia BOTÕES clicáveis (até 3) ou LISTA suspensa (até 10) pelo WhatsApp oficial. Cliente clica em vez de digitar — cada opção vira uma saída do bloco. Saídas extras: 'outra_resposta' (digitou texto) e 'sem_resposta' (timeout). SÓ funciona em canal Cloud API oficial.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
   { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e PARA o bot de responder (conversa fica 'em atendimento'). Use no fim de um caminho pra passar pro atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
   { id: "distribuir_atendimento", label: "Distribuir atendimento", descricao: "Atribui um atendente à conversa. Dois modos: SETOR (rotação dentro de um setor — Comercial, Financeiro… — menor carga / online primeiro) ou ATENDENTE FIXO (atribui sempre a pessoa escolhida). O bot SEGUE o fluxo — só para quando o atendente responder no inbox. Saídas: atribuído / sem atendente.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
   { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },
@@ -972,7 +971,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
 
 export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [
   { id: "mensagem_canal", label: "Mensagem recebida", descricao: "Dispara quando chega mensagem em qualquer canal (WhatsApp, Instagram, Facebook).", grupo: "mensagem" },
-  { id: "whatsapp_mensagem", label: "Mensagem WhatsApp (legado)", descricao: "Gatilho antigo, específico de WhatsApp QR (Baileys). Descontinuado — use 'Mensagem recebida'.", grupo: "mensagem", oculto: true },
+  { id: "whatsapp_mensagem", label: "Mensagem WhatsApp (legado)", descricao: "Gatilho antigo de WhatsApp. Descontinuado — use 'Mensagem recebida'.", grupo: "mensagem", oculto: true },
   { id: "pagamento_recebido", label: "Pagamento recebido (Asaas)", descricao: "Dispara no webhook do Asaas.", grupo: "asaas" },
   { id: "pagamento_vencido", label: "Pagamento vencido (Asaas)", descricao: "Dispara quando a cobrança está atrasada há N dias.", grupo: "asaas" },
   { id: "pagamento_proximo_vencimento", label: "Vencimento próximo (Asaas)", descricao: "Dispara N dias antes da cobrança vencer.", grupo: "asaas" },
@@ -984,10 +983,6 @@ export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [
   { id: "manual", label: "Acionado manualmente", descricao: "Executado pelo botão 'Executar agora'.", grupo: "fluxo" },
 ];
 
-// `whatsapp_qr` (Baileys) foi REMOVIDO da seleção de canais do gatilho —
-// está sendo descontinuado em favor da API oficial (whatsapp_api). O tipo
-// `whatsapp_qr` continua no union TipoCanalMensagem pra não quebrar cenários
-// e código legados; só não aparece mais como opção pra criar/configurar.
 export const TIPO_CANAL_META: ReadonlyArray<TipoCanalMeta> = [
   { id: "whatsapp_api", label: "WhatsApp API (Meta Cloud)" },
   { id: "instagram", label: "Instagram", emBreve: true },

@@ -541,4 +541,57 @@ export class WhatsAppCloudClient {
       return { ok: false, erro: msg };
     }
   }
+
+  /**
+   * Lê a saúde do número na Meta: quality_rating (GREEN/YELLOW/RED), tier de
+   * mensagens (TIER_250/1K/...) e o status da conta/número. Base do health-check
+   * anti-ban — alimenta o teto diário e detecta restrição/desativação ANTES de
+   * um disparo falhar. `contaOk=false` quando a Meta reporta número/conta fora
+   * do ar (o caller deve tripar o disjuntor).
+   */
+  async getSaudeNumero(): Promise<{
+    qualityRating: string | null;
+    tier: string | null;
+    telefone: string | null;
+    nameStatus: string | null;
+    platformType: string | null;
+    contaOk: boolean;
+    motivo: string | null;
+  }> {
+    try {
+      const res = await this.api.get(`/${this.phoneNumberId}`, {
+        params: {
+          fields:
+            "display_phone_number,quality_rating,messaging_limit_tier,name_status,code_verification_status,platform_type,status",
+        },
+      });
+      const d = res.data || {};
+      // A Meta usa `status` do número ("CONNECTED","FLAGGED","RESTRICTED",
+      // "BANNED"...) e `name_status`. Qualquer coisa fora de CONNECTED/… saudável
+      // sinaliza problema — o caller decide pausar.
+      const statusNumero = String(d.status || "").toUpperCase();
+      const problema = /RESTRICT|BANNED|DISABL|FLAGGED|DELETED/.test(statusNumero);
+      return {
+        qualityRating: d.quality_rating || null,
+        tier: d.messaging_limit_tier || null,
+        telefone: d.display_phone_number || null,
+        nameStatus: d.name_status || null,
+        platformType: d.platform_type || null,
+        contaOk: !problema,
+        motivo: problema ? `Número em estado "${statusNumero}" na Meta` : null,
+      };
+    } catch (err: any) {
+      const msg = err.response?.data?.error?.message || err.message;
+      // Erro da Graph API que indica restrição também tripa (caller checa motivo).
+      return {
+        qualityRating: null,
+        tier: null,
+        telefone: null,
+        nameStatus: null,
+        platformType: null,
+        contaOk: false,
+        motivo: msg || "Falha ao consultar saúde do número",
+      };
+    }
+  }
 }

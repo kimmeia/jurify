@@ -63,6 +63,15 @@ export function reportarErroInesperado(err: unknown): void {
 const INTERVALO_MS = 15 * 60 * 1000;
 const TOLERANCIA_MIN = 15;
 
+/**
+ * Espaçamento entre disparos de cobrança no mesmo ciclo — evita rajada que a
+ * Meta classifica como spam. O teto real de volume é o guard (rate + tier);
+ * este delay só suaviza a cadência dentro do que o guard permite.
+ */
+const THROTTLE_ENTRE_DISPAROS_MS = 1200;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 /** Status que indicam "cobrança já paga" — skip silencioso antes do disparo. */
 const STATUS_PAGO = new Set(["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH", "REFUNDED"]);
 
@@ -185,12 +194,38 @@ export async function rodarCicloCobrancas(
     let proximas = 0;
     let ultimoErroEnvio: string | undefined;
 
+    // Guard anti-ban: teto por canal (disjuntor + tier diário + rate). Gate no
+    // scheduler além do gate por-envio pra REAGENDAR o excedente — cobranças não
+    // disparadas neste ciclo não viram execução, então o próximo ciclo do cron
+    // as retoma, respeitando o limite da Meta em vez de estourar tudo de uma vez.
+    const { getCanalCloudApi } = await import("../integracoes/canal-envio");
+    const guard = await import("../integracoes/whatsapp-envio-guard");
+
     outer: for (const escritorioId of escritoriosIds) {
       const cobrancas = await carregarCobrancasDoEscritorio(escritorioId);
       const cenariosDoEscritorio = cenarios.filter((c) => c.escritorioId === escritorioId);
       const tz = fusoPorEscritorio.get(escritorioId) || FUSO_HORARIO_PADRAO;
 
+      // Canal de envio do escritório — base do gate anti-ban. Sem canal oficial
+      // conectado, o disparo falharia no envio; segue mesmo assim (o dispatcher
+      // reporta o erro), mas sem gate de volume.
+      const canalEnvio = opts.telefoneTeste ? null : await getCanalCloudApi(escritorioId);
+
       for (const cb of cobrancas) {
+        // Reagendamento: se o canal bateu o teto (tier diário ou rajada), para
+        // este escritório neste ciclo. As cobranças restantes não são tocadas —
+        // o próximo ciclo do cron (ou o próximo dia, quando o contador zera) as
+        // retoma. É o comportamento "espaçar e reagendar".
+        if (canalEnvio) {
+          const gate = await guard.podeEnviar({ db, canalId: canalEnvio.canalId, proativo: true });
+          if (!gate.ok && (gate.tipo === "diario" || gate.tipo === "rate" || gate.tipo === "restrito")) {
+            log.info(
+              { escritorioId, canalId: canalEnvio.canalId, motivo: gate.tipo },
+              "[Cobranças] teto anti-ban atingido — excedente reagendado pro próximo ciclo",
+            );
+            break;
+          }
+        }
         const vencStr = cb.vencimento;
         if (!vencStr) continue;
         const venc = parseVencimento(vencStr);
@@ -282,17 +317,20 @@ export async function rodarCicloCobrancas(
           }
           if (cobrancaPulada) break;
 
+          let disparouAgora = 0;
           if (cen.gatilho === "pagamento_vencido") {
             const r = await dispararPagamentoVencido(escritorioId, params);
-            if (r.cenariosDisparados > 0) vencidas += r.cenariosDisparados;
+            if (r.cenariosDisparados > 0) { vencidas += r.cenariosDisparados; disparouAgora += r.cenariosDisparados; }
             if (r.erro) ultimoErroEnvio = r.erro;
           } else {
             const r = await dispararProximoVencimento(escritorioId, params);
-            if (r.cenariosDisparados > 0) proximas += r.cenariosDisparados;
+            if (r.cenariosDisparados > 0) { proximas += r.cenariosDisparados; disparouAgora += r.cenariosDisparados; }
             if (r.erro) ultimoErroEnvio = r.erro;
           }
           // Limite (teste "só meu número" usa 1): para ao atingir o total.
           if (opts.limite && vencidas + proximas >= opts.limite) break outer;
+          // Espaça a cadência entre disparos reais (anti-rajada).
+          if (disparouAgora > 0) await sleep(THROTTLE_ENTRE_DISPAROS_MS);
         }
       }
     }

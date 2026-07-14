@@ -578,7 +578,7 @@ export type InsertAgendamentoLembrete = typeof agendamentoLembretes.$inferInsert
 export const canaisIntegrados = mysqlTable("canais_integrados", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioId").notNull(),
-  tipo: mysqlEnum("tipoCanal", ["whatsapp_qr", "whatsapp_api", "instagram", "facebook", "telefone_voip", "calcom", "chatgpt", "claude"]).notNull(),
+  tipo: mysqlEnum("tipoCanal", ["whatsapp_api", "instagram", "facebook", "telefone_voip", "calcom", "chatgpt", "claude"]).notNull(),
   nome: varchar("nomeCanal", { length: 128 }),
   status: mysqlEnum("statusCanal", ["conectado", "desconectado", "pendente", "erro", "banido"]).default("pendente").notNull(),
   configEncrypted: text("configEncrypted"),
@@ -604,6 +604,17 @@ export const canaisIntegrados = mysqlTable("canais_integrados", {
   restritoMeta: boolean("restritoMeta").default(false).notNull(),
   restritoMotivo: varchar("restritoMotivo", { length: 512 }),
   restritoEm: timestamp("restritoEm"),
+  // Saúde do número reportada pela Meta (health-check + webhook). `qualidadeMeta`
+  // = quality_rating (GREEN/YELLOW/RED); `tierMensagens` = messaging_limit_tier
+  // (TIER_250/TIER_1K/...). Alimentam o teto diário anti-ban e a UI.
+  qualidadeMeta: varchar("qualidadeMeta", { length: 16 }),
+  tierMensagens: varchar("tierMensagens", { length: 24 }),
+  // Contador PERSISTIDO de disparos iniciados pela empresa (template/texto/
+  // interativo) no dia corrente — teto anti-ban alinhado ao tier da Meta.
+  // Sobrevive a restart/multi-instância (o rate limit em memória só cobre rajada
+  // curta). `disparosDiaEm` é o bucket YYYY-MM-DD local; vira → contador zera.
+  disparosDia: int("disparosDia").default(0).notNull(),
+  disparosDiaEm: varchar("disparosDiaEm", { length: 10 }),
   createdAt: timestamp("createdAtCanal").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtCanal").defaultNow().onUpdateNow().notNull(),
 });

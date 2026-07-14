@@ -1,22 +1,17 @@
 /**
- * Envio de mensagens via canal — abstrai diferença entre WhatsApp QR
- * (Baileys) e WhatsApp Cloud API (Meta oficial).
+ * Envio de mensagens via canal — roteia pelo tipo de `canaisIntegrados.tipo`.
+ * Hoje o único provider de envio é a WhatsApp Cloud API (Meta oficial).
  *
- * Existia divergência: o envio MANUAL (operador digita e manda) em
- * `router-crm.ts` tinha branch pros dois tipos, mas envios AUTOMÁTICOS
- * (auto-reply, SmartFlow, resposta da IA) em `whatsapp-handler.ts` e
- * `smartflow/executores.ts` chamavam direto o Baileys e falhavam em
- * canais Cloud API ("Sessão WhatsApp desconectada" porque o Baileys
- * nem gerencia esses canais).
- *
- * Este helper unifica os 3 callers.
+ * Unifica os 3 callers (envio manual em `router-crm.ts`, auto-reply/SmartFlow
+ * em `whatsapp-handler.ts` e `smartflow/executores.ts`) num único ponto de
+ * roteamento + travas anti-ban.
  */
 
 import { getDb } from "../db";
 import { canaisIntegrados } from "../../drizzle/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
-import { isLidJid, jidToPhone } from "../../shared/whatsapp-types";
+import { jidToPhone } from "../../shared/whatsapp-types";
 
 const log = createLogger("canal-envio");
 
@@ -27,9 +22,15 @@ export interface EnvioResultado {
   /** Mensagem de erro pra registrar no DB. Presente apenas quando ok=false. */
   erro?: string;
   /** Tipo do provider que tentou (pra logs). */
-  provider?: "whatsapp_qr" | "whatsapp_api" | "outro";
+  provider?: "whatsapp_api" | "outro";
   /** Canal que efetivou o envio — usado pra amarrar a mensagem persistida à conversa certa. */
   canalId?: number;
+  /**
+   * Motivo do bloqueio pelo guard anti-ban, quando `ok=false` por trava (não por
+   * erro da Meta). "rate"/"diario" = adiar/reagendar (excedente sai depois);
+   * "restrito"/"optin" = não reenviar. Ausente quando a falha é outra.
+   */
+  bloqueio?: "restrito" | "diario" | "rate" | "optin";
 }
 
 export interface EnvioMensagemOpts {
@@ -39,6 +40,17 @@ export interface EnvioMensagemOpts {
   /** JID/chatId externo da conversa (preferido em WhatsApp QR pra reusar sessão). */
   chatIdExterno?: string | null;
   conteudo: string;
+  /**
+   * Disparo iniciado pela empresa (SmartFlow/scheduler). Ativa as travas de
+   * volume (teto diário + rate limit) do guard anti-ban. Resposta manual do
+   * operador e auto-reply a mensagem recebida deixam `false` — ainda respeitam
+   * o disjuntor (conta restrita = ninguém envia), mas não contam contra o teto.
+   */
+  proativo?: boolean;
+  /** Contato destinatário — habilita a checagem de opt-in quando exigida. */
+  contatoId?: number;
+  /** Exige opt-in do contato (fluxo automático proativo). */
+  exigirOptin?: boolean;
 }
 
 /**
@@ -91,8 +103,6 @@ export async function enviarMensagemPeloCanal(
   }
 
   switch (canal.tipo) {
-    case "whatsapp_qr":
-      return await enviarViaBaileys(opts);
     case "whatsapp_api":
       return await enviarViaCloudApi(canal, opts);
     default:
@@ -218,6 +228,10 @@ export async function enviarInterativoPeloCanalApi(opts: {
   botoes?: Array<{ id: string; titulo: string }>;
   drawerLabel?: string;
   secoes?: Array<{ titulo: string; itens: Array<{ id: string; titulo: string; descricao?: string }> }>;
+  /** Contato destinatário — habilita a checagem de opt-in quando exigida. */
+  contatoId?: number;
+  /** Fluxo automático: exige opt-in do contato. */
+  exigirOptin?: boolean;
 }): Promise<EnvioResultado> {
   const cred = await getCanalCloudApi(opts.escritorioId);
   if (!cred) {
@@ -230,6 +244,22 @@ export async function enviarInterativoPeloCanalApi(opts: {
   const telefone = (opts.telefone || "").replace(/\D/g, "");
   if (!telefone || telefone.length < 10) {
     return { ok: false, erro: "Telefone inválido pra Cloud API", provider: "whatsapp_api" };
+  }
+  // Interativo iniciado pela empresa é proativo — passa pelas travas anti-ban.
+  const db = await getDb();
+  const guard = db ? await import("./whatsapp-envio-guard") : null;
+  if (db && guard) {
+    const permitido = await guard.podeEnviar({
+      db,
+      canalId: cred.canalId,
+      contatoId: opts.contatoId,
+      proativo: true,
+      exigirOptin: opts.exigirOptin,
+    });
+    if (!permitido.ok) {
+      log.warn({ canalId: cred.canalId, tipo: permitido.tipo }, "[Guard] interativo bloqueado antes do envio");
+      return { ok: false, erro: permitido.erro, provider: "whatsapp_api", canalId: cred.canalId, bloqueio: permitido.tipo };
+    }
   }
   try {
     const { WhatsAppCloudClient } = await import("./whatsapp-cloud");
@@ -252,10 +282,13 @@ export async function enviarInterativoPeloCanalApi(opts: {
         rodape: opts.footer,
       });
     }
-    return { ok: true, idExterno: msgId, provider: "whatsapp_api" };
+    if (db && guard) await guard.registrarSucessoEnvio({ db, canalId: cred.canalId, proativo: true });
+    return { ok: true, idExterno: msgId, provider: "whatsapp_api", canalId: cred.canalId };
   } catch (e: any) {
     const apiMsg = e?.response?.data?.error?.message;
-    return { ok: false, erro: apiMsg || e?.message || "Falha ao enviar mensagem interativa", provider: "whatsapp_api" };
+    const erro = apiMsg || e?.message || "Falha ao enviar mensagem interativa";
+    if (db && guard) await guard.registrarFalhaEnvio({ db, canalId: cred.canalId, erro }).catch(() => {});
+    return { ok: false, erro, provider: "whatsapp_api", canalId: cred.canalId };
   }
 }
 
@@ -284,14 +317,6 @@ export async function sinalizarDigitando(opts: {
       .where(eq(canaisIntegrados.id, opts.canalId))
       .limit(1);
     if (!canal) return;
-
-    if (canal.tipo === "whatsapp_qr") {
-      const destinatario = opts.chatIdExterno || opts.telefone;
-      if (!destinatario) return;
-      const { getWhatsappManager } = await import("./whatsapp-baileys");
-      await getWhatsappManager().enviarPresenca(opts.canalId, destinatario, "composing");
-      return;
-    }
 
     if (canal.tipo === "whatsapp_api") {
       if (!opts.conversaId) return;
@@ -326,40 +351,6 @@ export async function sinalizarDigitando(opts: {
   }
 }
 
-async function enviarViaBaileys(opts: EnvioMensagemOpts): Promise<EnvioResultado> {
-  try {
-    const { getWhatsappManager } = await import("./whatsapp-baileys");
-    const m = getWhatsappManager();
-    if (!m.isConectado(opts.canalId)) {
-      return { ok: false, erro: "Sessão WhatsApp (Baileys) desconectada", provider: "whatsapp_qr" };
-    }
-
-    // Preferência: chatIdExterno → telefone. Fallback LID → PN quando
-    // o JID externo é @lid (Baileys retorna "Chat not found" em LIDs novos).
-    let destinatario = opts.chatIdExterno || opts.telefone || "";
-    if (!destinatario) {
-      return { ok: false, erro: "Sem destinatário (telefone/chatId vazios)", provider: "whatsapp_qr" };
-    }
-
-    if (isLidJid(destinatario) && opts.telefone) {
-      const tel = opts.telefone.replace(/\D/g, "");
-      if (tel.length >= 10) {
-        destinatario = `${tel}@s.whatsapp.net`;
-        log.warn({ canalId: opts.canalId, lid: opts.chatIdExterno, pn: destinatario }, "Convertendo LID para PN");
-      }
-    }
-
-    await m.enviarMensagemJid(opts.canalId, destinatario, opts.conteudo);
-    return { ok: true, provider: "whatsapp_qr" };
-  } catch (e: any) {
-    return {
-      ok: false,
-      erro: e?.message || "Falha desconhecida no envio Baileys",
-      provider: "whatsapp_qr",
-    };
-  }
-}
-
 async function enviarViaCloudApi(canal: any, opts: EnvioMensagemOpts): Promise<EnvioResultado> {
   try {
     if (!canal.configEncrypted || !canal.configIv || !canal.configTag) {
@@ -382,19 +373,41 @@ async function enviarViaCloudApi(canal: any, opts: EnvioMensagemOpts): Promise<E
       return { ok: false, erro: "Telefone inválido pra Cloud API", provider: "whatsapp_api" };
     }
 
+    // Travas anti-ban ANTES de tocar a Meta. O disjuntor vale pra TODO envio de
+    // texto (conta restrita = nada sai); teto diário/rate só pra proativo.
+    const db = await getDb();
+    const guard = db ? await import("./whatsapp-envio-guard") : null;
+    if (db && guard) {
+      const permitido = await guard.podeEnviar({
+        db,
+        canalId: canal.id,
+        contatoId: opts.contatoId,
+        proativo: opts.proativo,
+        exigirOptin: opts.exigirOptin,
+      });
+      if (!permitido.ok) {
+        log.warn({ canalId: canal.id, tipo: permitido.tipo }, "[Guard] texto bloqueado antes do envio");
+        return { ok: false, erro: permitido.erro, provider: "whatsapp_api", canalId: canal.id, bloqueio: permitido.tipo };
+      }
+    }
+
     const { WhatsAppCloudClient } = await import("./whatsapp-cloud");
     const client = new WhatsAppCloudClient({
       accessToken: config.accessToken,
       phoneNumberId: config.phoneNumberId,
     });
     const msgId = await client.enviarTexto(telefone, opts.conteudo);
-    return { ok: true, idExterno: msgId, provider: "whatsapp_api" };
+    if (db && guard) await guard.registrarSucessoEnvio({ db, canalId: canal.id, proativo: opts.proativo });
+    return { ok: true, idExterno: msgId, provider: "whatsapp_api", canalId: canal.id };
   } catch (e: any) {
     const apiMsg = e?.response?.data?.error?.message;
-    return {
-      ok: false,
-      erro: apiMsg || e?.message || "Falha desconhecida no envio Cloud API",
-      provider: "whatsapp_api",
-    };
+    const erro = apiMsg || e?.message || "Falha desconhecida no envio Cloud API";
+    // Meta recusou por restrição/spam? tripa o disjuntor (pausa os próximos).
+    const db = await getDb();
+    if (db) {
+      const guard = await import("./whatsapp-envio-guard");
+      await guard.registrarFalhaEnvio({ db, canalId: canal.id, erro }).catch(() => {});
+    }
+    return { ok: false, erro, provider: "whatsapp_api", canalId: canal.id };
   }
 }

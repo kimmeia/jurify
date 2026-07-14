@@ -16,7 +16,7 @@ async function buscarTipoDoCanal(canalId: number): Promise<TipoCanalMensagem> {
     const { canaisIntegrados } = await import("../../drizzle/schema");
     const { eq } = await import("drizzle-orm");
     const db = await getDb();
-    if (!db) return "whatsapp_qr";
+    if (!db) return "whatsapp_api";
     const [row] = await db
       .select({ tipo: canaisIntegrados.tipo })
       .from(canaisIntegrados)
@@ -24,9 +24,9 @@ async function buscarTipoDoCanal(canalId: number): Promise<TipoCanalMensagem> {
       .limit(1);
     const tipo = row?.tipo;
     if (tipo === "whatsapp_api" || tipo === "instagram" || tipo === "facebook") return tipo;
-    return "whatsapp_qr";
+    return "whatsapp_api";
   } catch {
-    return "whatsapp_qr";
+    return "whatsapp_api";
   }
 }
 
@@ -287,10 +287,8 @@ export async function enviarAutoReply(canalId: number, conversaId: number, chatI
  *
  * Fluxo:
  *   1. Persiste a mensagem com status "pendente" (já aparece na UI com spinner).
- *   2. Se o chatId é @lid, tenta converter pra telefone real do contato
- *      (LID nem sempre aceita sendMessage — Baileys retorna "Chat not found").
- *   3. Valida que a sessão Baileys está viva.
- *   4. Envia e atualiza status pra "enviada" (ou "falha" com log estruturado).
+ *   2. Roteia pelo canal (Cloud API) via enviarMensagemPeloCanal.
+ *   3. Atualiza status pra "enviada" (ou "falha" com log estruturado).
  *
  * A UI lê o campo `status` pra renderizar ícone de sucesso/falha.
  */
@@ -306,10 +304,8 @@ async function enviarResposta(canalId: number, conversaId: number, chatIdExterno
     ? dividirMensagemNatural(resposta, { maxMensagens: ctxConv.dividir.max })
     : [resposta];
 
-  // O helper enviarMensagemPeloCanal já roteia entre Baileys (whatsapp_qr) e
-  // Cloud API (whatsapp_api) baseado no tipo do canal. Antes este caminho
-  // chamava Baileys direto, fazendo respostas automáticas falharem em canais
-  // Cloud API com "Sessão WhatsApp desconectada".
+  // O helper enviarMensagemPeloCanal roteia pela Cloud API (whatsapp_api)
+  // baseado no tipo do canal.
   const { enviarMensagemPeloCanal, sinalizarDigitando } = await import("./canal-envio");
 
   for (let i = 0; i < partes.length; i++) {

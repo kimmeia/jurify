@@ -1,24 +1,18 @@
 /**
- * Testes — WhatsApp Baileys Types & Handler
- * Etapa 3: Validação de tipos, formatação e processamento de mensagens
+ * Testes — WhatsApp Types & Helpers
+ * Validação de tipos, formatação e helpers de telefone/JID.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   jidToPhone,
   phoneToJid,
   formatPhoneBR,
   phoneVariantsBR,
-  resolverJidValido,
-  limparCacheJid,
-  WHATSAPP_STATUS_LABELS,
-  WHATSAPP_STATUS_CORES,
 } from "../../shared/whatsapp-types";
 import type {
-  WhatsappSessionStatus,
   WhatsappMensagemRecebida,
   WhatsappMensagemEnviar,
-  WhatsappSessionInfo,
 } from "../../shared/whatsapp-types";
 
 // ─── Testes: Formatação de JID/Telefone ──────────────────────────────────────
@@ -101,9 +95,8 @@ describe("phoneVariantsBR", () => {
   });
 
   it("BR fixo 12 dígitos (3xxx) → variante com 9 (servidor pode aceitar)", () => {
-    // Fixo BR começa com 2/3/4/5 — função gera variante mas Baileys vai rejeitar
-    // a variante com 9 via onWhatsApp(). Comportamento aceitável: gera ambas e
-    // deixa o servidor decidir.
+    // Fixo BR começa com 2/3/4/5 — a função gera ambas variantes e deixa o
+    // servidor decidir qual existe.
     expect(phoneVariantsBR("551133334444")).toEqual([
       "551133334444",
       "5511933334444",
@@ -130,131 +123,6 @@ describe("phoneVariantsBR", () => {
   it("BR muito curto/longo (não-padrão) → não gera variante extra", () => {
     expect(phoneVariantsBR("123456")).toEqual(["123456"]);
     expect(phoneVariantsBR("5512345")).toEqual(["5512345"]);
-  });
-});
-
-// ─── Testes: resolverJidValido (consulta ao Baileys) ────────────────────────
-
-describe("resolverJidValido", () => {
-  beforeEach(() => {
-    limparCacheJid();
-  });
-
-  it("retorna JID com 9 quando servidor confirma esse formato", async () => {
-    const socket = {
-      // API real do Baileys: rest parameters (...phoneNumber: string[])
-      onWhatsApp: vi.fn(async (...numbers: string[]) => [
-        { exists: true, jid: `${numbers[0]}@s.whatsapp.net` },
-        { exists: false, jid: `${numbers[1]}@s.whatsapp.net` },
-      ]),
-    };
-    const jid = await resolverJidValido(socket, "5585999999999");
-    expect(jid).toBe("5585999999999@s.whatsapp.net");
-    // Cada variante chega como argumento separado (spread), não como array
-    expect(socket.onWhatsApp).toHaveBeenCalledWith("5585999999999", "558599999999");
-  });
-
-  it("retorna JID sem 9 quando só essa variante existe (caso real do bug)", async () => {
-    const socket = {
-      onWhatsApp: vi.fn(async (...numbers: string[]) => [
-        { exists: false, jid: `${numbers[0]}@s.whatsapp.net` },
-        { exists: true, jid: `${numbers[1]}@s.whatsapp.net` },
-      ]),
-    };
-    const jid = await resolverJidValido(socket, "5585999999999");
-    expect(jid).toBe("558599999999@s.whatsapp.net");
-  });
-
-  it("retorna null quando nenhuma variante existe (cliente sem WhatsApp)", async () => {
-    const socket = {
-      onWhatsApp: vi.fn(async (...numbers: string[]) =>
-        numbers.map((n) => ({ exists: false, jid: `${n}@s.whatsapp.net` })),
-      ),
-    };
-    const jid = await resolverJidValido(socket, "5585999999999");
-    expect(jid).toBeNull();
-  });
-
-  it("cacheia resultado pra evitar nova chamada com mesmo número", async () => {
-    const socket = {
-      onWhatsApp: vi.fn(async (...numbers: string[]) => [
-        { exists: true, jid: `${numbers[0]}@s.whatsapp.net` },
-      ]),
-    };
-    await resolverJidValido(socket, "5585999999999");
-    await resolverJidValido(socket, "5585999999999");
-    await resolverJidValido(socket, "5585999999999");
-    expect(socket.onWhatsApp).toHaveBeenCalledTimes(1);
-  });
-
-  it("fallback pro JID literal quando socket.onWhatsApp lança erro", async () => {
-    const socket = {
-      onWhatsApp: vi.fn(async () => {
-        throw new Error("Network down");
-      }),
-    };
-    const jid = await resolverJidValido(socket, "5585999999999");
-    // Sem cache — fallback usa primeira variante (preferida)
-    expect(jid).toBe("5585999999999@s.whatsapp.net");
-  });
-
-  it("trata onWhatsApp retornando undefined (Baileys sem conexão)", async () => {
-    const socket = {
-      // Baileys retorna undefined quando socket não está pronto
-      onWhatsApp: vi.fn(async () => undefined),
-    };
-    const jid = await resolverJidValido(socket, "5585999999999");
-    expect(jid).toBeNull();
-  });
-
-  it("retorna null pra string vazia (sem variantes)", async () => {
-    const socket = { onWhatsApp: vi.fn() };
-    const jid = await resolverJidValido(socket, "");
-    expect(jid).toBeNull();
-    expect(socket.onWhatsApp).not.toHaveBeenCalled();
-  });
-});
-
-// ─── Testes: Status Labels e Cores ──────────────────────────────────────────
-
-describe("WHATSAPP_STATUS_LABELS", () => {
-  it("tem label para todos os status", () => {
-    const statuses: WhatsappSessionStatus[] = [
-      "aguardando_qr", "conectando", "conectado",
-      "desconectado", "erro", "banido",
-    ];
-    for (const s of statuses) {
-      expect(WHATSAPP_STATUS_LABELS[s]).toBeTruthy();
-      expect(typeof WHATSAPP_STATUS_LABELS[s]).toBe("string");
-    }
-  });
-
-  it("labels em português", () => {
-    expect(WHATSAPP_STATUS_LABELS.conectado).toBe("Conectado");
-    expect(WHATSAPP_STATUS_LABELS.aguardando_qr).toBe("Aguardando QR Code");
-    expect(WHATSAPP_STATUS_LABELS.banido).toBe("Número Banido");
-  });
-});
-
-describe("WHATSAPP_STATUS_CORES", () => {
-  it("tem classes CSS para todos os status", () => {
-    const statuses: WhatsappSessionStatus[] = [
-      "aguardando_qr", "conectando", "conectado",
-      "desconectado", "erro", "banido",
-    ];
-    for (const s of statuses) {
-      expect(WHATSAPP_STATUS_CORES[s]).toBeTruthy();
-      expect(WHATSAPP_STATUS_CORES[s]).toContain("text-");
-      expect(WHATSAPP_STATUS_CORES[s]).toContain("bg-");
-    }
-  });
-
-  it("conectado usa verde", () => {
-    expect(WHATSAPP_STATUS_CORES.conectado).toContain("emerald");
-  });
-
-  it("erro usa vermelho", () => {
-    expect(WHATSAPP_STATUS_CORES.erro).toContain("red");
   });
 });
 
@@ -332,113 +200,6 @@ describe("WhatsappMensagemEnviar", () => {
     expect(msg.mediaUrl).toBeTruthy();
   });
 });
-
-describe("WhatsappSessionInfo", () => {
-  it("pode representar sessão desconectada", () => {
-    const info: WhatsappSessionInfo = {
-      canalId: 1,
-      status: "desconectado",
-    };
-    expect(info.status).toBe("desconectado");
-    expect(info.qrCode).toBeUndefined();
-  });
-
-  it("pode representar sessão conectada", () => {
-    const info: WhatsappSessionInfo = {
-      canalId: 1,
-      status: "conectado",
-      telefone: "5511999999999",
-      nomeDispositivo: "WhatsApp Business",
-      uptime: 3600,
-    };
-    expect(info.status).toBe("conectado");
-    expect(info.telefone).toBeTruthy();
-    expect(info.uptime).toBe(3600);
-  });
-
-  it("pode representar sessão aguardando QR", () => {
-    const info: WhatsappSessionInfo = {
-      canalId: 1,
-      status: "aguardando_qr",
-      qrCode: "2@abc123...",
-    };
-    expect(info.status).toBe("aguardando_qr");
-    expect(info.qrCode).toBeTruthy();
-  });
-});
-
-// ─── Testes: Validação de dados de sessão ────────────────────────────────────
-
-describe("Session Manager (unit)", () => {
-  it("mapeia status Baileys para status DB corretamente", () => {
-    const map: Record<WhatsappSessionStatus, string> = {
-      conectado: "conectado",
-      desconectado: "desconectado",
-      aguardando_qr: "pendente",
-      conectando: "pendente",
-      erro: "erro",
-      banido: "banido",
-    };
-
-    for (const [status, expected] of Object.entries(map)) {
-      const dbStatus = mapStatusToDb(status as WhatsappSessionStatus);
-      expect(dbStatus).toBe(expected);
-    }
-  });
-});
-
-// ─── Multi-tenant safety: listarSessoes filtra por escritorioId ────────────
-//
-// Regressão: o método retornava TODAS as sessões (de todos escritórios) e o
-// router só repassava — vazamento de dados entre tenants. O filtro precisa
-// ficar dentro do método pra ninguém esquecer no caller.
-
-describe("WhatsappSessionManager.listarSessoes — multi-tenancy", () => {
-  it("sem escritorioId, devolve todas as sessões (uso interno)", async () => {
-    const { getWhatsappManager } = await import("../integracoes/whatsapp-baileys");
-    const manager = getWhatsappManager();
-    // Limpa estado pra teste determinístico
-    (manager as any).sessions = new Map();
-    (manager as any).sessions.set(1, { canalId: 1, escritorioId: 100, status: "conectado", reconnectAttempts: 0, maxReconnectAttempts: 15 });
-    (manager as any).sessions.set(2, { canalId: 2, escritorioId: 200, status: "conectado", reconnectAttempts: 0, maxReconnectAttempts: 15 });
-    (manager as any).sessions.set(3, { canalId: 3, escritorioId: 100, status: "aguardando_qr", reconnectAttempts: 0, maxReconnectAttempts: 15 });
-
-    const todas = await manager.listarSessoes();
-    expect(todas).toHaveLength(3);
-  });
-
-  it("com escritorioId, filtra apenas sessões daquele escritório", async () => {
-    const { getWhatsappManager } = await import("../integracoes/whatsapp-baileys");
-    const manager = getWhatsappManager();
-    (manager as any).sessions = new Map();
-    (manager as any).sessions.set(1, { canalId: 1, escritorioId: 100, status: "conectado", reconnectAttempts: 0, maxReconnectAttempts: 15 });
-    (manager as any).sessions.set(2, { canalId: 2, escritorioId: 200, status: "conectado", reconnectAttempts: 0, maxReconnectAttempts: 15 });
-    (manager as any).sessions.set(3, { canalId: 3, escritorioId: 100, status: "aguardando_qr", reconnectAttempts: 0, maxReconnectAttempts: 15 });
-
-    const doEsc100 = await manager.listarSessoes(100);
-    expect(doEsc100).toHaveLength(2);
-    expect(doEsc100.map((s) => s.canalId).sort()).toEqual([1, 3]);
-
-    const doEsc200 = await manager.listarSessoes(200);
-    expect(doEsc200).toHaveLength(1);
-    expect(doEsc200[0].canalId).toBe(2);
-
-    const doEsc999 = await manager.listarSessoes(999);
-    expect(doEsc999).toHaveLength(0);
-  });
-});
-
-function mapStatusToDb(status: WhatsappSessionStatus): string {
-  switch (status) {
-    case "conectado": return "conectado";
-    case "desconectado": return "desconectado";
-    case "aguardando_qr": return "pendente";
-    case "conectando": return "pendente";
-    case "erro": return "erro";
-    case "banido": return "banido";
-    default: return "desconectado";
-  }
-}
 
 // ─── Testes: Agendamento Types ──────────────────────────────────────────────
 

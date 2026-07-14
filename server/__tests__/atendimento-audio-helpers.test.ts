@@ -11,7 +11,7 @@
 import { describe, it, expect } from "vitest";
 import path from "path";
 import { resolverMediaPathLocal } from "../escritorio/router-crm";
-import { detectarMimetypeAudio } from "../integracoes/whatsapp-baileys";
+import { detectarMimetypeAudio } from "../integracoes/audio-mimetype";
 
 describe("resolverMediaPathLocal", () => {
   it("converte URL local '/uploads/...' para path absoluto resolvido a partir do cwd", () => {

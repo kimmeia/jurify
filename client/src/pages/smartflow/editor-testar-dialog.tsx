@@ -288,7 +288,7 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
       mensagem: "Olá, gostaria de agendar uma consulta",
       nomeCliente: "João Silva",
       telefoneCliente: "(11) 99999-0000",
-      canalTipo: "whatsapp_qr",
+      canalTipo: "whatsapp_api",
       contatoId: 42,
       atendenteResponsavelId: 1,
       cliente: { nome: "João Silva", telefone: "(11) 99999-0000", campos: {} },
