@@ -389,6 +389,19 @@ export const crmRouter = router({
                       await guard.registrarSucessoTemplate({ db, canalId: convData.canalId });
                       log.info(`[CRM] Template Meta "${input.metaTemplate.nome}" enviado pra ${telefone} (msgId: ${msgId})`);
                     } else {
+                      // Disjuntor também no texto/mídia manual. Conta restrita
+                      // pela Meta ACEITA o POST (devolve msgId) e mata a entrega
+                      // no `failed` assíncrono — sem este gate o operador via
+                      // "enviada", o cliente nunca recebia e o sistema martelava
+                      // a reputação da conta a cada resposta.
+                      const guard = await import("../integracoes/whatsapp-envio-guard");
+                      const permitido = await guard.podeEnviar({ db, canalId: convData.canalId, proativo: false });
+                      if (!permitido.ok) {
+                        log.warn(`[CRM] Envio manual bloqueado: ${permitido.erro}`);
+                        const { mensagens } = await import("../../drizzle/schema");
+                        await db.update(mensagens).set({ status: "falha", erroEntrega: permitido.erro.slice(0, 500) }).where(eq(mensagens.id, id));
+                        return { id };
+                      }
                       msgId = await enviarConteudoCloudApi(client, telefone, input.tipo, input.conteudo, input.mediaUrl);
                       log.info(`[CRM] Mensagem enviada via Cloud API CoEx para ${telefone} (msgId: ${msgId})`);
                     }

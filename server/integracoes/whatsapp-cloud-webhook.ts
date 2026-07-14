@@ -362,6 +362,21 @@ export function registerWhatsAppCloudWebhook(app: Express) {
       const body = req.body;
       if (body.object !== "whatsapp_business_account") return;
 
+      // Log de CHEGADA incondicional — 1 linha por POST, com o resumo do
+      // evento. Sem isso, evento processado em silêncio e evento que nunca
+      // chegou são indistinguíveis no log ("não sincroniza" vira caça às
+      // cegas entre Meta e app — incidente do canal Bruno Boyadjian).
+      const resumoEvento = (body.entry || []).flatMap((e: any) =>
+        (e.changes || []).map((c: any) => ({
+          waba: e.id,
+          campo: c.field,
+          phoneNumberId: c.value?.metadata?.phone_number_id,
+          msgs: Array.isArray(c.value?.messages) ? c.value.messages.length : 0,
+          statuses: Array.isArray(c.value?.statuses) ? c.value.statuses.length : 0,
+        })),
+      );
+      log.info({ eventos: resumoEvento }, "[WhatsApp Cloud] webhook recebido");
+
       for (const entry of body.entry || []) {
         const wabaId = entry.id;
 
