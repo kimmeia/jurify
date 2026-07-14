@@ -84,6 +84,27 @@ async function getVerifyToken(): Promise<string> {
   return (await getMetaConfig()).verifyToken;
 }
 
+/**
+ * Lista de App Secrets aceitos na validação HMAC do webhook.
+ *
+ * Suporta MAIS DE UM app Meta entregando no mesmo callback — cenário real:
+ * o app do Embedded Signup (principal, secret no painel Admin) e um segundo
+ * app do BM do cliente (ex: quando o Login do app principal está suspenso
+ * pela Meta e a recepção precisa fluir pelo app do próprio BM). Cada app
+ * assina com o próprio secret; o evento vale se bater com qualquer um.
+ *
+ * Secrets extras via env `META_APP_SECRET_EXTRA` (separados por vírgula) —
+ * sem env setada, comportamento idêntico ao anterior (só o secret do Admin).
+ */
+async function getAppSecretsAceitos(): Promise<string[]> {
+  const { appSecret } = await getMetaConfig();
+  const extras = (process.env.META_APP_SECRET_EXTRA || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return [...new Set([appSecret, ...extras].filter(Boolean))];
+}
+
 interface CanalInfo {
   canalId: number;
   escritorioId: number;
@@ -330,10 +351,10 @@ export function registerWhatsAppCloudWebhook(app: Express) {
     // SmartFlow, transferir conversas) sem essa proteção. Body raw foi
     // capturado em `req.rawBody` pelo middleware verify do express.json
     // (server/_core/index.ts) pra paths /api/webhooks/.
-    const { appSecret } = await getMetaConfig();
+    const appSecrets = await getAppSecretsAceitos();
     const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
     const sigHeader = req.header("X-Hub-Signature-256");
-    const verif = verificarAssinaturaMeta(rawBody, sigHeader, appSecret);
+    const verif = verificarAssinaturaMeta(rawBody, sigHeader, appSecrets);
 
     if (!verif.ok) {
       log.warn(
