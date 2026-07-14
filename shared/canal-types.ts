@@ -3,7 +3,7 @@
  * Fase 2: WhatsApp, Instagram, Facebook, VoIP
  */
 
-export type TipoCanal = "whatsapp_qr" | "whatsapp_api" | "instagram" | "facebook" | "telefone_voip" | "calcom" | "chatgpt" | "claude";
+export type TipoCanal = "whatsapp_api" | "instagram" | "facebook" | "telefone_voip" | "calcom" | "chatgpt" | "claude";
 export type StatusCanal = "conectado" | "desconectado" | "pendente" | "erro" | "banido";
 
 /**
@@ -13,11 +13,10 @@ export type StatusCanal = "conectado" | "desconectado" | "pendente" | "erro" | "
  * (chatgpt, claude, calcom) que não fazem sentido como filtro de mensagem.
  */
 export const TIPOS_CANAL_COMUNICACAO: TipoCanal[] = [
-  "whatsapp_qr", "whatsapp_api", "instagram", "facebook", "telefone_voip",
+  "whatsapp_api", "instagram", "facebook", "telefone_voip",
 ];
 
 export const TIPO_CANAL_LABELS: Record<TipoCanal, string> = {
-  whatsapp_qr: "WhatsApp (QR Code)",
   whatsapp_api: "WhatsApp (API Oficial)",
   instagram: "Instagram",
   facebook: "Facebook Messenger",
@@ -28,7 +27,6 @@ export const TIPO_CANAL_LABELS: Record<TipoCanal, string> = {
 };
 
 export const TIPO_CANAL_DESCRICAO: Record<TipoCanal, string> = {
-  whatsapp_qr: "Conexão via QR Code — gratuita, sem custo por mensagem. Indicada para baixo volume.",
   whatsapp_api: "API Oficial Meta — robusta, sem risco de ban. Custo por conversa (~R$ 0,30).",
   instagram: "Mensagens diretas do Instagram via Meta Graph API.",
   facebook: "Messenger da página do Facebook via Meta Graph API.",
@@ -39,7 +37,6 @@ export const TIPO_CANAL_DESCRICAO: Record<TipoCanal, string> = {
 };
 
 export const TIPO_CANAL_ICONE: Record<TipoCanal, string> = {
-  whatsapp_qr: "MessageCircle",
   whatsapp_api: "MessageCircle",
   instagram: "Instagram",
   facebook: "Facebook",
@@ -66,10 +63,6 @@ export const STATUS_CANAL_CORES: Record<StatusCanal, string> = {
 };
 
 /** Campos de configuração por tipo de canal (para o formulário) */
-export interface ConfigWhatsappQR {
-  // Sem config manual — sessão gerida pelo servidor via Baileys
-}
-
 export interface ConfigWhatsappAPI {
   phoneNumberId: string;
   accessToken: string;

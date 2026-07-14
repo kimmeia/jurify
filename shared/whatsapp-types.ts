@@ -1,26 +1,6 @@
 /**
- * Tipos compartilhados — WhatsApp Baileys
- * Etapa 3: Conexão WhatsApp via QR Code com Baileys
+ * Tipos compartilhados — WhatsApp
  */
-
-export type WhatsappSessionStatus =
-  | "aguardando_qr"
-  | "conectando"
-  | "conectado"
-  | "desconectado"
-  | "erro"
-  | "banido";
-
-export interface WhatsappSessionInfo {
-  canalId: number;
-  status: WhatsappSessionStatus;
-  qrCode?: string; // base64 data URI do QR code
-  telefone?: string;
-  nomeDispositivo?: string;
-  ultimaMensagemAt?: string;
-  mensagemErro?: string;
-  uptime?: number; // segundos desde conexão
-}
 
 export interface WhatsappMensagemRecebida {
   chatId: string; // jid do remetente (ex: 5511999999999@s.whatsapp.net)
@@ -59,24 +39,6 @@ export interface WhatsappContatoInfo {
   telefone: string;
   imgUrl?: string;
 }
-
-export const WHATSAPP_STATUS_LABELS: Record<WhatsappSessionStatus, string> = {
-  aguardando_qr: "Aguardando QR Code",
-  conectando: "Conectando...",
-  conectado: "Conectado",
-  desconectado: "Desconectado",
-  erro: "Erro",
-  banido: "Número Banido",
-};
-
-export const WHATSAPP_STATUS_CORES: Record<WhatsappSessionStatus, string> = {
-  aguardando_qr: "text-amber-600 bg-amber-50 border-amber-200",
-  conectando: "text-blue-600 bg-blue-50 border-blue-200",
-  conectado: "text-emerald-600 bg-emerald-50 border-emerald-200",
-  desconectado: "text-gray-600 bg-gray-50 border-gray-200",
-  erro: "text-red-600 bg-red-50 border-red-200",
-  banido: "text-red-800 bg-red-100 border-red-300",
-};
 
 /**
  * Formata JID para número de telefone limpo.
@@ -122,9 +84,9 @@ export function phoneToJid(phone: string): string {
  * "no such user" — o JID válido é `558599999999@s.whatsapp.net`.
  *
  * Esta função recebe um número limpo e devolve as duas variantes possíveis
- * (com e sem o 9), pra serem testadas via `socket.onWhatsApp([...])`. A
- * primeira variante do array é a "preferida" (versão moderna com 9 quando
- * a entrada já tem 13 dígitos; sem 9 quando entrada tem 12).
+ * (com e sem o 9). A primeira variante do array é a "preferida" (versão
+ * moderna com 9 quando a entrada já tem 13 dígitos; sem 9 quando entrada
+ * tem 12).
  *
  * Exemplos:
  *   "5585999999999"  → ["5585999999999", "558599999999"]
@@ -172,72 +134,6 @@ export function phoneVariantsBR(phone: string): string[] {
 
   // Ordem: o original primeiro (preferido), variante depois (fallback)
   return canonical === comNove ? [comNove, semNove] : [semNove, comNove];
-}
-
-/**
- * Resolve o JID válido pra um número de telefone consultando o servidor do
- * WhatsApp via `socket.onWhatsApp(...numeros)`. Resolve a quirk dos números
- * BR sem "9" antecipado (ver `phoneVariantsBR`).
- *
- * Retorna:
- *   - JID com `@s.whatsapp.net` quando o número está registrado
- *   - `null` quando NENHUMA variante existe no WhatsApp (cliente não tem)
- *
- * Cache em memória (TTL 1h) — evita chamada extra a cada mensagem pro mesmo
- * número. Cache por número canônico (mesma resolução pra todos os formatos).
- *
- * IMPORTANTE: A API do Baileys `onWhatsApp` é REST PARAMETERS:
- *   `(...phoneNumber: string[]) => Promise<Array<{exists, jid}> | undefined>`
- *
- * Tem que chamar com SPREAD, NÃO passar array direto. Bug histórico:
- * passar array fazia o Baileys interpretar o array stringified como
- * UM telefone (`"5585...,558596..."`), retornar JID lixo, sendMessage()
- * aceitava o JID, mas o servidor do WhatsApp ignorava silenciosamente.
- *
- * Resultado: SmartFlow reportava "ok" mas mensagem não chegava no
- * celular do cliente.
- *
- * `socket` aqui é o WASocket do Baileys (tipado como `any` porque o import
- * dinâmico não dá pra tipar sem trazer Baileys pra `shared/`).
- */
-const jidCache = new Map<string, { jid: string | null; expiresAt: number }>();
-const JID_CACHE_TTL_MS = 60 * 60 * 1000; // 1h
-
-export async function resolverJidValido(
-  socket: {
-    onWhatsApp: (
-      ...phoneNumber: string[]
-    ) => Promise<Array<{ exists: boolean; jid: string }> | undefined>;
-  },
-  phone: string,
-): Promise<string | null> {
-  const variantes = phoneVariantsBR(phone);
-  if (variantes.length === 0) return null;
-
-  // Cache lookup pela primeira variante (canônica)
-  const cacheKey = variantes[0];
-  const cached = jidCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.jid;
-  }
-
-  try {
-    // SPREAD obrigatório — onWhatsApp espera N args separados, não array.
-    // Baileys consulta o servidor numa só round-trip.
-    const results = await socket.onWhatsApp(...variantes);
-    const valido = (results || []).find((r) => r?.exists)?.jid || null;
-    jidCache.set(cacheKey, { jid: valido, expiresAt: Date.now() + JID_CACHE_TTL_MS });
-    return valido;
-  } catch {
-    // Em caso de erro de rede, faz fallback pro JID da variante preferida.
-    // Não cacheia (pode ser falha temporária).
-    return `${variantes[0]}@s.whatsapp.net`;
-  }
-}
-
-/** Limpa o cache de resolução de JID. Útil em testes ou quando o user reconecta. */
-export function limparCacheJid(): void {
-  jidCache.clear();
 }
 
 /**

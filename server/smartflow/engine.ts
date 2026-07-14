@@ -396,7 +396,11 @@ export interface SmartflowExecutores {
     motivo?: string,
   ) => Promise<boolean>;
   /** Envia mensagem WhatsApp */
-  enviarWhatsApp: (telefone: string, mensagem: string) => Promise<boolean>;
+  enviarWhatsApp: (
+    telefone: string,
+    mensagem: string,
+    opts?: { contatoId?: number; proativo?: boolean },
+  ) => Promise<boolean>;
   /**
    * Envia mensagem interativa WhatsApp (botões ou lista) via Cloud API.
    * Opcional — ambientes sem Cloud API conectada não implementam, e o
@@ -1536,7 +1540,10 @@ async function handleWhatsAppEnviar(
   const temCanal = typeof ctx.canalId === "number" && ctx.canalId > 0;
   if (!temCanal && telefone) {
     try {
-      const ok = await exec.enviarWhatsApp(telefone, mensagem);
+      const ok = await exec.enviarWhatsApp(telefone, mensagem, {
+        contatoId: typeof ctx.contatoId === "number" ? ctx.contatoId : undefined,
+        proativo: true,
+      });
       if (!ok) {
         return {
           sucesso: false,
@@ -1620,7 +1627,10 @@ async function handleWhatsappAguardarResposta(
   const temCanal = typeof ctx.canalId === "number" && ctx.canalId > 0;
   if (!temCanal && telefone) {
     try {
-      const ok = await exec.enviarWhatsApp(telefone, mensagem);
+      const ok = await exec.enviarWhatsApp(telefone, mensagem, {
+        contatoId: typeof ctx.contatoId === "number" ? ctx.contatoId : undefined,
+        proativo: true,
+      });
       if (!ok) {
         return {
           sucesso: false,
@@ -1669,8 +1679,8 @@ async function handleWhatsappAguardarResposta(
  *   - `outra_resposta` se texto digitado não bateu (ou fallback=ignorar)
  *   - `sem_resposta` se timeout (scheduler chama com __resumindoWaitMotivo="timeout")
  *
- * SÓ funciona em canal Cloud API. Em Baileys QR, falha cedo com erro claro
- * pra operador entender por que a mensagem interativa não chegou.
+ * SÓ funciona em canal Cloud API. Em canais que não suportam interativo,
+ * falha cedo com erro claro pra operador entender por que não chegou.
  */
 async function handleWhatsappPerguntaOpcoes(
   passo: Passo,
@@ -3107,6 +3117,16 @@ export interface ExecutarCenarioResultado {
 const MAX_PASSOS_EXECUCAO = 50;
 
 /**
+ * Espaçamento (ms) entre iterações de `para_cada_item` quando o corpo dispara
+ * WhatsApp — anti-rajada num broadcast pra muitos contatos. Injetável pra teste
+ * (setar 0 evita o sleep real e mantém os testes rápidos/determinísticos).
+ */
+let throttleParaCadaItemMs = 1200;
+export function _setThrottleParaCadaItem(ms: number): void {
+  throttleParaCadaItemMs = ms;
+}
+
+/**
  * Executa um cenário como um walker de grafo.
  *
  * Comportamento:
@@ -3440,7 +3460,17 @@ async function executarParaCadaItem(opts: {
   const stopComLoop = new Set(stopAt);
   stopComLoop.add(passo.id);
 
+  // Anti-rajada: se o corpo do loop dispara WhatsApp, espaça as iterações. Um
+  // broadcast pra centenas de contatos back-to-back é o que a Meta flagra como
+  // spam. Loops sem envio (criar card, tags) não pagam o delay. O teto de volume
+  // real continua sendo o guard (rate + tier diário) dentro de cada envio.
+  const TIPOS_ENVIO_WHATS = new Set(["whatsapp_enviar", "whatsapp_aguardar_resposta", "whatsapp_pergunta_opcoes"]);
+  const espacaEnvio = passos.some((p) => TIPOS_ENVIO_WHATS.has(p.tipo));
+
   for (let i = 0; i < lista.length; i++) {
+    if (espacaEnvio && i > 0 && throttleParaCadaItemMs > 0) {
+      await new Promise((r) => setTimeout(r, throttleParaCadaItemMs));
+    }
     if (estadoGlobal.passosExecutados >= MAX_PASSOS_EXECUCAO) {
       return {
         sucesso: false,

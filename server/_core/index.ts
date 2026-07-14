@@ -174,9 +174,6 @@ async function startServer() {
   // WhatsApp Cloud API (CoEx) webhook
   const { registerWhatsAppCloudWebhook } = await import("../integracoes/whatsapp-cloud-webhook");
   registerWhatsAppCloudWebhook(app);
-  // Serve mídia recebida via WhatsApp Baileys (URLs /api/whatsapp-media/...)
-  const { registerWhatsAppMediaRoute } = await import("../integracoes/whatsapp-media-route");
-  registerWhatsAppMediaRoute(app);
 
   // Resolução de ambiente — centralizada em ./ambiente.ts. Ordem:
   //   1. JURIFY_AMBIENTE  (override manual)

@@ -145,7 +145,7 @@ describe("db-canais.listarCanais — sem efeitos destrutivos", () => {
   it("não chama delete mesmo quando há canais órfãos (whatsapp_api sem telefone)", async () => {
     selectQueue.push([
       { id: 1, escritorioId: 1, tipo: "whatsapp_api", nome: "", status: "conectado", telefone: null },
-      { id: 2, escritorioId: 1, tipo: "whatsapp_qr", nome: "QR", status: "conectado", telefone: "5585..." },
+      { id: 2, escritorioId: 1, tipo: "telefone_voip", nome: "VoIP", status: "conectado", telefone: "5585..." },
     ]);
 
     await listarCanais(1);
@@ -157,7 +157,7 @@ describe("db-canais.listarCanais — sem efeitos destrutivos", () => {
   it("filtra órfãos do retorno (não aparecem na UI) mas não os remove do banco", async () => {
     selectQueue.push([
       { id: 1, escritorioId: 1, tipo: "whatsapp_api", nome: "", status: "conectado", telefone: "" },
-      { id: 2, escritorioId: 1, tipo: "whatsapp_qr", nome: "QR", status: "conectado", telefone: "5585..." },
+      { id: 2, escritorioId: 1, tipo: "telefone_voip", nome: "VoIP", status: "conectado", telefone: "5585..." },
       { id: 3, escritorioId: 1, tipo: "whatsapp_api", nome: "OK", status: "conectado", telefone: "5511..." },
     ]);
 
@@ -172,7 +172,7 @@ describe("db-canais.removerCanaisOrfaos — limpeza explícita", () => {
   it("remove apenas canais whatsapp_api sem telefone", async () => {
     selectQueue.push([
       { id: 1, tipo: "whatsapp_api", telefone: null },
-      { id: 2, tipo: "whatsapp_qr", telefone: null }, // QR sem telefone é válido
+      { id: 2, tipo: "telefone_voip", telefone: null }, // outro tipo sem telefone é válido
       { id: 3, tipo: "whatsapp_api", telefone: "" },
       { id: 4, tipo: "whatsapp_api", telefone: "5511..." },
     ]);
@@ -185,7 +185,7 @@ describe("db-canais.removerCanaisOrfaos — limpeza explícita", () => {
 
   it("retorna 0 quando não há órfãos", async () => {
     selectQueue.push([
-      { id: 1, tipo: "whatsapp_qr", telefone: "5511..." },
+      { id: 1, tipo: "telefone_voip", telefone: "5511..." },
       { id: 2, tipo: "whatsapp_api", telefone: "5511..." },
     ]);
 
@@ -196,9 +196,9 @@ describe("db-canais.removerCanaisOrfaos — limpeza explícita", () => {
 });
 
 describe("validarConfigCanalPorTipo — campos obrigatórios por tipo", () => {
-  it("aceita tipos opcionais (whatsapp_qr) sem config", () => {
-    expect(() => validarConfigCanalPorTipo("whatsapp_qr", undefined)).not.toThrow();
-    expect(() => validarConfigCanalPorTipo("whatsapp_qr", {})).not.toThrow();
+  it("aceita tipos opcionais (whatsapp_api) sem config", () => {
+    expect(() => validarConfigCanalPorTipo("whatsapp_api", undefined)).not.toThrow();
+    expect(() => validarConfigCanalPorTipo("whatsapp_api", {})).not.toThrow();
   });
 
   it("aceita whatsapp_api/instagram/facebook/calcom sem config (conectam via OAuth/QR)", () => {

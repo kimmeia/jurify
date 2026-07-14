@@ -27,10 +27,8 @@ import type { CargoColaborador } from "@shared/escritorio-types";
 import { TIPO_CANAL_LABELS, TIPO_CANAL_DESCRICAO, STATUS_CANAL_LABELS, STATUS_CANAL_CORES } from "@shared/canal-types";
 import type { TipoCanal, StatusCanal } from "@shared/canal-types";
 import CalcomConfig from "@/components/integracoes/CalcomConfig";
-import WhatsappQR from "@/components/integracoes/WhatsappQR";
 import {
   AsaasDialog,
-  WhatsAppQRDialog,
   TwilioDialog,
   CalcomDialog,
   ChatGPTDialog,
@@ -1676,8 +1674,6 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
     onSuccess: () => { toast.success("Número de envio atualizado."); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
-  const [legacyDialog, setLegacyDialog] = useState<string | null>(null);
-  const [showAvancado, setShowAvancado] = useState(false);
   const { data: canaisData, refetch } = trpc.configuracoes.listarCanais.useQuery();
 
   const canais = canaisData?.canais || [];
@@ -1690,7 +1686,6 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
   const whatsappComErro = canais.filter(
     (c: any) => c.tipo === "whatsapp_api" && c.status === "erro" && !!c.mensagemErro,
   );
-  const whatsappQrCanal = canais.find(c => c.tipo === "whatsapp_qr");
   const instagramCanal = canais.find(c => c.tipo === "instagram");
   const facebookCanal = canais.find(c => c.tipo === "facebook");
 
@@ -1947,51 +1942,6 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
         ))}
       </div>
 
-      {/* Opções avançadas (escondidas por padrão) */}
-      <div className="mt-6">
-        <button
-          onClick={() => setShowAvancado(!showAvancado)}
-          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-        >
-          {showAvancado ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-          Opções avançadas (QR Code, configuração manual)
-        </button>
-
-        {showAvancado && (
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Card
-              className="cursor-pointer hover:border-primary/40 transition-colors"
-              onClick={() => setLegacyDialog("whatsapp_qr")}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-gray-500 to-slate-600 flex items-center justify-center text-lg shrink-0">
-                    📱
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-semibold">WhatsApp QR Code</h4>
-                      {whatsappQrCanal?.status === "conectado" && (
-                        <Badge
-                          variant="outline"
-                          className="text-[9px] text-emerald-600 bg-emerald-50"
-                        >
-                          <Wifi className="h-2.5 w-2.5 mr-0.5" />
-                          Conectado
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Conexão via QR code (alternativa para quem não tem conta Business).
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-      </div>
-
       {/* Dialog unificado para WhatsApp/Instagram/Messenger */}
       {metaDialog && (
         <MetaConnectDialog
@@ -2011,16 +1961,6 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
           canEdit={canEdit}
         />
       )}
-
-      {/* Dialog legacy para QR Code (avançado) */}
-      <WhatsAppQRDialog
-        open={legacyDialog === "whatsapp_qr"}
-        onClose={() => setLegacyDialog(null)}
-        canal={whatsappQrCanal}
-        canEdit={canEdit}
-        isDono={isDono}
-        onRefresh={refetch}
-      />
 
       {/* Dialog: cadastro manual de WhatsApp Cloud (fallback p/ OAuth) */}
       <WhatsappManualDialog

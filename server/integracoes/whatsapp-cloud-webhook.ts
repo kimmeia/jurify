@@ -121,6 +121,53 @@ async function findCanalByPhoneNumberId(phoneNumberId: string): Promise<CanalInf
 }
 
 /**
+ * Busca os canais de uma WABA (por wabaId). Diferente do roteamento de mensagem
+ * (estrito por phone_number_id), eventos de CONTA (account_update, quality) são
+ * WABA-scoped e devem afetar todo canal daquela WABA neste JuridFlow.
+ */
+async function findCanaisByWabaId(wabaId: string): Promise<CanalInfo[]> {
+  const db = await getDb();
+  if (!db || !wabaId) return [];
+  const out: CanalInfo[] = [];
+  try {
+    const canais = await db.select().from(canaisIntegrados)
+      .where(eq(canaisIntegrados.tipo, "whatsapp_api"));
+    for (const canal of canais) {
+      if (!canal.configEncrypted || !canal.configIv || !canal.configTag) continue;
+      try {
+        const config = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
+        if (config.wabaId === wabaId) {
+          out.push({
+            canalId: canal.id,
+            escritorioId: canal.escritorioId,
+            accessToken: typeof config.accessToken === "string" ? config.accessToken : "",
+          });
+        }
+      } catch { continue; }
+    }
+  } catch {}
+  return out;
+}
+
+/**
+ * Detecta se um evento `account_update` indica restrição/desativação da conta
+ * (não só um update informativo). Cobre os eventos que precedem/são o ban:
+ * DISABLED_UPDATE, ACCOUNT_RESTRICTION, ACCOUNT_VIOLATION, etc. Monta um motivo
+ * legível a partir de ban_info/restriction_info/violation_info quando presentes.
+ */
+export function detectarRestricaoConta(value: any): { restritivo: boolean; motivo: string } {
+  const event = String(value?.event || "").toUpperCase();
+  const restritivo = /DISABLE|RESTRICT|VIOLAT|BAN/.test(event);
+  if (!restritivo) return { restritivo: false, motivo: "" };
+  const partes: string[] = [event];
+  const restr = Array.isArray(value?.restriction_info) ? value.restriction_info : [];
+  for (const r of restr) if (r?.restriction_type) partes.push(String(r.restriction_type));
+  if (value?.violation_info?.violation_type) partes.push(String(value.violation_info.violation_type));
+  if (value?.ban_info?.ban_state) partes.push(String(value.ban_info.ban_state));
+  return { restritivo: true, motivo: partes.join(" · ").slice(0, 500) };
+}
+
+/**
  * Resolve o canal de uma mensagem recebida ESTRITAMENTE pelo phone_number_id.
  *
  * Sem fallback por wabaId de propósito: vários números podem dividir a MESMA
@@ -331,6 +378,59 @@ export function registerWhatsAppCloudWebhook(app: Express) {
             }
             continue;
           }
+
+          // Restrição/desativação da conta (nível WABA) — o evento que faltava:
+          // antes o app só sabia de restrição quando um template individual
+          // falhava com 131031. Agora, quando a Meta desativa/restringe a conta,
+          // tripa o disjuntor de TODO canal da WABA e some da UI o "tudo certo".
+          if (change.field === "account_update") {
+            try {
+              const { restritivo, motivo } = detectarRestricaoConta(change.value);
+              if (restritivo) {
+                const db = await getDb();
+                const canais = await findCanaisByWabaId(wabaId);
+                if (db && canais.length > 0) {
+                  const guard = await import("./whatsapp-envio-guard");
+                  for (const c of canais) {
+                    await guard.marcarCanalRestrito(db, c.canalId, `Conta Meta: ${motivo}`);
+                    await db.update(canaisIntegrados)
+                      .set({ status: "banido", mensagemErro: `Conta restrita/desativada pela Meta: ${motivo}`.slice(0, 500) })
+                      .where(eq(canaisIntegrados.id, c.canalId));
+                  }
+                  log.warn({ wabaId, motivo, canais: canais.length }, "[WhatsApp Cloud] conta restrita/desativada pela Meta — canais pausados");
+                }
+              }
+            } catch (accErr: any) {
+              log.error("[WhatsApp Cloud] Erro ao processar account_update:", accErr.message);
+            }
+            continue;
+          }
+
+          // Qualidade/tier do número — persiste pra UI e pro teto diário anti-ban.
+          if (change.field === "phone_number_quality_update") {
+            try {
+              const db = await getDb();
+              const canais = await findCanaisByWabaId(wabaId);
+              const evento = String(change.value?.event || "").toUpperCase();
+              const tier = change.value?.current_limit ? String(change.value.current_limit) : undefined;
+              const qualidade = evento === "FLAGGED" ? "RED" : evento === "UNFLAGGED" ? "GREEN" : undefined;
+              if (db && canais.length > 0 && (tier || qualidade)) {
+                for (const c of canais) {
+                  await db.update(canaisIntegrados)
+                    .set({
+                      ...(tier ? { tierMensagens: tier } : {}),
+                      ...(qualidade ? { qualidadeMeta: qualidade } : {}),
+                    })
+                    .where(eq(canaisIntegrados.id, c.canalId));
+                }
+                log.info({ wabaId, evento, tier }, "[WhatsApp Cloud] qualidade/tier do número atualizado");
+              }
+            } catch (qErr: any) {
+              log.error("[WhatsApp Cloud] Erro ao processar phone_number_quality_update:", qErr.message);
+            }
+            continue;
+          }
+
           if (change.field !== "messages") continue;
 
           const value = change.value;

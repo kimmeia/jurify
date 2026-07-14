@@ -220,6 +220,15 @@ export const whatsappCloudRouter = router({
         bodyParams: input.parametrosCorpo,
         headerImageUrl: input.headerImageUrl,
       });
+      // Template é iniciado pela empresa (proativo): passa pelas travas anti-ban
+      // (disjuntor + teto diário + rate). Sem opt-in — é envio manual do operador,
+      // que escolheu o destinatário. Antes este endpoint furava TODAS as travas.
+      const db = await getDb();
+      const guard = db ? await import("../integracoes/whatsapp-envio-guard") : null;
+      if (db && guard) {
+        const permitido = await guard.podeEnviar({ db, canalId: c.canalId, proativo: true });
+        if (!permitido.ok) throw new Error(permitido.erro);
+      }
       try {
         const msgId = await client.enviarTemplate(
           input.telefone,
@@ -227,9 +236,12 @@ export const whatsappCloudRouter = router({
           input.languageCode,
           components,
         );
+        if (db && guard) await guard.registrarSucessoEnvio({ db, canalId: c.canalId, proativo: true });
         return { success: true, idExterno: msgId };
       } catch (err) {
-        throw new Error(explicarErroFacebook(err, "Falha ao enviar template do WhatsApp"));
+        const erro = explicarErroFacebook(err, "Falha ao enviar template do WhatsApp");
+        if (db && guard) await guard.registrarFalhaEnvio({ db, canalId: c.canalId, erro }).catch(() => {});
+        throw new Error(erro);
       }
     }),
 
