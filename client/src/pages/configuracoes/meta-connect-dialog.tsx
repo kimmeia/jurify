@@ -206,8 +206,17 @@ export function MetaConnectDialog({
   });
 
   const subscribeMut = trpc.metaChannels.subscribeWebhooks.useMutation({
-    onSuccess: () => {
-      toast.success("Webhooks re-inscritos. Mensagens recebidas vão começar a chegar no Atendimento.");
+    onSuccess: (data: any) => {
+      if (data?.appDivergente) {
+        toast.error(
+          `Webhook inscrito, mas no app ERRADO: o token deste canal pertence ao app ` +
+            `"${data.appToken?.name || data.appToken?.id}" e as mensagens vão pra ele, não pro JuridFlow ` +
+            `(app ${data.appSistema}). Reconecte este número pelo botão "Conectar com Facebook" pra corrigir.`,
+          { duration: 15000 },
+        );
+      } else {
+        toast.success("Webhooks re-inscritos. Mensagens recebidas vão começar a chegar no Atendimento.");
+      }
       onRefresh();
     },
     onError: (e: any) => toast.error(e.message),

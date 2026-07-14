@@ -786,6 +786,22 @@ export const configuracoesRouter = router({
         });
       }
 
+      // Token de OUTRO app envia mensagens normalmente, mas o recebimento
+      // nunca funciona: o webhook + assinatura HMAC do sistema pertencem ao
+      // app configurado no Admin. Bloqueia aqui (com certeza da divergência)
+      // em vez de deixar nascer um canal que "conecta mas não recebe".
+      const { verificarAppDoToken } = await import("../routers/meta-channels");
+      const appCheck = await verificarAppDoToken(input.accessToken);
+      if (appCheck?.divergente) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            `Este token pertence ao app "${appCheck.appToken?.name || appCheck.appToken?.id}" (ID ${appCheck.appToken?.id}), ` +
+            `mas o JuridFlow usa o app ID ${appCheck.appSistema}. Com esse token o número envia mas NUNCA recebe mensagens. ` +
+            `Gere o token pelo app ${appCheck.appSistema} ou conecte pelo botão "Conectar com Facebook".`,
+        });
+      }
+
       const nomeCanal = teste.nome || teste.telefone || "WhatsApp Cloud";
       const telefoneCanal = teste.telefone || undefined;
 

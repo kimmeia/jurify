@@ -273,6 +273,49 @@ export async function subscribeAppToWaba(
   }
 }
 
+/**
+ * Descobre a qual app Meta um access token pertence (GET /app). Essencial pro
+ * diagnóstico de recebimento: `subscribed_apps` inscreve O APP DO TOKEN — se o
+ * token foi gerado por outro app (ex: app de outro BM), a inscrição "dá certo"
+ * mas os eventos vão pro webhook DAQUELE app, e o JuridFlow nunca recebe.
+ * Best-effort: retorna null em qualquer falha (nunca bloqueia o caller).
+ */
+export async function appDoToken(
+  accessToken: string,
+): Promise<{ id: string; name: string } | null> {
+  try {
+    const axios = (await import("axios")).default;
+    const res = await axios.get("https://graph.facebook.com/v21.0/app", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      timeout: 8000,
+    });
+    const id = res?.data?.id ? String(res.data.id) : "";
+    if (!id) return null;
+    return { id, name: String(res.data?.name || "") };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Compara o app do token com o app configurado no sistema (painel Admin /
+ * META_APP_ID). Retorna null quando não dá pra afirmar divergência (token ou
+ * config indisponíveis) — só acusa quando tem certeza.
+ */
+export async function verificarAppDoToken(accessToken: string): Promise<{
+  divergente: boolean;
+  appToken: { id: string; name: string } | null;
+  appSistema: string | null;
+} | null> {
+  const [tokenApp, config] = await Promise.all([appDoToken(accessToken), getMetaAppConfig()]);
+  if (!tokenApp || !config?.appId) return null;
+  return {
+    divergente: tokenApp.id !== config.appId,
+    appToken: tokenApp,
+    appSistema: config.appId,
+  };
+}
+
 // ─── Router ────────────────────────────────────────────────────────────────
 
 export const metaChannelsRouter = router({
@@ -830,11 +873,35 @@ export const metaChannelsRouter = router({
       const result = await subscribeAppToWaba(accessToken, wabaId);
       if (!result.ok) throw new Error(result.error);
 
+      // A inscrição amarra a WABA ao APP DO TOKEN. Se o token veio de outro
+      // app (ex: app de outro BM), a Meta aceita mas entrega os eventos pro
+      // webhook DAQUELE app — o JuridFlow nunca recebe. Acusa a divergência
+      // pro usuário reconectar via Embedded Signup em vez de testar às cegas.
+      const verificacao = await verificarAppDoToken(accessToken);
+      if (verificacao?.divergente) {
+        log.warn(
+          {
+            escritorioId: esc.escritorio.id,
+            canalId: input.canalId,
+            wabaId,
+            appToken: verificacao.appToken?.id,
+            appSistema: verificacao.appSistema,
+          },
+          "WhatsApp inscrito em webhooks, mas o token é de OUTRO app — eventos não chegarão neste sistema",
+        );
+        return {
+          success: true,
+          appDivergente: true,
+          appToken: verificacao.appToken,
+          appSistema: verificacao.appSistema,
+        };
+      }
+
       log.info(
         { escritorioId: esc.escritorio.id, canalId: input.canalId, wabaId },
         "WhatsApp re-inscrito em webhooks",
       );
-      return { success: true };
+      return { success: true, appDivergente: false as const };
     }),
 
   /**
