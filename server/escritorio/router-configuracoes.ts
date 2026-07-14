@@ -790,7 +790,7 @@ export const configuracoesRouter = router({
       // nunca funciona: o webhook + assinatura HMAC do sistema pertencem ao
       // app configurado no Admin. Bloqueia aqui (com certeza da divergência)
       // em vez de deixar nascer um canal que "conecta mas não recebe".
-      const { verificarAppDoToken } = await import("../routers/meta-channels");
+      const { verificarAppDoToken, tokenOperaWaba } = await import("../routers/meta-channels");
       const appCheck = await verificarAppDoToken(input.accessToken);
       if (appCheck?.divergente) {
         throw new TRPCError({
@@ -799,6 +799,21 @@ export const configuracoesRouter = router({
             `Este token pertence ao app "${appCheck.appToken?.name || appCheck.appToken?.id}" (ID ${appCheck.appToken?.id}), ` +
             `mas o JuridFlow usa o app ID ${appCheck.appSistema}. Com esse token o número envia mas NUNCA recebe mensagens. ` +
             `Gere o token pelo app ${appCheck.appSistema} ou conecte pelo botão "Conectar com Facebook".`,
+        });
+      }
+
+      // Escopo granular do token: precisa OPERAR a WABA informada. Token
+      // gerado antes de atribuir a WABA ao usuário do sistema "conecta" e
+      // até recebe, mas todo envio falha com (#200). Só bloqueia com
+      // divergência confirmada; checagem inconclusiva deixa passar.
+      const escopo = await tokenOperaWaba(input.accessToken, input.wabaId);
+      if (escopo && !escopo.opera) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            `Este token não tem acesso à WABA ${input.wabaId} — ele opera apenas: ${escopo.wabasDoToken.join(", ") || "(nenhuma)"}. ` +
+            `Isso acontece quando o token foi gerado ANTES de atribuir a Conta do WhatsApp ao usuário do sistema. ` +
+            `Atribua a WABA ao usuário do sistema (controle total) e gere um TOKEN NOVO — tokens antigos não herdam acessos novos.`,
         });
       }
 

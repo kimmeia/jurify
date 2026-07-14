@@ -317,6 +317,42 @@ export async function verificarAppDoToken(accessToken: string): Promise<{
 }
 
 /**
+ * Verifica, via GET /debug_token, se um token consegue OPERAR a WABA
+ * informada — os escopos granulares (`granular_scopes`) do token listam as
+ * WABAs congeladas na emissão. Token gerado ANTES de uma atribuição de
+ * ativo não herda o acesso novo e falha no envio com (#200), mesmo
+ * "conectando" — incidente real do onboarding manual.
+ *
+ * Retorna null quando inconclusivo (sem app token configurado, chamada
+ * falhou, ou resposta sem granular_scopes) — nunca bloqueia por dúvida.
+ */
+export async function tokenOperaWaba(
+  inputToken: string,
+  wabaId: string,
+): Promise<{ opera: boolean; wabasDoToken: string[] } | null> {
+  const config = await getMetaAppConfig();
+  if (!config?.appId || !config?.appSecret) return null;
+  try {
+    const axios = (await import("axios")).default;
+    const res = await axios.get("https://graph.facebook.com/v21.0/debug_token", {
+      params: { input_token: inputToken },
+      headers: { Authorization: `Bearer ${config.appId}|${config.appSecret}` },
+      timeout: 10000,
+    });
+    const granular = res?.data?.data?.granular_scopes;
+    if (!Array.isArray(granular)) return null;
+    const entrada = granular.find((g: any) => g?.scope === "whatsapp_business_messaging");
+    // Sem a entrada do escopo, ou sem target_ids (token com acesso amplo),
+    // não dá pra afirmar ausência — inconclusivo.
+    if (!entrada || !Array.isArray(entrada.target_ids)) return null;
+    const ids = entrada.target_ids.map((t: any) => String(t));
+    return { opera: ids.includes(String(wabaId)), wabasDoToken: ids };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Lê as inscrições de apps da WABA, incluindo o override de callback.
  * `override_callback_uri` num par (WABA, app) desvia os eventos REAIS da WABA
  * pra outra URL — enquanto o botão "Testar" do painel usa o callback padrão do

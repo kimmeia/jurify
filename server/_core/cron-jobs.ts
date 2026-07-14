@@ -234,6 +234,23 @@ export function iniciarJobs() {
   setInterval(() => expirarAssinaturas(), 60 * 60 * 1000);
   setInterval(() => verificarPrazosKanban(), 60 * 60 * 1000);
 
+  // Health-check WhatsApp Cloud (1x/hora + boot): lê qualidade/tier/status
+  // dos números na Meta. Detecta degradação ANTES do ban e pausa canal
+  // restrito proativamente — o incidente jul/2026 só apareceu quando o
+  // 131031 já tinha derrubado a conta.
+  const rodarHealthCheckWhatsApp = async () => {
+    try {
+      const { verificarSaudeCanaisWhatsApp } = await import(
+        "../integracoes/whatsapp-health-check"
+      );
+      await verificarSaudeCanaisWhatsApp();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] health-check WhatsApp falhou");
+    }
+  };
+  setTimeout(rodarHealthCheckWhatsApp, 2 * 60 * 1000);
+  setInterval(rodarHealthCheckWhatsApp, 60 * 60 * 1000);
+
   // 1x por dia: catch-up de cobranças que o webhook eventualmente
   // perdeu (race condition, downtime curto). Webhook (asaas-webhook.ts)
   // é a fonte primária e cobre eventos em tempo real — não precisamos
