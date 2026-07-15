@@ -177,3 +177,31 @@ describe("verificarAssinaturaMeta", () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe("multi-secret (dois apps Meta no mesmo webhook)", () => {
+  const body = Buffer.from(JSON.stringify({ object: "whatsapp_business_account" }));
+
+  it("valida quando a assinatura bate com QUALQUER um dos secrets", () => {
+    const assinadoPeloSegundo = calcularAssinaturaMeta(body, "secret-app-1641");
+    const r = verificarAssinaturaMeta(body, assinadoPeloSegundo, ["secret-app-1295", "secret-app-1641"]);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.mode).toBe("verified");
+  });
+
+  it("rejeita quando não bate com nenhum secret da lista", () => {
+    const assinadoPorTerceiro = calcularAssinaturaMeta(body, "secret-desconhecido");
+    const r = verificarAssinaturaMeta(body, assinadoPorTerceiro, ["secret-app-1295", "secret-app-1641"]);
+    expect(r.ok).toBe(false);
+  });
+
+  it("lista vazia/blank equivale a no-secret (modo legado)", () => {
+    const r = verificarAssinaturaMeta(body, undefined, ["", "  "]);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.mode).toBe("no-secret");
+  });
+
+  it("string única continua funcionando (compat)", () => {
+    const assinado = calcularAssinaturaMeta(body, "unico");
+    expect(verificarAssinaturaMeta(body, assinado, "unico").ok).toBe(true);
+  });
+});

@@ -272,7 +272,7 @@ export async function incrementarDisparoDia(db: any, canalId: number, agoraMs: n
 
 // ─── Orquestrador ────────────────────────────────────────────────────────────
 
-export type MotivoBloqueio = "restrito" | "diario" | "rate" | "optin";
+export type MotivoBloqueio = "restrito" | "diario" | "rate" | "optin" | "optout";
 
 /**
  * Decide se um envio PODE sair agora. Ordem: disjuntor → teto diário → rate
@@ -325,6 +325,20 @@ export async function podeEnviar(opts: {
           erro: `Envio adiado: ${rl.motivo}. Evita rajada que a Meta classifica como spam.`,
         };
       }
+    }
+  }
+
+  // Opt-out: pedido de descadastro vale pra TODO envio proativo — a política
+  // da Meta exige honrar ("respect all requests... to opt out"). Não afeta
+  // resposta quando o contato inicia conversa (proativo=false).
+  if (opts.proativo && opts.contatoId) {
+    const { contatoEstaOptOut } = await import("./whatsapp-optout");
+    if (await contatoEstaOptOut(opts.db, opts.contatoId)) {
+      return {
+        ok: false,
+        tipo: "optout",
+        erro: "Contato optou por não receber avisos automáticos (SAIR). Envio bloqueado — ele pode reativar respondendo VOLTAR.",
+      };
     }
   }
 

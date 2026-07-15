@@ -74,9 +74,15 @@ export type VerificacaoAssinaturaMeta =
 export function verificarAssinaturaMeta(
   rawBody: Buffer | undefined,
   signatureHeader: string | undefined,
-  secret: string | undefined,
+  secret: string | string[] | undefined,
 ): VerificacaoAssinaturaMeta {
-  if (!secret || secret.length === 0) {
+  // Aceita 1..N secrets: quando dois apps Meta entregam no MESMO webhook
+  // (ex: app do Embedded Signup + app do BM do cliente), cada um assina com
+  // o próprio App Secret — o evento é válido se bater com QUALQUER um.
+  const secrets = (Array.isArray(secret) ? secret : [secret])
+    .map((s) => (s || "").trim())
+    .filter((s) => s.length > 0);
+  if (secrets.length === 0) {
     return { ok: true, mode: "no-secret" };
   }
   if (!signatureHeader) {
@@ -100,9 +106,11 @@ export function verificarAssinaturaMeta(
       motivo: "rawBody indisponível — middleware verify do express.json não foi aplicado",
     };
   }
-  const esperado = calcularAssinaturaMeta(rawBody, secret);
-  if (!compararStringConstante(esperado, signatureHeader)) {
-    return { ok: false, mode: "mismatch", motivo: "HMAC não bate" };
+  for (const s of secrets) {
+    const esperado = calcularAssinaturaMeta(rawBody, s);
+    if (compararStringConstante(esperado, signatureHeader)) {
+      return { ok: true, mode: "verified" };
+    }
   }
-  return { ok: true, mode: "verified" };
+  return { ok: false, mode: "mismatch", motivo: "HMAC não bate com nenhum App Secret configurado" };
 }

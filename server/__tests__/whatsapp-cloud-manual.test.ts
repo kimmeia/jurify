@@ -182,4 +182,45 @@ describe("conectarWhatsappCloudManual", () => {
     const res = await caller.conectarWhatsappCloudManual(INPUT_OK);
     expect(res.id).toBe(555);
   });
+
+  it("recusa token cujo escopo granular NÃO opera a WABA informada (evita o #200)", async () => {
+    // Regressão do incidente: token gerado ANTES de atribuir a WABA ao
+    // usuário do sistema — conectava e recebia, mas todo envio dava (#200).
+    process.env.META_APP_ID = "1295936199370409";
+    process.env.META_APP_SECRET = "segredo-teste";
+    // 1ª GET (/app): app do token = app do sistema (passa a 1ª validação).
+    axiosGetMock.mockResolvedValueOnce({ data: { id: "1295936199370409", name: "JuridFlow App" } });
+    // 2ª GET (/debug_token): granular_scopes sem a WABA do input.
+    axiosGetMock.mockResolvedValueOnce({
+      data: { data: { granular_scopes: [{ scope: "whatsapp_business_messaging", target_ids: ["111", "222"] }] } },
+    });
+
+    const caller = configuracoesRouter.createCaller(fakeCtx());
+    await expect(caller.conectarWhatsappCloudManual(INPUT_OK)).rejects.toThrow(/não tem acesso à WABA/i);
+    expect(criarCanalMock).not.toHaveBeenCalled();
+  });
+
+  it("aceita quando o escopo granular INCLUI a WABA informada", async () => {
+    process.env.META_APP_ID = "1295936199370409";
+    process.env.META_APP_SECRET = "segredo-teste";
+    axiosGetMock.mockResolvedValueOnce({ data: { id: "1295936199370409", name: "JuridFlow App" } });
+    axiosGetMock.mockResolvedValueOnce({
+      data: { data: { granular_scopes: [{ scope: "whatsapp_business_messaging", target_ids: [INPUT_OK.wabaId] }] } },
+    });
+
+    const caller = configuracoesRouter.createCaller(fakeCtx());
+    const res = await caller.conectarWhatsappCloudManual(INPUT_OK);
+    expect(res.id).toBe(555);
+  });
+
+  it("checagem de escopo inconclusiva (sem granular_scopes) NÃO bloqueia", async () => {
+    process.env.META_APP_ID = "1295936199370409";
+    process.env.META_APP_SECRET = "segredo-teste";
+    axiosGetMock.mockResolvedValueOnce({ data: { id: "1295936199370409", name: "JuridFlow App" } });
+    axiosGetMock.mockResolvedValueOnce({ data: { data: {} } });
+
+    const caller = configuracoesRouter.createCaller(fakeCtx());
+    const res = await caller.conectarWhatsappCloudManual(INPUT_OK);
+    expect(res.id).toBe(555);
+  });
 });

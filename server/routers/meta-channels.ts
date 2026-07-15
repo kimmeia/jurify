@@ -316,6 +316,95 @@ export async function verificarAppDoToken(accessToken: string): Promise<{
   };
 }
 
+/**
+ * Verifica, via GET /debug_token, se um token consegue OPERAR a WABA
+ * informada — os escopos granulares (`granular_scopes`) do token listam as
+ * WABAs congeladas na emissão. Token gerado ANTES de uma atribuição de
+ * ativo não herda o acesso novo e falha no envio com (#200), mesmo
+ * "conectando" — incidente real do onboarding manual.
+ *
+ * Retorna null quando inconclusivo (sem app token configurado, chamada
+ * falhou, ou resposta sem granular_scopes) — nunca bloqueia por dúvida.
+ */
+export async function tokenOperaWaba(
+  inputToken: string,
+  wabaId: string,
+): Promise<{ opera: boolean; wabasDoToken: string[] } | null> {
+  const config = await getMetaAppConfig();
+  if (!config?.appId || !config?.appSecret) return null;
+  try {
+    const axios = (await import("axios")).default;
+    const res = await axios.get("https://graph.facebook.com/v21.0/debug_token", {
+      params: { input_token: inputToken },
+      headers: { Authorization: `Bearer ${config.appId}|${config.appSecret}` },
+      timeout: 10000,
+    });
+    const granular = res?.data?.data?.granular_scopes;
+    if (!Array.isArray(granular)) return null;
+    const entrada = granular.find((g: any) => g?.scope === "whatsapp_business_messaging");
+    // Sem a entrada do escopo, ou sem target_ids (token com acesso amplo),
+    // não dá pra afirmar ausência — inconclusivo.
+    if (!entrada || !Array.isArray(entrada.target_ids)) return null;
+    const ids = entrada.target_ids.map((t: any) => String(t));
+    return { opera: ids.includes(String(wabaId)), wabasDoToken: ids };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lê as inscrições de apps da WABA, incluindo o override de callback.
+ * `override_callback_uri` num par (WABA, app) desvia os eventos REAIS da WABA
+ * pra outra URL — enquanto o botão "Testar" do painel usa o callback padrão do
+ * app. Resultado: teste chega, mensagem real não. Best-effort: null em falha.
+ */
+export async function lerInscricoesWaba(
+  accessToken: string,
+  wabaId: string,
+): Promise<Array<{ id: string; name: string; override: string | null }> | null> {
+  try {
+    const axios = (await import("axios")).default;
+    const res = await axios.get(`https://graph.facebook.com/v21.0/${wabaId}/subscribed_apps`, {
+      params: { fields: "override_callback_uri,whatsapp_business_api_data" },
+      headers: { Authorization: `Bearer ${accessToken}` },
+      timeout: 10000,
+    });
+    const data = Array.isArray(res?.data?.data) ? res.data.data : [];
+    return data.map((d: any) => ({
+      id: String(d?.whatsapp_business_api_data?.id || ""),
+      name: String(d?.whatsapp_business_api_data?.name || ""),
+      override: d?.override_callback_uri ? String(d.override_callback_uri) : null,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Remove a inscrição do app (do token) na WABA. Usado pra re-inscrição LIMPA:
+ * DELETE + POST derruba qualquer override_callback_uri pendurado no par
+ * (WABA, app) — a causa clássica de "teste chega, mensagem real não".
+ */
+export async function desinscreverAppDaWaba(
+  accessToken: string,
+  wabaId: string,
+): Promise<boolean> {
+  try {
+    const axios = (await import("axios")).default;
+    await axios.delete(`https://graph.facebook.com/v21.0/${wabaId}/subscribed_apps`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      timeout: 10000,
+    });
+    return true;
+  } catch (err: any) {
+    log.warn(
+      { wabaId, status: err?.response?.status, fbError: err?.response?.data?.error },
+      "[metaChannels] DELETE subscribed_apps falhou (re-inscrição segue best-effort)",
+    );
+    return false;
+  }
+}
+
 // ─── Router ────────────────────────────────────────────────────────────────
 
 export const metaChannelsRouter = router({
@@ -870,8 +959,28 @@ export const metaChannelsRouter = router({
         throw new Error("Configuração do canal incompleta (access_token ou waba_id ausente).");
       }
 
+      // Re-inscrição LIMPA: lê o estado atual (captura override de callback),
+      // remove a inscrição do app e re-inscreve do zero. O override no par
+      // (WABA, app) desvia os eventos REAIS pra outra URL enquanto o botão
+      // "Testar" do painel usa o callback padrão — sintoma: teste chega,
+      // mensagem real some. DELETE+POST derruba o override.
+      const inscricoesAntes = await lerInscricoesWaba(accessToken, wabaId);
+      await desinscreverAppDaWaba(accessToken, wabaId);
+
       const result = await subscribeAppToWaba(accessToken, wabaId);
       if (!result.ok) throw new Error(result.error);
+
+      const inscricoesDepois = await lerInscricoesWaba(accessToken, wabaId);
+      const overrideAnterior =
+        inscricoesAntes?.find((i) => i.override)?.override ?? null;
+      const overrideAtual =
+        inscricoesDepois?.find((i) => i.override)?.override ?? null;
+      if (overrideAnterior || overrideAtual) {
+        log.warn(
+          { escritorioId: esc.escritorio.id, canalId: input.canalId, wabaId, overrideAnterior, overrideAtual },
+          "[metaChannels] override_callback_uri detectado na inscrição da WABA",
+        );
+      }
 
       // A inscrição amarra a WABA ao APP DO TOKEN. Se o token veio de outro
       // app (ex: app de outro BM), a Meta aceita mas entrega os eventos pro
@@ -894,14 +1003,16 @@ export const metaChannelsRouter = router({
           appDivergente: true,
           appToken: verificacao.appToken,
           appSistema: verificacao.appSistema,
+          overrideAnterior,
+          overrideAtual,
         };
       }
 
       log.info(
-        { escritorioId: esc.escritorio.id, canalId: input.canalId, wabaId },
-        "WhatsApp re-inscrito em webhooks",
+        { escritorioId: esc.escritorio.id, canalId: input.canalId, wabaId, overrideAnterior, overrideAtual },
+        "WhatsApp re-inscrito em webhooks (re-inscrição limpa)",
       );
-      return { success: true, appDivergente: false as const };
+      return { success: true, appDivergente: false as const, overrideAnterior, overrideAtual };
     }),
 
   /**
