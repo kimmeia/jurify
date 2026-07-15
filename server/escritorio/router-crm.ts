@@ -389,6 +389,21 @@ export const crmRouter = router({
                       await guard.registrarSucessoTemplate({ db, canalId: convData.canalId });
                       log.info(`[CRM] Template Meta "${input.metaTemplate.nome}" enviado pra ${telefone} (msgId: ${msgId})`);
                     } else {
+                      // Janela de 24h: fora dela a Meta REJEITA texto/mídia
+                      // livre (131047) — a bolha aparecia "enviada" e morria no
+                      // vácuo. Bloqueia na origem com instrução clara: fora da
+                      // janela, só template sai.
+                      const { ultimaEntradaDaConversa, janela24hAberta } = await import("../integracoes/whatsapp-optout");
+                      const ultimaEntrada = await ultimaEntradaDaConversa(db, input.conversaId);
+                      if (!janela24hAberta(ultimaEntrada, Date.now())) {
+                        const erroJanela =
+                          "Janela de 24h fechada: o WhatsApp só aceita mensagem livre até 24h após a última mensagem DO CLIENTE. Use um template (botão Templates) pra reabrir a conversa.";
+                        log.warn(`[CRM] Envio manual bloqueado: janela de 24h fechada (conversa ${input.conversaId})`);
+                        const { mensagens } = await import("../../drizzle/schema");
+                        await db.update(mensagens).set({ status: "falha", erroEntrega: erroJanela }).where(eq(mensagens.id, id));
+                        return { id };
+                      }
+
                       // Disjuntor também no texto/mídia manual. Conta restrita
                       // pela Meta ACEITA o POST (devolve msgId) e mata a entrega
                       // no `failed` assíncrono — sem este gate o operador via
@@ -828,6 +843,42 @@ export const crmRouter = router({
       if (!canal) throw new Error("Canal não encontrado.");
       const guard = await import("../integracoes/whatsapp-envio-guard");
       await guard.limparCanalRestrito(db, input.canalId);
+      return { success: true };
+    }),
+
+  /**
+   * Liga/desliga o opt-out de avisos automáticos de um contato. Usado quando
+   * o pedido chega por OUTRO canal (telefone, presencial) — a política da
+   * Meta exige honrar "requests either on or off WhatsApp". Registra origem
+   * com o nome de quem marcou (auditável).
+   */
+  definirOptOutWhatsapp: protectedProcedure
+    .input(z.object({
+      contatoId: z.number(),
+      optOut: z.boolean(),
+      motivo: z.string().max(100).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+      const { contatos } = await import("../../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const [contato] = await db
+        .select({ id: contatos.id })
+        .from(contatos)
+        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!contato) throw new Error("Contato não encontrado.");
+
+      const { aplicarOptOut, removerOptOut } = await import("../integracoes/whatsapp-optout");
+      if (input.optOut) {
+        const origem = `manual por ${ctx.user.name || ctx.user.email}${input.motivo ? `: ${input.motivo}` : ""}`;
+        await aplicarOptOut(db, input.contatoId, origem);
+      } else {
+        await removerOptOut(db, input.contatoId);
+      }
       return { success: true };
     }),
 

@@ -675,6 +675,17 @@ export const contatos = mysqlTable("contatos", {
    * fechamento (lead chega em fechado_ganho).
    */
   estagio: mysqlEnum("estagioContato", ["lead", "cliente"]).default("cliente").notNull(),
+  // Opt-out de mensagens PROATIVAS no WhatsApp (SAIR/PARAR/STOP, toggle
+  // manual ou pedido por outro canal — a política da Meta exige honrar
+  // todos). Não afeta respostas quando o contato inicia conversa.
+  optOutWhatsapp: boolean("optOutWhatsapp").default(false).notNull(),
+  optOutWhatsappEm: timestamp("optOutWhatsappEm"),
+  optOutWhatsappOrigem: varchar("optOutWhatsappOrigem", { length: 128 }),
+  // Rastro documental de opt-in (LGPD/política Meta). Preenchido passivo:
+  // inbound ("iniciou conversa"), "SIM" a pergunta do bot, ou atestado
+  // manual (contrato). NÃO participa do gate de envio.
+  optInWhatsappEm: timestamp("optInWhatsappEm"),
+  optInWhatsappOrigem: varchar("optInWhatsappOrigem", { length: 128 }),
   tags: text("tagsContato"),
   observacoes: text("observacoesContato"),
   responsavelId: int("responsavelIdContato"),

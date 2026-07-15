@@ -121,6 +121,51 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     return { contatoId, conversaId, mensagemId };
   }
 
+  // Rastro documental de opt-in (LGPD/política Meta): o primeiro inbound do
+  // contato registra "iniciou conversa". Best-effort, fire-and-forget.
+  void (async () => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) return;
+      const { registrarOptInSeAusente } = await import("./whatsapp-optout");
+      await registrarOptInSeAusente(db, contatoId, "iniciou conversa no WhatsApp");
+    } catch { /* best-effort */ }
+  })();
+
+  // Comandos de opt-out/opt-in na conversa (SAIR/PARAR/STOP → para proativos;
+  // VOLTAR → reativa). Política da Meta exige honrar o pedido. Comando
+  // reconhecido NÃO dispara SmartFlow nem auto-reply — só a confirmação única.
+  if (msg.tipo === "texto") {
+    try {
+      const {
+        interpretarComandoOptOut,
+        aplicarOptOut,
+        removerOptOut,
+        mensagemConfirmacaoSaida,
+        mensagemConfirmacaoVolta,
+      } = await import("./whatsapp-optout");
+      const comando = interpretarComandoOptOut(msg.conteudo);
+      if (comando) {
+        const { getDb } = await import("../db");
+        const db = await getDb();
+        if (db) {
+          const nomeEsc = await pegarNomeEscritorio(escritorioId);
+          if (comando === "sair") {
+            await aplicarOptOut(db, contatoId, "pediu SAIR na conversa");
+            await enviarResposta(canalId, conversaId, msg.chatId, mensagemConfirmacaoSaida(nomeEsc));
+          } else {
+            await removerOptOut(db, contatoId);
+            await enviarResposta(canalId, conversaId, msg.chatId, mensagemConfirmacaoVolta(nomeEsc));
+          }
+          return { contatoId, conversaId, mensagemId };
+        }
+      }
+    } catch (e: any) {
+      log.warn({ err: e?.message, contatoId }, "[OptOut] falha ao processar comando — mensagem segue fluxo normal");
+    }
+  }
+
   // Marca aguardando — MAS preserva em_atendimento (atendente assumiu, mantém
   // o controle; sobrescrever fazia o bot voltar a responder na próxima msg do
   // cliente, mesmo depois do atendente ter intervindo).
@@ -516,6 +561,26 @@ async function pegarAtendenteDaConversa(conversaId: number): Promise<number | nu
     return row?.atendenteId ?? null;
   } catch {
     return null;
+  }
+}
+
+/** Nome do escritório — usado no texto de confirmação de opt-out (a política
+ *  pede clareza sobre QUEM está mandando/parando de mandar). */
+async function pegarNomeEscritorio(escritorioId: number): Promise<string> {
+  try {
+    const { getDb } = await import("../db");
+    const { escritorios } = await import("../../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return "";
+    const [row] = await db
+      .select({ nome: escritorios.nome })
+      .from(escritorios)
+      .where(eq(escritorios.id, escritorioId))
+      .limit(1);
+    return row?.nome ?? "";
+  } catch {
+    return "";
   }
 }
 

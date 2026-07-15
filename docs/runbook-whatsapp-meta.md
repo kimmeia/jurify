@@ -77,6 +77,28 @@ Cada passo abaixo existe porque a falta dele causou falha real:
 - Regra operacional: cobrança = template **UTILITY** pra cliente com
   relação transacional. Disparo frio em massa = o que derrubou a conta.
 
+## Opt-in / Opt-out (política Meta)
+
+O que a política exige, literalmente: opt-in antes de mensagem iniciada
+pela empresa (método livre — "solely responsible for the method"; contrato
+vale) e honrar TODO pedido de opt-out ("either on or off WhatsApp").
+
+Como o sistema implementa:
+- **Opt-out**: contato responde `SAIR`/`PARAR`/`STOP` (palavra isolada) →
+  marcado, confirmação única enviada, TODOS os proativos bloqueados pelo
+  guard (motivo visível na execução). `VOLTAR` reativa. Pedido por outro
+  canal → toggle manual no contato (`crm.definirOptOutWhatsapp`, origem
+  auditável). Opt-out NÃO afeta respostas quando o contato inicia conversa.
+- **Opt-in documental**: primeiro inbound registra `optInWhatsappEm`
+  ("iniciou conversa"). Atestado manual/contrato via mesma mutation.
+  NÃO participa do gate de envio (rastro LGPD).
+- **Janela de 24h**: envio manual de texto/mídia fora da janela (24h após
+  a última mensagem DO CLIENTE) é bloqueado na origem com instrução de
+  usar template — fora da janela a Meta rejeitaria com 131047 e a bolha
+  "enviada" morreria no vácuo.
+- Operacional (escritório): cláusula de consentimento WhatsApp no contrato
+  padrão + rodapé "Responda SAIR para não receber avisos" nos templates.
+
 ## Bloqueio do APP (Login "Recurso indisponível") — prevenção
 
 - **Data Use Checkup é ANUAL** — não responder = Login suspenso (foi o que
