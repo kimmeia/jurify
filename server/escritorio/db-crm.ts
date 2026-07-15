@@ -554,6 +554,7 @@ export async function listarConversas(escritorioId: number, filtros?: {
       contatoNome: contatos.nome, contatoTelefone: contatos.telefone,
       optOutWhatsapp: contatos.optOutWhatsapp, optOutWhatsappEm: contatos.optOutWhatsappEm,
       canalId: conversas.canalId, canalNome: canaisIntegrados.nome, canalTipo: canaisIntegrados.tipo, canalTelefone: canaisIntegrados.telefone,
+      canalStatus: canaisIntegrados.status, canalRestrito: canaisIntegrados.restritoMeta,
       atendenteId: conversas.atendenteId,
       status: conversas.status, prioridade: conversas.prioridade,
       assunto: conversas.assunto,

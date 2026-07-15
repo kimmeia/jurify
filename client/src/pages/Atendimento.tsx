@@ -1220,9 +1220,23 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
     if (!ultimaEntrada) return true;
     return Date.now() - new Date(ultimaEntrada.createdAt).getTime() >= 24 * 60 * 60 * 1000;
   })();
+  // Canal morto (banido/desconectado/apagado): NADA sai por ele — conta banida
+  // "aceita" o envio (bolha ✓) e mata a entrega depois. Composer inteiro é
+  // substituído pelo aviso; o servidor tem o mesmo gate (defesa dupla).
+  const canalIndisponivel = !!(
+    ehCanalCloud && conv && (conv as any).canalStatus && (conv as any).canalStatus !== "conectado"
+  );
   const send = () => {
     const texto = msg.trim();
     if (!texto && !pendingMedia) return;
+    if (canalIndisponivel) {
+      toast.error("Este número está indisponível — atenda pelo número ativo (Nova Conversa).");
+      return;
+    }
+    if (janela24hFechada) {
+      toast.error("Janela de 24h fechada — o WhatsApp só aceita template. Use ⚡ Respostas rápidas → Templates Meta.");
+      return;
+    }
     enviar.mutate({
       conversaId: cid,
       conteudo: texto || (pendingMedia?.nome ?? ""),
@@ -1659,17 +1673,30 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         </div>
       )}
 
-      {janela24hFechada && (
-        <div className="mx-3 mt-2 mb-1 flex items-start gap-1.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-md px-2.5 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
-          <span className="shrink-0">⏱</span>
+      {canalIndisponivel && (
+        <div className="mx-3 mt-2 mb-3 flex items-start gap-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-md px-3 py-2.5 text-xs leading-snug text-red-800 dark:text-red-200">
+          <span className="shrink-0 text-sm">🚫</span>
           <span>
-            Janela de 24h fechada — o WhatsApp só aceita template até o cliente responder.
-            Use o botão <Zap className="inline h-3 w-3 -mt-0.5" aria-hidden /> Respostas rápidas → "Templates Meta aprovados".
+            <b>Este número está indisponível</b>
+            {(conv as any)?.canalStatus === "banido" ? " (conta banida/desabilitada na Meta)" : ` (canal ${(conv as any)?.canalStatus})`}.
+            Nenhuma mensagem — nem template — será entregue por ele.
+            Atenda este cliente pelo número ativo: <b>Nova Conversa</b>.
           </span>
         </div>
       )}
 
-      {/* Linha 2: Composer */}
+      {!canalIndisponivel && janela24hFechada && (
+        <div className="mx-3 mt-2 mb-1 flex items-start gap-1.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-md px-2.5 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+          <span className="shrink-0">⏱</span>
+          <span>
+            Janela de 24h fechada — texto livre está bloqueado até o cliente responder.
+            Envie um template: botão <Zap className="inline h-3 w-3 -mt-0.5" aria-hidden /> Respostas rápidas → "Templates Meta aprovados".
+          </span>
+        </div>
+      )}
+
+      {/* Linha 2: Composer (oculto quando o canal está morto) */}
+      {!canalIndisponivel && (
       <div className="p-3 pt-2 flex gap-2">
         {mobile ? (
           <Popover open={maisMenuAberto} onOpenChange={setMaisMenuAberto}>
@@ -1829,7 +1856,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           onChange={setMsg}
           templates={(tplList || []) as any}
           onEnter={send}
-          placeholder="Digite sua mensagem… ou clique em ✨ Compor com IA"
+          placeholder={janela24hFechada
+            ? "Janela de 24h fechada — envie um template (⚡ Respostas rápidas)"
+            : "Digite sua mensagem… ou clique em ✨ Compor com IA"}
           className="bg-background"
           interpolar={(c) => {
             const conv = convs.find((x: any) => x.id === cid);
@@ -1848,17 +1877,25 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           }}
         />
         <AudioRecordButton
-          onSend={(args) => enviar.mutate({ conversaId: cid, conteudo: args.conteudo, tipo: args.tipo, mediaUrl: args.mediaUrl })}
+          onSend={(args) => {
+            if (janela24hFechada) {
+              toast.error("Janela de 24h fechada — áudio livre não é aceito pela Meta. Envie um template.");
+              return;
+            }
+            enviar.mutate({ conversaId: cid, conteudo: args.conteudo, tipo: args.tipo, mediaUrl: args.mediaUrl });
+          }}
         />
         <Button
           size="sm"
           onClick={send}
-          disabled={!msg.trim() || enviar.isPending}
+          disabled={!msg.trim() || enviar.isPending || janela24hFechada}
+          title={janela24hFechada ? "Janela de 24h fechada — só template" : undefined}
           className="px-4 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
         >
           {enviar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>
+      )}
 
       {/* Linha 3: Hint compacto — só desktop (atalhos de teclado). */}
       {!mobile && (

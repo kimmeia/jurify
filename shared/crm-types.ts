@@ -73,6 +73,9 @@ export interface ConversaInfo {
   canalTipo?: string;
   /** Número do canal que recebeu a conversa — distingue quando o escritório tem múltiplos WhatsApp. */
   canalTelefone?: string;
+  /** Estado do canal da conversa — canal banido/desconectado bloqueia o composer inteiro. */
+  canalStatus?: string;
+  canalRestrito?: boolean;
   atendenteId?: number;
   atendenteNome?: string;
   status: StatusConversa;

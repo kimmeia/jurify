@@ -350,6 +350,26 @@ export const crmRouter = router({
             // Cloud API (CoEx) — enviar via API oficial
             try {
               const [canalRow] = await db.select().from(canaisIntegrados).where(eq(canaisIntegrados.id, convData.canalId)).limit(1);
+
+              // Canal MORTO (banido/desconectado/apagado): bloqueia TUDO —
+              // texto E template — antes de qualquer outra checagem. Conta
+              // banida ACEITA o POST (devolve wamid, bolha vira "enviada") e
+              // mata a entrega depois; e este gate, diferente do disjuntor,
+              // não é rearmável pelo "Já resolvi". Sem canal, antes ficava
+              // "pendente" eterno em silêncio.
+              if (!canalRow || canalRow.status !== "conectado") {
+                const motivoCanal = !canalRow
+                  ? "Canal desta conversa não existe mais."
+                  : canalRow.status === "banido"
+                    ? "Este número está banido/desabilitado na Meta."
+                    : `Canal desta conversa está "${canalRow.status}".`;
+                const erroCanal = `${motivoCanal} Nada enviado — atenda este cliente pelo número ativo (Nova Conversa).`;
+                log.warn(`[CRM] Envio bloqueado (canal indisponível): conversa ${input.conversaId}, canal ${convData.canalId}`);
+                const { mensagens } = await import("../../drizzle/schema");
+                await db.update(mensagens).set({ status: "falha", erroEntrega: erroCanal.slice(0, 500) }).where(eq(mensagens.id, id));
+                return { id };
+              }
+
               if (canalRow?.configEncrypted && canalRow?.configIv && canalRow?.configTag) {
                 const { decryptConfig } = await import("./crypto-utils");
                 const config = decryptConfig(canalRow.configEncrypted, canalRow.configIv, canalRow.configTag);
