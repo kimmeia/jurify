@@ -552,6 +552,7 @@ export async function listarConversas(escritorioId: number, filtros?: {
     .select({
       id: conversas.id, contatoId: conversas.contatoId,
       contatoNome: contatos.nome, contatoTelefone: contatos.telefone,
+      optOutWhatsapp: contatos.optOutWhatsapp, optOutWhatsappEm: contatos.optOutWhatsappEm,
       canalId: conversas.canalId, canalNome: canaisIntegrados.nome, canalTipo: canaisIntegrados.tipo, canalTelefone: canaisIntegrados.telefone,
       atendenteId: conversas.atendenteId,
       status: conversas.status, prioridade: conversas.prioridade,
@@ -633,6 +634,7 @@ export async function listarConversas(escritorioId: number, filtros?: {
     atendenteNome: r.atendenteId ? atendenteMap[r.atendenteId] : undefined,
     temAtraso: contatosComAtraso.has(r.contatoId),
     naoLidas: naoLidasPorConversa.get(r.id) ?? 0,
+    optOutWhatsappEm: toIsoString(r.optOutWhatsappEm) ?? undefined,
     ultimaMensagemAt: toIsoString(r.ultimaMensagemAt) ?? undefined,
     createdAt: toIsoString(r.createdAt) ?? "",
   }));

@@ -352,6 +352,8 @@ export const customer360Router = router({
             origem: contato.origem,
             tags,
             observacoes: contato.observacoes,
+            optOutWhatsapp: !!contato.optOutWhatsapp,
+            optOutWhatsappEm: toIsoString(contato.optOutWhatsappEm),
             createdAt: toIsoString(contato.createdAt) ?? "",
           },
           financeiro,

@@ -1877,6 +1877,23 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                         Não conectado
                       </Badge>
                     )}
+                    {/* Qualidade do número reportada pela Meta (health-check).
+                        GREEN some (sem ruído); YELLOW/RED avisa ANTES do ban. */}
+                    {!canal.isAdicionar && canal.conectado && canal.canal?.tipo === "whatsapp_api" &&
+                      (canal.canal as any)?.qualidadeMeta &&
+                      (canal.canal as any).qualidadeMeta !== "GREEN" && (
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] ${
+                          (canal.canal as any).qualidadeMeta === "RED"
+                            ? "text-red-600 bg-red-50 border-red-200"
+                            : "text-amber-600 bg-amber-50 border-amber-200"
+                        }`}
+                      >
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        Qualidade {(canal.canal as any).qualidadeMeta === "RED" ? "baixa" : "média"} na Meta
+                      </Badge>
+                    )}
                     {/* Número de envio (Cloud API): mostra qual número dispara e
                         deixa trocar quando há mais de um oficial conectado. */}
                     {!canal.isAdicionar && canal.conectado && canal.canal?.tipo === "whatsapp_api" && (

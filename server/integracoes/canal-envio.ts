@@ -30,7 +30,7 @@ export interface EnvioResultado {
    * erro da Meta). "rate"/"diario" = adiar/reagendar (excedente sai depois);
    * "restrito"/"optin" = não reenviar. Ausente quando a falha é outra.
    */
-  bloqueio?: "restrito" | "diario" | "rate" | "optin";
+  bloqueio?: "restrito" | "diario" | "rate" | "optin" | "optout";
 }
 
 export interface EnvioMensagemOpts {

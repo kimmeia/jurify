@@ -1,0 +1,150 @@
+<meta charset="utf-8">
+<title>Mockup — Opt-out + Registro de Opt-in (WhatsApp)</title>
+<style>
+  :root { --verde:#059669; --vermelho:#dc2626; --ambar:#d97706; --indigo:#4f46e5; --cinza:#6b7280; --borda:#e5e7eb; --fundo:#f8fafc; }
+  * { box-sizing:border-box; }
+  body { font-family:-apple-system,'Segoe UI',Roboto,sans-serif; margin:0; background:var(--fundo); color:#111827; line-height:1.55; }
+  .wrap { max-width:1080px; margin:0 auto; padding:32px 20px 80px; }
+  h1 { font-size:26px; margin:0 0 4px; }
+  .sub { color:var(--cinza); margin-bottom:28px; }
+  h2 { font-size:19px; margin:44px 0 6px; padding-top:20px; border-top:2px solid var(--borda); }
+  h2 .n { display:inline-block; background:var(--indigo); color:#fff; border-radius:8px; width:26px; height:26px; text-align:center; line-height:26px; font-size:14px; margin-right:8px; }
+  .nota { color:var(--cinza); font-size:14px; margin:0 0 16px; }
+  .grid { display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; }
+  .card { background:#fff; border:1px solid var(--borda); border-radius:14px; padding:18px; flex:1; min-width:300px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .card h3 { margin:0 0 10px; font-size:14px; text-transform:uppercase; letter-spacing:.4px; color:var(--cinza); }
+  /* chat mock */
+  .chat { background:#e5ddd5; border-radius:12px; padding:14px; }
+  .bolha { max-width:82%; padding:8px 12px; border-radius:10px; margin:6px 0; font-size:14px; position:relative; box-shadow:0 1px 1px rgba(0,0,0,.08); }
+  .dele { background:#fff; }
+  .nossa { background:#d9fdd3; margin-left:auto; }
+  .hora { font-size:10px; color:#8696a0; text-align:right; margin-top:2px; }
+  .sys { text-align:center; font-size:11px; color:#54656f; background:#fdf3c8; border-radius:8px; padding:4px 10px; margin:8px auto; width:fit-content; }
+  /* badges */
+  .badge { display:inline-block; font-size:11px; font-weight:600; border-radius:999px; padding:2px 10px; border:1px solid; }
+  .b-verde { color:var(--verde); background:#ecfdf5; border-color:#a7f3d0; }
+  .b-verm { color:var(--vermelho); background:#fef2f2; border-color:#fecaca; }
+  .b-ambar { color:var(--ambar); background:#fffbeb; border-color:#fde68a; }
+  .b-indigo { color:var(--indigo); background:#eef2ff; border-color:#c7d2fe; }
+  .b-cinza { color:var(--cinza); background:#f9fafb; border-color:var(--borda); }
+  /* toggle */
+  .linha-toggle { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid #f1f5f9; font-size:14px; }
+  .tgl { width:40px; height:22px; border-radius:999px; position:relative; flex-shrink:0; }
+  .tgl::after { content:''; width:18px; height:18px; border-radius:50%; background:#fff; position:absolute; top:2px; box-shadow:0 1px 2px rgba(0,0,0,.25); }
+  .tgl.on { background:var(--verde); } .tgl.on::after { right:2px; }
+  .tgl.off { background:#d1d5db; } .tgl.off::after { left:2px; }
+  table { border-collapse:collapse; width:100%; background:#fff; border-radius:12px; overflow:hidden; border:1px solid var(--borda); font-size:14px; }
+  th { background:#f1f5f9; text-align:left; padding:10px 14px; font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--cinza); }
+  td { padding:10px 14px; border-top:1px solid #f1f5f9; vertical-align:top; }
+  .ok { color:var(--verde); font-weight:700; } .no { color:var(--vermelho); font-weight:700; }
+  .kbd { background:#111827; color:#fff; border-radius:6px; padding:1px 8px; font-family:ui-monospace,monospace; font-size:12px; }
+  .aviso { background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:14px 16px; font-size:14px; }
+  .garantia { background:#ecfdf5; border:1px solid #a7f3d0; border-radius:12px; padding:14px 16px; font-size:14px; }
+  .exec { border-left:4px solid var(--vermelho); background:#fff; border-radius:0 10px 10px 0; padding:10px 14px; font-size:13px; border-top:1px solid var(--borda); border-right:1px solid var(--borda); border-bottom:1px solid var(--borda); }
+  .mini { font-size:12px; color:var(--cinza); }
+</style>
+
+<div class="wrap">
+  <h1>Opt-out + Registro de Opt-in — Mockup para aprovação</h1>
+  <p class="sub">Tudo que será construído e como funciona na prática. <b>O gate de envio atual NÃO muda</b> — nada que sai hoje deixa de sair, exceto para quem pedir pra sair.</p>
+
+  <div class="garantia">✅ <b>O que eu garanto (código, testado):</b> quem pedir SAIR não recebe mais nenhum disparo automático; quem não pedir, nada muda; atendimento humano nunca é bloqueado pelo opt-out quando o cliente escreve. <br>⚠️ <b>O que é consequência esperada (Meta, não garantia):</b> menos denúncias/bloqueios → qualidade do número protegida.</div>
+
+  <!-- ─────────────────────────── 1 ─────────────────────────── -->
+  <h2><span class="n">1</span>Cliente pede pra sair — no próprio WhatsApp</h2>
+  <p class="nota">Palavras aceitas (mensagem contendo <b>só</b> a palavra, qualquer capitalização): <span class="kbd">SAIR</span> <span class="kbd">PARAR</span> <span class="kbd">STOP</span>. Não pega "quero cancelar a consulta" — só a palavra isolada.</p>
+  <div class="grid">
+    <div class="card" style="max-width:420px">
+      <h3>Conversa no WhatsApp do cliente</h3>
+      <div class="chat">
+        <div class="bolha nossa">[Lembrete] Olá Francisca, sua parcela de R$ 100,00 vence amanhã. Responda SAIR para não receber avisos.<div class="hora">09:00 ✓✓</div></div>
+        <div class="bolha dele">sair<div class="hora">09:12</div></div>
+        <div class="bolha nossa">Você não receberá mais avisos automáticos do Escritório Boyadjian Advogados. Para voltar a receber, responda VOLTAR. Se precisar falar com a gente, é só escrever. 👋<div class="hora">09:12 ✓✓</div></div>
+      </div>
+      <p class="mini" style="margin-top:10px">↑ Confirmação enviada <b>uma única vez</b>. Depois disso, silêncio automático total.</p>
+    </div>
+    <div class="card">
+      <h3>O que acontece por dentro (na hora)</h3>
+      <div class="linha-toggle"><span>Contato marcado: <b>opt-out</b> (data + origem "pediu SAIR na conversa")</span><span class="badge b-verm">registrado</span></div>
+      <div class="linha-toggle"><span>Lembretes de cobrança automáticos (SmartFlow/scheduler)</span><span class="badge b-verm">param</span></div>
+      <div class="linha-toggle"><span>Campanhas / templates proativos</span><span class="badge b-verm">param</span></div>
+      <div class="linha-toggle"><span>Se ELE escrever de novo (dúvida, negociação)</span><span class="badge b-verde">atendimento normal</span></div>
+      <div class="linha-toggle" style="border:none"><span>Responder <span class="kbd">VOLTAR</span></span><span class="badge b-verde">reativa avisos</span></div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── 2 ─────────────────────────── -->
+  <h2><span class="n">2</span>Cliente pediu por telefone/pessoalmente — toggle manual</h2>
+  <p class="nota">A política da Meta exige honrar pedido feito <i>"por qualquer canal"</i>. O atendente marca no cadastro:</p>
+  <div class="grid">
+    <div class="card" style="max-width:460px">
+      <h3>Cadastro do contato (Clientes → Francisca)</h3>
+      <div class="linha-toggle">
+        <span><b>Avisos automáticos no WhatsApp</b><br><span class="mini">Cobranças, lembretes e campanhas</span></span>
+        <span class="tgl off"></span>
+      </div>
+      <div class="linha-toggle" style="border:none">
+        <span class="mini">Desativado em 14/07/2026 por Andreza · motivo: "pediu por telefone"</span>
+      </div>
+    </div>
+    <div class="card" style="max-width:460px">
+      <h3>Cabeçalho da conversa no Atendimento</h3>
+      <p style="font-size:15px; margin:6px 0"><b>Francisca Leidiane</b> <span class="badge b-cinza">Em atendimento</span> <span class="badge b-verm">🔕 Avisos desativados (SAIR em 14/07)</span></p>
+      <p class="mini">O atendente vê na hora que não deve prometer "vou te mandar o lembrete automático".</p>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── 3 ─────────────────────────── -->
+  <h2><span class="n">3</span>Quando um disparo é bloqueado — fica VISÍVEL, nunca silencioso</h2>
+  <div class="card">
+    <h3>Execução do SmartFlow (cenário "Cobrança 1d antes")</h3>
+    <div class="exec">⛔ <b>Não enviado para Francisca Leidiane</b> — contato optou por não receber avisos (SAIR em 14/07/2026). O fluxo continua para os demais contatos normalmente.</div>
+    <p class="mini" style="margin-bottom:0">Mesmo padrão já usado pelo disjuntor anti-ban: motivo persistido na execução, sem "sucesso mentiroso".</p>
+  </div>
+
+  <!-- ─────────────────────────── 4 ─────────────────────────── -->
+  <h2><span class="n">4</span>Registro de opt-in — passivo, sem mudar o gate</h2>
+  <p class="nota">O campo vai sendo preenchido sozinho, como <b>rastro documental</b> (LGPD/política). <b>Não bloqueia nada</b> — o critério de envio continua o de hoje.</p>
+  <div class="grid">
+    <div class="card">
+      <h3>Como o registro nasce</h3>
+      <table>
+        <tr><th>Evento</th><th>Registro criado</th></tr>
+        <tr><td>Contato manda mensagem</td><td><span class="badge b-indigo">origem: iniciou conversa</span> + data</td></tr>
+        <tr><td>Responde "SIM" a pergunta de consentimento do bot</td><td><span class="badge b-indigo">origem: confirmou na conversa</span></td></tr>
+        <tr><td>Atendente marca manualmente</td><td><span class="badge b-indigo">origem: contrato/atestado</span> + quem marcou</td></tr>
+      </table>
+    </div>
+    <div class="card" style="max-width:380px">
+      <h3>Configurações → Canais (contador)</h3>
+      <p style="font-size:28px; margin:4px 0"><b>78%</b> <span class="mini">dos contatos ativos com opt-in registrado</span></p>
+      <p class="mini">Só informativo. Se um dia você quiser apertar o gate, decide com esse número na mão — não hoje.</p>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── 5 ─────────────────────────── -->
+  <h2><span class="n">5</span>Tabela da verdade — o que muda e o que não muda</h2>
+  <table>
+    <tr><th>Situação</th><th>Hoje</th><th>Depois</th></tr>
+    <tr><td>Cobrança automática pra contato normal</td><td class="ok">envia</td><td class="ok">envia (igual)</td></tr>
+    <tr><td>Cobrança automática pra quem respondeu SAIR</td><td class="ok">envia 😬</td><td class="no">bloqueia + motivo visível</td></tr>
+    <tr><td>Cliente em opt-out escreve com dúvida → atendente responde</td><td class="ok">funciona</td><td class="ok">funciona (opt-out não afeta)</td></tr>
+    <tr><td>Bot responde quando o contato inicia conversa</td><td class="ok">funciona</td><td class="ok">funciona</td></tr>
+    <tr><td>Cliente responde VOLTAR</td><td>—</td><td class="ok">avisos reativados</td></tr>
+    <tr><td>Envio manual do operador na conversa</td><td class="ok">funciona</td><td class="ok">funciona (operador é soberano)</td></tr>
+    <tr><td>Gate de envio (inbound OU cliente Asaas)</td><td colspan="2" style="text-align:center"><b>INALTERADO</b></td></tr>
+  </table>
+
+  <!-- ─────────────────────────── 6 ─────────────────────────── -->
+  <h2><span class="n">6</span>O que será construído (escopo técnico)</h2>
+  <table>
+    <tr><th>Peça</th><th>Onde</th></tr>
+    <tr><td>Colunas <span class="kbd">optOutWhatsapp</span> / <span class="kbd">optInWhatsapp</span> (+data, origem, quem)</td><td>tabela <b>contatos</b> — migration com default, non-destrutiva</td></tr>
+    <tr><td>Detecção SAIR/PARAR/STOP/VOLTAR no inbound + confirmação única</td><td>whatsapp-handler (antes do SmartFlow)</td></tr>
+    <tr><td>Checagem de opt-out no guard (só envios proativos)</td><td>whatsapp-envio-guard (mesmo padrão do disjuntor)</td></tr>
+    <tr><td>Toggle + badge no cadastro e no Atendimento</td><td>Clientes / Atendimento</td></tr>
+    <tr><td>Contador de cobertura de opt-in</td><td>Configurações → Canais</td></tr>
+    <tr><td>Testes de tudo (palavras-chave, guard, reativação)</td><td>vitest — suíte atual: 2798 verdes</td></tr>
+  </table>
+  <p class="aviso" style="margin-top:16px">📌 <b>Fora do escopo (fica com o escritório):</b> incluir a cláusula de consentimento WhatsApp no contrato padrão (opção A) e o texto "Responda SAIR para não receber avisos" nos templates de cobrança — recomendado, custo zero.</p>
+</div>

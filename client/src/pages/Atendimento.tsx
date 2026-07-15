@@ -1210,6 +1210,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   // prependemos antigas — senão o "carregar mais" pulava pra fim e o usuário
   // perdia o que queria ler.
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [msgs]);
+  // Janela de 24h da Meta: fora dela texto livre é rejeitado (131047) — o
+  // servidor já bloqueia com erro visível na bolha; aqui é só orientação
+  // preventiva. Recalcula a cada render (o polling de 3s mantém atual).
+  const janela24hFechada = (() => {
+    if (!ehCanalCloud || !msgs) return false;
+    const todas = [...older, ...msgs];
+    const ultimaEntrada = [...todas].reverse().find((m: any) => m.direcao === "entrada");
+    if (!ultimaEntrada) return true;
+    return Date.now() - new Date(ultimaEntrada.createdAt).getTime() >= 24 * 60 * 60 * 1000;
+  })();
   const send = () => {
     const texto = msg.trim();
     if (!texto && !pendingMedia) return;
@@ -1329,6 +1339,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           <p className="text-[11px] text-muted-foreground truncate leading-tight">
             {STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status || ""}
             {(conv?.contatoTelefone || conv?.chatIdExterno) ? ` · ${conv?.contatoTelefone || conv?.chatIdExterno?.replace(/@.*/, "")}` : ""}
+            {(conv as any)?.optOutWhatsapp ? " · 🔕 Avisos desativados" : ""}
           </p>
         </div>
         {(() => {
@@ -1397,6 +1408,17 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <p className="text-sm font-semibold truncate">{conv?.contatoNome || "Contato"}</p>
             )}
             <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
+            {(conv as any)?.optOutWhatsapp && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+                title={
+                  "Contato pediu pra não receber cobranças e avisos automáticos no WhatsApp" +
+                  ((conv as any)?.optOutWhatsappEm ? ` (desde ${new Date((conv as any).optOutWhatsappEm).toLocaleDateString("pt-BR")})` : "")
+                }
+              >
+                🔕 Avisos desativados
+              </span>
+            )}
             {/* Pill do bot: indicador + toggle rápido. O controle completo vive no
                 Customer 360, mas este atalho garante visibilidade com o painel colapsado. */}
             {bot.managed && conv && (
@@ -1634,6 +1656,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           >
             <X className="h-3.5 w-3.5" />
           </button>
+        </div>
+      )}
+
+      {janela24hFechada && (
+        <div className="mx-3 mt-2 mb-1 flex items-start gap-1.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-md px-2.5 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+          <span className="shrink-0">⏱</span>
+          <span>
+            Janela de 24h fechada — o WhatsApp só aceita template até o cliente responder.
+            Use o botão <Zap className="inline h-3 w-3 -mt-0.5" aria-hidden /> Respostas rápidas → "Templates Meta aprovados".
+          </span>
         </div>
       )}
 

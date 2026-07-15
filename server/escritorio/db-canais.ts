@@ -49,6 +49,10 @@ export async function listarCanais(escritorioId: number) {
       temConfig: !!(r.configEncrypted && r.configIv && r.configTag),
       registradoCloudApi: !!r.registradoCloudApi,
       padraoEnvio: !!r.padraoEnvio,
+      // Saúde reportada pela Meta (health-check/webhook) — badge na UI.
+      qualidadeMeta: r.qualidadeMeta || undefined,
+      tierMensagens: r.tierMensagens || undefined,
+      restritoMeta: !!r.restritoMeta,
       createdAt: toIsoString(r.createdAt) ?? "",
     }));
 }
