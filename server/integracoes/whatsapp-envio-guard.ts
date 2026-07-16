@@ -76,8 +76,11 @@ export function detectarRestricaoMeta(
 
 /**
  * Traduz o messaging_limit_tier da Meta no teto de conversas iniciadas pela
- * empresa por 24h. Sem tier conhecido, assume TIER_1K (conservador — o suficiente
- * pra não perder cobrança legítima; o excedente é reagendado, não descartado).
+ * empresa por 24h. Sem tier conhecido, assume TIER_250 — é o teto real da
+ * Meta pra número novo/não verificado. Assumir 1K aqui deixava um número
+ * recém-conectado disparar 4× o limite real na 1ª hora (até o health-check
+ * sincronizar o tier), queimando a reputação logo no início. O excedente é
+ * reagendado, não descartado; quando o tier real chegar, o teto sobe sozinho.
  */
 export function limiteDiarioPorTier(tier: string | null | undefined): number {
   switch ((tier || "").toUpperCase()) {
@@ -87,7 +90,7 @@ export function limiteDiarioPorTier(tier: string | null | undefined): number {
     case "TIER_10K": return 10_000;
     case "TIER_100K": return 100_000;
     case "TIER_UNLIMITED": return Number.POSITIVE_INFINITY;
-    default: return 1_000;
+    default: return 250;
   }
 }
 

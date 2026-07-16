@@ -326,6 +326,14 @@ export const whatsappCloudRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const c = await carregarCanalCloud(ctx.user.id, input.canalId);
+      // Guard anti-ban: este endpoint furava TODAS as travas (disjuntor, teto
+      // diário, rate) — com conta restrita continuava martelando a Meta.
+      const db = await getDb();
+      const guard = db ? await import("../integracoes/whatsapp-envio-guard") : null;
+      if (db && guard) {
+        const permitido = await guard.podeEnviar({ db, canalId: input.canalId, proativo: true });
+        if (!permitido.ok) throw new Error(permitido.erro);
+      }
       const { WhatsAppCloudClient } = await import("../integracoes/whatsapp-cloud");
       const client = new WhatsAppCloudClient({
         accessToken: c.accessToken,
@@ -336,8 +344,13 @@ export const whatsappCloudRouter = router({
           cabecalho: input.cabecalho,
           rodape: input.rodape,
         });
+        if (db && guard) await guard.registrarSucessoEnvio({ db, canalId: input.canalId, proativo: true });
         return { success: true, idExterno: msgId };
-      } catch (err) {
+      } catch (err: any) {
+        if (db && guard) {
+          const apiMsg = err?.response?.data?.error?.message || err?.message || "";
+          await guard.registrarFalhaEnvio({ db, canalId: input.canalId, erro: apiMsg }).catch(() => {});
+        }
         throw new Error(explicarErroFacebook(err, "Falha ao enviar botões no WhatsApp"));
       }
     }),
@@ -374,6 +387,12 @@ export const whatsappCloudRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const c = await carregarCanalCloud(ctx.user.id, input.canalId);
+      const db = await getDb();
+      const guard = db ? await import("../integracoes/whatsapp-envio-guard") : null;
+      if (db && guard) {
+        const permitido = await guard.podeEnviar({ db, canalId: input.canalId, proativo: true });
+        if (!permitido.ok) throw new Error(permitido.erro);
+      }
       const { WhatsAppCloudClient } = await import("../integracoes/whatsapp-cloud");
       const client = new WhatsAppCloudClient({
         accessToken: c.accessToken,
@@ -387,8 +406,13 @@ export const whatsappCloudRouter = router({
           input.secoes,
           { cabecalho: input.cabecalho, rodape: input.rodape },
         );
+        if (db && guard) await guard.registrarSucessoEnvio({ db, canalId: input.canalId, proativo: true });
         return { success: true, idExterno: msgId };
-      } catch (err) {
+      } catch (err: any) {
+        if (db && guard) {
+          const apiMsg = err?.response?.data?.error?.message || err?.message || "";
+          await guard.registrarFalhaEnvio({ db, canalId: input.canalId, erro: apiMsg }).catch(() => {});
+        }
         throw new Error(explicarErroFacebook(err, "Falha ao enviar lista no WhatsApp"));
       }
     }),
@@ -405,6 +429,14 @@ export const whatsappCloudRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const c = await carregarCanalCloud(ctx.user.id, input.canalId);
+      // Reação referencia mensagem existente (não-proativa): respeita o
+      // disjuntor/rate, mas não conta contra o teto diário.
+      const db = await getDb();
+      const guard = db ? await import("../integracoes/whatsapp-envio-guard") : null;
+      if (db && guard) {
+        const permitido = await guard.podeEnviar({ db, canalId: input.canalId, proativo: false });
+        if (!permitido.ok) throw new Error(permitido.erro);
+      }
       const { WhatsAppCloudClient } = await import("../integracoes/whatsapp-cloud");
       const client = new WhatsAppCloudClient({
         accessToken: c.accessToken,
@@ -412,8 +444,13 @@ export const whatsappCloudRouter = router({
       });
       try {
         const msgId = await client.enviarReacao(input.telefone, input.messageId, input.emoji);
+        if (db && guard) await guard.registrarSucessoEnvio({ db, canalId: input.canalId, proativo: false });
         return { success: true, idExterno: msgId };
-      } catch (err) {
+      } catch (err: any) {
+        if (db && guard) {
+          const apiMsg = err?.response?.data?.error?.message || err?.message || "";
+          await guard.registrarFalhaEnvio({ db, canalId: input.canalId, erro: apiMsg }).catch(() => {});
+        }
         throw new Error(explicarErroFacebook(err, "Falha ao reagir no WhatsApp"));
       }
     }),
