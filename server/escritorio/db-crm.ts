@@ -554,6 +554,13 @@ export async function listarConversas(escritorioId: number, filtros?: {
       contatoNome: contatos.nome, contatoTelefone: contatos.telefone,
       optOutWhatsapp: contatos.optOutWhatsapp, optOutWhatsappEm: contatos.optOutWhatsappEm,
       canalId: conversas.canalId, canalNome: canaisIntegrados.nome, canalTipo: canaisIntegrados.tipo, canalTelefone: canaisIntegrados.telefone,
+      // Estado do canal na conversa: a UI trava o composer e sinaliza em
+      // vermelho quando o canal está restrito pela Meta ou fora do ar —
+      // sem isso o atendente responde no vazio (mensagem morre no guard).
+      canalStatus: canaisIntegrados.status,
+      canalRestrito: canaisIntegrados.restritoMeta,
+      canalRestritoMotivo: canaisIntegrados.restritoMotivo,
+      canalRestritoEm: canaisIntegrados.restritoEm,
       atendenteId: conversas.atendenteId,
       status: conversas.status, prioridade: conversas.prioridade,
       assunto: conversas.assunto,
