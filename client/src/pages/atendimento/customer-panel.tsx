@@ -36,6 +36,7 @@ import {
   User, Star, DollarSign, Gavel, TrendingUp, CheckSquare, Calendar,
   StickyNote, PenLine, Plus, Phone, Mail, Loader2, ChevronDown, ChevronRight,
   AlertTriangle, ExternalLink, Copy, Sparkles, RefreshCw, Pencil, X, Check, Bot,
+  Bell, BellOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { parseValorBR } from "@shared/valor-br";
@@ -104,6 +105,18 @@ export function CustomerPanel({
   const [notaAberta, setNotaAberta] = useState<
     { id: number; titulo?: string | null; conteudo: string; createdAt: string | null } | null
   >(null);
+  const [confirmarOptOut, setConfirmarOptOut] = useState(false);
+  const utils = trpc.useUtils();
+  const optOutMut = trpc.crm.definirOptOutWhatsapp.useMutation({
+    onSuccess: (_data, vars) => {
+      toast.success(vars.optOut
+        ? "Avisos automáticos desativados para este contato."
+        : "Avisos automáticos reativados.");
+      utils.customer360.getContext.invalidate({ contatoId });
+      utils.crm.listarConversas.invalidate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   if (isLoading) {
     return (
@@ -489,6 +502,79 @@ export function CustomerPanel({
           </div>
         </div>
       )}
+
+      {/* ─── Avisos automáticos no WhatsApp: opt-out do contato. Ligado = recebe
+          cobranças/lembretes/campanhas; desligado = nenhum disparo proativo sai
+          (atendimento humano nunca é bloqueado). ─── */}
+      <div className="px-4 pt-1">
+        <div className="border-t pt-3 flex items-center gap-2.5">
+          <div
+            className={
+              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 " +
+              (contato.optOutWhatsapp
+                ? "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300"
+                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300")
+            }
+          >
+            {contato.optOutWhatsapp ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold leading-tight">Avisos automáticos no WhatsApp</p>
+            <p className="text-[10px] text-muted-foreground leading-tight">
+              {contato.optOutWhatsapp
+                ? `Não recebe cobranças e avisos${contato.optOutWhatsappEm ? ` · desde ${formatDate(contato.optOutWhatsappEm)}` : ""}`
+                : "Recebe cobranças, lembretes e campanhas"}
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              if (contato.optOutWhatsapp) optOutMut.mutate({ contatoId, optOut: false });
+              else setConfirmarOptOut(true);
+            }}
+            disabled={optOutMut.isPending}
+            title={contato.optOutWhatsapp ? "Reativar avisos automáticos" : "Desativar avisos automáticos"}
+            className={
+              "relative w-11 h-6 rounded-full transition shrink-0 disabled:opacity-50 " +
+              (contato.optOutWhatsapp ? "bg-slate-300 dark:bg-slate-700" : "bg-emerald-500")
+            }
+          >
+            <span
+              className={
+                "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all " +
+                (contato.optOutWhatsapp ? "left-0.5" : "left-[22px]")
+              }
+            />
+          </button>
+        </div>
+      </div>
+
+      <AlertDialog open={confirmarOptOut} onOpenChange={setConfirmarOptOut}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar avisos automáticos?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O contato deixará de receber cobranças e avisos automáticos.
+              Ele pode reativar respondendo VOLTAR.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={optOutMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                optOutMut.mutate(
+                  { contatoId, optOut: true, motivo: "toggle no Atendimento" },
+                  { onSuccess: () => setConfirmarOptOut(false) },
+                );
+              }}
+              disabled={optOutMut.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {optOutMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Desativar avisos"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Diálogo pra ler a anotação inteira (a nota na coluna é cortada em 3 linhas). */}
       <Dialog open={!!notaAberta} onOpenChange={(o) => { if (!o) setNotaAberta(null); }}>

@@ -889,6 +889,12 @@ export default function Atendimento() {
                   convs.map((c: any) => {
                     const naoLidas = Number(c.naoLidas || 0);
                     const selecionada = selId === c.id;
+                    // Canal da conversa fora do ar (restrição Meta/banido/erro/
+                    // desconectado) — sinaliza em vermelho pra ver o estrago de
+                    // longe, sem abrir conversa por conversa.
+                    const canalCaiu =
+                      (c as any).canalRestrito === true ||
+                      ["erro", "banido", "desconectado"].includes(String((c as any).canalStatus || ""));
                     return (
                       <button
                         key={c.id}
@@ -901,7 +907,9 @@ export default function Atendimento() {
                               // a conversa — preto translúcido (pedido do dono;
                               // o violeta confundia com a selecionada)
                               ? "bg-black/[0.07] hover:bg-black/[0.10] dark:bg-white/10 dark:hover:bg-white/[0.14]"
-                              : "hover:bg-muted/40")
+                              : canalCaiu
+                                ? "bg-rose-50/70 hover:bg-rose-100/60 dark:bg-rose-950/20 dark:hover:bg-rose-950/30"
+                                : "hover:bg-muted/40")
                         }
                         onClick={() => setSelId(c.id)}
                       >
@@ -923,11 +931,24 @@ export default function Atendimento() {
                             {/* Channel icon overlay (canto inferior direito) */}
                             {(c as any).canalTipo && (
                               <div
-                                className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-background border-2 border-background flex items-center justify-center text-[8px]"
-                                title={`${(c as any).canalNome || (c as any).canalTipo}${(c as any).canalTelefone ? ` · ${(c as any).canalTelefone}` : ""}`}
+                                className={
+                                  "absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] border-2 " +
+                                  (canalCaiu ? "bg-red-100 border-red-500 dark:bg-red-950" : "bg-background border-background")
+                                }
+                                title={
+                                  canalCaiu
+                                    ? `⛔ Canal inoperante${(c as any).canalTelefone ? ` · ${(c as any).canalTelefone}` : ""} — nenhuma mensagem sai por ele`
+                                    : `${(c as any).canalNome || (c as any).canalTipo}${(c as any).canalTelefone ? ` · ${(c as any).canalTelefone}` : ""}`
+                                }
                               >
                                 <CanalLogo tipo={(c as any).canalTipo} className="w-3 h-3" />
                               </div>
+                            )}
+                            {canalCaiu && (
+                              <span
+                                className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-background animate-pulse"
+                                aria-hidden
+                              />
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -1150,6 +1171,25 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   // Cloud API. Pra outros canais não há suporte a templates oficiais
   // e a chamada falharia com erro "Canal sem WABA ID".
   const ehCanalCloud = conv?.canalTipo === "whatsapp_api";
+  // Canal fora do ar (restrição Meta / banido / erro / desconectado): nada
+  // sai por ele — nem template. A UI trava tudo e sinaliza em vermelho;
+  // o guard do servidor é a 2ª camada, mas cada tentativa rejeitada pela
+  // Meta conta contra a reputação do número (por isso trava na origem).
+  const canalInoperante =
+    !!conv &&
+    ((conv as any).canalRestrito === true ||
+      ["erro", "banido", "desconectado"].includes(String((conv as any).canalStatus || "")));
+  const canalInoperanteDetalhe = (() => {
+    if (!canalInoperante) return "";
+    const motivo =
+      (conv as any)?.canalRestritoMotivo ||
+      ((conv as any)?.canalStatus === "banido" ? "número banido pela Meta" :
+       (conv as any)?.canalStatus === "desconectado" ? "canal desconectado" : "erro na conexão do canal");
+    const em = (conv as any)?.canalRestritoEm
+      ? ` em ${new Date((conv as any).canalRestritoEm).toLocaleDateString("pt-BR")}`
+      : "";
+    return `${motivo}${em}`;
+  })();
   const { data: metaTplsRaw } = (trpc as any).whatsappCloud.listarTemplates.useQuery(
     { canalId: conv?.canalId },
     { enabled: !!ehCanalCloud && !!conv?.canalId, retry: false, staleTime: 5 * 60 * 1000 },
@@ -1210,7 +1250,22 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   // prependemos antigas — senão o "carregar mais" pulava pra fim e o usuário
   // perdia o que queria ler.
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [msgs]);
+  // Janela de 24h da Meta: fora dela texto livre é rejeitado (131047) — o
+  // servidor já bloqueia com erro visível na bolha; aqui é só orientação
+  // preventiva. Recalcula a cada render (o polling de 3s mantém atual).
+  const janela24hFechada = (() => {
+    if (!ehCanalCloud || !msgs) return false;
+    const todas = [...older, ...msgs];
+    const ultimaEntrada = [...todas].reverse().find((m: any) => m.direcao === "entrada");
+    if (!ultimaEntrada) return true;
+    return Date.now() - new Date(ultimaEntrada.createdAt).getTime() >= 24 * 60 * 60 * 1000;
+  })();
+  // Trava dura do composer (aprovada via mockup): fora da janela só template
+  // sai; canal inoperante não envia nada. O rascunho digitado é preservado —
+  // quando o cliente responder (polling 3s) a janela reabre e destrava só.
+  const composerBloqueado = canalInoperante || (ehCanalCloud && janela24hFechada);
   const send = () => {
+    if (composerBloqueado) return;
     const texto = msg.trim();
     if (!texto && !pendingMedia) return;
     enviar.mutate({
@@ -1329,6 +1384,8 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           <p className="text-[11px] text-muted-foreground truncate leading-tight">
             {STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status || ""}
             {(conv?.contatoTelefone || conv?.chatIdExterno) ? ` · ${conv?.contatoTelefone || conv?.chatIdExterno?.replace(/@.*/, "")}` : ""}
+            {(conv as any)?.optOutWhatsapp ? " · 🔕 Avisos desativados" : ""}
+            {canalInoperante && <span className="text-red-600 dark:text-red-400 font-semibold"> · ⛔ Canal inoperante</span>}
           </p>
         </div>
         {(() => {
@@ -1397,6 +1454,26 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <p className="text-sm font-semibold truncate">{conv?.contatoNome || "Contato"}</p>
             )}
             <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
+            {canalInoperante && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+                title={`Canal fora do ar: ${canalInoperanteDetalhe}. Nenhuma mensagem sai por ele.`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                Canal inoperante
+              </span>
+            )}
+            {(conv as any)?.optOutWhatsapp && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+                title={
+                  "Contato pediu pra não receber cobranças e avisos automáticos no WhatsApp" +
+                  ((conv as any)?.optOutWhatsappEm ? ` (desde ${new Date((conv as any).optOutWhatsappEm).toLocaleDateString("pt-BR")})` : "")
+                }
+              >
+                🔕 Avisos desativados
+              </span>
+            )}
             {/* Pill do bot: indicador + toggle rápido. O controle completo vive no
                 Customer 360, mas este atalho garante visibilidade com o painel colapsado. */}
             {bot.managed && conv && (
@@ -1431,11 +1508,18 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             {(conv as any)?.canalNome && (
               <span
                 className="inline-flex items-center gap-1"
-                title={`Conversa recebida via ${(conv as any).canalNome || "canal"}${(conv as any).canalTelefone ? ` · ${(conv as any).canalTelefone}` : ""}`}
+                title={
+                  canalInoperante
+                    ? `Canal fora do ar: ${canalInoperanteDetalhe}`
+                    : `Conversa recebida via ${(conv as any).canalNome || "canal"}${(conv as any).canalTelefone ? ` · ${(conv as any).canalTelefone}` : ""}`
+                }
               >
                 <span className="text-muted-foreground/40">·</span>
                 <CanalLogo tipo={(conv as any).canalTipo} className="w-3.5 h-3.5" />
-                {(conv as any).canalTelefone || (conv as any).canalNome}
+                <span className={canalInoperante ? "text-red-600 dark:text-red-400 font-semibold line-through decoration-red-400" : undefined}>
+                  {(conv as any).canalTelefone || (conv as any).canalNome}
+                </span>
+                {canalInoperante && <span aria-hidden>⛔</span>}
               </span>
             )}
             {(conv?.contatoTelefone || conv?.chatIdExterno) && (
@@ -1573,9 +1657,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           variant="outline"
           size="sm"
           className="h-7 text-[11px] border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-700 px-2.5"
-          disabled={composerSugestao.isPending}
+          disabled={composerSugestao.isPending || composerBloqueado}
           onClick={() => composerSugestao.mutate({ conversaId: cid, tom })}
-          title="Gerar resposta com IA no tom selecionado"
+          title={composerBloqueado ? "Envio de texto livre bloqueado nesta conversa" : "Gerar resposta com IA no tom selecionado"}
         >
           {composerSugestao.isPending
             ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
@@ -1637,6 +1721,49 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         </div>
       )}
 
+      {canalInoperante ? (
+        <div className="mx-3 mt-2 mb-1 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-md px-2.5 py-2 text-[11px] leading-snug text-red-800 dark:text-red-200">
+          <div className="flex items-start gap-1.5">
+            <span className="shrink-0">⛔</span>
+            <span>
+              <b>Este canal está inoperante</b>
+              {(conv as any)?.canalTelefone ? <> — o número <b>{(conv as any).canalTelefone}</b></> : null}
+              {" "}({canalInoperanteDetalhe}). Nenhuma mensagem — nem template — pode ser enviada por ele.
+              As mensagens recebidas continuam salvas.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-1.5 pl-5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-[11px] px-2 border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 dark:border-red-800 dark:text-red-300"
+              onClick={() => setLocation("/configuracoes?tab=canais")}
+            >
+              Ver status do canal
+            </Button>
+          </div>
+        </div>
+      ) : janela24hFechada ? (
+        <div className="mx-3 mt-2 mb-1 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-md px-2.5 py-2 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+          <div className="flex items-start gap-1.5">
+            <span className="shrink-0">🔒</span>
+            <span>
+              <b>Janela de 24h fechada.</b> O WhatsApp não aceita mensagem livre — envie um{" "}
+              <b>template aprovado</b> para reabrir a conversa. Quando o cliente responder, o campo destrava sozinho.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-1.5 pl-5">
+            <Button
+              size="sm"
+              className="h-6 text-[11px] px-2.5 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+              onClick={() => setShowTemplates(true)}
+            >
+              <Zap className="h-3 w-3 mr-1" /> Enviar template aprovado
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {/* Linha 2: Composer */}
       <div className="p-3 pt-2 flex gap-2">
         {mobile ? (
@@ -1655,7 +1782,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             <PopoverContent align="start" side="top" className="w-60 p-1.5">
               <button
                 type="button"
-                disabled={composerSugestao.isPending}
+                disabled={composerSugestao.isPending || composerBloqueado}
                 onClick={() => { setMaisMenuAberto(false); composerSugestao.mutate({ conversaId: cid, tom }); }}
                 className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left disabled:opacity-60"
               >
@@ -1666,8 +1793,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               </button>
               <button
                 type="button"
+                disabled={canalInoperante}
                 onClick={() => { setMaisMenuAberto(false); setShowTemplates(true); }}
-                className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left"
+                className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left disabled:opacity-60"
               >
                 <span className="h-9 w-9 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 flex items-center justify-center shrink-0">
                   <Zap className="h-4 w-4" />
@@ -1677,7 +1805,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <AnexoButton
                 onAnexar={(m) => { setPendingMedia(m); setMaisMenuAberto(false); }}
                 trigger={
-                  <button type="button" className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left">
+                  <button type="button" disabled={composerBloqueado} className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left disabled:opacity-60">
                     <span className="h-9 w-9 rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300 flex items-center justify-center shrink-0">
                       <Paperclip className="h-4 w-4" />
                     </span>
@@ -1688,7 +1816,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             </PopoverContent>
           </Popover>
         ) : (
-          <AnexoButton onAnexar={(m) => setPendingMedia(m)} />
+          <AnexoButton onAnexar={(m) => setPendingMedia(m)} disabled={composerBloqueado} />
         )}
         <Popover open={showTemplates} onOpenChange={setShowTemplates}>
           {mobile ? (
@@ -1697,7 +1825,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             </PopoverAnchor>
           ) : (
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" title="Respostas rápidas">
+              <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" title="Respostas rápidas" disabled={canalInoperante}>
                 <Zap className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
@@ -1797,8 +1925,15 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           onChange={setMsg}
           templates={(tplList || []) as any}
           onEnter={send}
-          placeholder="Digite sua mensagem… ou clique em ✨ Compor com IA"
-          className="bg-background"
+          disabled={composerBloqueado}
+          placeholder={
+            canalInoperante
+              ? "⛔ Canal inoperante — envio desativado"
+              : composerBloqueado
+                ? "🔒 Bloqueado — janela de 24h fechada. Envie um template para reabrir."
+                : "Digite sua mensagem… ou clique em ✨ Compor com IA"
+          }
+          className="bg-background disabled:cursor-not-allowed"
           interpolar={(c) => {
             const conv = convs.find((x: any) => x.id === cid);
             return interpolarTemplate(c, {
@@ -1816,12 +1951,14 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           }}
         />
         <AudioRecordButton
+          disabled={composerBloqueado}
           onSend={(args) => enviar.mutate({ conversaId: cid, conteudo: args.conteudo, tipo: args.tipo, mediaUrl: args.mediaUrl })}
         />
         <Button
           size="sm"
           onClick={send}
-          disabled={!msg.trim() || enviar.isPending}
+          disabled={!msg.trim() || enviar.isPending || composerBloqueado}
+          title={composerBloqueado ? (canalInoperante ? "Canal inoperante — envio desativado" : "Janela de 24h fechada — use um template") : undefined}
           className="px-4 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
         >
           {enviar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -1955,7 +2092,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
  */
 type EnvioComposer = { tipo: "texto" | "audio"; conteudo: string; mediaUrl?: string };
 
-function AudioRecordButton({ onSend }: { onSend: (args: EnvioComposer) => void }) {
+function AudioRecordButton({ onSend, disabled }: { onSend: (args: EnvioComposer) => void; disabled?: boolean }) {
   const [estado, setEstado] = useState<"idle" | "gravando" | "enviando">("idle");
   const [duracao, setDuracao] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -2111,8 +2248,9 @@ function AudioRecordButton({ onSend }: { onSend: (args: EnvioComposer) => void }
       size="sm"
       variant="ghost"
       onClick={iniciarGravacao}
+      disabled={disabled}
       className="h-9 w-9 p-0"
-      title="Gravar nota de voz"
+      title={disabled ? "Envio bloqueado nesta conversa" : "Gravar nota de voz"}
     >
       <Mic className="h-4 w-4" />
     </Button>
@@ -2159,9 +2297,11 @@ const ANEXO_SPECS = {
 function AnexoButton({
   onAnexar,
   trigger,
+  disabled,
 }: {
   onAnexar: (m: { url: string; tipo: "imagem" | "video" | "documento"; nome: string; tamanho: number }) => void;
   trigger?: React.ReactNode;
+  disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const tipoSelRef = useRef<keyof typeof ANEXO_SPECS>("imagem");
@@ -2227,8 +2367,8 @@ function AnexoButton({
             variant="ghost"
             size="sm"
             className="h-9 w-9 p-0 shrink-0"
-            title="Anexar foto, vídeo ou documento"
-            disabled={subindo}
+            title={disabled ? "Envio bloqueado nesta conversa" : "Anexar foto, vídeo ou documento"}
+            disabled={subindo || disabled}
           >
             {subindo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
           </Button>

@@ -81,6 +81,9 @@ export interface ConversaInfo {
   ultimaMensagemAt?: string;
   ultimaMensagemPreview?: string;
   naoLidas: number;
+  /** Contato pediu pra não receber avisos automáticos no WhatsApp (SAIR ou toggle manual). */
+  optOutWhatsapp?: boolean;
+  optOutWhatsappEm?: string;
   createdAt: string;
 }
 

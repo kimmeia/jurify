@@ -214,6 +214,18 @@ export function MetaConnectDialog({
             `(app ${data.appSistema}). Reconecte este número pelo botão "Conectar com Facebook" pra corrigir.`,
           { duration: 15000 },
         );
+      } else if (data?.overrideAtual) {
+        toast.error(
+          `A inscrição da WABA ainda tem um callback alternativo (${data.overrideAtual}) desviando os eventos ` +
+            `pra fora do JuridFlow. Tente re-inscrever de novo; se persistir, remova o override no painel da Meta.`,
+          { duration: 15000 },
+        );
+      } else if (data?.overrideAnterior) {
+        toast.success(
+          `Corrigido: havia um callback alternativo (${data.overrideAnterior}) desviando os eventos desta WABA. ` +
+            `Foi removido — teste receber uma mensagem agora.`,
+          { duration: 15000 },
+        );
       } else {
         toast.success("Webhooks re-inscritos. Mensagens recebidas vão começar a chegar no Atendimento.");
       }

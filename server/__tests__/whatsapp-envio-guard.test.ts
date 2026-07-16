@@ -117,23 +117,23 @@ describe("podeDispararTemplate", () => {
   });
 
   it("bloqueia template automático pra estranho (sem inbound E sem cobrança)", async () => {
-    // canal ok → inbound vazio → asaas vazio → sem consentimento
-    const db = fakeDb({ selectQueue: [[{ restrito: false }], [], []] });
+    // canal ok → sem opt-out → inbound vazio → asaas vazio → sem consentimento
+    const db = fakeDb({ selectQueue: [[{ restrito: false }], [{ optOut: false }], [], []] });
     const r = await podeDispararTemplate({ db, canalId: 3, contatoId: 5, exigirOptin: true, agoraMs: 1000 });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.tipo).toBe("optin");
   });
 
   it("libera por opt-in user-initiated (contato já escreveu)", async () => {
-    // canal ok → inbound encontrado (não chega a consultar asaas)
-    const db = fakeDb({ selectQueue: [[{ restrito: false }], [{ id: 1 }]] });
+    // canal ok → sem opt-out → inbound encontrado (não consulta asaas)
+    const db = fakeDb({ selectQueue: [[{ restrito: false }], [{ optOut: false }], [{ id: 1 }]] });
     const r = await podeDispararTemplate({ db, canalId: 3, contatoId: 5, exigirOptin: true, agoraMs: 1000 });
     expect(r.ok).toBe(true);
   });
 
   it("libera template UTILITY por relação transacional (cliente Asaas) mesmo sem inbound", async () => {
-    // canal ok → inbound vazio → é cliente com cobrança Asaas → consentimento
-    const db = fakeDb({ selectQueue: [[{ restrito: false }], [], [{ id: 99 }]] });
+    // canal ok → sem opt-out → inbound vazio → cliente Asaas → consentimento
+    const db = fakeDb({ selectQueue: [[{ restrito: false }], [{ optOut: false }], [], [{ id: 99 }]] });
     const r = await podeDispararTemplate({ db, canalId: 3, contatoId: 5, exigirOptin: true, agoraMs: 1000 });
     expect(r.ok).toBe(true);
   });
@@ -232,6 +232,31 @@ describe("podeEnviar — proativo vs. resposta", () => {
     const r = await podeEnviar({ db: db2, canalId: 1, proativo: false, agoraMs: t });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.tipo).toBe("restrito");
+  });
+});
+
+describe("podeEnviar — opt-out do contato", () => {
+  beforeEach(() => _resetRateLimit());
+
+  it("bloqueia proativo pra contato que pediu SAIR", async () => {
+    // canal ok → contato com optOut=true
+    const db = fakeDb({ selectQueue: [[{ restrito: false }], [{ optOut: true }]] });
+    const r = await podeEnviar({ db, canalId: 1, contatoId: 5, proativo: true, agoraMs: 1000 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.tipo).toBe("optout");
+  });
+
+  it("resposta manual (não-proativo) NÃO é afetada pelo opt-out", async () => {
+    const db = fakeDb({ selectQueue: [[{ restrito: false }]] });
+    const r = await podeEnviar({ db, canalId: 1, contatoId: 5, proativo: false, agoraMs: 1000 });
+    expect(r.ok).toBe(true);
+  });
+
+  it("proativo pra contato SEM opt-out segue normal", async () => {
+    // canal ok → optOut false → (sem exigirOptin) libera
+    const db = fakeDb({ selectQueue: [[{ restrito: false }], [{ optOut: false }]] });
+    const r = await podeEnviar({ db, canalId: 1, contatoId: 5, proativo: true, agoraMs: 1000 });
+    expect(r.ok).toBe(true);
   });
 });
 

@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Bloqueio janela 24h + canal inoperante</title>
+<style>
+  :root{
+    --violet:#7c3aed; --violet-dark:#6d28d9; --violet-bg:#f5f3ff;
+    --slate-900:#0f172a; --slate-700:#334155; --slate-500:#64748b; --slate-400:#94a3b8;
+    --slate-200:#e2e8f0; --slate-100:#f1f5f9; --slate-50:#f8fafc;
+    --amber-bg:#fefce8; --amber-border:#fde68a; --amber-text:#854d0e;
+    --rose:#e11d48; --rose-bg:#fff1f2; --rose-border:#fecdd3; --rose-text:#9f1239;
+    --emerald:#10b981; --emerald-bg:#ecfdf5; --emerald-text:#047857;
+    --blue-bubble:#1e40af; --blue-badge-bg:#dbeafe; --blue-badge-text:#1d4ed8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;background:var(--slate-100);color:var(--slate-900);line-height:1.5}
+  .wrap{max-width:1060px;margin:0 auto;padding:32px 20px 60px}
+  .brand{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--violet)}
+  .brand .logo{display:inline-flex;height:24px;width:24px;align-items:center;justify-content:center;border-radius:6px;background:var(--violet);color:#fff;font-size:11px;font-weight:700}
+  h1{font-size:24px;font-weight:700;margin-top:8px}
+  .sub{color:var(--slate-500);margin-top:4px;font-size:15px}
+  h2{font-size:16px;font-weight:700;margin-bottom:8px}
+  .diag{border:1px solid var(--amber-border);background:#fffbeb80;border-radius:16px;padding:20px;margin:24px 0}
+  .diag p{font-size:13.5px;color:var(--slate-700)}
+  .diag b{color:var(--slate-900)}
+  .grid2{display:grid;grid-template-columns:1fr;gap:20px;margin-bottom:28px}
+  @media(min-width:860px){.grid2{grid-template-columns:1fr 1fr}}
+  .card{background:#fff;border-radius:16px;overflow:hidden;border:1px solid var(--slate-200)}
+  .card.bad{border-color:var(--rose-border)}
+  .card.good{border-color:#a7f3d0}
+  .card-tag{padding:8px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid}
+  .bad .card-tag{background:var(--rose-bg);border-color:var(--rose-border);color:var(--rose)}
+  .good .card-tag{background:var(--emerald-bg);border-color:#a7f3d0;color:var(--emerald-text)}
+  .card-body{padding:16px}
+  .note{font-size:12px;margin-top:12px}
+  .bad .note{color:var(--rose)}
+  .good .note{color:var(--emerald-text)}
+
+  /* ——— chat mock ——— */
+  .chat-header{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--slate-200);padding-bottom:10px}
+  .avatar{height:38px;width:38px;border-radius:50%;background:var(--slate-200);color:var(--slate-500);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;position:relative}
+  .avatar .wa-dot{position:absolute;bottom:-2px;right:-2px;height:14px;width:14px;border-radius:50%;background:#25d366;border:2px solid #fff}
+  .avatar .wa-dot.down{background:var(--rose)}
+  .chat-name{font-weight:600;font-size:14px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .pill{font-size:10px;border-radius:5px;padding:2px 6px;font-weight:600;white-space:nowrap}
+  .pill.blue{background:var(--blue-badge-bg);color:var(--blue-badge-text)}
+  .pill.amber{background:#fef3c7;color:#92400e}
+  .pill.red{background:var(--rose-bg);color:var(--rose);border:1px solid var(--rose-border)}
+  .pill.red .dot{display:inline-block;height:6px;width:6px;border-radius:50%;background:var(--rose);margin-right:4px;animation:pulse 1.5s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .chat-phone{font-size:11.5px;color:var(--slate-500)}
+  .chat-phone.down{color:var(--rose);font-weight:600;text-decoration:line-through}
+  .msgs{padding:14px 4px;display:flex;flex-direction:column;gap:10px;background:var(--slate-50);border-radius:10px;margin-top:12px}
+  .bubble{max-width:78%;border-radius:12px;padding:9px 12px;font-size:13px}
+  .bubble.in{background:#fff;border:1px solid var(--slate-200);align-self:flex-start}
+  .bubble.out{background:var(--blue-bubble);color:#fff;align-self:flex-end}
+  .bubble.dead{background:var(--blue-bubble);color:#fff;align-self:flex-end;border:2px solid var(--rose)}
+  .bubble .meta{display:block;font-size:10px;opacity:.7;margin-top:4px;text-align:right}
+  .bubble .dead-note{display:block;font-size:10.5px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.25);color:#fecaca}
+  .day{align-self:center;font-size:10.5px;color:var(--slate-400);background:#fff;border:1px solid var(--slate-200);border-radius:99px;padding:2px 10px}
+
+  /* ——— banners ——— */
+  .banner{border-radius:10px;padding:10px 12px;font-size:12.5px;margin-top:12px;display:flex;gap:8px;align-items:flex-start}
+  .banner.amber{background:var(--amber-bg);border:1px solid var(--amber-border);color:var(--amber-text)}
+  .banner.red{background:var(--rose-bg);border:1px solid var(--rose-border);color:var(--rose-text)}
+  .banner b{font-weight:700}
+  .banner .ico{flex-shrink:0}
+
+  /* ——— composer ——— */
+  .composer{margin-top:12px}
+  .composer-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+  .input{flex:1;border:1.5px solid var(--slate-200);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--slate-700);background:#fff}
+  .input.disabled{background:var(--slate-100);color:var(--slate-400);border-style:dashed;cursor:not-allowed;display:flex;align-items:center;gap:8px}
+  .icon-btn{height:36px;width:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;border:1px solid var(--slate-200);background:#fff;color:var(--slate-500)}
+  .icon-btn.disabled{opacity:.35;cursor:not-allowed}
+  .send-btn{height:36px;width:44px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:var(--violet);color:#fff;font-size:15px;border:none}
+  .send-btn.disabled{background:var(--slate-300, #cbd5e1);background:#cbd5e1;cursor:not-allowed}
+  .cta-template{display:inline-flex;align-items:center;gap:7px;background:var(--violet);color:#fff;font-weight:600;font-size:13px;border-radius:10px;padding:9px 16px;border:none;cursor:pointer;box-shadow:0 1px 3px rgba(124,58,237,.35)}
+  .cta-ghost{display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--slate-700);font-weight:500;font-size:12.5px;border-radius:10px;padding:8px 14px;border:1px solid var(--slate-200);cursor:pointer}
+  .cta-red{display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--rose);font-weight:600;font-size:12.5px;border-radius:10px;padding:8px 14px;border:1px solid var(--rose-border);cursor:pointer}
+
+  /* ——— health ——— */
+  .health{display:inline-flex;flex-direction:column;align-items:center;gap:2px;font-size:9px;font-weight:700;color:var(--slate-500)}
+  .health .circle{height:38px;width:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;border:3px solid}
+  .health .circle.ok{border-color:var(--emerald);color:var(--emerald-text);background:var(--emerald-bg)}
+  .health .circle.down{border-color:var(--rose);color:var(--rose);background:var(--rose-bg)}
+
+  /* ——— lista ——— */
+  .conv-item{display:flex;gap:10px;align-items:center;padding:10px;border-radius:12px;border:1px solid var(--slate-200);background:#fff}
+  .conv-item + .conv-item{margin-top:8px}
+  .conv-item .txt{min-width:0;flex:1}
+  .conv-item .n{font-size:13px;font-weight:600}
+  .conv-item .p{font-size:11.5px;color:var(--slate-500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .section-title{font-size:18px;font-weight:700;margin:36px 0 6px}
+  .section-sub{font-size:13.5px;color:var(--slate-500);margin-bottom:16px}
+  .rules{background:#fff;border:1px solid var(--slate-200);border-radius:16px;padding:20px}
+  .rules ul{margin-left:18px;font-size:13.5px;color:var(--slate-700);display:flex;flex-direction:column;gap:8px}
+  .rules b{color:var(--slate-900)}
+  .approve{margin-top:28px;background:var(--violet-bg);border:1px solid #ddd6fe;border-radius:16px;padding:20px}
+  .approve ol{margin-left:18px;font-size:13.5px;color:var(--slate-700);display:flex;flex-direction:column;gap:8px}
+  .tag-hoje{font-size:10px;font-weight:700;color:var(--rose);text-transform:uppercase;letter-spacing:.04em}
+  .tag-prop{font-size:10px;font-weight:700;color:var(--emerald-text);text-transform:uppercase;letter-spacing:.04em}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand"><span class="logo">J.</span> JuridFlow · Atendimento (Inbox)</div>
+    <h1>Bloqueio real da janela de 24h + sinalização de canal inoperante</h1>
+    <p class="sub">Mockup para aprovação — 2 mudanças no chat: (1) fora da janela de 24h o campo trava e o envio fica impossível; (2) canal caído/restrito pela Meta fica visível em vermelho na conversa e na lista.</p>
+  </header>
+
+  <div class="diag">
+    <h2>🔎 O problema hoje</h2>
+    <p>
+      O sistema já <b>sabe</b> que a janela fechou (mostra o aviso amarelo), mas o campo continua liberado:
+      o atendente digita, clica enviar, a bolha aparece — e a mensagem <b>morre no servidor com "Não entregue"</b>.
+      Cada tentativa dessas é <b>registrada pela Meta contra o número</b> (erro 131047 = sinal de spam).
+      E quando o canal inteiro cai (restrição/ban da Meta), <b>nada na conversa sinaliza</b> — o atendente
+      continua trabalhando numa conversa que não envia nada.
+    </p>
+  </div>
+
+  <!-- ================= ESTADO 1: JANELA 24H ================= -->
+  <h2 class="section-title">1) Janela de 24h fechada <span style="font-weight:400;color:var(--slate-500)">(canal saudável)</span></h2>
+  <p class="section-sub">Cliente não responde há mais de 24h → texto livre é impossível. O único caminho que o WhatsApp aceita (template) vira o botão principal.</p>
+
+  <div class="grid2">
+    <!-- HOJE -->
+    <div class="card bad">
+      <div class="card-tag">Hoje (permite enviar — mensagem morre)</div>
+      <div class="card-body">
+        <div class="msgs">
+          <span class="day">Hoje</span>
+          <div class="bubble dead">
+            Bom dia sr. tudo bem? me conta o que aconteceu…
+            <span class="meta">10:08 ⚠</span>
+            <span class="dead-note">⚠ Não entregue — Janela de 24h fechada: o WhatsApp só aceita mensagem livre até 24h após a última mensagem DO CLIENTE.</span>
+          </div>
+        </div>
+        <div class="banner amber"><span class="ico">🕐</span><span>Janela de 24h fechada — o WhatsApp só aceita template até o cliente responder.</span></div>
+        <div class="composer">
+          <div class="composer-row">
+            <div class="icon-btn">📎</div>
+            <div class="input">afdfsdf</div>
+            <div class="icon-btn">🎤</div>
+            <button class="send-btn">➤</button>
+          </div>
+        </div>
+        <p class="note">✗ Aviso existe mas é só decorativo — o envio segue liberado e cada tentativa conta contra a reputação do número.</p>
+      </div>
+    </div>
+
+    <!-- PROPOSTA -->
+    <div class="card good">
+      <div class="card-tag">Proposta (campo travado + template como único caminho)</div>
+      <div class="card-body">
+        <div class="msgs">
+          <span class="day">Hoje</span>
+          <div class="bubble in" style="opacity:.55">— última mensagem do cliente há 3 dias —</div>
+        </div>
+        <div class="banner amber">
+          <span class="ico">🔒</span>
+          <span><b>Janela de 24h fechada.</b> O WhatsApp não aceita mensagem livre — envie um <b>template aprovado</b> para reabrir a conversa. Quando o cliente responder, o campo destrava sozinho.</span>
+        </div>
+        <div class="composer">
+          <div class="composer-row">
+            <div class="icon-btn disabled">📎</div>
+            <div class="input disabled">🔒 Bloqueado — janela de 24h fechada</div>
+            <div class="icon-btn disabled">🎤</div>
+            <button class="send-btn disabled">➤</button>
+          </div>
+          <div class="composer-row" style="justify-content:center;margin-top:12px">
+            <button class="cta-template">📋 Enviar template aprovado</button>
+            <button class="cta-ghost">Ver templates da Meta</button>
+          </div>
+        </div>
+        <p class="note">✓ Impossível enviar texto livre: campo, anexo, áudio e botão de enviar desativados. Zero tentativas rejeitadas = zero sinal de spam pra Meta.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ESTADO 2: CANAL INOPERANTE ================= -->
+  <h2 class="section-title">2) Canal inoperante <span style="font-weight:400;color:var(--slate-500)">(restrito/banido pela Meta ou desconectado)</span></h2>
+  <p class="section-sub">O canal desta conversa caiu (disjuntor ativado, conta restrita ou número banido). Nem template sai. A conversa inteira sinaliza em vermelho.</p>
+
+  <div class="grid2">
+    <!-- HOJE -->
+    <div class="card bad">
+      <div class="card-tag">Hoje (nada sinaliza — atendente trabalha no vazio)</div>
+      <div class="card-body">
+        <div class="chat-header">
+          <div class="avatar">W<span class="wa-dot"></span></div>
+          <div>
+            <div class="chat-name">Andreza de Souza Bezerra <span class="pill blue">Em atendimento</span> <span class="pill amber">🤖 Bot pausado</span></div>
+            <div class="chat-phone">📱 +55 85 2008-7353 · 558596768044</div>
+          </div>
+          <div style="margin-left:auto"><span class="health"><span class="circle ok">90</span>HEALTH</span></div>
+        </div>
+        <div class="composer">
+          <div class="composer-row">
+            <div class="icon-btn">📎</div>
+            <div class="input">Digite uma mensagem…</div>
+            <div class="icon-btn">🎤</div>
+            <button class="send-btn">➤</button>
+          </div>
+        </div>
+        <p class="note">✗ Canal banido, mas o cabeçalho está igual ao de um canal saudável — verde, health 90, campo liberado.</p>
+      </div>
+    </div>
+
+    <!-- PROPOSTA -->
+    <div class="card good">
+      <div class="card-tag">Proposta (vermelho em tudo que depende do canal)</div>
+      <div class="card-body">
+        <div class="chat-header">
+          <div class="avatar">W<span class="wa-dot down"></span></div>
+          <div>
+            <div class="chat-name">Andreza de Souza Bezerra <span class="pill blue">Em atendimento</span> <span class="pill red"><span class="dot"></span>Canal inoperante</span></div>
+            <div class="chat-phone down">📱 +55 85 2008-7353</div>
+          </div>
+          <div style="margin-left:auto"><span class="health"><span class="circle down">✕</span>HEALTH</span></div>
+        </div>
+        <div class="banner red">
+          <span class="ico">⛔</span>
+          <span><b>Este canal está inoperante</b> — o número +55 85 2008-7353 foi restringido pela Meta em 14/07. Nenhuma mensagem (nem template) pode ser enviada por ele. As mensagens recebidas continuam salvas.</span>
+        </div>
+        <div class="composer">
+          <div class="composer-row">
+            <div class="icon-btn disabled">📎</div>
+            <div class="input disabled">⛔ Canal inoperante — envio desativado</div>
+            <div class="icon-btn disabled">🎤</div>
+            <button class="send-btn disabled">➤</button>
+          </div>
+          <div class="composer-row" style="justify-content:center;margin-top:12px">
+            <button class="cta-red">⚙ Ver status do canal</button>
+            <button class="cta-ghost">↪ Continuar por outro canal</button>
+          </div>
+        </div>
+        <p class="note">✓ Número riscado em vermelho + badge pulsante + banner com motivo e data + composer 100% travado (template incluso). Botão leva direto a Configurações → Canais.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= LISTA ================= -->
+  <h2 class="section-title">3) Na lista de conversas</h2>
+  <p class="section-sub">O ponto do WhatsApp no avatar fica vermelho em toda conversa do canal caído — dá pra ver o estrago de longe, sem abrir conversa por conversa.</p>
+
+  <div class="card" style="max-width:420px">
+    <div class="card-body">
+      <div class="conv-item">
+        <div class="avatar" style="background:#c7d2fe;color:#4338ca">MC<span class="wa-dot"></span></div>
+        <div class="txt"><div class="n">Maria Cunha</div><div class="p">[Sistema] Conversa transferida…</div></div>
+        <span class="pill blue">Em atendimento</span>
+      </div>
+      <div class="conv-item" style="border-color:var(--rose-border);background:var(--rose-bg)">
+        <div class="avatar">W<span class="wa-dot down"></span></div>
+        <div class="txt"><div class="n">Andreza de Souza <span class="pill red" style="margin-left:4px"><span class="dot"></span>canal caiu</span></div><div class="p">Bom dia sr. tudo bem? me conta o…</div></div>
+      </div>
+      <div class="conv-item">
+        <div class="avatar" style="background:#fbcfe8;color:#be185d">T<span class="wa-dot"></span></div>
+        <div class="txt"><div class="n">Thierry</div><div class="p">Ok</div></div>
+        <span class="pill blue">Em atendimento</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= REGRAS ================= -->
+  <h2 class="section-title">Regras de comportamento propostas</h2>
+  <div class="rules">
+    <ul>
+      <li><b>Janela fechada</b> (última mensagem do cliente ≥ 24h): campo de texto, anexo e áudio <b>desativados</b>; botão de enviar cinza; CTA "Enviar template aprovado" vira o caminho principal. O texto já digitado <b>não é apagado</b> — fica guardado como rascunho e volta quando a janela reabrir.</li>
+      <li><b>Destrava automático:</b> qualquer mensagem nova do cliente reabre a janela e o campo volta ao normal na hora (o polling de 3s já existe — sem F5).</li>
+      <li><b>Canal inoperante</b> (restrição Meta / disjuntor / desconectado): bloqueia <b>tudo</b>, inclusive template. Número em vermelho riscado, badge pulsante "Canal inoperante", banner com motivo + data, health em vermelho. Recebimento continua funcionando e fica claro pro atendente.</li>
+      <li><b>Fonte da verdade no servidor:</b> além do visual, o servidor já rejeita (guard). A UI passa a impedir a tentativa — as duas camadas juntas = zero erro 131047 por engano do atendente.</li>
+      <li><b>Conversa sem nenhuma mensagem do cliente</b> (ex.: conversa recém-criada pelo escritório): tratada como janela fechada → só template.</li>
+      <li>Vale para <b>WhatsApp Cloud API</b>. Canais sem regra de 24h (Instagram/Messenger têm regra própria de 7 dias — fase 2) não mudam agora.</li>
+    </ul>
+  </div>
+
+  <!-- ================= APROVAÇÃO ================= -->
+  <div class="approve">
+    <h2>✅ Para você aprovar / decidir</h2>
+    <ol>
+      <li><b>Sinalização do canal caído:</b> aprova o combo <i>número riscado em vermelho + badge pulsante + banner</i>? Ou prefere só o badge, sem riscar o número?</li>
+      <li><b>Lista de conversas:</b> aprova o fundo rosado + ponto vermelho nas conversas do canal caído, ou prefere só o ponto vermelho (mais discreto)?</li>
+      <li><b>Botão "Continuar por outro canal":</b> quando o escritório tem outro número WhatsApp ativo, oferecemos mover a conversa? (pode ficar pra fase 2)</li>
+      <li><b>Rascunho preservado</b> quando a janela fecha no meio da digitação — ok assim?</li>
+    </ol>
+  </div>
+
+</div>
+</body>
+</html>

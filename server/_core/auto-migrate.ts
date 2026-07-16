@@ -1361,6 +1361,13 @@ export async function runMigrations(): Promise<void> {
     try { await connection.query(`ALTER TABLE canais_integrados ADD COLUMN disparosDia INT NOT NULL DEFAULT 0`); } catch { /* exists */ }
     try { await connection.query(`ALTER TABLE canais_integrados ADD COLUMN disparosDiaEm VARCHAR(10) NULL`); } catch { /* exists */ }
 
+    // Opt-out/opt-in WhatsApp por contato (política Meta: honrar descadastro).
+    try { await connection.query(`ALTER TABLE contatos ADD COLUMN optOutWhatsapp BOOLEAN NOT NULL DEFAULT FALSE`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE contatos ADD COLUMN optOutWhatsappEm TIMESTAMP NULL`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE contatos ADD COLUMN optOutWhatsappOrigem VARCHAR(128) NULL`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE contatos ADD COLUMN optInWhatsappEm TIMESTAMP NULL`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE contatos ADD COLUMN optInWhatsappOrigem VARCHAR(128) NULL`); } catch { /* exists */ }
+
     // SmartFlow scheduler — coluna retomarEmExec p/ retomar passos "esperar"
     try { await connection.query(`ALTER TABLE smartflow_execucoes ADD COLUMN retomarEmExec TIMESTAMP NULL`); } catch { /* exists */ }
     try { await connection.query(`ALTER TABLE smartflow_execucoes ADD INDEX idx_sfe_retomar (retomarEmExec)`); } catch { /* exists */ }
