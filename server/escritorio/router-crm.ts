@@ -568,23 +568,54 @@ export const crmRouter = router({
         conteudo: input.mensagem,
       });
 
-      // 5. Enviar via WhatsApp pelo canal (Cloud API). Best-effort: se falhar,
-      //    a conversa já está criada pra atendimento manual.
+      // 5. Enviar via WhatsApp pelo canal (Cloud API). Conversa iniciada pelo
+      //    escritório = disparo frio 1-a-1: passa por TODAS as travas (janela
+      //    de 24h, teto diário, rate, opt-out, opt-in). Este caminho furava o
+      //    guard — era a porta aberta pro padrão de envio que derruba conta.
+      //    Best-effort: se bloquear/falhar, a conversa fica criada pra
+      //    atendimento manual e a bolha mostra o motivo real.
+      const marcarFalha = async (motivo: string) => {
+        try {
+          const db = await getDb();
+          if (!db) return;
+          const { mensagens } = await import("../../drizzle/schema");
+          await db.update(mensagens).set({ status: "falha", erroEntrega: motivo.slice(0, 500) }).where(eq(mensagens.id, msgId));
+        } catch { /* não mascarar o erro original */ }
+      };
       try {
-        const { enviarMensagemPeloCanal } = await import("../integracoes/canal-envio");
-        const r = await enviarMensagemPeloCanal({
-          canalId: input.canalId,
-          telefone: cleanPhone,
-          chatIdExterno: jid,
-          conteudo: input.mensagem,
-        });
-        if (r.ok) {
-          log.info(`[CRM] Nova conversa iniciada com ${cleanPhone} via WhatsApp (jid=${jid})`);
+        const db = await getDb();
+        const { ultimaEntradaDaConversa, janela24hAberta } = await import("../integracoes/whatsapp-optout");
+        const ultimaEntrada = db ? await ultimaEntradaDaConversa(db, conversaId) : null;
+        if (!janela24hAberta(ultimaEntrada, Date.now())) {
+          const erroJanela =
+            "Janela de 24h fechada: conversa iniciada pela empresa só sai com template aprovado — a Meta rejeitaria texto livre (131047) e cada tentativa conta contra a reputação do número.";
+          log.warn(`[CRM] iniciarConversa bloqueado: janela fechada (conversa ${conversaId})`);
+          await marcarFalha(erroJanela);
         } else {
-          log.warn({ err: r.erro, canalId: input.canalId }, "[CRM] Falha ao enviar 1ª mensagem");
+          const { enviarMensagemPeloCanal } = await import("../integracoes/canal-envio");
+          const r = await enviarMensagemPeloCanal({
+            canalId: input.canalId,
+            telefone: cleanPhone,
+            chatIdExterno: jid,
+            conteudo: input.mensagem,
+            proativo: true,
+            contatoId,
+            exigirOptin: true,
+          });
+          if (r.ok) {
+            log.info(`[CRM] Nova conversa iniciada com ${cleanPhone} via WhatsApp (jid=${jid})`);
+            if (r.idExterno && db) {
+              const { mensagens } = await import("../../drizzle/schema");
+              await db.update(mensagens).set({ idExterno: r.idExterno, status: "enviada" }).where(eq(mensagens.id, msgId));
+            }
+          } else {
+            log.warn({ err: r.erro, canalId: input.canalId }, "[CRM] Falha ao enviar 1ª mensagem");
+            await marcarFalha(r.erro || "Envio bloqueado pelas travas anti-ban");
+          }
         }
       } catch (err: any) {
         log.error(`[CRM] Erro ao enviar 1ª mensagem:`, err.message);
+        await marcarFalha(err?.message || "Erro ao enviar mensagem");
       }
 
       return { conversaId, contatoId };

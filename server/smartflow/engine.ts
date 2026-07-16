@@ -416,6 +416,12 @@ export interface SmartflowExecutores {
     botoes?: Array<{ id: string; titulo: string }>;
     drawerLabel?: string;
     secoes?: Array<{ titulo: string; itens: Array<{ id: string; titulo: string; descricao?: string }> }>;
+    /** Contato destinatário — sem ele o guard pula opt-out/opt-in. */
+    contatoId?: number;
+    /** false = reply a mensagem do contato (não conta teto nem checa opt-out). */
+    proativo?: boolean;
+    /** Disparo proativo automático: exige opt-in do contato. */
+    exigirOptin?: boolean;
   }) => Promise<boolean>;
   /**
    * Envia um template (HSM) WhatsApp aprovado da Meta pelo canal oficial
@@ -1780,6 +1786,12 @@ async function handleWhatsappPerguntaOpcoes(
   const headerInterp = cfg.header ? interpolarVariaveis(cfg.header, ctx as any) : undefined;
   const footerInterp = cfg.footer ? interpolarVariaveis(cfg.footer, ctx as any) : undefined;
 
+  // Reply (gatilho = mensagem do contato, ctx.canalId presente) não conta o
+  // teto proativo nem checa opt-out — política Meta permite responder quem
+  // escreveu. Gatilho não-mensagem (scheduler/webhook) é proativo: opt-out e
+  // opt-in valem (antes esse caminho furava os dois — contato que pediu SAIR
+  // continuava recebendo pergunta interativa).
+  const veioDeMensagem = typeof ctx.canalId === "number" && ctx.canalId > 0;
   let ok = false;
   try {
     ok = await exec.enviarWhatsAppInteractive({
@@ -1791,6 +1803,9 @@ async function handleWhatsappPerguntaOpcoes(
       botoes: modo === "botoes" ? cfg.opcoes : undefined,
       drawerLabel: cfg.drawerLabel,
       secoes: modo === "lista" ? cfg.secoes : undefined,
+      contatoId: typeof ctx.contatoId === "number" ? ctx.contatoId : undefined,
+      proativo: !veioDeMensagem,
+      exigirOptin: !veioDeMensagem,
     });
   } catch (err: any) {
     return { sucesso: false, contexto: ctx, mensagemErro: `WhatsApp interativo: ${err?.message || String(err)}` };
@@ -1804,7 +1819,10 @@ async function handleWhatsappPerguntaOpcoes(
   return {
     sucesso: true,
     parar: true,
-    resposta: bodyInterp,
+    // Em fluxo de mensagem o interativo JÁ foi entregue acima pelo executor;
+    // devolver `resposta` fazia o whatsapp-handler reenviar o corpo como
+    // texto puro — o contato recebia a mesma mensagem 2×.
+    ...(veioDeMensagem ? {} : { resposta: bodyInterp }),
     contexto: {
       ...ctx,
       mensagensEnviadas: [...enviadas, bodyInterp],

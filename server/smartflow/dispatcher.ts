@@ -1031,9 +1031,14 @@ export async function dispararPagamentoVencido(
         continue;
       }
 
-      // Controle `repetirPorDias`: para de lembrar depois de N dias.
-      const limite = Math.max(1, Math.floor(Number(cfg?.repetirPorDias ?? 1)));
-      if (temHorarioConfigurado(cfg) && !params.ignorarDedup) {
+      // Controle `repetirPorDias`: para de lembrar depois de N dias. Vale
+      // TAMBÉM sem horário configurado — o modo legado tinha só dedupe de
+      // 24h e lembrava 1×/dia por cobrança vencida PARA SEMPRE (dunning
+      // perpétuo = report de spam = ban de conta). Clamp 30: a janela de
+      // `diasDistintosDisparados` desliza em 30 dias, acima disso o limite
+      // nunca seria atingido e viraria infinito de novo.
+      const limite = Math.min(30, Math.max(1, Math.floor(Number(cfg?.repetirPorDias ?? 1))));
+      if (!params.ignorarDedup) {
         const disparadosDias = await diasDistintosDisparados(c.cenarioId, params.pagamentoId);
         if (disparadosDias >= limite) {
           log.debug({ cenarioId: c.cenarioId, pagamentoId: params.pagamentoId, limite }, "SmartFlow: pagamento_vencido atingiu repetirPorDias");
@@ -1131,8 +1136,10 @@ export async function dispararProximoVencimento(
 
       if (!params.ignorarDedup && await jaDisparouPagamento(c.cenarioId, params.pagamentoId, slotChave)) continue;
 
-      const limite = Math.max(1, Math.floor(Number(cfg?.repetirPorDias ?? 1)));
-      if (temHorarioConfigurado(cfg) && !params.ignorarDedup) {
+      // Mesmo racional do pagamento_vencido: repetirPorDias vale com ou sem
+      // horário configurado, com clamp na janela de 30 dias do contador.
+      const limite = Math.min(30, Math.max(1, Math.floor(Number(cfg?.repetirPorDias ?? 1))));
+      if (!params.ignorarDedup) {
         const disparadosDias = await diasDistintosDisparados(c.cenarioId, params.pagamentoId);
         if (disparadosDias >= limite) continue;
       }
