@@ -232,6 +232,11 @@ export async function enviarInterativoPeloCanalApi(opts: {
   contatoId?: number;
   /** Fluxo automático: exige opt-in do contato. */
   exigirOptin?: boolean;
+  /**
+   * false = reply a mensagem do contato (não conta teto proativo nem checa
+   * opt-out — política Meta permite responder quem escreveu). Default: true.
+   */
+  proativo?: boolean;
 }): Promise<EnvioResultado> {
   const cred = await getCanalCloudApi(opts.escritorioId);
   if (!cred) {
@@ -245,7 +250,9 @@ export async function enviarInterativoPeloCanalApi(opts: {
   if (!telefone || telefone.length < 10) {
     return { ok: false, erro: "Telefone inválido pra Cloud API", provider: "whatsapp_api" };
   }
-  // Interativo iniciado pela empresa é proativo — passa pelas travas anti-ban.
+  // Interativo passa pelas travas anti-ban; proativo por default (reply
+  // explícito do fluxo de mensagem chega com proativo:false).
+  const proativo = opts.proativo !== false;
   const db = await getDb();
   const guard = db ? await import("./whatsapp-envio-guard") : null;
   if (db && guard) {
@@ -253,7 +260,7 @@ export async function enviarInterativoPeloCanalApi(opts: {
       db,
       canalId: cred.canalId,
       contatoId: opts.contatoId,
-      proativo: true,
+      proativo,
       exigirOptin: opts.exigirOptin,
     });
     if (!permitido.ok) {
@@ -282,7 +289,7 @@ export async function enviarInterativoPeloCanalApi(opts: {
         rodape: opts.footer,
       });
     }
-    if (db && guard) await guard.registrarSucessoEnvio({ db, canalId: cred.canalId, proativo: true });
+    if (db && guard) await guard.registrarSucessoEnvio({ db, canalId: cred.canalId, proativo });
     return { ok: true, idExterno: msgId, provider: "whatsapp_api", canalId: cred.canalId };
   } catch (e: any) {
     const apiMsg = e?.response?.data?.error?.message;

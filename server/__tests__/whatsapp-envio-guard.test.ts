@@ -188,8 +188,10 @@ describe("teto diário por tier (anti-ban)", () => {
     expect(limiteDiarioPorTier("TIER_1K")).toBe(1_000);
     expect(limiteDiarioPorTier("TIER_10K")).toBe(10_000);
     expect(limiteDiarioPorTier("TIER_UNLIMITED")).toBe(Number.POSITIVE_INFINITY);
-    expect(limiteDiarioPorTier(null)).toBe(1_000); // default conservador
-    expect(limiteDiarioPorTier("xpto")).toBe(1_000);
+    // Sem tier conhecido = número novo/não sincronizado: assume o teto real
+    // de número não verificado (250), não 1K — regressão do 2º ban.
+    expect(limiteDiarioPorTier(null)).toBe(250);
+    expect(limiteDiarioPorTier("xpto")).toBe(250);
   });
 
   it("bloqueia quando o contador do dia atinge o teto do tier", () => {

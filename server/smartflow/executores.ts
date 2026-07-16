@@ -1209,6 +1209,9 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
           botoes: p.botoes,
           drawerLabel: p.drawerLabel,
           secoes: p.secoes,
+          contatoId: p.contatoId,
+          proativo: p.proativo,
+          exigirOptin: p.exigirOptin,
         });
         if (!r.ok) {
           log.warn({ erro: r.erro, provider: r.provider, modo: p.modo }, "SmartFlow: envio WhatsApp interativo falhou");
