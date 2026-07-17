@@ -371,7 +371,7 @@ export const crmRouter = router({
                       // Disjuntor: se a conta está restrita pela Meta, não dispara
                       // o template — marca falha com o motivo e aborta (não martela).
                       const guard = await import("../integracoes/whatsapp-envio-guard");
-                      const permitido = await guard.podeDispararTemplate({ db, canalId: convData.canalId });
+                      const permitido = await guard.podeDispararTemplate({ db, canalId: convData.canalId, telefone });
                       if (!permitido.ok) {
                         log.warn(`[CRM] Template manual bloqueado: ${permitido.erro}`);
                         const { mensagens } = await import("../../drizzle/schema");

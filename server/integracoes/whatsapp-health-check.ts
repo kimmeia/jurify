@@ -127,6 +127,20 @@ export async function verificarSaudeCanaisWhatsApp(): Promise<{
             "[HealthCheck] qualidade do número DEGRADADA — reduza volume/revise templates antes que a Meta restrinja",
           );
         }
+        // Transição de qualidade/tier vira notificação ativa pro dono —
+        // warn no deploy log ninguém vê a tempo (lição dos bans de jul/2026).
+        try {
+          const { avaliarTransicaoSaude, notificarSaudeCanal } = await import("./whatsapp-alertas");
+          const alertas = avaliarTransicaoSaude({
+            qualidadeAnterior: canal.qualidadeMeta,
+            qualidadeNova: saude.qualityRating,
+            tierAnterior: canal.tierMensagens,
+            tierNovo: saude.tier,
+          });
+          for (const a of alertas) {
+            await notificarSaudeCanal({ canalId: canal.id, titulo: a.titulo, mensagem: a.mensagem });
+          }
+        } catch { /* best-effort */ }
       }
     } catch (err: any) {
       log.warn({ canalId: canal.id, err: err?.message }, "[HealthCheck] falha ao verificar canal (não-fatal)");

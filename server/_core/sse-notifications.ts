@@ -39,6 +39,9 @@ export interface Notificacao {
     | "chamada_resposta"
     | "chamada_encerrada"
     | "chamada_fila"
+    // Saúde do canal WhatsApp (qualidade Meta caiu, disjuntor tripou, tier
+    // rebaixado) — o aviso que faltou nos bans de jul/2026.
+    | "whatsapp_saude"
     | "info";
   titulo: string;
   mensagem: string;
@@ -114,6 +117,9 @@ const TIPOS_PUSH = new Set<Notificacao["tipo"]>([
   "assinatura_concluida",
   "movimentacao_processo",
   "nova_acao",
+  // Aviso de saúde do canal precisa alcançar o dono mesmo com o app fechado —
+  // é a diferença entre reagir no amarelo e descobrir no ban.
+  "whatsapp_saude",
 ]);
 
 /** Rota que a notificação abre ao ser tocada. */
@@ -123,6 +129,7 @@ function rotaPush(n: Omit<Notificacao, "timestamp">): string {
   if (n.tipo === "movimentacao_processo" || n.tipo === "nova_acao" || n.tipo === "assinatura_concluida") {
     return "/processos";
   }
+  if (n.tipo === "whatsapp_saude") return "/configuracoes?tab=canais";
   return "/atendimento";
 }
 
