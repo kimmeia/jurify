@@ -278,3 +278,45 @@ describe("registrarSucessoEnvio — contagem só no proativo", () => {
     expect(verificarRateLimit(21, 1000).ok).toBe(true);
   });
 });
+
+describe("freio por qualidade (quality rating da Meta)", () => {
+  beforeEach(() => _resetRateLimit());
+
+  it("YELLOW corta o teto diário pela metade", () => {
+    const t = Date.parse("2026-07-17T10:00:00Z");
+    const hoje = bucketDia(t);
+    // TIER_250 com qualidade amarela → teto efetivo 125.
+    expect(
+      verificarLimiteDiario({ disparosDia: 124, disparosDiaEm: hoje, tier: "TIER_250", qualidade: "YELLOW" }, t).ok,
+    ).toBe(true);
+    const bloqueado = verificarLimiteDiario(
+      { disparosDia: 125, disparosDiaEm: hoje, tier: "TIER_250", qualidade: "YELLOW" },
+      t,
+    );
+    expect(bloqueado.ok).toBe(false);
+    expect(bloqueado.motivo).toContain("AMARELA");
+    // Sem qualidade (ou verde), o teto cheio vale.
+    expect(
+      verificarLimiteDiario({ disparosDia: 125, disparosDiaEm: hoje, tier: "TIER_250", qualidade: "GREEN" }, t).ok,
+    ).toBe(true);
+  });
+
+  it("RED bloqueia proativo, mas resposta (reply) continua saindo", async () => {
+    const t = Date.parse("2026-07-17T10:00:00Z");
+    const estadoRed = {
+      restrito: false,
+      disparosDia: 0,
+      disparosDiaEm: null,
+      tier: "TIER_1K",
+      qualidade: "RED",
+      escritorioId: 1,
+    };
+    const db1 = fakeDb({ selectQueue: [[estadoRed]] });
+    const r = await podeEnviar({ db: db1, canalId: 1, proativo: true, agoraMs: t });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.tipo).toBe("qualidade");
+
+    const db2 = fakeDb({ selectQueue: [[estadoRed]] });
+    expect((await podeEnviar({ db: db2, canalId: 1, proativo: false, agoraMs: t })).ok).toBe(true);
+  });
+});

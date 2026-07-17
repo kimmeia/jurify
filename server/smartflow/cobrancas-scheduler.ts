@@ -218,7 +218,7 @@ export async function rodarCicloCobrancas(
         // retoma. É o comportamento "espaçar e reagendar".
         if (canalEnvio) {
           const gate = await guard.podeEnviar({ db, canalId: canalEnvio.canalId, proativo: true });
-          if (!gate.ok && (gate.tipo === "diario" || gate.tipo === "rate" || gate.tipo === "restrito")) {
+          if (!gate.ok && (gate.tipo === "diario" || gate.tipo === "rate" || gate.tipo === "restrito" || gate.tipo === "qualidade")) {
             log.info(
               { escritorioId, canalId: canalEnvio.canalId, motivo: gate.tipo },
               "[Cobranças] teto anti-ban atingido — excedente reagendado pro próximo ciclo",

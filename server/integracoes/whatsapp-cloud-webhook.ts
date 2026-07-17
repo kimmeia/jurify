@@ -452,12 +452,31 @@ export function registerWhatsAppCloudWebhook(app: Express) {
               const qualidade = evento === "FLAGGED" ? "RED" : evento === "UNFLAGGED" ? "GREEN" : undefined;
               if (db && canais.length > 0 && (tier || qualidade)) {
                 for (const c of canais) {
+                  const [atual] = await db
+                    .select({ q: canaisIntegrados.qualidadeMeta, t: canaisIntegrados.tierMensagens })
+                    .from(canaisIntegrados)
+                    .where(eq(canaisIntegrados.id, c.canalId))
+                    .limit(1);
                   await db.update(canaisIntegrados)
                     .set({
                       ...(tier ? { tierMensagens: tier } : {}),
                       ...(qualidade ? { qualidadeMeta: qualidade } : {}),
                     })
                     .where(eq(canaisIntegrados.id, c.canalId));
+                  // FLAGGED/tier rebaixado tem que chegar no dono na hora —
+                  // é o último aviso útil antes de uma restrição.
+                  try {
+                    const { avaliarTransicaoSaude, notificarSaudeCanal } = await import("./whatsapp-alertas");
+                    const alertas = avaliarTransicaoSaude({
+                      qualidadeAnterior: atual?.q ?? null,
+                      qualidadeNova: qualidade ?? atual?.q ?? null,
+                      tierAnterior: atual?.t ?? null,
+                      tierNovo: tier ?? atual?.t ?? null,
+                    });
+                    for (const a of alertas) {
+                      await notificarSaudeCanal({ canalId: c.canalId, titulo: a.titulo, mensagem: a.mensagem });
+                    }
+                  } catch { /* best-effort */ }
                 }
                 log.info({ wabaId, evento, tier }, "[WhatsApp Cloud] qualidade/tier do número atualizado");
               }

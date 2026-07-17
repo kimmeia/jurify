@@ -105,6 +105,10 @@ export interface EstadoCanal {
   disparosDia: number;
   disparosDiaEm: string | null;
   tier: string | null;
+  /** quality_rating da Meta (GREEN/YELLOW/RED) — alimenta o freio automático. */
+  qualidade: string | null;
+  /** Dono do canal — permite resolver contato por telefone dentro do guard. */
+  escritorioId: number | null;
 }
 
 /**
@@ -113,15 +117,25 @@ export interface EstadoCanal {
  * Pura — `agoraMs` injetável pra teste.
  */
 export function verificarLimiteDiario(
-  estado: Pick<EstadoCanal, "disparosDia" | "disparosDiaEm" | "tier">,
+  estado: Pick<EstadoCanal, "disparosDia" | "disparosDiaEm" | "tier"> & { qualidade?: string | null },
   agoraMs: number,
 ): { ok: boolean; motivo?: string } {
-  const limite = limiteDiarioPorTier(estado.tier);
-  if (!Number.isFinite(limite)) return { ok: true };
+  const bruto = limiteDiarioPorTier(estado.tier);
+  if (!Number.isFinite(bruto)) return { ok: true };
+  // Freio por qualidade: YELLOW corta o teto pela metade. A Meta só rebaixa
+  // o tier DEPOIS do estrago — reduzir volume no primeiro sinal é o que dá
+  // tempo de recuperar o número antes da restrição.
+  const amarelo = (estado.qualidade || "").toUpperCase() === "YELLOW";
+  const limite = amarelo ? Math.max(1, Math.floor(bruto / 2)) : bruto;
   const hoje = bucketDia(agoraMs);
   const usadosHoje = estado.disparosDiaEm === hoje ? Number(estado.disparosDia || 0) : 0;
   if (usadosHoje >= limite) {
-    return { ok: false, motivo: `teto diário de ${limite} disparos/24h atingido (tier Meta)` };
+    return {
+      ok: false,
+      motivo: amarelo
+        ? `teto diário reduzido a ${limite} disparos/24h (qualidade AMARELA na Meta)`
+        : `teto diário de ${limite} disparos/24h atingido (tier Meta)`,
+    };
   }
   return { ok: true };
 }
@@ -219,6 +233,8 @@ export async function carregarEstadoCanal(db: any, canalId: number): Promise<Est
       disparosDia: canaisIntegrados.disparosDia,
       disparosDiaEm: canaisIntegrados.disparosDiaEm,
       tier: canaisIntegrados.tierMensagens,
+      qualidade: canaisIntegrados.qualidadeMeta,
+      escritorioId: canaisIntegrados.escritorioId,
     })
     .from(canaisIntegrados)
     .where(eq(canaisIntegrados.id, canalId))
@@ -229,6 +245,8 @@ export async function carregarEstadoCanal(db: any, canalId: number): Promise<Est
     disparosDia: Number(c?.disparosDia || 0),
     disparosDiaEm: c?.disparosDiaEm ?? null,
     tier: c?.tier ?? null,
+    qualidade: c?.qualidade ?? null,
+    escritorioId: c?.escritorioId ?? null,
   };
 }
 
@@ -242,11 +260,26 @@ export async function canalEstaRestrito(
 
 /** Tripa o disjuntor: marca o canal como restrito pela Meta. Idempotente. */
 export async function marcarCanalRestrito(db: any, canalId: number, motivo: string): Promise<void> {
+  let jaEstavaRestrito = false;
+  try {
+    jaEstavaRestrito = (await carregarEstadoCanal(db, canalId)).restrito;
+  } catch { /* segue — tripar o disjuntor é mais importante que a notificação */ }
   await db
     .update(canaisIntegrados)
     .set({ restritoMeta: true, restritoMotivo: motivo.slice(0, 500), restritoEm: new Date() })
     .where(eq(canaisIntegrados.id, canalId));
   log.warn({ canalId, motivo: motivo.slice(0, 120) }, "[Guard] canal marcado como RESTRITO pela Meta — envios pausados");
+  // Só na TRANSIÇÃO (não a cada envio bloqueado) — senão vira spam interno.
+  if (!jaEstavaRestrito) {
+    try {
+      const { notificarSaudeCanal } = await import("./whatsapp-alertas");
+      await notificarSaudeCanal({
+        canalId,
+        titulo: "⛔ WhatsApp pausado — restrição da Meta",
+        mensagem: `${motivo.slice(0, 240)} — o disjuntor pausou todos os envios deste canal. Veja Configurações → Canais e trate a restrição antes de reativar.`,
+      });
+    } catch { /* best-effort */ }
+  }
 }
 
 /** Rearma o disjuntor: canal voltou a poder enviar (sucesso ou reativação). */
@@ -275,7 +308,7 @@ export async function incrementarDisparoDia(db: any, canalId: number, agoraMs: n
 
 // ─── Orquestrador ────────────────────────────────────────────────────────────
 
-export type MotivoBloqueio = "restrito" | "diario" | "rate" | "optin" | "optout";
+export type MotivoBloqueio = "restrito" | "qualidade" | "diario" | "rate" | "optin" | "optout";
 
 /**
  * Decide se um envio PODE sair agora. Ordem: disjuntor → teto diário → rate
@@ -293,14 +326,18 @@ export async function podeEnviar(opts: {
   db: any;
   canalId?: number;
   contatoId?: number;
+  /** Telefone do destinatário — fallback pra resolver o contato quando o
+   *  caller não trouxe `contatoId` (opt-out não pode depender disso). */
+  telefone?: string | null;
   proativo?: boolean;
   exigirOptin?: boolean;
   agoraMs?: number;
 }): Promise<{ ok: true } | { ok: false; erro: string; tipo: MotivoBloqueio }> {
   const agoraMs = opts.agoraMs ?? Date.now();
+  let estado: EstadoCanal | null = null;
 
   if (opts.canalId) {
-    const estado = await carregarEstadoCanal(opts.db, opts.canalId);
+    estado = await carregarEstadoCanal(opts.db, opts.canalId);
 
     // Disjuntor — sempre. Conta restrita = nenhum envio (proativo ou não).
     if (estado.restrito) {
@@ -312,6 +349,17 @@ export async function podeEnviar(opts: {
     }
 
     if (opts.proativo) {
+      // Freio por qualidade: RED pausa TODO proativo (só resposta a quem
+      // escreve sai). Esperar a Meta restringir é esperar o ban — RED é o
+      // último estágio antes dele.
+      if ((estado.qualidade || "").toUpperCase() === "RED") {
+        return {
+          ok: false,
+          tipo: "qualidade",
+          erro:
+            "Qualidade do número está VERMELHA na Meta — disparos proativos pausados automaticamente até a qualidade se recuperar. Respostas a clientes continuam saindo.",
+        };
+      }
       const diario = verificarLimiteDiario(estado, agoraMs);
       if (!diario.ok) {
         return {
@@ -331,12 +379,24 @@ export async function podeEnviar(opts: {
     }
   }
 
+  // Resolve o contato pelo telefone quando o caller não trouxe `contatoId`.
+  // Sem isso, opt-out/opt-in dependiam de cada caller lembrar de passar o id —
+  // e quem esquecia (template manual, cobrança sem vínculo) furava a política.
+  let contatoId = opts.contatoId;
+  if (!contatoId && opts.telefone && opts.proativo && estado?.escritorioId) {
+    try {
+      const { buscarContatoPorTelefone } = await import("../escritorio/db-crm");
+      const c = await buscarContatoPorTelefone(estado.escritorioId, String(opts.telefone).replace(/\D/g, ""));
+      if (c) contatoId = c.id;
+    } catch { /* best-effort: sem contato resolvido, as demais travas seguem valendo */ }
+  }
+
   // Opt-out: pedido de descadastro vale pra TODO envio proativo — a política
   // da Meta exige honrar ("respect all requests... to opt out"). Não afeta
   // resposta quando o contato inicia conversa (proativo=false).
-  if (opts.proativo && opts.contatoId) {
+  if (opts.proativo && contatoId) {
     const { contatoEstaOptOut } = await import("./whatsapp-optout");
-    if (await contatoEstaOptOut(opts.db, opts.contatoId)) {
+    if (await contatoEstaOptOut(opts.db, contatoId)) {
       return {
         ok: false,
         tipo: "optout",
@@ -345,8 +405,8 @@ export async function podeEnviar(opts: {
     }
   }
 
-  if (opts.exigirOptin && opts.contatoId) {
-    const consent = await contatoTemConsentimento(opts.db, opts.contatoId);
+  if (opts.exigirOptin && contatoId) {
+    const consent = await contatoTemConsentimento(opts.db, contatoId);
     if (!consent) {
       return {
         ok: false,
@@ -367,6 +427,7 @@ export async function podeDispararTemplate(opts: {
   db: any;
   canalId?: number;
   contatoId?: number;
+  telefone?: string | null;
   exigirOptin?: boolean;
   agoraMs?: number;
 }): Promise<{ ok: true } | { ok: false; erro: string; tipo: MotivoBloqueio }> {

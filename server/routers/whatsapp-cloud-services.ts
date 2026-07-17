@@ -226,7 +226,7 @@ export const whatsappCloudRouter = router({
       const db = await getDb();
       const guard = db ? await import("../integracoes/whatsapp-envio-guard") : null;
       if (db && guard) {
-        const permitido = await guard.podeEnviar({ db, canalId: c.canalId, proativo: true });
+        const permitido = await guard.podeEnviar({ db, canalId: c.canalId, telefone: input.telefone, proativo: true });
         if (!permitido.ok) throw new Error(permitido.erro);
       }
       try {
@@ -331,7 +331,7 @@ export const whatsappCloudRouter = router({
       const db = await getDb();
       const guard = db ? await import("../integracoes/whatsapp-envio-guard") : null;
       if (db && guard) {
-        const permitido = await guard.podeEnviar({ db, canalId: input.canalId, proativo: true });
+        const permitido = await guard.podeEnviar({ db, canalId: input.canalId, telefone: input.telefone, proativo: true });
         if (!permitido.ok) throw new Error(permitido.erro);
       }
       const { WhatsAppCloudClient } = await import("../integracoes/whatsapp-cloud");
@@ -390,7 +390,7 @@ export const whatsappCloudRouter = router({
       const db = await getDb();
       const guard = db ? await import("../integracoes/whatsapp-envio-guard") : null;
       if (db && guard) {
-        const permitido = await guard.podeEnviar({ db, canalId: input.canalId, proativo: true });
+        const permitido = await guard.podeEnviar({ db, canalId: input.canalId, telefone: input.telefone, proativo: true });
         if (!permitido.ok) throw new Error(permitido.erro);
       }
       const { WhatsAppCloudClient } = await import("../integracoes/whatsapp-cloud");

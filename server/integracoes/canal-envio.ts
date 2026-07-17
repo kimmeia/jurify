@@ -27,10 +27,11 @@ export interface EnvioResultado {
   canalId?: number;
   /**
    * Motivo do bloqueio pelo guard anti-ban, quando `ok=false` por trava (não por
-   * erro da Meta). "rate"/"diario" = adiar/reagendar (excedente sai depois);
-   * "restrito"/"optin" = não reenviar. Ausente quando a falha é outra.
+   * erro da Meta). "rate"/"diario"/"qualidade" = adiar/reagendar (excedente sai
+   * depois); "restrito"/"optin"/"optout" = não reenviar. Ausente quando a falha
+   * é outra.
    */
-  bloqueio?: "restrito" | "diario" | "rate" | "optin" | "optout";
+  bloqueio?: import("./whatsapp-envio-guard").MotivoBloqueio;
 }
 
 export interface EnvioMensagemOpts {
@@ -191,6 +192,7 @@ export async function enviarTemplatePeloCanalApi(opts: {
       db,
       canalId: cred.canalId,
       contatoId: opts.contatoId,
+      telefone,
       exigirOptin: opts.exigirOptin,
     });
     if (!permitido.ok) {
@@ -260,6 +262,7 @@ export async function enviarInterativoPeloCanalApi(opts: {
       db,
       canalId: cred.canalId,
       contatoId: opts.contatoId,
+      telefone,
       proativo,
       exigirOptin: opts.exigirOptin,
     });
@@ -389,6 +392,7 @@ async function enviarViaCloudApi(canal: any, opts: EnvioMensagemOpts): Promise<E
         db,
         canalId: canal.id,
         contatoId: opts.contatoId,
+        telefone,
         proativo: opts.proativo,
         exigirOptin: opts.exigirOptin,
       });
