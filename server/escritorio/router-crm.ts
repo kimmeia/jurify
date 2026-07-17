@@ -584,8 +584,11 @@ export const crmRouter = router({
       };
       try {
         const db = await getDb();
-        const { ultimaEntradaDaConversa, janela24hAberta } = await import("../integracoes/whatsapp-optout");
-        const ultimaEntrada = db ? await ultimaEntradaDaConversa(db, conversaId) : null;
+        // Janela por PAR (contato × canal), não por conversa: conversa nova
+        // pro mesmo telefone herda a janela aberta por inbound em conversa
+        // anterior (a Meta mede o par de números, não a thread).
+        const { ultimaEntradaDoContatoNoCanal, janela24hAberta } = await import("../integracoes/whatsapp-optout");
+        const ultimaEntrada = db ? await ultimaEntradaDoContatoNoCanal(db, contatoId, input.canalId) : null;
         if (!janela24hAberta(ultimaEntrada, Date.now())) {
           const erroJanela =
             "Janela de 24h fechada: conversa iniciada pela empresa só sai com template aprovado — a Meta rejeitaria texto livre (131047) e cada tentativa conta contra a reputação do número.";

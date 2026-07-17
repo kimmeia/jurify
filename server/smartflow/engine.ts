@@ -1543,7 +1543,11 @@ async function handleWhatsAppEnviar(
   // deve ter sido populado pelo dispatcher. Nesse caso, o engine envia
   // diretamente via executor (que busca o canal WhatsApp ativo do escritório).
   const telefone = typeof ctx.telefoneCliente === "string" ? ctx.telefoneCliente.trim() : "";
-  const temCanal = typeof ctx.canalId === "number" && ctx.canalId > 0;
+  // `canalId` persiste no contexto da execução — numa retomada por TIMEOUT
+  // (scheduler) não há whatsapp-handler pra entregar `resposta`, e o segmento
+  // não é reply: envia direto, como proativo (com todas as travas).
+  const temCanal =
+    typeof ctx.canalId === "number" && ctx.canalId > 0 && (ctx as any).__retomadaPorTimeout !== true;
   if (!temCanal && telefone) {
     try {
       const ok = await exec.enviarWhatsApp(telefone, mensagem, {
@@ -1630,7 +1634,11 @@ async function handleWhatsappAguardarResposta(
   // presente (mensagem veio via canal), senão executor real busca canal
   // ativo do escritório.
   const telefone = typeof ctx.telefoneCliente === "string" ? ctx.telefoneCliente.trim() : "";
-  const temCanal = typeof ctx.canalId === "number" && ctx.canalId > 0;
+  // `canalId` persiste no contexto da execução — numa retomada por TIMEOUT
+  // (scheduler) não há whatsapp-handler pra entregar `resposta`, e o segmento
+  // não é reply: envia direto, como proativo (com todas as travas).
+  const temCanal =
+    typeof ctx.canalId === "number" && ctx.canalId > 0 && (ctx as any).__retomadaPorTimeout !== true;
   if (!temCanal && telefone) {
     try {
       const ok = await exec.enviarWhatsApp(telefone, mensagem, {
@@ -1790,8 +1798,11 @@ async function handleWhatsappPerguntaOpcoes(
   // teto proativo nem checa opt-out — política Meta permite responder quem
   // escreveu. Gatilho não-mensagem (scheduler/webhook) é proativo: opt-out e
   // opt-in valem (antes esse caminho furava os dois — contato que pediu SAIR
-  // continuava recebendo pergunta interativa).
-  const veioDeMensagem = typeof ctx.canalId === "number" && ctx.canalId > 0;
+  // continuava recebendo pergunta interativa). Retomada por TIMEOUT não é
+  // reply: `canalId` persistido no contexto não pode reclassificar um envio
+  // disparado dias depois pelo scheduler.
+  const veioDeMensagem =
+    typeof ctx.canalId === "number" && ctx.canalId > 0 && (ctx as any).__retomadaPorTimeout !== true;
   let ok = false;
   try {
     ok = await exec.enviarWhatsAppInteractive({

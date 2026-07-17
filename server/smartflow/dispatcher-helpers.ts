@@ -242,6 +242,17 @@ export function temHorarioConfigurado(cfg: JanelaDisparo | undefined | null): bo
 export const MAX_DISPAROS_DIA = 3;
 
 /**
+ * Clampa um valor numérico de config de disparo em [1, max]. NaN/inválido
+ * (config corrompida, string não-numérica) cai no fallback — NUNCA em NaN:
+ * `x >= NaN` é sempre false e um limite NaN desligaria o teto (foi a fresta
+ * que reabria o dunning infinito).
+ */
+export function clampConfigDisparo(valor: unknown, fallback: number, max: number): number {
+  const n = Number(valor ?? fallback);
+  return Math.min(max, Math.max(1, Number.isFinite(n) ? Math.floor(n) : fallback));
+}
+
+/**
  * Dada uma janela de disparo e uma data-base (início do dia), retorna os
  * `disparosPorDia` slots como instâncias Date — cada um é o inicio do
  * horário de disparo naquele dia. Ex: `horarioInicial="09:00"`,
@@ -267,8 +278,8 @@ export function calcularSlotsDoDia(
   // (ex.: 20/dia — causou ban da Meta por "Sending spam"), NUNCA dispara mais
   // que MAX_DISPAROS_DIA por dia pro mesmo pagamento. Protege inclusive fluxos
   // já criados. 1/dia é o recomendado pra cobrança.
-  const disparos = Math.min(MAX_DISPAROS_DIA, Math.max(1, Math.floor(Number(cfg?.disparosPorDia ?? 1))));
-  const intervaloMin = Math.max(1, Math.floor(Number(cfg?.intervaloMinutos ?? 120)));
+  const disparos = clampConfigDisparo(cfg?.disparosPorDia, 1, MAX_DISPAROS_DIA);
+  const intervaloMin = clampConfigDisparo(cfg?.intervaloMinutos, 120, 24 * 60);
 
   const slots: Date[] = [];
   if (tz) {

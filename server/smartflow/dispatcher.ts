@@ -18,13 +18,14 @@
 
 import { getDb } from "../db";
 import { smartflowCenarios, smartflowPassos, smartflowExecucoes } from "../../drizzle/schema";
-import { eq, and, inArray, gte } from "drizzle-orm";
+import { eq, and, inArray, gte, isNotNull, lte } from "drizzle-orm";
 import { executarCenario, Passo, SmartflowContexto, ExecutarCenarioResultado } from "./engine";
 import { criarExecutoresReais } from "./executores";
 import { createLogger } from "../_core/logger";
 import {
   aceitaCanal,
   chaveDiaLocal,
+  clampConfigDisparo,
   contextoContemPagamento,
   contextoContemSlot,
   deveDispararProximo,
@@ -863,7 +864,11 @@ async function diasDistintosDisparados(
   // Janela ampla (30 dias) — ninguém configura mais que isso.
   const desde = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const execs = await db
-    .select({ contexto: smartflowExecucoes.contexto, createdAt: smartflowExecucoes.createdAt })
+    .select({
+      contexto: smartflowExecucoes.contexto,
+      createdAt: smartflowExecucoes.createdAt,
+      status: smartflowExecucoes.status,
+    })
     .from(smartflowExecucoes)
     .where(
       and(
@@ -873,6 +878,11 @@ async function diasDistintosDisparados(
     );
   const dias = new Set<string>();
   for (const r of execs) {
+    // Execução com ERRO não conta dia: com repetirPorDias=1 (default), uma
+    // falha transitória da Meta no único dia permitido deixava o lembrete
+    // sem NENHUMA entrega — o dedupe de 24h já impede re-tentativa no mesmo
+    // dia; aqui garantimos a re-tentativa no dia seguinte.
+    if (r.status === "erro") continue;
     if (!contextoContemPagamento(r.contexto, pagamentoId)) continue;
     const d = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt as any);
     dias.add(chaveDiaLocal(d));
@@ -1037,7 +1047,7 @@ export async function dispararPagamentoVencido(
       // perpétuo = report de spam = ban de conta). Clamp 30: a janela de
       // `diasDistintosDisparados` desliza em 30 dias, acima disso o limite
       // nunca seria atingido e viraria infinito de novo.
-      const limite = Math.min(30, Math.max(1, Math.floor(Number(cfg?.repetirPorDias ?? 1))));
+      const limite = clampConfigDisparo(cfg?.repetirPorDias, 1, 30);
       if (!params.ignorarDedup) {
         const disparadosDias = await diasDistintosDisparados(c.cenarioId, params.pagamentoId);
         if (disparadosDias >= limite) {
@@ -1137,8 +1147,8 @@ export async function dispararProximoVencimento(
       if (!params.ignorarDedup && await jaDisparouPagamento(c.cenarioId, params.pagamentoId, slotChave)) continue;
 
       // Mesmo racional do pagamento_vencido: repetirPorDias vale com ou sem
-      // horário configurado, com clamp na janela de 30 dias do contador.
-      const limite = Math.min(30, Math.max(1, Math.floor(Number(cfg?.repetirPorDias ?? 1))));
+      // horário configurado, clamp 30 e NaN → 1.
+      const limite = clampConfigDisparo(cfg?.repetirPorDias, 1, 30);
       if (!params.ignorarDedup) {
         const disparadosDias = await diasDistintosDisparados(c.cenarioId, params.pagamentoId);
         if (disparadosDias >= limite) continue;
@@ -1623,6 +1633,26 @@ export async function retomarExecucao(execId: number): Promise<{ retomada: boole
     if (!exec) return { retomada: false, erro: "Execução não encontrada" };
     if (exec.status !== "rodando") return { retomada: false, erro: `Execução em status ${exec.status}` };
 
+    // Claim atômico: só UM caller retoma. Sem isso, ciclo do scheduler que
+    // passasse de 60s retomava a mesma execução 2× → mensagens DUPLICADAS
+    // pro mesmo contato (mesma classe de bug do cron-concurrency-guard).
+    // O perdedor da corrida acha retomarEm já NULL e sai. De quebra, re-checa
+    // retomarEm: lote atrasado não retoma execução re-pausada com prazo futuro.
+    const [claim] = (await db
+      .update(smartflowExecucoes)
+      .set({ retomarEm: null })
+      .where(
+        and(
+          eq(smartflowExecucoes.id, execId),
+          eq(smartflowExecucoes.status, "rodando"),
+          isNotNull(smartflowExecucoes.retomarEm),
+          lte(smartflowExecucoes.retomarEm, new Date()),
+        ),
+      )) as unknown as [{ affectedRows: number }];
+    if (!claim || Number(claim.affectedRows) !== 1) {
+      return { retomada: false, erro: "Execução já retomada por outro ciclo" };
+    }
+
     const cenario = await carregarCenarioPorId(exec.escritorioId, exec.cenarioId);
     if (!cenario) return { retomada: false, erro: "Cenário não encontrado" };
 
@@ -1640,6 +1670,12 @@ export async function retomarExecucao(execId: number): Promise<{ retomada: boole
     delete (contextoBase as any).aguardandoTimeoutMinutos;
     delete (contextoBase as any).aguardandoOpcoes;
     delete (contextoBase as any).aguardandoNodeClienteId;
+    // Segmento retomado pelo SCHEDULER (timeout/espera), não por mensagem do
+    // contato: os handlers de envio não podem tratar como reply — `ctx.canalId`
+    // persiste no contexto e, sem esta flag, o ramo "sem_resposta" saía com
+    // proativo:false (pulando RED, tetos e opt-out) e o texto livre era
+    // devolvido como `resposta` pra um whatsapp-handler que não existe aqui.
+    (contextoBase as any).__retomadaPorTimeout = true;
 
     const executores = criarExecutoresReais(exec.escritorioId);
 
@@ -1782,6 +1818,24 @@ async function retomarComResposta(
     .limit(1);
   if (!exec || exec.status !== "rodando") return [];
 
+  // Claim atômico: duas mensagens rápidas do contato (sem acumularSegundos)
+  // achavam a MESMA execução aguardando e retomavam em paralelo → duas
+  // respostas da IA + contexto sobrescrito. Só o vencedor limpa a flag de
+  // espera; o perdedor sai e a 2ª mensagem segue como gatilho novo. Zerar
+  // retomarEm também tira a execução do lote do scheduler (corrida
+  // timeout×resposta).
+  const [claim] = (await db
+    .update(smartflowExecucoes)
+    .set({ aguardandoMensagemContatoId: null, retomarEm: null })
+    .where(
+      and(
+        eq(smartflowExecucoes.id, execId),
+        eq(smartflowExecucoes.status, "rodando"),
+        isNotNull(smartflowExecucoes.aguardandoMensagemContatoId),
+      ),
+    )) as unknown as [{ affectedRows: number }];
+  if (!claim || Number(claim.affectedRows) !== 1) return [];
+
   const cenario = await carregarCenarioPorId(exec.escritorioId, exec.cenarioId);
   if (!cenario) return [];
 
@@ -1797,6 +1851,9 @@ async function retomarComResposta(
   delete (contextoBase as any).aguardandoContatoId;
   delete (contextoBase as any).aguardandoTimeoutMinutos;
   delete (contextoBase as any).aguardandoOpcoes;
+  // Retomada por MENSAGEM: limpa flag herdada de uma retomada por timeout
+  // anterior (persistida no contexto) — daqui pra frente é reply de verdade.
+  delete (contextoBase as any).__retomadaPorTimeout;
   contextoBase.respostaUsuario = respostaTexto;
   // Resposta a botão/lista vai como objeto separado — o handler de
   // `whatsapp_pergunta_opcoes` roteia por `cond_<id>` sem ambiguidade.
