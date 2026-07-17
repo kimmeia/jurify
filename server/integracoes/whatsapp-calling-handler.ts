@@ -251,12 +251,34 @@ async function avisarPerdidaPorWhatsapp(
   try {
     const cfg = await obterConfigCanal(canalInfo.canalId, canalInfo.escritorioId);
     if (!cfg?.accessToken || !cfg?.phoneNumberId) return;
+    // Aviso automático é mensagem iniciada pela empresa (ligação NÃO abre a
+    // janela de 24h) — passa pelo guard como todo proativo. Antes este era o
+    // único caminho automático fora das travas: com conta restrita ou contato
+    // em opt-out, o aviso saía mesmo assim.
+    const dbGuard = await getDb();
+    if (dbGuard) {
+      const guard = await import("./whatsapp-envio-guard");
+      const permitido = await guard.podeEnviar({
+        db: dbGuard,
+        canalId: canalInfo.canalId,
+        telefone,
+        proativo: true,
+      });
+      if (!permitido.ok) {
+        log.info({ telefone, tipo: permitido.tipo }, "[WA Calling] aviso de chamada perdida suprimido pelo guard");
+        return;
+      }
+    }
     const client = new WhatsAppCloudClient({
       accessToken: cfg.accessToken,
       phoneNumberId: cfg.phoneNumberId,
       wabaId: cfg.wabaId,
     });
     const messageId = await client.enviarTexto(telefone, TEXTO_PERDIDA);
+    if (dbGuard) {
+      const guard = await import("./whatsapp-envio-guard");
+      await guard.registrarSucessoEnvio({ db: dbGuard, canalId: canalInfo.canalId, proativo: true }).catch(() => {});
+    }
 
     const db = await getDb();
     if (db && conversaId) {
@@ -276,6 +298,14 @@ async function avisarPerdidaPorWhatsapp(
     log.info({ telefone, conversaId }, "[WA Calling] chamada perdida — WhatsApp automático enviado");
   } catch (err: any) {
     log.warn("[WA Calling] falha ao enviar WhatsApp de chamada perdida:", err?.message);
+    try {
+      const dbFalha = await getDb();
+      if (dbFalha) {
+        const guard = await import("./whatsapp-envio-guard");
+        const apiMsg = err?.response?.data?.error?.message || err?.message || "";
+        await guard.registrarFalhaEnvio({ db: dbFalha, canalId: canalInfo.canalId, erro: apiMsg }).catch(() => {});
+      }
+    } catch { /* best-effort */ }
   }
 }
 
