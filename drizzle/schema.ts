@@ -792,6 +792,9 @@ export const mensagens = mysqlTable("mensagens", {
   conversaId: int("conversaIdMsg").notNull(),
   remetenteId: int("remetenteIdMsg"),
   direcao: mysqlEnum("direcaoMsg", ["entrada", "saida"]).notNull(),
+  // CoEx: 'celular' = enviada pelo atendente no app WhatsApp Business do
+  // celular (echo da Meta). NULL = fluxo pré-CoEx (inferido de direcao).
+  origem: varchar("origemMsg", { length: 16 }),
   tipo: mysqlEnum("tipoMsg", ["texto", "imagem", "audio", "video", "documento", "localizacao", "contato", "sticker", "sistema", "ligacao"]).notNull(),
   conteudo: text("conteudoMsg"),
   mediaUrl: varchar("mediaUrl", { length: 512 }),
@@ -809,7 +812,9 @@ export const mensagens = mysqlTable("mensagens", {
   // location estruturada, contacts etc sem migration nova.
   payload: text("payloadMsg"),
   createdAt: timestamp("createdAtMsg").defaultNow().notNull(),
-});
+}, (t) => ({
+  idxIdExterno: index("idx_mensagens_id_externo").on(t.idExterno),
+}));
 
 export type Mensagem = typeof mensagens.$inferSelect;
 export type InsertMensagem = typeof mensagens.$inferInsert;

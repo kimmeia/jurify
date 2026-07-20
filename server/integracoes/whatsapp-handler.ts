@@ -1,7 +1,7 @@
 import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
 import { isLidJid } from "../../shared/whatsapp-types";
 import type { TipoCanalMensagem, ImagemAnexa } from "../../shared/smartflow-types";
-import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, enviarMensagem as salvarMensagem, atualizarStatusMensagem, atualizarConversa } from "../escritorio/db-crm";
+import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, enviarMensagem as salvarMensagem, atualizarStatusMensagem, atualizarConversa, buscarMensagemPorIdExterno } from "../escritorio/db-crm";
 import { obterAutoReplyCanal } from "../escritorio/db-canais";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-whatsapp-handler");
@@ -32,6 +32,17 @@ async function buscarTipoDoCanal(canalId: number): Promise<TipoCanalMensagem> {
 
 export async function processarMensagemRecebida(canalId: number, escritorioId: number, msg: WhatsappMensagemRecebida) {
   if (msg.isGroup) return { contatoId: 0, conversaId: 0, mensagemId: 0 };
+
+  // Dedup por wamid: a Meta reentrega webhooks (timeout/retry) e, em CoEx,
+  // mensagem enviada pela própria API pode voltar como echo. Mesmo id já
+  // persistido = já processada — não duplica bolha nem redispara SmartFlow.
+  if (msg.messageId) {
+    const duplicada = await buscarMensagemPorIdExterno(msg.messageId);
+    if (duplicada) {
+      log.info({ messageId: msg.messageId, conversaId: duplicada.conversaId }, "[WhatsApp] wamid já processado — reentrega ignorada");
+      return { contatoId: 0, conversaId: duplicada.conversaId, mensagemId: duplicada.id };
+    }
+  }
 
   // ─── Resolução de contato/conversa ──────────────────────────────────────
   // PRIMEIRO tentamos achar uma conversa existente pelo chatId (JID, mesmo
@@ -110,6 +121,7 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     conversaId, remetenteId: undefined, direcao: "entrada", tipo: tipoMsg, conteudo,
     mediaUrl: msg.mediaUrl || undefined,
     payload: msg.interactiveReply ? { interactiveReply: msg.interactiveReply } : null,
+    idExterno: msg.messageId || undefined,
   });
 
   // Evento `system` do WhatsApp (ex: cliente trocou de número): fica registrado

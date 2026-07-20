@@ -684,6 +684,8 @@ export async function enviarMensagem(dados: {
   payload?: Record<string, unknown> | null;
   /** Id da mensagem na Meta (Cloud API) — casa o webhook de status de entrega. */
   idExterno?: string;
+  /** CoEx: 'celular' = echo do app WhatsApp Business. Ausente = fluxo normal. */
+  origem?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
@@ -695,6 +697,7 @@ export async function enviarMensagem(dados: {
     conversaId: dados.conversaId,
     remetenteId: dados.remetenteId ?? null,
     direcao: dados.direcao as DirecaoMsg,
+    origem: dados.origem || null,
     tipo: tipoValido,
     conteudo: dados.conteudo,
     mediaUrl: dados.mediaUrl || null,
@@ -710,6 +713,25 @@ export async function enviarMensagem(dados: {
   }).where(eq(conversas.id, dados.conversaId));
 
   return (result as { insertId: number }).insertId;
+}
+
+/**
+ * Busca mensagem pelo id da Meta (wamid). Base do dedup de inbound: a Meta
+ * reentrega webhooks (retry) e, em CoEx, mensagem enviada pela própria API
+ * volta como echo — mesmo wamid já persistido = já processada.
+ */
+export async function buscarMensagemPorIdExterno(
+  idExterno: string,
+): Promise<{ id: number; conversaId: number } | null> {
+  if (!idExterno) return null;
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .select({ id: mensagens.id, conversaId: mensagens.conversaId })
+    .from(mensagens)
+    .where(eq(mensagens.idExterno, idExterno))
+    .limit(1);
+  return row ?? null;
 }
 
 /**
