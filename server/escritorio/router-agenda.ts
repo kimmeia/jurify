@@ -949,6 +949,18 @@ export const agendaRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // `agendamento_lembretes` não tem escritorioId — a tenancy vem do
+      // agendamento pai (mesmo padrão de salvarLembretes acima). Sem o join,
+      // qualquer usuário com agenda.editar apagava lembrete de outro
+      // escritório por id.
+      const [lem] = await db
+        .select({ id: agendamentoLembretes.id })
+        .from(agendamentoLembretes)
+        .innerJoin(agendamentos, eq(agendamentoLembretes.agendamentoId, agendamentos.id))
+        .where(and(eq(agendamentoLembretes.id, input.id), eq(agendamentos.escritorioId, perm.escritorioId)))
+        .limit(1);
+      if (!lem) throw new TRPCError({ code: "NOT_FOUND", message: "Lembrete não encontrado." });
+
       await db.delete(agendamentoLembretes).where(eq(agendamentoLembretes.id, input.id));
       return { ok: true };
     }),
