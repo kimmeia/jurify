@@ -39,7 +39,7 @@ vi.mock("../integracoes/whatsapp-handler", () => ({
   processarMensagemRecebida: vi.fn(),
 }));
 
-const { resolverCanalDaMensagem, detectarRestricaoConta } = await import("../integracoes/whatsapp-cloud-webhook");
+const { resolverCanalDaMensagem, detectarRestricaoConta, extrairMotivosDesconexaoCoex } = await import("../integracoes/whatsapp-cloud-webhook");
 
 describe("resolverCanalDaMensagem — isolamento por número", () => {
   it("acha o canal pelo phone_number_id exato", async () => {
@@ -92,5 +92,31 @@ describe("detectarRestricaoConta — evento account_update", () => {
     expect(detectarRestricaoConta({ event: "ACCOUNT_UPDATE" }).restritivo).toBe(false);
     expect(detectarRestricaoConta({ event: "PARTNER_ADDED" }).restritivo).toBe(false);
     expect(detectarRestricaoConta({}).restritivo).toBe(false);
+  });
+
+  it("PARTNER_REMOVED também NÃO é restrição (tem tratamento próprio de CoEx)", () => {
+    expect(detectarRestricaoConta({ event: "PARTNER_REMOVED" }).restritivo).toBe(false);
+  });
+});
+
+describe("extrairMotivosDesconexaoCoex — PARTNER_REMOVED", () => {
+  it("lê reasons de waba_info.disconnection_info (shape objeto)", () => {
+    const m = extrairMotivosDesconexaoCoex({
+      event: "PARTNER_REMOVED",
+      waba_info: { disconnection_info: { reasons: ["ACCOUNT_DISCONNECTED", "USER_RE_REGISTERED"] } },
+    });
+    expect(m).toBe("ACCOUNT_DISCONNECTED · USER_RE_REGISTERED");
+  });
+
+  it("lê disconnection_info na raiz (shape array)", () => {
+    const m = extrairMotivosDesconexaoCoex({
+      disconnection_info: [{ reason: "CHANGE_NUMBER" }],
+    });
+    expect(m).toBe("CHANGE_NUMBER");
+  });
+
+  it("sem info detalhada cai no fallback PARTNER_REMOVED", () => {
+    expect(extrairMotivosDesconexaoCoex({ event: "PARTNER_REMOVED" })).toBe("PARTNER_REMOVED");
+    expect(extrairMotivosDesconexaoCoex({})).toBe("PARTNER_REMOVED");
   });
 });

@@ -106,6 +106,48 @@ Como o sistema implementa:
 - Política de Privacidade do app sempre no ar.
 - ≥2 admins no app; checar a Caixa de Entrada de alertas mensalmente.
 
+## Coexistência (CoEx) — número no app do celular E na API
+
+CoEx = Embedded Signup com `featureType: "whatsapp_business_app_onboarding"`
+(pareamento por QR). O número segue no app WhatsApp Business do celular e
+simultaneamente na Cloud API. Ground truth: `is_on_biz_app` do
+`GET /{phone_number_id}`, persistido como `isOnBizApp` na config do canal
+(⚠️ o `coexMode` legado era hardcoded "true" pra TODA conexão — não é sinal).
+
+### Checklist do painel Meta (App Dashboard) — obrigatório pro CoEx
+
+1. **Webhook fields**: WhatsApp → Configuration → assinar, além de
+   `messages`/`account_update`/`phone_number_quality_update`/`calls`:
+   - `smb_message_echoes` — mensagens que o atendente envia PELO CELULAR
+   - `history` — histórico (até 6 meses, requer consentimento no QR flow)
+   - `smb_app_state_sync` — contatos do celular
+   (`POST /{waba}/subscribed_apps` NÃO escolhe fields — é app-level, no painel.)
+2. **Configuration do Embedded Signup** (`META_CONFIG_ID`): qualquer
+   Configuration padrão de WhatsApp ES serve — o sub-fluxo CoEx é ativado em
+   runtime pelo `featureType` que o client já envia.
+
+### O que o código já cobre
+
+- Echo do celular (`smb_message_echoes`): ingestão SILENCIOSA — timeline como
+  saída `origem='celular'`, dedup por wamid, conversa vira `em_atendimento`
+  (bot não fala por cima do humano). Nunca dispara SmartFlow/auto-reply.
+- `PARTNER_REMOVED` (app desinstalado, ~14 dias sem abrir, troca de número,
+  re-registro): canais da WABA viram `desconectado` com motivo + alerta.
+- Registro: canal CoEx sai com `registradoCloudApi=true` (QR já registra);
+  `/register` com PIN é RECUSADO pra CoEx (desfaria o pareamento).
+- Calling API: bloqueada pra CoEx (chamadas ficam no app do celular) — UI
+  explica em vez de oferecer switch quebrado.
+
+### Ainda NÃO coberto (fase 2)
+
+- `history` e `smb_app_state_sync`: sem handler (logados como "campo sem
+  handler"). Import de histórico exige backdating em `enviarMensagem`
+  (createdAt custom) + rastreio de progresso — sem isso, janela de 24h de
+  contatos pré-CoEx começa fechada (template-only até o cliente responder).
+- Regras Meta a comunicar no onboarding: app ≥ 2.24.17, número ativo ≥ 7
+  dias, abrir o app a cada ~14 dias, throughput reduzido, broadcast
+  read-only, grupos indisponíveis na API.
+
 ## Pendências externas (estado em 14/jul/2026)
 
 - [ ] Acesso avançado do app `1295...` (Análise do App) — destrava o 1-clique.

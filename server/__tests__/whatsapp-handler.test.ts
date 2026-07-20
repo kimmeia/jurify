@@ -25,6 +25,7 @@ vi.mock("../escritorio/db-crm", () => ({
   listarConversas: vi.fn(),
   atualizarConversa: vi.fn(),
   distribuirLead: vi.fn(),
+  buscarMensagemPorIdExterno: vi.fn().mockResolvedValue(null),
 }));
 
 import { enviarAutoReply } from "../integracoes/whatsapp-handler";
