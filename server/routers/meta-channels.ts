@@ -156,7 +156,7 @@ export function explicarErroRegister(err: unknown): string | null {
     return "O nome de exibição foi alterado muitas vezes nas últimas 24h. Aguarde algumas horas antes de tentar novamente.";
   }
   if (code === 133005) {
-    return "Senha incorreta para esta conta WhatsApp. Se você ainda usa o número no app comum/Business, exclua a conta no app antes de registrar pela API.";
+    return "Senha incorreta para esta conta WhatsApp — comum quando o número ainda está ativo no app do celular. Se a intenção é usar o número no app E na plataforma ao mesmo tempo (coexistência), NÃO registre por PIN: reconecte via \"Conectar com Facebook\" e pareie pelo QR code. Se a intenção é migrar o número inteiramente pra API, exclua a conta no app do celular e tente de novo.";
   }
   if (code === 133010) {
     return "Número não verificado. Verifique o número via SMS/voz no WhatsApp Manager antes de registrar na Cloud API.";
@@ -453,22 +453,27 @@ export const metaChannelsRouter = router({
         );
       }
 
-      // Busca info do telefone
+      // Busca info do telefone. `is_on_biz_app`/`platform_type` são o ground
+      // truth de coexistência (CoEx) — número que continua no app do celular.
       let telefone = "";
       let nomeVerificado = "";
+      let isOnBizApp = false;
+      let platformTypeMeta = "";
       let erroTelefone: string | null = null;
       try {
         const axios = (await import("axios")).default;
         const phoneRes = await axios.get(
           `https://graph.facebook.com/v21.0/${input.phoneNumberId}`,
           {
-            params: { fields: "display_phone_number,verified_name" },
+            params: { fields: "display_phone_number,verified_name,platform_type,is_on_biz_app" },
             headers: { Authorization: `Bearer ${accessToken}` },
             timeout: 10000,
           },
         );
         telefone = phoneRes.data?.display_phone_number || "";
         nomeVerificado = phoneRes.data?.verified_name || "";
+        isOnBizApp = phoneRes.data?.is_on_biz_app === true;
+        platformTypeMeta = typeof phoneRes.data?.platform_type === "string" ? phoneRes.data.platform_type : "";
       } catch (err: any) {
         erroTelefone = explicarErroFacebook(err, "Falha ao buscar dados do número WhatsApp");
         log.warn(
@@ -491,12 +496,18 @@ export const metaChannelsRouter = router({
         );
       }
 
+      const { decidirRegistroConexao } = await import("../integracoes/coex");
+      const registro = decidirRegistroConexao({ isOnBizApp, platformType: platformTypeMeta });
+
       const { encryptConfig } = await import("../escritorio/crypto-utils");
       const config = {
         accessToken,
         phoneNumberId: input.phoneNumberId || "",
         wabaId: input.wabaId || "",
-        coexMode: "true",
+        // Ground truth da Meta — o antigo coexMode era hardcoded "true" pra
+        // toda conexão e não distinguia nada (por isso não é mais gravado).
+        isOnBizApp: registro.coex ? "true" : "false",
+        platformType: registro.platformType,
       };
       const { encrypted, iv, tag } = encryptConfig(config);
 
@@ -536,6 +547,9 @@ export const metaChannelsRouter = router({
             telefone: telefone || existente.telefone,
             nome: nomeVerificado ? `WhatsApp (${nomeVerificado})` : existente.nome,
             mensagemErro: null,
+            // CoEx (pareado por QR) e número que a Meta já reporta CLOUD_API
+            // saem registrados — sem isso a UI pedia PIN indevidamente.
+            ...(registro.jaRegistrado ? { registradoCloudApi: true } : {}),
           })
           .where(eq(canaisIntegrados.id, existente.id));
       } else {
@@ -548,6 +562,7 @@ export const metaChannelsRouter = router({
           configIv: iv,
           configTag: tag,
           telefone,
+          ...(registro.jaRegistrado ? { registradoCloudApi: true } : {}),
         });
       }
 
@@ -564,7 +579,7 @@ export const metaChannelsRouter = router({
       }
 
       log.info(
-        { escritorioId: esc.escritorio.id, telefone, webhooksInscritos: subResult.ok },
+        { escritorioId: esc.escritorio.id, telefone, webhooksInscritos: subResult.ok, coex: registro.coex, platformType: registro.platformType },
         "WhatsApp conectado via Embedded Signup",
       );
       return {
@@ -573,6 +588,8 @@ export const metaChannelsRouter = router({
         nome: nomeVerificado,
         canal: "whatsapp" as const,
         webhooksInscritos: subResult.ok,
+        coex: registro.coex,
+        jaRegistrado: registro.jaRegistrado,
       };
     }),
 
@@ -850,6 +867,16 @@ export const metaChannelsRouter = router({
         throw new Error("Configuração do canal incompleta (phone_number_id ou access_token ausente).");
       }
 
+      // Número em coexistência já sai registrado pelo pareamento por QR —
+      // registrar por PIN aqui não se aplica e pode desfazer a conexão com
+      // o app do celular.
+      const { canalEhCoex } = await import("../integracoes/coex");
+      if (canalEhCoex(config)) {
+        throw new Error(
+          "Este número está em modo coexistência (app do celular + API) e já sai registrado na Cloud API pelo pareamento por QR code — o registro por PIN não se aplica. Se o card de registro apareceu, use \"Verificar registro\" ou reconecte o canal.",
+        );
+      }
+
       const axios = (await import("axios")).default;
       try {
         await axios.post(
@@ -1074,14 +1101,17 @@ export const metaChannelsRouter = router({
       const axios = (await import("axios")).default;
       try {
         const res = await axios.get(`https://graph.facebook.com/v21.0/${cfg.phoneNumberId}`, {
-          params: { fields: "platform_type,code_verification_status,display_phone_number,name_status" },
+          params: { fields: "platform_type,code_verification_status,display_phone_number,name_status,is_on_biz_app" },
           headers: { Authorization: `Bearer ${cfg.accessToken}` },
           timeout: 10000,
         });
         const platformType: string = res.data?.platform_type || "";
-        const registrado = platformType === "CLOUD_API";
+        // CoEx (is_on_biz_app) também conta como registrado: o pareamento por
+        // QR já registra o número — o passo de PIN não se aplica.
+        const isOnBizApp = res.data?.is_on_biz_app === true;
+        const registrado = platformType === "CLOUD_API" || isOnBizApp;
         if (registrado) await marcar();
-        return { registrado, forcado: false, platformType: platformType || null };
+        return { registrado, forcado: false, platformType: platformType || null, isOnBizApp };
       } catch (err: any) {
         log.warn(
           { status: err?.response?.status, fbError: err?.response?.data?.error },
