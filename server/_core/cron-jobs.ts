@@ -268,6 +268,28 @@ export function iniciarJobs() {
     }
   }, 30 * 60 * 1000);
 
+  // A cada 6 horas: health-check da fila de webhooks do Asaas — detecta
+  // fila `interrupted` (o Asaas para de enviar eventos em silêncio após
+  // falhas de entrega) e re-arma com o token salvo, notificando o dono.
+  setInterval(async () => {
+    try {
+      const { verificarWebhooksAsaas } = await import("../integracoes/asaas-webhook-saude");
+      await verificarWebhooksAsaas();
+    } catch (err: any) {
+      log.error("[Cron] verificarWebhooksAsaas falhou:", err.message);
+    }
+  }, 6 * 60 * 60 * 1000);
+  // Primeira verificação 5min após o boot (deploy novo pode ter sido a
+  // causa das falhas de entrega que interromperam a fila).
+  setTimeout(async () => {
+    try {
+      const { verificarWebhooksAsaas } = await import("../integracoes/asaas-webhook-saude");
+      await verificarWebhooksAsaas();
+    } catch (err: any) {
+      log.error("[Cron] verificarWebhooksAsaas (boot) falhou:", err.message);
+    }
+  }, 5 * 60 * 1000);
+
   // A cada 5 minutos: processa 1 janela de sincronização histórica por
   // escritório elegível. Cada escritório controla seu próprio cooldown
   // entre janelas via `historicoSyncIntervaloMinutos`. Webhook cobre

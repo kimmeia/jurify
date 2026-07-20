@@ -97,6 +97,14 @@ export function registerAsaasWebhook(app: Express) {
 
       const escritorioId = cfg.escritorioId;
 
+      // Carimbo de vida da fila: base do health-check "conectado mas sem
+      // eventos" (fila interrompida no Asaas = silêncio total aqui).
+      // Best-effort — nunca bloqueia o processamento do evento.
+      db.update(asaasConfig)
+        .set({ ultimoWebhookEm: new Date() })
+        .where(eq(asaasConfig.id, cfg.id))
+        .catch(() => {});
+
       // ─── EVENTOS DE COBRANÇA ─────────────────────────────────────────
       if (body.event.startsWith("PAYMENT_") && body.payment) {
         const payment = body.payment;

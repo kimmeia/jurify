@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { gerarIdemKey } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -146,6 +147,13 @@ export function NovaCobrancaDialog({
   // escolhe vincular ao Asaas existente (auto-fix) ou criar mesmo assim.
   const [duplicatasDetectadas, setDuplicatasDetectadas] = useState<any[] | null>(null);
   const [verificandoDuplicata, setVerificandoDuplicata] = useState(false);
+  // Chave de idempotência: 1 por "sessão de criação" (abertura do dialog /
+  // pós-sucesso). Timeout + reclique reusa a MESMA chave → o backend acha a
+  // cobrança já criada e não cobra o cliente 2×.
+  const [idemKey, setIdemKey] = useState(gerarIdemKey);
+  useEffect(() => {
+    if (open) setIdemKey(gerarIdemKey());
+  }, [open]);
   const utils = trpc.useUtils();
   const vincularBenefMut = (trpc as any).asaas.vincularPagamentoBeneficiario.useMutation({
     onSuccess: () => {
@@ -177,6 +185,7 @@ export function NovaCobrancaDialog({
     onSuccess: (data) => {
       setResultado(data.cobranca);
       toast.success("Cobranca criada");
+      setIdemKey(gerarIdemKey());
       onCobrancaCriada?.({ tipo: "avulsa", paymentId: data.cobranca?.id || null, valor: parseFloat(valor) || 0 });
       onSuccess();
     },
@@ -257,6 +266,7 @@ export function NovaCobrancaDialog({
         vencimento,
         formaPagamento: forma as any,
         descricao: descricao || undefined,
+        idempotencyKey: idemKey,
         ...comissaoFields,
         ...acoesField,
       });
@@ -268,6 +278,7 @@ export function NovaCobrancaDialog({
         vencimento,
         formaPagamento: forma as any,
         descricao: descricao || undefined,
+        idempotencyKey: idemKey,
         ...comissaoFields,
         ...acoesField,
       });

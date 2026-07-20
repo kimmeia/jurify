@@ -651,7 +651,17 @@ export const asaasRouter = router({
 
   /** Conecta o Asaas com a API key do escritório */
   conectar: protectedProcedure
-    .input(z.object({ apiKey: z.string().min(10), webhookUrl: z.string().url().optional() }))
+    .input(z.object({
+      apiKey: z.string().min(10),
+      webhookUrl: z.string().url().optional(),
+      /**
+       * Rotação EXPLÍCITA do webhookToken (resposta a incidente: token
+       * comprometido). Exige `webhookUrl`: o token novo é registrado no
+       * Asaas ANTES de ser persistido — se o registro falhar, o antigo é
+       * mantido (nunca repete o bug da rotação cega que matava a fila).
+       */
+      rotacionarWebhookToken: z.boolean().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       // Conectar/desconectar Asaas é configuração crítica do escritório
       // (afeta TODO o financeiro). Atendente/estagiário não entra aqui.
@@ -692,16 +702,23 @@ export const asaasRouter = router({
 
       // Criptografar
       const { encrypted, iv, tag } = encrypt(input.apiKey);
-      const webhookToken = generateWebhookSecret();
+
+      // Upsert config
+      const [existing] = await db.select().from(asaasConfig)
+        .where(eq(asaasConfig.escritorioId, esc.escritorio.id)).limit(1);
+
+      // REUSA o webhookToken existente no reconnect. Rotacionar sempre era o
+      // bug que matava a fila: o token novo era persistido mas o re-registro
+      // no Asaas é opcional/best-effort — o Asaas seguia mandando o token
+      // ANTIGO, todo evento caía em 401 e, após falhas repetidas, o Asaas
+      // INTERROMPE a fila de webhooks em silêncio. Token novo só quando
+      // nunca houve um.
+      const webhookToken = existing?.webhookToken || generateWebhookSecret();
 
       const novoStatus = isRateLimit ? ("aguardando_validacao" as const) : ("conectado" as const);
       const novaMsgErro = isRateLimit
         ? "rate_limit_429: Asaas em cota excedida (janela 12h). Validação automática em background."
         : null;
-
-      // Upsert config
-      const [existing] = await db.select().from(asaasConfig)
-        .where(eq(asaasConfig.escritorioId, esc.escritorio.id)).limit(1);
 
       if (existing) {
         await db.update(asaasConfig).set({
@@ -765,7 +782,17 @@ export const asaasRouter = router({
           // Asaas exige email obrigatorio - usar o email do usuario logado
           const [userRow] = await db.select({ email: users.email }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
           const email = userRow?.email || "noreply@calcsaas.app";
-          await client.configurarWebhook(fullWebhookUrl, webhookToken, email);
+          // Rotação explícita: registra o token NOVO primeiro; só persiste
+          // se o Asaas aceitou (ordem inversa era o bug que matava a fila).
+          const tokenParaRegistrar =
+            input.rotacionarWebhookToken ? generateWebhookSecret() : webhookToken;
+          await client.configurarWebhook(fullWebhookUrl, tokenParaRegistrar, email);
+          if (tokenParaRegistrar !== webhookToken) {
+            await db.update(asaasConfig)
+              .set({ webhookToken: tokenParaRegistrar })
+              .where(eq(asaasConfig.escritorioId, esc.escritorio.id));
+            log.info(`[Asaas] webhookToken rotacionado com registro confirmado`);
+          }
           webhookRegistrado = true;
           log.info(`[Asaas] Webhook auto-registrado: ${fullWebhookUrl}`);
         } catch (err: any) {
@@ -2183,6 +2210,14 @@ export const asaasRouter = router({
        * Vazio/omitido → comportamento legado (1 evento sem `acaoId`).
        */
       processoIds: z.array(z.number().int().positive()).optional(),
+      /**
+       * Chave de idempotência gerada pelo frontend (1× por abertura do
+       * dialog). Timeout + reclique NÃO cria cobrança dupla: a chave viaja
+       * no externalReference (`op:<chave>`) e re-tentativas encontram a
+       * cobrança já criada (local ou no Asaas) em vez de criar outra.
+       * Só [A-Za-z0-9-]: `_`/`%` são wildcards de LIKE.
+       */
+      idempotencyKey: z.string().min(8).max(40).regex(/^[A-Za-z0-9-]+$/).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
@@ -2196,6 +2231,38 @@ export const asaasRouter = router({
       const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Idempotência (camada 1 — local): a mesma operação já concluiu numa
+      // tentativa anterior? Devolve a cobrança existente em vez de criar
+      // outra — o cliente final não pode ser cobrado 2× por causa de um
+      // timeout + reclique.
+      if (input.idempotencyKey) {
+        // `op:` é sempre a ÚLTIMA parte da ref (join com ";") — o LIKE sem o
+        // `%` final ancora no fim e elimina colisão por chave-prefixo.
+        const [jaCriada] = await db
+          .select()
+          .from(asaasCobrancas)
+          .where(and(
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+            like(asaasCobrancas.externalReference, `%op:${input.idempotencyKey}`),
+          ))
+          .limit(1);
+        if (jaCriada) {
+          return {
+            success: true,
+            idempotente: true,
+            cobranca: {
+              id: jaCriada.asaasPaymentId,
+              status: jaCriada.status,
+              invoiceUrl: jaCriada.invoiceUrl,
+              bankSlipUrl: jaCriada.bankSlipUrl,
+              pixQrCode: jaCriada.pixQrCodePayload
+                ? { payload: jaCriada.pixQrCodePayload, image: null }
+                : null,
+            },
+          };
+        }
+      }
 
       // Buscar vínculo Asaas primário do contato. Um contato pode ter
       // múltiplos vínculos (duplicatas no Asaas com mesmo CPF), mas
@@ -2243,10 +2310,36 @@ export const asaasRouter = router({
         await validarAtendente(esc.escritorio.id, atendenteId);
       }
 
-      // Carimba o atendente no Asaas para que cobranças importadas em outro
-      // canal (webhook, sync) consigam reidentificar a atribuição original.
-      const externalReference =
-        atendenteId !== null ? `atendente:${atendenteId}` : undefined;
+      // Carimba o atendente (reatribuição via sync/webhook) e a chave de
+      // idempotência no externalReference. O parser de atendente é regex —
+      // convive com partes extras separadas por ";".
+      const refPartes: string[] = [];
+      if (atendenteId !== null) refPartes.push(`atendente:${atendenteId}`);
+      if (input.idempotencyKey) refPartes.push(`op:${input.idempotencyKey}`);
+      const externalReference = refPartes.length > 0 ? refPartes.join(";") : undefined;
+
+      // Idempotência (camada 2 — remoto): a tentativa anterior criou no
+      // Asaas mas a resposta se perdeu ANTES do INSERT local. Busca por
+      // janela recente do customer e casa pela CHAVE (`op:`) — não pela ref
+      // exata, porque a parte `atendente:` pode mudar entre tentativas
+      // (responsável do contato reatribuído) e a busca exata deixaria a
+      // duplicata passar exatamente no cenário que a idempotência protege.
+      let cobrancaRemota = null as Awaited<ReturnType<typeof client.criarCobranca>> | null;
+      if (input.idempotencyKey) {
+        try {
+          const desde = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          const remoto = await client.listarCobrancasPorJanela({
+            dateCreatedGe: desde,
+            customer: vinculo.asaasCustomerId,
+            limit: 100,
+          });
+          const marca = `op:${input.idempotencyKey}`;
+          const achada = (remoto.data || []).find(
+            (c) => !c.deleted && typeof c.externalReference === "string" && c.externalReference.endsWith(marca),
+          );
+          if (achada) cobrancaRemota = achada;
+        } catch { /* indisponível → segue pro caminho normal de criação */ }
+      }
 
       // Criar cobrança no Asaas. O `client.criarCobranca` já formata erros
       // do Asaas com a descrição original ("Vencimento não pode ser data
@@ -2254,7 +2347,7 @@ export const asaasRouter = router({
       // frontend exibir mensagem útil em vez de "status code 500".
       let cobranca;
       try {
-        cobranca = await client.criarCobranca({
+        cobranca = cobrancaRemota ?? await client.criarCobranca({
           customer: vinculo.asaasCustomerId,
           billingType: input.formaPagamento,
           value: input.valor,
@@ -2266,9 +2359,11 @@ export const asaasRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: err?.message || "Erro ao criar cobrança no Asaas" });
       }
 
-      // Salvar localmente. INSERT retorna `insertId` em MySQL — usamos
-      // pra vincular as ações na tabela N:M `cobranca_acoes` logo abaixo.
-      const [resultInsert] = await db.insert(asaasCobrancas).values({
+      // Salvar localmente. onDuplicateKeyUpdate cobre a corrida com o
+      // webhook PAYMENT_CREATED (que pode inserir a linha antes de nós) e a
+      // adoção idempotente de cobrança já existente no Asaas — preserva os
+      // campos que só nós conhecemos (atendente/categoria/ref).
+      await db.insert(asaasCobrancas).values({
         escritorioId: esc.escritorio.id,
         contatoId: input.contatoId,
         asaasPaymentId: cobranca.id,
@@ -2285,8 +2380,27 @@ export const asaasRouter = router({
         atendenteId,
         categoriaId: input.categoriaId ?? null,
         comissionavelOverride: input.comissionavelOverride ?? null,
+      }).onDuplicateKeyUpdate({
+        set: {
+          contatoId: input.contatoId,
+          externalReference: externalReference ?? null,
+          atendenteId,
+          categoriaId: input.categoriaId ?? null,
+          comissionavelOverride: input.comissionavelOverride ?? null,
+        },
       });
-      const cobrancaIdLocal = (resultInsert as { insertId: number }).insertId;
+      // Id local pela chave única — o insertId não é confiável no caminho
+      // de update (mesmo padrão do parcelamento).
+      const [cobLocalRow] = await db
+        .select({ id: asaasCobrancas.id })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          eq(asaasCobrancas.asaasPaymentId, cobranca.id),
+        ))
+        .limit(1);
+      if (!cobLocalRow) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao registrar a cobrança localmente." });
+      const cobrancaIdLocal = cobLocalRow.id;
 
       // Vincular ações (N:M). Validação garante que os processos pertencem
       // ao mesmo contato + escritório (anti-spoof). IDs inválidos viram no-op.
@@ -5033,6 +5147,12 @@ export const asaasRouter = router({
        * (R$ 3.000 em 3x ativando 3 ações distintas) funciona aqui.
        */
       processoIds: z.array(z.number().int().positive()).optional(),
+      /**
+       * Chave de idempotência do frontend (1× por abertura do dialog). Vira
+       * o `parcelamentoLocalId`: um retry após falha na parcela k RETOMA da
+       * parcela faltante em vez de recriar as k-1 primeiras no Asaas.
+       */
+      idempotencyKey: z.string().min(8).max(40).regex(/^[A-Za-z0-9-]+$/).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
@@ -5061,22 +5181,61 @@ export const asaasRouter = router({
         input.processoIds,
       );
 
-      const parcelamentoLocalId = nanoid(16);
+      const parcelamentoLocalId = input.idempotencyKey ?? nanoid(16);
       const descBase = input.descricao || "Parcelamento";
       const plano = calcularParcelas(input.valorTotal, input.parcelas, input.vencimento);
+
+      // Retomada idempotente: parcelas já criadas numa tentativa anterior
+      // (mesma chave) são puladas — sem isso o retry recomeçava da parcela 1
+      // e o cliente final recebia as primeiras DUPLICADAS no Asaas.
+      const parcelasExistentes = new Map<number, string>();
+      if (input.idempotencyKey) {
+        const existentes = await db
+          .select({ parcelaAtual: asaasCobrancas.parcelaAtual, asaasPaymentId: asaasCobrancas.asaasPaymentId })
+          .from(asaasCobrancas)
+          .where(and(
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+            eq(asaasCobrancas.parcelamentoLocalId, parcelamentoLocalId),
+          ));
+        for (const e of existentes) {
+          if (e.parcelaAtual != null && e.asaasPaymentId) {
+            parcelasExistentes.set(e.parcelaAtual, e.asaasPaymentId);
+          }
+        }
+      }
 
       const parcelasCriadas: Array<{ asaasPaymentId: string; parcelaAtual: number; valor: number }> = [];
       let erroParcela: { numero: number; mensagem: string } | null = null;
 
       for (const p of plano) {
         try {
-          const cobranca = await client.criarCobranca({
-            customer: vinculo.asaasCustomerId,
-            billingType: input.formaPagamento,
-            value: p.valor,
-            dueDate: p.vencimento,
-            description: `${descBase} — parcela ${p.parcelaAtual}/${p.parcelaTotal}`,
-          });
+          const jaExiste = parcelasExistentes.get(p.parcelaAtual);
+          if (jaExiste) {
+            parcelasCriadas.push({ asaasPaymentId: jaExiste, parcelaAtual: p.parcelaAtual, valor: p.valor });
+            continue;
+          }
+
+          // Ref determinística por parcela — permite adotar a cobrança se a
+          // tentativa anterior criou no Asaas mas caiu antes do INSERT local.
+          const refParcela = `par:${parcelamentoLocalId}:${p.parcelaAtual}`;
+          let cobranca: Awaited<ReturnType<typeof client.criarCobranca>> | null = null;
+          if (input.idempotencyKey) {
+            try {
+              const remoto = await client.listarCobrancas({ externalReference: refParcela, limit: 1 });
+              const achada = remoto.data?.[0];
+              if (achada && !achada.deleted) cobranca = achada;
+            } catch { /* segue pra criação normal */ }
+          }
+          if (!cobranca) {
+            cobranca = await client.criarCobranca({
+              customer: vinculo.asaasCustomerId,
+              billingType: input.formaPagamento,
+              value: p.valor,
+              dueDate: p.vencimento,
+              description: `${descBase} — parcela ${p.parcelaAtual}/${p.parcelaTotal}`,
+              externalReference: refParcela,
+            });
+          }
 
           await db.insert(asaasCobrancas).values({
             escritorioId: esc.escritorio.id,
@@ -5091,6 +5250,7 @@ export const asaasRouter = router({
             descricao: `${descBase} — parcela ${p.parcelaAtual}/${p.parcelaTotal}`,
             invoiceUrl: cobranca.invoiceUrl || null,
             bankSlipUrl: cobranca.bankSlipUrl || null,
+            externalReference: refParcela,
             atendenteId: input.atendenteId ?? null,
             categoriaId: input.categoriaId ?? null,
             comissionavelOverride: input.comissionavelOverride ?? null,
@@ -5105,6 +5265,7 @@ export const asaasRouter = router({
               parcelamentoLocalId,
               parcelaAtual: p.parcelaAtual,
               parcelaTotal: p.parcelaTotal,
+              externalReference: refParcela,
               atendenteId: input.atendenteId ?? null,
               categoriaId: input.categoriaId ?? null,
               comissionavelOverride: input.comissionavelOverride ?? null,

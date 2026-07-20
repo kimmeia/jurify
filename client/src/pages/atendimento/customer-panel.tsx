@@ -18,6 +18,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { gerarIdemKey } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -989,12 +990,19 @@ function CriarCobrancaInline({
   });
   const [forma, setForma] = useState<"PIX" | "BOLETO" | "CREDIT_CARD" | "UNDEFINED">("PIX");
   const [descricao, setDescricao] = useState("");
+  // Idempotência: mesma chave por sessão do popover — reclique após timeout
+  // não cria cobrança dupla no Asaas.
+  const [idemKey, setIdemKey] = useState(gerarIdemKey);
+  useEffect(() => {
+    if (open) setIdemKey(gerarIdemKey());
+  }, [open]);
 
   const mut = trpc.asaas.criarCobranca.useMutation({
     onSuccess: () => {
       toast.success("Cobrança criada no Asaas");
       setValor("");
       setDescricao("");
+      setIdemKey(gerarIdemKey());
       setOpen(false);
       onSuccess();
     },
@@ -1084,6 +1092,7 @@ function CriarCobrancaInline({
               vencimento,
               formaPagamento: forma,
               descricao: descricao || undefined,
+              idempotencyKey: idemKey,
             });
           }}
           disabled={mut.isPending}

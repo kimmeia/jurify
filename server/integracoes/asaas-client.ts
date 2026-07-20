@@ -543,6 +543,8 @@ export class AsaasClient {
   async listarCobrancas(params?: {
     customer?: string;
     status?: AsaasPaymentStatus;
+    /** Filtro exato por externalReference — base da idempotência outbound. */
+    externalReference?: string;
     offset?: number;
     limit?: number;
   }): Promise<AsaasListResponse<AsaasPayment>> {
@@ -872,5 +874,37 @@ export class AsaasClient {
       authToken: accessToken,
     });
     return res.data;
+  }
+
+  /**
+   * Lê a config atual do webhook da conta. Base do health-check: quando o
+   * Asaas acumula falhas de entrega ele seta `interrupted: true` e PARA de
+   * enviar eventos — sem este GET ninguém fica sabendo.
+   */
+  async obterWebhook(): Promise<{
+    url?: string;
+    email?: string;
+    enabled?: boolean;
+    interrupted?: boolean;
+    apiVersion?: number;
+  } | null> {
+    try {
+      const res = await this.api.get("/webhook");
+      const data = res.data;
+      // Defensivo: se a API devolver wrapper de lista, pega o webhook que
+      // aponta pro nosso endpoint (sem isso o health-check viraria no-op).
+      if (data && Array.isArray(data.data)) {
+        return (
+          data.data.find((w: any) => String(w?.url || "").includes("/api/webhooks/asaas")) ??
+          data.data[0] ??
+          null
+        );
+      }
+      return data ?? null;
+    } catch (e: any) {
+      // Sem webhook configurado: 404 não é falha — é "nada a verificar".
+      if (e?.response?.status === 404) return null;
+      throw e;
+    }
   }
 }
