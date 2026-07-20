@@ -389,6 +389,31 @@ describe("POST — account_update", () => {
     expect(marcarCanalRestrito).toHaveBeenCalledTimes(2);
   });
 
+  it("PARTNER_REMOVED (CoEx desfeito) → canais desconectados, SEM tripar o guard anti-spam", async () => {
+    await postWebhook({
+      object: "whatsapp_business_account",
+      entry: [{
+        id: "WABA1",
+        changes: [{
+          field: "account_update",
+          value: {
+            event: "PARTNER_REMOVED",
+            waba_info: { disconnection_info: { reasons: ["ACCOUNT_DISCONNECTED"] } },
+          },
+        }],
+      }],
+    });
+    await vi.waitFor(() => {
+      const ups = captured.filter((c) => c.op === "update" && c.table === "canais_integrados");
+      expect(ups.length).toBe(2);
+      for (const up of ups) {
+        expect(up.set?.status).toBe("desconectado");
+        expect(String(up.set?.mensagemErro)).toContain("ACCOUNT_DISCONNECTED");
+      }
+    });
+    expect(marcarCanalRestrito).not.toHaveBeenCalled();
+  });
+
   it("evento informativo não mexe em nada", async () => {
     await postWebhook({
       object: "whatsapp_business_account",

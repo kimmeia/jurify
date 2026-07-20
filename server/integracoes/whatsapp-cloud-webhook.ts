@@ -176,6 +176,31 @@ async function findCanaisByWabaId(wabaId: string): Promise<CanalInfo[]> {
  * DISABLED_UPDATE, ACCOUNT_RESTRICTION, ACCOUNT_VIOLATION, etc. Monta um motivo
  * legível a partir de ban_info/restriction_info/violation_info quando presentes.
  */
+/**
+ * Extrai motivos legíveis do `account_update` PARTNER_REMOVED — o evento que
+ * a Meta envia quando a coexistência (CoEx) é desfeita: cliente desinstalou o
+ * app WhatsApp Business, ficou ~14 dias sem abrir, trocou de número ou
+ * re-registrou. Shape defensivo: a Meta variou o envelope entre versões.
+ */
+export function extrairMotivosDesconexaoCoex(value: any): string {
+  const info = value?.waba_info?.disconnection_info ?? value?.disconnection_info;
+  const motivos: string[] = [];
+  const add = (v: unknown) => {
+    if (typeof v === "string" && v.trim()) motivos.push(v.trim());
+  };
+  if (Array.isArray(info)) {
+    for (const i of info) {
+      add(i?.reason);
+      add(i?.disconnection_reason);
+    }
+  } else if (info && typeof info === "object") {
+    if (Array.isArray(info.reasons)) info.reasons.forEach(add);
+    add(info.reason);
+    add(info.disconnection_reason);
+  }
+  return motivos.length ? motivos.join(" · ") : "PARTNER_REMOVED";
+}
+
 export function detectarRestricaoConta(value: any): { restritivo: boolean; motivo: string } {
   const event = String(value?.event || "").toUpperCase();
   const restritivo = /DISABLE|RESTRICT|VIOLAT|BAN/.test(event);
@@ -422,6 +447,36 @@ export function registerWhatsAppCloudWebhook(app: Express) {
           // tripa o disjuntor de TODO canal da WABA e some da UI o "tudo certo".
           if (change.field === "account_update") {
             try {
+              // CoEx desfeito (PARTNER_REMOVED): app desinstalado, ~14 dias sem
+              // abrir, troca de número ou re-registro. Sem tratamento o canal
+              // ficava "conectado" pra sempre com todo envio morrendo no vácuo.
+              const eventoConta = String(change.value?.event || "").toUpperCase();
+              if (eventoConta === "PARTNER_REMOVED") {
+                const motivos = extrairMotivosDesconexaoCoex(change.value);
+                const db = await getDb();
+                const canais = await findCanaisByWabaId(wabaId);
+                if (db && canais.length > 0) {
+                  for (const c of canais) {
+                    await db.update(canaisIntegrados)
+                      .set({
+                        status: "desconectado",
+                        mensagemErro: `Coexistência desfeita pela Meta (${motivos}). Abra o app WhatsApp Business no celular e reconecte o canal.`.slice(0, 500),
+                      })
+                      .where(eq(canaisIntegrados.id, c.canalId));
+                    try {
+                      const { notificarSaudeCanal } = await import("./whatsapp-alertas");
+                      await notificarSaudeCanal({
+                        canalId: c.canalId,
+                        titulo: "WhatsApp desconectado (coexistência)",
+                        mensagem: `A Meta desfez a conexão do número com a plataforma (${motivos}). Verifique o app WhatsApp Business no celular e reconecte o canal em Configurações → Canais.`,
+                      });
+                    } catch { /* best-effort */ }
+                  }
+                  log.warn({ wabaId, motivos, canais: canais.length }, "[WhatsApp CoEx] PARTNER_REMOVED — canais marcados como desconectados");
+                }
+                continue;
+              }
+
               const { restritivo, motivo } = detectarRestricaoConta(change.value);
               if (restritivo) {
                 const db = await getDb();
