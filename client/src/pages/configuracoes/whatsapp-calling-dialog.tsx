@@ -42,6 +42,7 @@ export function WhatsAppCallingDialog({ open, onClose, canalId, canEdit }: Props
   });
 
   const habilitado = !!statusQuery.data?.habilitado;
+  const coexBloqueado = !!(statusQuery.data as any)?.coexBloqueado;
   const carregando = statusQuery.isLoading || definirMut.isPending;
 
   return (
@@ -69,7 +70,21 @@ export function WhatsAppCallingDialog({ open, onClose, canalId, canEdit }: Props
           </div>
         )}
 
-        {!statusQuery.isLoading && !statusQuery.error && (
+        {!statusQuery.isLoading && !statusQuery.error && coexBloqueado && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200 space-y-1.5">
+            <p className="flex items-start gap-1.5 font-medium">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              Número em modo coexistência
+            </p>
+            <p>
+              Este número continua conectado ao app WhatsApp Business no celular. Nesse modo,
+              as chamadas de voz ficam <strong>no app do celular</strong> — a Calling API da
+              Meta não suporta números em coexistência.
+            </p>
+          </div>
+        )}
+
+        {!statusQuery.isLoading && !statusQuery.error && !coexBloqueado && (
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div className="space-y-0.5">

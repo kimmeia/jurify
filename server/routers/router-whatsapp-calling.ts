@@ -30,7 +30,17 @@ import {
   cancelarOverflow,
 } from "../integracoes/whatsapp-calling-overflow";
 import { obterConfigChamada, salvarConfigChamada } from "../integracoes/whatsapp-calling-config";
+import { canalEhCoex } from "../integracoes/coex";
 import { explicarErroFacebook } from "./meta-channels";
+
+const MSG_COEX_SEM_CALLING =
+  "Este número está em modo coexistência (app do celular + API): chamadas de voz continuam exclusivas do app WhatsApp Business no celular — a Calling API da Meta não suporta números em coexistência.";
+
+/** Bloqueia operações da Calling API em canal CoEx (a Meta não suporta). */
+async function exigirCanalSemCoex(escritorioId: number, canalId: number): Promise<void> {
+  const cfg = await obterConfigCanal(canalId, escritorioId);
+  if (canalEhCoex(cfg)) throw new Error(MSG_COEX_SEM_CALLING);
+}
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("router-whatsapp-calling");
@@ -114,12 +124,23 @@ export const whatsappCallingRouter = router({
     .input(z.object({ canalId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const esc = await getEsc(ctx.user.id);
+      // Canal CoEx: responde o bloqueio sem consultar a Meta (a chamada
+      // falharia) — a UI usa `coexBloqueado` pra explicar em vez de errar.
+      const cfg = await obterConfigCanal(input.canalId, esc.escritorioId);
+      if (canalEhCoex(cfg)) {
+        return {
+          habilitado: false,
+          status: "COEX_NAO_SUPORTADO",
+          raw: null as unknown,
+          coexBloqueado: true,
+        };
+      }
       const client = await clientDoCanal(esc.escritorioId, input.canalId);
       const raw = await comErroMeta("Falha ao ler a configuração de ligação", () =>
         client.getCallingSettings(),
       );
       const status = typeof raw.status === "string" ? raw.status : "";
-      return { habilitado: status.toUpperCase() === "ENABLED", status, raw };
+      return { habilitado: status.toUpperCase() === "ENABLED", status, raw, coexBloqueado: false };
     }),
 
   /** Habilita/desabilita ligação no número (gestão). */
@@ -134,6 +155,7 @@ export const whatsappCallingRouter = router({
     .mutation(async ({ ctx, input }) => {
       await exigirGestao(ctx.user.id);
       const esc = await getEsc(ctx.user.id);
+      await exigirCanalSemCoex(esc.escritorioId, input.canalId);
       const client = await clientDoCanal(esc.escritorioId, input.canalId);
       const extra =
         input.mostrarIcone === undefined
@@ -156,6 +178,7 @@ export const whatsappCallingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await getEsc(ctx.user.id);
+      await exigirCanalSemCoex(esc.escritorioId, input.canalId);
       const client = await clientDoCanal(esc.escritorioId, input.canalId);
       const texto =
         input.texto ||
@@ -183,6 +206,7 @@ export const whatsappCallingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await getEsc(ctx.user.id);
+      await exigirCanalSemCoex(esc.escritorioId, input.canalId);
       const client = await clientDoCanal(esc.escritorioId, input.canalId);
       const telLimpo = input.telefone.replace(/\D/g, "");
 
