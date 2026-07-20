@@ -5198,7 +5198,9 @@ export const asaasRouter = router({
             eq(asaasCobrancas.parcelamentoLocalId, parcelamentoLocalId),
           ));
         for (const e of existentes) {
-          if (e.parcelaAtual != null) parcelasExistentes.set(e.parcelaAtual, e.asaasPaymentId);
+          if (e.parcelaAtual != null && e.asaasPaymentId) {
+            parcelasExistentes.set(e.parcelaAtual, e.asaasPaymentId);
+          }
         }
       }
 
