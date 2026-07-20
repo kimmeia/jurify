@@ -38,9 +38,12 @@ const log = createLogger("whatsapp-envio-guard");
 
 /**
  * Códigos de erro da Meta que indicam restrição de conta / spam / violação de
- * política — tripam o disjuntor. NÃO inclui limites "saudáveis" por
- * destinatário (131049/130497 = teto de marketing por usuário, normais) nem
- * erros de configuração — esses não são restrição de conta.
+ * política — tripam o disjuntor. NÃO inclui limites "saudáveis": 131049 =
+ * frequency cap de marketing por usuário; 131056 = rate por par de números;
+ * 131026 = destinatário indisponível (ou marketing dropado pelo cap); 130497 =
+ * restrição de PAÍS de destino (cross-country) — nenhum é restrição da conta.
+ * Também fora: 132015/132016 (template pausado/desativado — problema de UM
+ * template, tratado via alerta; tripar aqui pausaria o canal inteiro).
  */
 export const META_CODIGOS_RESTRICAO = new Set<number>([
   131031, // Business account has been locked (restrição de conta)

@@ -138,3 +138,34 @@ export async function ultimaEntradaDaConversa(db: any, conversaId: number): Prom
     .limit(1);
   return row?.createdAt ?? null;
 }
+
+/**
+ * Última mensagem RECEBIDA do contato em QUALQUER conversa daquele canal.
+ * A janela de 24h da Meta é por par (número da empresa, número do cliente) —
+ * medir só a conversa atual dava falso "fechada" quando a conversa anterior
+ * tinha sido encerrada e uma nova era aberta pro mesmo telefone.
+ * Exclui mensagens `tipo="sistema"` (eventos internos não abrem janela).
+ */
+export async function ultimaEntradaDoContatoNoCanal(
+  db: any,
+  contatoId: number,
+  canalId: number,
+): Promise<Date | null> {
+  const { mensagens, conversas } = await import("../../drizzle/schema");
+  const { desc, ne } = await import("drizzle-orm");
+  const [row] = await db
+    .select({ createdAt: mensagens.createdAt })
+    .from(mensagens)
+    .innerJoin(conversas, eq(mensagens.conversaId, conversas.id))
+    .where(
+      and(
+        eq(conversas.contatoId, contatoId),
+        eq(conversas.canalId, canalId),
+        eq(mensagens.direcao, "entrada"),
+        ne(mensagens.tipo, "sistema"),
+      ),
+    )
+    .orderBy(desc(mensagens.id))
+    .limit(1);
+  return row?.createdAt ?? null;
+}
