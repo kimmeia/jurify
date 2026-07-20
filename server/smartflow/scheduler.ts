@@ -41,7 +41,23 @@ const INTERVALO_MS = 60_000; // 60s
 
 let intervalo: ReturnType<typeof setInterval> | null = null;
 
+// Guard de reentrada: ciclo com passos lentos (LLM) pode passar de 60s e o
+// setInterval sobrepor — mesma classe de bug do cron de monitoramento
+// (cron-concurrency-guard). O claim atômico em retomarExecucao é a defesa
+// principal; esta flag evita o desperdício de ciclos concorrentes.
+let cicloRodando = false;
+
 export async function rodarCicloScheduler(): Promise<{ retomadas: number; falhas: number }> {
+  if (cicloRodando) return { retomadas: 0, falhas: 0 };
+  cicloRodando = true;
+  try {
+    return await rodarCicloSchedulerInterno();
+  } finally {
+    cicloRodando = false;
+  }
+}
+
+async function rodarCicloSchedulerInterno(): Promise<{ retomadas: number; falhas: number }> {
   const db = await getDb();
   if (!db) return { retomadas: 0, falhas: 0 };
 

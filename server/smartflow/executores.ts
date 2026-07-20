@@ -241,7 +241,7 @@ async function resolverContextoCliente(
  */
 async function persistirEnvioTemplate(
   escritorioId: number,
-  dados: { contatoId: number; canalId?: number; idExterno: string; conteudo: string },
+  dados: { contatoId: number; canalId?: number; idExterno: string; conteudo: string; assunto?: string },
 ): Promise<void> {
   try {
     const { getDb } = await import("../db");
@@ -291,7 +291,12 @@ async function persistirEnvioTemplate(
     const { criarConversa, enviarMensagem } = await import("../escritorio/db-crm");
     const conversaId =
       existente?.id ??
-      (await criarConversa({ escritorioId, contatoId: dados.contatoId, canalId, assunto: "Cobrança (SmartFlow)" }));
+      (await criarConversa({
+        escritorioId,
+        contatoId: dados.contatoId,
+        canalId,
+        assunto: dados.assunto || "Cobrança (SmartFlow)",
+      }));
 
     await enviarMensagem({
       conversaId,
@@ -1188,6 +1193,19 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
             okTodas = false;
             break;
           }
+          // Registra na timeline da conversa (com idExterno pro webhook
+          // `failed` casar) — antes o texto proativo era invisível no
+          // Atendimento e falha de entrega em massa não aparecia em lugar
+          // nenhum.
+          if (opts?.contatoId) {
+            await persistirEnvioTemplate(escritorioId, {
+              contatoId: opts.contatoId,
+              canalId: r.canalId,
+              idExterno: r.idExterno || "",
+              conteudo: partes[i],
+              assunto: "Automação (SmartFlow)",
+            });
+          }
         }
         return okTodas;
       } catch (err: any) {
@@ -1215,6 +1233,18 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
         });
         if (!r.ok) {
           log.warn({ erro: r.erro, provider: r.provider, modo: p.modo }, "SmartFlow: envio WhatsApp interativo falhou");
+        } else if (p.contatoId) {
+          // Timeline: sem isto a pergunta interativa não existia na conversa —
+          // o atendente via só a resposta do cliente, sem a pergunta (o corpo
+          // parou de ser reenviado pelo handler quando o envio duplicado foi
+          // eliminado).
+          await persistirEnvioTemplate(escritorioId, {
+            contatoId: p.contatoId,
+            canalId: r.canalId,
+            idExterno: r.idExterno || "",
+            conteudo: p.body,
+            assunto: "Automação (SmartFlow)",
+          });
         }
         return r.ok;
       } catch (err: any) {
