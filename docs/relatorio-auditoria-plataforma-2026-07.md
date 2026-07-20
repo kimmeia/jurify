@@ -166,7 +166,7 @@ UNIQUEs + upserts, 429 handling nos syncs, 22 arquivos de teste.
 | # | Sev. | Falha | Evidência |
 |---|---|---|---|
 | S1 | **crítica** | `/uploads` servido por `express.static` **sem autenticação** — documentos jurídicos com PII acessíveis por URL (LGPD) | _core/index.ts:149 |
-| S2 | **crítica** | Uploads em **disco efêmero** — sem volume Railway montado, anexos/assinaturas/modelos somem a cada deploy (o código só loga warning) | _core/index.ts:59-79 |
+| S2 | ~~crítica~~ **mitigada na infra** | Uploads em disco efêmero — o código só loga warning sem volume, mas o volume Railway (`juridflow-volume`) está montado e **validado fim-a-fim pelo dono** (arquivo sobrevive a redeploys). Restam: confirmar o mesmo em staging + backup do volume (Railway não snapshota — migração p/ S3 no P2) | _core/index.ts:59-79 |
 | S3 | alta | IDOR kanban: `deletarColuna`/`editarColuna`/`criarColuna` sem checagem de tenant — qualquer logado deleta coluna+cards de outro escritório por id sequencial | router-kanban.ts:160-201 |
 | S4 | média | XSS: saída de IA renderizada via `marked` + `dangerouslySetInnerHTML` sem sanitização | Processos.tsx:807,827 |
 | S5 | média | `express.json({limit:"3gb"})` global + upload base64 em RAM → DoS/OOM | _core/index.ts:137-147 |
