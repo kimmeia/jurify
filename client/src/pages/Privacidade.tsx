@@ -6,7 +6,7 @@
 
 import { Link } from "wouter";
 
-const ATUALIZADO_EM = "29 de abril de 2026";
+const ATUALIZADO_EM = "20 de julho de 2026";
 
 export default function Privacidade() {
   return (
@@ -26,6 +26,7 @@ export default function Privacidade() {
         <ul className="list-disc pl-6">
           <li><strong>Cadastro</strong>: nome, email, senha (hash), telefone, dados do escritório.</li>
           <li><strong>Operacionais</strong>: dados que você insere (clientes, processos, documentos, anotações).</li>
+          <li><strong>Atendimento (WhatsApp)</strong>: mensagens trocadas com os clientes do escritório, nome e telefone dos contatos, quando você conecta um número via integração oficial com a Meta.</li>
           <li><strong>Pagamento</strong>: processado pelo Asaas; recebemos apenas confirmação e identificadores. Não armazenamos número de cartão.</li>
           <li><strong>Técnicos</strong>: IP, user-agent, logs de acesso, telemetria de erros (via Sentry).</li>
         </ul>
@@ -58,13 +59,36 @@ export default function Privacidade() {
           <li><strong>Resend</strong> &mdash; envio de emails transacionais.</li>
           <li><strong>Sentry</strong> &mdash; monitoramento de erros (dados anonimizados).</li>
           <li><strong>Google</strong> &mdash; autenticação Google Sign-In (opcional).</li>
+          <li><strong>Meta Platforms</strong> &mdash; WhatsApp Business Platform (Cloud API), quando você conecta um canal de atendimento (opcional).</li>
         </ul>
         <p>
           Não vendemos dados pessoais a terceiros. Não compartilhamos pra
           fins de marketing.
         </p>
 
-        <h2 className="text-xl font-semibold pt-4">5. Seus direitos (LGPD art. 18)</h2>
+        <h2 className="text-xl font-semibold pt-4">5. Dados do WhatsApp e da Meta</h2>
+        <p>
+          Se você conecta um número de WhatsApp Business à Plataforma
+          (integração oficial via Meta &mdash; WhatsApp Business Platform),
+          tratamos:
+        </p>
+        <ul className="list-disc pl-6">
+          <li><strong>Mensagens</strong> enviadas e recebidas no número conectado, pra exibir e operar o atendimento dentro da Plataforma.</li>
+          <li><strong>Contatos</strong>: nome de perfil e número de telefone dos clientes que conversam com o escritório.</li>
+          <li><strong>Identificadores técnicos</strong> da conta (WhatsApp Business Account ID, Phone Number ID) e tokens de acesso, armazenados criptografados (AES-256-GCM).</li>
+        </ul>
+        <p>
+          Esses dados são usados exclusivamente pra prover o atendimento e
+          automações configuradas por você. Não os usamos pra publicidade,
+          não os vendemos e não os compartilhamos com terceiros fora dos
+          operadores listados acima. O tratamento segue os{" "}
+          <a href="https://developers.facebook.com/terms/" target="_blank" rel="noreferrer" className="text-violet-600 hover:underline">Termos da Plataforma Meta</a>.
+          Ao desconectar o canal, os tokens de acesso são revogados e
+          excluídos; o histórico de conversas segue a política de retenção
+          da sua conta (seção 8).
+        </p>
+
+        <h2 className="text-xl font-semibold pt-4">6. Seus direitos (LGPD art. 18)</h2>
         <p>Você pode, a qualquer momento:</p>
         <ul className="list-disc pl-6">
           <li>Acessar seus dados (exportação via suporte).</li>
@@ -79,14 +103,25 @@ export default function Privacidade() {
           Atendemos em até 15 dias úteis.
         </p>
 
-        <h2 className="text-xl font-semibold pt-4">6. Retenção</h2>
+        <h2 id="exclusao-de-dados" className="text-xl font-semibold pt-4">7. Exclusão de dados</h2>
+        <p>Pra solicitar a exclusão dos seus dados (incluindo dados obtidos via WhatsApp/Meta):</p>
+        <ol className="list-decimal pl-6">
+          <li>Envie um email pra <a href="mailto:privacidade@juridflow.com.br" className="text-violet-600 hover:underline">privacidade@juridflow.com.br</a> com o assunto &ldquo;Exclusão de dados&rdquo;, a partir do email cadastrado na conta; ou</li>
+          <li>Cancele sua conta em Configurações &gt; Meu Plano &mdash; após o período de exportação de 60 dias, todos os dados são excluídos automaticamente.</li>
+        </ol>
+        <p>
+          Confirmamos a exclusão por email em até 15 dias úteis, ressalvados
+          dados que precisamos reter por obrigação legal (seção 8).
+        </p>
+
+        <h2 className="text-xl font-semibold pt-4">8. Retenção</h2>
         <p>
           Dados de cadastro: enquanto durar a assinatura + 60 dias após
           cancelamento (período de exportação) + obrigações legais (5 anos
           fiscais). Logs técnicos: 180 dias. Backups: 30 dias.
         </p>
 
-        <h2 className="text-xl font-semibold pt-4">7. Segurança</h2>
+        <h2 className="text-xl font-semibold pt-4">9. Segurança</h2>
         <ul className="list-disc pl-6">
           <li>HTTPS/TLS em toda comunicação.</li>
           <li>Senhas armazenadas com hash (scrypt).</li>
@@ -96,31 +131,31 @@ export default function Privacidade() {
           <li>Acesso a dados de produção restrito a engenheiros autorizados.</li>
         </ul>
 
-        <h2 className="text-xl font-semibold pt-4">8. Cookies</h2>
+        <h2 className="text-xl font-semibold pt-4">10. Cookies</h2>
         <p>
           Usamos cookies essenciais pra manter sua sessão (login). Não usamos
           cookies de tracking publicitário de terceiros.
         </p>
 
-        <h2 className="text-xl font-semibold pt-4">9. Crianças</h2>
+        <h2 className="text-xl font-semibold pt-4">11. Crianças</h2>
         <p>
           A Plataforma é destinada a profissionais maiores de 18 anos. Não
           coletamos dados de menores.
         </p>
 
-        <h2 className="text-xl font-semibold pt-4">10. Encarregado de Dados (DPO)</h2>
+        <h2 className="text-xl font-semibold pt-4">12. Encarregado de Dados (DPO)</h2>
         <p>
           Encarregado: <em>a definir</em>. Contato:{" "}
           <a href="mailto:privacidade@juridflow.com.br" className="text-violet-600 hover:underline">privacidade@juridflow.com.br</a>.
         </p>
 
-        <h2 className="text-xl font-semibold pt-4">11. ANPD</h2>
+        <h2 className="text-xl font-semibold pt-4">13. ANPD</h2>
         <p>
           Você pode reclamar à Autoridade Nacional de Proteção de Dados
           (ANPD) caso entenda que seus direitos foram violados.
         </p>
 
-        <h2 className="text-xl font-semibold pt-4">12. Alterações</h2>
+        <h2 className="text-xl font-semibold pt-4">14. Alterações</h2>
         <p>
           Esta Política pode ser atualizada. Mudanças materiais serão
           comunicadas por email ou banner com ao menos 30 dias de
