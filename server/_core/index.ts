@@ -152,18 +152,36 @@ async function startServer() {
   // Tenancy pelo path: `escritorio_<id>` (uploads/assinaturas/modelos) ou
   // `whatsapp-cloud/<escritorioId>/...` (mídia recebida). Path sem marcador
   // de escritório (legado) exige só login.
+  // Cache curto userId→escritorioId: uma tela do Atendimento carrega dezenas
+  // de mídias em paralelo — sem isso cada <img> custava um lookup de
+  // colaborador no DB.
+  const uploadsEscCache = new Map<number, { escritorioId: number | null; ate: number }>();
   app.use(
     "/uploads",
     async (req, res, next) => {
+      // Exceção PÚBLICA por design: pareceres são capability-URLs (slug +
+      // timestamp + random) compartilhados com o CLIENTE do advogado por
+      // e-mail/WhatsApp — destinatário externo não tem sessão. O resto do
+      // /uploads exige login + escritório.
+      if (req.path.startsWith("/pareceres/")) {
+        next();
+        return;
+      }
       try {
         const { sdk } = await import("./sdk");
         const user = await sdk.authenticateRequest(req);
         const m =
           req.path.match(/escritorio_(\d+)/) || req.path.match(/^\/whatsapp-cloud\/(\d+)\//);
         if (m && user.role !== "admin") {
-          const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
-          const esc = await getEscritorioPorUsuario(user.id);
-          if (!esc || esc.escritorio.id !== Number(m[1])) {
+          const agora = Date.now();
+          let entrada = uploadsEscCache.get(user.id);
+          if (!entrada || entrada.ate < agora) {
+            const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
+            const esc = await getEscritorioPorUsuario(user.id);
+            entrada = { escritorioId: esc?.escritorio.id ?? null, ate: agora + 60_000 };
+            uploadsEscCache.set(user.id, entrada);
+          }
+          if (entrada.escritorioId !== Number(m[1])) {
             res.status(403).json({ error: "Sem acesso a este arquivo" });
             return;
           }

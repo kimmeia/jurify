@@ -888,7 +888,23 @@ export class AsaasClient {
     interrupted?: boolean;
     apiVersion?: number;
   } | null> {
-    const res = await this.api.get("/webhook");
-    return res.data ?? null;
+    try {
+      const res = await this.api.get("/webhook");
+      const data = res.data;
+      // Defensivo: se a API devolver wrapper de lista, pega o webhook que
+      // aponta pro nosso endpoint (sem isso o health-check viraria no-op).
+      if (data && Array.isArray(data.data)) {
+        return (
+          data.data.find((w: any) => String(w?.url || "").includes("/api/webhooks/asaas")) ??
+          data.data[0] ??
+          null
+        );
+      }
+      return data ?? null;
+    } catch (e: any) {
+      // Sem webhook configurado: 404 não é falha — é "nada a verificar".
+      if (e?.response?.status === 404) return null;
+      throw e;
+    }
   }
 }

@@ -651,7 +651,17 @@ export const asaasRouter = router({
 
   /** Conecta o Asaas com a API key do escritório */
   conectar: protectedProcedure
-    .input(z.object({ apiKey: z.string().min(10), webhookUrl: z.string().url().optional() }))
+    .input(z.object({
+      apiKey: z.string().min(10),
+      webhookUrl: z.string().url().optional(),
+      /**
+       * Rotação EXPLÍCITA do webhookToken (resposta a incidente: token
+       * comprometido). Exige `webhookUrl`: o token novo é registrado no
+       * Asaas ANTES de ser persistido — se o registro falhar, o antigo é
+       * mantido (nunca repete o bug da rotação cega que matava a fila).
+       */
+      rotacionarWebhookToken: z.boolean().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       // Conectar/desconectar Asaas é configuração crítica do escritório
       // (afeta TODO o financeiro). Atendente/estagiário não entra aqui.
@@ -772,7 +782,17 @@ export const asaasRouter = router({
           // Asaas exige email obrigatorio - usar o email do usuario logado
           const [userRow] = await db.select({ email: users.email }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
           const email = userRow?.email || "noreply@calcsaas.app";
-          await client.configurarWebhook(fullWebhookUrl, webhookToken, email);
+          // Rotação explícita: registra o token NOVO primeiro; só persiste
+          // se o Asaas aceitou (ordem inversa era o bug que matava a fila).
+          const tokenParaRegistrar =
+            input.rotacionarWebhookToken ? generateWebhookSecret() : webhookToken;
+          await client.configurarWebhook(fullWebhookUrl, tokenParaRegistrar, email);
+          if (tokenParaRegistrar !== webhookToken) {
+            await db.update(asaasConfig)
+              .set({ webhookToken: tokenParaRegistrar })
+              .where(eq(asaasConfig.escritorioId, esc.escritorio.id));
+            log.info(`[Asaas] webhookToken rotacionado com registro confirmado`);
+          }
           webhookRegistrado = true;
           log.info(`[Asaas] Webhook auto-registrado: ${fullWebhookUrl}`);
         } catch (err: any) {
@@ -2217,12 +2237,14 @@ export const asaasRouter = router({
       // outra — o cliente final não pode ser cobrado 2× por causa de um
       // timeout + reclique.
       if (input.idempotencyKey) {
+        // `op:` é sempre a ÚLTIMA parte da ref (join com ";") — o LIKE sem o
+        // `%` final ancora no fim e elimina colisão por chave-prefixo.
         const [jaCriada] = await db
           .select()
           .from(asaasCobrancas)
           .where(and(
             eq(asaasCobrancas.escritorioId, esc.escritorio.id),
-            like(asaasCobrancas.externalReference, `%op:${input.idempotencyKey}%`),
+            like(asaasCobrancas.externalReference, `%op:${input.idempotencyKey}`),
           ))
           .limit(1);
         if (jaCriada) {
@@ -2297,14 +2319,25 @@ export const asaasRouter = router({
       const externalReference = refPartes.length > 0 ? refPartes.join(";") : undefined;
 
       // Idempotência (camada 2 — remoto): a tentativa anterior criou no
-      // Asaas mas a resposta se perdeu ANTES do INSERT local. Consulta por
-      // externalReference e ADOTA a cobrança existente em vez de criar outra.
+      // Asaas mas a resposta se perdeu ANTES do INSERT local. Busca por
+      // janela recente do customer e casa pela CHAVE (`op:`) — não pela ref
+      // exata, porque a parte `atendente:` pode mudar entre tentativas
+      // (responsável do contato reatribuído) e a busca exata deixaria a
+      // duplicata passar exatamente no cenário que a idempotência protege.
       let cobrancaRemota = null as Awaited<ReturnType<typeof client.criarCobranca>> | null;
-      if (input.idempotencyKey && externalReference) {
+      if (input.idempotencyKey) {
         try {
-          const remoto = await client.listarCobrancas({ externalReference, limit: 1 });
-          const achada = remoto.data?.[0];
-          if (achada && !achada.deleted) cobrancaRemota = achada;
+          const desde = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          const remoto = await client.listarCobrancasPorJanela({
+            dateCreatedGe: desde,
+            customer: vinculo.asaasCustomerId,
+            limit: 100,
+          });
+          const marca = `op:${input.idempotencyKey}`;
+          const achada = (remoto.data || []).find(
+            (c) => !c.deleted && typeof c.externalReference === "string" && c.externalReference.endsWith(marca),
+          );
+          if (achada) cobrancaRemota = achada;
         } catch { /* indisponível → segue pro caminho normal de criação */ }
       }
 
