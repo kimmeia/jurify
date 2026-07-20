@@ -331,6 +331,92 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
   return { contatoId, conversaId, mensagemId };
 }
 
+/**
+ * Ingestão SILENCIOSA de echo CoEx — mensagem que o atendente enviou pelo app
+ * WhatsApp Business do celular (webhook `smb_message_echoes`).
+ *
+ * Regras:
+ *  - Entra na timeline como saída com origem 'celular'.
+ *  - Dedup por wamid: mensagem enviada pela PRÓPRIA API também volta como
+ *    echo — o wamid já persistido no envio evita a duplicata.
+ *  - Marca a conversa em_atendimento: humano respondeu pelo celular = assumiu.
+ *    Mesmo efeito do envio manual no inbox — SmartFlow/auto-reply pausam.
+ *  - NÃO dispara SmartFlow, auto-reply, opt-in nem notificação de "nova
+ *    mensagem": não é mensagem do cliente.
+ */
+export async function processarEchoCelular(
+  canalId: number,
+  escritorioId: number,
+  echo: {
+    chatId: string;
+    telefone: string;
+    conteudo: string;
+    tipo: WhatsappMensagemRecebida["tipo"];
+    mediaUrl?: string;
+    messageId: string;
+  },
+) {
+  if (echo.messageId) {
+    const duplicada = await buscarMensagemPorIdExterno(echo.messageId);
+    if (duplicada) {
+      return { conversaId: duplicada.conversaId, mensagemId: duplicada.id, duplicada: true };
+    }
+  }
+
+  // Resolve contato+conversa (cria se não existirem — o relacionamento pode
+  // ter vivido inteiro no celular antes da conexão CoEx).
+  let conversaId = await buscarConversaPorChatId(escritorioId, canalId, echo.chatId);
+  let contatoId = conversaId ? ((await pegarContatoIdDaConversa(conversaId)) ?? 0) : 0;
+  if (!contatoId && echo.telefone) {
+    const existente = await buscarContatoPorTelefoneDB(escritorioId, echo.telefone.replace(/\D/g, ""));
+    contatoId = existente?.id ?? 0;
+  }
+  if (!contatoId) {
+    const resultado = await criarOuReutilizarContato({
+      escritorioId,
+      nome: echo.telefone || "Contato WhatsApp",
+      telefone: echo.telefone,
+      origem: "whatsapp",
+    });
+    contatoId = resultado.id;
+  }
+  if (!conversaId) {
+    conversaId = await buscarConversaExistente(escritorioId, contatoId, canalId, echo.chatId);
+  }
+  if (!conversaId) {
+    conversaId = await criarConversa({
+      escritorioId,
+      contatoId,
+      canalId,
+      assunto: `WhatsApp: ${echo.telefone || "contato"}`,
+      chatIdExterno: echo.chatId,
+    });
+  }
+
+  const mensagemId = await salvarMensagem({
+    conversaId,
+    remetenteId: undefined,
+    direcao: "saida",
+    origem: "celular",
+    tipo: mapTipo(echo.tipo),
+    conteudo: echo.conteudo,
+    mediaUrl: echo.mediaUrl || undefined,
+    status: "enviada",
+    idExterno: echo.messageId || undefined,
+  });
+
+  const statusAtual = await pegarStatusConversa(conversaId);
+  if (statusAtual !== "em_atendimento") {
+    await atualizarConversa(conversaId, escritorioId, { status: "em_atendimento" });
+  }
+
+  log.info(
+    { canalId, conversaId, mensagemId },
+    "[WhatsApp CoEx] Echo do celular ingerido — conversa em atendimento humano",
+  );
+  return { conversaId, mensagemId, duplicada: false };
+}
+
 /** Envia o auto-reply fixo configurado no canal. Se vazio/null, não envia nada
  *  (silêncio deliberado — operador atende manualmente pela UI de Atendimento). */
 export async function enviarAutoReply(canalId: number, conversaId: number, chatIdExterno: string) {

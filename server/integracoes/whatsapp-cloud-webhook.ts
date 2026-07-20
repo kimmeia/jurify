@@ -394,6 +394,7 @@ export function registerWhatsAppCloudWebhook(app: Express) {
           phoneNumberId: c.value?.metadata?.phone_number_id,
           msgs: Array.isArray(c.value?.messages) ? c.value.messages.length : 0,
           statuses: Array.isArray(c.value?.statuses) ? c.value.statuses.length : 0,
+          echoes: Array.isArray(c.value?.message_echoes) ? c.value.message_echoes.length : 0,
         })),
       );
       log.info({ eventos: resumoEvento }, "[WhatsApp Cloud] webhook recebido");
@@ -486,7 +487,62 @@ export function registerWhatsAppCloudWebhook(app: Express) {
             continue;
           }
 
-          if (change.field !== "messages") continue;
+          // CoEx: mensagem que o atendente enviou pelo app WhatsApp Business
+          // do celular chega como echo. Ingestão SILENCIOSA: entra na timeline
+          // como saída (origem 'celular') e pausa o bot — nunca dispara
+          // SmartFlow/auto-reply, porque NÃO é mensagem do cliente.
+          if (change.field === "smb_message_echoes") {
+            const valueEcho = change.value;
+            const phoneNumberIdEcho = valueEcho?.metadata?.phone_number_id;
+            const canalEcho = await resolverCanalDaMensagem(phoneNumberIdEcho);
+            if (!canalEcho) {
+              log.warn(
+                { phoneNumberId: phoneNumberIdEcho, wabaId },
+                "[WhatsApp Cloud] Echo de número não conectado neste JuridFlow — ignorado",
+              );
+              continue;
+            }
+            for (const echo of valueEcho?.message_echoes || []) {
+              try {
+                const telefoneCliente = formatPhone(String(echo.to || ""));
+                if (!telefoneCliente) continue;
+                const { conteudo, tipo, mediaId, nomeOriginalArquivo } =
+                  parseMensagemCloud(echo, telefoneCliente);
+                let mediaUrl = "";
+                if (mediaId && canalEcho.accessToken) {
+                  const { baixarMidiaCloudApi } = await import("./whatsapp-cloud-media");
+                  const baixada = await baixarMidiaCloudApi({
+                    mediaId,
+                    accessToken: canalEcho.accessToken,
+                    escritorioId: canalEcho.escritorioId,
+                    canalId: canalEcho.canalId,
+                    nomeOriginal: nomeOriginalArquivo,
+                  });
+                  if (baixada) mediaUrl = baixada.url;
+                }
+                const { processarEchoCelular } = await import("./whatsapp-handler");
+                await processarEchoCelular(canalEcho.canalId, canalEcho.escritorioId, {
+                  chatId: `${String(echo.to || "")}@s.whatsapp.net`,
+                  telefone: telefoneCliente,
+                  conteudo: mediaUrl ? `${conteudo}\n[media:${mediaUrl}]` : conteudo,
+                  tipo,
+                  mediaUrl,
+                  messageId: String(echo.id || ""),
+                });
+              } catch (echoErr: any) {
+                log.error("[WhatsApp Cloud] Erro ao processar echo CoEx:", echoErr.message);
+              }
+            }
+            continue;
+          }
+
+          if (change.field !== "messages") {
+            // Campo sem handler (ex: history/smb_app_state_sync do CoEx, ainda
+            // não suportados). Log explícito — descarte silencioso transforma
+            // "não sincroniza" em caça às cegas entre Meta e app.
+            log.info({ campo: change.field, wabaId }, "[WhatsApp Cloud] campo de webhook sem handler — ignorado");
+            continue;
+          }
 
           const value = change.value;
           const phoneNumberId = value?.metadata?.phone_number_id;

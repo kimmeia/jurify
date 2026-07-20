@@ -85,8 +85,10 @@ vi.mock("../escritorio/crypto-utils", () => ({
 }));
 
 const processarMensagemRecebida = vi.fn(async () => ({ contatoId: 1, conversaId: 1, mensagemId: 1 }));
+const processarEchoCelular = vi.fn(async () => ({ conversaId: 1, mensagemId: 1, duplicada: false }));
 vi.mock("../integracoes/whatsapp-handler", () => ({
   processarMensagemRecebida: (...a: any[]) => processarMensagemRecebida(...a),
+  processarEchoCelular: (...a: any[]) => processarEchoCelular(...a),
 }));
 
 const marcarCanalRestrito = vi.fn(async () => {});
@@ -137,6 +139,7 @@ afterAll(async () => {
 beforeEach(() => {
   captured = [];
   processarMensagemRecebida.mockClear();
+  processarEchoCelular.mockClear();
   marcarCanalRestrito.mockClear();
   registrarFalhaTemplate.mockClear();
   delete process.env.META_APP_SECRET_EXTRA;
@@ -254,6 +257,81 @@ describe("POST — field messages", () => {
     expect(res.status).toBe(200);
     await aguardarProcessamento();
     expect(processarMensagemRecebida).not.toHaveBeenCalled();
+    expect(captured).toHaveLength(0);
+  });
+});
+
+// ─── POST: smb_message_echoes (CoEx) ─────────────────────────────────────────
+
+describe("POST — field smb_message_echoes (CoEx)", () => {
+  it("echo do celular chega parseado em processarEchoCelular com o canal certo", async () => {
+    const res = await postWebhook({
+      object: "whatsapp_business_account",
+      entry: [{
+        id: "WABA1",
+        changes: [{
+          field: "smb_message_echoes",
+          value: {
+            metadata: { phone_number_id: "PN_A" },
+            message_echoes: [{
+              from: "5585999991111",
+              to: "5585988887777",
+              id: "wamid.ECHO_HTTP",
+              timestamp: "1700000100",
+              type: "text",
+              text: { body: "respondi pelo celular" },
+            }],
+          },
+        }],
+      }],
+    });
+    expect(res.status).toBe(200);
+    await vi.waitFor(() => expect(processarEchoCelular).toHaveBeenCalledTimes(1));
+
+    const [canalId, escritorioId, echo] = processarEchoCelular.mock.calls[0] as any[];
+    expect(canalId).toBe(1);
+    expect(escritorioId).toBe(10);
+    expect(echo).toMatchObject({
+      telefone: "5585988887777",
+      chatId: "5585988887777@s.whatsapp.net",
+      conteudo: "respondi pelo celular",
+      tipo: "texto",
+      messageId: "wamid.ECHO_HTTP",
+    });
+    expect(processarMensagemRecebida).not.toHaveBeenCalled();
+  });
+
+  it("echo de número não conectado → ignorado", async () => {
+    const res = await postWebhook({
+      object: "whatsapp_business_account",
+      entry: [{
+        id: "WABA1",
+        changes: [{
+          field: "smb_message_echoes",
+          value: {
+            metadata: { phone_number_id: "PN_DESCONHECIDO" },
+            message_echoes: [{ to: "5585988887777", id: "wamid.X", type: "text", text: { body: "oi" } }],
+          },
+        }],
+      }],
+    });
+    expect(res.status).toBe(200);
+    await aguardarProcessamento();
+    expect(processarEchoCelular).not.toHaveBeenCalled();
+  });
+
+  it("campo ainda sem handler (ex: history) → ack sem processamento", async () => {
+    const res = await postWebhook({
+      object: "whatsapp_business_account",
+      entry: [{
+        id: "WABA1",
+        changes: [{ field: "history", value: { metadata: { phone_number_id: "PN_A" } } }],
+      }],
+    });
+    expect(res.status).toBe(200);
+    await aguardarProcessamento();
+    expect(processarMensagemRecebida).not.toHaveBeenCalled();
+    expect(processarEchoCelular).not.toHaveBeenCalled();
     expect(captured).toHaveLength(0);
   });
 });
