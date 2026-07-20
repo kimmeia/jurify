@@ -252,8 +252,14 @@ export async function syncCobrancasDeCliente(
       // tenha pedido modo "apenas criar/atualizar").
       if (cob.deleted) {
         if (apenasCriarAtualizar) continue;
+        // Filtro de escritório OBRIGATÓRIO: o mesmo asaasPaymentId pode
+        // existir em 2 escritórios (mesma conta Asaas conectada em ambos) —
+        // sem ele, o sync de um escritório deletava a cobrança do OUTRO.
         const [local] = await db.select({ id: asaasCobrancas.id }).from(asaasCobrancas)
-          .where(eq(asaasCobrancas.asaasPaymentId, cob.id)).limit(1);
+          .where(and(
+            eq(asaasCobrancas.asaasPaymentId, cob.id),
+            eq(asaasCobrancas.escritorioId, escritorioId),
+          )).limit(1);
         if (local) {
           await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, local.id));
           stats.removidas++;
@@ -264,8 +270,13 @@ export async function syncCobrancasDeCliente(
 
       idsAsaas.add(cob.id);
 
+      // Mesmo racional acima: sem o filtro de escritório, o UPDATE abaixo
+      // reatribuía contatoId/customer da cobrança de OUTRO escritório.
       const [local] = await db.select().from(asaasCobrancas)
-        .where(eq(asaasCobrancas.asaasPaymentId, cob.id)).limit(1);
+        .where(and(
+          eq(asaasCobrancas.asaasPaymentId, cob.id),
+          eq(asaasCobrancas.escritorioId, escritorioId),
+        )).limit(1);
 
       if (local) {
         // Normaliza datas de pagamento (API pode retornar "" / undefined; DB guarda null)

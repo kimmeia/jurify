@@ -543,6 +543,8 @@ export class AsaasClient {
   async listarCobrancas(params?: {
     customer?: string;
     status?: AsaasPaymentStatus;
+    /** Filtro exato por externalReference — base da idempotência outbound. */
+    externalReference?: string;
     offset?: number;
     limit?: number;
   }): Promise<AsaasListResponse<AsaasPayment>> {
@@ -872,5 +874,21 @@ export class AsaasClient {
       authToken: accessToken,
     });
     return res.data;
+  }
+
+  /**
+   * Lê a config atual do webhook da conta. Base do health-check: quando o
+   * Asaas acumula falhas de entrega ele seta `interrupted: true` e PARA de
+   * enviar eventos — sem este GET ninguém fica sabendo.
+   */
+  async obterWebhook(): Promise<{
+    url?: string;
+    email?: string;
+    enabled?: boolean;
+    interrupted?: boolean;
+    apiVersion?: number;
+  } | null> {
+    const res = await this.api.get("/webhook");
+    return res.data ?? null;
   }
 }
