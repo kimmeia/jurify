@@ -156,6 +156,9 @@ export const kanbanRouter = router({
     }),
 
   // ─── COLUNAS ──────────────────────────────────────────────────────────────
+  // `kanban_colunas` não tem escritorioId próprio — a tenancy vem do funil.
+  // Sem o join, qualquer logado editava/deletava coluna (e todos os cards
+  // dela) de OUTRO escritório por id sequencial (IDOR destrutivo).
 
   criarColuna: protectedProcedure
     .input(z.object({ funilId: z.number(), nome: z.string().min(1).max(64), cor: z.string().max(16).optional() }))
@@ -164,6 +167,12 @@ export const kanbanRouter = router({
       if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [funil] = await db
+        .select({ id: kanbanFunis.id })
+        .from(kanbanFunis)
+        .where(and(eq(kanbanFunis.id, input.funilId), eq(kanbanFunis.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!funil) throw new TRPCError({ code: "NOT_FOUND", message: "Funil não encontrado." });
       // Pegar próxima ordem
       const existentes = await db.select({ ordem: kanbanColunas.ordem }).from(kanbanColunas)
         .where(eq(kanbanColunas.funilId, input.funilId)).orderBy(desc(kanbanColunas.ordem)).limit(1);
@@ -180,8 +189,17 @@ export const kanbanRouter = router({
       tipo: z.enum(["normal", "conclusao"]).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [col] = await db
+        .select({ id: kanbanColunas.id })
+        .from(kanbanColunas)
+        .innerJoin(kanbanFunis, eq(kanbanColunas.funilId, kanbanFunis.id))
+        .where(and(eq(kanbanColunas.id, input.id), eq(kanbanFunis.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!col) throw new TRPCError({ code: "NOT_FOUND", message: "Coluna não encontrada." });
       const update: any = {};
       if (input.nome) update.nome = input.nome;
       if (input.cor !== undefined) update.cor = input.cor;
@@ -193,8 +211,17 @@ export const kanbanRouter = router({
   deletarColuna: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [col] = await db
+        .select({ id: kanbanColunas.id })
+        .from(kanbanColunas)
+        .innerJoin(kanbanFunis, eq(kanbanColunas.funilId, kanbanFunis.id))
+        .where(and(eq(kanbanColunas.id, input.id), eq(kanbanFunis.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!col) throw new TRPCError({ code: "NOT_FOUND", message: "Coluna não encontrada." });
       await db.delete(kanbanCards).where(eq(kanbanCards.colunaId, input.id));
       await db.delete(kanbanColunas).where(eq(kanbanColunas.id, input.id));
       return { success: true };
@@ -1059,7 +1086,14 @@ export const kanbanRouter = router({
       if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [com] = await db.select().from(kanbanComentarios).where(eq(kanbanComentarios.id, input.id)).limit(1);
+      // Join no card: `kanban_comentarios` não tem escritorioId — sem isso um
+      // gestor (verTodos) apagava comentário de card de OUTRO escritório.
+      const [com] = await db
+        .select({ id: kanbanComentarios.id, autorId: kanbanComentarios.autorId })
+        .from(kanbanComentarios)
+        .innerJoin(kanbanCards, eq(kanbanComentarios.cardId, kanbanCards.id))
+        .where(and(eq(kanbanComentarios.id, input.id), eq(kanbanCards.escritorioId, perm.escritorioId)))
+        .limit(1);
       if (!com) throw new TRPCError({ code: "NOT_FOUND" });
       // Autor pode sempre apagar; gestor/dono também (verTodos).
       if (com.autorId !== perm.colaboradorId && !perm.verTodos) {

@@ -19,6 +19,7 @@ import {
   calcularMomentoLembrete,
   calcularSlotsDoDia,
   chaveDiaLocal,
+  clampConfigDisparo,
   contextoContemPagamento,
   contextoContemSlot,
   dateNoFuso,
@@ -539,5 +540,26 @@ describe("calcularSlotsDoDia — teto anti-spam (MAX_DISPAROS_DIA)", () => {
       new Date("2026-05-01T12:00:00.000Z"),
     );
     expect(slots.length).toBe(1);
+  });
+});
+
+describe("clampConfigDisparo — NaN nunca desliga o teto", () => {
+  it("clampa no intervalo [1, max]", () => {
+    expect(clampConfigDisparo(5, 1, 30)).toBe(5);
+    expect(clampConfigDisparo(0, 1, 30)).toBe(1);
+    expect(clampConfigDisparo(99, 1, 30)).toBe(30);
+    expect(clampConfigDisparo(2.9, 1, 30)).toBe(2);
+  });
+
+  it("config corrompida (string não-numérica) cai no fallback, não em NaN", () => {
+    // Regressão: Math.max(1, NaN) = NaN e `disparadosDias >= NaN` é sempre
+    // false — o limite sumia e o dunning perpétuo voltava por essa fresta.
+    expect(clampConfigDisparo("abc", 1, 30)).toBe(1);
+    expect(clampConfigDisparo(undefined, 1, 30)).toBe(1);
+    expect(clampConfigDisparo(null, 1, 30)).toBe(1);
+    expect(clampConfigDisparo(NaN, 1, 30)).toBe(1);
+    // Não-finito (Infinity) também cai no fallback conservador, não no teto.
+    expect(clampConfigDisparo(Infinity, 1, 30)).toBe(1);
+    expect(clampConfigDisparo("abc", 120, 1440)).toBe(120);
   });
 });

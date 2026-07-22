@@ -145,8 +145,54 @@ async function startServer() {
     }),
   );
   app.use(express.urlencoded({ limit: "3gb", extended: true }));
-  // Serve uploaded files statically
-  app.use("/uploads", express.static("./uploads"));
+  // /uploads AUTENTICADO. Antes era express.static puro — documento jurídico
+  // com PII acessível por URL sem login (LGPD). O assinante EXTERNO não usa
+  // este caminho (tem rota própria por token — assinatura-pdf-route); todo
+  // consumidor interno é same-origin e manda o cookie de sessão sozinho.
+  // Tenancy pelo path: `escritorio_<id>` (uploads/assinaturas/modelos) ou
+  // `whatsapp-cloud/<escritorioId>/...` (mídia recebida). Path sem marcador
+  // de escritório (legado) exige só login.
+  // Cache curto userId→escritorioId: uma tela do Atendimento carrega dezenas
+  // de mídias em paralelo — sem isso cada <img> custava um lookup de
+  // colaborador no DB.
+  const uploadsEscCache = new Map<number, { escritorioId: number | null; ate: number }>();
+  app.use(
+    "/uploads",
+    async (req, res, next) => {
+      // Exceção PÚBLICA por design: pareceres são capability-URLs (slug +
+      // timestamp + random) compartilhados com o CLIENTE do advogado por
+      // e-mail/WhatsApp — destinatário externo não tem sessão. O resto do
+      // /uploads exige login + escritório.
+      if (req.path.startsWith("/pareceres/")) {
+        next();
+        return;
+      }
+      try {
+        const { sdk } = await import("./sdk");
+        const user = await sdk.authenticateRequest(req);
+        const m =
+          req.path.match(/escritorio_(\d+)/) || req.path.match(/^\/whatsapp-cloud\/(\d+)\//);
+        if (m && user.role !== "admin") {
+          const agora = Date.now();
+          let entrada = uploadsEscCache.get(user.id);
+          if (!entrada || entrada.ate < agora) {
+            const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
+            const esc = await getEscritorioPorUsuario(user.id);
+            entrada = { escritorioId: esc?.escritorio.id ?? null, ate: agora + 60_000 };
+            uploadsEscCache.set(user.id, entrada);
+          }
+          if (entrada.escritorioId !== Number(m[1])) {
+            res.status(403).json({ error: "Sem acesso a este arquivo" });
+            return;
+          }
+        }
+        next();
+      } catch {
+        res.status(401).json({ error: "Não autenticado" });
+      }
+    },
+    express.static("./uploads"),
+  );
   // Rate limiting — aplicar globalmente ao tRPC e limites específicos para públicas
   app.use("/api/trpc", globalApiRateLimit);
   app.use(

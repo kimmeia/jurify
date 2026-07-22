@@ -32,6 +32,9 @@ import {
 import { obterConfigChamada, salvarConfigChamada } from "../integracoes/whatsapp-calling-config";
 import { canalEhCoex } from "../integracoes/coex";
 import { explicarErroFacebook } from "./meta-channels";
+import { createLogger } from "../_core/logger";
+
+const log = createLogger("router-whatsapp-calling");
 
 const MSG_COEX_SEM_CALLING =
   "Este número está em modo coexistência (app do celular + API): chamadas de voz continuam exclusivas do app WhatsApp Business no celular — a Calling API da Meta não suporta números em coexistência.";
@@ -41,9 +44,6 @@ async function exigirCanalSemCoex(escritorioId: number, canalId: number): Promis
   const cfg = await obterConfigCanal(canalId, escritorioId);
   if (canalEhCoex(cfg)) throw new Error(MSG_COEX_SEM_CALLING);
 }
-import { createLogger } from "../_core/logger";
-
-const log = createLogger("router-whatsapp-calling");
 
 /**
  * Executa uma chamada à Graph API traduzindo erros 4xx pro motivo REAL da Meta
@@ -61,6 +61,54 @@ async function comErroMeta<T>(contexto: string, fn: () => Promise<T>): Promise<T
     );
     throw new Error(explicarErroFacebook(err, contexto));
   }
+}
+
+/**
+ * Envia o `call_permission_request` passando pelas travas anti-ban. É um POST
+ * real em /messages (mensagem iniciada pela empresa) — era o único caminho de
+ * mensagem fora do guard: com conta restrita ou contato em opt-out, o pedido
+ * saía mesmo assim, e um 131031 síncrono daqui não tripava o disjuntor.
+ * O registrarFalhaEnvio precisa do erro CRU (err.response) — por isso a
+ * chamada não usa comErroMeta por dentro.
+ */
+async function enviarPedidoPermissao(
+  client: WhatsAppCloudClient,
+  canalId: number,
+  telefone: string,
+  texto: string,
+): Promise<string> {
+  const db = await getDb();
+  if (db) {
+    const guard = await import("../integracoes/whatsapp-envio-guard");
+    const permitido = await guard.podeEnviar({ db, canalId, telefone, proativo: true });
+    if (!permitido.ok) {
+      log.info(
+        { telefone: telefone.replace(/\D/g, ""), tipo: permitido.tipo },
+        "[Calling] pedido de permissão bloqueado pelo guard",
+      );
+      throw new Error(permitido.erro);
+    }
+  }
+  let messageId: string;
+  try {
+    messageId = await client.pedirPermissaoLigacao(telefone, texto);
+  } catch (err: any) {
+    if (db) {
+      const guard = await import("../integracoes/whatsapp-envio-guard");
+      const apiMsg = err?.response?.data?.error?.message || err?.message || "";
+      await guard.registrarFalhaEnvio({ db, canalId, erro: apiMsg }).catch(() => {});
+    }
+    log.warn(
+      { status: err?.response?.status, fbError: err?.response?.data?.error },
+      "[Calling] pedido de permissão falhou",
+    );
+    throw new Error(explicarErroFacebook(err, "Falha ao enviar o pedido de permissão"));
+  }
+  if (db) {
+    const guard = await import("../integracoes/whatsapp-envio-guard");
+    await guard.registrarSucessoEnvio({ db, canalId, proativo: true }).catch(() => {});
+  }
+  return messageId;
 }
 
 interface EscInfo {
@@ -183,9 +231,7 @@ export const whatsappCallingRouter = router({
       const texto =
         input.texto ||
         "Podemos te ligar pelo WhatsApp para falar sobre o seu atendimento?";
-      const messageId = await comErroMeta("Falha ao enviar o pedido de permissão", () =>
-        client.pedirPermissaoLigacao(input.telefone, texto),
-      );
+      const messageId = await enviarPedidoPermissao(client, input.canalId, input.telefone, texto);
       return { messageId };
     }),
 
@@ -210,6 +256,22 @@ export const whatsappCallingRouter = router({
       const client = await clientDoCanal(esc.escritorioId, input.canalId);
       const telLimpo = input.telefone.replace(/\D/g, "");
 
+      // Conta restrita: erro honesto ANTES de tentar (a chamada de voz em si
+      // não é mensagem, mas o fallback abaixo envia — e com conta restrita
+      // nada deve sair).
+      {
+        const db = await getDb();
+        if (db) {
+          const guard = await import("../integracoes/whatsapp-envio-guard");
+          const restr = await guard.canalEstaRestrito(db, input.canalId);
+          if (restr.restrito) {
+            throw new Error(
+              `Conta WhatsApp restrita pela Meta${restr.motivo ? ` (${restr.motivo})` : ""} — ligações e mensagens pausadas até a liberação.`,
+            );
+          }
+        }
+      }
+
       let callId: string;
       try {
         callId = await client.iniciarChamada(
@@ -224,9 +286,7 @@ export const whatsappCallingRouter = router({
         // Ele aprova no WhatsApp (validade 7 dias) e a próxima ligação conecta.
         if (msg.includes("permission") || msg.includes("consent")) {
           const texto = "Podemos te ligar pelo WhatsApp para falar sobre o seu atendimento?";
-          const messageId = await comErroMeta("Falha ao enviar o pedido de permissão", () =>
-            client.pedirPermissaoLigacao(input.telefone, texto),
-          );
+          const messageId = await enviarPedidoPermissao(client, input.canalId, input.telefone, texto);
           log.info({ telefone: telLimpo }, "[Calling] saída sem permissão — pedido enviado automaticamente");
           return { status: "permissao_solicitada" as const, messageId };
         }

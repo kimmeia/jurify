@@ -542,6 +542,45 @@ export function registerWhatsAppCloudWebhook(app: Express) {
             continue;
           }
 
+          // Template pausado/desativado/rejeitado pela Meta: sem este aviso o
+          // cenário que usa o template quebra em silêncio (erro 132015 síncrono
+          // na execução, sem push) e, na 3ª pausa, a Meta DESATIVA o template
+          // permanentemente. NÃO tripa disjuntor — é problema de 1 template,
+          // não da conta.
+          if (change.field === "message_template_status_update") {
+            try {
+              const evento = String(change.value?.event || "").toUpperCase();
+              if (["PAUSED", "DISABLED", "REJECTED", "FLAGGED"].includes(evento)) {
+                const nome =
+                  change.value?.message_template_name || change.value?.template_name || "template";
+                const motivo =
+                  change.value?.reason ||
+                  change.value?.other_info?.description ||
+                  change.value?.disable_info?.disable_date ||
+                  "";
+                const canais = await findCanaisByWabaId(wabaId);
+                const { notificarSaudeCanal } = await import("./whatsapp-alertas");
+                const titulo =
+                  evento === "DISABLED"
+                    ? `🚫 Template "${nome}" DESATIVADO pela Meta`
+                    : evento === "REJECTED"
+                      ? `❌ Template "${nome}" rejeitado pela Meta`
+                      : `⏸️ Template "${nome}" pausado pela Meta`;
+                const mensagem =
+                  evento === "DISABLED"
+                    ? `A Meta desativou o template permanentemente (3ª pausa por qualidade). Cenários que o usam pararam de enviar — crie um template novo com conteúdo revisado.${motivo ? ` Detalhe: ${String(motivo).slice(0, 200)}` : ""}`
+                    : `Cenários que usam este template vão falhar até ele ser liberado. Revise o conteúdo (a pausa vem de feedback negativo dos destinatários) — na 3ª pausa a Meta desativa em definitivo.${motivo ? ` Detalhe: ${String(motivo).slice(0, 200)}` : ""}`;
+                for (const c of canais) {
+                  await notificarSaudeCanal({ canalId: c.canalId, titulo, mensagem });
+                }
+                log.warn({ wabaId, evento, template: nome }, "[WhatsApp Cloud] status de template mudou — dono notificado");
+              }
+            } catch (tErr: any) {
+              log.error("[WhatsApp Cloud] Erro ao processar message_template_status_update:", tErr.message);
+            }
+            continue;
+          }
+
           // CoEx: mensagem que o atendente enviou pelo app WhatsApp Business
           // do celular chega como echo. Ingestão SILENCIOSA: entra na timeline
           // como saída (origem 'celular') e pausa o bot — nunca dispara

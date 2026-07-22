@@ -1445,6 +1445,12 @@ export const asaasConfig = mysqlTable("asaas_config", {
    */
   saldoAtualizadoEm: timestamp("saldoAtualizadoEmAsaas"),
   /**
+   * Último evento de webhook AUTENTICADO recebido. Alimenta o health-check
+   * da fila (fila interrompida no Asaas = silêncio total aqui) e o
+   * diagnóstico da conexão.
+   */
+  ultimoWebhookEm: timestamp("ultimoWebhookEmAsaas"),
+  /**
    * Sincronização histórica controlada por janelas de tempo.
    * Webhook cobre eventos futuros automaticamente; estes campos
    * controlam a importação do passado em pedaços pequenos pra não
