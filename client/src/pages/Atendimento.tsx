@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/compon
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
-import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon, ChevronLeft } from "lucide-react";
+import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon, ChevronLeft, Archive } from "lucide-react";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { TIPOS_CANAL_COMUNICACAO } from "@shared/canal-types";
@@ -466,6 +466,9 @@ export default function Atendimento() {
   const [horaFim, setHoraFim] = useState("");
   const [buscaAtendente, setBuscaAtendente] = useState("");
   const [showFiltros, setShowFiltros] = useState(false);
+  // Pasta Arquivadas: vista alternativa da coluna — lista só conversas
+  // arquivadas, com desarquivar individual e bulk dos canais desativados.
+  const [mostrarArquivadas, setMostrarArquivadas] = useState(false);
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
   // Ligação de voz via WhatsApp (Calling API). Instância global (montada no
   // AppLayout) — a chamada toca em qualquer tela; aqui só usamos pra ligar.
@@ -506,9 +509,18 @@ export default function Atendimento() {
   // Limite alto: o Inbox precisa enxergar além de 100 (escritório com muitos
   // contatos). Os contadores reais vêm de contarConversas (não do array).
   const { data: convsAll, refetch: rC } = trpc.crm.listarConversas.useQuery(
-    { ...(filtrosBackend ?? {}), limite: 300 },
+    mostrarArquivadas ? { arquivadas: true, limite: 300 } : { ...(filtrosBackend ?? {}), limite: 300 },
     { refetchInterval: 5000 },
   );
+  const { data: resumoArq, refetch: rArq } = trpc.crm.resumoArquivadas.useQuery(undefined, { refetchInterval: 60000 });
+  const arquivarMut = trpc.crm.arquivarConversa.useMutation({
+    onSuccess: () => { rC(); rArq(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const arquivarBulkMut = trpc.crm.arquivarCanaisDesativados.useMutation({
+    onSuccess: (r) => { toast.success(`${r.arquivadas} conversa(s) arquivada(s).`); rC(); rArq(); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const { data: countsData } = trpc.crm.contarConversas.useQuery(filtrosBackend, { refetchInterval: 5000 });
   // Listas pros dropdowns de filtro. listarAtendentes já é usado no detalhe;
   // listarSetores entra novo no escopo principal pra alimentar o filtro.
@@ -533,7 +545,8 @@ export default function Atendimento() {
   };
   const convs = (() => {
     const todas = convsAll || [];
-    let porStatus = filtro === "todos" ? todas : todas.filter((c: any) => c.status === filtro);
+    // Na pasta Arquivadas as abas de status ficam ocultas — lista tudo.
+    let porStatus = filtro === "todos" || mostrarArquivadas ? todas : todas.filter((c: any) => c.status === filtro);
     // Mantém a conversa ABERTA visível mesmo que mude de status e saia do filtro
     // da aba (ex.: ao responder, aguardando → em_atendimento) — senão ela "some"
     // da lista e o atendente precisa trocar de aba pra reencontrar.
@@ -936,13 +949,29 @@ export default function Atendimento() {
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
-                {/* Pills com contador. Scroll horizontal em mobile/colunas estreitas. */}
-                <div className="flex gap-1 overflow-x-auto -mx-1 px-1 pb-0.5 scrollbar-thin">
+                {mostrarArquivadas && (
+                  <div className="flex items-center gap-2 py-1">
+                    <button
+                      onClick={() => setMostrarArquivadas(false)}
+                      className="text-xs font-semibold text-primary hover:underline"
+                    >
+                      ‹ Voltar
+                    </button>
+                    <span className="text-sm font-bold">🗄️ Arquivadas</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {resumoArq?.total ?? 0}
+                    </span>
+                  </div>
+                )}
+                {/* Abas segmentadas de status — largura fixa, sem scroll
+                    horizontal (substitui os pills com setinhas). */}
+                {!mostrarArquivadas && (
+                <div className="grid grid-cols-4 gap-0.5 rounded-lg bg-muted p-[3px]">
                   {([
                     { v: "todos", l: "Todas", n: counts.todos },
                     { v: "aguardando", l: "Aguardando", n: counts.aguardando },
                     { v: "em_atendimento", l: "Em atend.", n: counts.em_atendimento },
-                    { v: "resolvido", l: "Resolvido", n: counts.resolvido },
+                    { v: "resolvido", l: "Resolvidas", n: counts.resolvido },
                   ] as const).map((p) => {
                     const ativo = filtro === p.v;
                     return (
@@ -950,31 +979,67 @@ export default function Atendimento() {
                         key={p.v}
                         onClick={() => setFiltro(p.v)}
                         className={
-                          "shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors " +
-                          (ativo
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted/60 text-muted-foreground hover:bg-muted")
+                          "rounded-md px-1 py-1 text-center transition-colors " +
+                          (ativo ? "bg-background shadow-sm" : "hover:bg-background/50")
                         }
                       >
-                        <span>{p.l}</span>
-                        <span className={"tabular-nums " + (ativo ? "opacity-90" : "opacity-70")}>
+                        <span
+                          className={
+                            "block text-[10px] font-semibold leading-tight truncate " +
+                            (ativo ? "text-violet-600" : "text-muted-foreground")
+                          }
+                        >
+                          {p.l}
+                        </span>
+                        <span
+                          className={
+                            "block text-[12.5px] font-extrabold tabular-nums leading-tight " +
+                            (ativo ? "text-violet-600" : "text-muted-foreground/70")
+                          }
+                        >
                           {p.n}
                         </span>
                       </button>
                     );
                   })}
                 </div>
+                )}
               </div>
               <ScrollArea className="flex-1 min-h-0">
+                {mostrarArquivadas && (resumoArq?.canaisDesativados?.length ?? 0) > 0 && (
+                  <div className="m-2 rounded-lg border border-dashed p-3 bg-muted/30">
+                    <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                      <strong className="text-foreground">
+                        {resumoArq!.canaisDesativados.length} {resumoArq!.canaisDesativados.length === 1 ? "canal desativado" : "canais desativados"}
+                      </strong>{" "}
+                      ainda {resumoArq!.canaisDesativados.length === 1 ? "tem" : "têm"}{" "}
+                      <strong className="text-foreground">
+                        {resumoArq!.canaisDesativados.reduce((s, c) => s + c.foraDoArquivo, 0)} conversas
+                      </strong>{" "}
+                      fora do arquivo ({resumoArq!.canaisDesativados.map((c) => c.telefone || c.nome || `#${c.canalId}`).join(", ")}).
+                    </p>
+                    <Button
+                      size="sm"
+                      className="mt-2 h-7 text-xs"
+                      disabled={arquivarBulkMut.isPending}
+                      onClick={() => arquivarBulkMut.mutate()}
+                    >
+                      {arquivarBulkMut.isPending ? <Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> : null}
+                      Arquivar conversas dos canais desativados
+                    </Button>
+                  </div>
+                )}
                 {!convs?.length ? (
                   <div className="text-center py-16 px-4">
                     <MessageCircle className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
                     <p className="text-sm text-muted-foreground">
                       {inboxBusca
                         ? "Nada encontrado"
-                        : filtro === "todos"
-                          ? "Nenhuma conversa"
-                          : "Nenhuma neste filtro"}
+                        : mostrarArquivadas
+                          ? "Nenhuma conversa arquivada"
+                          : filtro === "todos"
+                            ? "Nenhuma conversa"
+                            : "Nenhuma neste filtro"}
                     </p>
                     {(inboxBusca || filtro !== "todos") && (
                       <button
@@ -1080,7 +1145,7 @@ export default function Atendimento() {
                                 {previewMensagem(c)}
                               </p>
                               {naoLidas > 0 && (
-                                <span className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-violet-600 text-white text-[10px] font-bold tabular-nums">
+                                <span className="shrink-0 inline-flex items-center justify-center min-w-[19px] h-[19px] px-1 rounded-full bg-emerald-500 text-white text-[10.5px] font-extrabold tabular-nums">
                                   {naoLidas > 99 ? "99+" : naoLidas}
                                 </span>
                               )}
@@ -1114,6 +1179,18 @@ export default function Atendimento() {
                                   · {(c as any).atendenteNome.split(" ")[0]}
                                 </span>
                               )}
+                              {mostrarArquivadas && (
+                                <span
+                                  role="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    arquivarMut.mutate({ id: c.id, arquivar: false });
+                                  }}
+                                  className="ml-auto text-[10px] font-semibold text-primary hover:underline"
+                                >
+                                  Desarquivar
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1122,6 +1199,21 @@ export default function Atendimento() {
                   })
                 )}
               </ScrollArea>
+              {!mostrarArquivadas && (
+                <button
+                  onClick={() => setMostrarArquivadas(true)}
+                  className="flex items-center gap-2.5 px-3 py-2.5 border-t bg-muted/30 hover:bg-muted/60 transition-colors text-left"
+                >
+                  <span className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center text-sm" aria-hidden>🗄️</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-xs font-bold">Arquivadas</span>
+                    <span className="block text-[10px] text-muted-foreground truncate">
+                      {resumoArq?.total ?? 0} conversas fora das abas e contadores
+                    </span>
+                  </span>
+                  <span className="text-muted-foreground text-xs" aria-hidden>›</span>
+                </button>
+              )}
             </div>
 
             {/* Coluna 2: Chat. No mobile com conversa aberta vira overlay em
@@ -1235,6 +1327,10 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const [showTemplates, setShowTemplates] = useState(false);
   const [maisMenuAberto, setMaisMenuAberto] = useState(false);
   const [showTransferir, setShowTransferir] = useState(false);
+  const arquivarConv = trpc.crm.arquivarConversa.useMutation({
+    onSuccess: () => { toast.success("Conversa arquivada — mensagem nova do contato a desarquiva."); onDeleted(); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const [showVincular, setShowVincular] = useState(false);
   const [buscaVincular, setBuscaVincular] = useState("");
   const [tom, setTom] = useState<"formal" | "direto" | "empatico" | "amigavel">("empatico");
@@ -1513,6 +1609,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             <DropdownMenuItem onClick={() => setShowAddLead(true)}><TrendingUp className="h-4 w-4 mr-2" />Pipeline</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setShowAgendar(true)}><Calendar className="h-4 w-4 mr-2" />Agendar</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setShowTransferir(true)}><ArrowRightLeft className="h-4 w-4 mr-2" />Transferir</DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={arquivarConv.isPending}
+              onClick={() => arquivarConv.mutate({ id: conv.id, arquivar: true })}
+            >
+              <Archive className="h-4 w-4 mr-2" />Arquivar conversa
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setShowVincular(true)}><Link2 className="h-4 w-4 mr-2" />Vincular</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-4 w-4 mr-2 text-emerald-600" />Resolver</DropdownMenuItem>

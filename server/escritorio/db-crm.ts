@@ -3,7 +3,7 @@
  * Fase 3 — Inclui algoritmo de distribuição inteligente de leads
  */
 
-import { eq, and, desc, asc, or, sql, gt, gte, lte, like, inArray, isNull, type SQL } from "drizzle-orm";
+import { eq, and, desc, asc, or, sql, gt, gte, lte, like, inArray, isNull, isNotNull, ne, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios, setores } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
@@ -434,9 +434,12 @@ export async function criarConversa(dados: {
 async function condicoesConversa(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   escritorioId: number,
-  filtros?: { atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number; dataInicio?: string; dataFim?: string },
+  filtros?: { atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number; dataInicio?: string; dataFim?: string; arquivadas?: boolean },
 ): Promise<SQL[] | null> {
   const conditions: SQL[] = [eq(conversas.escritorioId, escritorioId)];
+  // Arquivadas ficam fora de TODAS as vistas padrão (lista, contadores);
+  // a pasta Arquivadas pede explicitamente arquivadas=true.
+  conditions.push(filtros?.arquivadas ? isNotNull(conversas.arquivadaEm) : isNull(conversas.arquivadaEm));
   if (filtros?.canalId) {
     conditions.push(eq(conversas.canalId, filtros.canalId));
   }
@@ -537,6 +540,7 @@ export async function listarConversas(escritorioId: number, filtros?: {
   dataInicio?: string;
   dataFim?: string;
   limite?: number;
+  arquivadas?: boolean;
 }) {
   const db = await getDb();
   if (!db) return [];
@@ -567,6 +571,7 @@ export async function listarConversas(escritorioId: number, filtros?: {
       chatIdExterno: conversas.chatIdExterno,
       ultimaMensagemAt: conversas.ultimaMensagemAt,
       ultimaMensagemPreview: conversas.ultimaMensagemPreview,
+      arquivadaEm: conversas.arquivadaEm,
       createdAt: conversas.createdAt,
     })
     .from(conversas)
@@ -645,6 +650,99 @@ export async function listarConversas(escritorioId: number, filtros?: {
     ultimaMensagemAt: toIsoString(r.ultimaMensagemAt) ?? undefined,
     createdAt: toIsoString(r.createdAt) ?? "",
   }));
+}
+
+// ─── Arquivamento de conversas ───────────────────────────────────────────────
+
+/** Arquiva/desarquiva uma conversa (escopada ao escritório). */
+export async function definirArquivada(id: number, escritorioId: number, arquivar: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+  await db.update(conversas)
+    .set({ arquivadaEm: arquivar ? new Date() : null })
+    .where(and(eq(conversas.id, id), eq(conversas.escritorioId, escritorioId)));
+}
+
+/**
+ * Desarquiva se estiver arquivada — chamado na ingestão de mensagem nova.
+ * Garante que ninguém fica sem resposta por a conversa estar no arquivo:
+ * atividade nova traz a conversa de volta pro inbox sozinha.
+ */
+export async function desarquivarSeArquivada(conversaId: number) {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    await db.update(conversas)
+      .set({ arquivadaEm: null })
+      .where(and(eq(conversas.id, conversaId), isNotNull(conversas.arquivadaEm)));
+  } catch {
+    /* best-effort — nunca bloqueia a ingestão */
+  }
+}
+
+/**
+ * Resumo pra pasta Arquivadas: total arquivado + canais desativados
+ * (status != conectado) que ainda têm conversas FORA do arquivo — alimenta
+ * o atalho de arquivamento em massa.
+ */
+export async function resumoArquivadas(escritorioId: number): Promise<{
+  total: number;
+  canaisDesativados: { canalId: number; nome: string; telefone: string; foraDoArquivo: number }[];
+}> {
+  const db = await getDb();
+  if (!db) return { total: 0, canaisDesativados: [] };
+
+  const [tot] = await db
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(conversas)
+    .where(and(eq(conversas.escritorioId, escritorioId), isNotNull(conversas.arquivadaEm)));
+
+  const canaisMortos = await db
+    .select({ id: canaisIntegrados.id, nome: canaisIntegrados.nome, telefone: canaisIntegrados.telefone })
+    .from(canaisIntegrados)
+    .where(and(eq(canaisIntegrados.escritorioId, escritorioId), ne(canaisIntegrados.status, "conectado")));
+
+  const canaisDesativados: { canalId: number; nome: string; telefone: string; foraDoArquivo: number }[] = [];
+  if (canaisMortos.length > 0) {
+    const contagens = await db
+      .select({ canalId: conversas.canalId, n: sql<number>`COUNT(*)` })
+      .from(conversas)
+      .where(and(
+        eq(conversas.escritorioId, escritorioId),
+        isNull(conversas.arquivadaEm),
+        inArray(conversas.canalId, canaisMortos.map((c) => c.id)),
+      ))
+      .groupBy(conversas.canalId);
+    const porCanal = new Map(contagens.map((c) => [c.canalId, Number(c.n)]));
+    for (const c of canaisMortos) {
+      const n = porCanal.get(c.id) ?? 0;
+      if (n > 0) canaisDesativados.push({ canalId: c.id, nome: c.nome || "", telefone: c.telefone || "", foraDoArquivo: n });
+    }
+  }
+
+  return { total: Number(tot?.n ?? 0), canaisDesativados };
+}
+
+/**
+ * Arquiva em massa TODAS as conversas ativas de canais desativados
+ * (status != conectado) do escritório. Retorna quantas foram arquivadas.
+ */
+export async function arquivarConversasDeCanaisDesativados(escritorioId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+  const canaisMortos = await db
+    .select({ id: canaisIntegrados.id })
+    .from(canaisIntegrados)
+    .where(and(eq(canaisIntegrados.escritorioId, escritorioId), ne(canaisIntegrados.status, "conectado")));
+  if (canaisMortos.length === 0) return 0;
+  const [result] = await db.update(conversas)
+    .set({ arquivadaEm: new Date() })
+    .where(and(
+      eq(conversas.escritorioId, escritorioId),
+      isNull(conversas.arquivadaEm),
+      inArray(conversas.canalId, canaisMortos.map((c) => c.id)),
+    ));
+  return Number((result as { affectedRows?: number })?.affectedRows ?? 0);
 }
 
 export async function atualizarConversa(id: number, escritorioId: number, dados: Record<string, any>) {

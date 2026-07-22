@@ -12,6 +12,7 @@ import {
   criarContato, criarOuReutilizarContato, listarContatos, atualizarContato, unificarContatos,
   buscarContatoPorTelefone,
   criarConversa, listarConversas, contarConversasPorStatus, atualizarConversa, excluirConversa,
+  definirArquivada, resumoArquivadas as resumoArquivadasDB, arquivarConversasDeCanaisDesativados,
   enviarMensagem, listarMensagens,
   criarLead, listarLeads, atualizarLead, excluirLead,
   obterMetricasDashboard, distribuirLead, obterMetricasDetalhadas,
@@ -218,6 +219,7 @@ export const crmRouter = router({
       dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
       limite: z.number().int().min(1).max(1000).optional(),
+      arquivadas: z.boolean().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
@@ -239,6 +241,9 @@ export const crmRouter = router({
       atendenteId: z.number().optional(),
       atendenteIds: z.array(z.number()).optional(),
       setorId: z.number().optional(),
+      // Sem canalId aqui o zod DESCARTAVA o campo: a lista filtrava pelo
+      // número mas os contadores das abas ficavam globais.
+      canalId: z.number().optional(),
       dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
     }).optional())
@@ -253,6 +258,34 @@ export const crmRouter = router({
       }
       return contarConversasPorStatus(perm.escritorioId, filtros);
     }),
+
+  /** Arquiva/desarquiva uma conversa. Arquivada sai das vistas padrão sem
+   *  ser apagada; mensagem nova do contato desarquiva sozinha. */
+  arquivarConversa: protectedProcedure
+    .input(z.object({ id: z.number(), arquivar: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      await definirArquivada(input.id, esc.escritorio.id, input.arquivar);
+      return { success: true };
+    }),
+
+  /** Total arquivado + canais desativados com conversas fora do arquivo. */
+  resumoArquivadas: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+    if (!perm.allowed) return { total: 0, canaisDesativados: [] };
+    return resumoArquivadasDB(perm.escritorioId);
+  }),
+
+  /** Arquiva em massa as conversas de canais desativados (dono/gestor). */
+  arquivarCanaisDesativados: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "atendimento", "editar");
+    if (!perm.allowed || !perm.verTodos) {
+      throw new Error("Apenas donos e gestores podem arquivar canais em massa.");
+    }
+    const arquivadas = await arquivarConversasDeCanaisDesativados(perm.escritorioId);
+    return { arquivadas };
+  }),
 
   atualizarConversa: protectedProcedure
     .input(z.object({
