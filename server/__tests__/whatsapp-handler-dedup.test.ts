@@ -35,6 +35,7 @@ vi.mock("../escritorio/db-crm", () => ({
   atualizarStatusMensagem: vi.fn(),
   atualizarConversa: vi.fn(),
   buscarMensagemPorIdExterno: vi.fn().mockResolvedValue(null),
+  desarquivarSeArquivada: vi.fn(),
 }));
 
 vi.mock("../integracoes/whatsapp-optout", () => ({
