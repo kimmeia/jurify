@@ -990,8 +990,8 @@ export default function Atendimento() {
                 <div className="grid grid-cols-4 gap-0.5 rounded-lg bg-muted p-[3px]">
                   {([
                     { v: "todos", l: "Todas", n: counts.todos },
-                    { v: "aguardando", l: "Aguardando", n: counts.aguardando },
                     { v: "em_atendimento", l: "Em atend.", n: counts.em_atendimento },
+                    { v: "aguardando", l: "Aguardando", n: counts.aguardando },
                     { v: "resolvido", l: "Resolvidas", n: counts.resolvido },
                   ] as const).map((p) => {
                     const ativo = filtro === p.v;
