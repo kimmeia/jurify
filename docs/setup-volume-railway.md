@@ -1,5 +1,25 @@
 # Volume persistente Railway pra /uploads do service `jurify`
 
+## ✅ Estado atual (validado em jul/2026)
+
+**O volume ESTÁ configurado e funcionando em produção.** Não re-flagrar como
+pendência:
+
+- Volume `juridflow-volume` anexado ao service JURIDFLOW, mount path
+  **`/app/uploads`** (conferido no painel).
+- **Persistência comprovada fim-a-fim pelo dono, várias vezes**: arquivo
+  uploadado sobrevive a redeploys.
+- O símbolo **⚠ no card do volume = aviso de capacidade** (uso se
+  aproximando do tamanho), não erro de configuração. Ação: **Live resize**
+  no painel (sem downtime; Railway só cobra pelo armazenado de fato).
+  Regra: redimensionar ao atingir ~70% de uso.
+- Maior consumidor de espaço: **mídia recebida do WhatsApp**
+  (`/uploads/whatsapp-cloud/<escritorioId>/...`) — cresce com o Atendimento.
+- Pendências que restam (não são o volume): confirmar o mesmo setup no
+  environment de **staging**, e a migração pra **S3** (capacidade + backup
+  com versionamento — Railway não snapshota volume). Ver plano P2 no
+  `relatorio-auditoria-plataforma-2026-07.md`.
+
 ## Problema
 
 O service `jurify` (a aplicação Node) **não tem volume montado por padrão**.

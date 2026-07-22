@@ -1,0 +1,537 @@
+import { useMemo, useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { toast } from "sonner";
+import {
+  Handshake, Plus, Loader2, TableIcon, Columns3, Phone, X,
+} from "lucide-react";
+
+// ─── moeda em centavos (int no backend) ──────────────────────────────────────
+const brl = (cents?: number | null) =>
+  cents == null ? "—" : (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+/** "1.800,00" ou "1800.00" → centavos int. */
+const paraCentavos = (s: string): number | undefined => {
+  const limpo = s.replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(limpo);
+  return Number.isFinite(n) ? Math.round(n * 100) : undefined;
+};
+
+type StatusAcordo = "negociando" | "proposta_enviada" | "fechado" | "cancelado";
+const STATUS_META: Record<StatusAcordo, { label: string; cls: string; dot: string }> = {
+  negociando: { label: "Negociando", cls: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300", dot: "bg-amber-500" },
+  proposta_enviada: { label: "Proposta enviada", cls: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300", dot: "bg-blue-500" },
+  fechado: { label: "Fechado", cls: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300", dot: "bg-emerald-500" },
+  cancelado: { label: "Cancelado", cls: "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300", dot: "bg-rose-500" },
+};
+const iniciais = (n?: string | null) => (n || "?").split(" ").slice(0, 2).map((x) => x[0]).join("").toUpperCase();
+const timeAgo = (iso?: string) => {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  const h = Math.floor(ms / 3.6e6);
+  if (h < 1) return "agora há pouco";
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  return `há ${d} ${d === 1 ? "dia" : "dias"}`;
+};
+
+function StatusBadge({ s }: { s: StatusAcordo }) {
+  const m = STATUS_META[s];
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold ${m.cls}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${m.dot}`} />{m.label}
+    </span>
+  );
+}
+
+export default function Acordos() {
+  const [vista, setVista] = useState<"tabela" | "kanban">("tabela");
+  const [busca, setBusca] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState<"todos" | StatusAcordo>("todos");
+  const [detalheId, setDetalheId] = useState<number | null>(null);
+  const [novoAberto, setNovoAberto] = useState(false);
+
+  const { data: acordos = [], isLoading, refetch } = trpc.acordos.listar.useQuery(
+    filtroStatus === "todos" ? {} : { status: filtroStatus },
+  );
+  const { data: resumo } = trpc.acordos.resumo.useQuery();
+
+  const filtrados = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    if (!q) return acordos;
+    return acordos.filter((a: any) =>
+      (a.clienteNome || "").toLowerCase().includes(q) ||
+      (a.parteContraria || "").toLowerCase().includes(q));
+  }, [acordos, busca]);
+
+  const onUpdate = () => { refetch(); };
+
+  return (
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      {/* Cabeçalho */}
+      <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Handshake className="h-6 w-6 text-violet-600" /> Acordos
+          </h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            Negociações extrajudiciais do escritório numa tela só — sem abrir cliente por cliente.
+          </p>
+        </div>
+        <Button onClick={() => setNovoAberto(true)} className="bg-violet-600 hover:bg-violet-700">
+          <Plus className="h-4 w-4 mr-1.5" /> Novo acordo
+        </Button>
+      </header>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <Kpi titulo="Em negociação" valor={`${resumo?.emNegociacao ?? 0}`} sufixo="acordos" />
+        <Kpi titulo="Valor em negociação" valor={brl(resumo?.valorEmNegociacao)} cor="text-amber-600" />
+        <Kpi titulo="Fechados no mês" valor={brl(resumo?.valorFechadoMes)} sufixo={`(${resumo?.fechadosMes ?? 0})`} cor="text-emerald-600" />
+        <Kpi titulo="Taxa de fechamento" valor={`${resumo?.taxaFechamento ?? 0}%`} />
+      </div>
+
+      {/* Controles */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <div className="inline-flex rounded-lg border bg-background p-0.5 text-sm">
+          <button onClick={() => setVista("tabela")} className={`px-3 py-1.5 rounded-md font-medium inline-flex items-center gap-1.5 ${vista === "tabela" ? "bg-violet-600 text-white" : "text-muted-foreground"}`}>
+            <TableIcon className="h-3.5 w-3.5" /> Tabela
+          </button>
+          <button onClick={() => setVista("kanban")} className={`px-3 py-1.5 rounded-md font-medium inline-flex items-center gap-1.5 ${vista === "kanban" ? "bg-violet-600 text-white" : "text-muted-foreground"}`}>
+            <Columns3 className="h-3.5 w-3.5" /> Kanban
+          </button>
+        </div>
+        <Input placeholder="Buscar por cliente ou parte contrária…" value={busca} onChange={(e) => setBusca(e.target.value)} className="flex-1 min-w-[200px]" />
+        <Select value={filtroStatus} onValueChange={(v) => setFiltroStatus(v as any)}>
+          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os status</SelectItem>
+            <SelectItem value="negociando">Negociando</SelectItem>
+            <SelectItem value="proposta_enviada">Proposta enviada</SelectItem>
+            <SelectItem value="fechado">Fechado</SelectItem>
+            <SelectItem value="cancelado">Cancelado</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando…</div>
+      ) : filtrados.length === 0 ? (
+        <div className="text-center py-16 border rounded-2xl bg-muted/20">
+          <Handshake className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="text-muted-foreground text-sm">Nenhum acordo ainda. Clique em <b>Novo acordo</b> para registrar a primeira negociação.</p>
+        </div>
+      ) : vista === "tabela" ? (
+        <TabelaAcordos acordos={filtrados} onAbrir={setDetalheId} />
+      ) : (
+        <KanbanAcordos acordos={filtrados} onAbrir={setDetalheId} />
+      )}
+
+      {detalheId != null && (
+        <DrawerDetalhe id={detalheId} onClose={() => setDetalheId(null)} onUpdate={onUpdate} />
+      )}
+      {novoAberto && <DialogNovo onClose={() => setNovoAberto(false)} onCriado={onUpdate} />}
+    </div>
+  );
+}
+
+function Kpi({ titulo, valor, sufixo, cor }: { titulo: string; valor: string; sufixo?: string; cor?: string }) {
+  return (
+    <div className="bg-background rounded-2xl border p-4">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">{titulo}</p>
+      <p className={`text-2xl font-bold mt-1 tabular-nums ${cor || ""}`}>{valor} {sufixo && <span className="text-sm font-medium text-muted-foreground">{sufixo}</span>}</p>
+    </div>
+  );
+}
+
+function TabelaAcordos({ acordos, onAbrir }: { acordos: any[]; onAbrir: (id: number) => void }) {
+  return (
+    <div className="bg-background rounded-2xl border overflow-x-auto">
+      <table className="w-full text-[13px] min-w-[860px]">
+        <thead>
+          <tr className="text-left text-muted-foreground text-[10px] uppercase tracking-wide border-b bg-muted/40">
+            <th className="px-4 py-2.5 font-semibold">Cliente</th>
+            <th className="px-4 py-2.5 font-semibold">Parte contrária</th>
+            <th className="px-4 py-2.5 font-semibold">Contato (quem negocia)</th>
+            <th className="px-4 py-2.5 font-semibold">Responsável</th>
+            <th className="px-4 py-2.5 font-semibold text-right">Proposta</th>
+            <th className="px-4 py-2.5 font-semibold">Status</th>
+            <th className="px-4 py-2.5 font-semibold">Atualizado</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {acordos.map((a) => (
+            <tr key={a.id} className="hover:bg-violet-50/40 dark:hover:bg-violet-950/20 cursor-pointer" onClick={() => onAbrir(a.id)}>
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold flex items-center justify-center shrink-0">{iniciais(a.clienteNome)}</div>
+                  <div className="min-w-0"><p className="font-medium truncate">{a.clienteNome}</p>{(a.processoApelido || a.processoNumeroCnj) && <p className="text-[11px] text-muted-foreground truncate">{a.processoApelido || a.processoNumeroCnj}</p>}</div>
+                </div>
+              </td>
+              <td className="px-4 py-3">{a.parteContraria}</td>
+              <td className="px-4 py-3">
+                <p>{a.contatoContrarioNome || "—"}</p>
+                {a.contatoContrarioTelefone && <p className="text-[11px] text-emerald-600 tabular-nums">{a.contatoContrarioTelefone}</p>}
+              </td>
+              <td className="px-4 py-3">{a.responsavelNome || "—"}</td>
+              <td className="px-4 py-3 text-right tabular-nums font-semibold">
+                {brl(a.valorProposta)}
+                {a.valorFechado != null && <p className="text-[10px] text-emerald-600 font-normal">fechou {brl(a.valorFechado)}</p>}
+              </td>
+              <td className="px-4 py-3">
+                <StatusBadge s={a.status} />
+                {a.motivoCancelamento && <p className="text-[10px] text-rose-500 mt-0.5">{a.motivoCancelamento}</p>}
+              </td>
+              <td className="px-4 py-3 text-muted-foreground text-[12px]">{timeAgo(a.updatedAt)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function KanbanAcordos({ acordos, onAbrir }: { acordos: any[]; onAbrir: (id: number) => void }) {
+  const cols: StatusAcordo[] = ["negociando", "proposta_enviada", "fechado", "cancelado"];
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      {cols.map((s) => {
+        const items = acordos.filter((a) => a.status === s);
+        return (
+          <div key={s} className="bg-muted/30 rounded-2xl border p-2.5">
+            <div className="flex items-center justify-between px-1 pb-2">
+              <span className="text-[12px] font-semibold flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${STATUS_META[s].dot}`} />{STATUS_META[s].label}</span>
+              <span className="text-[11px] text-muted-foreground">{items.length}</span>
+            </div>
+            <div className="space-y-2">
+              {items.map((a) => (
+                <div key={a.id} onClick={() => onAbrir(a.id)} className="bg-background rounded-xl border p-3 cursor-pointer hover:border-violet-300">
+                  <p className="font-medium text-[13px]">{a.clienteNome}</p>
+                  <p className="text-[11px] text-muted-foreground mb-1.5">vs {a.parteContraria}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] font-bold tabular-nums">{brl(a.valorProposta)}</span>
+                    <span className="text-[11px] text-muted-foreground">{a.responsavelNome || "—"}</span>
+                  </div>
+                  {a.motivoCancelamento && <p className="text-[10px] text-rose-500 mt-1.5 border-t pt-1.5">✕ {a.motivoCancelamento}</p>}
+                  {a.valorFechado != null && <p className="text-[10px] text-emerald-600 mt-1.5 border-t pt-1.5">✓ fechou em {brl(a.valorFechado)}</p>}
+                </div>
+              ))}
+              {items.length === 0 && <p className="text-[11px] text-muted-foreground/50 text-center py-3">vazio</p>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const ICONE_TIPO: Record<string, string> = { proposta: "💬", contraproposta: "↩️", nota: "📝", fechamento: "✅", cancelamento: "✕" };
+
+function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => void; onUpdate: () => void }) {
+  const { data: a, isLoading, refetch } = trpc.acordos.obter.useQuery({ id });
+  const [cancelarAberto, setCancelarAberto] = useState(false);
+  const [tratAberto, setTratAberto] = useState(false);
+  const [fecharAberto, setFecharAberto] = useState(false);
+  const atualizar = () => { refetch(); onUpdate(); };
+
+  return (
+    <Sheet open onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="w-full sm:max-w-md p-0 flex flex-col gap-0">
+        {isLoading || !a ? (
+          <div className="flex-1 flex items-center justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
+        ) : (
+          <>
+            <div className="px-5 py-4 border-b">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-9 w-9 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center">{iniciais(a.contatoId ? undefined : undefined)}</div>
+                  <div>
+                    <p className="font-bold">{(a as any).clienteNome ?? "Cliente"}</p>
+                    <p className="text-[11px] text-muted-foreground">Acordo #{a.id}</p>
+                  </div>
+                </div>
+                <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+              </div>
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                <StatusBadge s={a.status as StatusAcordo} />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <div className="bg-muted/40 rounded-xl border p-3 mb-4">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1.5">Parte contrária</p>
+                <p className="font-medium text-[14px]">{a.parteContraria}</p>
+                <div className="flex items-center justify-between mt-2">
+                  <div>
+                    <p className="text-[13px]">{a.contatoContrarioNome || "—"}</p>
+                    {a.contatoContrarioTelefone && <p className="text-[12px] text-muted-foreground tabular-nums">{a.contatoContrarioTelefone}</p>}
+                  </div>
+                  {a.contatoContrarioTelefone && (
+                    <a href={`https://wa.me/${a.contatoContrarioTelefone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"
+                       className="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5 dark:bg-emerald-950/40 dark:text-emerald-300">
+                      <Phone className="h-3.5 w-3.5" /> WhatsApp
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Valor em negociação</p>
+                <p className="text-xl font-bold tabular-nums">
+                  {brl(a.valorProposta)}
+                  {a.valorFechado != null && <span className="text-emerald-600 text-sm"> → {brl(a.valorFechado)}</span>}
+                </p>
+              </div>
+              {a.motivoCancelamento && (
+                <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-[12px] text-rose-700 mb-4 dark:bg-rose-950/30 dark:text-rose-300">
+                  Motivo do cancelamento: <b>{a.motivoCancelamento}</b>
+                </div>
+              )}
+
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-2 mt-4">Histórico da negociação</p>
+              <div className="space-y-3">
+                {(a.tratativas || []).map((t: any) => (
+                  <div key={t.id} className="flex gap-2.5">
+                    <div className="mt-0.5">{ICONE_TIPO[t.tipo] || "•"}</div>
+                    <div className="flex-1 border-l-2 border-muted pl-3 -ml-1">
+                      <p className="text-[13px]">{t.conteudo}{t.valor != null && <span className="font-semibold tabular-nums"> · {brl(t.valor)}</span>}</p>
+                      <p className="text-[11px] text-muted-foreground">{t.autor} · {new Date(t.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
+                    </div>
+                  </div>
+                ))}
+                {(a.tratativas || []).length === 0 && <p className="text-[12px] text-muted-foreground">Sem tratativas registradas.</p>}
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t bg-muted/30">
+              {a.status === "negociando" || a.status === "proposta_enviada" ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" className="flex-1 bg-violet-600 hover:bg-violet-700" onClick={() => setTratAberto(true)}>＋ Registrar</Button>
+                  <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => setFecharAberto(true)}>✓ Fechar</Button>
+                  <Button size="sm" variant="outline" className="border-rose-200 text-rose-600 hover:text-rose-700" onClick={() => setCancelarAberto(true)}>Cancelar</Button>
+                </div>
+              ) : (
+                <p className="text-[12px] text-muted-foreground text-center">Acordo {STATUS_META[a.status as StatusAcordo].label.toLowerCase()} — somente leitura.</p>
+              )}
+            </div>
+
+            {tratAberto && <DialogTratativa acordoId={a.id} onClose={() => setTratAberto(false)} onFeito={atualizar} />}
+            {fecharAberto && <DialogFechar acordoId={a.id} valorAtual={a.valorProposta} onClose={() => setFecharAberto(false)} onFeito={() => { atualizar(); }} />}
+            {cancelarAberto && <DialogCancelar acordoId={a.id} onClose={() => setCancelarAberto(false)} onFeito={() => { atualizar(); }} />}
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function DialogNovo({ onClose, onCriado }: { onClose: () => void; onCriado: () => void }) {
+  const [contatoId, setContatoId] = useState<number | null>(null);
+  const [busca, setBusca] = useState("");
+  const [parteContraria, setParteContraria] = useState("");
+  const [contatoNome, setContatoNome] = useState("");
+  const [contatoTel, setContatoTel] = useState("");
+  const [valor, setValor] = useState("");
+  const [processoId, setProcessoId] = useState<string>("nenhum");
+
+  const { data: clientesData } = trpc.clientes.listar.useQuery({ busca: busca || undefined, limite: 20, estagio: "todos" }, { enabled: busca.length >= 2 });
+  const clientes = (clientesData as any)?.clientes ?? [];
+  const { data: processos = [] } = trpc.clienteProcessos.listar.useQuery({ contatoId: contatoId! }, { enabled: !!contatoId });
+
+  const criar = trpc.acordos.criar.useMutation({
+    onSuccess: () => { toast.success("Acordo criado"); onCriado(); onClose(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const submeter = () => {
+    if (!contatoId) { toast.error("Selecione o cliente"); return; }
+    if (!parteContraria.trim()) { toast.error("Informe a parte contrária"); return; }
+    criar.mutate({
+      contatoId,
+      processoId: processoId !== "nenhum" ? Number(processoId) : undefined,
+      parteContraria: parteContraria.trim(),
+      contatoContrarioNome: contatoNome.trim() || undefined,
+      contatoContrarioTelefone: contatoTel.trim() || undefined,
+      valorProposta: valor ? paraCentavos(valor) : undefined,
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader><DialogTitle>Novo acordo</DialogTitle></DialogHeader>
+        <div className="space-y-3 text-[13px] max-h-[70vh] overflow-y-auto">
+          <div>
+            <Label className="text-[12px]">Cliente</Label>
+            {contatoId ? (
+              <div className="flex items-center justify-between border rounded-lg px-3 py-2 mt-1">
+                <span className="font-medium">{clientes.find((c: any) => c.id === contatoId)?.nome || busca}</span>
+                <button onClick={() => { setContatoId(null); setProcessoId("nenhum"); }} className="text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+              </div>
+            ) : (
+              <>
+                <Input placeholder="Buscar cliente do escritório…" value={busca} onChange={(e) => setBusca(e.target.value)} className="mt-1" />
+                {clientes.length > 0 && (
+                  <div className="border rounded-lg mt-1 max-h-40 overflow-y-auto divide-y">
+                    {clientes.map((c: any) => (
+                      <button key={c.id} onClick={() => setContatoId(c.id)} className="w-full text-left px-3 py-2 hover:bg-muted">
+                        <p className="font-medium">{c.nome}</p>{c.telefone && <p className="text-[11px] text-muted-foreground">{c.telefone}</p>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {contatoId && processos.length > 0 && (
+            <div>
+              <Label className="text-[12px]">Processo vinculado <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+              <Select value={processoId} onValueChange={setProcessoId}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nenhum">— nenhum / extrajudicial puro —</SelectItem>
+                  {(processos as any[]).map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.apelido || p.numeroCnj || `Processo #${p.id}`}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label className="text-[12px]">Parte contrária</Label><Input placeholder="Ex.: Construtora Alfa Ltda" value={parteContraria} onChange={(e) => setParteContraria(e.target.value)} className="mt-1" /></div>
+            <div><Label className="text-[12px]">Valor da proposta</Label><Input placeholder="R$ 0,00" value={valor} onChange={(e) => setValor(e.target.value)} className="mt-1 tabular-nums" /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label className="text-[12px]">Contato (outro lado)</Label><Input placeholder="Ex.: Dr. Ricardo" value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} className="mt-1" /></div>
+            <div><Label className="text-[12px]">Telefone do contato</Label><Input placeholder="(85) 9…" value={contatoTel} onChange={(e) => setContatoTel(e.target.value)} className="mt-1 tabular-nums" /></div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button className="bg-violet-600 hover:bg-violet-700" onClick={submeter} disabled={criar.isPending}>
+            {criar.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}Criar acordo
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DialogTratativa({ acordoId, onClose, onFeito }: { acordoId: number; onClose: () => void; onFeito: () => void }) {
+  const [tipo, setTipo] = useState<"proposta" | "contraproposta" | "nota">("proposta");
+  const [valor, setValor] = useState("");
+  const [conteudo, setConteudo] = useState("");
+  const [daContraria, setDaContraria] = useState(false);
+  const m = trpc.acordos.registrarTratativa.useMutation({
+    onSuccess: () => { toast.success("Tratativa registrada"); onFeito(); onClose(); },
+    onError: (e) => toast.error(e.message),
+  });
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader><DialogTitle>Registrar tratativa</DialogTitle></DialogHeader>
+        <div className="space-y-3 text-[13px]">
+          <div>
+            <Label className="text-[12px]">Tipo</Label>
+            <Select value={tipo} onValueChange={(v) => setTipo(v as any)}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="proposta">Proposta (nossa)</SelectItem>
+                <SelectItem value="contraproposta">Contraproposta</SelectItem>
+                <SelectItem value="nota">Nota / andamento</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {tipo !== "nota" && (
+            <div><Label className="text-[12px]">Valor</Label><Input placeholder="R$ 0,00" value={valor} onChange={(e) => setValor(e.target.value)} className="mt-1 tabular-nums" /></div>
+          )}
+          <div><Label className="text-[12px]">Descrição</Label><Textarea placeholder="O que foi tratado…" value={conteudo} onChange={(e) => setConteudo(e.target.value)} className="mt-1 h-20" /></div>
+          <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
+            <input type="checkbox" checked={daContraria} onChange={(e) => setDaContraria(e.target.checked)} /> Registro veio da parte contrária
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button className="bg-violet-600 hover:bg-violet-700" disabled={m.isPending || !conteudo.trim()} onClick={() =>
+            m.mutate({ acordoId, tipo, valor: valor ? paraCentavos(valor) : undefined, conteudo: conteudo.trim(), daParteContraria: daContraria })
+          }>{m.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}Registrar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DialogFechar({ acordoId, valorAtual, onClose, onFeito }: { acordoId: number; valorAtual?: number | null; onClose: () => void; onFeito: () => void }) {
+  const [valor, setValor] = useState(valorAtual != null ? String((valorAtual / 100).toFixed(2)).replace(".", ",") : "");
+  const m = trpc.acordos.fechar.useMutation({
+    onSuccess: () => { toast.success("Acordo fechado 🎉"); onFeito(); onClose(); },
+    onError: (e) => toast.error(e.message),
+  });
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader><DialogTitle className="text-emerald-700">Fechar acordo</DialogTitle></DialogHeader>
+        <div className="space-y-3 text-[13px]">
+          <div><Label className="text-[12px]">Valor final acordado</Label><Input placeholder="R$ 0,00" value={valor} onChange={(e) => setValor(e.target.value)} className="mt-1 tabular-nums" /></div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Voltar</Button>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={m.isPending} onClick={() => {
+            const c = paraCentavos(valor);
+            if (c == null) { toast.error("Informe o valor"); return; }
+            m.mutate({ acordoId, valorFechado: c });
+          }}>{m.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}Confirmar fechamento</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const MOTIVOS = [
+  "Cliente preferiu prosseguir com a ação",
+  "Parte contrária recusou a proposta",
+  "Valor abaixo do aceitável",
+  "Sem resposta da parte contrária",
+  "Outro",
+];
+function DialogCancelar({ acordoId, onClose, onFeito }: { acordoId: number; onClose: () => void; onFeito: () => void }) {
+  const [motivo, setMotivo] = useState(MOTIVOS[0]);
+  const [obs, setObs] = useState("");
+  const m = trpc.acordos.cancelar.useMutation({
+    onSuccess: () => { toast.success("Acordo cancelado"); onFeito(); onClose(); },
+    onError: (e) => toast.error(e.message),
+  });
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader><DialogTitle className="text-rose-700">Cancelar acordo</DialogTitle></DialogHeader>
+        <div className="space-y-3 text-[13px]">
+          <p className="text-muted-foreground">O motivo fica registrado no histórico e aparece na lista.</p>
+          <div>
+            <Label className="text-[12px]">Motivo</Label>
+            <Select value={motivo} onValueChange={setMotivo}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>{MOTIVOS.map((mo) => <SelectItem key={mo} value={mo}>{mo}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <Textarea placeholder="Observação (opcional)" value={obs} onChange={(e) => setObs(e.target.value)} className="h-20" />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Voltar</Button>
+          <Button className="bg-rose-600 hover:bg-rose-700" disabled={m.isPending} onClick={() => m.mutate({ acordoId, motivo, observacao: obs.trim() || undefined })}>
+            {m.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}Confirmar cancelamento
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
