@@ -38,10 +38,9 @@ import ModelosContrato from "./pages/ModelosContrato";
 import AgenteJuridico from "./pages/AgenteJuridico";
 import Agendamento from "./pages/Agendamento";
 import Atendimento from "./pages/Atendimento";
-import AgentesIA from "./pages/AgentesIA";
 import AgenteChat from "./pages/AgenteChat";
-import SmartFlow from "./pages/SmartFlow";
 import SmartFlowEditor from "./pages/SmartFlowEditor";
+import Automacoes from "./pages/Automacoes";
 import Kanban from "./pages/Kanban";
 import Clientes from "./pages/Clientes";
 import Acordos from "./pages/Acordos";
@@ -283,19 +282,16 @@ function Router() {
           <Atendimento />
         </ClientArea>
       </Route>
-      <Route path="/agentes-ia">
+      {/* Automações — fusão de Fluxos (SmartFlow) + Agentes (Agentes IA). */}
+      <Route path="/automacoes">
         <ClientArea>
-          <AgentesIA />
+          <Automacoes />
         </ClientArea>
       </Route>
+      {/* Deep-links preservados (chat do agente + editor de fluxo full-screen). */}
       <Route path="/agentes-ia/:id/chat">
         <ClientArea>
           <AgenteChat />
-        </ClientArea>
-      </Route>
-      <Route path="/smartflow">
-        <ClientArea>
-          <SmartFlow />
         </ClientArea>
       </Route>
       <Route path="/smartflow/novo">
@@ -307,6 +303,15 @@ function Router() {
         <ClientArea>
           <SmartFlowEditor />
         </ClientArea>
+      </Route>
+      {/* Telas de lista antigas → redirect pra sub-aba correspondente
+          (preserva links salvos, o card "Agente Jurídico" e o dropdown
+          "escolher agente" do editor de fluxo). */}
+      <Route path="/agentes-ia">
+        <Redirect to="/automacoes?tab=agentes" />
+      </Route>
+      <Route path="/smartflow">
+        <Redirect to="/automacoes?tab=fluxos" />
       </Route>
       <Route path="/kanban">
         <ClientArea>

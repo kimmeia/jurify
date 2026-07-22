@@ -140,8 +140,30 @@ export const acordosRouter = router({
       if (!db) return null;
 
       const [a] = await db
-        .select()
+        .select({
+          id: acordos.id,
+          contatoId: acordos.contatoId,
+          clienteNome: contatos.nome,
+          processoId: acordos.processoId,
+          processoApelido: clienteProcessos.apelido,
+          processoNumeroCnj: clienteProcessos.numeroCnj,
+          parteContraria: acordos.parteContraria,
+          contatoContrarioNome: acordos.contatoContrarioNome,
+          contatoContrarioTelefone: acordos.contatoContrarioTelefone,
+          responsavelId: acordos.responsavelId,
+          responsavelNome: users.name,
+          valorProposta: acordos.valorProposta,
+          valorFechado: acordos.valorFechado,
+          status: acordos.status,
+          motivoCancelamento: acordos.motivoCancelamento,
+          createdAt: acordos.createdAt,
+          updatedAt: acordos.updatedAt,
+        })
         .from(acordos)
+        .innerJoin(contatos, eq(contatos.id, acordos.contatoId))
+        .leftJoin(clienteProcessos, eq(clienteProcessos.id, acordos.processoId))
+        .leftJoin(colaboradores, eq(colaboradores.id, acordos.responsavelId))
+        .leftJoin(users, eq(users.id, colaboradores.userId))
         .where(and(eq(acordos.id, input.id), eq(acordos.escritorioId, perm.escritorioId)))
         .limit(1);
       if (!a) return null;

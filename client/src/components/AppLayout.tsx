@@ -44,7 +44,6 @@ import {
   BarChart3,
   CheckSquare,
   DollarSign,
-  BrainCircuit,
   Zap,
   LayoutGrid,
   Lightbulb,
@@ -470,16 +469,18 @@ function AppSidebarContent({
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
-              {/* Agentes IA */}
-              {canSee("agentesIa") && !moduloOcultoNoMenu("agentesIa") && <SidebarMenuItem>
+              {/* Automações — fusão de SmartFlow (Fluxos) + Agentes IA
+                  (Agentes). Aparece se o usuário pode ver ao menos um dos
+                  dois; o gate por sub-aba fica dentro da página. */}
+              {(canSee("smartflow") || canSee("agentesIa")) && !moduloOcultoNoMenu("smartflow") && <SidebarMenuItem>
                 <SidebarMenuButton
-                  isActive={location === "/agentes-ia"}
-                  onClick={() => navigateOrBlock("/agentes-ia")}
-                  tooltip="Agentes IA"
+                  isActive={location.startsWith("/automacoes")}
+                  onClick={() => navigateOrBlock("/automacoes")}
+                  tooltip="Automações"
                   className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
                 >
-                  <BrainCircuit className={`h-4 w-4 ${location === "/agentes-ia" ? "text-primary" : ""}`} />
-                  <span>Agentes IA</span>
+                  <Zap className={`h-4 w-4 ${location.startsWith("/automacoes") ? "text-primary" : ""}`} />
+                  <span>Automações</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -493,19 +494,6 @@ function AppSidebarContent({
                 >
                   <LayoutGrid className={`h-4 w-4 ${location === "/kanban" ? "text-primary" : ""}`} />
                   <span className="flex-1">Kanban</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* SmartFlow */}
-              {canSee("smartflow") && !moduloOcultoNoMenu("smartflow") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/smartflow"}
-                  onClick={() => navigateOrBlock("/smartflow")}
-                  tooltip="SmartFlow"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <Zap className={`h-4 w-4 ${location === "/smartflow" ? "text-primary" : ""}`} />
-                  <span>SmartFlow</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 

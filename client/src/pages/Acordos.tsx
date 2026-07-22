@@ -250,22 +250,28 @@ function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
           <>
             <div className="px-5 py-4 border-b">
               <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-9 w-9 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center">{iniciais(a.contatoId ? undefined : undefined)}</div>
+                <div className="flex items-center gap-2.5">
+                  <div className="h-10 w-10 rounded-full bg-violet-100 text-violet-700 text-sm font-bold flex items-center justify-center dark:bg-violet-950/40 dark:text-violet-300">{iniciais((a as any).clienteNome)}</div>
                   <div>
-                    <p className="font-bold">{(a as any).clienteNome ?? "Cliente"}</p>
-                    <p className="text-[11px] text-muted-foreground">Acordo #{a.id}</p>
+                    <p className="font-bold leading-tight">{(a as any).clienteNome ?? "Cliente"}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Acordo #{a.id}
+                      {((a as any).processoApelido || (a as any).processoNumeroCnj) && <> · {(a as any).processoApelido || (a as any).processoNumeroCnj}</>}
+                    </p>
                   </div>
                 </div>
                 <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
               </div>
               <div className="mt-3 flex items-center gap-2 flex-wrap">
                 <StatusBadge s={a.status as StatusAcordo} />
+                {(a as any).responsavelNome && (
+                  <span className="text-[12px] text-muted-foreground">Responsável: <span className="font-medium text-foreground">{(a as any).responsavelNome}</span></span>
+                )}
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4">
-              <div className="bg-muted/40 rounded-xl border p-3 mb-4">
+              <div className="rounded-xl border p-3 mb-4">
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1.5">Parte contrária</p>
                 <p className="font-medium text-[14px]">{a.parteContraria}</p>
                 <div className="flex items-center justify-between mt-2">
@@ -282,7 +288,7 @@ function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
                 </div>
               </div>
 
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-4 rounded-xl border p-3">
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Valor em negociação</p>
                 <p className="text-xl font-bold tabular-nums">
                   {brl(a.valorProposta)}
@@ -310,7 +316,7 @@ function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
               </div>
             </div>
 
-            <div className="px-5 py-3 border-t bg-muted/30">
+            <div className="px-5 py-3 border-t">
               {a.status === "negociando" || a.status === "proposta_enviada" ? (
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" className="flex-1 bg-violet-600 hover:bg-violet-700" onClick={() => setTratAberto(true)}>＋ Registrar</Button>
