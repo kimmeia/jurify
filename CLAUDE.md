@@ -89,6 +89,15 @@ Caso clássico: validação inicial passou → integração quebrou depois → p
 - `scripts/spike-motor-proprio/poc-2-esaj-login/adapters/` — scrapers Playwright (PJe TJCE)
 - `shared/` — types compartilhados client/server
 
+## Infra (estado validado — não re-flagrar)
+
+- Uploads (`/app/uploads`): volume Railway `juridflow-volume` montado e
+  **validado fim-a-fim em produção** (arquivo sobrevive a redeploy). ⚠ no
+  painel = capacidade → Live resize. Detalhes/histórico em
+  `docs/setup-volume-railway.md`. Migração S3 planejada (P2 do relatório).
+- `/uploads` é servido com auth de sessão + checagem de escritório
+  (exceção pública: `/uploads/pareceres/` — capability-URL por design).
+
 ## Anti-patterns conhecidos
 
 - ❌ `authenticator.options = X` (modifica singleton)

@@ -36,6 +36,7 @@ import {
   Lock,
   FileSearch,
   FileText,
+  Handshake,
   Headphones,
   CalendarDays,
   Settings,
@@ -393,6 +394,21 @@ function AppSidebarContent({
                 >
                   <Users className={`h-4 w-4 ${location === "/clientes" ? "text-primary" : ""}`} />
                   <span className="flex-1">Clientes</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>}
+
+              {/* Acordos — tratativas extrajudiciais. Gate herda de "clientes"
+                  (acordo é vinculado a cliente; verProprios filtra por
+                  responsável no backend). */}
+              {canSee("clientes") && <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location === "/acordos"}
+                  onClick={() => navigateOrBlock("/acordos")}
+                  tooltip="Acordos"
+                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
+                >
+                  <Handshake className={`h-4 w-4 ${location === "/acordos" ? "text-primary" : ""}`} />
+                  <span className="flex-1">Acordos</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 

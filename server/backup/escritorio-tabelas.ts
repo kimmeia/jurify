@@ -52,6 +52,7 @@ export const TABELAS_INCLUIR: TabelaBackup[] = [
   { nomeBanco: "kanban_cards", colunaEscritorio: "escritorioIdKCard", categoria: "dados" },
   { nomeBanco: "kanban_tags", colunaEscritorio: "escritorioIdKTag", categoria: "dados" },
   { nomeBanco: "assinaturas_digitais", colunaEscritorio: "escritorioId", categoria: "dados" },
+  { nomeBanco: "acordos", colunaEscritorio: "escritorioIdAcordo", categoria: "dados" },
   // Financeiro:
   { nomeBanco: "asaas_clientes", colunaEscritorio: "escritorioIdAsaasCli", categoria: "dados" },
   { nomeBanco: "asaas_cobrancas", colunaEscritorio: "escritorioIdAsaasCob", categoria: "dados" },
@@ -162,6 +163,11 @@ export const TABELAS_SATELITE: TabelaBackupSatelite[] = [
     categoria: "dados",
   },
   {
+    nomeBanco: "acordo_tratativas",
+    filtroSql: "acordoIdTrat IN (SELECT id FROM acordos WHERE escritorioIdAcordo = ?)",
+    categoria: "dados",
+  },
+  {
     nomeBanco: "permissoes_cargo",
     filtroSql: "cargoId IN (SELECT id FROM cargos_personalizados WHERE escritorioId = ?)",
     categoria: "configs",
@@ -241,6 +247,7 @@ export const ORDEM_TOPOLOGICA: ReadonlyArray<string> = [
 
   // NÍVEL 2:
   "cliente_processos",
+  "acordos", // depende de contatos + cliente_processos (opcional) + colaboradores
   "eventos_processo", // FK opcional pra judit_monitoramentos (raiz)
   "agendamento_lembretes",
   "agendamento_anexos",
@@ -256,5 +263,6 @@ export const ORDEM_TOPOLOGICA: ReadonlyArray<string> = [
 
   // NÍVEL 3:
   "cliente_processo_anotacoes",
+  "acordo_tratativas", // depende de acordos
   "kanban_movimentacoes",
 ];

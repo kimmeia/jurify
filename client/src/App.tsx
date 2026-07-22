@@ -44,6 +44,7 @@ import SmartFlow from "./pages/SmartFlow";
 import SmartFlowEditor from "./pages/SmartFlowEditor";
 import Kanban from "./pages/Kanban";
 import Clientes from "./pages/Clientes";
+import Acordos from "./pages/Acordos";
 import Relatorios from "./pages/Relatorios";
 import Financeiro from "./pages/Financeiro";
 import AtribuirCobrancasPage from "./pages/financeiro/AtribuirCobrancasPage";
@@ -315,6 +316,11 @@ function Router() {
       <Route path="/clientes">
         <ClientArea>
           <Clientes />
+        </ClientArea>
+      </Route>
+      <Route path="/acordos">
+        <ClientArea>
+          <Acordos />
         </ClientArea>
       </Route>
       <Route path="/relatorios">
