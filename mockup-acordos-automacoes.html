@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Módulo Acordos + Automações</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif}
+  .tabnum{font-variant-numeric:tabular-nums}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px}
+  [data-tela]{display:none}
+  [data-tela].ativa{display:block}
+  .drawer{transition:transform .25s ease}
+  .drawer.fechado{transform:translateX(100%)}
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+<!-- Banner explicativo (topo, some ao rolar o mockup — só didático) -->
+<div class="bg-violet-600 text-white text-[13px] px-4 py-2 flex items-center justify-center gap-2">
+  <span class="font-semibold">Mockup navegável</span>
+  <span class="opacity-90">— clique em <b>Automações</b> (menu fundido: Fluxos + Agentes) e em <b>Acordos</b> (módulo novo). Tudo é clicável.</span>
+</div>
+
+<div class="flex h-[calc(100vh-36px)]">
+
+  <!-- ============ SIDEBAR (app real) ============ -->
+  <aside class="w-60 shrink-0 bg-white border-r flex flex-col">
+    <div class="px-4 py-4 flex items-center gap-2 border-b">
+      <span class="inline-flex h-7 w-7 items-center justify-center rounded-md bg-violet-600 text-white text-xs font-bold">J.</span>
+      <span class="font-bold text-[15px]">Boyadjian Adv.</span>
+    </div>
+    <nav class="flex-1 overflow-y-auto py-2 text-[13.5px]">
+      <div class="px-3 space-y-0.5">
+        <a class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100" href="#"><span>🏠</span> Dashboard</a>
+        <a class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100" href="#"><span>🧮</span> Cálculos</a>
+        <a class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100" href="#"><span>👥</span> Clientes</a>
+        <a class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100" href="#"><span>📄</span> Modelos</a>
+        <a class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100" href="#"><span>📅</span> Agenda</a>
+        <a class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100" href="#"><span>🔎</span> Processos</a>
+
+        <!-- NOVO: Acordos -->
+        <a data-nav="acordos" class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 cursor-pointer" href="#">
+          <span>🤝</span> Acordos
+          <span class="ml-auto text-[9px] bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5 font-bold">NOVO</span>
+        </a>
+
+        <a class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100" href="#"><span>🎧</span> Atendimento</a>
+        <a class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100" href="#"><span>🗂️</span> Kanban</a>
+
+        <!-- FUNDIDO: Automações (antes Agentes IA + SmartFlow) -->
+        <a data-nav="automacoes" class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 cursor-pointer" href="#">
+          <span>⚡</span> Automações
+          <span class="ml-auto text-[9px] bg-violet-100 text-violet-700 rounded px-1.5 py-0.5 font-bold">2→1</span>
+        </a>
+
+        <a class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100" href="#"><span>📊</span> Relatórios</a>
+        <a class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100" href="#"><span>💲</span> Financeiro</a>
+        <a class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100" href="#"><span>⚙️</span> Configurações</a>
+      </div>
+    </nav>
+    <div class="px-4 py-3 border-t flex items-center gap-2 text-[13px]">
+      <div class="h-8 w-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-white flex items-center justify-center text-xs font-bold">BB</div>
+      <div class="min-w-0"><p class="font-medium truncate">Bruno Boyadjian</p><p class="text-[11px] text-slate-400 truncate">Dono</p></div>
+    </div>
+  </aside>
+
+  <!-- ============ CONTEÚDO ============ -->
+  <main class="flex-1 overflow-y-auto relative">
+
+    <!-- ===================== TELA: ACORDOS ===================== -->
+    <section data-tela="acordos" class="ativa p-6">
+      <header class="mb-5">
+        <div class="flex items-center gap-2 text-[13px] text-violet-600 font-semibold">Automações → não; <span class="text-slate-400 font-normal">Acordos → Tratativas extrajudiciais</span></div>
+        <div class="flex items-start justify-between gap-4 mt-1">
+          <div>
+            <h1 class="text-2xl font-bold">Acordos <span class="text-slate-400 font-normal text-lg">· negociações extrajudiciais</span></h1>
+            <p class="text-slate-500 text-[14px] mt-0.5">Todos os acordos do escritório numa tela só — sem abrir cliente por cliente.</p>
+          </div>
+          <button onclick="abrirNovo()" class="shrink-0 inline-flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-lg px-4 py-2.5 shadow-sm">＋ Novo acordo</button>
+        </div>
+      </header>
+
+      <!-- KPIs -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div class="bg-white rounded-2xl border p-4">
+          <p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Em negociação</p>
+          <p class="text-2xl font-bold mt-1">3 <span class="text-sm font-medium text-slate-400">acordos</span></p>
+        </div>
+        <div class="bg-white rounded-2xl border p-4">
+          <p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Valor em negociação</p>
+          <p class="text-2xl font-bold mt-1 tabnum text-amber-600">R$ 44.500</p>
+        </div>
+        <div class="bg-white rounded-2xl border p-4">
+          <p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Fechados no mês</p>
+          <p class="text-2xl font-bold mt-1 tabnum text-emerald-600">R$ 14.000 <span class="text-sm font-medium text-slate-400">(1)</span></p>
+        </div>
+        <div class="bg-white rounded-2xl border p-4">
+          <p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Taxa de fechamento</p>
+          <p class="text-2xl font-bold mt-1 tabnum">50% <span class="text-sm font-medium text-slate-400">(1 de 2)</span></p>
+        </div>
+      </div>
+
+      <!-- Barra de controles -->
+      <div class="flex items-center gap-2 mb-3 flex-wrap">
+        <div class="inline-flex rounded-lg border bg-white p-0.5 text-[13px]">
+          <button id="btnTabela" onclick="setVista('tabela')" class="px-3 py-1.5 rounded-md font-medium bg-violet-600 text-white">☰ Tabela</button>
+          <button id="btnKanban" onclick="setVista('kanban')" class="px-3 py-1.5 rounded-md font-medium text-slate-500">▦ Kanban</button>
+        </div>
+        <input placeholder="Buscar por cliente ou parte contrária…" class="flex-1 min-w-[200px] border rounded-lg px-3 py-2 text-[13px] bg-white" />
+        <select class="border rounded-lg px-3 py-2 text-[13px] bg-white text-slate-600">
+          <option>Todos os status</option><option>Negociando</option><option>Proposta enviada</option><option>Fechado</option><option>Cancelado</option>
+        </select>
+        <select class="border rounded-lg px-3 py-2 text-[13px] bg-white text-slate-600">
+          <option>Todos os responsáveis</option><option>Andreza</option><option>Pablo</option><option>Milena</option><option>Eduardo</option>
+        </select>
+      </div>
+
+      <!-- ---- VISTA TABELA ---- -->
+      <div id="vistaTabela" class="bg-white rounded-2xl border overflow-hidden">
+        <table class="w-full text-[13px]">
+          <thead>
+            <tr class="text-left text-slate-400 text-[10px] uppercase tracking-wide border-b bg-slate-50/60">
+              <th class="px-4 py-2.5 font-semibold">Cliente</th>
+              <th class="px-4 py-2.5 font-semibold">Parte contrária</th>
+              <th class="px-4 py-2.5 font-semibold">Contato (quem negocia)</th>
+              <th class="px-4 py-2.5 font-semibold">Responsável</th>
+              <th class="px-4 py-2.5 font-semibold text-right">Proposta</th>
+              <th class="px-4 py-2.5 font-semibold">Status</th>
+              <th class="px-4 py-2.5 font-semibold">Atualizado</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y" id="linhasAcordo"></tbody>
+        </table>
+      </div>
+
+      <!-- ---- VISTA KANBAN ---- -->
+      <div id="vistaKanban" class="hidden grid grid-cols-1 md:grid-cols-4 gap-3">
+        <!-- colunas preenchidas via JS -->
+      </div>
+
+      <p class="text-[11px] text-slate-400 mt-3">💡 Cada linha abre a negociação com histórico de propostas, botão de WhatsApp e vínculo ao processo. Clique numa linha/card.</p>
+    </section>
+
+    <!-- ===================== TELA: AUTOMAÇÕES (fusão) ===================== -->
+    <section data-tela="automacoes" class="p-6">
+      <header class="mb-5">
+        <div class="flex items-center gap-2 text-[13px] text-violet-600 font-semibold">Automações</div>
+        <h1 class="text-2xl font-bold mt-1">Automações</h1>
+        <p class="text-slate-500 text-[14px] mt-0.5">
+          <b>Agentes de IA</b> e <b>SmartFlow</b> reunidos numa aba só. Faz sentido porque o agente não roda sozinho — ele é uma peça que um <b>fluxo</b> aciona.
+        </p>
+      </header>
+
+      <!-- sub-abas -->
+      <div class="border-b mb-4 flex gap-1 text-[14px]">
+        <button id="subFluxos" onclick="setSub('fluxos')" class="px-4 py-2 -mb-px border-b-2 border-violet-600 text-violet-700 font-semibold">⚡ Fluxos</button>
+        <button id="subAgentes" onclick="setSub('agentes')" class="px-4 py-2 -mb-px border-b-2 border-transparent text-slate-500 font-medium">🧠 Agentes</button>
+      </div>
+
+      <!-- conteúdo Fluxos -->
+      <div id="cttFluxos">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="inline-flex rounded-lg border bg-white p-0.5 text-[13px]">
+            <button class="px-3 py-1.5 rounded-md font-medium bg-slate-100 text-slate-700">Cenários</button>
+            <button class="px-3 py-1.5 rounded-md font-medium text-slate-400">Execuções</button>
+          </div>
+          <div class="flex-1"></div>
+          <button class="bg-violet-600 text-white text-sm font-semibold rounded-lg px-4 py-2">＋ Novo cenário</button>
+        </div>
+        <div class="grid md:grid-cols-3 gap-3">
+          <div class="bg-white rounded-2xl border p-4">
+            <div class="flex items-center justify-between"><span class="text-[10px] bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5 font-semibold">Ativo</span><span class="text-slate-300">⋯</span></div>
+            <p class="font-semibold mt-2">Cobrança de vencimento</p>
+            <p class="text-[12px] text-slate-500 mt-0.5">Gatilho: pagamento vencido → template</p>
+            <p class="text-[11px] text-slate-400 mt-2">Usa o agente <b>Financeiro</b> no passo de resposta</p>
+          </div>
+          <div class="bg-white rounded-2xl border p-4">
+            <div class="flex items-center justify-between"><span class="text-[10px] bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5 font-semibold">Ativo</span><span class="text-slate-300">⋯</span></div>
+            <p class="font-semibold mt-2">Triagem de novo lead</p>
+            <p class="text-[12px] text-slate-500 mt-0.5">Gatilho: mensagem recebida → IA</p>
+            <p class="text-[11px] text-slate-400 mt-2">Usa o agente <b>SDR Boyadjian</b></p>
+          </div>
+          <div class="bg-white rounded-2xl border border-dashed p-4 flex items-center justify-center text-slate-400 text-[13px]">＋ criar do zero ou por template</div>
+        </div>
+      </div>
+
+      <!-- conteúdo Agentes -->
+      <div id="cttAgentes" class="hidden">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="inline-flex rounded-lg border bg-white p-0.5 text-[13px]">
+            <button class="px-3 py-1.5 rounded-md font-medium bg-slate-100 text-slate-700">Escritório</button>
+            <button class="px-3 py-1.5 rounded-md font-medium text-slate-400">Templates</button>
+            <button class="px-3 py-1.5 rounded-md font-medium text-slate-400">Meus</button>
+          </div>
+          <div class="flex-1"></div>
+          <button class="bg-violet-600 text-white text-sm font-semibold rounded-lg px-4 py-2">＋ Novo agente</button>
+        </div>
+        <div class="grid md:grid-cols-3 gap-3">
+          <div class="bg-white rounded-2xl border p-4">
+            <div class="flex items-center gap-2"><span class="h-8 w-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center">🧠</span><p class="font-semibold">SDR Boyadjian</p></div>
+            <p class="text-[12px] text-slate-500 mt-2">Triagem e qualificação no WhatsApp</p>
+            <p class="text-[11px] text-slate-400 mt-2">Usado em 1 fluxo · 4 campos de captura</p>
+          </div>
+          <div class="bg-white rounded-2xl border p-4">
+            <div class="flex items-center gap-2"><span class="h-8 w-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">🧠</span><p class="font-semibold">Financeiro</p></div>
+            <p class="text-[12px] text-slate-500 mt-2">Responde dúvidas de cobrança</p>
+            <p class="text-[11px] text-slate-400 mt-2">Usado em 1 fluxo · base com 3 docs</p>
+          </div>
+          <div class="bg-white rounded-2xl border border-dashed p-4 flex items-center justify-center text-slate-400 text-[13px]">＋ novo agente ou clonar template</div>
+        </div>
+        <div class="mt-4 bg-amber-50/60 border border-amber-200 rounded-xl p-3 text-[12px] text-amber-800">
+          🔑 Sub-abas respeitam plano e permissão de forma independente: se o cargo/plano só libera <b>Fluxos</b>, a sub-aba <b>Agentes</b> aparece bloqueada — não a aba inteira.
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== DRAWER: DETALHE DO ACORDO ===================== -->
+    <div id="overlayDrawer" class="hidden fixed inset-0 bg-black/30 z-40" onclick="fecharDrawer()"></div>
+    <aside id="drawer" class="drawer fechado fixed top-0 right-0 h-full w-full max-w-md bg-white border-l shadow-2xl z-50 flex flex-col">
+      <div id="drawerHead" class="px-5 py-4 border-b"></div>
+      <div id="drawerBody" class="flex-1 overflow-y-auto px-5 py-4"></div>
+      <div id="drawerFoot" class="px-5 py-3 border-t bg-slate-50"></div>
+    </aside>
+
+    <!-- ===================== MODAL: NOVO ACORDO ===================== -->
+    <div id="modalNovo" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)fecharNovo()">
+      <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl">
+        <div class="px-5 py-4 border-b flex items-center justify-between">
+          <h3 class="font-bold text-lg">Novo acordo</h3>
+          <button onclick="fecharNovo()" class="text-slate-400 hover:text-slate-600">✕</button>
+        </div>
+        <div class="px-5 py-4 space-y-3 text-[13px] max-h-[70vh] overflow-y-auto">
+          <div>
+            <label class="block text-[12px] font-medium text-slate-600 mb-1">Cliente</label>
+            <input placeholder="Buscar cliente do escritório…" class="w-full border rounded-lg px-3 py-2" />
+            <p class="text-[11px] text-slate-400 mt-1">Vincula ao cadastro existente — já traz telefone e processos do cliente.</p>
+          </div>
+          <div>
+            <label class="block text-[12px] font-medium text-slate-600 mb-1">Processo vinculado <span class="text-slate-400 font-normal">(opcional)</span></label>
+            <select class="w-full border rounded-lg px-3 py-2 text-slate-600"><option>— nenhum / extrajudicial puro —</option><option>Ação Trabalhista 0012345-67.2025</option></select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[12px] font-medium text-slate-600 mb-1">Parte contrária</label>
+              <input placeholder="Ex.: Construtora Alfa Ltda" class="w-full border rounded-lg px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-[12px] font-medium text-slate-600 mb-1">Valor da proposta</label>
+              <input placeholder="R$ 0,00" class="w-full border rounded-lg px-3 py-2 tabnum" />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[12px] font-medium text-slate-600 mb-1">Contato (quem negocia do outro lado)</label>
+              <input placeholder="Ex.: Dr. Ricardo (adv.)" class="w-full border rounded-lg px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-[12px] font-medium text-slate-600 mb-1">Telefone do contato</label>
+              <input placeholder="(85) 9…" class="w-full border rounded-lg px-3 py-2 tabnum" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-[12px] font-medium text-slate-600 mb-1">Responsável (nosso)</label>
+            <select class="w-full border rounded-lg px-3 py-2 text-slate-600"><option>Andreza</option><option>Pablo</option><option>Milena</option><option>Eduardo</option></select>
+          </div>
+        </div>
+        <div class="px-5 py-3 border-t flex justify-end gap-2">
+          <button onclick="fecharNovo()" class="px-4 py-2 rounded-lg border text-[13px] font-medium text-slate-600">Cancelar</button>
+          <button onclick="fecharNovo()" class="px-4 py-2 rounded-lg bg-violet-600 text-white text-[13px] font-semibold">Criar acordo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== MODAL: CANCELAR (com motivo) ===================== -->
+    <div id="modalCancelar" class="hidden fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4" onclick="if(event.target===this)fecharCancelar()">
+      <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl">
+        <div class="px-5 py-4 border-b"><h3 class="font-bold text-lg text-rose-700">Cancelar acordo</h3></div>
+        <div class="px-5 py-4 space-y-3 text-[13px]">
+          <p class="text-slate-500">O motivo fica registrado no histórico e aparece na lista — é o que você pediu para não perder o porquê.</p>
+          <div>
+            <label class="block text-[12px] font-medium text-slate-600 mb-1">Motivo do cancelamento</label>
+            <select class="w-full border rounded-lg px-3 py-2 text-slate-600">
+              <option>Cliente preferiu prosseguir com a ação</option>
+              <option>Parte contrária recusou a proposta</option>
+              <option>Valor abaixo do aceitável</option>
+              <option>Sem resposta da parte contrária</option>
+              <option>Outro (descrever)</option>
+            </select>
+          </div>
+          <textarea placeholder="Observação (opcional)" class="w-full border rounded-lg px-3 py-2 h-20"></textarea>
+        </div>
+        <div class="px-5 py-3 border-t flex justify-end gap-2">
+          <button onclick="fecharCancelar()" class="px-4 py-2 rounded-lg border text-[13px] font-medium text-slate-600">Voltar</button>
+          <button onclick="fecharCancelar()" class="px-4 py-2 rounded-lg bg-rose-600 text-white text-[13px] font-semibold">Confirmar cancelamento</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ---- dados fictícios ----
+const STATUS = {
+  negociando:   {label:'Negociando',       cls:'bg-amber-100 text-amber-700 border-amber-200', dot:'bg-amber-500'},
+  proposta:     {label:'Proposta enviada',  cls:'bg-blue-100 text-blue-700 border-blue-200',   dot:'bg-blue-500'},
+  fechado:      {label:'Fechado',           cls:'bg-emerald-100 text-emerald-700 border-emerald-200', dot:'bg-emerald-500'},
+  cancelado:    {label:'Cancelado',         cls:'bg-rose-100 text-rose-700 border-rose-200',   dot:'bg-rose-500'},
+};
+const acordos = [
+  {id:1, cliente:'Maria Cunha', proc:'Ação Trabalhista 0012345-67.2025', contraria:'Construtora Alfa Ltda',
+   contato:'Dr. Ricardo (adv.)', tel:'(85) 99999-1111', resp:'Andreza', valor:'R$ 18.000', status:'negociando', atual:'há 2 dias',
+   timeline:[
+     {q:'Andreza', t:'10/07 · 14h', txt:'Registrou o acordo — proposta inicial de R$ 15.000', tipo:'proposta'},
+     {q:'Dr. Ricardo', t:'12/07 · 09h', txt:'Contraproposta de R$ 12.000', tipo:'contra'},
+     {q:'Andreza', t:'15/07 · 16h', txt:'Nova proposta de R$ 18.000', tipo:'proposta'},
+     {q:'Andreza', t:'18/07 · 10h', txt:'Aguardando retorno da parte contrária', tipo:'nota'},
+   ]},
+  {id:2, cliente:'João Bezerra', proc:'Rescisão Indireta 0088-21.2025', contraria:'Supermercado Beta',
+   contato:'Dra. Fernanda', tel:'(85) 98888-2222', resp:'Pablo', valor:'R$ 35.000', status:'proposta', atual:'há 1 dia',
+   timeline:[
+     {q:'Pablo', t:'16/07 · 11h', txt:'Registrou o acordo e enviou proposta de R$ 35.000', tipo:'proposta'},
+     {q:'Pablo', t:'17/07 · 15h', txt:'Proposta encaminhada ao jurídico da empresa — aguardando', tipo:'nota'},
+   ]},
+  {id:3, cliente:'Vanuza Lima', proc:'Revisional Bancária 0455-30.2025', contraria:'Banco Gamma S.A.',
+   contato:'Depto. Jurídico', tel:'(85) 3333-4444', resp:'Milena', valor:'R$ 12.500', status:'fechado', atual:'há 5 dias',
+   fechadoEm:'R$ 14.000', timeline:[
+     {q:'Milena', t:'05/07 · 10h', txt:'Proposta inicial R$ 12.500', tipo:'proposta'},
+     {q:'Banco Gamma', t:'08/07 · 14h', txt:'Contraproposta R$ 14.000', tipo:'contra'},
+     {q:'Milena', t:'09/07 · 09h', txt:'Acordo FECHADO em R$ 14.000 ✅', tipo:'fechado'},
+   ]},
+  {id:4, cliente:'Thierry Sousa', proc:'Indenização 0777-12.2025', contraria:'Seguradora Delta',
+   contato:'Dr. Paulo', tel:'(85) 97777-5555', resp:'Andreza', valor:'R$ 8.000', status:'cancelado', atual:'há 8 dias',
+   motivo:'Cliente preferiu prosseguir com a ação', timeline:[
+     {q:'Andreza', t:'01/07 · 13h', txt:'Proposta inicial R$ 8.000', tipo:'proposta'},
+     {q:'Andreza', t:'10/07 · 17h', txt:'CANCELADO — cliente preferiu prosseguir com a ação', tipo:'cancelado'},
+   ]},
+  {id:5, cliente:'Aluísio Miranda', proc:'Danos morais 0321-45.2025', contraria:'Telefonia Épsilon',
+   contato:'Dra. Camila', tel:'(85) 96666-7777', resp:'Eduardo', valor:'R$ 6.000', status:'negociando', atual:'há 3 h',
+   timeline:[{q:'Eduardo', t:'19/07 · 08h', txt:'Registrou o acordo — proposta de R$ 6.000', tipo:'proposta'}]},
+];
+
+const ini = n => n.split(' ').slice(0,2).map(x=>x[0]).join('').toUpperCase();
+const badge = s => `<span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold ${STATUS[s].cls}"><span class="w-1.5 h-1.5 rounded-full ${STATUS[s].dot}"></span>${STATUS[s].label}</span>`;
+
+// ---- render tabela ----
+function renderTabela(){
+  document.getElementById('linhasAcordo').innerHTML = acordos.map(a=>`
+    <tr class="hover:bg-violet-50/40 cursor-pointer" onclick="abrirDrawer(${a.id})">
+      <td class="px-4 py-3">
+        <div class="flex items-center gap-2">
+          <div class="h-7 w-7 rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold flex items-center justify-center">${ini(a.cliente)}</div>
+          <div><p class="font-medium">${a.cliente}</p><p class="text-[11px] text-slate-400">${a.proc}</p></div>
+        </div>
+      </td>
+      <td class="px-4 py-3">${a.contraria}</td>
+      <td class="px-4 py-3"><p>${a.contato}</p><p class="text-[11px] text-emerald-600 tabnum">${a.tel}</p></td>
+      <td class="px-4 py-3">${a.resp}</td>
+      <td class="px-4 py-3 text-right tabnum font-semibold">${a.valor}${a.fechadoEm?`<p class="text-[10px] text-emerald-600 font-normal">fechou ${a.fechadoEm}</p>`:''}</td>
+      <td class="px-4 py-3">${badge(a.status)}${a.motivo?`<p class="text-[10px] text-rose-500 mt-0.5">${a.motivo}</p>`:''}</td>
+      <td class="px-4 py-3 text-slate-400 text-[12px]">${a.atual}</td>
+    </tr>`).join('');
+}
+
+// ---- render kanban ----
+function renderKanban(){
+  const cols = [['negociando','Negociando'],['proposta','Proposta enviada'],['fechado','Fechado'],['cancelado','Cancelado']];
+  document.getElementById('vistaKanban').innerHTML = cols.map(([s,label])=>{
+    const items = acordos.filter(a=>a.status===s);
+    return `<div class="bg-slate-50 rounded-2xl border p-2.5">
+      <div class="flex items-center justify-between px-1 pb-2">
+        <span class="text-[12px] font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full ${STATUS[s].dot}"></span>${label}</span>
+        <span class="text-[11px] text-slate-400">${items.length}</span>
+      </div>
+      <div class="space-y-2">
+        ${items.map(a=>`<div onclick="abrirDrawer(${a.id})" class="bg-white rounded-xl border p-3 cursor-pointer hover:border-violet-300">
+          <p class="font-medium text-[13px]">${a.cliente}</p>
+          <p class="text-[11px] text-slate-400 mb-1.5">vs ${a.contraria}</p>
+          <div class="flex items-center justify-between">
+            <span class="text-[13px] font-bold tabnum">${a.valor}</span>
+            <span class="text-[11px] text-slate-400">${a.resp}</span>
+          </div>
+          ${a.motivo?`<p class="text-[10px] text-rose-500 mt-1.5 border-t pt-1.5">✕ ${a.motivo}</p>`:''}
+          ${a.fechadoEm?`<p class="text-[10px] text-emerald-600 mt-1.5 border-t pt-1.5">✓ fechou em ${a.fechadoEm}</p>`:''}
+        </div>`).join('') || '<p class="text-[11px] text-slate-300 text-center py-3">vazio</p>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ---- drawer detalhe ----
+const iconeTipo = {proposta:'💬', contra:'↩️', nota:'📝', fechado:'✅', cancelado:'✕'};
+function abrirDrawer(id){
+  const a = acordos.find(x=>x.id===id);
+  document.getElementById('drawerHead').innerHTML = `
+    <div class="flex items-start justify-between">
+      <div>
+        <div class="flex items-center gap-2">
+          <div class="h-9 w-9 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center">${ini(a.cliente)}</div>
+          <div><p class="font-bold">${a.cliente}</p><p class="text-[11px] text-slate-400">${a.proc}</p></div>
+        </div>
+      </div>
+      <button onclick="fecharDrawer()" class="text-slate-400 hover:text-slate-600">✕</button>
+    </div>
+    <div class="mt-3 flex items-center gap-2 flex-wrap">${badge(a.status)}
+      <span class="text-[12px] text-slate-500">Responsável: <b>${a.resp}</b></span>
+    </div>`;
+
+  document.getElementById('drawerBody').innerHTML = `
+    <div class="bg-slate-50 rounded-xl border p-3 mb-4">
+      <p class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1.5">Parte contrária</p>
+      <p class="font-medium text-[14px]">${a.contraria}</p>
+      <div class="flex items-center justify-between mt-2">
+        <div><p class="text-[13px]">${a.contato}</p><p class="text-[12px] text-slate-500 tabnum">${a.tel}</p></div>
+        <button class="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">📱 WhatsApp</button>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Valor em negociação</p>
+      <p class="text-xl font-bold tabnum">${a.valor}${a.fechadoEm?` <span class="text-emerald-600 text-sm">→ ${a.fechadoEm}</span>`:''}</p>
+    </div>
+    ${a.motivo?`<div class="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-[12px] text-rose-700 mb-4">Motivo do cancelamento: <b>${a.motivo}</b></div>`:''}
+
+    <p class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-2 mt-4">Histórico da negociação</p>
+    <div class="space-y-3">
+      ${a.timeline.map(t=>`<div class="flex gap-2.5">
+        <div class="mt-0.5">${iconeTipo[t.tipo]||'•'}</div>
+        <div class="flex-1 border-l-2 border-slate-100 pl-3 -ml-1">
+          <p class="text-[13px]">${t.txt}</p>
+          <p class="text-[11px] text-slate-400">${t.q} · ${t.t}</p>
+        </div>
+      </div>`).join('')}
+    </div>`;
+
+  const podeMexer = a.status==='negociando' || a.status==='proposta';
+  document.getElementById('drawerFoot').innerHTML = podeMexer ? `
+    <div class="flex flex-wrap gap-2">
+      <button class="flex-1 bg-violet-600 text-white text-[13px] font-semibold rounded-lg px-3 py-2">＋ Registrar proposta</button>
+      <button class="flex-1 bg-emerald-600 text-white text-[13px] font-semibold rounded-lg px-3 py-2">✓ Marcar fechado</button>
+      <button onclick="abrirCancelar()" class="bg-white border border-rose-200 text-rose-600 text-[13px] font-semibold rounded-lg px-3 py-2">Cancelar</button>
+    </div>` : `<p class="text-[12px] text-slate-400 text-center">Acordo ${STATUS[a.status].label.toLowerCase()} — somente leitura.</p>`;
+
+  document.getElementById('drawer').classList.remove('fechado');
+  document.getElementById('overlayDrawer').classList.remove('hidden');
+}
+function fecharDrawer(){document.getElementById('drawer').classList.add('fechado');document.getElementById('overlayDrawer').classList.add('hidden');}
+
+// ---- navegação ----
+function nav(tela){
+  document.querySelectorAll('[data-tela]').forEach(s=>s.classList.remove('ativa'));
+  document.querySelector(`[data-tela="${tela}"]`).classList.add('ativa');
+  document.querySelectorAll('[data-nav]').forEach(el=>{
+    const on = el.getAttribute('data-nav')===tela;
+    el.classList.toggle('bg-violet-50', on); el.classList.toggle('text-violet-700', on); el.classList.toggle('font-semibold', on);
+  });
+}
+function setVista(v){
+  const t=v==='tabela';
+  document.getElementById('vistaTabela').classList.toggle('hidden',!t);
+  document.getElementById('vistaKanban').classList.toggle('hidden',t);
+  document.getElementById('btnTabela').className = 'px-3 py-1.5 rounded-md font-medium '+(t?'bg-violet-600 text-white':'text-slate-500');
+  document.getElementById('btnKanban').className = 'px-3 py-1.5 rounded-md font-medium '+(!t?'bg-violet-600 text-white':'text-slate-500');
+}
+function setSub(s){
+  const f=s==='fluxos';
+  document.getElementById('cttFluxos').classList.toggle('hidden',!f);
+  document.getElementById('cttAgentes').classList.toggle('hidden',f);
+  document.getElementById('subFluxos').className='px-4 py-2 -mb-px border-b-2 '+(f?'border-violet-600 text-violet-700 font-semibold':'border-transparent text-slate-500 font-medium');
+  document.getElementById('subAgentes').className='px-4 py-2 -mb-px border-b-2 '+(!f?'border-violet-600 text-violet-700 font-semibold':'border-transparent text-slate-500 font-medium');
+}
+function abrirNovo(){document.getElementById('modalNovo').classList.remove('hidden');}
+function fecharNovo(){document.getElementById('modalNovo').classList.add('hidden');}
+function abrirCancelar(){document.getElementById('modalCancelar').classList.remove('hidden');}
+function fecharCancelar(){document.getElementById('modalCancelar').classList.add('hidden');}
+
+document.querySelectorAll('[data-nav]').forEach(el=>el.addEventListener('click',e=>{e.preventDefault();nav(el.getAttribute('data-nav'));}));
+renderTabela(); renderKanban(); nav('acordos');
+</script>
+</body>
+</html>
