@@ -464,6 +464,7 @@ export default function Atendimento() {
   const [dataFim, setDataFim] = useState("");
   const [horaIni, setHoraIni] = useState(""); // "HH:MM"
   const [horaFim, setHoraFim] = useState("");
+  const [buscaAtendente, setBuscaAtendente] = useState("");
   const [showFiltros, setShowFiltros] = useState(false);
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
   // Ligação de voz via WhatsApp (Calling API). Instância global (montada no
@@ -723,7 +724,7 @@ export default function Atendimento() {
                   </button>
                 </div>
                 <Dialog open={showFiltros} onOpenChange={setShowFiltros}>
-                  <DialogContent className="sm:max-w-md max-h-[88vh] overflow-y-auto">
+                  <DialogContent className="sm:max-w-xl max-h-[88vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2">
                         Filtros da inbox
@@ -740,75 +741,117 @@ export default function Atendimento() {
                     <div className="space-y-4 py-1">
                       <div className="space-y-1.5">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Atendentes</p>
-                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-                          {(atendentesPrincipal || []).map((a: any) => {
-                            const ativo = atendentesFiltro.includes(a.id);
-                            return (
-                              <button
-                                key={a.id}
-                                onClick={() =>
-                                  setAtendentesFiltro((prev) =>
-                                    ativo ? prev.filter((x) => x !== a.id) : [...prev, a.id],
-                                  )
-                                }
-                                className={
-                                  "inline-flex items-center rounded-full px-3 py-1 border text-xs " +
-                                  (ativo
-                                    ? "bg-primary text-primary-foreground border-primary"
-                                    : "bg-muted/30 hover:bg-muted")
-                                }
-                              >
-                                {a.nome || `#${a.id}`}
-                              </button>
-                            );
-                          })}
-                          {(atendentesPrincipal || []).length === 0 && (
-                            <span className="text-xs text-muted-foreground/60">Nenhum atendente cadastrado</span>
-                          )}
+                        <div className="rounded-lg border overflow-hidden">
+                          <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/30">
+                            <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <input
+                              value={buscaAtendente}
+                              onChange={(e) => setBuscaAtendente(e.target.value)}
+                              placeholder="Buscar atendente…"
+                              className="w-full h-7 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
+                            />
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2">
+                            {(() => {
+                              const termo = buscaAtendente.trim().toLowerCase();
+                              const lista = ((atendentesPrincipal || []) as any[]).filter(
+                                (a) => !termo || String(a.nome || "").toLowerCase().includes(termo),
+                              );
+                              if ((atendentesPrincipal || []).length === 0) {
+                                return <span className="text-xs text-muted-foreground/60 px-3 py-2">Nenhum atendente cadastrado</span>;
+                              }
+                              if (lista.length === 0) {
+                                return <span className="text-xs text-muted-foreground/60 px-3 py-2">Nenhum atendente encontrado</span>;
+                              }
+                              return lista.map((a) => {
+                                const ativo = atendentesFiltro.includes(a.id);
+                                return (
+                                  <button
+                                    key={a.id}
+                                    onClick={() =>
+                                      setAtendentesFiltro((prev) =>
+                                        ativo ? prev.filter((x) => x !== a.id) : [...prev, a.id],
+                                      )
+                                    }
+                                    className={
+                                      "flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-left border-b border-muted/40 " +
+                                      (ativo
+                                        ? "bg-primary/5 text-primary font-medium"
+                                        : "text-foreground/80 hover:bg-muted/40")
+                                    }
+                                  >
+                                    <span
+                                      className={
+                                        "h-4 w-4 shrink-0 rounded border flex items-center justify-center text-[10px] " +
+                                        (ativo ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/40")
+                                      }
+                                    >
+                                      {ativo ? "✓" : ""}
+                                    </span>
+                                    <span className="truncate">{a.nome || `#${a.id}`}</span>
+                                  </button>
+                                );
+                              });
+                            })()}
+                          </div>
+                          <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30 border-t text-[11px] text-muted-foreground">
+                            <span>
+                              <b>{atendentesFiltro.length}</b> {atendentesFiltro.length === 1 ? "selecionado" : "selecionados"}
+                            </span>
+                            <button
+                              onClick={() => setAtendentesFiltro([])}
+                              disabled={atendentesFiltro.length === 0}
+                              className="font-semibold text-primary hover:underline disabled:opacity-40 disabled:no-underline"
+                            >
+                              Limpar seleção
+                            </button>
+                          </div>
                         </div>
                       </div>
-                      <div className="space-y-1.5">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Setor</p>
-                        <select
-                          value={setorFiltro ?? ""}
-                          onChange={(e) => setSetorFiltro(e.target.value ? Number(e.target.value) : null)}
-                          className="w-full h-9 rounded-md border bg-background px-2 text-sm"
-                        >
-                          <option value="">Todos os setores</option>
-                          {(setoresLista || []).map((s: any) => (
-                            <option key={s.id} value={s.id}>{s.nome}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Canal</p>
-                        <select
-                          value={canalFiltro ?? ""}
-                          onChange={(e) => setCanalFiltro(e.target.value ? Number(e.target.value) : null)}
-                          className="w-full h-9 rounded-md border bg-background px-2 text-sm"
-                        >
-                          <option value="">Todos os canais</option>
-                          {(() => {
-                            // Só canais conectados — desconectado/banido/excluído não
-                            // poluem o filtro. Se um filtro salvo aponta pra canal que
-                            // saiu da lista, mantém uma opção visível pra não "sumir"
-                            // um filtro ativo que o usuário não consegue mais desligar.
-                            const conectados = (((canaisInboxLista as any)?.canais || []) as any[])
-                              .filter((c) => c.status === "conectado" && TIPOS_CANAL_COMUNICACAO.includes(c.tipo));
-                            const opts = conectados.map((c) => {
-                              const tel = c.telefone ? ` · ${c.telefone}` : "";
-                              return <option key={c.id} value={c.id}>{c.nome || c.tipo}{tel}</option>;
-                            });
-                            if (canalFiltro && !conectados.some((c) => c.id === canalFiltro)) {
-                              opts.push(
-                                <option key={canalFiltro} value={canalFiltro}>
-                                  Canal desativado (#{canalFiltro})
-                                </option>,
-                              );
-                            }
-                            return opts;
-                          })()}
-                        </select>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Setor</p>
+                          <select
+                            value={setorFiltro ?? ""}
+                            onChange={(e) => setSetorFiltro(e.target.value ? Number(e.target.value) : null)}
+                            className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                          >
+                            <option value="">Todos os setores</option>
+                            {(setoresLista || []).map((s: any) => (
+                              <option key={s.id} value={s.id}>{s.nome}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Canal</p>
+                          <select
+                            value={canalFiltro ?? ""}
+                            onChange={(e) => setCanalFiltro(e.target.value ? Number(e.target.value) : null)}
+                            className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                          >
+                            <option value="">Todos os canais</option>
+                            {(() => {
+                              // Só canais conectados — desconectado/banido/excluído não
+                              // poluem o filtro. Se um filtro salvo aponta pra canal que
+                              // saiu da lista, mantém uma opção visível pra não "sumir"
+                              // um filtro ativo que o usuário não consegue mais desligar.
+                              const conectados = (((canaisInboxLista as any)?.canais || []) as any[])
+                                .filter((c) => c.status === "conectado" && TIPOS_CANAL_COMUNICACAO.includes(c.tipo));
+                              const opts = conectados.map((c) => {
+                                const tel = c.telefone ? ` · ${c.telefone}` : "";
+                                return <option key={c.id} value={c.id}>{c.nome || c.tipo}{tel}</option>;
+                              });
+                              if (canalFiltro && !conectados.some((c) => c.id === canalFiltro)) {
+                                opts.push(
+                                  <option key={canalFiltro} value={canalFiltro}>
+                                    Canal desativado (#{canalFiltro})
+                                  </option>,
+                                );
+                              }
+                              return opts;
+                            })()}
+                          </select>
+                        </div>
                       </div>
                       <div className="space-y-1.5">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Período</p>
@@ -2491,6 +2534,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
   const [periodoFiltro, setPeriodoFiltro] = useState<"todos" | "7d" | "30d" | "90d">("todos");
   const [valorMin, setValorMin] = useState<string>("");
   const [valorMax, setValorMax] = useState<string>("");
+  const [buscaAtendente, setBuscaAtendente] = useState("");
   const [showFiltros, setShowFiltros] = useState(false);
   const utils = trpc.useUtils();
   // OTIMISTIC UPDATE: muda etapa no cache antes da resposta do backend. Sem
@@ -2758,7 +2802,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
     </div>
 
     <Dialog open={showFiltros} onOpenChange={setShowFiltros}>
-      <DialogContent className="sm:max-w-md max-h-[88vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-xl max-h-[88vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Filtros do pipeline
@@ -2775,62 +2819,107 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
         <div className="space-y-4 py-1">
           <div className="space-y-1.5">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Atendentes</p>
-            <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-              {(atendentesLista || []).length === 0 && (
-                <span className="text-xs text-muted-foreground/60">Nenhum cadastrado</span>
-              )}
-              {((atendentesLista || []) as any[]).map((a) => {
-                const ativo = responsaveisFiltro.includes(a.id);
-                return (
-                  <button
-                    key={a.id}
-                    onClick={() => setResponsaveisFiltro((p) => ativo ? p.filter((x) => x !== a.id) : [...p, a.id])}
-                    className={"inline-flex items-center rounded-full px-3 py-1 border text-xs " + (ativo ? "bg-violet-600 text-white border-violet-600" : "bg-muted/30 hover:bg-muted")}
-                  >
-                    {a.nome || `#${a.id}`}
-                  </button>
-                );
-              })}
+            <div className="rounded-lg border overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/30">
+                <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <input
+                  value={buscaAtendente}
+                  onChange={(e) => setBuscaAtendente(e.target.value)}
+                  placeholder="Buscar atendente…"
+                  className="w-full h-7 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2">
+                {(() => {
+                  const termo = buscaAtendente.trim().toLowerCase();
+                  const lista = ((atendentesLista || []) as any[]).filter(
+                    (a) => !termo || String(a.nome || "").toLowerCase().includes(termo),
+                  );
+                  if ((atendentesLista || []).length === 0) {
+                    return <span className="text-xs text-muted-foreground/60 px-3 py-2">Nenhum cadastrado</span>;
+                  }
+                  if (lista.length === 0) {
+                    return <span className="text-xs text-muted-foreground/60 px-3 py-2">Nenhum atendente encontrado</span>;
+                  }
+                  return lista.map((a) => {
+                    const ativo = responsaveisFiltro.includes(a.id);
+                    return (
+                      <button
+                        key={a.id}
+                        onClick={() => setResponsaveisFiltro((p) => ativo ? p.filter((x) => x !== a.id) : [...p, a.id])}
+                        className={
+                          "flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-left border-b border-muted/40 " +
+                          (ativo ? "bg-violet-50 text-violet-700 font-medium dark:bg-violet-950 dark:text-violet-300" : "text-foreground/80 hover:bg-muted/40")
+                        }
+                      >
+                        <span
+                          className={
+                            "h-4 w-4 shrink-0 rounded border flex items-center justify-center text-[10px] " +
+                            (ativo ? "bg-violet-600 border-violet-600 text-white" : "border-muted-foreground/40")
+                          }
+                        >
+                          {ativo ? "✓" : ""}
+                        </span>
+                        <span className="truncate">{a.nome || `#${a.id}`}</span>
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
+              <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30 border-t text-[11px] text-muted-foreground">
+                <span>
+                  <b>{responsaveisFiltro.length}</b> {responsaveisFiltro.length === 1 ? "selecionado" : "selecionados"}
+                </span>
+                <button
+                  onClick={() => setResponsaveisFiltro([])}
+                  disabled={responsaveisFiltro.length === 0}
+                  className="font-semibold text-violet-600 hover:underline disabled:opacity-40 disabled:no-underline"
+                >
+                  Limpar seleção
+                </button>
+              </div>
             </div>
           </div>
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Setor</p>
-            <select
-              value={setorFiltro ?? ""}
-              onChange={(e) => setSetorFiltro(e.target.value ? Number(e.target.value) : null)}
-              className="w-full h-9 rounded-md border bg-background px-2 text-sm"
-            >
-              <option value="">Todos os setores</option>
-              {((setoresFiltroLista || []) as any[]).map((s) => (
-                <option key={s.id} value={s.id}>{s.nome}</option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Canal de comunicação</p>
-            <select
-              value={canalFiltro ?? ""}
-              onChange={(e) => setCanalFiltro(e.target.value ? Number(e.target.value) : null)}
-              className="w-full h-9 rounded-md border bg-background px-2 text-sm"
-            >
-              <option value="">Todos os canais</option>
-              {(() => {
-                // Só canais conectados (mesma regra do Inbox) + fallback pra
-                // filtro ativo apontando pra canal que saiu da lista.
-                const conectados = (((canaisFiltroLista as any)?.canais || []) as any[])
-                  .filter((c) => c.status === "conectado" && TIPOS_CANAL_COMUNICACAO.includes(c.tipo));
-                const opts = conectados.map((c) => {
-                  const telLabel = c.telefone ? ` · ${c.telefone}` : "";
-                  return <option key={c.id} value={c.id}>{c.nome || c.tipo}{telLabel}</option>;
-                });
-                if (canalFiltro && !conectados.some((c) => c.id === canalFiltro)) {
-                  opts.push(
-                    <option key={canalFiltro} value={canalFiltro}>Canal desativado (#{canalFiltro})</option>,
-                  );
-                }
-                return opts;
-              })()}
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Setor</p>
+              <select
+                value={setorFiltro ?? ""}
+                onChange={(e) => setSetorFiltro(e.target.value ? Number(e.target.value) : null)}
+                className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="">Todos os setores</option>
+                {((setoresFiltroLista || []) as any[]).map((s) => (
+                  <option key={s.id} value={s.id}>{s.nome}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Canal de comunicação</p>
+              <select
+                value={canalFiltro ?? ""}
+                onChange={(e) => setCanalFiltro(e.target.value ? Number(e.target.value) : null)}
+                className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="">Todos os canais</option>
+                {(() => {
+                  // Só canais conectados (mesma regra do Inbox) + fallback pra
+                  // filtro ativo apontando pra canal que saiu da lista.
+                  const conectados = (((canaisFiltroLista as any)?.canais || []) as any[])
+                    .filter((c) => c.status === "conectado" && TIPOS_CANAL_COMUNICACAO.includes(c.tipo));
+                  const opts = conectados.map((c) => {
+                    const telLabel = c.telefone ? ` · ${c.telefone}` : "";
+                    return <option key={c.id} value={c.id}>{c.nome || c.tipo}{telLabel}</option>;
+                  });
+                  if (canalFiltro && !conectados.some((c) => c.id === canalFiltro)) {
+                    opts.push(
+                      <option key={canalFiltro} value={canalFiltro}>Canal desativado (#{canalFiltro})</option>,
+                    );
+                  }
+                  return opts;
+                })()}
+              </select>
+            </div>
           </div>
           <div className="space-y-1.5">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Período</p>
