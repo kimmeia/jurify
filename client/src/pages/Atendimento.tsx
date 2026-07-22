@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -458,9 +458,12 @@ export default function Atendimento() {
   const [canalFiltro, setCanalFiltro] = useState<number | null>(null);
   const [periodoFiltro, setPeriodoFiltro] = useState<"todos" | "7d" | "30d" | "90d">("todos");
   // Período customizado (datas escolhidas pelo usuário). Quando preenchido,
-  // tem prioridade sobre os presets acima.
+  // tem prioridade sobre os presets acima. Hora é opcional: vazia, o extremo
+  // assume o dia inteiro (De=00:00, Até=23:59) — comportamento antigo.
   const [dataIni, setDataIni] = useState(""); // "YYYY-MM-DD"
   const [dataFim, setDataFim] = useState("");
+  const [horaIni, setHoraIni] = useState(""); // "HH:MM"
+  const [horaFim, setHoraFim] = useState("");
   const [showFiltros, setShowFiltros] = useState(false);
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
   // Ligação de voz via WhatsApp (Calling API). Instância global (montada no
@@ -491,8 +494,8 @@ export default function Atendimento() {
     if (setorFiltro) f.setorId = setorFiltro;
     if (canalFiltro) f.canalId = canalFiltro;
     // Range customizado tem prioridade; senão, preset relativo.
-    if (dataIni) f.dataInicio = new Date(dataIni + "T00:00:00").toISOString();
-    if (dataFim) f.dataFim = new Date(dataFim + "T23:59:59").toISOString();
+    if (dataIni) f.dataInicio = new Date(`${dataIni}T${horaIni || "00:00"}:00`).toISOString();
+    if (dataFim) f.dataFim = new Date(`${dataFim}T${horaFim || "23:59"}:59`).toISOString();
     if (!dataIni && !dataFim && periodoFiltro !== "todos") {
       const dias = periodoFiltro === "7d" ? 7 : periodoFiltro === "30d" ? 30 : 90;
       f.dataInicio = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
@@ -524,6 +527,8 @@ export default function Atendimento() {
     setPeriodoFiltro("todos");
     setDataIni("");
     setDataFim("");
+    setHoraIni("");
+    setHoraFim("");
   };
   const convs = (() => {
     const todas = convsAll || [];
@@ -717,125 +722,177 @@ export default function Atendimento() {
                     )}
                   </button>
                 </div>
-                {showFiltros && (
-                  <div className="rounded-md border bg-background p-2.5 space-y-2.5 text-[11px]">
-                    <div className="space-y-1">
-                      <p className="font-medium text-muted-foreground">Atendentes</p>
-                      <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
-                        {(atendentesPrincipal || []).map((a: any) => {
-                          const ativo = atendentesFiltro.includes(a.id);
-                          return (
-                            <button
-                              key={a.id}
-                              onClick={() =>
-                                setAtendentesFiltro((prev) =>
-                                  ativo ? prev.filter((x) => x !== a.id) : [...prev, a.id],
-                                )
-                              }
-                              className={
-                                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 border text-[10px] " +
-                                (ativo
-                                  ? "bg-primary text-primary-foreground border-primary"
-                                  : "bg-muted/30 hover:bg-muted")
-                              }
-                            >
-                              {a.nome || `#${a.id}`}
-                            </button>
-                          );
-                        })}
-                        {(atendentesPrincipal || []).length === 0 && (
-                          <span className="text-muted-foreground/60">Nenhum atendente cadastrado</span>
+                <Dialog open={showFiltros} onOpenChange={setShowFiltros}>
+                  <DialogContent className="sm:max-w-md max-h-[88vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        Filtros da inbox
+                        {filtrosAtivos > 0 && (
+                          <span className="rounded-full bg-primary/10 text-primary text-[11px] font-bold px-2 py-0.5">
+                            {filtrosAtivos} {filtrosAtivos === 1 ? "ativo" : "ativos"}
+                          </span>
                         )}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="font-medium text-muted-foreground">Setor</p>
-                      <select
-                        value={setorFiltro ?? ""}
-                        onChange={(e) => setSetorFiltro(e.target.value ? Number(e.target.value) : null)}
-                        className="w-full h-7 rounded-md border bg-background px-2 text-[11px]"
-                      >
-                        <option value="">Todos os setores</option>
-                        {(setoresLista || []).map((s: any) => (
-                          <option key={s.id} value={s.id}>{s.nome}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="font-medium text-muted-foreground">Canal</p>
-                      <select
-                        value={canalFiltro ?? ""}
-                        onChange={(e) => setCanalFiltro(e.target.value ? Number(e.target.value) : null)}
-                        className="w-full h-7 rounded-md border bg-background px-2 text-[11px]"
-                      >
-                        <option value="">Todos os canais</option>
-                        {(((canaisInboxLista as any)?.canais || []) as any[])
-                          .filter((c) => c.status !== "removido" && TIPOS_CANAL_COMUNICACAO.includes(c.tipo))
-                          .map((c) => {
-                            const tel = c.telefone ? ` · ${c.telefone}` : "";
-                            return <option key={c.id} value={c.id}>{c.nome || c.tipo}{tel}</option>;
+                      </DialogTitle>
+                      <DialogDescription>
+                        Os filtros são aplicados na hora — a lista atualiza atrás do dialog.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-1">
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Atendentes</p>
+                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                          {(atendentesPrincipal || []).map((a: any) => {
+                            const ativo = atendentesFiltro.includes(a.id);
+                            return (
+                              <button
+                                key={a.id}
+                                onClick={() =>
+                                  setAtendentesFiltro((prev) =>
+                                    ativo ? prev.filter((x) => x !== a.id) : [...prev, a.id],
+                                  )
+                                }
+                                className={
+                                  "inline-flex items-center rounded-full px-3 py-1 border text-xs " +
+                                  (ativo
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-muted/30 hover:bg-muted")
+                                }
+                              >
+                                {a.nome || `#${a.id}`}
+                              </button>
+                            );
                           })}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="font-medium text-muted-foreground">Período</p>
-                      <div className="grid grid-cols-4 gap-1">
-                        {(["todos", "7d", "30d", "90d"] as const).map((p) => {
-                          const label = p === "todos" ? "Todos" : p === "7d" ? "7 dias" : p === "30d" ? "30 dias" : "90 dias";
-                          const ativo = periodoFiltro === p;
-                          return (
-                            <button
-                              key={p}
-                              onClick={() => setPeriodoFiltro(p)}
-                              className={
-                                "h-6 rounded text-[10px] border " +
-                                (ativo
-                                  ? "bg-primary text-primary-foreground border-primary"
-                                  : "bg-muted/30 hover:bg-muted")
-                              }
-                            >
-                              {label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {/* Período exato — escolhe as datas que quiser (sobrepõe os presets). */}
-                      <div className="grid grid-cols-2 gap-1 mt-1">
-                        <div className="space-y-0.5">
-                          <label className="text-[9px] text-muted-foreground">De</label>
-                          <input
-                            type="date"
-                            value={dataIni}
-                            max={dataFim || undefined}
-                            onChange={(e) => setDataIni(e.target.value)}
-                            className="w-full h-7 rounded-md border bg-background px-2 text-[11px]"
-                          />
-                        </div>
-                        <div className="space-y-0.5">
-                          <label className="text-[9px] text-muted-foreground">Até</label>
-                          <input
-                            type="date"
-                            value={dataFim}
-                            min={dataIni || undefined}
-                            onChange={(e) => setDataFim(e.target.value)}
-                            className="w-full h-7 rounded-md border bg-background px-2 text-[11px]"
-                          />
+                          {(atendentesPrincipal || []).length === 0 && (
+                            <span className="text-xs text-muted-foreground/60">Nenhum atendente cadastrado</span>
+                          )}
                         </div>
                       </div>
-                      {(dataIni || dataFim) && (
-                        <p className="text-[9px] text-muted-foreground">Período exato ativo — os presets acima ficam ignorados.</p>
-                      )}
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Setor</p>
+                        <select
+                          value={setorFiltro ?? ""}
+                          onChange={(e) => setSetorFiltro(e.target.value ? Number(e.target.value) : null)}
+                          className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                        >
+                          <option value="">Todos os setores</option>
+                          {(setoresLista || []).map((s: any) => (
+                            <option key={s.id} value={s.id}>{s.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Canal</p>
+                        <select
+                          value={canalFiltro ?? ""}
+                          onChange={(e) => setCanalFiltro(e.target.value ? Number(e.target.value) : null)}
+                          className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                        >
+                          <option value="">Todos os canais</option>
+                          {(() => {
+                            // Só canais conectados — desconectado/banido/excluído não
+                            // poluem o filtro. Se um filtro salvo aponta pra canal que
+                            // saiu da lista, mantém uma opção visível pra não "sumir"
+                            // um filtro ativo que o usuário não consegue mais desligar.
+                            const conectados = (((canaisInboxLista as any)?.canais || []) as any[])
+                              .filter((c) => c.status === "conectado" && TIPOS_CANAL_COMUNICACAO.includes(c.tipo));
+                            const opts = conectados.map((c) => {
+                              const tel = c.telefone ? ` · ${c.telefone}` : "";
+                              return <option key={c.id} value={c.id}>{c.nome || c.tipo}{tel}</option>;
+                            });
+                            if (canalFiltro && !conectados.some((c) => c.id === canalFiltro)) {
+                              opts.push(
+                                <option key={canalFiltro} value={canalFiltro}>
+                                  Canal desativado (#{canalFiltro})
+                                </option>,
+                              );
+                            }
+                            return opts;
+                          })()}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Período</p>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {(["todos", "7d", "30d", "90d"] as const).map((p) => {
+                            const label = p === "todos" ? "Todos" : p === "7d" ? "7 dias" : p === "30d" ? "30 dias" : "90 dias";
+                            const ativo = periodoFiltro === p;
+                            return (
+                              <button
+                                key={p}
+                                onClick={() => setPeriodoFiltro(p)}
+                                className={
+                                  "h-8 rounded-md text-xs border " +
+                                  (ativo
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-muted/30 hover:bg-muted")
+                                }
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {/* Período exato — data + hora opcional em cada extremo
+                            (sobrepõe os presets). Hora vazia = dia inteiro. */}
+                        <div className="grid grid-cols-2 gap-2 mt-1.5">
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-muted-foreground">De (data · hora)</label>
+                            <div className="grid grid-cols-[1.4fr_1fr] gap-1">
+                              <input
+                                type="date"
+                                value={dataIni}
+                                max={dataFim || undefined}
+                                onChange={(e) => setDataIni(e.target.value)}
+                                className="w-full h-9 rounded-md border bg-background px-2 text-xs"
+                              />
+                              <input
+                                type="time"
+                                value={horaIni}
+                                disabled={!dataIni}
+                                onChange={(e) => setHoraIni(e.target.value)}
+                                className="w-full h-9 rounded-md border bg-background px-1.5 text-xs disabled:opacity-40"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-muted-foreground">Até (data · hora)</label>
+                            <div className="grid grid-cols-[1.4fr_1fr] gap-1">
+                              <input
+                                type="date"
+                                value={dataFim}
+                                min={dataIni || undefined}
+                                onChange={(e) => setDataFim(e.target.value)}
+                                className="w-full h-9 rounded-md border bg-background px-2 text-xs"
+                              />
+                              <input
+                                type="time"
+                                value={horaFim}
+                                disabled={!dataFim}
+                                onChange={(e) => setHoraFim(e.target.value)}
+                                className="w-full h-9 rounded-md border bg-background px-1.5 text-xs disabled:opacity-40"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                          {dataIni || dataFim
+                            ? "Período exato ativo — os presets acima ficam ignorados. Hora vazia considera o dia inteiro."
+                            : "Hora é opcional — em branco, o filtro considera o dia inteiro (00:00 a 23:59)."}
+                        </p>
+                      </div>
                     </div>
-                    {filtrosAtivos > 0 && (
+                    <DialogFooter className="flex-row justify-between sm:justify-between">
                       <button
                         onClick={limparFiltrosAvancados}
-                        className="text-[10px] text-primary hover:underline"
+                        disabled={filtrosAtivos === 0}
+                        className="text-xs font-semibold text-primary hover:underline disabled:opacity-40 disabled:no-underline"
                       >
-                        Limpar filtros avançados
+                        Limpar filtros
                       </button>
-                    )}
-                  </div>
-                )}
+                      <Button size="sm" onClick={() => setShowFiltros(false)}>Concluído</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
                 {/* Pills com contador. Scroll horizontal em mobile/colunas estreitas. */}
                 <div className="flex gap-1 overflow-x-auto -mx-1 px-1 pb-0.5 scrollbar-thin">
                   {([
@@ -2700,96 +2757,120 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
       </Button>
     </div>
 
-    {showFiltros && (
-      <div className="rounded-xl border bg-card p-3 grid gap-3 md:grid-cols-4 text-[11px]">
-        <div className="space-y-1.5">
-          <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">Atendente</p>
-          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
-            {(atendentesLista || []).length === 0 && (
-              <span className="text-muted-foreground/60">Nenhum cadastrado</span>
+    <Dialog open={showFiltros} onOpenChange={setShowFiltros}>
+      <DialogContent className="sm:max-w-md max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            Filtros do pipeline
+            {filtrosAtivos > 0 && (
+              <span className="rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold px-2 py-0.5 dark:bg-violet-950 dark:text-violet-300">
+                {filtrosAtivos} {filtrosAtivos === 1 ? "ativo" : "ativos"}
+              </span>
             )}
-            {((atendentesLista || []) as any[]).map((a) => {
-              const ativo = responsaveisFiltro.includes(a.id);
-              return (
-                <button
-                  key={a.id}
-                  onClick={() => setResponsaveisFiltro((p) => ativo ? p.filter((x) => x !== a.id) : [...p, a.id])}
-                  className={"inline-flex items-center gap-1 rounded-full px-2 py-0.5 border text-[10px] " + (ativo ? "bg-violet-600 text-white border-violet-600" : "bg-muted/30 hover:bg-muted")}
-                >
-                  {a.nome || `#${a.id}`}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">Setor</p>
-          <select
-            value={setorFiltro ?? ""}
-            onChange={(e) => setSetorFiltro(e.target.value ? Number(e.target.value) : null)}
-            className="w-full h-8 rounded-md border bg-background px-2 text-[11px]"
-          >
-            <option value="">Todos os setores</option>
-            {((setoresFiltroLista || []) as any[]).map((s) => (
-              <option key={s.id} value={s.id}>{s.nome}</option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">Canal de comunicação</p>
-          <select
-            value={canalFiltro ?? ""}
-            onChange={(e) => setCanalFiltro(e.target.value ? Number(e.target.value) : null)}
-            className="w-full h-8 rounded-md border bg-background px-2 text-[11px]"
-          >
-            <option value="">Todos os canais</option>
-            {(((canaisFiltroLista as any)?.canais || []) as any[])
-              .filter((c) => c.status !== "removido" && TIPOS_CANAL_COMUNICACAO.includes(c.tipo))
-              .map((c) => {
-                const telLabel = c.telefone ? ` · ${c.telefone}` : "";
+          </DialogTitle>
+          <DialogDescription>
+            Os filtros são aplicados na hora — o quadro atualiza atrás do dialog.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Atendentes</p>
+            <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+              {(atendentesLista || []).length === 0 && (
+                <span className="text-xs text-muted-foreground/60">Nenhum cadastrado</span>
+              )}
+              {((atendentesLista || []) as any[]).map((a) => {
+                const ativo = responsaveisFiltro.includes(a.id);
                 return (
-                  <option key={c.id} value={c.id}>
-                    {c.nome || c.tipo}{telLabel}
-                  </option>
+                  <button
+                    key={a.id}
+                    onClick={() => setResponsaveisFiltro((p) => ativo ? p.filter((x) => x !== a.id) : [...p, a.id])}
+                    className={"inline-flex items-center rounded-full px-3 py-1 border text-xs " + (ativo ? "bg-violet-600 text-white border-violet-600" : "bg-muted/30 hover:bg-muted")}
+                  >
+                    {a.nome || `#${a.id}`}
+                  </button>
                 );
               })}
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">Período</p>
-          <div className="grid grid-cols-4 gap-1">
-            {(["todos", "7d", "30d", "90d"] as const).map((p) => {
-              const label = p === "todos" ? "Todos" : p === "7d" ? "7d" : p === "30d" ? "30d" : "90d";
-              const ativo = periodoFiltro === p;
-              return (
-                <button
-                  key={p}
-                  onClick={() => setPeriodoFiltro(p)}
-                  className={"h-7 rounded text-[10px] border " + (ativo ? "bg-violet-600 text-white border-violet-600" : "bg-muted/30 hover:bg-muted")}
-                >
-                  {label}
-                </button>
-              );
-            })}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Setor</p>
+            <select
+              value={setorFiltro ?? ""}
+              onChange={(e) => setSetorFiltro(e.target.value ? Number(e.target.value) : null)}
+              className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+            >
+              <option value="">Todos os setores</option>
+              {((setoresFiltroLista || []) as any[]).map((s) => (
+                <option key={s.id} value={s.id}>{s.nome}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Canal de comunicação</p>
+            <select
+              value={canalFiltro ?? ""}
+              onChange={(e) => setCanalFiltro(e.target.value ? Number(e.target.value) : null)}
+              className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+            >
+              <option value="">Todos os canais</option>
+              {(() => {
+                // Só canais conectados (mesma regra do Inbox) + fallback pra
+                // filtro ativo apontando pra canal que saiu da lista.
+                const conectados = (((canaisFiltroLista as any)?.canais || []) as any[])
+                  .filter((c) => c.status === "conectado" && TIPOS_CANAL_COMUNICACAO.includes(c.tipo));
+                const opts = conectados.map((c) => {
+                  const telLabel = c.telefone ? ` · ${c.telefone}` : "";
+                  return <option key={c.id} value={c.id}>{c.nome || c.tipo}{telLabel}</option>;
+                });
+                if (canalFiltro && !conectados.some((c) => c.id === canalFiltro)) {
+                  opts.push(
+                    <option key={canalFiltro} value={canalFiltro}>Canal desativado (#{canalFiltro})</option>,
+                  );
+                }
+                return opts;
+              })()}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Período</p>
+            <div className="grid grid-cols-4 gap-1.5">
+              {(["todos", "7d", "30d", "90d"] as const).map((p) => {
+                const label = p === "todos" ? "Todos" : p === "7d" ? "7 dias" : p === "30d" ? "30 dias" : "90 dias";
+                const ativo = periodoFiltro === p;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setPeriodoFiltro(p)}
+                    className={"h-8 rounded-md text-xs border " + (ativo ? "bg-violet-600 text-white border-violet-600" : "bg-muted/30 hover:bg-muted")}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Valor (R$)</p>
+            <div className="flex items-center gap-2">
+              <Input value={valorMin} onChange={(e) => setValorMin(e.target.value)} placeholder="Mín" className="h-9 text-sm" />
+              <span className="text-muted-foreground">–</span>
+              <Input value={valorMax} onChange={(e) => setValorMax(e.target.value)} placeholder="Máx" className="h-9 text-sm" />
+            </div>
           </div>
         </div>
-        <div className="space-y-1.5">
-          <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">Valor (R$)</p>
-          <div className="flex items-center gap-1">
-            <Input value={valorMin} onChange={(e) => setValorMin(e.target.value)} placeholder="Mín" className="h-8 text-[11px]" />
-            <span className="text-muted-foreground">–</span>
-            <Input value={valorMax} onChange={(e) => setValorMax(e.target.value)} placeholder="Máx" className="h-8 text-[11px]" />
-          </div>
-        </div>
-        {filtrosAtivos > 0 && (
-          <div className="md:col-span-4">
-            <button onClick={limparFiltrosAv} className="text-[10px] text-violet-600 hover:underline">
-              Limpar filtros
-            </button>
-          </div>
-        )}
-      </div>
-    )}
+        <DialogFooter className="flex-row justify-between sm:justify-between">
+          <button
+            onClick={limparFiltrosAv}
+            disabled={filtrosAtivos === 0}
+            className="text-xs font-semibold text-violet-600 hover:underline disabled:opacity-40 disabled:no-underline"
+          >
+            Limpar filtros
+          </button>
+          <Button size="sm" onClick={() => setShowFiltros(false)}>Concluído</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     {view === "kanban" ? (
       // Mesmo layout do Kanban de tarefas: flex horizontal com scroll, colunas
