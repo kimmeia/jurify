@@ -469,6 +469,9 @@ export default function Atendimento() {
   // Pasta Arquivadas: vista alternativa da coluna — lista só conversas
   // arquivadas, com desarquivar individual e bulk dos canais desativados.
   const [mostrarArquivadas, setMostrarArquivadas] = useState(false);
+  // Última versão conhecida da conversa aberta — com o filtro de status no
+  // servidor, ela pode sair do array retornado ao mudar de status.
+  const abertaCacheRef = useRef<any>(null);
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
   // Ligação de voz via WhatsApp (Calling API). Instância global (montada no
   // AppLayout) — a chamada toca em qualquer tela; aqui só usamos pra ligar.
@@ -508,8 +511,17 @@ export default function Atendimento() {
   })();
   // Limite alto: o Inbox precisa enxergar além de 100 (escritório com muitos
   // contatos). Os contadores reais vêm de contarConversas (não do array).
+  // Status vai pro SERVIDOR: filtrar client-side sobre as 300 mais recentes
+  // fazia a aba "Aguardando 40" mostrar 1 conversa (as outras 39 eram antigas
+  // e ficavam fora do corte) — contador certo, lista mentindo.
   const { data: convsAll, refetch: rC } = trpc.crm.listarConversas.useQuery(
-    mostrarArquivadas ? { arquivadas: true, limite: 300 } : { ...(filtrosBackend ?? {}), limite: 300 },
+    mostrarArquivadas
+      ? { arquivadas: true, limite: 300 }
+      : {
+          ...(filtrosBackend ?? {}),
+          ...(filtro !== "todos" ? { status: filtro as any } : {}),
+          limite: 300,
+        },
     { refetchInterval: 5000 },
   );
   const { data: resumoArq, refetch: rArq } = trpc.crm.resumoArquivadas.useQuery(undefined, { refetchInterval: 60000 });
@@ -545,13 +557,22 @@ export default function Atendimento() {
   };
   const convs = (() => {
     const todas = convsAll || [];
-    // Na pasta Arquivadas as abas de status ficam ocultas — lista tudo.
+    // Status já vem filtrado do servidor; o filter local é só cinto de
+    // segurança pro intervalo entre trocar de aba e o refetch chegar.
     let porStatus = filtro === "todos" || mostrarArquivadas ? todas : todas.filter((c: any) => c.status === filtro);
     // Mantém a conversa ABERTA visível mesmo que mude de status e saia do filtro
     // da aba (ex.: ao responder, aguardando → em_atendimento) — senão ela "some"
-    // da lista e o atendente precisa trocar de aba pra reencontrar.
-    if (selId != null && !porStatus.some((c: any) => c.id === selId)) {
+    // da lista e o atendente precisa trocar de aba pra reencontrar. Com o filtro
+    // no servidor ela pode nem vir no array — o cache guarda a última versão.
+    if (selId != null) {
       const aberta = todas.find((c: any) => c.id === selId);
+      if (aberta) abertaCacheRef.current = aberta;
+      else if (abertaCacheRef.current?.id !== selId) abertaCacheRef.current = null;
+    } else {
+      abertaCacheRef.current = null;
+    }
+    if (selId != null && !porStatus.some((c: any) => c.id === selId)) {
+      const aberta = todas.find((c: any) => c.id === selId) ?? (abertaCacheRef.current?.id === selId ? abertaCacheRef.current : null);
       if (aberta) porStatus = [aberta, ...porStatus];
     }
     const q = inboxBusca.trim().toLowerCase();
@@ -1360,7 +1381,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
     onError: (e: any) => toast.error(e.message),
   });
   const { data: tplList } = trpc.templates.listar.useQuery(undefined, { retry: false });
-  const conv = convs.find((c: any) => c.id === cid);
+  // Fallback pro cache: com filtro de status no servidor, a conversa aberta
+  // pode sair do array ao mudar de status — o header/composer seguem inteiros.
+  const convCacheRef = useRef<any>(null);
+  const convEncontrada = convs.find((c: any) => c.id === cid);
+  if (convEncontrada) convCacheRef.current = convEncontrada;
+  const conv = convEncontrada ?? (convCacheRef.current?.id === cid ? convCacheRef.current : undefined);
   const bot = botStatusInfo(conv?.status);
   const botToggle = useBotToggle(onUpdate);
   // Templates Meta (HSM) — só faz query quando o canal da conversa é
