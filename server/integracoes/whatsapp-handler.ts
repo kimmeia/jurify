@@ -1,7 +1,7 @@
 import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
 import { isLidJid } from "../../shared/whatsapp-types";
 import type { TipoCanalMensagem, ImagemAnexa } from "../../shared/smartflow-types";
-import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, enviarMensagem as salvarMensagem, atualizarStatusMensagem, atualizarConversa, buscarMensagemPorIdExterno } from "../escritorio/db-crm";
+import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, enviarMensagem as salvarMensagem, atualizarStatusMensagem, atualizarConversa, buscarMensagemPorIdExterno, desarquivarSeArquivada } from "../escritorio/db-crm";
 import { obterAutoReplyCanal } from "../escritorio/db-canais";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-whatsapp-handler");
@@ -123,6 +123,10 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     payload: msg.interactiveReply ? { interactiveReply: msg.interactiveReply } : null,
     idExterno: msg.messageId || undefined,
   });
+
+  // Mensagem nova traz conversa arquivada de volta pro inbox — ninguém fica
+  // sem resposta por a conversa estar na pasta Arquivadas.
+  await desarquivarSeArquivada(conversaId);
 
   // Evento `system` do WhatsApp (ex: cliente trocou de número): fica registrado
   // na timeline como nota, mas NÃO é mensagem do cliente — não muda status, não
@@ -404,6 +408,9 @@ export async function processarEchoCelular(
     status: "enviada",
     idExterno: echo.messageId || undefined,
   });
+
+  // Atividade nova (mesmo vinda do celular) desarquiva a conversa.
+  await desarquivarSeArquivada(conversaId);
 
   const statusAtual = await pegarStatusConversa(conversaId);
   if (statusAtual !== "em_atendimento") {

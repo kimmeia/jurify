@@ -777,6 +777,9 @@ export const conversas = mysqlTable("conversas", {
    * destaque na lista). NULL = nunca aberta — todas as entradas contam.
    */
   lidaPeloAtendenteEm: timestamp("lidaPeloAtendenteEm"),
+  // Pasta Arquivadas: NULL = ativa. Arquivada sai das vistas padrão sem ser
+  // apagada; mensagem nova do contato limpa o campo (desarquiva sozinha).
+  arquivadaEm: timestamp("arquivadaEmConv"),
   tempoEspera: int("tempoEspera"),
   tempoConclusao: int("tempoConclusao"),
   avaliacaoCliente: int("avaliacaoCliente"),
