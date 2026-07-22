@@ -30,6 +30,7 @@ import { origensLeadRouter } from "./escritorio/router-origens-lead";
 import { camposClienteRouter } from "./escritorio/router-campos-cliente";
 import { modelosContratoRouter } from "./escritorio/router-modelos-contrato";
 import { clienteProcessosRouter } from "./escritorio/router-cliente-processos";
+import { acordosRouter } from "./escritorio/router-acordos";
 import { importarProcessosRouter } from "./escritorio/router-importar-processos";
 import { relatoriosRouter, relatoriosPdfRouter } from "./escritorio/router-relatorios";
 import { permissoesRouter } from "./escritorio/router-permissoes";
@@ -117,6 +118,7 @@ export const appRouter = router({
   camposCliente: camposClienteRouter,
   modelosContrato: modelosContratoRouter,
   clienteProcessos: clienteProcessosRouter,
+  acordos: acordosRouter,
   importarProcessos: importarProcessosRouter,
   relatorios: mergeRouters(relatoriosRouter, relatoriosPdfRouter),
   permissoes: permissoesRouter,

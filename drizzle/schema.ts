@@ -1191,6 +1191,72 @@ export const clienteProcessoAnotacoes = mysqlTable("cliente_processo_anotacoes",
   cpaProcessoIdx: index("cpa_processo_idx").on(t.processoId),
 }));
 
+/**
+ * Acordos — tratativas extrajudiciais de negociação com a parte contrária.
+ * Visão GLOBAL do escritório (não presa a um cliente): resolve a dor de ter
+ * que abrir cliente por cliente pra ver o que está sendo negociado.
+ *
+ * Vinculado ao cliente (`contatoId`) e opcionalmente a um processo já
+ * existente (`processoId`) — mas acordo pode ser puramente extrajudicial,
+ * antes de virar processo. `parteContraria`/contato adversário NÃO vêm de
+ * `cliente_processos` (que não tem esses campos), por isso ficam aqui.
+ *
+ * Valores em CENTAVOS (int) pra evitar float em dinheiro.
+ */
+export const acordos = mysqlTable("acordos", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdAcordo").notNull(),
+  contatoId: int("contatoIdAcordo").notNull(),
+  /** Processo vinculado (opcional — acordo pode ser pré-processual). */
+  processoId: int("processoIdAcordo"),
+  parteContraria: varchar("parteContrariaAcordo", { length: 255 }).notNull(),
+  /** Quem negocia do OUTRO lado (advogado/preposto adversário). */
+  contatoContrarioNome: varchar("contatoContrarioNomeAcordo", { length: 255 }),
+  contatoContrarioTelefone: varchar("contatoContrarioTelAcordo", { length: 20 }),
+  /** Responsável NOSSO pela negociação — FK colaboradores.id. */
+  responsavelId: int("responsavelIdAcordo"),
+  /** Valor da proposta atual, em centavos. */
+  valorProposta: int("valorPropostaAcordo"),
+  /** Valor efetivamente fechado, em centavos (preenchido ao fechar). */
+  valorFechado: int("valorFechadoAcordo"),
+  status: mysqlEnum("statusAcordo", ["negociando", "proposta_enviada", "fechado", "cancelado"])
+    .default("negociando").notNull(),
+  /** Preenchido quando status = cancelado (o "porquê" que não pode se perder). */
+  motivoCancelamento: varchar("motivoCancelamentoAcordo", { length: 512 }),
+  criadoPor: int("criadoPorAcordo"),
+  createdAt: timestamp("createdAtAcordo").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtAcordo").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  acordoEscIdx: index("acordo_esc_idx").on(t.escritorioId),
+  acordoContatoIdx: index("acordo_contato_idx").on(t.contatoId),
+}));
+
+export type Acordo = typeof acordos.$inferSelect;
+export type InsertAcordo = typeof acordos.$inferInsert;
+
+/**
+ * Histórico da negociação de um acordo: cada proposta, contraproposta, nota,
+ * fechamento ou cancelamento. Imutável (espelha cliente_processo_anotacoes).
+ * `autorUserId` = colaborador nosso que registrou; quando a tratativa é da
+ * parte contrária, `autorUserId` fica null e `autorLabel` traz o nome livre.
+ */
+export const acordoTratativas = mysqlTable("acordo_tratativas", {
+  id: int("id").autoincrement().primaryKey(),
+  acordoId: int("acordoIdTrat").notNull(),
+  autorUserId: int("autorUserIdTrat"),
+  autorLabel: varchar("autorLabelTrat", { length: 255 }),
+  tipo: mysqlEnum("tipoTrat", ["proposta", "contraproposta", "nota", "fechamento", "cancelamento"])
+    .default("nota").notNull(),
+  /** Valor citado na tratativa (centavos), quando aplicável. */
+  valor: int("valorTrat"),
+  conteudo: text("conteudoTrat").notNull(),
+  createdAt: timestamp("createdAtTrat").defaultNow().notNull(),
+}, (t) => ({
+  tratAcordoIdx: index("trat_acordo_idx").on(t.acordoId),
+}));
+
+export type AcordoTratativa = typeof acordoTratativas.$inferSelect;
+
 export type ClienteProcessoAnotacao = typeof clienteProcessoAnotacoes.$inferSelect;
 export type InsertClienteProcessoAnotacao = typeof clienteProcessoAnotacoes.$inferInsert;
 
