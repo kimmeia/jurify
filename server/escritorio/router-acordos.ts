@@ -73,6 +73,9 @@ export const acordosRouter = router({
           responsavelId: acordos.responsavelId,
           responsavelNome: users.name,
           valorProposta: acordos.valorProposta,
+          valorInicial: acordos.valorInicial,
+          valorPretendido: acordos.valorPretendido,
+          valorDisponivel: acordos.valorDisponivel,
           valorFechado: acordos.valorFechado,
           status: acordos.status,
           motivoCancelamento: acordos.motivoCancelamento,
@@ -153,6 +156,9 @@ export const acordosRouter = router({
           responsavelId: acordos.responsavelId,
           responsavelNome: users.name,
           valorProposta: acordos.valorProposta,
+          valorInicial: acordos.valorInicial,
+          valorPretendido: acordos.valorPretendido,
+          valorDisponivel: acordos.valorDisponivel,
           valorFechado: acordos.valorFechado,
           status: acordos.status,
           motivoCancelamento: acordos.motivoCancelamento,
@@ -205,7 +211,10 @@ export const acordosRouter = router({
       contatoContrarioNome: z.string().max(255).optional(),
       contatoContrarioTelefone: z.string().max(20).optional(),
       responsavelUserId: z.number().optional(),
-      valorProposta: z.number().int().min(0).optional(),
+      /** Marcos da negociação (centavos) — a proposta atual nasce do inicial. */
+      valorInicial: z.number().int().min(0),
+      valorPretendido: z.number().int().min(0),
+      valorDisponivel: z.number().int().min(0),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "criar");
@@ -247,22 +256,94 @@ export const acordosRouter = router({
         contatoContrarioNome: input.contatoContrarioNome ?? null,
         contatoContrarioTelefone: input.contatoContrarioTelefone ?? null,
         responsavelId,
-        valorProposta: input.valorProposta ?? null,
+        valorProposta: input.valorInicial,
+        valorInicial: input.valorInicial,
+        valorPretendido: input.valorPretendido,
+        valorDisponivel: input.valorDisponivel,
         status: "negociando",
         criadoPor: ctx.user.id,
       });
       const id = (res as { insertId: number }).insertId;
 
-      if (input.valorProposta != null) {
-        await db.insert(acordoTratativas).values({
-          acordoId: id,
-          autorUserId: ctx.user.id,
-          tipo: "proposta",
-          valor: input.valorProposta,
-          conteudo: `Proposta inicial registrada`,
-        });
-      }
+      await db.insert(acordoTratativas).values({
+        acordoId: id,
+        autorUserId: ctx.user.id,
+        tipo: "proposta",
+        valor: input.valorInicial,
+        conteudo: `Proposta inicial registrada`,
+      });
       return { id };
+    }),
+
+  /**
+   * Edita partes/contato/responsável/processo e os três marcos de valor de um
+   * acordo em aberto. O cliente vinculado é imutável (definido na criação).
+   * Não altera a proposta atual (essa só muda ao registrar tratativa/fechar).
+   */
+  editar: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      parteContraria: z.string().min(1).max(255),
+      contatoContrarioNome: z.string().max(255).optional(),
+      contatoContrarioTelefone: z.string().max(20).optional(),
+      responsavelUserId: z.number().nullable().optional(),
+      processoId: z.number().nullable().optional(),
+      valorInicial: z.number().int().min(0),
+      valorPretendido: z.number().int().min(0),
+      valorDisponivel: z.number().int().min(0),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+      if (!perm.editar) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar acordos." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [a] = await db
+        .select()
+        .from(acordos)
+        .where(and(eq(acordos.id, input.id), eq(acordos.escritorioId, perm.escritorioId)))
+        .limit(1);
+      if (!a) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!perm.verTodos && a.responsavelId !== perm.colaboradorId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acordo de outro responsável." });
+      }
+      if (a.status === "fechado" || a.status === "cancelado") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Acordo encerrado — não é mais editável." });
+      }
+
+      // Processo (se informado) precisa ser do mesmo cliente/escritório.
+      if (input.processoId != null) {
+        const [p] = await db
+          .select({ id: clienteProcessos.id })
+          .from(clienteProcessos)
+          .where(and(
+            eq(clienteProcessos.id, input.processoId),
+            eq(clienteProcessos.escritorioId, perm.escritorioId),
+            eq(clienteProcessos.contatoId, a.contatoId),
+          ))
+          .limit(1);
+        if (!p) throw new TRPCError({ code: "BAD_REQUEST", message: "Processo inválido para este cliente." });
+      }
+
+      // Responsável só muda se o campo veio no payload; senão preserva o atual.
+      const responsavelId =
+        input.responsavelUserId !== undefined
+          ? (await colaboradorDoUser(db, perm.escritorioId, input.responsavelUserId)) ?? a.responsavelId
+          : a.responsavelId;
+
+      await db.update(acordos)
+        .set({
+          parteContraria: input.parteContraria,
+          contatoContrarioNome: input.contatoContrarioNome ?? null,
+          contatoContrarioTelefone: input.contatoContrarioTelefone ?? null,
+          responsavelId,
+          processoId: input.processoId ?? null,
+          valorInicial: input.valorInicial,
+          valorPretendido: input.valorPretendido,
+          valorDisponivel: input.valorDisponivel,
+        })
+        .where(eq(acordos.id, input.id));
+      return { ok: true };
     }),
 
   /**
