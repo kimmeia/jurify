@@ -153,9 +153,18 @@ function formatRelativo(d: string | Date): string {
 // ─── Componente principal ────────────────────────────────────────────────────
 
 export default function ModelosContrato() {
-  const { data: meuEsc } = trpc.configuracoes.meuEscritorio.useQuery();
-  const cargo = meuEsc?.colaborador.cargo;
-  const isGestor = cargo === "dono" || cargo === "gestor";
+  // Gate de gestão (Novo / editar / excluir) espelha o servidor: requireGestao
+  // → checkPermission("modelos","editar", fallback "configuracoes"). O hardcode
+  // anterior (cargo === "dono"/"gestor") escondia o botão pra dono com cargo
+  // personalizado — o enum vira o fallback "atendente", nunca literal "dono".
+  const { data: minhasPerms } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
+    undefined,
+    { retry: false, staleTime: 60_000 },
+  ) || { data: null };
+  const permsMod = minhasPerms?.permissoes as Record<string, { editar?: boolean }> | undefined;
+  const isGestor =
+    minhasPerms?.cargo === "Dono" ||
+    !!(permsMod && (permsMod.modelos?.editar || permsMod.configuracoes?.editar));
 
   const utils = (trpc as any).useUtils();
   const { data: modelos, isLoading } = (trpc as any).modelosContrato.listar.useQuery();
