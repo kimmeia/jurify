@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import {
-  Handshake, Plus, Loader2, TableIcon, Columns3, Phone, X,
+  Handshake, Plus, Loader2, TableIcon, Columns3, Phone, X, Pencil,
 } from "lucide-react";
 
 // ─── moeda em centavos (int no backend) ──────────────────────────────────────
@@ -23,6 +23,8 @@ const paraCentavos = (s: string): number | undefined => {
   const n = parseFloat(limpo);
   return Number.isFinite(n) ? Math.round(n * 100) : undefined;
 };
+/** centavos int → "1800,00" (pra pré-preencher input de edição). */
+const centsParaInput = (c?: number | null): string => (c == null ? "" : (c / 100).toFixed(2).replace(".", ","));
 
 type StatusAcordo = "negociando" | "proposta_enviada" | "fechado" | "cancelado";
 const STATUS_META: Record<StatusAcordo, { label: string; cls: string; dot: string }> = {
@@ -48,6 +50,104 @@ function StatusBadge({ s }: { s: StatusAcordo }) {
     <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold ${m.cls}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${m.dot}`} />{m.label}
     </span>
+  );
+}
+
+// ─── termômetro de valores ────────────────────────────────────────────────────
+// Régua normalizada entre o LIMITE (disponível, 0%) e a META (pretendido, 100%),
+// então a leitura vale nos dois sentidos: cobrando (quer o maior) ou pagando
+// (quer o menor). A direção é inferida por pretendido × disponível — sem toggle.
+type Termometro = {
+  atual: number;
+  progresso: number;      // 0..100 — posição da proposta atual rumo à meta
+  distanciaMeta: number;  // centavos, sempre >= 0
+  atingiuMeta: boolean;
+  estourou: boolean;      // proposta passou do limite (lado errado da régua)
+  cor: "rose" | "amber" | "emerald";
+  cobrando: boolean;      // meta acima do limite = quer o maior
+};
+function calcTermometro(a: {
+  valorInicial?: number | null; valorPretendido?: number | null;
+  valorDisponivel?: number | null; valorProposta?: number | null;
+}): Termometro | null {
+  const ini = a.valorInicial, pre = a.valorPretendido, dis = a.valorDisponivel;
+  if (ini == null || pre == null || dis == null) return null;
+  const atual = a.valorProposta ?? ini;
+  const span = pre - dis; // meta - limite (pode ser negativo ao pagar)
+  const raw = span === 0 ? (atual === pre ? 100 : 0) : ((atual - dis) / span) * 100;
+  const progresso = Math.max(0, Math.min(100, raw));
+  const cor: Termometro["cor"] = progresso >= 85 ? "emerald" : progresso >= 40 ? "amber" : "rose";
+  return {
+    atual, progresso, distanciaMeta: Math.abs(pre - atual),
+    atingiuMeta: raw >= 100, estourou: raw <= 0, cor, cobrando: pre >= dis,
+  };
+}
+const COR_PILL: Record<Termometro["cor"], string> = {
+  emerald: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+  amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+  rose: "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+};
+const COR_TXT: Record<Termometro["cor"], string> = { emerald: "text-emerald-600", amber: "text-amber-600", rose: "text-rose-600" };
+const COR_FILL: Record<Termometro["cor"], string> = { emerald: "bg-emerald-500", amber: "bg-amber-400", rose: "bg-rose-400" };
+const EMOJI: Record<Termometro["cor"], string> = { emerald: "🟢", amber: "🟡", rose: "🔴" };
+function statusTermometro(t: Termometro): string {
+  if (t.atingiuMeta) return "meta atingida";
+  if (t.estourou) return t.cobrando ? "abaixo do limite" : "acima do limite";
+  return `a ${brl(t.distanciaMeta)} da meta`;
+}
+
+/** Barra compacta pra tabela/kanban — mostra o progresso rumo à meta de longe. */
+function MiniBarra({ a }: { a: any }) {
+  const t = calcTermometro(a);
+  if (!t || a.status === "cancelado") return null;
+  return (
+    <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
+      <div className={`h-full rounded-full ${COR_FILL[t.cor]}`} style={{ width: `${Math.max(4, t.progresso)}%` }} />
+    </div>
+  );
+}
+
+/** Painel de valores com a régua (usado no drawer de detalhe). */
+function PainelTermometro({ a }: { a: any }) {
+  const t = calcTermometro(a);
+  if (!t) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-900 p-3 mb-4">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1">Valores da negociação</p>
+        <p className="text-[12px] text-muted-foreground">Marcos ainda não informados. Toque em <b>Editar</b> para definir inicial, pretendido e disponível — o termômetro aparece em seguida.</p>
+        <p className="text-lg font-bold tabular-nums mt-1">{brl(a.valorProposta)}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border p-4 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Valores da negociação</p>
+        <span className={`text-[10px] rounded-full px-2 py-0.5 font-semibold ${COR_PILL[t.cor]}`}>{EMOJI[t.cor]} {statusTermometro(t)}</span>
+      </div>
+      <div className="flex items-baseline justify-between mb-3">
+        <span className="text-[12px] text-muted-foreground">Proposta atual</span>
+        <span className="text-2xl font-bold tabular-nums">{brl(t.atual)}</span>
+      </div>
+      <div className="relative pt-1 pb-1">
+        <div className="h-2.5 rounded-full bg-gradient-to-r from-rose-300 via-amber-300 to-emerald-400" />
+        <div className="absolute" style={{ left: `${t.progresso}%`, top: "2px", transform: "translateX(-50%)" }}>
+          <div className="w-4 h-4 rounded-full bg-slate-900 dark:bg-white border-2 border-white dark:border-slate-900 shadow" />
+        </div>
+      </div>
+      <div className="flex justify-between text-[11px] mt-1">
+        <span className="text-rose-600 font-medium">Limite · <span className="tabular-nums">{brl(a.valorDisponivel)}</span></span>
+        <span className="text-emerald-700 font-medium">Meta · <span className="tabular-nums">{brl(a.valorPretendido)}</span></span>
+      </div>
+      <div className="flex items-center justify-between mt-3 pt-3 border-t text-[12px]">
+        <span className="text-muted-foreground">Valor inicial (âncora)</span>
+        <span className="tabular-nums text-muted-foreground">{brl(a.valorInicial)}</span>
+      </div>
+      <div className="flex items-center justify-between text-[12px] mt-1">
+        <span className="text-muted-foreground">Progresso rumo à meta</span>
+        <span className={`tabular-nums font-semibold ${COR_TXT[t.cor]}`}>{Math.round(t.progresso)}%</span>
+      </div>
+    </div>
   );
 }
 
@@ -181,9 +281,10 @@ function TabelaAcordos({ acordos, onAbrir }: { acordos: any[]; onAbrir: (id: num
                 {a.contatoContrarioTelefone && <p className="text-[11px] text-emerald-600 tabular-nums">{a.contatoContrarioTelefone}</p>}
               </td>
               <td className="px-4 py-3">{a.responsavelNome || "—"}</td>
-              <td className="px-4 py-3 text-right tabular-nums font-semibold">
+              <td className="px-4 py-3 text-right tabular-nums font-semibold min-w-[120px]">
                 {brl(a.valorProposta)}
                 {a.valorFechado != null && <p className="text-[10px] text-emerald-600 font-normal">fechou {brl(a.valorFechado)}</p>}
+                <MiniBarra a={a} />
               </td>
               <td className="px-4 py-3">
                 <StatusBadge s={a.status} />
@@ -219,6 +320,7 @@ function KanbanAcordos({ acordos, onAbrir }: { acordos: any[]; onAbrir: (id: num
                     <span className="text-[13px] font-bold tabular-nums">{brl(a.valorProposta)}</span>
                     <span className="text-[11px] text-muted-foreground">{a.responsavelNome || "—"}</span>
                   </div>
+                  <MiniBarra a={a} />
                   {a.motivoCancelamento && <p className="text-[10px] text-rose-500 mt-1.5 border-t pt-1.5">✕ {a.motivoCancelamento}</p>}
                   {a.valorFechado != null && <p className="text-[10px] text-emerald-600 mt-1.5 border-t pt-1.5">✓ fechou em {brl(a.valorFechado)}</p>}
                 </div>
@@ -239,7 +341,9 @@ function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
   const [cancelarAberto, setCancelarAberto] = useState(false);
   const [tratAberto, setTratAberto] = useState(false);
   const [fecharAberto, setFecharAberto] = useState(false);
+  const [editarAberto, setEditarAberto] = useState(false);
   const atualizar = () => { refetch(); onUpdate(); };
+  const emAberto = a?.status === "negociando" || a?.status === "proposta_enviada";
 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
@@ -260,7 +364,15 @@ function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
                     </p>
                   </div>
                 </div>
-                <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+                <div className="flex items-center gap-1.5">
+                  {emAberto && (
+                    <button onClick={() => setEditarAberto(true)}
+                      className="inline-flex items-center gap-1 text-[12px] font-semibold text-violet-600 border border-violet-200 rounded-lg px-2 py-1 hover:bg-violet-50 dark:border-violet-900 dark:hover:bg-violet-950/40">
+                      <Pencil className="h-3 w-3" /> Editar
+                    </button>
+                  )}
+                  <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+                </div>
               </div>
               <div className="mt-3 flex items-center gap-2 flex-wrap">
                 <StatusBadge s={a.status as StatusAcordo} />
@@ -288,13 +400,13 @@ function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
                 </div>
               </div>
 
-              <div className="flex items-center justify-between mb-4 rounded-xl border p-3">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Valor em negociação</p>
-                <p className="text-xl font-bold tabular-nums">
-                  {brl(a.valorProposta)}
-                  {a.valorFechado != null && <span className="text-emerald-600 text-sm"> → {brl(a.valorFechado)}</span>}
-                </p>
-              </div>
+              <PainelTermometro a={a} />
+              {a.valorFechado != null && (
+                <div className="flex items-center justify-between mb-4 rounded-xl border border-emerald-200 bg-emerald-50/60 dark:bg-emerald-950/20 dark:border-emerald-900 px-3 py-2 text-[13px]">
+                  <span className="text-emerald-700 dark:text-emerald-300 font-semibold">Fechado em</span>
+                  <span className="text-emerald-700 dark:text-emerald-300 font-bold tabular-nums">{brl(a.valorFechado)}</span>
+                </div>
+              )}
               {a.motivoCancelamento && (
                 <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-[12px] text-rose-700 mb-4 dark:bg-rose-950/30 dark:text-rose-300">
                   Motivo do cancelamento: <b>{a.motivoCancelamento}</b>
@@ -331,6 +443,7 @@ function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
             {tratAberto && <DialogTratativa acordoId={a.id} onClose={() => setTratAberto(false)} onFeito={atualizar} />}
             {fecharAberto && <DialogFechar acordoId={a.id} valorAtual={a.valorProposta} onClose={() => setFecharAberto(false)} onFeito={() => { atualizar(); }} />}
             {cancelarAberto && <DialogCancelar acordoId={a.id} onClose={() => setCancelarAberto(false)} onFeito={() => { atualizar(); }} />}
+            {editarAberto && <DialogEditar a={a} onClose={() => setEditarAberto(false)} onFeito={atualizar} />}
           </>
         )}
       </SheetContent>
@@ -344,7 +457,9 @@ function DialogNovo({ onClose, onCriado }: { onClose: () => void; onCriado: () =
   const [parteContraria, setParteContraria] = useState("");
   const [contatoNome, setContatoNome] = useState("");
   const [contatoTel, setContatoTel] = useState("");
-  const [valor, setValor] = useState("");
+  const [valInicial, setValInicial] = useState("");
+  const [valPretendido, setValPretendido] = useState("");
+  const [valDisponivel, setValDisponivel] = useState("");
   const [processoId, setProcessoId] = useState<string>("nenhum");
 
   const { data: clientesData } = trpc.clientes.listar.useQuery({ busca: busca || undefined, limite: 20, estagio: "todos" }, { enabled: busca.length >= 2 });
@@ -359,13 +474,17 @@ function DialogNovo({ onClose, onCriado }: { onClose: () => void; onCriado: () =
   const submeter = () => {
     if (!contatoId) { toast.error("Selecione o cliente"); return; }
     if (!parteContraria.trim()) { toast.error("Informe a parte contrária"); return; }
+    const ini = paraCentavos(valInicial), pre = paraCentavos(valPretendido), dis = paraCentavos(valDisponivel);
+    if (ini == null || pre == null || dis == null) { toast.error("Preencha os três valores da negociação"); return; }
     criar.mutate({
       contatoId,
       processoId: processoId !== "nenhum" ? Number(processoId) : undefined,
       parteContraria: parteContraria.trim(),
       contatoContrarioNome: contatoNome.trim() || undefined,
       contatoContrarioTelefone: contatoTel.trim() || undefined,
-      valorProposta: valor ? paraCentavos(valor) : undefined,
+      valorInicial: ini,
+      valorPretendido: pre,
+      valorDisponivel: dis,
     });
   };
 
@@ -412,19 +531,123 @@ function DialogNovo({ onClose, onCriado }: { onClose: () => void; onCriado: () =
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-[12px]">Parte contrária</Label><Input placeholder="Ex.: Construtora Alfa Ltda" value={parteContraria} onChange={(e) => setParteContraria(e.target.value)} className="mt-1" /></div>
-            <div><Label className="text-[12px]">Valor da proposta</Label><Input placeholder="R$ 0,00" value={valor} onChange={(e) => setValor(e.target.value)} className="mt-1 tabular-nums" /></div>
-          </div>
+          <div><Label className="text-[12px]">Parte contrária</Label><Input placeholder="Ex.: Construtora Alfa Ltda" value={parteContraria} onChange={(e) => setParteContraria(e.target.value)} className="mt-1" /></div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-[12px]">Contato (outro lado)</Label><Input placeholder="Ex.: Dr. Ricardo" value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} className="mt-1" /></div>
             <div><Label className="text-[12px]">Telefone do contato</Label><Input placeholder="(85) 9…" value={contatoTel} onChange={(e) => setContatoTel(e.target.value)} className="mt-1 tabular-nums" /></div>
+          </div>
+
+          <div className="border-t pt-3">
+            <Label className="text-[12px] font-semibold">Valores da negociação</Label>
+            <div className="grid grid-cols-3 gap-2 mt-1.5">
+              <div><Label className="text-[11px] text-muted-foreground">Inicial <span className="text-muted-foreground/60">âncora</span></Label><Input placeholder="R$ 0,00" value={valInicial} onChange={(e) => setValInicial(e.target.value)} className="mt-1 tabular-nums" /></div>
+              <div><Label className="text-[11px] text-emerald-700">Pretendido <span className="text-muted-foreground/60">meta</span></Label><Input placeholder="R$ 0,00" value={valPretendido} onChange={(e) => setValPretendido(e.target.value)} className="mt-1 tabular-nums border-emerald-300" /></div>
+              <div><Label className="text-[11px] text-rose-700">Disponível <span className="text-muted-foreground/60">limite</span></Label><Input placeholder="R$ 0,00" value={valDisponivel} onChange={(e) => setValDisponivel(e.target.value)} className="mt-1 tabular-nums border-rose-200" /></div>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5">A proposta atual nasce do <b>inicial</b> e o sentido (cobrar = quer o maior / pagar = quer o menor) é detectado automaticamente por <b>pretendido × disponível</b>.</p>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button className="bg-violet-600 hover:bg-violet-700" onClick={submeter} disabled={criar.isPending}>
             {criar.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}Criar acordo
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DialogEditar({ a, onClose, onFeito }: { a: any; onClose: () => void; onFeito: () => void }) {
+  const [parteContraria, setParteContraria] = useState<string>(a.parteContraria ?? "");
+  const [contatoNome, setContatoNome] = useState<string>(a.contatoContrarioNome ?? "");
+  const [contatoTel, setContatoTel] = useState<string>(a.contatoContrarioTelefone ?? "");
+  const [responsavelUserId, setResponsavelUserId] = useState<string | undefined>(undefined);
+  const [processoId, setProcessoId] = useState<string>(a.processoId != null ? String(a.processoId) : "nenhum");
+  const [valInicial, setValInicial] = useState<string>(centsParaInput(a.valorInicial));
+  const [valPretendido, setValPretendido] = useState<string>(centsParaInput(a.valorPretendido));
+  const [valDisponivel, setValDisponivel] = useState<string>(centsParaInput(a.valorDisponivel));
+
+  const { data: colabData } = trpc.configuracoes.listarColaboradoresParaFiltro.useQuery({ modulo: "clientes" });
+  const colaboradores = (colabData as any)?.colaboradores ?? [];
+  const { data: processos = [] } = trpc.clienteProcessos.listar.useQuery({ contatoId: a.contatoId }, { enabled: !!a.contatoId });
+  const respAtualUserId = colaboradores.find((c: any) => c.id === a.responsavelId)?.userId;
+  const respValue = responsavelUserId ?? (respAtualUserId != null ? String(respAtualUserId) : "");
+
+  const m = trpc.acordos.editar.useMutation({
+    onSuccess: () => { toast.success("Acordo atualizado"); onFeito(); onClose(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const salvar = () => {
+    if (!parteContraria.trim()) { toast.error("Informe a parte contrária"); return; }
+    const ini = paraCentavos(valInicial), pre = paraCentavos(valPretendido), dis = paraCentavos(valDisponivel);
+    if (ini == null || pre == null || dis == null) { toast.error("Preencha os três valores da negociação"); return; }
+    m.mutate({
+      id: a.id,
+      parteContraria: parteContraria.trim(),
+      contatoContrarioNome: contatoNome.trim() || undefined,
+      contatoContrarioTelefone: contatoTel.trim() || undefined,
+      responsavelUserId: respValue ? Number(respValue) : undefined,
+      processoId: processoId !== "nenhum" ? Number(processoId) : null,
+      valorInicial: ini,
+      valorPretendido: pre,
+      valorDisponivel: dis,
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader><DialogTitle>Editar acordo</DialogTitle></DialogHeader>
+        <div className="space-y-3 text-[13px] max-h-[70vh] overflow-y-auto">
+          <div className="text-[12px] text-muted-foreground">Cliente: <b className="text-foreground">{a.clienteNome}</b> <span className="text-muted-foreground/60">(fixo — vinculado ao cadastro)</span></div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label className="text-[12px]">Parte contrária</Label><Input value={parteContraria} onChange={(e) => setParteContraria(e.target.value)} className="mt-1" /></div>
+            <div>
+              <Label className="text-[12px]">Responsável</Label>
+              <Select value={respValue} onValueChange={setResponsavelUserId}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar…" /></SelectTrigger>
+                <SelectContent>
+                  {colaboradores.map((c: any) => (
+                    <SelectItem key={c.userId} value={String(c.userId)}>{c.userName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label className="text-[12px]">Contato (outro lado)</Label><Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} className="mt-1" /></div>
+            <div><Label className="text-[12px]">Telefone do contato</Label><Input value={contatoTel} onChange={(e) => setContatoTel(e.target.value)} className="mt-1 tabular-nums" /></div>
+          </div>
+          <div>
+            <Label className="text-[12px]">Processo vinculado</Label>
+            <Select value={processoId} onValueChange={setProcessoId}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="nenhum">— nenhum / extrajudicial puro —</SelectItem>
+                {(processos as any[]).map((p) => (
+                  <SelectItem key={p.id} value={String(p.id)}>{p.apelido || p.numeroCnj || `Processo #${p.id}`}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="border-t pt-3">
+            <Label className="text-[12px] font-semibold">Valores da negociação</Label>
+            <div className="grid grid-cols-3 gap-2 mt-1.5">
+              <div><Label className="text-[11px] text-muted-foreground">Inicial <span className="text-muted-foreground/60">âncora</span></Label><Input value={valInicial} onChange={(e) => setValInicial(e.target.value)} className="mt-1 tabular-nums" /></div>
+              <div><Label className="text-[11px] text-emerald-700">Pretendido <span className="text-muted-foreground/60">meta</span></Label><Input value={valPretendido} onChange={(e) => setValPretendido(e.target.value)} className="mt-1 tabular-nums border-emerald-300" /></div>
+              <div><Label className="text-[11px] text-rose-700">Disponível <span className="text-muted-foreground/60">limite</span></Label><Input value={valDisponivel} onChange={(e) => setValDisponivel(e.target.value)} className="mt-1 tabular-nums border-rose-200" /></div>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5">A proposta atual (R$ {centsParaInput(a.valorProposta) || "0,00"}) vem da última tratativa — muda ao registrar proposta/contraproposta, não aqui.</p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button className="bg-violet-600 hover:bg-violet-700" onClick={salvar} disabled={m.isPending}>
+            {m.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}Salvar alterações
           </Button>
         </DialogFooter>
       </DialogContent>

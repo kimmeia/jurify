@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Acordos — valores + edição</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif}
+  .tabnum{font-variant-numeric:tabular-nums}
+  [data-tela]{display:none}[data-tela].on{display:block}
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-5 py-8">
+
+  <header class="mb-6">
+    <div class="flex items-center gap-2 text-sm text-violet-600 font-semibold">
+      <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-violet-600 text-white text-xs font-bold">J.</span>
+      JuridFlow · Acordos → Melhorias
+    </div>
+    <h1 class="text-2xl font-bold mt-2">Termômetro de valores + <span class="text-emerald-600">edição</span> do acordo</h1>
+    <p class="text-slate-500 mt-1 text-[15px]">Três marcos de valor pra saber, de relance, se a negociação está perto ou longe do alvo. E poder editar partes, contato e valores.</p>
+  </header>
+
+  <!-- explicação dos 3 valores -->
+  <div class="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 mb-6">
+    <h2 class="text-base font-bold mb-2 text-amber-900">🎯 Os três valores (confirme a leitura)</h2>
+    <div class="grid md:grid-cols-3 gap-3 text-[13px]">
+      <div class="bg-white rounded-xl border p-3">
+        <p class="font-semibold text-slate-700">Valor inicial <span class="text-[10px] bg-slate-100 text-slate-500 rounded px-1 py-0.5">âncora</span></p>
+        <p class="text-slate-500 mt-1">Com quanto a negociação começou — a 1ª proposta que foi colocada na mesa.</p>
+      </div>
+      <div class="bg-white rounded-xl border p-3">
+        <p class="font-semibold text-emerald-700">Valor pretendido <span class="text-[10px] bg-emerald-100 text-emerald-700 rounded px-1 py-0.5">meta</span></p>
+        <p class="text-slate-500 mt-1">O alvo que você quer fechar. É a referência do "perto ou longe".</p>
+      </div>
+      <div class="bg-white rounded-xl border p-3">
+        <p class="font-semibold text-rose-700">Valor disponível <span class="text-[10px] bg-rose-100 text-rose-700 rounded px-1 py-0.5">limite</span></p>
+        <p class="text-slate-500 mt-1">O limite que dá pra aceitar — o piso (cobrando) ou o teto (pagando). Passou disso, não fecha.</p>
+      </div>
+    </div>
+    <p class="text-[12px] text-amber-800 mt-3">💡 No exemplo abaixo o escritório está <b>cobrando</b> pelo cliente (quer o maior valor): disponível é o piso mínimo, pretendido a meta, inicial a âncora de largada. Se for o contrário (pagando), a régua inverte — me diga qual é o caso mais comum de vocês.</p>
+  </div>
+
+  <div class="flex gap-2 mb-4">
+    <button onclick="tela('detalhe')" id="bt-detalhe" class="px-4 py-2 rounded-lg text-sm font-semibold bg-violet-600 text-white">1 · Detalhe com termômetro</button>
+    <button onclick="tela('editar')" id="bt-editar" class="px-4 py-2 rounded-lg text-sm font-semibold bg-white border text-slate-600">2 · Editar acordo</button>
+  </div>
+
+  <!-- ============ TELA 1: DETALHE COM TERMÔMETRO ============ -->
+  <div data-tela="detalhe" class="on">
+    <div class="max-w-md mx-auto bg-white rounded-2xl border shadow-sm overflow-hidden">
+      <!-- cabeçalho -->
+      <div class="px-5 py-4 border-b">
+        <div class="flex items-start justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="h-10 w-10 rounded-full bg-violet-100 text-violet-700 text-sm font-bold flex items-center justify-center">AM</div>
+            <div>
+              <p class="font-bold leading-tight">Antonio Martins de Castro</p>
+              <p class="text-[11px] text-slate-400">Acordo #2 · Ação Trabalhista 0012-67</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="tela('editar')" class="text-[12px] font-semibold text-violet-600 border border-violet-200 rounded-lg px-2 py-1 hover:bg-violet-50">✎ Editar</button>
+            <button class="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
+          </div>
+        </div>
+        <div class="mt-3 flex items-center gap-2 flex-wrap">
+          <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-amber-100 text-amber-700 border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Negociando</span>
+          <span class="text-[12px] text-slate-500">Responsável: <b class="text-slate-700">Bruno Menezes Azevedo</b></span>
+        </div>
+      </div>
+
+      <div class="px-5 py-4 space-y-4">
+        <!-- parte contrária -->
+        <div class="rounded-xl border p-3">
+          <p class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1.5">Parte contrária</p>
+          <p class="font-medium text-[14px]">Banco Itapeva</p>
+          <div class="flex items-center justify-between mt-2">
+            <div><p class="text-[13px]">Dunice Marcon Advogados</p><p class="text-[12px] text-slate-500 tabnum">0800 770 5989</p></div>
+            <button class="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">📱 WhatsApp</button>
+          </div>
+        </div>
+
+        <!-- ★ TERMÔMETRO DE VALORES ★ -->
+        <div class="rounded-xl border p-4">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Valores da negociação</p>
+            <span class="text-[10px] bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 font-semibold">🟡 a R$ 1.500 da meta</span>
+          </div>
+
+          <!-- proposta atual em destaque -->
+          <div class="flex items-baseline justify-between mb-3">
+            <span class="text-[12px] text-slate-500">Proposta atual</span>
+            <span class="text-2xl font-bold tabnum">R$ 13.500</span>
+          </div>
+
+          <!-- régua -->
+          <div class="relative pt-5 pb-1">
+            <!-- trilha com gradiente -->
+            <div class="h-2.5 rounded-full bg-gradient-to-r from-rose-300 via-amber-300 to-emerald-400"></div>
+            <!-- marcador da proposta atual (≈70%) -->
+            <div class="absolute" style="left:70%;top:8px;transform:translateX(-50%)">
+              <div class="w-4 h-4 rounded-full bg-slate-900 border-2 border-white shadow"></div>
+            </div>
+            <!-- marcos -->
+            <div class="absolute left-0 top-0 text-[10px] text-rose-600 font-semibold">Disponível</div>
+            <div class="absolute top-0 text-[10px] text-emerald-700 font-semibold" style="left:100%;transform:translateX(-100%)">Pretendido</div>
+          </div>
+          <div class="flex justify-between text-[12px] tabnum mt-0.5">
+            <span class="text-rose-600 font-medium">R$ 12.000</span>
+            <span class="text-emerald-700 font-medium">R$ 15.000</span>
+          </div>
+
+          <!-- valor inicial (âncora) discreto -->
+          <div class="flex items-center justify-between mt-3 pt-3 border-t text-[12px]">
+            <span class="text-slate-400">Valor inicial (âncora de largada)</span>
+            <span class="tabnum text-slate-500">R$ 20.000</span>
+          </div>
+          <div class="flex items-center justify-between text-[12px] mt-1">
+            <span class="text-slate-400">Progresso rumo à meta</span>
+            <span class="tabnum font-semibold text-amber-600">50%</span>
+          </div>
+        </div>
+
+        <!-- histórico -->
+        <div>
+          <p class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-2">Histórico da negociação</p>
+          <div class="space-y-3 text-[13px]">
+            <div class="flex gap-2.5"><span>💬</span><div class="border-l-2 border-slate-100 pl-3 -ml-1"><p>Proposta inicial registrada · <b class="tabnum">R$ 20.000</b></p><p class="text-[11px] text-slate-400">Bruno Menezes · 20/07</p></div></div>
+            <div class="flex gap-2.5"><span>↩️</span><div class="border-l-2 border-slate-100 pl-3 -ml-1"><p>Contraproposta do banco · <b class="tabnum">R$ 11.000</b></p><p class="text-[11px] text-slate-400">Dunice Marcon · 21/07</p></div></div>
+            <div class="flex gap-2.5"><span>💬</span><div class="border-l-2 border-slate-100 pl-3 -ml-1"><p>Nova proposta · <b class="tabnum">R$ 13.500</b></p><p class="text-[11px] text-slate-400">Bruno Menezes · 22/07</p></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 border-t flex gap-2">
+        <button class="flex-1 bg-violet-600 text-white text-[13px] font-semibold rounded-lg px-3 py-2">＋ Registrar</button>
+        <button class="flex-1 bg-emerald-600 text-white text-[13px] font-semibold rounded-lg px-3 py-2">✓ Fechar</button>
+        <button class="bg-white border border-rose-200 text-rose-600 text-[13px] font-semibold rounded-lg px-3 py-2">Cancelar</button>
+      </div>
+    </div>
+    <p class="text-center text-[12px] text-slate-400 mt-3">A pílula do topo (“a R$ 1.500 da meta”) e a régua mudam de cor: 🔴 perto do piso · 🟡 no meio · 🟢 na meta ou acima.</p>
+  </div>
+
+  <!-- ============ TELA 2: EDITAR ============ -->
+  <div data-tela="editar">
+    <div class="max-w-lg mx-auto bg-white rounded-2xl border shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b flex items-center justify-between">
+        <h3 class="font-bold text-lg">Editar acordo</h3>
+        <button onclick="tela('detalhe')" class="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
+      </div>
+      <div class="px-5 py-4 space-y-3 text-[13px]">
+        <div class="text-[12px] text-slate-400">Cliente: <b class="text-slate-700">Antonio Martins de Castro</b> <span class="text-slate-300">(fixo — vinculado ao cadastro)</span></div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="block text-[12px] font-medium text-slate-600 mb-1">Parte contrária</label><input value="Banco Itapeva" class="w-full border rounded-lg px-3 py-2" /></div>
+          <div><label class="block text-[12px] font-medium text-slate-600 mb-1">Responsável</label>
+            <select class="w-full border rounded-lg px-3 py-2 text-slate-600"><option>Bruno Menezes Azevedo</option><option>Andreza</option><option>Milena</option></select></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="block text-[12px] font-medium text-slate-600 mb-1">Contato (outro lado)</label><input value="Dunice Marcon Advogados" class="w-full border rounded-lg px-3 py-2" /></div>
+          <div><label class="block text-[12px] font-medium text-slate-600 mb-1">Telefone do contato</label><input value="0800 770 5989" class="w-full border rounded-lg px-3 py-2 tabnum" /></div>
+        </div>
+        <div><label class="block text-[12px] font-medium text-slate-600 mb-1">Processo vinculado</label>
+          <select class="w-full border rounded-lg px-3 py-2 text-slate-600"><option>Ação Trabalhista 0012-67.2025</option><option>— nenhum / extrajudicial —</option></select></div>
+
+        <div class="border-t pt-3">
+          <p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2">Valores da negociação</p>
+          <div class="grid grid-cols-3 gap-3">
+            <div><label class="block text-[12px] font-medium text-slate-500 mb-1">Inicial <span class="text-slate-300">âncora</span></label><input value="R$ 20.000" class="w-full border rounded-lg px-3 py-2 tabnum" /></div>
+            <div><label class="block text-[12px] font-medium text-emerald-700 mb-1">Pretendido <span class="text-slate-300">meta</span></label><input value="R$ 15.000" class="w-full border rounded-lg px-3 py-2 tabnum border-emerald-300" /></div>
+            <div><label class="block text-[12px] font-medium text-rose-700 mb-1">Disponível <span class="text-slate-300">limite</span></label><input value="R$ 12.000" class="w-full border rounded-lg px-3 py-2 tabnum border-rose-200" /></div>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1.5">A <b>proposta atual</b> (R$ 13.500) vem da última tratativa do histórico — não se edita aqui, muda ao registrar proposta/contraproposta.</p>
+        </div>
+      </div>
+      <div class="px-5 py-3 border-t flex justify-end gap-2">
+        <button onclick="tela('detalhe')" class="px-4 py-2 rounded-lg border text-[13px] font-medium text-slate-600">Cancelar</button>
+        <button onclick="tela('detalhe')" class="px-4 py-2 rounded-lg bg-violet-600 text-white text-[13px] font-semibold">Salvar alterações</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- perguntas de aprovação -->
+  <div class="mt-8 bg-violet-50 border border-violet-200 rounded-2xl p-5 max-w-2xl mx-auto">
+    <h2 class="text-base font-bold mb-2">✅ Para você aprovar / decidir</h2>
+    <ol class="list-decimal ml-5 text-[13.5px] text-slate-700 space-y-1.5">
+      <li><b>A leitura dos 3 valores</b> (inicial=âncora, pretendido=meta, disponível=limite) está certa? Ou "disponível" significa outra coisa pra vocês?</li>
+      <li>O caso mais comum é <b>cobrando</b> (quer o maior valor) ou <b>pagando</b> (quer o menor)? Isso define o sentido da régua e do "🟢 na meta".</li>
+      <li>Manter a <b>proposta atual derivada da última tratativa</b> (automática), ou você prefere digitá-la à mão também?</li>
+      <li>Quer um <b>mini-indicador de progresso na tabela/kanban</b> (uma barrinha por linha) pra ver de longe quais estão perto da meta?</li>
+    </ol>
+  </div>
+
+</div>
+<script>
+function tela(id){
+  document.querySelectorAll('[data-tela]').forEach(e=>e.classList.remove('on'));
+  document.querySelector(`[data-tela="${id}"]`).classList.add('on');
+  document.getElementById('bt-detalhe').className='px-4 py-2 rounded-lg text-sm font-semibold '+(id==='detalhe'?'bg-violet-600 text-white':'bg-white border text-slate-600');
+  document.getElementById('bt-editar').className='px-4 py-2 rounded-lg text-sm font-semibold '+(id==='editar'?'bg-violet-600 text-white':'bg-white border text-slate-600');
+}
+</script>
+</body>
+</html>

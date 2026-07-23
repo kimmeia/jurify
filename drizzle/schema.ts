@@ -1223,8 +1223,14 @@ export const acordos = mysqlTable("acordos", {
   contatoContrarioTelefone: varchar("contatoContrarioTelAcordo", { length: 20 }),
   /** Responsável NOSSO pela negociação — FK colaboradores.id. */
   responsavelId: int("responsavelIdAcordo"),
-  /** Valor da proposta atual, em centavos. */
+  /** Valor da proposta atual, em centavos (derivado da última tratativa). */
   valorProposta: int("valorPropostaAcordo"),
+  /** Marcos da negociação (centavos) — ver 0165. Âncora de largada. */
+  valorInicial: int("valorInicialAcordo"),
+  /** Meta que se quer fechar — referência do "perto/longe" no termômetro. */
+  valorPretendido: int("valorPretendidoAcordo"),
+  /** Limite aceitável — piso ao cobrar, teto ao pagar. Direção inferida por pretendido×disponível. */
+  valorDisponivel: int("valorDisponivelAcordo"),
   /** Valor efetivamente fechado, em centavos (preenchido ao fechar). */
   valorFechado: int("valorFechadoAcordo"),
   status: mysqlEnum("statusAcordo", ["negociando", "proposta_enviada", "fechado", "cancelado"])
