@@ -4,6 +4,7 @@ import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { createLogger } from "./logger";
 import { captureError } from "./sentry";
+import { runComContextoImpersonacao } from "./impersonation-context";
 
 const errLog = createLogger("trpc-error");
 
@@ -123,12 +124,19 @@ const requireUser = t.middleware(async opts => {
     }
   }
 
-  return next({
-    ctx: {
-      ...ctx,
-      user: ctx.user,
-    },
-  });
+  // Propaga a flag de impersonação pelo AsyncLocalStorage — o checkPermission
+  // (que só recebe userId) lê daqui pra dar bypass de superuser ao admin.
+  // `usuario` captura o ctx.user já narrowed (não-null) pra não perder o tipo
+  // dentro do closure — senão o TS re-alarga pra User|null downstream.
+  const usuario = ctx.user;
+  return runComContextoImpersonacao(usuario.impersonatedBy, () =>
+    next({
+      ctx: {
+        ...ctx,
+        user: usuario,
+      },
+    }),
+  );
 });
 
 export const protectedProcedure = t.procedure.use(requireUser);
