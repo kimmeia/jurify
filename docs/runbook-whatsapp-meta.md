@@ -148,6 +148,62 @@ simultaneamente na Cloud API. Ground truth: `is_on_biz_app` do
   dias, abrir o app a cada ~14 dias, throughput reduzido, broadcast
   read-only, grupos indisponíveis na API.
 
+## App Review — roteiro de submissão (estado em 23/jul/2026)
+
+Caso de uso "Conectar-se com clientes pelo WhatsApp" do app `1295936199370409`.
+Estado dos testes: `whatsapp_business_messaging` ✅ · `whatsapp_business_management` ✅ ·
+`public_profile` com 1 chamada registrada (vira Concluída em até 24h; **teste
+vale 30 dias** — enviar dentro da janela).
+
+### Antes de enviar
+
+1. **Remover do caso de uso** (Casos de uso → Personalizar → Remover):
+   `manage_app_solution` (só pra soluções multiparceiro com BSP — não temos) e
+   `whatsapp_business_manage_events` (eventos de conversão pra anúncios — não
+   usamos e conflita com sigilo/LGPD; mesma família da chave "Identificar
+   pedido/lead" que fica DESLIGADA na WABA). Permissão sem uso demonstrável é
+   motivo clássico de reprovação; se precisar um dia, pede de novo.
+2. Configurações do app → Básico: ícone carregado, categoria, URLs de
+   privacidade/termos/exclusão (já no ar: `/privacidade`, `/termos`,
+   `/privacidade#exclusao-de-dados`).
+3. Central de Segurança do BM **Devular**: verificação da empresa concluída.
+4. Data Use Checkup sem pendência (Ações necessárias/alertas).
+
+### Textos de justificativa (submeter em inglês)
+
+`whatsapp_business_messaging`:
+> JuridFlow is a CRM/customer-service platform for law firms in Brazil. Each
+> law firm connects its own WhatsApp Business number via Embedded Signup. We
+> use whatsapp_business_messaging to (1) receive client messages via webhooks
+> and display them in the firm's support inbox, and (2) send replies within
+> the 24-hour customer service window, plus opted-in utility template
+> notifications (e.g. appointment and payment reminders). The platform
+> enforces opt-out handling (STOP keywords), the 24-hour window, and
+> per-number daily sending limits.
+
+`whatsapp_business_management`:
+> Used during onboarding and operation of each law firm's WABA: subscribing
+> our app to the WABA's webhooks after Embedded Signup, reading phone number
+> status/quality rating to display account health, registering the phone
+> number on Cloud API, and managing message templates the firm uses for
+> opted-in notifications.
+
+### Instruções de teste pro revisor
+
+Criar usuário demo em escritório de teste e informar no formulário:
+> Log in at https://juridflow.com.br with the provided credentials →
+> Configurações → Canais shows the connected WhatsApp number → Atendimento
+> shows the inbox where messages arrive and replies are sent.
+
+Se pedir screencast: gravar Embedded Signup + troca de mensagem no
+Atendimento (2–3 min, sem áudio serve).
+
+### Depois da aprovação
+
+1. Access Verification (~5 dias úteis).
+2. Embedded Signup destrava pra clientes reais; CoEx passa a funcionar —
+   assinar os webhook fields de CoEx (seção "Coexistência" acima).
+
 ## Pendências externas (estado em 14/jul/2026)
 
 - [ ] Acesso avançado do app `1295...` (Análise do App) — destrava o 1-clique.
