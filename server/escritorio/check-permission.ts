@@ -21,6 +21,7 @@ import { colaboradores, cargosPersonalizados, permissoesCargo } from "../../driz
 import { eq, and, or } from "drizzle-orm";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { MODULOS } from "../../shared/permissoes-modulos";
+import { estaImpersonando } from "../_core/impersonation-context";
 
 export interface PermissionResult {
   allowed: boolean;
@@ -154,19 +155,32 @@ export async function checkPermission(
   acao: "ver" | "criar" | "editar" | "excluir" = "ver",
   options?: { fallbackModulo?: string },
 ): Promise<PermissionResult> {
+  const impersonando = estaImpersonando();
   const fallbackModulo = options?.fallbackModulo;
   // Cache key inclui fallback pra não misturar resultados (mesmo user,
   // mesmo módulo, fallback diferente pode dar resultado diferente).
   const cacheKey = `${userId}:${modulo}${fallbackModulo ? `|${fallbackModulo}` : ""}`;
-  const cached = cache.get(cacheKey);
-  if (cached && Date.now() - cached.ts < CACHE_TTL) {
-    return applyAction(cached.data, acao);
+  // Impersonação NÃO usa o cache compartilhado: a flag não entra na chave, então
+  // um resultado impersonado não pode vazar pra sessão normal do mesmo user (nem
+  // o contrário).
+  if (!impersonando) {
+    const cached = cache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      return applyAction(cached.data, acao);
+    }
   }
 
   const esc = await getEscritorioPorUsuario(userId);
   if (!esc) return { allowed: false, verTodos: false, verProprios: false, criar: false, editar: false, excluir: false, colaboradorId: 0, escritorioId: 0, cargo: "" };
 
   const base = { colaboradorId: esc.colaborador.id, escritorioId: esc.escritorio.id, cargo: esc.colaborador.cargo };
+
+  // Admin impersonando: acesso total de superuser, independe do cargo do alvo.
+  // (decisão de produto — ações ficam auditadas em nome do admin original.)
+  // Não cacheia, pois a flag de impersonação não faz parte da cacheKey.
+  if (impersonando) {
+    return { allowed: true, verTodos: true, verProprios: true, criar: true, editar: true, excluir: true, ...base };
+  }
 
   // Dono sempre tem tudo
   if (esc.colaborador.cargo === "dono") {
