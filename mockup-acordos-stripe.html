@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Acordos — redesign estilo Stripe</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root{ --page:#f5f7fa; --ink:#0f172a; --sub:#64748b; --mut:#94a3b8;
+         --line:#eef1f5; --violet:#7c3aed; --card:#ffffff; }
+  body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;background:var(--page);color:var(--ink)}
+  .tabnum{font-variant-numeric:tabular-nums}
+  /* sombra "Stripe": duas camadas suaves, sem borda dura */
+  .card{background:var(--card);border:1px solid rgba(15,23,42,.06);border-radius:16px;
+        box-shadow:0 1px 2px rgba(15,23,42,.04),0 2px 6px rgba(15,23,42,.04)}
+  .card-sm{background:var(--card);border:1px solid rgba(15,23,42,.07);border-radius:12px;
+        box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .elev{box-shadow:0 8px 30px rgba(15,23,42,.10),0 2px 8px rgba(15,23,42,.06)}
+  .btn-primary{background:linear-gradient(180deg,#8b5cf6,#7c3aed);color:#fff;
+        box-shadow:0 1px 1px rgba(15,23,42,.12),inset 0 1px 0 rgba(255,255,255,.18)}
+  .btn-primary:hover{filter:brightness(1.04)}
+  .cap{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);font-weight:600}
+  .row-hover:hover{background:#faf9ff}
+  [data-tela]{display:none}[data-tela].on{display:block}
+</style>
+</head>
+<body>
+<div class="max-w-6xl mx-auto px-5 py-8">
+
+  <!-- explicação do que muda -->
+  <div class="card p-5 mb-6" style="border-color:rgba(124,58,237,.18);background:linear-gradient(180deg,#faf9ff,#fff)">
+    <div class="flex items-center gap-2 text-[13px] font-semibold text-violet-700 mb-1.5">
+      <span class="inline-flex h-6 w-6 items-center justify-center rounded-md text-white text-[11px] font-bold" style="background:var(--violet)">J.</span>
+      Acordos · redesign estilo Stripe (para aprovar)
+    </div>
+    <ul class="text-[13px] text-slate-600 grid md:grid-cols-3 gap-x-6 gap-y-1 mt-2">
+      <li>✓ <b>Um X só</b> pra fechar o painel (hoje tem 2)</li>
+      <li>✓ Fim do <b>cinza "branco-gelo"</b> — cartões brancos + sombra suave</li>
+      <li>✓ Cabeçalhos em <b>caps discretas</b>, números tabulares</li>
+      <li>✓ Painel lateral mais <b>respirado</b> e organizado</li>
+      <li>✓ Tabela com <b>hairlines</b> (linhas finas), hover leve</li>
+      <li>✓ Botões com leve gradiente/sombra (assinatura Stripe)</li>
+    </ul>
+  </div>
+
+  <div class="flex gap-2 mb-5">
+    <button onclick="tela('lista')" id="bt-lista" class="px-4 py-2 rounded-lg text-sm font-semibold btn-primary">1 · Lista (página)</button>
+    <button onclick="tela('drawer')" id="bt-drawer" class="px-4 py-2 rounded-lg text-sm font-semibold bg-white border text-slate-600">2 · Painel lateral (drawer)</button>
+  </div>
+
+  <!-- ============ TELA 1: LISTA ============ -->
+  <div data-tela="lista" class="on">
+    <!-- header -->
+    <div class="flex items-start justify-between gap-4 flex-wrap mb-5">
+      <div>
+        <h1 class="text-[22px] font-bold flex items-center gap-2 tracking-tight">
+          <span class="inline-flex h-6 w-6 items-center justify-center rounded-md text-violet-600">🤝</span> Acordos
+        </h1>
+        <p class="text-slate-500 text-[13.5px] mt-0.5">Negociações extrajudiciais do escritório numa tela só — sem abrir cliente por cliente.</p>
+      </div>
+      <button class="btn-primary inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-semibold">＋ Novo acordo</button>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-5">
+      <div class="card p-4">
+        <p class="cap">Em negociação</p>
+        <p class="text-[26px] font-bold mt-1 tabnum leading-none">4 <span class="text-[13px] font-medium text-slate-400">acordos</span></p>
+      </div>
+      <div class="card p-4">
+        <p class="cap">Valor em negociação</p>
+        <p class="text-[26px] font-bold mt-1 tabnum leading-none text-amber-600">R$ 90.883</p>
+      </div>
+      <div class="card p-4">
+        <p class="cap">Fechados no mês</p>
+        <p class="text-[26px] font-bold mt-1 tabnum leading-none text-emerald-600">R$ 0 <span class="text-[13px] font-medium text-slate-400">(0)</span></p>
+      </div>
+      <div class="card p-4">
+        <p class="cap">Taxa de fechamento</p>
+        <p class="text-[26px] font-bold mt-1 tabnum leading-none">0%</p>
+      </div>
+    </div>
+
+    <!-- controles -->
+    <div class="flex items-center gap-2 mb-3 flex-wrap">
+      <div class="inline-flex rounded-lg border bg-white p-0.5 text-[13px] card-sm" style="box-shadow:none">
+        <button class="px-3 py-1.5 rounded-md font-medium inline-flex items-center gap-1.5 btn-primary">▦ Tabela</button>
+        <button class="px-3 py-1.5 rounded-md font-medium inline-flex items-center gap-1.5 text-slate-500">◫ Kanban</button>
+      </div>
+      <input placeholder="Buscar por cliente ou parte contrária…" class="flex-1 min-w-[220px] card-sm px-3 py-2 text-[13px] outline-none" style="box-shadow:none" />
+      <select class="card-sm px-3 py-2 text-[13px] text-slate-600 outline-none" style="box-shadow:none"><option>Todos os status</option></select>
+    </div>
+
+    <!-- tabela -->
+    <div class="card overflow-hidden">
+      <table class="w-full text-[13px]">
+        <thead>
+          <tr class="text-left border-b" style="border-color:var(--line)">
+            <th class="px-4 py-2.5 cap font-semibold">Cliente</th>
+            <th class="px-4 py-2.5 cap font-semibold">Parte contrária</th>
+            <th class="px-4 py-2.5 cap font-semibold">Contato (quem negocia)</th>
+            <th class="px-4 py-2.5 cap font-semibold">Responsável</th>
+            <th class="px-4 py-2.5 cap font-semibold text-right">Proposta</th>
+            <th class="px-4 py-2.5 cap font-semibold">Status</th>
+            <th class="px-4 py-2.5 cap font-semibold">Atualizado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- linha 1 -->
+          <tr class="row-hover cursor-pointer border-b" style="border-color:var(--line)">
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-2.5">
+                <div class="h-8 w-8 rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold flex items-center justify-center shrink-0">HN</div>
+                <div><p class="font-semibold">Honni Nunes Carvalho</p></div>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-slate-600">MAPFRE Seguros Gerais S.A.</td>
+            <td class="px-4 py-3"><p class="text-slate-700">NPAA Advogados</p><p class="text-[12px] text-emerald-600 tabnum">(14) 3312-5312</p></td>
+            <td class="px-4 py-3 text-slate-600">Bruno Menezes</td>
+            <td class="px-4 py-3 text-right">
+              <span class="tabnum font-semibold">R$ 12.000</span>
+              <div class="mt-1.5 h-1.5 rounded-full bg-slate-100 overflow-hidden ml-auto w-24"><div class="h-full rounded-full bg-amber-400" style="width:55%"></div></div>
+            </td>
+            <td class="px-4 py-3"><span class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Negociando</span></td>
+            <td class="px-4 py-3 text-slate-400 text-[12px]">há 18 h</td>
+          </tr>
+          <!-- linha 2 -->
+          <tr class="row-hover cursor-pointer border-b" style="border-color:var(--line)">
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-2.5">
+                <div class="h-8 w-8 rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold flex items-center justify-center shrink-0">AM</div>
+                <div><p class="font-semibold">Ayran Michel Viana</p></div>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-slate-600">Banco Volkswagen S.A.</td>
+            <td class="px-4 py-3"><p class="text-slate-700">Queiroz Cavalcanti</p><p class="text-[12px] text-emerald-600 tabnum">(85) 3032-5757</p></td>
+            <td class="px-4 py-3 text-slate-600">Bruno Menezes</td>
+            <td class="px-4 py-3 text-right">
+              <span class="tabnum font-semibold">R$ 60.000</span>
+              <div class="mt-1.5 h-1.5 rounded-full bg-slate-100 overflow-hidden ml-auto w-24"><div class="h-full rounded-full bg-emerald-500" style="width:88%"></div></div>
+            </td>
+            <td class="px-4 py-3"><span class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Negociando</span></td>
+            <td class="px-4 py-3 text-slate-400 text-[12px]">há 18 h</td>
+          </tr>
+          <!-- linha 3 -->
+          <tr class="row-hover cursor-pointer border-b" style="border-color:var(--line)">
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-2.5">
+                <div class="h-8 w-8 rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold flex items-center justify-center shrink-0">BG</div>
+                <div><p class="font-semibold">Bernardo Gomes De Lima</p></div>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-slate-600">Schulze Advogados</td>
+            <td class="px-4 py-3"><p class="text-slate-700">Banco Pan</p></td>
+            <td class="px-4 py-3 text-slate-600">Bruno Menezes</td>
+            <td class="px-4 py-3 text-right">
+              <span class="tabnum font-semibold">R$ 13.194</span>
+              <div class="mt-1.5 h-1.5 rounded-full bg-slate-100 overflow-hidden ml-auto w-24"><div class="h-full rounded-full bg-rose-400" style="width:22%"></div></div>
+            </td>
+            <td class="px-4 py-3"><span class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Negociando</span></td>
+            <td class="px-4 py-3 text-slate-400 text-[12px]">há 18 h</td>
+          </tr>
+          <!-- linha 4 cancelado -->
+          <tr class="row-hover cursor-pointer">
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-2.5">
+                <div class="h-8 w-8 rounded-full bg-slate-100 text-slate-500 text-[11px] font-bold flex items-center justify-center shrink-0">NA</div>
+                <div><p class="font-semibold">Natanael Alison Gadelha</p></div>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-slate-600">Bruno Vanderlei Advogados</td>
+            <td class="px-4 py-3"><p class="text-slate-700">Caixa Consórcios</p><p class="text-[12px] text-emerald-600 tabnum">(81) 3222-2159</p></td>
+            <td class="px-4 py-3 text-slate-600">Bruno Menezes</td>
+            <td class="px-4 py-3 text-right text-slate-300 tabnum">—</td>
+            <td class="px-4 py-3">
+              <span class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-rose-50 text-rose-600 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>Cancelado</span>
+              <p class="text-[11px] text-rose-500 mt-0.5">Cliente preferiu prosseguir com a ação</p>
+            </td>
+            <td class="px-4 py-3 text-slate-400 text-[12px]">há 18 h</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="text-center text-[12px] text-slate-400 mt-3">Fundo da página cinza-claro frio, cartões brancos com sombra suave — cada bloco “levanta” em vez de virar um borrão cinza.</p>
+  </div>
+
+  <!-- ============ TELA 2: DRAWER ============ -->
+  <div data-tela="drawer">
+    <div class="max-w-md mx-auto bg-white rounded-2xl elev overflow-hidden">
+      <!-- cabeçalho: UM X só -->
+      <div class="px-5 pt-4 pb-4 border-b" style="border-color:var(--line)">
+        <div class="flex items-start justify-between">
+          <div class="flex items-center gap-3">
+            <div class="h-11 w-11 rounded-full bg-violet-100 text-violet-700 text-sm font-bold flex items-center justify-center">HN</div>
+            <div>
+              <p class="font-bold leading-tight text-[15px]">Honni Nunes Carvalho</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">Acordo #5</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button class="inline-flex items-center gap-1 text-[12px] font-semibold text-violet-600 rounded-lg px-2.5 py-1.5 hover:bg-violet-50" style="border:1px solid rgba(124,58,237,.25)">✎ Editar</button>
+            <button class="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">✕</button>
+          </div>
+        </div>
+        <div class="mt-3 flex items-center gap-2 flex-wrap">
+          <span class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Negociando</span>
+          <span class="text-[12px] text-slate-500">Responsável · <b class="text-slate-700 font-semibold">Bruno Menezes Azevedo</b></span>
+        </div>
+      </div>
+
+      <div class="px-5 py-4 space-y-3.5 bg-white">
+        <!-- parte contrária -->
+        <div class="card-sm p-3.5">
+          <p class="cap mb-1.5">Parte contrária</p>
+          <p class="font-semibold text-[14px]">MAPFRE Seguros Gerais S.A.</p>
+          <div class="flex items-center justify-between mt-2.5">
+            <div><p class="text-[13px] text-slate-700">NPAA Advogados Associados</p><p class="text-[12px] text-slate-400 tabnum">(14) 3312-5312</p></div>
+            <button class="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg px-2.5 py-1.5" style="border:1px solid rgba(5,150,105,.2)">📱 WhatsApp</button>
+          </div>
+        </div>
+
+        <!-- termômetro -->
+        <div class="card-sm p-4">
+          <div class="flex items-center justify-between mb-3">
+            <p class="cap">Valores da negociação</p>
+            <span class="text-[10.5px] rounded-full px-2 py-0.5 font-semibold bg-amber-50 text-amber-700" style="border:1px solid rgba(217,119,6,.2)">🟡 a R$ 3.000 da meta</span>
+          </div>
+          <div class="flex items-baseline justify-between mb-3">
+            <span class="text-[12px] text-slate-500">Proposta atual</span>
+            <span class="text-[26px] font-bold tabnum leading-none">R$ 12.000</span>
+          </div>
+          <div class="relative pt-1 pb-1">
+            <div class="h-2.5 rounded-full" style="background:linear-gradient(90deg,#fda4af,#fcd34d,#6ee7b7)"></div>
+            <div class="absolute" style="left:55%;top:2px;transform:translateX(-50%)"><div class="w-4 h-4 rounded-full bg-slate-900 border-2 border-white" style="box-shadow:0 1px 3px rgba(0,0,0,.3)"></div></div>
+          </div>
+          <div class="flex justify-between text-[11px] mt-1.5">
+            <span class="text-rose-600 font-medium">Limite · <span class="tabnum">R$ 9.000</span></span>
+            <span class="text-emerald-700 font-medium">Meta · <span class="tabnum">R$ 15.000</span></span>
+          </div>
+          <div class="flex items-center justify-between mt-3 pt-3 border-t text-[12px]" style="border-color:var(--line)">
+            <span class="text-slate-400">Valor inicial (âncora)</span><span class="tabnum text-slate-500">R$ 20.000</span>
+          </div>
+          <div class="flex items-center justify-between text-[12px] mt-1">
+            <span class="text-slate-400">Progresso rumo à meta</span><span class="tabnum font-semibold text-amber-600">55%</span>
+          </div>
+        </div>
+
+        <!-- histórico -->
+        <div class="card-sm p-3.5">
+          <p class="cap mb-2.5">Histórico da negociação</p>
+          <div class="space-y-3 text-[13px]">
+            <div class="flex gap-2.5"><span>📝</span><div class="border-l-2 pl-3 -ml-1" style="border-color:var(--line)"><p>Novo extrato pedido da parte contrária para o banco, 5 dias de prazo</p><p class="text-[11px] text-slate-400 mt-0.5">Bruno Menezes · 22/07, 15:58</p></div></div>
+            <div class="flex gap-2.5"><span>💬</span><div class="border-l-2 pl-3 -ml-1" style="border-color:var(--line)"><p>Proposta inicial registrada · <b class="tabnum">R$ 12.000</b></p><p class="text-[11px] text-slate-400 mt-0.5">Bruno Menezes · 22/07, 15:40</p></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- rodapé de ações -->
+      <div class="px-5 py-3 border-t flex gap-2 bg-white" style="border-color:var(--line)">
+        <button class="btn-primary flex-1 text-[13px] font-semibold rounded-lg px-3 py-2">＋ Registrar</button>
+        <button class="flex-1 text-white text-[13px] font-semibold rounded-lg px-3 py-2" style="background:linear-gradient(180deg,#10b981,#059669);box-shadow:0 1px 1px rgba(0,0,0,.12)">✓ Fechar</button>
+        <button class="text-[13px] font-semibold rounded-lg px-3 py-2 text-rose-600 bg-white" style="border:1px solid rgba(225,29,72,.25)">Cancelar</button>
+      </div>
+    </div>
+    <p class="text-center text-[12px] text-slate-400 mt-3">Um X só (canto superior direito). Seções em cartões brancos discretos, respiro maior, mesma régua do termômetro.</p>
+  </div>
+
+  <!-- aprovação -->
+  <div class="mt-8 card p-5 max-w-2xl mx-auto" style="border-color:rgba(124,58,237,.18)">
+    <h2 class="text-[15px] font-bold mb-2">✅ Para você aprovar</h2>
+    <ol class="list-decimal ml-5 text-[13.5px] text-slate-700 space-y-1.5">
+      <li>Curtiu o tom Stripe (branco + sombra suave, sem o cinza “gelo”)? Ou prefere ainda <b>mais clean</b> (sem bordas, só sombra)?</li>
+      <li>Mantenho o <b>roxo</b> como cor de destaque, ou puxo pro <b>índigo/azul</b> do Stripe (#635BFF)?</li>
+      <li>Aplico o mesmo tratamento nos <b>cards do Kanban</b> e nos diálogos (Novo/Editar/Fechar)?</li>
+    </ol>
+  </div>
+
+</div>
+<script>
+function tela(id){
+  document.querySelectorAll('[data-tela]').forEach(e=>e.classList.remove('on'));
+  document.querySelector(`[data-tela="${id}"]`).classList.add('on');
+  document.getElementById('bt-lista').className='px-4 py-2 rounded-lg text-sm font-semibold '+(id==='lista'?'btn-primary':'bg-white border text-slate-600');
+  document.getElementById('bt-drawer').className='px-4 py-2 rounded-lg text-sm font-semibold '+(id==='drawer'?'btn-primary':'bg-white border text-slate-600');
+}
+</script>
+</body>
+</html>
