@@ -26,6 +26,11 @@ const paraCentavos = (s: string): number | undefined => {
 /** centavos int → "1800,00" (pra pré-preencher input de edição). */
 const centsParaInput = (c?: number | null): string => (c == null ? "" : (c / 100).toFixed(2).replace(".", ","));
 
+// Superfícies estilo "cartão elevado" (tom Stripe): branco + sombra suave em
+// camadas + hairline — cada bloco levanta da página, sem o cinza "branco-gelo".
+const CARD = "rounded-2xl border border-border/60 bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05),0_6px_16px_-6px_rgba(16,24,40,0.10)]";
+const CARD_SM = "rounded-xl border border-border/60 bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)]";
+
 type StatusAcordo = "negociando" | "proposta_enviada" | "fechado" | "cancelado";
 const STATUS_META: Record<StatusAcordo, { label: string; cls: string; dot: string }> = {
   negociando: { label: "Negociando", cls: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300", dot: "bg-amber-500" },
@@ -101,7 +106,7 @@ function MiniBarra({ a }: { a: any }) {
   const t = calcTermometro(a);
   if (!t || a.status === "cancelado") return null;
   return (
-    <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
+    <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 dark:bg-muted overflow-hidden">
       <div className={`h-full rounded-full ${COR_FILL[t.cor]}`} style={{ width: `${Math.max(4, t.progresso)}%` }} />
     </div>
   );
@@ -112,17 +117,17 @@ function PainelTermometro({ a }: { a: any }) {
   const t = calcTermometro(a);
   if (!t) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-900 p-3 mb-4">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1">Valores da negociação</p>
+      <div className="rounded-xl border border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-900 shadow-[0_1px_2px_rgba(16,24,40,0.05)] p-3.5 mb-3.5">
+        <p className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground/80 font-semibold mb-1">Valores da negociação</p>
         <p className="text-[12px] text-muted-foreground">Marcos ainda não informados. Toque em <b>Editar</b> para definir inicial, pretendido e disponível — o termômetro aparece em seguida.</p>
         <p className="text-lg font-bold tabular-nums mt-1">{brl(a.valorProposta)}</p>
       </div>
     );
   }
   return (
-    <div className="rounded-xl border p-4 mb-4">
+    <div className={`${CARD_SM} p-4 mb-3.5`}>
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Valores da negociação</p>
+        <p className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground/80 font-semibold">Valores da negociação</p>
         <span className={`text-[10px] rounded-full px-2 py-0.5 font-semibold ${COR_PILL[t.cor]}`}>{EMOJI[t.cor]} {statusTermometro(t)}</span>
       </div>
       <div className="flex items-baseline justify-between mb-3">
@@ -224,7 +229,7 @@ export default function Acordos() {
       {isLoading ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando…</div>
       ) : filtrados.length === 0 ? (
-        <div className="text-center py-16 border rounded-2xl bg-muted/20">
+        <div className={`text-center py-16 ${CARD}`}>
           <Handshake className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
           <p className="text-muted-foreground text-sm">Nenhum acordo ainda. Clique em <b>Novo acordo</b> para registrar a primeira negociação.</p>
         </div>
@@ -244,31 +249,31 @@ export default function Acordos() {
 
 function Kpi({ titulo, valor, sufixo, cor }: { titulo: string; valor: string; sufixo?: string; cor?: string }) {
   return (
-    <div className="bg-background rounded-2xl border p-4">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">{titulo}</p>
-      <p className={`text-2xl font-bold mt-1 tabular-nums ${cor || ""}`}>{valor} {sufixo && <span className="text-sm font-medium text-muted-foreground">{sufixo}</span>}</p>
+    <div className={`${CARD} p-4`}>
+      <p className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground/80 font-semibold">{titulo}</p>
+      <p className={`text-[26px] leading-none font-bold mt-1.5 tabular-nums ${cor || ""}`}>{valor} {sufixo && <span className="text-[13px] font-medium text-muted-foreground">{sufixo}</span>}</p>
     </div>
   );
 }
 
 function TabelaAcordos({ acordos, onAbrir }: { acordos: any[]; onAbrir: (id: number) => void }) {
   return (
-    <div className="bg-background rounded-2xl border overflow-x-auto">
+    <div className={`${CARD} overflow-x-auto`}>
       <table className="w-full text-[13px] min-w-[860px]">
         <thead>
-          <tr className="text-left text-muted-foreground text-[10px] uppercase tracking-wide border-b bg-muted/40">
-            <th className="px-4 py-2.5 font-semibold">Cliente</th>
-            <th className="px-4 py-2.5 font-semibold">Parte contrária</th>
-            <th className="px-4 py-2.5 font-semibold">Contato (quem negocia)</th>
-            <th className="px-4 py-2.5 font-semibold">Responsável</th>
-            <th className="px-4 py-2.5 font-semibold text-right">Proposta</th>
-            <th className="px-4 py-2.5 font-semibold">Status</th>
-            <th className="px-4 py-2.5 font-semibold">Atualizado</th>
+          <tr className="text-left text-muted-foreground/80 text-[10.5px] uppercase tracking-[0.06em] border-b border-border/60">
+            <th className="px-4 py-3 font-semibold">Cliente</th>
+            <th className="px-4 py-3 font-semibold">Parte contrária</th>
+            <th className="px-4 py-3 font-semibold">Contato (quem negocia)</th>
+            <th className="px-4 py-3 font-semibold">Responsável</th>
+            <th className="px-4 py-3 font-semibold text-right">Proposta</th>
+            <th className="px-4 py-3 font-semibold">Status</th>
+            <th className="px-4 py-3 font-semibold">Atualizado</th>
           </tr>
         </thead>
-        <tbody className="divide-y">
+        <tbody className="divide-y divide-border/50">
           {acordos.map((a) => (
-            <tr key={a.id} className="hover:bg-violet-50/40 dark:hover:bg-violet-950/20 cursor-pointer" onClick={() => onAbrir(a.id)}>
+            <tr key={a.id} className="hover:bg-violet-50/50 dark:hover:bg-violet-950/20 cursor-pointer transition-colors" onClick={() => onAbrir(a.id)}>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2">
                   <div className="h-7 w-7 rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold flex items-center justify-center shrink-0">{iniciais(a.clienteNome)}</div>
@@ -306,14 +311,14 @@ function KanbanAcordos({ acordos, onAbrir }: { acordos: any[]; onAbrir: (id: num
       {cols.map((s) => {
         const items = acordos.filter((a) => a.status === s);
         return (
-          <div key={s} className="bg-muted/30 rounded-2xl border p-2.5">
-            <div className="flex items-center justify-between px-1 pb-2">
-              <span className="text-[12px] font-semibold flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${STATUS_META[s].dot}`} />{STATUS_META[s].label}</span>
-              <span className="text-[11px] text-muted-foreground">{items.length}</span>
+          <div key={s} className="bg-slate-50/70 dark:bg-white/[0.02] rounded-2xl border border-border/60 p-2.5">
+            <div className="flex items-center justify-between px-1.5 pb-2 pt-0.5">
+              <span className="text-[11.5px] font-semibold flex items-center gap-1.5 text-muted-foreground"><span className={`w-2 h-2 rounded-full ${STATUS_META[s].dot}`} />{STATUS_META[s].label}</span>
+              <span className="text-[11px] text-muted-foreground/70 tabular-nums">{items.length}</span>
             </div>
             <div className="space-y-2">
               {items.map((a) => (
-                <div key={a.id} onClick={() => onAbrir(a.id)} className="bg-background rounded-xl border p-3 cursor-pointer hover:border-violet-300">
+                <div key={a.id} onClick={() => onAbrir(a.id)} className={`${CARD_SM} p-3 cursor-pointer hover:shadow-[0_2px_10px_-2px_rgba(16,24,40,0.12)] hover:border-violet-200 transition-all`}>
                   <p className="font-medium text-[13px]">{a.clienteNome}</p>
                   <p className="text-[11px] text-muted-foreground mb-1.5">vs {a.parteContraria}</p>
                   <div className="flex items-center justify-between">
@@ -347,7 +352,7 @@ function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full sm:max-w-md p-0 flex flex-col gap-0">
+      <SheetContent className="w-full sm:max-w-md p-0 flex flex-col gap-0 [&>button.absolute]:hidden">
         {isLoading || !a ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : (
@@ -355,9 +360,9 @@ function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
             <div className="px-5 py-4 border-b">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="h-10 w-10 rounded-full bg-violet-100 text-violet-700 text-sm font-bold flex items-center justify-center dark:bg-violet-950/40 dark:text-violet-300">{iniciais((a as any).clienteNome)}</div>
+                  <div className="h-11 w-11 rounded-full bg-violet-100 text-violet-700 text-sm font-bold flex items-center justify-center dark:bg-violet-950/40 dark:text-violet-300">{iniciais((a as any).clienteNome)}</div>
                   <div>
-                    <p className="font-bold leading-tight">{(a as any).clienteNome ?? "Cliente"}</p>
+                    <p className="font-bold leading-tight text-[15px]">{(a as any).clienteNome ?? "Cliente"}</p>
                     <p className="text-[11px] text-muted-foreground">
                       Acordo #{a.id}
                       {((a as any).processoApelido || (a as any).processoNumeroCnj) && <> · {(a as any).processoApelido || (a as any).processoNumeroCnj}</>}
@@ -371,7 +376,7 @@ function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
                       <Pencil className="h-3 w-3" /> Editar
                     </button>
                   )}
-                  <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+                  <button onClick={onClose} className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><X className="h-4 w-4" /></button>
                 </div>
               </div>
               <div className="mt-3 flex items-center gap-2 flex-wrap">
@@ -383,9 +388,9 @@ function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4">
-              <div className="rounded-xl border p-3 mb-4">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1.5">Parte contrária</p>
-                <p className="font-medium text-[14px]">{a.parteContraria}</p>
+              <div className={`${CARD_SM} p-3.5 mb-3.5`}>
+                <p className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground/80 font-semibold mb-1.5">Parte contrária</p>
+                <p className="font-semibold text-[14px]">{a.parteContraria}</p>
                 <div className="flex items-center justify-between mt-2">
                   <div>
                     <p className="text-[13px]">{a.contatoContrarioNome || "—"}</p>
@@ -413,7 +418,8 @@ function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
                 </div>
               )}
 
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-2 mt-4">Histórico da negociação</p>
+              <div className={`${CARD_SM} p-3.5`}>
+              <p className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground/80 font-semibold mb-2.5">Histórico da negociação</p>
               <div className="space-y-3">
                 {(a.tratativas || []).map((t: any) => (
                   <div key={t.id} className="flex gap-2.5">
@@ -425,6 +431,7 @@ function DrawerDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
                   </div>
                 ))}
                 {(a.tratativas || []).length === 0 && <p className="text-[12px] text-muted-foreground">Sem tratativas registradas.</p>}
+              </div>
               </div>
             </div>
 
@@ -506,7 +513,7 @@ function DialogNovo({ onClose, onCriado }: { onClose: () => void; onCriado: () =
                 {clientes.length > 0 && (
                   <div className="border rounded-lg mt-1 max-h-40 overflow-y-auto divide-y">
                     {clientes.map((c: any) => (
-                      <button key={c.id} onClick={() => setContatoId(c.id)} className="w-full text-left px-3 py-2 hover:bg-muted">
+                      <button key={c.id} onClick={() => setContatoId(c.id)} className="w-full text-left px-3 py-2 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition-colors">
                         <p className="font-medium">{c.nome}</p>{c.telefone && <p className="text-[11px] text-muted-foreground">{c.telefone}</p>}
                       </button>
                     ))}
