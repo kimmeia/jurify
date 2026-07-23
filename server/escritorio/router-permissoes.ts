@@ -411,8 +411,10 @@ export const permissoesRouter = router({
     const db = await getDb();
     if (!db) return null;
 
-    // Se é dono, tem tudo
-    if (esc.colaborador.cargo === "dono") {
+    // Se é dono — ou um admin impersonando (superuser do escritório-alvo) —
+    // tem tudo. Espelha o bypass do checkPermission pra os gates da UI baterem
+    // com o que o servidor de fato permite.
+    if (esc.colaborador.cargo === "dono" || (ctx.user as any).impersonatedBy) {
       const all: Record<string, any> = {};
       for (const m of MODULOS) {
         all[m] = { verTodos: true, verProprios: true, criar: true, editar: true, excluir: true };
