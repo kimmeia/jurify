@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Novas ações — caixa de entrada com desfecho</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;background:#f5f7fa;color:#0f172a}
+  .tabnum{font-variant-numeric:tabular-nums}
+  .card{background:#fff;border:1px solid rgba(15,23,42,.06);border-radius:14px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 2px 6px rgba(15,23,42,.04)}
+  .pulse{animation:p 1.6s ease-in-out infinite}@keyframes p{0%,100%{opacity:1}50%{opacity:.55}}
+  [data-tela]{display:none}[data-tela].on{display:block}
+</style>
+</head>
+<body>
+<div class="max-w-4xl mx-auto px-5 py-8">
+
+  <header class="mb-5">
+    <div class="flex items-center gap-2 text-[13px] font-semibold text-indigo-600">
+      <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600 text-white text-[11px] font-bold">J.</span>
+      Processos · Novas ações detectadas → nova lógica (para aprovar)
+    </div>
+    <h1 class="text-2xl font-bold mt-2 tracking-tight">Toda ação vira uma <span class="text-indigo-600">tarefa com desfecho</span></h1>
+    <p class="text-slate-500 mt-1 text-[14px]">O card sai das <b>Pendentes</b> assim que alguém age — e mostra <b>quem resolveu, como e quando</b>. Fim do "isso já foi tratado ou não?".</p>
+  </header>
+
+  <!-- legenda dos 3 desfechos -->
+  <div class="card p-4 mb-5">
+    <p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2.5">Os três desfechos de um card</p>
+    <div class="grid md:grid-cols-3 gap-3 text-[13px]">
+      <div class="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+        <p class="font-bold text-emerald-700 flex items-center gap-1.5">🟢 Monitorando</p>
+        <p class="text-slate-600 mt-1 text-[12.5px]">Decidiu acompanhar o processo. Cria o monitoramento <b>e</b> resolve o card num clique só.</p>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+        <p class="font-bold text-slate-700 flex items-center gap-1.5">✔ Ciente (lida)</p>
+        <p class="text-slate-600 mt-1 text-[12.5px]">Viu, mas não precisa monitorar agora. Fica registrado que já foi analisada.</p>
+      </div>
+      <div class="rounded-lg border border-rose-200 bg-rose-50/50 p-3">
+        <p class="font-bold text-rose-700 flex items-center gap-1.5">⊘ Falso positivo</p>
+        <p class="text-slate-600 mt-1 text-[12.5px]">Não é do seu cliente. Sai das pendentes; fica no histórico (reversível), não some pra sempre.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- filtro segmentado -->
+  <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+    <div class="inline-flex rounded-lg border bg-white p-0.5 text-[13px] card" style="box-shadow:none">
+      <button onclick="tela('pendentes')" id="bt-pendentes" class="px-3 py-1.5 rounded-md font-semibold bg-indigo-600 text-white">Pendentes <span class="ml-1 px-1.5 rounded-full bg-white/25 text-[11px] tabnum">2</span></button>
+      <button onclick="tela('resolvidas')" id="bt-resolvidas" class="px-3 py-1.5 rounded-md font-medium text-slate-500">Resolvidas <span class="ml-1 px-1.5 rounded-full bg-slate-100 text-[11px] tabnum">1</span></button>
+      <button onclick="tela('resolvidas')" class="px-3 py-1.5 rounded-md font-medium text-slate-500">Todas</button>
+    </div>
+    <input placeholder="Buscar por nome, CPF, CNPJ ou CNJ…" class="flex-1 min-w-[220px] card px-3 py-2 text-[13px] outline-none" style="box-shadow:none" />
+  </div>
+
+  <!-- ============ TELA 1: PENDENTES ============ -->
+  <div data-tela="pendentes" class="on">
+    <div class="space-y-2.5">
+
+      <!-- card NOVO / pendente -->
+      <div class="card border-l-[3px] border-l-rose-500 overflow-hidden" style="background:linear-gradient(90deg,rgba(255,241,242,.5),#fff)">
+        <div class="px-4 py-3.5 flex items-start gap-3">
+          <div class="h-11 w-11 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shrink-0">JM</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <p class="text-sm font-bold tracking-tight">Jussilen Fonteles Monteiro</p>
+              <span class="pulse inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-bold uppercase tracking-wider">🔔 Novo</span>
+              <span class="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-mono">CPF 655.043.213-87</span>
+            </div>
+            <p class="text-[10.5px] text-slate-500 mt-1">🕐 Detectado <b class="text-slate-700">há 2 dias</b> · <span class="px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold text-[9.5px]">TJCE</span></p>
+            <div class="mt-3 rounded-lg bg-slate-50/70 border border-slate-200/70 p-3">
+              <p class="text-sm font-bold font-mono">3068460-35.2026.8.06.0001</p>
+              <p class="text-[10.5px] text-slate-500 italic mt-1">Partes, assunto, valor e movimentações não carregados ainda.</p>
+            </div>
+          </div>
+          <div class="flex flex-col gap-1 shrink-0 w-[128px]">
+            <button class="h-8 text-[11px] rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 text-white font-semibold shadow-sm inline-flex items-center justify-center gap-1">📡 Monitorar</button>
+            <button class="h-8 text-[11px] rounded-lg border text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1">✔ Ciente</button>
+            <button class="h-8 text-[11px] rounded-lg text-rose-600 hover:bg-rose-50 inline-flex items-center justify-center gap-1">⊘ Falso</button>
+            <button class="h-7 text-[10px] rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 inline-flex items-center justify-center gap-1 mt-0.5">🔍 Detalhes <span class="text-[9px] text-indigo-400">1 cred</span></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2º card pendente -->
+      <div class="card border-l-[3px] border-l-rose-500 overflow-hidden" style="background:linear-gradient(90deg,rgba(255,241,242,.5),#fff)">
+        <div class="px-4 py-3.5 flex items-start gap-3">
+          <div class="h-11 w-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm shrink-0">FM</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <p class="text-sm font-bold tracking-tight">Fábia Ranielle Salvino Martins</p>
+              <span class="pulse inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-bold uppercase tracking-wider">🔔 Novo</span>
+              <span class="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-mono">CPF 933.235.493-68</span>
+            </div>
+            <p class="text-[10.5px] text-slate-500 mt-1">🕐 Detectado <b class="text-slate-700">há 5 h</b> · <span class="px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold text-[9.5px]">TJCE</span></p>
+            <div class="mt-3 rounded-lg bg-slate-50/70 border border-slate-200/70 p-3">
+              <p class="text-sm font-bold font-mono">0801234-56.2026.8.06.0001</p>
+              <p class="text-[10.5px] text-slate-500 italic mt-1">Partes, assunto, valor e movimentações não carregados ainda.</p>
+            </div>
+          </div>
+          <div class="flex flex-col gap-1 shrink-0 w-[128px]">
+            <button class="h-8 text-[11px] rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 text-white font-semibold shadow-sm inline-flex items-center justify-center gap-1">📡 Monitorar</button>
+            <button class="h-8 text-[11px] rounded-lg border text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1">✔ Ciente</button>
+            <button class="h-8 text-[11px] rounded-lg text-rose-600 hover:bg-rose-50 inline-flex items-center justify-center gap-1">⊘ Falso</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <p class="text-center text-[12px] text-slate-400 mt-4">Ao clicar em qualquer desfecho, o card <b>sai daqui na hora</b> e o contador Pendentes cai. Veja o resultado na aba <b>Resolvidas →</b></p>
+  </div>
+
+  <!-- ============ TELA 2: RESOLVIDAS ============ -->
+  <div data-tela="resolvidas">
+    <div class="space-y-2.5">
+
+      <!-- resolvido: monitorando -->
+      <div class="card border-l-[3px] border-l-emerald-500 overflow-hidden">
+        <div class="px-4 py-3 flex items-start gap-3">
+          <div class="h-11 w-11 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shrink-0 opacity-90">JM</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <p class="text-sm font-bold tracking-tight text-slate-700">Jussilen Fonteles Monteiro</p>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold border border-emerald-200">🟢 Monitorando</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">Resolvido por <b class="text-slate-700">Bruno Menezes</b> · há 1 min · agora aparece na aba <b>Movimentações</b></p>
+            <p class="text-[11px] text-slate-400 font-mono mt-1">3068460-35.2026.8.06.0001 · TJCE</p>
+          </div>
+          <div class="shrink-0">
+            <button class="h-7 text-[11px] rounded-lg border text-slate-500 hover:bg-slate-50 px-2.5 inline-flex items-center gap-1">↩ Desfazer</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- exemplo: ciente -->
+      <div class="card border-l-[3px] border-l-slate-300 overflow-hidden opacity-95">
+        <div class="px-4 py-3 flex items-start gap-3">
+          <div class="h-11 w-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold text-sm shrink-0 opacity-80">LM</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <p class="text-sm font-bold tracking-tight text-slate-700">Lucia Maria Gomes</p>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold border border-slate-200">✔ Ciente</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">Marcada por <b class="text-slate-700">Andreza</b> · ontem 16:20</p>
+            <p class="text-[11px] text-slate-400 font-mono mt-1">0805678-90.2026.8.06.0001 · TJCE</p>
+          </div>
+          <div class="shrink-0">
+            <button class="h-7 text-[11px] rounded-lg border text-slate-500 hover:bg-slate-50 px-2.5 inline-flex items-center gap-1">↩ Reabrir</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- exemplo: falso -->
+      <div class="card border-l-[3px] border-l-rose-300 overflow-hidden opacity-90">
+        <div class="px-4 py-3 flex items-start gap-3">
+          <div class="h-11 w-11 rounded-xl bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-sm shrink-0">RS</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <p class="text-sm font-bold tracking-tight text-slate-600 line-through decoration-slate-300">Ricardo Souza (homônimo)</p>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-[10px] font-semibold border border-rose-200">⊘ Falso positivo</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">Descartado por <b class="text-slate-700">Bruno Menezes</b> · há 3 dias</p>
+            <p class="text-[11px] text-slate-400 font-mono mt-1">0809999-11.2026.8.06.0001 · TJCE</p>
+          </div>
+          <div class="shrink-0">
+            <button class="h-7 text-[11px] rounded-lg border text-slate-500 hover:bg-slate-50 px-2.5 inline-flex items-center gap-1">↩ Reabrir</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <p class="text-center text-[12px] text-slate-400 mt-4">Cada card resolvido mostra o <b>desfecho + quem + quando</b>. Ninguém retrabalha, e nada some pra sempre (tudo reversível).</p>
+  </div>
+
+  <!-- aprovação -->
+  <div class="card p-5 mt-8" style="border-color:rgba(79,70,229,.18)">
+    <h2 class="text-[15px] font-bold mb-2">✅ Para você aprovar / decidir</h2>
+    <ol class="list-decimal ml-5 text-[13.5px] text-slate-700 space-y-1.5">
+      <li>Ao clicar <b>Monitorar</b>, o card sai das Pendentes e vira <b>🟢 Monitorando</b> num clique só (hoje ele fica lá "NOVO"). Confirma?</li>
+      <li>Registrar <b>quem resolveu, como e quando</b> em cada card? (exige um campinho a mais no banco — migration não-destrutiva)</li>
+      <li>View padrão = <b>Pendentes</b> (só o que falta tratar), com abas Resolvidas / Todas?</li>
+      <li><b>Falso positivo</b>: fica no histórico como "descartado" (reversível), em vez de sumir pra sempre como hoje?</li>
+    </ol>
+  </div>
+
+</div>
+<script>
+function tela(id){
+  document.querySelectorAll('[data-tela]').forEach(e=>e.classList.remove('on'));
+  document.querySelector(`[data-tela="${id}"]`).classList.add('on');
+  document.getElementById('bt-pendentes').className='px-3 py-1.5 rounded-md font-semibold '+(id==='pendentes'?'bg-indigo-600 text-white':'text-slate-500 font-medium');
+  document.getElementById('bt-resolvidas').className='px-3 py-1.5 rounded-md font-semibold '+(id==='resolvidas'?'bg-indigo-600 text-white':'text-slate-500 font-medium');
+}
+</script>
+</body>
+</html>
