@@ -79,8 +79,17 @@ export async function modeloParaEscritorio(escritorioId: number): Promise<string
   }
 }
 
-/** Resumo via OpenAI Chat Completions. */
-async function resumirComOpenAI(texto: string, modelo: string): Promise<string | null> {
+/** Dispatcher genérico por provider — retorna o texto da resposta ou null. */
+async function chamarProvider(system: string, user: string, modelo: string, maxTokens: number): Promise<string | null> {
+  const provider = providerDoModelo(modelo);
+  if (provider === "openai") return chamarOpenAI(system, user, modelo, maxTokens);
+  if (provider === "anthropic") return chamarAnthropic(system, user, modelo, maxTokens);
+  log.warn({ modelo }, "modelo de provider desconhecido — pulando IA");
+  return null;
+}
+
+/** OpenAI Chat Completions. */
+async function chamarOpenAI(system: string, user: string, modelo: string, maxTokens: number): Promise<string | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     log.warn("OPENAI_API_KEY não configurada");
@@ -92,10 +101,10 @@ async function resumirComOpenAI(texto: string, modelo: string): Promise<string |
     body: JSON.stringify({
       model: modelo,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: texto },
+        { role: "system", content: system },
+        { role: "user", content: user },
       ],
-      max_tokens: 120,
+      max_tokens: maxTokens,
       temperature: 0.2,
     }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -112,8 +121,8 @@ async function resumirComOpenAI(texto: string, modelo: string): Promise<string |
   return out && out.length > 0 ? out : null;
 }
 
-/** Resumo via Anthropic Messages API. */
-async function resumirComAnthropic(texto: string, modelo: string): Promise<string | null> {
+/** Anthropic Messages API. */
+async function chamarAnthropic(system: string, user: string, modelo: string, maxTokens: number): Promise<string | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     log.warn("ANTHROPIC_API_KEY não configurada");
@@ -128,9 +137,9 @@ async function resumirComAnthropic(texto: string, modelo: string): Promise<strin
     },
     body: JSON.stringify({
       model: modelo,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: texto }],
-      max_tokens: 120,
+      system,
+      messages: [{ role: "user", content: user }],
+      max_tokens: maxTokens,
       temperature: 0.2,
     }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -166,12 +175,8 @@ export async function resumirMovimentacao(
   if (limpo.length < 40) return null;
   const truncado = limpo.length > MAX_INPUT_CHARS ? limpo.slice(0, MAX_INPUT_CHARS) : limpo;
 
-  const provider = providerDoModelo(modelo);
   try {
-    if (provider === "openai") return await resumirComOpenAI(truncado, modelo);
-    if (provider === "anthropic") return await resumirComAnthropic(truncado, modelo);
-    log.warn({ modelo }, "modelo de provider desconhecido — pulando resumo");
-    return null;
+    return await chamarProvider(SYSTEM_PROMPT, truncado, modelo, 120);
   } catch (err: any) {
     if (err?.name === "AbortError" || err?.name === "TimeoutError") {
       log.warn({ modelo, timeoutMs: TIMEOUT_MS }, "timeout no resumo IA");
@@ -180,4 +185,85 @@ export async function resumirMovimentacao(
     log.warn({ modelo, err: err?.message ?? String(err) }, "erro inesperado no resumo IA");
     return null;
   }
+}
+
+// ─── Classificação estruturada (resumo + desfecho + relevância) ──────────────
+
+export type Desfecho = "favoravel" | "desfavoravel" | "parcial" | "neutro";
+export type Relevancia = "relevante" | "rotina";
+export type LadoCliente = "autor" | "reu" | "desconhecido";
+export type ResumoClassificado = {
+  resumo: string;
+  desfecho: Desfecho | null;
+  relevancia: Relevancia;
+};
+
+const DESFECHOS: Desfecho[] = ["favoravel", "desfavoravel", "parcial", "neutro"];
+
+const SYSTEM_PROMPT_CLASSIFICACAO = `Você é um assistente jurídico que analisa UMA movimentação de processo do PJe brasileiro.
+Responda APENAS com JSON válido (sem markdown, sem crases), exatamente neste formato:
+{"resumo": "...", "relevancia": "relevante"|"rotina", "desfecho": "favoravel"|"desfavoravel"|"parcial"|"neutro"|null}
+
+Regras:
+- "resumo": 1 frase curta (máx. 200 caracteres) em pt-BR claro, focando no que mudou no processo. Sem jargão, sem prefixos, sem aspas.
+- "relevancia": "rotina" para movimentação administrativa/de expediente (conclusos, distribuído, juntada de petição, remessa, mero despacho de impulso, publicação). "relevante" para decisões, sentenças, despachos que exijam providência, intimações e audiências.
+- "desfecho": preencha SOMENTE quando a movimentação for uma DECISÃO/SENTENÇA/ACÓRDÃO/DESPACHO DECISÓRIO que resolve algo a favor ou contra uma parte. Avalie do ponto de vista do NOSSO cliente (informado na mensagem): "favoravel" se beneficia nosso cliente, "desfavoravel" se prejudica, "parcial" se procedente em parte, "neutro" se decisão sem vencedor claro. Use null quando NÃO for decisão de mérito (intimação, juntada, audiência designada, conclusos, etc.).
+- Não invente dados que não estão no texto.`;
+
+/**
+ * Classifica uma movimentação: resumo + desfecho (favorável/desfavorável do
+ * ponto de vista do NOSSO cliente) + relevância (relevante/rotina). Nunca
+ * lança; retorna null quando não vale classificar ou a IA cai. Se a IA
+ * responder algo que não é JSON, cai num fallback que ao menos aproveita o
+ * texto como resumo (sem classificar).
+ */
+export async function classificarMovimentacao(
+  texto: string,
+  modelo: string = MODELO_DEFAULT,
+  opts?: { ladoCliente?: LadoCliente },
+): Promise<ResumoClassificado | null> {
+  const limpo = (texto ?? "").trim();
+  if (limpo.length < 40) return null;
+  const truncado = limpo.length > MAX_INPUT_CHARS ? limpo.slice(0, MAX_INPUT_CHARS) : limpo;
+
+  const lado = opts?.ladoCliente ?? "desconhecido";
+  const ladoTxt =
+    lado === "autor" ? "O NOSSO cliente é o AUTOR (polo ativo) da ação."
+    : lado === "reu" ? "O NOSSO cliente é o RÉU (polo passivo) da ação."
+    : "Não se sabe de que lado o nosso cliente está — se não der pra inferir com segurança, use desfecho null.";
+  const user = `${ladoTxt}\n\nMovimentação:\n${truncado}`;
+
+  let raw: string | null;
+  try {
+    raw = await chamarProvider(SYSTEM_PROMPT_CLASSIFICACAO, user, modelo, 320);
+  } catch (err: any) {
+    if (err?.name === "AbortError" || err?.name === "TimeoutError") log.warn({ modelo }, "timeout na classificação IA");
+    else log.warn({ modelo, err: err?.message ?? String(err) }, "erro inesperado na classificação IA");
+    return null;
+  }
+  if (!raw) return null;
+  return parseClassificacao(raw);
+}
+
+/** Extrai o JSON da resposta (tolerante a crases/texto ao redor) e valida. */
+export function parseClassificacao(raw: string): ResumoClassificado | null {
+  const ini = raw.indexOf("{");
+  const fim = raw.lastIndexOf("}");
+  if (ini >= 0 && fim > ini) {
+    try {
+      const obj = JSON.parse(raw.slice(ini, fim + 1)) as Record<string, unknown>;
+      const resumo = typeof obj.resumo === "string" ? obj.resumo.trim() : "";
+      if (resumo) {
+        const desfecho = DESFECHOS.includes(obj.desfecho as Desfecho) ? (obj.desfecho as Desfecho) : null;
+        const relevancia: Relevancia = obj.relevancia === "rotina" ? "rotina" : "relevante";
+        return { resumo: resumo.slice(0, 240), desfecho, relevancia };
+      }
+    } catch {
+      // cai no fallback abaixo
+    }
+  }
+  // Fallback: IA ignorou o JSON — aproveita o texto cru como resumo, sem selo.
+  const fallback = raw.replace(/[`{}]/g, "").trim();
+  if (fallback.length < 3) return null;
+  return { resumo: fallback.slice(0, 240), desfecho: null, relevancia: "relevante" };
 }

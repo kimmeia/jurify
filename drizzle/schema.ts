@@ -3349,6 +3349,15 @@ export const eventosProcesso = mysqlTable(
     hashDedup: varchar("hashDedup", { length: 64 }).notNull(),
     /** Resumo curto (pt-BR) do conteúdo gerado por IA. NULL = não foi gerado. */
     resumoIa: text("resumo_ia"),
+    /**
+     * Classificação IA da movimentação (ver resumir-movimentacao.ts):
+     * `desfecho` só é preenchido quando é uma decisão/sentença — favorável ou
+     * não do ponto de vista do nosso cliente; NULL = não é decisão de mérito.
+     * `relevancia` separa movimentação relevante de rotina (mero expediente).
+     * NULL nos dois = ainda não classificado (mov antiga ou IA indisponível).
+     */
+    desfecho: mysqlEnum("desfechoEvento", ["favoravel", "desfavoravel", "parcial", "neutro"]),
+    relevancia: mysqlEnum("relevanciaEvento", ["relevante", "rotina"]),
     lido: boolean("lido").default(false).notNull(),
     /**
      * Desfecho do card de nova ação (feed de Processos). `pendente` = ainda
