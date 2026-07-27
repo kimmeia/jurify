@@ -873,6 +873,14 @@ function identificadorPrincipal(mon: any): string {
   return mon.searchKey;
 }
 
+// Selos de classificação da movimentação (resumo IA classificado).
+const DESFECHO_MOV: Record<string, { label: string; emoji: string; cls: string; dot: string }> = {
+  favoravel: { label: "Favorável", emoji: "🟢", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
+  desfavoravel: { label: "Desfavorável", emoji: "🔴", cls: "bg-rose-50 text-rose-700 border-rose-200", dot: "bg-rose-500" },
+  parcial: { label: "Parcial", emoji: "🟡", cls: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" },
+  neutro: { label: "Sem mérito", emoji: "⚪", cls: "bg-slate-100 text-slate-600 border-slate-200", dot: "bg-slate-400" },
+};
+
 function MonitoramentoCard({
   mon,
   onPausar,
@@ -973,6 +981,12 @@ function MonitoramentoCard({
     { monitoramentoId: mon.id, page: 1, pageSize: 50 },
     { enabled: aberto && !!mon.id, retry: false },
   );
+
+  // "Criar prazo" na timeline: aprova o prazo sugerido → vira agendamento.
+  const criarPrazoMut = (trpc as any).prazosSugeridos.aprovar.useMutation({
+    onSuccess: () => { toast.success("Prazo criado na Agenda ✅"); refetchHist(); },
+    onError: (e: any) => toast.error("Falha ao criar prazo", { description: e.message }),
+  });
 
   // Extrai dados do processo com fallback em cascata pras steps —
   // diferentes fontes preenchem em momentos diferentes:
@@ -1349,23 +1363,44 @@ function MonitoramentoCard({
                     </p>
                     <div className="relative space-y-3 max-h-96 overflow-y-auto pl-4">
                       <div className="absolute left-1 top-1 bottom-1 w-px bg-indigo-200 dark:bg-indigo-900" />
-                      {steps.map((s: any, i: number) => (
+                      {steps.map((s: any, i: number) => {
+                        const dm = s.desfecho ? DESFECHO_MOV[s.desfecho] : null;
+                        const rotina = s.relevancia === "rotina";
+                        const prazo = s.prazoSugerido;
+                        return (
                         <div key={i} className="relative">
-                          <div className="absolute -left-3 top-1.5 h-2 w-2 rounded-full bg-indigo-400 ring-2 ring-background" />
+                          <div className={`absolute -left-3 top-1.5 h-2 w-2 rounded-full ring-2 ring-background ${dm ? dm.dot : rotina ? "bg-slate-300" : "bg-indigo-400"}`} />
                           <div className="text-xs">
-                            {s.step_date && (
-                              <span className="text-[10px] text-muted-foreground font-medium">
-                                {new Date(s.step_date).toLocaleDateString("pt-BR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                })}
-                              </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {s.step_date && (
+                                <span className="text-[10px] text-muted-foreground font-medium">
+                                  {new Date(s.step_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                                </span>
+                              )}
+                              {dm && <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-semibold border ${dm.cls}`}>{dm.emoji} {dm.label}</span>}
+                              {(s.relevancia === "rotina" || s.relevancia === "relevante") && (
+                                rotina
+                                  ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-slate-100 text-slate-500 border-slate-200">📄 Rotina</span>
+                                  : <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300">⭐ Relevante</span>
+                              )}
+                              {prazo && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold border bg-orange-100 text-orange-700 border-orange-300">⏰ Requer prazo</span>}
+                            </div>
+                            {s.resumoIa
+                              ? <p className="text-[11.5px] leading-snug mt-1 font-medium text-foreground">{s.resumoIa}</p>
+                              : <p className="text-[11px] leading-tight mt-0.5">{s.content}</p>}
+                            {s.resumoIa && <p className="text-[10px] leading-tight mt-0.5 text-muted-foreground line-clamp-2">{s.content}</p>}
+                            {prazo && (
+                              <div className="mt-1.5 rounded-md bg-orange-50 border border-orange-200 px-2 py-1.5 flex items-center justify-between gap-2 flex-wrap dark:bg-orange-950/20 dark:border-orange-900">
+                                <span className="text-[10px] text-orange-800 dark:text-orange-300">⏰ <b>{prazo.titulo}</b> — {prazo.prazoDias} dias{prazo.prazoUteis ? " úteis" : ""}{prazo.dataSugerida ? ` · vence ${new Date(prazo.dataSugerida).toLocaleDateString("pt-BR")}` : ""}</span>
+                                <Button size="sm" className="h-6 text-[10px] rounded-md bg-orange-600 hover:bg-orange-700 text-white px-2 shrink-0" disabled={criarPrazoMut.isPending} onClick={() => criarPrazoMut.mutate({ id: prazo.id })}>
+                                  {criarPrazoMut.isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "＋ Criar prazo"}
+                                </Button>
+                              </div>
                             )}
-                            <p className="text-[11px] leading-tight mt-0.5">{s.content}</p>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ) : processoData ? (
@@ -1463,6 +1498,20 @@ function MonitorarTab() {
     { retry: false },
   );
   const listaMons = mons || [];
+
+  // Staging/dev: botão pra semear um processo de teste com movimentações já
+  // classificadas (desfecho/relevância/prazo) — pro dono ver o resumo novo.
+  const { data: ambTeste } = (trpc.processos as any).ambienteTeste?.useQuery?.(undefined, { retry: false }) ?? { data: undefined };
+  const seedTesteMut = (trpc.processos as any).seedMovimentacoesTeste.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(`Processo de teste criado (${r?.total ?? 4} movimentações)`, {
+        description: "Abra o card '🧪 Processo de teste' abaixo e expanda pra ver os selos.",
+        duration: 9000,
+      });
+      refetch();
+    },
+    onError: (e: any) => toast.error("Falha no seed de teste", { description: e.message }),
+  });
 
   // Credenciais do cofre
   const { data: credenciais } = trpc.cofreCredenciais.listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
@@ -1625,6 +1674,19 @@ function MonitorarTab() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {ambTeste?.ehTeste && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 rounded-lg border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800"
+                disabled={seedTesteMut.isPending}
+                onClick={() => seedTesteMut.mutate()}
+                title="Cria um processo de teste com movimentações classificadas (só staging/dev)."
+              >
+                {seedTesteMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <span className="mr-1">🧪</span>}
+                Gerar teste
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
