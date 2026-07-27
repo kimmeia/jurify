@@ -3350,6 +3350,16 @@ export const eventosProcesso = mysqlTable(
     /** Resumo curto (pt-BR) do conteúdo gerado por IA. NULL = não foi gerado. */
     resumoIa: text("resumo_ia"),
     lido: boolean("lido").default(false).notNull(),
+    /**
+     * Desfecho do card de nova ação (feed de Processos). `pendente` = ainda
+     * na caixa de entrada; os demais são terminais e mostram quem/quando.
+     * Pendentes na UI = resolucao='pendente' AND lido=false (o cron grava
+     * lido=true pra silenciar baseline/polo-ativo/pré-cadastro sem resolver).
+     * Só aplicável a tipo='nova_acao'; nos demais eventos fica no default.
+     */
+    resolucao: mysqlEnum("resolucaoEvento", ["pendente", "monitorando", "lida", "falso"]).default("pendente").notNull(),
+    resolvidoPorUserId: int("resolvidoPorUserIdEvento"),
+    resolvidoEm: timestamp("resolvidoEmEvento"),
     alertaEnviado: boolean("alertaEnviado").default(false).notNull(),
     alertaEnviadoEm: timestamp("alertaEnviadoEm"),
     createdAt: timestamp("createdAtEvento").defaultNow().notNull(),

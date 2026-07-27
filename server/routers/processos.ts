@@ -27,6 +27,7 @@ import {
   motorMonitoramentos,
   eventosProcesso,
   adminIntegracoes,
+  users,
 } from "../../drizzle/schema";
 import { decrypt as adminDecrypt } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -1745,6 +1746,9 @@ export const processosRouter = router({
   listarNovasAcoes: protectedProcedure
     .input(
       z.object({
+        /** Caixa de entrada: pendentes (default) | resolvidas | todas. */
+        filtro: z.enum(["pendentes", "resolvidas", "todas"]).optional(),
+        /** Legado — equivale a filtro="pendentes" quando true. */
         apenasNaoLidas: z.boolean().optional(),
         limite: z.number().int().min(1).max(100).default(20),
         cursor: z.number().int().min(0).default(0),
@@ -1779,12 +1783,19 @@ export const processosRouter = router({
       // do cadastro do cliente. Sem este filtro, esses eventos silenciados
       // apareciam como cards "novos" e processos antigos (ex: 2015)
       // contavam como alerta porque `createdAt` é a hora do INSERT.
+      // Pendentes = resolucao='pendente' AND lido=false. O `lido=false` exclui
+      // os silenciados pelo cron (baseline/polo-ativo/pré-cadastro gravam
+      // lido=true sem resolver). Resolvidas = estados terminais. Todas = tudo.
+      const filtro = input.filtro ?? (input.apenasNaoLidas === false ? "todas" : "pendentes");
       const condicoes = [
         eq(eventosProcesso.escritorioId, esc.escritorio.id),
         eq(eventosProcesso.tipo, "nova_acao"),
       ];
-      if (input.apenasNaoLidas) {
+      if (filtro === "pendentes") {
+        condicoes.push(eq(eventosProcesso.resolucao, "pendente"));
         condicoes.push(eq(eventosProcesso.lido, false));
+      } else if (filtro === "resolvidas") {
+        condicoes.push(ne(eventosProcesso.resolucao, "pendente"));
       }
 
       const acoesRaw = await db
@@ -1795,6 +1806,9 @@ export const processosRouter = router({
           dataDistribuicao: eventosProcesso.dataEvento,
           conteudo: eventosProcesso.conteudo,
           lido: eventosProcesso.lido,
+          resolucao: eventosProcesso.resolucao,
+          resolvidoEm: eventosProcesso.resolvidoEm,
+          resolvidoPorNome: users.name,
           createdAt: eventosProcesso.createdAt,
           monitoramentoId: eventosProcesso.monitoramentoId,
           clienteApelido: motorMonitoramentos.apelido,
@@ -1806,6 +1820,7 @@ export const processosRouter = router({
           motorMonitoramentos,
           eq(motorMonitoramentos.id, eventosProcesso.monitoramentoId),
         )
+        .leftJoin(users, eq(users.id, eventosProcesso.resolvidoPorUserId))
         .where(and(...condicoes))
         .orderBy(desc(eventosProcesso.createdAt))
         .offset(input.cursor)
@@ -1849,6 +1864,7 @@ export const processosRouter = router({
           and(
             eq(eventosProcesso.escritorioId, esc.escritorio.id),
             eq(eventosProcesso.tipo, "nova_acao"),
+            eq(eventosProcesso.resolucao, "pendente"),
             eq(eventosProcesso.lido, false),
           ),
         );
@@ -1862,7 +1878,41 @@ export const processosRouter = router({
       };
     }),
 
-  marcarNovaAcaoLida: protectedProcedure
+  /**
+   * Resolve um card de nova ação com um desfecho terminal
+   * (monitorando/lida/falso): grava quem e quando, e marca lido=true pra sair
+   * da caixa de Pendentes. "monitorando" é chamado após criar o monitoramento
+   * do processo; "falso" é reversível via reabrirNovaAcao.
+   */
+  resolverNovaAcao: protectedProcedure
+    .input(z.object({
+      id: z.number().int().positive(),
+      resolucao: z.enum(["monitorando", "lida", "falso"]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      await db
+        .update(eventosProcesso)
+        .set({
+          resolucao: input.resolucao,
+          resolvidoPorUserId: ctx.user.id,
+          resolvidoEm: new Date(),
+          lido: true,
+        })
+        .where(and(
+          eq(eventosProcesso.id, input.id),
+          eq(eventosProcesso.escritorioId, esc.escritorio.id),
+          eq(eventosProcesso.tipo, "nova_acao"),
+        ));
+      return { ok: true };
+    }),
+
+  /** Reabre um card resolvido — volta pra caixa de Pendentes (limpa desfecho). */
+  reabrirNovaAcao: protectedProcedure
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -1872,19 +1922,32 @@ export const processosRouter = router({
 
       await db
         .update(eventosProcesso)
-        .set({ lido: true })
-        .where(
-          and(
-            eq(eventosProcesso.id, input.id),
-            eq(eventosProcesso.escritorioId, esc.escritorio.id),
-          ),
-        );
+        .set({ resolucao: "pendente", resolvidoPorUserId: null, resolvidoEm: null, lido: false })
+        .where(and(
+          eq(eventosProcesso.id, input.id),
+          eq(eventosProcesso.escritorioId, esc.escritorio.id),
+          eq(eventosProcesso.tipo, "nova_acao"),
+        ));
       return { ok: true };
     }),
 
-  /** Remove uma nova ação detectada (hard delete). Usado quando o usuário
-   *  identifica falso positivo — vamos sumir com o card. Filtra por
-   *  escritorioId pra evitar deletar registro de outro escritório. */
+  /** @deprecated use `resolverNovaAcao`. Mantido por retrocompat — marca "lida". */
+  marcarNovaAcaoLida: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+      await db
+        .update(eventosProcesso)
+        .set({ resolucao: "lida", resolvidoPorUserId: ctx.user.id, resolvidoEm: new Date(), lido: true })
+        .where(and(eq(eventosProcesso.id, input.id), eq(eventosProcesso.escritorioId, esc.escritorio.id)));
+      return { ok: true };
+    }),
+
+  /** @deprecated use `resolverNovaAcao` com "falso". Agora é SOFT-delete
+   *  (reversível): marca o card como falso positivo em vez de apagar. */
   removerNovaAcao: protectedProcedure
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
@@ -1892,15 +1955,10 @@ export const processosRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
-
       await db
-        .delete(eventosProcesso)
-        .where(
-          and(
-            eq(eventosProcesso.id, input.id),
-            eq(eventosProcesso.escritorioId, esc.escritorio.id),
-          ),
-        );
+        .update(eventosProcesso)
+        .set({ resolucao: "falso", resolvidoPorUserId: ctx.user.id, resolvidoEm: new Date(), lido: true })
+        .where(and(eq(eventosProcesso.id, input.id), eq(eventosProcesso.escritorioId, esc.escritorio.id)));
       return { ok: true };
     }),
 
