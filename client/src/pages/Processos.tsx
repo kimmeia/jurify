@@ -2419,13 +2419,19 @@ function AlertasBadge() {
 // TAB: NOVAS AÇÕES
 // ═══════════════════════════════════════════════════════════════════════════════
 
+const RESOLUCAO_META: Record<string, { label: string; emoji: string; badge: string; borda: string; verbo: string }> = {
+  monitorando: { label: "Monitorando", emoji: "🟢", badge: "bg-emerald-100 text-emerald-700 border-emerald-200", borda: "border-l-emerald-500", verbo: "Resolvido" },
+  lida: { label: "Ciente", emoji: "✔", badge: "bg-slate-100 text-slate-600 border-slate-200", borda: "border-l-slate-300", verbo: "Marcada" },
+  falso: { label: "Falso positivo", emoji: "⊘", badge: "bg-rose-50 text-rose-600 border-rose-200", borda: "border-l-rose-300", verbo: "Descartado" },
+};
+
 function NovasAcoesTab() {
   // Default `true`: a aba mostra só ações com `lido=false` (não-silenciadas).
   // Eventos silenciados (baseline da primeira execução, polo ativo, ajuizado
   // antes do cadastro do cliente) ficam acessíveis pelo toggle no header.
   // Sem este default, processos antigos da baseline apareciam confundindo
   // o user como se fossem detecções recentes.
-  const [apenasNaoLidas, setApenasNaoLidas] = useState(true);
+  const [filtro, setFiltro] = useState<"pendentes" | "resolvidas" | "todas">("pendentes");
   const [novoOpen, setNovoOpen] = useState(false);
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
@@ -2448,7 +2454,7 @@ function NovasAcoesTab() {
   const [acoesAcumuladas, setAcoesAcumuladas] = useState<any[]>([]);
 
   const { data, refetch, isLoading, isFetching } = trpc.processos.listarNovasAcoes.useQuery(
-    { apenasNaoLidas, limite: LIMITE_PAGINA, cursor },
+    { filtro, limite: LIMITE_PAGINA, cursor },
     { retry: false },
   );
 
@@ -2457,7 +2463,7 @@ function NovasAcoesTab() {
   useEffect(() => {
     setCursor(0);
     setAcoesAcumuladas([]);
-  }, [apenasNaoLidas]);
+  }, [filtro]);
 
   // Acumula páginas: cursor=0 substitui (página inicial / refetch),
   // cursor>0 anexa (carregar mais).
@@ -2494,22 +2500,26 @@ function NovasAcoesTab() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Marca lido só localmente — evita refetch que perderia a posição/scroll
-  // do usuário em listas longas. O backend acaba consistente no próximo
-  // fetch natural (carregar mais ou mudança de filtro).
-  const marcarLidaMut = trpc.processos.marcarNovaAcaoLida.useMutation({
-    onMutate: ({ id }) => {
-      setAcoesAcumuladas((prev) => prev.map((a) => (a.id === id ? { ...a, lido: true } : a)));
-    },
-  });
-
-  const removerAcaoMut = trpc.processos.removerNovaAcao.useMutation({
+  // Resolve um card (monitorando/lida/falso): sai da lista atual na hora
+  // (optimistic) — o card deixa as Pendentes. onError reverte via refetch.
+  const resolverMut = trpc.processos.resolverNovaAcao.useMutation({
     onMutate: ({ id }: { id: number }) => {
       setAcoesAcumuladas((prev) => prev.filter((a) => a.id !== id));
     },
-    onSuccess: () => toast.success("Card removido"),
     onError: (e: any) => {
-      toast.error("Erro ao remover", { description: e.message });
+      toast.error("Não foi possível resolver o card", { description: e.message });
+      recarregarDoTopo();
+    },
+  });
+
+  // Reabre um card resolvido — volta pra Pendentes; sai da lista de Resolvidas.
+  const reabrirMut = trpc.processos.reabrirNovaAcao.useMutation({
+    onMutate: ({ id }: { id: number }) => {
+      setAcoesAcumuladas((prev) => prev.filter((a) => a.id !== id));
+    },
+    onSuccess: () => toast.success("Card reaberto — voltou pras Pendentes"),
+    onError: (e: any) => {
+      toast.error("Erro ao reabrir", { description: e.message });
       recarregarDoTopo();
     },
   });
@@ -2569,7 +2579,7 @@ function NovasAcoesTab() {
     return mon?.credencialId ?? undefined;
   };
 
-  const handleMonitorarAcao = (a: any) => {
+  const handleMonitorarAcao = async (a: any) => {
     const credId = credencialIdDoMonitor(a.monitoramentoId);
     if (!credId) {
       toast.error("Sem credencial OAB associada", {
@@ -2578,13 +2588,18 @@ function NovasAcoesTab() {
       });
       return;
     }
-    monitorarMut.mutate({ numeroCnj: a.cnj, credencialId: credId });
+    try {
+      await monitorarMut.mutateAsync({ numeroCnj: a.cnj, credencialId: credId });
+      // Monitorar É o desfecho: resolve o card e tira das Pendentes num clique.
+      resolverMut.mutate({ id: a.id, resolucao: "monitorando" });
+    } catch {
+      // toast de erro já disparado por monitorarMut.onError; card permanece.
+    }
   };
 
-  const handleRemoverAcao = (id: number) => {
-    if (confirm("Marcar este card como FALSO POSITIVO e remover? Isso não pode ser desfeito.")) {
-      removerAcaoMut.mutate({ id });
-    }
+  const handleFalsoAcao = (id: number) => {
+    // Reversível agora (soft): vai pras Resolvidas como "falso", sem confirm.
+    resolverMut.mutate({ id, resolucao: "falso" });
   };
 
   const atualizarAgoraMut = trpc.processos.atualizarNovasAcoesAgora.useMutation({
@@ -2691,7 +2706,6 @@ function NovasAcoesTab() {
           .map((c: string) => normalizar(String(c)));
         return campos.some((c: string) => c.includes(buscaNormalizada));
       });
-  const naoLidasAcumuladas = acoes.filter((a: any) => !a.lido).length;
 
   return (
     <div className="space-y-4">
@@ -2948,21 +2962,30 @@ function NovasAcoesTab() {
             </button>
           )}
         </div>
-        <p className="text-xs text-slate-500 shrink-0">
+        <p className="text-xs text-slate-500 shrink-0 hidden sm:block">
           {acoes.length}
           {hasMore && !buscaNormalizada ? "+" : ""}{" "}
-          {acoes.length === 1 ? "nova ação" : "novas ações"}
-          {naoLidasAcumuladas ? ` (${naoLidasAcumuladas} não lidas)` : ""}
+          {acoes.length === 1 ? "card" : "cards"}
         </p>
-        <Button
-          size="sm"
-          variant={apenasNaoLidas ? "default" : "outline"}
-          className="h-8 rounded-lg"
-          onClick={() => setApenasNaoLidas(!apenasNaoLidas)}
-        >
-          <Bell className="h-3 w-3 mr-1" />
-          {apenasNaoLidas ? "Só não lidas" : "Filtrar não lidas"}
-        </Button>
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs shrink-0">
+          {([
+            ["pendentes", "Pendentes"],
+            ["resolvidas", "Resolvidas"],
+            ["todas", "Todas"],
+          ] as const).map(([val, label]) => (
+            <button
+              key={val}
+              type="button"
+              onClick={() => setFiltro(val)}
+              className={`px-2.5 py-1.5 rounded-md font-medium transition-colors inline-flex items-center gap-1 ${filtro === val ? "bg-indigo-600 text-white" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              {label}
+              {val === "pendentes" && (data?.totalNaoLidas ?? 0) > 0 && (
+                <span className={`px-1.5 rounded-full text-[10px] tabular-nums ${filtro === val ? "bg-white/25" : "bg-rose-100 text-rose-600"}`}>{data?.totalNaoLidas}</span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Mostra skeleton tambem em isFetching+lista vazia pra cobrir o gap
@@ -2974,9 +2997,17 @@ function NovasAcoesTab() {
         <Card>
           <CardContent className="flex flex-col items-center py-12 text-center">
             <Siren className="h-10 w-10 text-muted-foreground/30 mb-3" />
-            <p className="text-sm font-medium">Nenhuma nova ação detectada</p>
+            <p className="text-sm font-medium">
+              {filtro === "pendentes" ? "Nada pendente — tudo resolvido! 🎉"
+                : filtro === "resolvidas" ? "Nenhum card resolvido ainda"
+                : "Nenhuma nova ação detectada"}
+            </p>
             <p className="text-xs text-muted-foreground mt-1 max-w-md">
-              Quando houver novos processos contra seus clientes monitorados, eles aparecerão aqui.
+              {filtro === "pendentes"
+                ? "Novas ações contra seus clientes monitorados aparecem aqui pra você dar um desfecho."
+                : filtro === "resolvidas"
+                ? "Cards que você monitorar, marcar como ciente ou descartar aparecem aqui."
+                : "Quando houver novos processos contra seus clientes monitorados, eles aparecerão aqui."}
             </p>
           </CardContent>
         </Card>
@@ -2996,13 +3027,17 @@ function NovasAcoesTab() {
             const clienteNome = a.clienteApelido || a.clienteSearchKey || "Cliente";
             const seed = clienteNome + (a.id || "");
             const iniciais = gerarIniciais(clienteNome);
-            const corteBorda = !a.lido ? "border-l-rose-500" : "border-l-transparent";
+            const resolvido = a.resolucao && a.resolucao !== "pendente";
+            const rMeta = resolvido ? RESOLUCAO_META[a.resolucao as string] : null;
+            const corteBorda = resolvido
+              ? (rMeta?.borda ?? "border-l-slate-300")
+              : (!a.lido ? "border-l-rose-500" : "border-l-transparent");
             const tempoRel = tempoRelativoBR(a.dataDistribuicao || a.createdAt);
 
             return (
               <div
                 key={a.id}
-                className={`rounded-xl bg-white border border-slate-200 border-l-[3px] ${corteBorda} ${!a.lido ? "shadow-[0_2px_8px_-2px_rgb(244,63,94,0.15)] bg-gradient-to-r from-rose-50/30 to-white" : "shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]"} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all ${marcarLidaMut.isPending ? "pointer-events-none opacity-70" : ""}`}
+                className={`rounded-xl bg-white border border-slate-200 border-l-[3px] ${corteBorda} ${!a.lido ? "shadow-[0_2px_8px_-2px_rgb(244,63,94,0.15)] bg-gradient-to-r from-rose-50/30 to-white" : "shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]"} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all ${resolverMut.isPending ? "pointer-events-none opacity-70" : ""}`}
               >
                 <div className="px-4 py-3.5">
                   <div className="flex items-start gap-3">
@@ -3017,10 +3052,15 @@ function NovasAcoesTab() {
                         <p className="text-sm font-bold tracking-tight truncate" title={clienteNome}>
                           {clienteNome}
                         </p>
-                        {!a.lido && (
+                        {!resolvido && !a.lido && (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-bold uppercase tracking-wider animate-pulse">
                             <Siren className="h-2.5 w-2.5" />
                             Novo
+                          </span>
+                        )}
+                        {resolvido && rMeta && (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${rMeta.badge}`}>
+                            {rMeta.emoji} {rMeta.label}
                           </span>
                         )}
                         {a.clienteSearchType && a.clienteSearchKey && (
@@ -3029,6 +3069,13 @@ function NovasAcoesTab() {
                           </span>
                         )}
                       </div>
+                      {resolvido && (
+                        <p className="text-[10.5px] text-slate-500 mt-1">
+                          {rMeta?.verbo} por <b className="text-slate-700">{a.resolvidoPorNome || "—"}</b>
+                          {a.resolvidoEm && <> · {tempoRelativoBR(a.resolvidoEm)}</>}
+                          {a.resolucao === "monitorando" && <> · agora aparece em <b className="text-slate-700">Movimentações</b></>}
+                        </p>
+                      )}
 
                       {/* Detectado há X / em Y tribunal */}
                       <div className="flex items-center gap-2 text-[10.5px] text-slate-500 mt-1 flex-wrap">
@@ -3153,40 +3200,56 @@ function NovasAcoesTab() {
 
                     {/* Ações — empilhadas à direita */}
                     <div className="flex flex-col gap-1 shrink-0">
-                      <Button
-                        size="sm"
-                        className="h-7 text-[10.5px] rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-sm"
-                        title="Monitorar movimentações deste processo (2 cred/mês)"
-                        disabled={monitorarMut.isPending}
-                        onClick={() => handleMonitorarAcao(a)}
-                      >
-                        {monitorarMut.isPending && monitorarMut.variables?.numeroCnj === a.cnj
-                          ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                          : <Radar className="h-3 w-3 mr-1" />}
-                        Monitorar
-                      </Button>
-                      {!a.lido && (
+                      {resolvido ? (
                         <Button
                           size="sm"
-                          variant="ghost"
-                          className="h-7 text-[10.5px] rounded-lg text-slate-600 hover:bg-slate-100"
-                          onClick={() => marcarLidaMut.mutate({ id: a.id })}
+                          variant="outline"
+                          className="h-7 text-[10.5px] rounded-lg text-slate-600"
+                          title="Reabrir — volta pras Pendentes"
+                          disabled={reabrirMut.isPending}
+                          onClick={() => reabrirMut.mutate({ id: a.id })}
                         >
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Marcar lida
+                          <RefreshCcw className="h-3 w-3 mr-1" />
+                          Reabrir
                         </Button>
+                      ) : (
+                        <>
+                          <Button
+                            size="sm"
+                            className="h-7 text-[10.5px] rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-sm"
+                            title="Monitorar movimentações deste processo (2 cred/mês) — resolve o card"
+                            disabled={monitorarMut.isPending || resolverMut.isPending}
+                            onClick={() => handleMonitorarAcao(a)}
+                          >
+                            {monitorarMut.isPending && monitorarMut.variables?.numeroCnj === a.cnj
+                              ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              : <Radar className="h-3 w-3 mr-1" />}
+                            Monitorar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-[10.5px] rounded-lg text-slate-600 hover:bg-slate-100"
+                            title="Ciente — você viu, mas não precisa monitorar agora"
+                            disabled={resolverMut.isPending}
+                            onClick={() => resolverMut.mutate({ id: a.id, resolucao: "lida" })}
+                          >
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Ciente
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-[10.5px] rounded-lg text-rose-600 hover:bg-rose-50"
+                            title="Falso positivo (reversível — vai pras Resolvidas)"
+                            disabled={resolverMut.isPending}
+                            onClick={() => handleFalsoAcao(a.id)}
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Falso
+                          </Button>
+                        </>
                       )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 text-[10.5px] rounded-lg text-rose-600 hover:bg-rose-50"
-                        title="Marcar como falso positivo e remover"
-                        disabled={removerAcaoMut.isPending}
-                        onClick={() => handleRemoverAcao(a.id)}
-                      >
-                        <Trash2 className="h-3 w-3 mr-1" />
-                        Falso
-                      </Button>
                     </div>
                   </div>
                 </div>
