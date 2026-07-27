@@ -64,6 +64,14 @@ const TIPO_LABEL: Record<string, string> = {
   cnpj: "CNPJ",
 };
 
+// Selo de desfecho da movimentação (classificação IA).
+const DESFECHO_META: Record<string, { label: string; emoji: string; cls: string }> = {
+  favoravel: { label: "Favorável", emoji: "🟢", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  desfavoravel: { label: "Desfavorável", emoji: "🔴", cls: "bg-rose-50 text-rose-700 border-rose-200" },
+  parcial: { label: "Parcial", emoji: "🟡", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  neutro: { label: "Sem mérito", emoji: "⚪", cls: "bg-slate-100 text-slate-600 border-slate-200" },
+};
+
 export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) {
   const [, setLocation] = useLocation();
   const [criarPrazoOpen, setCriarPrazoOpen] = useState(false);
@@ -112,6 +120,33 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
           </div>
         ) : data ? (
           <div className="px-4 py-4 space-y-4">
+            {/* Classificação IA (desfecho / relevância / prazo) */}
+            {(data.desfecho || data.relevancia || (data as any).prazoSugerido) && (
+              <section className="flex items-center gap-1.5 flex-wrap">
+                {data.desfecho && DESFECHO_META[data.desfecho] && (
+                  <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${DESFECHO_META[data.desfecho].cls}`}>
+                    {DESFECHO_META[data.desfecho].emoji} {DESFECHO_META[data.desfecho].label}
+                  </span>
+                )}
+                {data.relevancia === "rotina" ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-slate-100 text-slate-500 border-slate-200">📄 Rotina</span>
+                ) : data.relevancia === "relevante" ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-violet-50 text-violet-700 border-violet-200">⭐ Relevante</span>
+                ) : null}
+                {(data as any).prazoSugerido && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-orange-100 text-orange-700 border-orange-300">⏰ Requer prazo</span>
+                )}
+              </section>
+            )}
+
+            {/* Resumo IA (quando gerado) */}
+            {data.resumoIa && (
+              <section className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Resumo (IA)</p>
+                <p className="text-sm font-medium leading-snug">{data.resumoIa}</p>
+              </section>
+            )}
+
             {/* Cliente monitorado */}
             <section className="space-y-1">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
@@ -241,6 +276,7 @@ interface DialogProps {
     searchKey: string | null;
     dataEvento: Date | string;
     conteudo: string;
+    prazoSugerido?: { titulo: string; dataSugerida: Date | string | null; prazoDias: number | null; prazoUteis: boolean } | null;
   };
   onSuccess: () => void;
 }
@@ -261,8 +297,20 @@ function tituloSugerido(evento: DialogProps["evento"]): string {
 }
 
 function CriarPrazoDialog({ open, onClose, evento, onSuccess }: DialogProps) {
-  const [titulo, setTitulo] = useState(tituloSugerido(evento));
-  const [dataLimite, setDataLimite] = useState(dataSugerida(evento.dataEvento));
+  // Se a IA detectou um prazo (prazos_sugeridos), pré-preenche com ele:
+  // título do prazo real + a data já calculada. Senão, cai no default (5 dias
+  // úteis após a movimentação).
+  const prazoSug = evento.prazoSugerido;
+  const [titulo, setTitulo] = useState(
+    prazoSug?.titulo
+      ? `${evento.apelido || evento.searchKey || "cliente"}: ${prazoSug.titulo}`
+      : tituloSugerido(evento),
+  );
+  const [dataLimite, setDataLimite] = useState(
+    prazoSug?.dataSugerida
+      ? format(new Date(prazoSug.dataSugerida), "yyyy-MM-dd")
+      : dataSugerida(evento.dataEvento),
+  );
   const [prioridade, setPrioridade] = useState<"baixa" | "normal" | "alta" | "critica">("normal");
 
   const criarMut = trpc.agendamento.criar.useMutation({

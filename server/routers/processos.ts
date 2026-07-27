@@ -29,6 +29,7 @@ import {
   adminIntegracoes,
   users,
   prazosSugeridos,
+  notificacoes,
 } from "../../drizzle/schema";
 import { decrypt as adminDecrypt } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -1540,6 +1541,7 @@ export const processosRouter = router({
       },
     ];
 
+    let primeiroEventoId: number | null = null;
     for (let i = 0; i < MOVS.length; i++) {
       const m = MOVS[i];
       const dataEvento = new Date(base - m.diasAtras * dia);
@@ -1559,6 +1561,7 @@ export const processosRouter = router({
         relevancia: m.relevancia,
       });
       const eventoId = (evRes as { insertId: number }).insertId;
+      if (primeiroEventoId == null) primeiroEventoId = eventoId;
       if (m.prazo) {
         await db.insert(prazosSugeridos).values({
           escritorioId,
@@ -1575,6 +1578,18 @@ export const processosRouter = router({
           status: "pendente",
         });
       }
+    }
+
+    // Notificação de teste apontando pra 1ª movimentação (favorável) — pro
+    // dono abrir o drawer pelo sino e ver os selos/resumo também lá.
+    if (primeiroEventoId != null) {
+      await db.insert(notificacoes).values({
+        userId: ctx.user.id,
+        titulo: "🧪 Nova movimentação: Processo de teste",
+        mensagem: "Sentença julgou procedente o pedido; condenou o réu a pagar R$ 15.000 de danos morais.",
+        tipo: "movimentacao",
+        eventoId: primeiroEventoId,
+      });
     }
 
     return { ok: true, monitoramentoId, total: MOVS.length };
