@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Resumo classificado das movimentações</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;background:#f5f7fa;color:#0f172a}
+  .tabnum{font-variant-numeric:tabular-nums}
+  .card{background:#fff;border:1px solid rgba(15,23,42,.06);border-radius:14px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 2px 6px rgba(15,23,42,.04)}
+  .chip{display:inline-flex;align-items:center;gap:.25rem;padding:.1rem .5rem;border-radius:9999px;font-size:11px;font-weight:600;border:1px solid}
+</style>
+</head>
+<body>
+<div class="max-w-3xl mx-auto px-5 py-8">
+
+  <header class="mb-5">
+    <div class="flex items-center gap-2 text-[13px] font-semibold text-indigo-600">
+      <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600 text-white text-[11px] font-bold">J.</span>
+      Processos · Resumo classificado das movimentações (para aprovar)
+    </div>
+    <h1 class="text-2xl font-bold mt-2 tracking-tight">Bater o olho e saber: <span class="text-indigo-600">tem prazo? é rotina? ganhamos?</span></h1>
+    <p class="text-slate-500 mt-1 text-[14px]">Hoje o resumo é 1 frase. A IA passa a devolver também <b>3 selos</b> — desfecho, relevância e prazo — pra o advogado priorizar em 3 segundos.</p>
+  </header>
+
+  <!-- legenda -->
+  <div class="card p-4 mb-5">
+    <p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2.5">Os 3 selos</p>
+    <div class="grid md:grid-cols-3 gap-3 text-[12.5px]">
+      <div>
+        <p class="font-bold text-slate-700 mb-1.5">1 · Desfecho <span class="text-slate-400 font-normal">(só em decisões)</span></p>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="chip bg-emerald-50 text-emerald-700 border-emerald-200">🟢 Favorável</span>
+          <span class="chip bg-rose-50 text-rose-700 border-rose-200">🔴 Desfavorável</span>
+          <span class="chip bg-amber-50 text-amber-700 border-amber-200">🟡 Parcial</span>
+          <span class="chip bg-slate-100 text-slate-600 border-slate-200">⚪ Sem mérito</span>
+        </div>
+      </div>
+      <div>
+        <p class="font-bold text-slate-700 mb-1.5">2 · Relevância</p>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="chip bg-violet-50 text-violet-700 border-violet-200">⭐ Relevante</span>
+          <span class="chip bg-slate-100 text-slate-500 border-slate-200">📄 Rotina</span>
+        </div>
+        <p class="text-slate-500 mt-1.5 text-[11.5px]">Rotina = conclusos, juntada, mero expediente. Fica discreto, não polui.</p>
+      </div>
+      <div>
+        <p class="font-bold text-slate-700 mb-1.5">3 · Prazo</p>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="chip bg-orange-100 text-orange-700 border-orange-300">⏰ Requer prazo</span>
+        </div>
+        <p class="text-slate-500 mt-1.5 text-[11.5px]">Puxa o <b>prazo sugerido</b> que o sistema já detecta → botão <b>Criar prazo</b> joga direto na Agenda.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- filtro rápido -->
+  <div class="flex items-center gap-2 mb-3 flex-wrap text-[12px]">
+    <span class="text-slate-400 font-semibold uppercase text-[10.5px] tracking-wide">Filtrar:</span>
+    <button class="chip bg-indigo-600 text-white border-indigo-600">Todas</button>
+    <button class="chip bg-white text-slate-600 border-slate-200">⏰ Só com prazo</button>
+    <button class="chip bg-white text-slate-600 border-slate-200">⭐ Só relevantes</button>
+    <button class="chip bg-white text-slate-600 border-slate-200">🔴 Só desfavoráveis</button>
+  </div>
+
+  <!-- lista de movimentações -->
+  <div class="space-y-2.5">
+
+    <!-- mov 1: sentença favorável COM prazo -->
+    <div class="card border-l-[3px] border-l-emerald-500 p-4">
+      <div class="flex items-start gap-3">
+        <div class="h-9 w-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 text-lg">⚖️</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap mb-1">
+            <span class="chip bg-emerald-50 text-emerald-700 border-emerald-200">🟢 Favorável</span>
+            <span class="chip bg-violet-50 text-violet-700 border-violet-200">⭐ Relevante</span>
+            <span class="chip bg-orange-100 text-orange-700 border-orange-300">⏰ Requer prazo</span>
+            <span class="text-[10.5px] text-slate-400 ml-auto tabnum">08/07 · TJCE · 1ª inst.</span>
+          </div>
+          <p class="text-[13.5px] text-slate-800 font-medium leading-snug">Sentença julgou <b>procedente</b> o pedido do autor; condenou o réu ao pagamento de danos morais.</p>
+          <div class="mt-2.5 rounded-lg bg-orange-50/70 border border-orange-200 p-2.5 flex items-center justify-between gap-2 flex-wrap">
+            <p class="text-[12px] text-orange-800">⏰ <b>Prazo detectado:</b> recurso de apelação — <b>15 dias úteis</b> · sugestão de vencimento <b>29/07</b></p>
+            <button class="chip bg-orange-600 text-white border-orange-600 px-3 py-1">＋ Criar prazo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- mov 2: rotina -->
+    <div class="card border-l-[3px] border-l-slate-200 p-4 opacity-95">
+      <div class="flex items-start gap-3">
+        <div class="h-9 w-9 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center shrink-0 text-lg">📄</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap mb-1">
+            <span class="chip bg-slate-100 text-slate-500 border-slate-200">📄 Rotina</span>
+            <span class="text-[10.5px] text-slate-400 ml-auto tabnum">06/07 · TJCE</span>
+          </div>
+          <p class="text-[13px] text-slate-600 leading-snug">Autos conclusos ao gabinete para decisão. Sem providência necessária.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- mov 3: desfavorável COM prazo -->
+    <div class="card border-l-[3px] border-l-rose-500 p-4">
+      <div class="flex items-start gap-3">
+        <div class="h-9 w-9 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 text-lg">⚖️</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap mb-1">
+            <span class="chip bg-rose-50 text-rose-700 border-rose-200">🔴 Desfavorável</span>
+            <span class="chip bg-violet-50 text-violet-700 border-violet-200">⭐ Relevante</span>
+            <span class="chip bg-orange-100 text-orange-700 border-orange-300">⏰ Requer prazo</span>
+            <span class="text-[10.5px] text-slate-400 ml-auto tabnum">04/07 · TJCE</span>
+          </div>
+          <p class="text-[13.5px] text-slate-800 font-medium leading-snug">Decisão <b>indeferiu</b> a tutela de urgência requerida pelo nosso cliente.</p>
+          <div class="mt-2.5 rounded-lg bg-orange-50/70 border border-orange-200 p-2.5 flex items-center justify-between gap-2 flex-wrap">
+            <p class="text-[12px] text-orange-800">⏰ <b>Prazo detectado:</b> agravo de instrumento — <b>15 dias úteis</b> · vencimento <b>25/07</b></p>
+            <button class="chip bg-orange-600 text-white border-orange-600 px-3 py-1">＋ Criar prazo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- mov 4: intimação (relevante, sem desfecho) -->
+    <div class="card border-l-[3px] border-l-indigo-400 p-4">
+      <div class="flex items-start gap-3">
+        <div class="h-9 w-9 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 text-lg">📨</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap mb-1">
+            <span class="chip bg-violet-50 text-violet-700 border-violet-200">⭐ Relevante</span>
+            <span class="chip bg-orange-100 text-orange-700 border-orange-300">⏰ Requer prazo</span>
+            <span class="text-[10.5px] text-slate-400 ml-auto tabnum">01/07 · TJCE</span>
+          </div>
+          <p class="text-[13.5px] text-slate-800 font-medium leading-snug">Intimação para o cliente se manifestar sobre os documentos juntados pela parte contrária.</p>
+          <div class="mt-2.5 rounded-lg bg-orange-50/70 border border-orange-200 p-2.5 flex items-center justify-between gap-2 flex-wrap">
+            <p class="text-[12px] text-orange-800">⏰ <b>Prazo detectado:</b> manifestação — <b>5 dias úteis</b> · vencimento <b>08/07</b></p>
+            <button class="chip bg-orange-600 text-white border-orange-600 px-3 py-1">＋ Criar prazo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- aprovação -->
+  <div class="card p-5 mt-8" style="border-color:rgba(79,70,229,.18)">
+    <h2 class="text-[15px] font-bold mb-2">✅ Para você aprovar / decidir</h2>
+    <ol class="list-decimal ml-5 text-[13.5px] text-slate-700 space-y-1.5">
+      <li>As <b>3 dimensões</b> (desfecho · relevância · prazo) atendem? Falta alguma (ex.: selo de <b>urgência</b> quando o prazo é curto)?</li>
+      <li><b>Favorável/desfavorável é sempre do ponto de vista do NOSSO cliente</b> — pra isso a IA precisa saber se somos autor ou réu. Uso as partes que já carregamos pra decidir o lado. Ok?</li>
+      <li>O botão <b>Criar prazo</b> aprova o <b>prazo sugerido</b> que o sistema já detecta e joga na <b>Agenda</b> (1 clique). Confirma?</li>
+      <li>Quer os <b>filtros rápidos</b> no topo (só com prazo / só relevantes / só desfavoráveis)?</li>
+      <li>Reprocessar as movimentações <b>já existentes</b> com a nova classificação, ou só valer pras novas daqui pra frente? <span class="text-slate-400">(reprocessar gasta tokens de IA)</span></li>
+    </ol>
+  </div>
+
+</div>
+</body>
+</html>
