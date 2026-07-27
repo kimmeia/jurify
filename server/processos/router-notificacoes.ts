@@ -18,7 +18,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { notificacoes, eventosProcesso, motorMonitoramentos } from "../../drizzle/schema";
+import { notificacoes, eventosProcesso, motorMonitoramentos, prazosSugeridos } from "../../drizzle/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 const log = createLogger("processos-router-notificacoes");
@@ -233,6 +233,9 @@ export const notificacoesRouter = router({
           dataEvento: eventosProcesso.dataEvento,
           conteudo: eventosProcesso.conteudo,
           conteudoJson: eventosProcesso.conteudoJson,
+          resumoIa: eventosProcesso.resumoIa,
+          desfecho: eventosProcesso.desfecho,
+          relevancia: eventosProcesso.relevancia,
           cnjAfetado: eventosProcesso.cnjAfetado,
           fonte: eventosProcesso.fonte,
           lido: eventosProcesso.lido,
@@ -265,6 +268,25 @@ export const notificacoesRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Evento não encontrado" });
       }
 
-      return row;
+      // Prazo sugerido PENDENTE deste evento (pro selo "⏰ requer prazo" +
+      // botão de aprovar direto no drawer). UNIQUE em evento_id → no máx. 1.
+      const [prazo] = await db
+        .select({
+          id: prazosSugeridos.id,
+          tipo: prazosSugeridos.tipo,
+          titulo: prazosSugeridos.titulo,
+          dataSugerida: prazosSugeridos.dataSugerida,
+          prazoDias: prazosSugeridos.prazoDias,
+          prazoUteis: prazosSugeridos.prazoUteis,
+        })
+        .from(prazosSugeridos)
+        .where(and(
+          eq(prazosSugeridos.eventoId, input.eventoId),
+          eq(prazosSugeridos.escritorioId, row.escritorioId),
+          eq(prazosSugeridos.status, "pendente"),
+        ))
+        .limit(1);
+
+      return { ...row, prazoSugerido: prazo ?? null };
     }),
 });
