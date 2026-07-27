@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   providerDoModelo,
   resumirMovimentacao,
+  parseClassificacao,
   MODELO_DEFAULT,
 } from "./resumir-movimentacao";
 
@@ -179,5 +180,41 @@ describe("resumirMovimentacao (graceful degradation)", () => {
     const body = JSON.parse(call[1].body);
     const userMsg = body.messages.find((m: any) => m.role === "user");
     expect(userMsg.content.length).toBeLessThanOrEqual(4000);
+  });
+});
+
+describe("parseClassificacao (JSON estruturado + fallback)", () => {
+  it("JSON válido → resumo + desfecho + relevancia", () => {
+    const r = parseClassificacao('{"resumo":"Sentença procedente","relevancia":"relevante","desfecho":"favoravel"}');
+    expect(r).toEqual({ resumo: "Sentença procedente", desfecho: "favoravel", relevancia: "relevante" });
+  });
+
+  it("tolera crases/markdown ao redor do JSON", () => {
+    const raw = "```json\n{\"resumo\":\"Conclusos\",\"relevancia\":\"rotina\",\"desfecho\":null}\n```";
+    const r = parseClassificacao(raw);
+    expect(r).toEqual({ resumo: "Conclusos", desfecho: null, relevancia: "rotina" });
+  });
+
+  it("desfecho inválido → null (não quebra)", () => {
+    const r = parseClassificacao('{"resumo":"X","relevancia":"relevante","desfecho":"ganhamos"}');
+    expect(r?.desfecho).toBeNull();
+  });
+
+  it("relevancia ausente/estranha → default 'relevante'", () => {
+    const r = parseClassificacao('{"resumo":"X"}');
+    expect(r?.relevancia).toBe("relevante");
+    expect(r?.desfecho).toBeNull();
+  });
+
+  it("resposta não-JSON → fallback usa o texto como resumo, sem selo", () => {
+    const r = parseClassificacao("Apenas texto solto sem json aqui");
+    expect(r?.resumo).toBe("Apenas texto solto sem json aqui");
+    expect(r?.desfecho).toBeNull();
+    expect(r?.relevancia).toBe("relevante");
+  });
+
+  it("vazio → null", () => {
+    expect(parseClassificacao("")).toBeNull();
+    expect(parseClassificacao("{}")).toBeNull();
   });
 });

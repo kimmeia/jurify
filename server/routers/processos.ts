@@ -28,9 +28,11 @@ import {
   eventosProcesso,
   adminIntegracoes,
   users,
+  prazosSugeridos,
 } from "../../drizzle/schema";
 import { decrypt as adminDecrypt } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
+import { ambienteSuportaTeste } from "../_core/ambiente";
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
 import { tribunalRequerCredencial } from "../processos/tribunais-pdpj";
@@ -1352,6 +1354,27 @@ export const processosRouter = router({
         .orderBy(desc(eventosProcesso.dataEvento))
         .limit(limite);
 
+      // Prazos sugeridos PENDENTES deste processo — casados por eventoId pro
+      // selo "⏰ requer prazo" + botão de aprovar direto na timeline.
+      const prazos = await db
+        .select({
+          id: prazosSugeridos.id,
+          eventoId: prazosSugeridos.eventoId,
+          tipo: prazosSugeridos.tipo,
+          titulo: prazosSugeridos.titulo,
+          dataSugerida: prazosSugeridos.dataSugerida,
+          prazoDias: prazosSugeridos.prazoDias,
+          prazoUteis: prazosSugeridos.prazoUteis,
+        })
+        .from(prazosSugeridos)
+        .where(and(
+          eq(prazosSugeridos.escritorioId, esc.escritorio.id),
+          eq(prazosSugeridos.cnjAfetado, mon.searchKey),
+          eq(prazosSugeridos.status, "pendente"),
+        ));
+      const prazoPorEvento = new Map<number, (typeof prazos)[number]>();
+      for (const p of prazos) if (p.eventoId != null) prazoPorEvento.set(p.eventoId, p);
+
       // Shape compat com frontend antigo (esperava resp Judit):
       // items[].responseType + items[].responseData. Mapeia eventos
       // pra esse formato. O frontend (Processos.tsx steps.map) lê
@@ -1377,7 +1400,15 @@ export const processosRouter = router({
       const items = eventos.map((e) => ({
         id: e.id,
         responseType: e.tipo === "movimentacao" ? "step" : e.tipo,
-        responseData: adaptarMov(e.conteudoJson ? safeParse(e.conteudoJson) : null, e.conteudo, e.dataEvento),
+        responseData: {
+          ...adaptarMov(e.conteudoJson ? safeParse(e.conteudoJson) : null, e.conteudo, e.dataEvento),
+          // Classificação IA + prazo — chegam como campos do `step` na timeline.
+          eventoId: e.id,
+          resumoIa: e.resumoIa ?? null,
+          desfecho: e.desfecho ?? null,
+          relevancia: e.relevancia ?? null,
+          prazoSugerido: prazoPorEvento.get(e.id) ?? null,
+        },
         createdAt: e.createdAt,
         lido: e.lido,
       }));
@@ -1425,6 +1456,129 @@ export const processosRouter = router({
 
       return { items, eventos, capa, partes: capa?.parties ?? [], totalNaoLidas: naoLidas };
     }),
+
+  /** Indica se este ambiente aceita dados de teste (staging/dev) — gate do
+   *  botão "gerar movimentações de teste" na UI. */
+  ambienteTeste: protectedProcedure.query(() => ({ ehTeste: ambienteSuportaTeste() })),
+
+  /**
+   * SEED de staging: cria (ou recria) um processo de teste com movimentações
+   * JÁ CLASSIFICADAS (desfecho/relevância/prazo) pro dono ver o resumo novo
+   * sem esperar o cron detectar algo real. Bloqueado em produção.
+   */
+  seedMovimentacoesTeste: protectedProcedure.mutation(async ({ ctx }) => {
+    if (!ambienteSuportaTeste()) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Seed de teste só em staging/dev." });
+    }
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+    const escritorioId = esc.escritorio.id;
+    const CNJ = "3068460-35.2026.8.06.0001";
+
+    // Idempotente: limpa seed anterior deste escritório antes de recriar.
+    await db.delete(prazosSugeridos).where(and(eq(prazosSugeridos.escritorioId, escritorioId), eq(prazosSugeridos.cnjAfetado, CNJ)));
+    await db.delete(eventosProcesso).where(and(eq(eventosProcesso.escritorioId, escritorioId), eq(eventosProcesso.cnjAfetado, CNJ)));
+    await db.delete(motorMonitoramentos).where(and(eq(motorMonitoramentos.escritorioId, escritorioId), eq(motorMonitoramentos.searchKey, CNJ)));
+
+    const [monRes] = await db.insert(motorMonitoramentos).values({
+      escritorioId,
+      criadoPor: ctx.user.id,
+      tipoMonitoramento: "movimentacoes",
+      searchType: "lawsuit_cnj",
+      searchKey: CNJ,
+      tribunal: "TJCE",
+      apelido: "🧪 Processo de teste (staging)",
+      status: "ativo",
+      totalAtualizacoes: 4,
+      ultimaMovimentacaoEm: new Date(),
+      ultimaMovimentacaoTexto: "Sentença julgou procedente o pedido do autor.",
+      capaJson: JSON.stringify({ classeProcesso: "Procedimento Comum Cível", tribunal: "TJCE", instance: 1 }),
+      partesJson: JSON.stringify([
+        { name: "Cliente de Teste Ltda", side: "Passive" },
+        { name: "Banco Exemplo S.A.", side: "Active" },
+      ]),
+    });
+    const monitoramentoId = (monRes as { insertId: number }).insertId;
+
+    const base = Date.now();
+    const dia = 86_400_000;
+    // Cada mov de teste: texto bruto + a classificação que a IA produziria.
+    const MOVS: Array<{
+      diasAtras: number; texto: string; resumo: string;
+      desfecho: "favoravel" | "desfavoravel" | "parcial" | "neutro" | null;
+      relevancia: "relevante" | "rotina";
+      prazo?: { titulo: string; dias: number; uteis: boolean; motivo: string };
+    }> = [
+      {
+        diasAtras: 1,
+        texto: "Sentença. Julgo PROCEDENTE o pedido formulado na inicial para condenar o réu ao pagamento de indenização por danos morais no valor de R$ 15.000,00, corrigidos monetariamente. Publique-se. Intimem-se.",
+        resumo: "Sentença julgou procedente o pedido; condenou o réu a pagar R$ 15.000 de danos morais.",
+        desfecho: "favoravel", relevancia: "relevante",
+        prazo: { titulo: "Recurso de apelação", dias: 15, uteis: true, motivo: "Sentença publicada — prazo para apelar." },
+      },
+      {
+        diasAtras: 3,
+        texto: "Decisão. INDEFIRO o pedido de tutela de urgência formulado pela parte autora, por ausência de probabilidade do direito. Cite-se.",
+        resumo: "Decisão indeferiu a tutela de urgência requerida pelo nosso cliente.",
+        desfecho: "desfavoravel", relevancia: "relevante",
+        prazo: { titulo: "Agravo de instrumento", dias: 15, uteis: true, motivo: "Decisão interlocutória agravável." },
+      },
+      {
+        diasAtras: 5,
+        texto: "Intimação da parte para, no prazo legal, manifestar-se sobre os documentos juntados pela parte contrária às fls. 210/245.",
+        resumo: "Intimação para o cliente se manifestar sobre documentos juntados pela parte contrária.",
+        desfecho: null, relevancia: "relevante",
+        prazo: { titulo: "Manifestação sobre documentos", dias: 5, uteis: true, motivo: "Intimação para manifestação." },
+      },
+      {
+        diasAtras: 8,
+        texto: "Certifico que os autos foram conclusos ao gabinete para decisão nesta data. Nada mais.",
+        resumo: "Autos conclusos ao gabinete para decisão. Sem providência necessária.",
+        desfecho: null, relevancia: "rotina",
+      },
+    ];
+
+    for (let i = 0; i < MOVS.length; i++) {
+      const m = MOVS[i];
+      const dataEvento = new Date(base - m.diasAtras * dia);
+      const [evRes] = await db.insert(eventosProcesso).values({
+        monitoramentoId,
+        escritorioId,
+        tipo: "movimentacao",
+        dataEvento,
+        fonte: "pje",
+        conteudo: m.texto,
+        conteudoJson: JSON.stringify({ data: dataEvento.toISOString(), texto: m.texto, tipo: "movimentacao" }),
+        cnjAfetado: CNJ,
+        hashDedup: `seed-${escritorioId}-${i}`,
+        lido: false,
+        resumoIa: m.resumo,
+        desfecho: m.desfecho,
+        relevancia: m.relevancia,
+      });
+      const eventoId = (evRes as { insertId: number }).insertId;
+      if (m.prazo) {
+        await db.insert(prazosSugeridos).values({
+          escritorioId,
+          eventoId,
+          monitoramentoId,
+          tipo: "prazo_processual",
+          titulo: m.prazo.titulo,
+          dataSugerida: new Date(base + m.prazo.dias * dia),
+          prazoDias: m.prazo.dias,
+          prazoUteis: m.prazo.uteis,
+          motivo: m.prazo.motivo,
+          trechoOrigem: m.texto.slice(0, 200),
+          cnjAfetado: CNJ,
+          status: "pendente",
+        });
+      }
+    }
+
+    return { ok: true, monitoramentoId, total: MOVS.length };
+  }),
 
   // Dispara consulta direta do processo associado a um monitoramento.
   // Cobra 1 cred. Útil quando o user clica "Histórico" no card pra

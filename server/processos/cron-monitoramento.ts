@@ -41,7 +41,7 @@ import {
 } from "./polo-matcher";
 import { extrairAnoCnj } from "./cnj-parser";
 import { hashEvento as hashEventoNorm } from "../../scripts/spike-motor-proprio/lib/parser-utils";
-import { resumirMovimentacao, modeloParaEscritorio } from "./resumir-movimentacao";
+import { classificarMovimentacao, modeloParaEscritorio } from "./resumir-movimentacao";
 
 /**
  * Idade máxima (em anos) que um CNJ pode ter pra ser considerado "novo"
@@ -504,18 +504,18 @@ export async function pollarUmMonitoramentoMovs(
         const modelo = await modeloParaEscritorio(mon.escritorioId);
         await Promise.all(
           movsParaNotif.map(async (m) => {
-            const resumo = await resumirMovimentacao(m.mov.texto, modelo);
-            m.resumoIa = resumo;
-            if (resumo) {
+            const cls = await classificarMovimentacao(m.mov.texto, modelo);
+            m.resumoIa = cls?.resumo ?? null;
+            if (cls) {
               try {
                 await db
                   .update(eventosProcesso)
-                  .set({ resumoIa: resumo })
+                  .set({ resumoIa: cls.resumo, desfecho: cls.desfecho, relevancia: cls.relevancia })
                   .where(eq(eventosProcesso.id, m.eventoId));
               } catch (errUpd) {
                 log.warn(
                   { eventoId: m.eventoId, err: errUpd instanceof Error ? errUpd.message : String(errUpd) },
-                  "[motor-cron] UPDATE resumo_ia falhou (segue sem)",
+                  "[motor-cron] UPDATE resumo/classificacao falhou (segue sem)",
                 );
               }
             }
