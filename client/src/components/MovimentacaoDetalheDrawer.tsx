@@ -51,6 +51,7 @@ import {
   CalendarClock,
   CheckSquare,
   Archive,
+  Sparkles,
 } from "lucide-react";
 
 interface Props {
@@ -77,10 +78,19 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
   const [criarPrazoOpen, setCriarPrazoOpen] = useState(false);
   const [criarTarefaOpen, setCriarTarefaOpen] = useState(false);
 
-  const { data, isLoading, error } = trpc.notificacoes.detalheEvento.useQuery(
+  const { data, isLoading, error, refetch } = trpc.notificacoes.detalheEvento.useQuery(
     { eventoId: eventoId ?? 0 },
     { enabled: eventoId !== null && eventoId > 0, retry: false },
   );
+
+  // Classifica a movimentação sob demanda (movs antigas não passaram pelo cron).
+  const classificarMut = (trpc as any).processos.classificarEvento.useMutation({
+    onSuccess: (r: any) => {
+      if (r?.ok) { toast.success("Movimentação classificada ✨"); refetch(); }
+      else toast.error("IA indisponível", { description: "Verifique a chave de IA nas configurações." });
+    },
+    onError: (e: any) => toast.error("Falha ao classificar", { description: e.message }),
+  });
 
   const open = eventoId !== null;
 
@@ -140,11 +150,22 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
             )}
 
             {/* Resumo IA (quando gerado) */}
-            {data.resumoIa && (
+            {data.resumoIa ? (
               <section className="space-y-1">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Resumo (IA)</p>
                 <p className="text-sm font-medium leading-snug">{data.resumoIa}</p>
               </section>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                disabled={classificarMut.isPending}
+                onClick={() => classificarMut.mutate({ eventoId: data.id })}
+              >
+                {classificarMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
+                Classificar com IA
+              </Button>
             )}
 
             {/* Cliente monitorado */}
