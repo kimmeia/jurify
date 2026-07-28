@@ -1614,7 +1614,7 @@ export const processosRouter = router({
       if (!ev || ev.escritorioId !== esc.escritorio.id) throw new TRPCError({ code: "NOT_FOUND", message: "Movimentação não encontrada" });
 
       const modelo = await modeloParaEscritorio(esc.escritorio.id);
-      const cls = await classificarMovimentacao(ev.conteudo, modelo);
+      const cls = await classificarMovimentacao(ev.conteudo, modelo, { escritorioId: esc.escritorio.id });
       if (!cls) return { ok: false as const };
       await db.update(eventosProcesso)
         .set({ resumoIa: cls.resumo, desfecho: cls.desfecho, relevancia: cls.relevancia })
@@ -1654,7 +1654,7 @@ export const processosRouter = router({
       const modelo = await modeloParaEscritorio(esc.escritorio.id);
       let classificados = 0;
       for (const e of eventos) {
-        const cls = await classificarMovimentacao(e.conteudo, modelo);
+        const cls = await classificarMovimentacao(e.conteudo, modelo, { escritorioId: esc.escritorio.id });
         if (cls) {
           await db.update(eventosProcesso)
             .set({ resumoIa: cls.resumo, desfecho: cls.desfecho, relevancia: cls.relevancia })

@@ -504,7 +504,7 @@ export async function pollarUmMonitoramentoMovs(
         const modelo = await modeloParaEscritorio(mon.escritorioId);
         await Promise.all(
           movsParaNotif.map(async (m) => {
-            const cls = await classificarMovimentacao(m.mov.texto, modelo);
+            const cls = await classificarMovimentacao(m.mov.texto, modelo, { escritorioId: mon.escritorioId });
             m.resumoIa = cls?.resumo ?? null;
             if (cls) {
               try {
