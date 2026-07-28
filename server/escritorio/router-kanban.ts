@@ -597,6 +597,21 @@ export const kanbanRouter = router({
         if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode excluir seus próprios cards." });
       }
 
+      // Confirma que o card é DESTE escritório antes de tocar em qualquer coisa
+      // (evita apagar satélites de um card fora do tenant).
+      const [alvo] = await db
+        .select({ id: kanbanCards.id })
+        .from(kanbanCards)
+        .where(and(eq(kanbanCards.id, input.id), eq(kanbanCards.escritorioId, perm.escritorioId)))
+        .limit(1);
+      if (!alvo) throw new TRPCError({ code: "NOT_FOUND", message: "Card não encontrado." });
+
+      // Exclusão é a MESMA row usada pelo quadro e pelo cadastro do cliente
+      // (kanban_cards.clienteId), então apagar aqui remove nos dois lugares.
+      // Limpa os satélites antes (sem FK no schema → evita órfãos).
+      await db.delete(kanbanMovimentacoes).where(eq(kanbanMovimentacoes.cardId, input.id));
+      await db.delete(kanbanResponsavelLog).where(eq(kanbanResponsavelLog.cardId, input.id));
+      await db.delete(kanbanComentarios).where(eq(kanbanComentarios.cardId, input.id));
       await db.delete(kanbanCards)
         .where(and(eq(kanbanCards.id, input.id), eq(kanbanCards.escritorioId, perm.escritorioId)));
       return { success: true };
@@ -1122,6 +1137,9 @@ export const kanbanRouter = router({
       const conditions: any[] = [
         eq(kanbanCards.escritorioId, perm.escritorioId),
         eq(kanbanCards.clienteId, input.clienteId),
+        // Card arquivado no quadro NÃO deve aparecer no cadastro do cliente —
+        // consistência com obterFunil (que também esconde arquivados).
+        eq(kanbanCards.arquivado, false),
       ];
       if (!perm.verTodos && perm.verProprios) {
         conditions.push(eq(kanbanCards.responsavelId, perm.colaboradorId));

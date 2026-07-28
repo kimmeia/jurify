@@ -3,7 +3,7 @@
  * Funis customizáveis com colunas e cards arrastáveis.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +90,20 @@ export default function Kanban() {
   const [dragOverCardId, setDragOverCardId] = useState<number | null>(null);
 
   const { data: funis, refetch: refetchFunis } = (trpc as any).kanban.listarFunis.useQuery();
+
+  // Deep-link vindo do cadastro do cliente: /kanban?funil=3&card=2331 abre o
+  // funil certo E o drawer do card direto (em vez de cair na visão geral).
+  // Roda 1x no mount e LIMPA a URL — assim um refresh não reabre o card.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const funil = Number(sp.get("funil"));
+    const card = Number(sp.get("card"));
+    if (Number.isFinite(funil) && funil > 0) setFunilAtivo(funil);
+    if (Number.isFinite(card) && card > 0) setCardAberto(card);
+    if (sp.has("funil") || sp.has("card")) window.history.replaceState({}, "", "/kanban");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [filtros, setFiltros] = useState<FiltrosKanban>(FILTROS_VAZIOS);
   const { data: funilData, refetch: refetchFunil } = (trpc as any).kanban.obterFunil.useQuery(
     { funilId: funilAtivo!, ...filtros, mostrarArquivados },
@@ -115,15 +129,26 @@ export default function Kanban() {
 
   // Detalhe card — polling 10s pra ver edições/comentários/movimentações
   // feitas por outros usuários enquanto o modal está aberto.
-  const { data: cardDetalhe, refetch: refetchDetalhe } = (trpc as any).kanban.detalheCard.useQuery(
+  const { data: cardDetalhe, refetch: refetchDetalhe, error: cardDetalheErro } = (trpc as any).kanban.detalheCard.useQuery(
     { id: cardAberto! },
     {
       enabled: !!cardAberto,
+      retry: false,
       // Pausa polling durante drag pra evitar race com reconciliador React.
       refetchInterval: dragCardId || dragColunaId ? false : 10_000,
       refetchOnWindowFocus: !dragCardId && !dragColunaId,
     },
   );
+
+  // Card do deep-link não existe mais (excluído): avisa e fecha o drawer em vez
+  // de deixar o painel vazio/carregando pra sempre.
+  useEffect(() => {
+    if (cardAberto && (cardDetalheErro as any)?.data?.code === "NOT_FOUND") {
+      toast.error("Card não encontrado", { description: "Ele pode ter sido excluído." });
+      setCardAberto(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardDetalheErro, cardAberto]);
 
   const criarFunilMut = (trpc as any).kanban.criarFunil.useMutation({
     onSuccess: (d: any) => { toast.success("Funil criado!"); setNovoFunilOpen(false); setNovoFunilNome(""); refetchFunis(); setFunilAtivo(d.id); },

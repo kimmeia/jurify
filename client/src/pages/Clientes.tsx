@@ -1272,6 +1272,19 @@ function KanbanClienteTab({ contatoId }: { contatoId: number }) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Excluir card = MESMA row do quadro (kanban_cards) → some nos dois lugares.
+  const { data: perms } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(undefined, { retry: false }) ?? { data: undefined };
+  const podeExcluirCard = perms?.cargo === "Dono" || !!perms?.permissoes?.kanban?.excluir;
+  const [excluirAlvo, setExcluirAlvo] = useState<{ id: number; titulo: string } | null>(null);
+  const excluirCardMut = (trpc as any).kanban.deletarCard.useMutation({
+    onSuccess: () => {
+      toast.success("Card excluído do Kanban e do cadastro");
+      setExcluirAlvo(null);
+      refetch();
+    },
+    onError: (e: any) => toast.error("Falha ao excluir card", { description: e.message }),
+  });
+
   const cards: any[] = data?.cards || [];
   const colunas: any[] = funilDetalhe?.colunas || [];
 
@@ -1311,14 +1324,27 @@ function KanbanClienteTab({ contatoId }: { contatoId: number }) {
                     </p>
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setLocation(`/kanban?card=${c.id}&funil=${c.funilId}`)}
-                  title="Abrir no Kanban"
-                >
-                  Abrir
-                </Button>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setLocation(`/kanban?card=${c.id}&funil=${c.funilId}`)}
+                    title="Abrir no Kanban"
+                  >
+                    Abrir
+                  </Button>
+                  {podeExcluirCard && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setExcluirAlvo({ id: c.id, titulo: c.titulo })}
+                      title="Excluir card (remove do Kanban também)"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -1388,6 +1414,31 @@ function KanbanClienteTab({ contatoId }: { contatoId: number }) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Confirmação de exclusão — hard delete da MESMA row do quadro. */}
+        <AlertDialog open={!!excluirAlvo} onOpenChange={(o) => !o && setExcluirAlvo(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir card do Kanban?</AlertDialogTitle>
+              <AlertDialogDescription>
+                O card <strong>{excluirAlvo?.titulo}</strong> será removido do
+                Kanban <strong>e</strong> deste cadastro do cliente. Esta ação
+                não pode ser desfeita. (Para só tirar do quadro sem apagar, use
+                <em> Arquivar</em> no card dentro do Kanban.)
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={excluirCardMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => excluirAlvo && excluirCardMut.mutate({ id: excluirAlvo.id })}
+                disabled={excluirCardMut.isPending}
+              >
+                {excluirCardMut.isPending ? "Excluindo..." : "Excluir definitivamente"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
