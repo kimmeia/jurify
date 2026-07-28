@@ -31,9 +31,9 @@ const diffs = [
   {
     icon: FileSearch,
     titulo: "Motor próprio de processos",
-    desc: "Monitora processos por CPF/CNPJ direto nos tribunais, com análise estratégica por IA e mensagem pronta pro cliente.",
+    desc: "Monitora processos e novas ações por CPF/CNPJ com motor próprio, análise estratégica por IA e mensagem pronta pro cliente.",
     bullets: [
-      "Alertas de movimentação por palavra-chave",
+      "Alerta de movimentação nova com resumo por IA",
       "Cofre de credenciais OAB (segredo de justiça)",
       "Roadmap público: você vota nas próximas features",
     ],
