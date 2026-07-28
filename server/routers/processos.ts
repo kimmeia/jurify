@@ -16,7 +16,7 @@
  */
 
 import { z } from "zod";
-import { eq, desc, and, or, ne, sql } from "drizzle-orm";
+import { eq, desc, and, or, ne, sql, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -34,6 +34,7 @@ import {
 import { decrypt as adminDecrypt } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { ambienteSuportaTeste } from "../_core/ambiente";
+import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resumir-movimentacao";
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
 import { tribunalRequerCredencial } from "../processos/tribunais-pdpj";
@@ -1594,6 +1595,75 @@ export const processosRouter = router({
 
     return { ok: true, monitoramentoId, total: MOVS.length };
   }),
+
+  /** Classifica UMA movimentação já detectada (resumo + desfecho + relevância)
+   *  sob demanda e persiste — pro dono reprocessar movs antigas (sem esperar o
+   *  cron) direto do drawer. Retorna ok:false quando a IA está indisponível. */
+  classificarEvento: protectedProcedure
+    .input(z.object({ eventoId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+      const [ev] = await db
+        .select({ id: eventosProcesso.id, conteudo: eventosProcesso.conteudo, escritorioId: eventosProcesso.escritorioId })
+        .from(eventosProcesso)
+        .where(eq(eventosProcesso.id, input.eventoId))
+        .limit(1);
+      if (!ev || ev.escritorioId !== esc.escritorio.id) throw new TRPCError({ code: "NOT_FOUND", message: "Movimentação não encontrada" });
+
+      const modelo = await modeloParaEscritorio(esc.escritorio.id);
+      const cls = await classificarMovimentacao(ev.conteudo, modelo, { escritorioId: esc.escritorio.id });
+      if (!cls) return { ok: false as const };
+      await db.update(eventosProcesso)
+        .set({ resumoIa: cls.resumo, desfecho: cls.desfecho, relevancia: cls.relevancia })
+        .where(eq(eventosProcesso.id, ev.id));
+      return { ok: true as const, ...cls };
+    }),
+
+  /** Classifica em lote as movimentações recentes AINDA sem classificação de um
+   *  monitoramento (bounded pra não estourar custo/tempo). classificados=0 com
+   *  tentados>0 sinaliza IA indisponível (chave não configurada). */
+  reclassificarMovimentacoes: protectedProcedure
+    .input(z.object({ monitoramentoId: z.number().int().positive(), limite: z.number().int().min(1).max(30).default(15) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+      const [mon] = await db
+        .select({ searchKey: motorMonitoramentos.searchKey })
+        .from(motorMonitoramentos)
+        .where(and(eq(motorMonitoramentos.id, input.monitoramentoId), eq(motorMonitoramentos.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!mon) throw new TRPCError({ code: "NOT_FOUND", message: "Monitoramento não encontrado" });
+
+      const eventos = await db
+        .select({ id: eventosProcesso.id, conteudo: eventosProcesso.conteudo })
+        .from(eventosProcesso)
+        .where(and(
+          eq(eventosProcesso.escritorioId, esc.escritorio.id),
+          eq(eventosProcesso.cnjAfetado, mon.searchKey),
+          eq(eventosProcesso.tipo, "movimentacao"),
+          isNull(eventosProcesso.resumoIa),
+        ))
+        .orderBy(desc(eventosProcesso.dataEvento))
+        .limit(input.limite);
+
+      const modelo = await modeloParaEscritorio(esc.escritorio.id);
+      let classificados = 0;
+      for (const e of eventos) {
+        const cls = await classificarMovimentacao(e.conteudo, modelo, { escritorioId: esc.escritorio.id });
+        if (cls) {
+          await db.update(eventosProcesso)
+            .set({ resumoIa: cls.resumo, desfecho: cls.desfecho, relevancia: cls.relevancia })
+            .where(eq(eventosProcesso.id, e.id));
+          classificados++;
+        }
+      }
+      return { classificados, tentados: eventos.length };
+    }),
 
   // Dispara consulta direta do processo associado a um monitoramento.
   // Cobra 1 cred. Útil quando o user clica "Histórico" no card pra

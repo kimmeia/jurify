@@ -1,9 +1,22 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+// A chave de IA agora vem do resolver compartilhado (admin_integracoes /
+// escritório), não de process.env. Mockamos o resolver pra controlar
+// provider+chave nos testes sem tocar em DB nem env.
+const { resolverChaveIAEscritorioMock } = vi.hoisted(() => ({
+  resolverChaveIAEscritorioMock: vi.fn(),
+}));
+
+vi.mock("../_core/ai-call", () => ({
+  resolverChaveIAEscritorio: resolverChaveIAEscritorioMock,
+}));
+
 import {
   providerDoModelo,
   resumirMovimentacao,
   parseClassificacao,
   MODELO_DEFAULT,
+  MODELO_DEFAULT_ANTHROPIC,
 } from "./resumir-movimentacao";
 
 describe("providerDoModelo (dispatch por prefixo)", () => {
@@ -39,19 +52,23 @@ describe("MODELO_DEFAULT", () => {
   it("default é GPT-4o-mini (escolha mais barata do user)", () => {
     expect(MODELO_DEFAULT).toBe("gpt-4o-mini");
   });
+  it("default Anthropic é Haiku (barato pra alto volume)", () => {
+    expect(MODELO_DEFAULT_ANTHROPIC).toBe("claude-haiku-4-5-20251001");
+  });
 });
 
 describe("resumirMovimentacao (graceful degradation)", () => {
   const realFetch = global.fetch;
-  const realOpenAIKey = process.env.OPENAI_API_KEY;
-  const realAnthropicKey = process.env.ANTHROPIC_API_KEY;
+
+  beforeEach(() => {
+    resolverChaveIAEscritorioMock.mockReset();
+    // Default: chave OpenAI disponível. Testes que precisam de outra fonte
+    // (ou de nenhuma) sobrescrevem.
+    resolverChaveIAEscritorioMock.mockResolvedValue({ apiKey: "sk-test", provider: "openai" });
+  });
 
   afterEach(() => {
     global.fetch = realFetch;
-    if (realOpenAIKey === undefined) delete process.env.OPENAI_API_KEY;
-    else process.env.OPENAI_API_KEY = realOpenAIKey;
-    if (realAnthropicKey === undefined) delete process.env.ANTHROPIC_API_KEY;
-    else process.env.ANTHROPIC_API_KEY = realAnthropicKey;
   });
 
   it("texto curto demais → null (não gasta token)", async () => {
@@ -64,14 +81,8 @@ describe("resumirMovimentacao (graceful degradation)", () => {
     expect(await resumirMovimentacao("   ", "gpt-4o-mini")).toBeNull();
   });
 
-  it("modelo desconhecido → null (não quebra cron)", async () => {
-    const texto = "Despacho judicial expedido em " + "x".repeat(200);
-    const r = await resumirMovimentacao(texto, "llama-3");
-    expect(r).toBeNull();
-  });
-
-  it("OPENAI_API_KEY ausente → null (silent fallback)", async () => {
-    delete process.env.OPENAI_API_KEY;
+  it("sem chave de IA configurada → null (silent fallback)", async () => {
+    resolverChaveIAEscritorioMock.mockResolvedValue(null);
     const texto =
       "Despacho dos autos: defiro o pedido de tutela antecipada formulado pela parte autora, " +
       "determinando a suspensão da exigibilidade do crédito tributário até decisão final.";
@@ -79,17 +90,8 @@ describe("resumirMovimentacao (graceful degradation)", () => {
     expect(r).toBeNull();
   });
 
-  it("ANTHROPIC_API_KEY ausente → null (silent fallback)", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
-    const texto =
-      "Despacho dos autos: defiro o pedido de tutela antecipada formulado pela parte autora, " +
-      "determinando a suspensão da exigibilidade do crédito tributário até decisão final.";
-    const r = await resumirMovimentacao(texto, "claude-haiku-4-5-20251001");
-    expect(r).toBeNull();
-  });
-
   it("OpenAI 200 OK → retorna conteúdo trimmed", async () => {
-    process.env.OPENAI_API_KEY = "sk-test";
+    resolverChaveIAEscritorioMock.mockResolvedValue({ apiKey: "sk-test", provider: "openai" });
     global.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -109,7 +111,7 @@ describe("resumirMovimentacao (graceful degradation)", () => {
   });
 
   it("Anthropic 200 OK → retorna conteúdo trimmed", async () => {
-    process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+    resolverChaveIAEscritorioMock.mockResolvedValue({ apiKey: "sk-ant-test", provider: "anthropic" });
     global.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: async () => ({ content: [{ text: "  Sentença procedente.  " }] }),
@@ -127,8 +129,25 @@ describe("resumirMovimentacao (graceful degradation)", () => {
     expect(body.model).toBe("claude-haiku-4-5-20251001");
   });
 
+  it("chave disponível não serve o modelo configurado → usa default do provider", async () => {
+    // Escritório configurou modelo gpt-* mas só há chave Claude → a chave manda:
+    // cai no default Anthropic em vez de falhar em silêncio.
+    resolverChaveIAEscritorioMock.mockResolvedValue({ apiKey: "sk-ant-test", provider: "anthropic" });
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ content: [{ text: "resumo" }] }),
+    } as any);
+    const texto =
+      "Despacho dos autos: defiro o pedido de tutela antecipada formulado pela parte autora, " +
+      "determinando a suspensão da exigibilidade do crédito tributário.";
+    await resumirMovimentacao(texto, "gpt-4o-mini");
+    const call = (global.fetch as any).mock.calls[0];
+    expect(call[0]).toBe("https://api.anthropic.com/v1/messages");
+    const body = JSON.parse(call[1].body);
+    expect(body.model).toBe(MODELO_DEFAULT_ANTHROPIC);
+  });
+
   it("OpenAI HTTP 500 → null (não propaga erro)", async () => {
-    process.env.OPENAI_API_KEY = "sk-test";
     global.fetch = vi.fn().mockResolvedValueOnce({
       ok: false,
       status: 500,
@@ -140,7 +159,6 @@ describe("resumirMovimentacao (graceful degradation)", () => {
   });
 
   it("fetch lança exceção genérica → null (silent)", async () => {
-    process.env.OPENAI_API_KEY = "sk-test";
     global.fetch = vi.fn().mockRejectedValueOnce(new Error("network down"));
     const texto = "Despacho dos autos: defiro o pedido de tutela antecipada formulado pela parte autora.";
     const r = await resumirMovimentacao(texto, "gpt-4o-mini");
@@ -148,7 +166,6 @@ describe("resumirMovimentacao (graceful degradation)", () => {
   });
 
   it("AbortError (timeout) → null", async () => {
-    process.env.OPENAI_API_KEY = "sk-test";
     const abortErr: any = new Error("aborted");
     abortErr.name = "AbortError";
     global.fetch = vi.fn().mockRejectedValueOnce(abortErr);
@@ -158,7 +175,6 @@ describe("resumirMovimentacao (graceful degradation)", () => {
   });
 
   it("resposta com choices vazio → null", async () => {
-    process.env.OPENAI_API_KEY = "sk-test";
     global.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: async () => ({ choices: [] }),
@@ -169,7 +185,6 @@ describe("resumirMovimentacao (graceful degradation)", () => {
   });
 
   it("trunca input >4000 chars antes de mandar (não gasta token à toa)", async () => {
-    process.env.OPENAI_API_KEY = "sk-test";
     global.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: async () => ({ choices: [{ message: { content: "resumo" } }] }),
