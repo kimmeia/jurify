@@ -197,7 +197,7 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
               este cliente — antes mesmo da citação chegar.
               <br />
               <br />
-              <span className="text-foreground font-medium">Cobrança: 35 créditos/mês</span>
+              <span className="text-foreground font-medium">Cobrança: 15 créditos/mês</span>
               {" "}— renovada automaticamente, podendo ser cancelada a qualquer momento.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -2361,7 +2361,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                   <p className="text-xs font-medium">Quero monitorar este processo</p>
                   <p className="text-[10px] text-muted-foreground">
                     Após vincular, abriremos a tela de monitoramento (módulo Processos) com este CNJ
-                    pré-preenchido pra você escolher a credencial e confirmar (5 créditos/mês).
+                    pré-preenchido pra você escolher a credencial e confirmar (2 créditos/mês).
                   </p>
                 </div>
               </label>

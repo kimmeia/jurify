@@ -8,8 +8,8 @@
  *   if (!pode.permitido) throw new Error(pode.mensagem);
  */
 
-import { getDb } from "../db";
-import { contatos, conversas, colaboradores, escritorios, subscriptions, users, clienteArquivos } from "../../drizzle/schema";
+import { getDb, getActiveSubscription } from "../db";
+import { contatos, conversas, colaboradores, escritorios, users, clienteArquivos } from "../../drizzle/schema";
 import { eq, and, or, sql } from "drizzle-orm";
 
 // ─── Definição de limites por plano ─────────────────────────────────────────
@@ -121,39 +121,24 @@ export async function verificarLimite(
 
   if (!esc) return { permitido: false, atual: 0, maximo: 0, mensagem: "Escritório não encontrado", planId: "free" };
 
-  // Buscar subscription ativa do dono. Inclui cortesia (status pode ser
-  // 'canceled' mas `cortesia=true` libera acesso sem limite).
-  const [sub] = await db.select({
-    planId: subscriptions.planId,
-    status: subscriptions.status,
-    cortesia: subscriptions.cortesia,
-    cortesiaExpiraEm: subscriptions.cortesiaExpiraEm,
-  })
-    .from(subscriptions)
-    .where(and(
-      eq(subscriptions.userId, esc.ownerId),
-      or(
-        eq(subscriptions.status, "active"),
-        eq(subscriptions.cortesia, true),
-      ),
-    ))
-    .limit(1);
+  // Sub com acesso ativo do dono via regra canônica (getActiveSubscription/
+  // temAcessoAtivo): cortesia válida OU status='active' OU 'trialing' dentro
+  // do prazo. A query local anterior só casava status='active'/cortesia —
+  // trial caía nos limites do free (10 clientes, 0 agentes IA) mesmo com o
+  // módulo liberado pelo requireModulo, que já usava a regra canônica.
+  const sub = await getActiveSubscription(esc.ownerId);
 
   // CORTESIA: libera sem limite (alinha com painel admin que mostra
-  // "Cortesia ativa"). Antes a query filtrava só `status='active'`,
-  // ignorando cortesia → caía no plano "free" com maxClientes=10.
+  // "Cortesia ativa"). Expiração já validada por getActiveSubscription.
   // Convenção: `maximo: -1` é "ilimitado" (Infinity vira null em JSON).
   if (sub?.cortesia) {
-    const expirou = sub.cortesiaExpiraEm != null && sub.cortesiaExpiraEm < Date.now();
-    if (!expirou) {
-      return {
-        permitido: true,
-        atual: 0,
-        maximo: -1,
-        mensagem: "Cortesia ativa — sem limite",
-        planId: sub.planId || "cortesia",
-      };
-    }
+    return {
+      permitido: true,
+      atual: 0,
+      maximo: -1,
+      mensagem: "Cortesia ativa — sem limite",
+      planId: sub.planId || "cortesia",
+    };
   }
 
   const planId = sub?.planId || "free";
@@ -229,10 +214,10 @@ export async function moduloDisponivel(escritorioId: number, modulo: string): Pr
 
   if (!esc) return false;
 
-  const [sub] = await db.select({ planId: subscriptions.planId })
-    .from(subscriptions)
-    .where(and(eq(subscriptions.userId, esc.ownerId), eq(subscriptions.status, "active")))
-    .limit(1);
+  // Mesma regra canônica de verificarLimite (inclui trialing); cortesia
+  // libera todos os módulos, alinhado com requireModulo.
+  const sub = await getActiveSubscription(esc.ownerId);
+  if (sub?.cortesia) return true;
 
   const planId = sub?.planId || "free";
   const limites = getLimites(planId);

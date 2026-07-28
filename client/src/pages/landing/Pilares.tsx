@@ -61,7 +61,7 @@ export function Pilares() {
         <BentoCell icon={DollarSign} titulo="Financeiro + Asaas" desc="Pix, boleto e cartão. Recorrência e fluxo de caixa." />
         <BentoCell icon={TrendingUp} titulo="Comissões" desc="Fechou? Calcula a comissão e lança a despesa." />
         <BentoCell icon={FileText} titulo="Modelos de contrato" desc="DOCX com placeholders que viram campos." />
-        <BentoCell icon={Calculator} titulo="Cálculos jurídicos" desc="Bancário, trabalhista, tributário. Resultado em PDF." />
+        <BentoCell icon={Calculator} titulo="Cálculos jurídicos" desc="Bancário, trabalhista, previdenciário. Parecer em PDF." />
 
         {/* Wide cell */}
         <motion.div
@@ -73,8 +73,8 @@ export function Pilares() {
           </div>
           <h3 className="font-bold text-white">Processos &amp; Kanban — motor próprio</h3>
           <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-violet-100/65">
-            Monitoramento por CPF/CNPJ direto nos tribunais, alertas de movimentação por
-            palavra-chave e prazos no Kanban.
+            Alerta de cada movimentação nova com resumo por IA, detector de prazos e
+            audiências que vira sugestão na agenda, e funil de processos no Kanban.
           </p>
         </motion.div>
       </motion.div>
