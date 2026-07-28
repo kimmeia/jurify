@@ -988,6 +988,21 @@ function MonitoramentoCard({
     onError: (e: any) => toast.error("Falha ao criar prazo", { description: e.message }),
   });
 
+  // Classifica em lote as movimentações antigas (sem selo) deste processo.
+  const reclassificarMut = (trpc as any).processos.reclassificarMovimentacoes.useMutation({
+    onSuccess: (r: any) => {
+      if (r?.tentados > 0 && r?.classificados === 0) {
+        toast.error("IA indisponível", { description: "Verifique a chave de IA nas configurações." });
+      } else if (r?.classificados > 0) {
+        toast.success(`${r.classificados} movimentação(ões) classificada(s) ✨`);
+        refetchHist();
+      } else {
+        toast.info("Todas as movimentações já estavam classificadas");
+      }
+    },
+    onError: (e: any) => toast.error("Falha ao classificar", { description: e.message }),
+  });
+
   // Extrai dados do processo com fallback em cascata pras steps —
   // diferentes fontes preenchem em momentos diferentes:
   //
@@ -1358,9 +1373,22 @@ function MonitoramentoCard({
                 {/* Timeline de movimentações */}
                 {steps.length > 0 ? (
                   <div>
-                    <p className="text-[10px] font-semibold text-muted-foreground mb-2">
-                      MOVIMENTAÇÕES ({steps.length})
-                    </p>
+                    <div className="flex items-center justify-between mb-2 gap-2">
+                      <p className="text-[10px] font-semibold text-muted-foreground">
+                        MOVIMENTAÇÕES ({steps.length})
+                      </p>
+                      {steps.some((s: any) => s.eventoId && !s.resumoIa) && (
+                        <button
+                          className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 inline-flex items-center gap-1 disabled:opacity-60"
+                          disabled={reclassificarMut.isPending}
+                          onClick={() => reclassificarMut.mutate({ monitoramentoId: mon.id })}
+                          title="Gera resumo + selos (desfecho/relevância) das movimentações que ainda não têm."
+                        >
+                          {reclassificarMut.isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Sparkles className="h-2.5 w-2.5" />}
+                          Classificar com IA
+                        </button>
+                      )}
+                    </div>
                     <div className="relative space-y-3 max-h-96 overflow-y-auto pl-4">
                       <div className="absolute left-1 top-1 bottom-1 w-px bg-indigo-200 dark:bg-indigo-900" />
                       {steps.map((s: any, i: number) => {

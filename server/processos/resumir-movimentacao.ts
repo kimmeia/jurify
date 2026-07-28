@@ -22,11 +22,16 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { escritorios } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
+import { resolverChaveIAEscritorio, type AIProvider } from "../_core/ai-call";
 
 const log = createLogger("resumir-movimentacao");
 
 /** Modelo default quando o escritório não configurou um. */
 export const MODELO_DEFAULT = "gpt-4o-mini";
+
+/** Default Anthropic quando a chave disponível é Claude mas o modelo
+ *  configurado é de outro provider (Haiku: barato pra tarefa de alto volume). */
+export const MODELO_DEFAULT_ANTHROPIC = "claude-haiku-4-5-20251001";
 
 /** Timeout do request — não pode bloquear o cron de monitoramento. */
 const TIMEOUT_MS = 8000;
@@ -79,22 +84,49 @@ export async function modeloParaEscritorio(escritorioId: number): Promise<string
   }
 }
 
-/** Dispatcher genérico por provider — retorna o texto da resposta ou null. */
-async function chamarProvider(system: string, user: string, modelo: string, maxTokens: number): Promise<string | null> {
-  const provider = providerDoModelo(modelo);
-  if (provider === "openai") return chamarOpenAI(system, user, modelo, maxTokens);
-  if (provider === "anthropic") return chamarAnthropic(system, user, modelo, maxTokens);
-  log.warn({ modelo }, "modelo de provider desconhecido — pulando IA");
-  return null;
+/**
+ * Dispatcher por provider. A CHAVE vem do mesmo lugar que o resto da
+ * plataforma usa (agentes de IA, `chamarIA`): `admin_integracoes` no banco,
+ * via `resolverChaveIAEscritorio` (chave do escritório/agente → chave global
+ * admin). Antes isto lia `process.env.OPENAI_API_KEY`/`ANTHROPIC_API_KEY`
+ * direto — que fica vazio em produção porque a chave é configurada pela UI
+ * (Admin → Integrações) e persiste criptografada no DB, não em env var. Efeito
+ * do bug: a classificação era a ÚNICA feature de IA que nunca enxergava a
+ * chave, então nenhuma movimentação recebia selo/resumo.
+ *
+ * O provider passa a vir da CHAVE resolvida, não do nome do modelo: se a chave
+ * disponível não serve o modelo configurado pelo escritório, cai no default
+ * daquele provider (a chave manda).
+ */
+async function chamarProvider(
+  system: string,
+  user: string,
+  modeloPreferido: string,
+  maxTokens: number,
+  escritorioId?: number,
+): Promise<string | null> {
+  const keys = await resolverChaveIAEscritorio(escritorioId);
+  if (!keys) {
+    log.warn(
+      { escritorioId },
+      "classificação IA: nenhuma chave configurada (admin_integracoes / escritório) — pulando",
+    );
+    return null;
+  }
+  const modelo = modeloCompativel(modeloPreferido, keys.provider);
+  if (keys.provider === "anthropic") return chamarAnthropic(system, user, modelo, maxTokens, keys.apiKey);
+  return chamarOpenAI(system, user, modelo, maxTokens, keys.apiKey);
+}
+
+/** Usa o modelo configurado se o provider da chave o serve; senão, o default
+ *  daquele provider — evita "configurei gpt-* mas só tenho chave Claude" = silêncio. */
+function modeloCompativel(modeloPreferido: string, provider: AIProvider): string {
+  if (providerDoModelo(modeloPreferido) === provider) return modeloPreferido;
+  return provider === "anthropic" ? MODELO_DEFAULT_ANTHROPIC : MODELO_DEFAULT;
 }
 
 /** OpenAI Chat Completions. */
-async function chamarOpenAI(system: string, user: string, modelo: string, maxTokens: number): Promise<string | null> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    log.warn("OPENAI_API_KEY não configurada");
-    return null;
-  }
+async function chamarOpenAI(system: string, user: string, modelo: string, maxTokens: number, apiKey: string): Promise<string | null> {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -122,12 +154,7 @@ async function chamarOpenAI(system: string, user: string, modelo: string, maxTok
 }
 
 /** Anthropic Messages API. */
-async function chamarAnthropic(system: string, user: string, modelo: string, maxTokens: number): Promise<string | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    log.warn("ANTHROPIC_API_KEY não configurada");
-    return null;
-  }
+async function chamarAnthropic(system: string, user: string, modelo: string, maxTokens: number, apiKey: string): Promise<string | null> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -168,6 +195,7 @@ async function chamarAnthropic(system: string, user: string, modelo: string, max
 export async function resumirMovimentacao(
   texto: string,
   modelo: string = MODELO_DEFAULT,
+  escritorioId?: number,
 ): Promise<string | null> {
   const limpo = (texto ?? "").trim();
   // Movimentações muito curtas (< 40 chars) geralmente já são auto-explicativas
@@ -176,7 +204,7 @@ export async function resumirMovimentacao(
   const truncado = limpo.length > MAX_INPUT_CHARS ? limpo.slice(0, MAX_INPUT_CHARS) : limpo;
 
   try {
-    return await chamarProvider(SYSTEM_PROMPT, truncado, modelo, 120);
+    return await chamarProvider(SYSTEM_PROMPT, truncado, modelo, 120, escritorioId);
   } catch (err: any) {
     if (err?.name === "AbortError" || err?.name === "TimeoutError") {
       log.warn({ modelo, timeoutMs: TIMEOUT_MS }, "timeout no resumo IA");
@@ -220,7 +248,7 @@ Regras:
 export async function classificarMovimentacao(
   texto: string,
   modelo: string = MODELO_DEFAULT,
-  opts?: { ladoCliente?: LadoCliente },
+  opts?: { ladoCliente?: LadoCliente; escritorioId?: number },
 ): Promise<ResumoClassificado | null> {
   const limpo = (texto ?? "").trim();
   if (limpo.length < 40) return null;
@@ -235,7 +263,7 @@ export async function classificarMovimentacao(
 
   let raw: string | null;
   try {
-    raw = await chamarProvider(SYSTEM_PROMPT_CLASSIFICACAO, user, modelo, 320);
+    raw = await chamarProvider(SYSTEM_PROMPT_CLASSIFICACAO, user, modelo, 320, opts?.escritorioId);
   } catch (err: any) {
     if (err?.name === "AbortError" || err?.name === "TimeoutError") log.warn({ modelo }, "timeout na classificação IA");
     else log.warn({ modelo, err: err?.message ?? String(err) }, "erro inesperado na classificação IA");
