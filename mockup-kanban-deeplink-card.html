@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow · Abrir card do Kanban a partir do cliente</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;background:#f5f7fa;color:#0f172a}
+  .tabnum{font-variant-numeric:tabular-nums}
+  .card{background:#fff;border:1px solid rgba(15,23,42,.06);border-radius:14px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 2px 6px rgba(15,23,42,.04)}
+  .col{background:#f1f5f9;border:1px solid rgba(15,23,42,.06);border-radius:12px}
+  .kc{background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:10px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  [data-tela]{display:none}[data-tela].on{display:block}
+</style>
+</head>
+<body>
+<div class="max-w-5xl mx-auto px-5 py-8">
+
+  <header class="mb-5">
+    <div class="flex items-center gap-2 text-[13px] font-semibold text-indigo-600">
+      <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600 text-white text-[11px] font-bold">J.</span>
+      Kanban · abrir o card real do cliente (para aprovar)
+    </div>
+    <h1 class="text-2xl font-bold mt-2 tracking-tight">Clicar <span class="text-indigo-600">“Abrir”</span> leva ao card certo, não à visão geral</h1>
+    <p class="text-slate-500 mt-1 text-[14px]">O link <code class="text-[12px] bg-slate-200/70 px-1 rounded">/kanban?card=2331&funil=3</code> já existe — falta a tela do Kanban <b>ler esses parâmetros</b> e abrir o funil + o card.</p>
+  </header>
+
+  <div class="flex gap-2 mb-5">
+    <button onclick="tela('antes')" id="bt-antes" class="px-4 py-2 rounded-lg text-sm font-semibold bg-white border text-slate-600">Antes (bug)</button>
+    <button onclick="tela('depois')" id="bt-depois" class="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white">Depois (corrigido)</button>
+  </div>
+
+  <!-- ============ ANTES ============ -->
+  <div data-tela="antes">
+    <div class="card p-5">
+      <div class="text-[12px] text-slate-400 font-mono mb-3">juridflow.com.br/kanban?card=2331&funil=3</div>
+      <div class="rounded-xl bg-gradient-to-br from-indigo-600 to-blue-600 text-white p-4 mb-3">
+        <p class="text-[11px] uppercase tracking-wide text-white/80 font-semibold">Kanban · visão geral</p>
+        <p class="text-lg font-bold mt-1">2 funis ativos</p>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div class="col p-3"><p class="font-semibold text-[13px]">Produção Operacional</p><p class="text-[11px] text-slate-500">158 em produção</p></div>
+        <div class="col p-3"><p class="font-semibold text-[13px]">Comercial</p><p class="text-[11px] text-slate-500">39 em produção</p></div>
+        <div class="col p-3 border-dashed flex items-center justify-center text-slate-400 text-[12px]">+ Novo funil</div>
+      </div>
+      <div class="mt-4 rounded-lg bg-rose-50 border border-rose-200 p-3 text-[13px] text-rose-700">
+        ❌ <b>O que acontece hoje:</b> apesar do <code>?card=2331&funil=3</code> na URL, a tela ignora os parâmetros e mostra a lista de funis. O usuário se perde e não acha o card do cliente.
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DEPOIS ============ -->
+  <div data-tela="depois" class="on">
+    <div class="card overflow-hidden">
+      <div class="text-[12px] text-slate-400 font-mono px-4 pt-3">juridflow.com.br/kanban?card=2331&funil=3 → abre o funil + o card</div>
+      <div class="flex">
+        <!-- board -->
+        <div class="flex-1 p-4 min-w-0">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white text-[11px] font-bold">P</span>
+            <p class="font-bold text-[15px]">Produção Operacional</p>
+            <span class="text-[11px] text-slate-400">11 colunas</span>
+          </div>
+          <div class="flex gap-3 overflow-x-auto pb-2">
+            <div class="col p-2.5 w-52 shrink-0">
+              <p class="text-[11px] font-semibold text-slate-500 px-1 pb-2 flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-400"></span>Triagem <span class="text-slate-400">3</span></p>
+              <div class="space-y-2">
+                <div class="kc p-2.5 text-[12px] text-slate-600">Processo 0810…-45</div>
+                <div class="kc p-2.5 text-[12px] text-slate-600">Cliente João P.</div>
+              </div>
+            </div>
+            <!-- coluna do card destacado -->
+            <div class="col p-2.5 w-52 shrink-0" style="background:#eef2ff;border-color:#c7d2fe">
+              <p class="text-[11px] font-semibold text-indigo-600 px-1 pb-2 flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-indigo-500"></span>Execução de honorários <span class="text-slate-400">5</span></p>
+              <div class="space-y-2">
+                <!-- card destacado -->
+                <div class="kc p-2.5 ring-2 ring-indigo-500 ring-offset-1">
+                  <p class="text-[12px] font-semibold">Luana Vitoria Souza Da Silva</p>
+                  <p class="text-[10px] text-slate-500 mt-0.5">⏱ prazo 07/08/2026</p>
+                  <span class="inline-block mt-1 text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">↳ aberto</span>
+                </div>
+                <div class="kc p-2.5 text-[12px] text-slate-600">Marcos A.</div>
+              </div>
+            </div>
+            <div class="col p-2.5 w-52 shrink-0 opacity-70">
+              <p class="text-[11px] font-semibold text-slate-500 px-1 pb-2 flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400"></span>Concluído <span class="text-slate-400">93</span></p>
+              <div class="space-y-2"><div class="kc p-2.5 text-[12px] text-slate-600">Ana R.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- drawer detalhe do card -->
+        <div class="w-72 shrink-0 border-l bg-white p-4" style="border-color:#eef1f5">
+          <div class="flex items-start justify-between">
+            <p class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Detalhe do card</p>
+            <span class="text-slate-400">✕</span>
+          </div>
+          <p class="font-bold text-[15px] mt-2 leading-tight">Luana Vitoria Souza Da Silva</p>
+          <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">Execução de honorários</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-semibold">⏱ 07/08/2026</span>
+          </div>
+          <div class="mt-3 space-y-2 text-[12px]">
+            <div class="flex justify-between"><span class="text-slate-400">Cliente</span><span class="font-medium">Luana V. S. da Silva</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Funil</span><span class="font-medium">Produção Operacional</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Responsável</span><span class="font-medium">Bruno M.</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Valor</span><span class="font-medium tabnum">R$ 300,00</span></div>
+          </div>
+          <div class="mt-3 pt-3 border-t" style="border-color:#eef1f5">
+            <p class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Descrição</p>
+            <p class="text-[12px] text-slate-600">Execução de honorários contratuais.</p>
+          </div>
+          <div class="mt-3 flex gap-2">
+            <button class="flex-1 text-[12px] font-semibold rounded-lg bg-indigo-600 text-white py-1.5">Editar</button>
+            <button class="flex-1 text-[12px] font-semibold rounded-lg border py-1.5 text-slate-600">Mover</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="text-center text-[12px] text-slate-400 mt-3">Abre o <b>funil correto</b>, rola até a coluna, <b>destaca o card</b> e abre o <b>drawer de detalhe</b> — tudo num clique.</p>
+  </div>
+
+  <!-- aprovação -->
+  <div class="card p-5 mt-8" style="border-color:rgba(79,70,229,.18)">
+    <h2 class="text-[15px] font-bold mb-2">✅ Para você aprovar / decidir</h2>
+    <ol class="list-decimal ml-5 text-[13.5px] text-slate-700 space-y-1.5">
+      <li>Ao clicar <b>Abrir</b>: abre o funil certo <b>e</b> já o <b>drawer de detalhe do card</b> (recomendo), ou só leva ao funil com o card destacado (sem abrir o drawer)?</li>
+      <li>Depois de abrir, <b>limpar a URL</b> (tirar o <code>?card=…</code>) pra um refresh não reabrir o card toda vez? (recomendo limpar)</li>
+      <li>Se o card estiver <b>arquivado</b> ou tiver sido <b>movido/excluído</b>: abrir mesmo assim mostrando o estado atual, ou avisar “card não encontrado neste funil”? (recomendo abrir o que existir + aviso se sumiu)</li>
+    </ol>
+  </div>
+
+</div>
+<script>
+function tela(id){
+  document.querySelectorAll('[data-tela]').forEach(e=>e.classList.remove('on'));
+  document.querySelector(`[data-tela="${id}"]`).classList.add('on');
+  document.getElementById('bt-antes').className='px-4 py-2 rounded-lg text-sm font-semibold '+(id==='antes'?'bg-indigo-600 text-white':'bg-white border text-slate-600');
+  document.getElementById('bt-depois').className='px-4 py-2 rounded-lg text-sm font-semibold '+(id==='depois'?'bg-indigo-600 text-white':'bg-white border text-slate-600');
+}
+</script>
+</body>
+</html>
