@@ -53,6 +53,7 @@ import Tarefas from "./pages/Tarefas";
 import AssinarDocumento from "./pages/AssinarDocumento";
 import AceitarConvite from "./pages/AceitarConvite";
 import ConfirmarEmail from "./pages/auth/ConfirmarEmail";
+import AuthSplitPage from "./pages/auth/AuthSplitPage";
 import AppLayout from "./components/AppLayout";
 import AdminLayout from "./components/AdminLayout";
 import SubscriptionGuard from "./components/SubscriptionGuard";
@@ -91,6 +92,12 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/termos" component={Termos} />
       <Route path="/privacidade" component={Privacidade} />
+      <Route path="/login">
+        <AuthSplitPage modo="login" />
+      </Route>
+      <Route path="/cadastro">
+        <AuthSplitPage modo="signup" />
+      </Route>
       <Route path="/esqueci-senha" component={EsqueciSenha} />
       <Route path="/redefinir-senha" component={RedefinirSenha} />
       <Route path="/confirmar-email/:token" component={ConfirmarEmail} />

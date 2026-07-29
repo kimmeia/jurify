@@ -32,6 +32,9 @@ interface AuthFormsProps {
    * no mesmo procedure backend.
    */
   conviteToken?: string;
+  /** Esconde o seletor de abas — usado pelas páginas /login e /cadastro,
+   *  onde a troca de modo é navegação entre rotas, não tab. */
+  hideTabs?: boolean;
 }
 
 // Tipo do Google Identity Services (não declaramos `window.google` global pra
@@ -58,7 +61,7 @@ function getGoogleGIS(): GoogleAccountsId | null {
 let gisInitialized = false;
 let gisCallback: ((response: { credential: string }) => void) | null = null;
 
-export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, conviteToken }: AuthFormsProps) {
+export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, conviteToken, hideTabs }: AuthFormsProps) {
   const [tab, setTab] = useState<"login" | "signup">(defaultTab);
   const utils = trpc.useUtils();
 
@@ -307,10 +310,12 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
         </div>
       )}
       <Tabs value={tab} onValueChange={(v) => setTab(v as "login" | "signup")}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="login">Entrar</TabsTrigger>
-          <TabsTrigger value="signup">Criar conta</TabsTrigger>
-        </TabsList>
+        {!hideTabs && (
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="login">Entrar</TabsTrigger>
+            <TabsTrigger value="signup">Criar conta</TabsTrigger>
+          </TabsList>
+        )}
 
         {/* ─── Tab Login ─── */}
         <TabsContent value="login" className="space-y-4 mt-6">
@@ -546,7 +551,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
         </TabsContent>
       </Tabs>
 
-      {!googleConfig?.enabled && (
+      {googleConfig && !googleConfig.enabled && (
         <p className="text-[10px] text-muted-foreground text-center mt-4">
           💡 Dica: configure <code className="font-mono">GOOGLE_CLIENT_ID</code> no servidor
           para habilitar login com Google.
