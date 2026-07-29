@@ -199,7 +199,14 @@ export async function simularComissao(
     })
     .from(asaasCobrancas)
     .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
-    .leftJoin(contatos, eq(contatos.id, asaasCobrancas.contatoId))
+    // Cliente real via COALESCE(beneficiário, pagador) — mesmo padrão do
+    // dashboard/relatórios comerciais. Caso "esposa paga pelo marido":
+    // contatoId=NULL + contatoBeneficiarioId=marido não é órfã, e sem o
+    // COALESCE o relatório de comissão saía sem nome de cliente.
+    .leftJoin(
+      contatos,
+      sql`${contatos.id} = COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId})`,
+    )
     .where(and(...condicoes))
     .orderBy(asc(asaasCobrancas.dataPagamento));
 
