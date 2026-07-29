@@ -1,7 +1,7 @@
 /**
  * Landing Page do JuridFlow (direção híbrida — hero dark cinematográfico,
- * corpo claro). Navbar scroll-aware + seções + Footer. Auth via dialog do
- * `AuthForms` (preserva fluxo existente).
+ * corpo claro). Navbar scroll-aware + seções + Footer. CTAs de auth navegam
+ * pras páginas dedicadas /login e /cadastro (URLs rastreáveis de campanha).
  *
  * Comportamento de redirect (preservado da versão anterior):
  *  - Admin → /admin
@@ -15,14 +15,6 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { AuthForms } from "./auth/AuthForms";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
 import { cn } from "@/lib/utils";
@@ -41,9 +33,10 @@ import { CtaFinal } from "./landing/CtaFinal";
 import { LandingFooter } from "./landing/LandingFooter";
 
 export default function Home() {
-  const { user, loading, refresh } = useAuth();
+  const { user, loading } = useAuth();
   const [, setLocation] = useLocation();
-  const [authOpen, setAuthOpen] = useState<"login" | "signup" | null>(null);
+  const irParaAuth = (modo: "login" | "signup") =>
+    setLocation(modo === "signup" ? "/cadastro" : "/login");
 
   // Subscription check (mesmo fluxo da versão anterior — preserva
   // redirect pra /dashboard ou /plans quando logado).
@@ -81,46 +74,23 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#07060f]">
       {/* Navbar fixa */}
-      <Navbar onCta={setAuthOpen} />
+      <Navbar onCta={irParaAuth} />
 
       {/* Sections */}
       <main>
-        <Hero onCta={setAuthOpen} />
+        <Hero onCta={irParaAuth} />
         <Integracoes />
         <Problemas />
         <SmartFlow />
         <Pilares />
         <Demo />
         <Comparativo />
-        <Pricing onCta={setAuthOpen} />
+        <Pricing onCta={irParaAuth} />
         <Faq />
-        <CtaFinal onCta={setAuthOpen} />
+        <CtaFinal onCta={irParaAuth} />
       </main>
 
       <LandingFooter />
-
-      {/* Modal de autenticação (preservado do fluxo anterior) */}
-      <Dialog open={!!authOpen} onOpenChange={(o) => !o && setAuthOpen(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-center">
-              {authOpen === "signup" ? "Crie sua conta" : "Bem-vindo de volta"}
-            </DialogTitle>
-            <DialogDescription className="text-center text-xs">
-              {authOpen === "signup"
-                ? "Cadastre-se em segundos. Sem cartão de crédito."
-                : "Entre com seu e-mail ou conta Google."}
-            </DialogDescription>
-          </DialogHeader>
-          <AuthForms
-            defaultTab={authOpen || "login"}
-            onSuccess={async () => {
-              setAuthOpen(null);
-              await refresh();
-            }}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
