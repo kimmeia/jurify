@@ -191,11 +191,17 @@ export async function gerarComissaoPdf(data: ComissaoPdfData): Promise<Buffer> {
           soma += it.valor;
           doc.fillColor(C.slate).font("Helvetica").fontSize(8)
             .text(formatData(it.dataPagamento), xData, yr + 2, { width: wData, lineBreak: false });
-          // Cliente em negrito; sem nome, a descrição vira a linha principal.
-          const principal = it.contatoNome || it.descricao || "—";
-          doc.fillColor(C.dark).font("Helvetica-Bold").fontSize(8.5)
-            .text(fit(principal, wCli), xCli, yr, { width: wCli, lineBreak: false });
-          if (it.contatoNome && it.descricao) {
+          // Cliente em negrito; sem vínculo, o estado fica explícito em vez
+          // da descrição posar de nome (quem confere o fechamento precisa
+          // saber que há cobrança sem cliente antes de assinar).
+          if (it.contatoNome) {
+            doc.fillColor(C.dark).font("Helvetica-Bold").fontSize(8.5)
+              .text(fit(it.contatoNome, wCli), xCli, yr, { width: wCli, lineBreak: false });
+          } else {
+            doc.fillColor(C.amber).font("Helvetica-BoldOblique").fontSize(8.5)
+              .text("Cliente não vinculado", xCli, yr, { width: wCli, lineBreak: false });
+          }
+          if (it.descricao) {
             doc.fillColor(C.faint).font("Helvetica").fontSize(6.8)
               .text(fit(it.descricao, wCli), xCli, yr + 10, { width: wCli, lineBreak: false });
           }
