@@ -220,6 +220,9 @@ export const crmRouter = router({
       dataFim: z.string().optional(),
       limite: z.number().int().min(1).max(1000).optional(),
       arquivadas: z.boolean().optional(),
+      // Busca no banco (nome/telefone). Sem isso o Inbox só achava conversa
+      // dentro do corte de recência já carregado na tela.
+      busca: z.string().trim().max(120).optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
