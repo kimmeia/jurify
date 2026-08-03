@@ -434,12 +434,52 @@ export async function criarConversa(dados: {
 async function condicoesConversa(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   escritorioId: number,
-  filtros?: { atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number; dataInicio?: string; dataFim?: string; arquivadas?: boolean },
+  filtros?: { atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number; dataInicio?: string; dataFim?: string; arquivadas?: boolean; busca?: string },
 ): Promise<SQL[] | null> {
   const conditions: SQL[] = [eq(conversas.escritorioId, escritorioId)];
   // Arquivadas ficam fora de TODAS as vistas padrão (lista, contadores);
   // a pasta Arquivadas pede explicitamente arquivadas=true.
-  conditions.push(filtros?.arquivadas ? isNotNull(conversas.arquivadaEm) : isNull(conversas.arquivadaEm));
+  //
+  // Exceção: busca por texto varre TAMBÉM as arquivadas. Quem procura um
+  // número específico quer achar a conversa onde ela estiver — some da
+  // vista padrão, mas não da busca (a UI marca o resultado com badge).
+  // Termo normalizado ANTES: decide tanto a condição de busca quanto se as
+  // arquivadas entram. Busca só com espaços não conta como busca — senão
+  // soltava as arquivadas na vista padrão sem filtrar nada em troca.
+  const termo = filtros?.busca?.trim();
+
+  if (filtros?.arquivadas) {
+    conditions.push(isNotNull(conversas.arquivadaEm));
+  } else if (!termo) {
+    conditions.push(isNull(conversas.arquivadaEm));
+  }
+
+  // Busca no BANCO (nome/telefone do contato), não em memória. Antes o
+  // Inbox filtrava client-side sobre as N conversas mais recentes já
+  // carregadas: conversa fora desse corte era invisível pra busca —
+  // justamente as antigas, e piorando conforme chegavam conversas novas.
+  if (termo) {
+    const alvos: SQL[] = [like(contatos.nome, `%${escapeLikePattern(termo)}%`)];
+    const digitos = termo.replace(/\D/g, "");
+    if (digitos.length >= 3) {
+      // Variantes BR (com/sem o "9" antecipado) — mesma regra de
+      // `buscarContatoPorTelefone`, senão digitar o número "do jeito que
+      // está no celular" não bate com o formato salvo.
+      const { phoneVariantsBR } = await import("../../shared/whatsapp-types");
+      const variantes = new Set<string>([digitos, ...phoneVariantsBR(digitos)]);
+      // Telefone pode estar salvo com máscara (cadastro manual): compara
+      // também a coluna sem os separadores mais comuns.
+      const telSemMascara = sql`REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${contatos.telefone}, '(', ''), ')', ''), '-', ''), ' ', ''), '+', '')`;
+      for (const v of variantes) {
+        const padrao = `%${escapeLikePattern(v)}%`;
+        alvos.push(like(contatos.telefone, padrao));
+        alvos.push(sql`${telSemMascara} LIKE ${padrao}`);
+        alvos.push(like(contatos.telefonesSecundarios, padrao));
+        alvos.push(like(contatos.telefonesAnteriores, padrao));
+      }
+    }
+    conditions.push(or(...alvos)!);
+  }
   if (filtros?.canalId) {
     conditions.push(eq(conversas.canalId, filtros.canalId));
   }
@@ -541,6 +581,8 @@ export async function listarConversas(escritorioId: number, filtros?: {
   dataFim?: string;
   limite?: number;
   arquivadas?: boolean;
+  /** Busca server-side por nome/telefone do contato (inclui arquivadas). */
+  busca?: string;
 }) {
   const db = await getDb();
   if (!db) return [];
