@@ -5,7 +5,7 @@
 
 import { eq, and, desc, asc, or, sql, gt, gte, lt, lte, like, inArray, isNull, isNotNull, ne, exists, notExists, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
-import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios, setores } from "../../drizzle/schema";
+import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios, setores, smartflowExecucoes, chamadas } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
 import { escapeLikePattern } from "../_core/sql-helpers";
 import { normalizarValorBR } from "../../shared/valor-br";
@@ -839,6 +839,29 @@ export async function excluirConversa(id: number, escritorioId: number) {
     .where(and(eq(conversas.id, id), eq(conversas.escritorioId, escritorioId))).limit(1);
   if (!conv) throw new Error("Conversa não encontrada.");
   await db.delete(mensagens).where(eq(mensagens.conversaId, id));
+
+  // Sem isto a conversa "ressuscita": a execução continua `rodando` com
+  // `aguardandoMensagemContatoId` apontando pro contato, então a próxima
+  // mensagem dele é casada por `acharExecucaoAguardando` e o fluxo retoma
+  // do passo onde parou, com todo o contexto acumulado — como se nada
+  // tivesse sido excluído.
+  await db.update(smartflowExecucoes)
+    .set({ status: "cancelado", retomarEm: null, aguardandoMensagemContatoId: null })
+    .where(and(
+      eq(smartflowExecucoes.escritorioId, escritorioId),
+      eq(smartflowExecucoes.conversaId, id),
+      eq(smartflowExecucoes.status, "rodando"),
+    ));
+
+  await db.update(chamadas).set({ conversaId: null })
+    .where(and(eq(chamadas.escritorioId, escritorioId), eq(chamadas.conversaId, id)));
+
+  // O lead sobrevive de propósito — pode ter valor/negociação em andamento.
+  // Só o ponteiro pra conversa morta é limpo (senão "Ir para conversa" abre
+  // o vazio). Quem quer sumir com o lead usa a exclusão do pipeline.
+  await db.update(leads).set({ conversaId: null })
+    .where(and(eq(leads.escritorioId, escritorioId), eq(leads.conversaId, id)));
+
   await db.delete(conversas).where(and(eq(conversas.id, id), eq(conversas.escritorioId, escritorioId)));
 }
 
