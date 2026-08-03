@@ -24,7 +24,7 @@
  * uma integração quebrada. Mas logamos tudo pra auditoria.
  */
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   contatos,
@@ -38,6 +38,8 @@ import {
   assinaturasDigitais,
   asaasClientes,
   asaasCobrancas,
+  smartflowExecucoes,
+  chamadas,
 } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
 
@@ -212,13 +214,18 @@ export async function excluirClienteEmCascata(
         .from(conversas)
         .where(and(eq(conversas.escritorioId, escritorioId), eq(conversas.contatoId, contatoId)));
 
-      if (conversasDoContato.length > 0) {
-        const conversaIds = conversasDoContato.map((c) => c.id);
+      const conversaIds = conversasDoContato.map((c) => c.id);
+
+      if (conversaIds.length > 0) {
         const delMsgs = await tx
           .delete(mensagens)
           .where(inArray(mensagens.conversaId, conversaIds));
         resultado.mensagensExcluidas =
           (delMsgs as unknown as { affectedRows?: number })?.affectedRows ?? 0;
+
+        await tx
+          .delete(chamadas)
+          .where(and(eq(chamadas.escritorioId, escritorioId), inArray(chamadas.conversaId, conversaIds)));
 
         // ─── 5. Conversas ────────────────────────────────────────────
         const delConv = await tx
@@ -227,6 +234,25 @@ export async function excluirClienteEmCascata(
         resultado.conversasExcluidas =
           (delConv as unknown as { affectedRows?: number })?.affectedRows ?? 0;
       }
+
+      await tx
+        .delete(chamadas)
+        .where(and(eq(chamadas.escritorioId, escritorioId), eq(chamadas.contatoId, contatoId)));
+
+      // ─── 5b. Execuções de fluxo ──────────────────────────────────────
+      // Execução sobrevivente continua disparando timeout no scheduler e
+      // tentando entregar mensagem numa conversa que não existe mais.
+      await tx
+        .delete(smartflowExecucoes)
+        .where(and(
+          eq(smartflowExecucoes.escritorioId, escritorioId),
+          conversaIds.length > 0
+            ? or(
+                eq(smartflowExecucoes.contatoId, contatoId),
+                inArray(smartflowExecucoes.conversaId, conversaIds),
+              )
+            : eq(smartflowExecucoes.contatoId, contatoId),
+        ));
 
       // ─── 6. Leads ────────────────────────────────────────────────────
       const delLeads = await tx
