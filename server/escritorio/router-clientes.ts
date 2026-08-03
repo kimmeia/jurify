@@ -13,52 +13,12 @@ import { excluirClienteEmCascata } from "./excluir-cliente";
 import { reconciliarCobrancasOrfas } from "./db-financeiro";
 import { criarLead } from "./db-crm";
 import { createLogger } from "../_core/logger";
-import { toIsoString } from "../_core/dates";
+import { toIsoString, diaAtualEmTz } from "../_core/dates";
 
 const log = createLogger("router-clientes");
 
 const ORIGEM_CONTATO = ["whatsapp", "instagram", "facebook", "telefone", "manual", "site", "asaas"] as const;
 
-/**
- * Calcula início e fim de "hoje" no fuso do escritório, devolvendo
- * instantes UTC pra comparar com `createdAt` (TIMESTAMP, UTC no DB).
- * Usado em `estatisticas.novosHoje` — antes do fix usávamos CURDATE()
- * do MySQL, que respondia conforme TZ da sessão; em produção Railway
- * (UTC), cliente cadastrado às 22h horário SP virava "amanhã".
- *
- * Considera DST consultando o offset ao meio-dia do dia em questão.
- */
-function diaAtualEmTz(fusoHorario: string): { inicio: Date; fim: Date } {
-  const agora = new Date();
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: fusoHorario,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const [ano, mes, dia] = fmt.format(agora).split("-").map(Number);
-
-  // Offset do fuso ao meio-dia (ancora num horário sem ambiguidade de DST)
-  const refAoMeioDia = new Date(Date.UTC(ano, mes - 1, dia, 12, 0, 0));
-  const tzName =
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: fusoHorario,
-      timeZoneName: "longOffset",
-    })
-      .formatToParts(refAoMeioDia)
-      .find((p) => p.type === "timeZoneName")?.value ?? "GMT+00:00";
-  const match = tzName.match(/GMT([+-])(\d{1,2}):?(\d{2})?/);
-  const offsetMs = match
-    ? (match[1] === "+" ? 1 : -1) *
-      (Number(match[2]) * 60 + Number(match[3] ?? 0)) *
-      60 *
-      1000
-    : 0;
-
-  const inicio = new Date(Date.UTC(ano, mes - 1, dia) - offsetMs);
-  const fim = new Date(inicio.getTime() + 24 * 60 * 60 * 1000);
-  return { inicio, fim };
-}
 
 /** Remove entradas vazias/nulas e serializa pra TEXT.
  *  - `null`, `""`, `undefined` → omitidos

@@ -107,3 +107,28 @@ describe("contadores usam a MESMA regra da lista", () => {
     expect(s).toContain("`createdAtMsg`");
   });
 });
+
+describe("somente primeiro contato (lead novo no periodo)", () => {
+  it("adiciona NOT EXISTS de mensagem anterior ao inicio da janela", async () => {
+    await listarConversas(1, { dataInicio: INICIO, dataFim: FIM, somenteNovos: true });
+    const s = sqlPrincipal();
+    expect(s).toMatch(/not exists/i);
+    // O recorte e "nenhuma mensagem ANTES do inicio" — precisa do `<`.
+    expect(s).toContain("`createdAtMsg` <");
+  });
+
+  it("sem o toggle nao gera NOT EXISTS", async () => {
+    await listarConversas(1, { dataInicio: INICIO, dataFim: FIM });
+    expect(sqlPrincipal()).not.toMatch(/not exists/i);
+  });
+
+  it("toggle sem dataInicio e ignorado (nao existe 'antes' pra ancorar)", async () => {
+    await listarConversas(1, { dataFim: FIM, somenteNovos: true });
+    expect(sqlPrincipal()).not.toMatch(/not exists/i);
+  });
+
+  it("contadores respeitam o toggle (aba e lista continuam batendo)", async () => {
+    await contarConversasPorStatus(1, { dataInicio: INICIO, somenteNovos: true });
+    expect(sqlPrincipal()).toMatch(/not exists/i);
+  });
+});

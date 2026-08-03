@@ -223,6 +223,8 @@ export const crmRouter = router({
       // Busca no banco (nome/telefone). Sem isso o Inbox só achava conversa
       // dentro do corte de recência já carregado na tela.
       busca: z.string().trim().max(120).optional(),
+      // Só quem teve o PRIMEIRO contato dentro do período (lead novo).
+      somenteNovos: z.boolean().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
@@ -249,6 +251,7 @@ export const crmRouter = router({
       canalId: z.number().optional(),
       dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
+      somenteNovos: z.boolean().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
