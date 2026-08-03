@@ -467,6 +467,7 @@ export default function Atendimento() {
   // Período customizado (datas escolhidas pelo usuário). Quando preenchido,
   // tem prioridade sobre os presets acima. Hora é opcional: vazia, o extremo
   // assume o dia inteiro (De=00:00, Até=23:59) — comportamento antigo.
+  const [somenteNovos, setSomenteNovos] = useState(false);
   const [dataIni, setDataIni] = useState(""); // "YYYY-MM-DD"
   const [dataFim, setDataFim] = useState("");
   const [horaIni, setHoraIni] = useState(""); // "HH:MM"
@@ -510,6 +511,9 @@ export default function Atendimento() {
     // Range customizado tem prioridade; senão, preset relativo.
     if (dataIni) f.dataInicio = new Date(`${dataIni}T${horaIni || "00:00"}:00`).toISOString();
     if (dataFim) f.dataFim = new Date(`${dataFim}T${horaFim || "23:59"}:59`).toISOString();
+    // Só faz sentido com início definido — é ele que marca "antes disso não pode
+    // haver mensagem". O backend também ignora sem dataInicio.
+    if (somenteNovos && dataIni) f.somenteNovos = true;
     if (!dataIni && !dataFim && periodoFiltro !== "todos") {
       const dias = periodoFiltro === "7d" ? 7 : periodoFiltro === "30d" ? 30 : 90;
       f.dataInicio = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
@@ -554,12 +558,14 @@ export default function Atendimento() {
     (setorFiltro ? 1 : 0) +
     (canalFiltro ? 1 : 0) +
     (periodoFiltro !== "todos" ? 1 : 0) +
-    (dataIni || dataFim ? 1 : 0);
+    (dataIni || dataFim ? 1 : 0) +
+    (somenteNovos && dataIni ? 1 : 0);
   const limparFiltrosAvancados = () => {
     setAtendentesFiltro([]);
     setSetorFiltro(null);
     setCanalFiltro(null);
     setPeriodoFiltro("todos");
+    setSomenteNovos(false);
     setDataIni("");
     setDataFim("");
     setHoraIni("");
@@ -971,6 +977,25 @@ export default function Atendimento() {
                             ? "Período exato ativo — os presets acima ficam ignorados. Hora vazia considera o dia inteiro."
                             : "Hora é opcional — em branco, o filtro considera o dia inteiro (00:00 a 23:59)."}
                         </p>
+                        {/* No WhatsApp a conversa é reaproveitada pra sempre, então
+                            sem este recorte não dá pra separar lead novo de cliente
+                            que já falava com o escritório antes. */}
+                        <label className="flex items-start gap-2 pt-1 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={somenteNovos}
+                            disabled={!dataIni}
+                            onChange={(e) => setSomenteNovos(e.target.checked)}
+                            className="mt-0.5 h-3.5 w-3.5 accent-violet-600 cursor-pointer disabled:opacity-40"
+                          />
+                          <span className="text-[11px] leading-snug">
+                            <span className="font-semibold">Somente primeiro contato</span>
+                            <span className="text-muted-foreground">
+                              {" "}— só quem falou com o escritório pela primeira vez no período
+                              {!dataIni && " (exige data de início)"}
+                            </span>
+                          </span>
+                        </label>
                       </div>
                     </div>
                     <DialogFooter className="flex-row justify-between sm:justify-between">
