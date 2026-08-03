@@ -3,13 +3,13 @@
  * Fase 3 — Inclui algoritmo de distribuição inteligente de leads
  */
 
-import { eq, and, desc, asc, or, sql, gt, gte, lte, like, inArray, isNull, isNotNull, ne, exists, type SQL } from "drizzle-orm";
+import { eq, and, desc, asc, or, sql, gt, gte, lt, lte, like, inArray, isNull, isNotNull, ne, exists, notExists, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios, setores } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
 import { escapeLikePattern } from "../_core/sql-helpers";
 import { normalizarValorBR } from "../../shared/valor-br";
-import { toIsoString } from "../_core/dates";
+import { toIsoString, diaAtualEmTz, inicioDiasAtrasEmTz } from "../_core/dates";
 
 /**
  * Parse defensivo de campo TEXT que deveria ser JSON array. Se o conteúdo
@@ -434,7 +434,7 @@ export async function criarConversa(dados: {
 async function condicoesConversa(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   escritorioId: number,
-  filtros?: { atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number; dataInicio?: string; dataFim?: string; arquivadas?: boolean; busca?: string },
+  filtros?: { atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number; dataInicio?: string; dataFim?: string; arquivadas?: boolean; busca?: string; somenteNovos?: boolean },
 ): Promise<SQL[] | null> {
   const conditions: SQL[] = [eq(conversas.escritorioId, escritorioId)];
   // Arquivadas ficam fora de TODAS as vistas padrão (lista, contadores);
@@ -540,6 +540,22 @@ async function condicoesConversa(
     conditions.push(
       exists(db.select({ um: sql`1` }).from(mensagens).where(and(...janela))),
     );
+
+    // "Somente primeiro contato": nenhuma mensagem ANTES do início da janela.
+    // Junto com o EXISTS acima, isola quem falou com o escritório pela
+    // primeira vez no período — sem isso não dá pra separar lead novo de
+    // cliente recorrente, porque no WhatsApp a conversa é reaproveitada
+    // pra sempre (o mesmo JID cai sempre na mesma linha de `conversas`).
+    if (filtros?.somenteNovos && inicioOk) {
+      conditions.push(
+        notExists(
+          db
+            .select({ um: sql`1` })
+            .from(mensagens)
+            .where(and(eq(mensagens.conversaId, conversas.id), lt(mensagens.createdAt, inicioOk))),
+        ),
+      );
+    }
   }
   return conditions;
 }
@@ -556,6 +572,7 @@ export async function contarConversasPorStatus(escritorioId: number, filtros?: {
   canalId?: number;
   dataInicio?: string;
   dataFim?: string;
+  somenteNovos?: boolean;
 }): Promise<{ todos: number; aguardando: number; em_atendimento: number; resolvido: number }> {
   const zero = { todos: 0, aguardando: 0, em_atendimento: 0, resolvido: 0 };
   const db = await getDb();
@@ -595,6 +612,8 @@ export async function listarConversas(escritorioId: number, filtros?: {
   arquivadas?: boolean;
   /** Busca server-side por nome/telefone do contato (inclui arquivadas). */
   busca?: string;
+  /** Só conversas cujo PRIMEIRO contato caiu na janela (lead novo). */
+  somenteNovos?: boolean;
 }) {
   const db = await getDb();
   if (!db) return [];
@@ -1336,8 +1355,19 @@ export async function obterMetricasDetalhadas(escritorioId: number) {
   const db = await getDb();
   if (!db) return null;
 
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
+  // "Hoje" no fuso do ESCRITÓRIO, não do MySQL. `CURDATE()` respondia
+  // conforme o TZ da sessão: em produção (UTC) o dia virava às 21h de
+  // Brasília, então mensagem/conversa da noite era contada como "amanhã" e
+  // os cards nunca fechavam com o filtro de período do inbox.
+  const [escr] = await db
+    .select({ fuso: escritorios.fusoHorario })
+    .from(escritorios)
+    .where(eq(escritorios.id, escritorioId))
+    .limit(1);
+  const fuso = escr?.fuso || "America/Sao_Paulo";
+  const { inicio: inicioHoje } = diaAtualEmTz(fuso);
+  const inicio7Dias = inicioDiasAtrasEmTz(fuso, 7);
+  const inicio30Dias = inicioDiasAtrasEmTz(fuso, 30);
 
   // Mensagens hoje (entrada/saída)
   const msgsHoje = await db.select({
@@ -1345,7 +1375,7 @@ export async function obterMetricasDetalhadas(escritorioId: number) {
     total: sql<number>`COUNT(*)`,
   }).from(mensagens)
     .innerJoin(conversas, eq(mensagens.conversaId, conversas.id))
-    .where(and(eq(conversas.escritorioId, escritorioId), sql`createdAtMsg >= CURDATE()`))
+    .where(and(eq(conversas.escritorioId, escritorioId), gte(mensagens.createdAt, inicioHoje)))
     .groupBy(mensagens.direcao);
 
   const msgsEntradaHoje = Number(msgsHoje.find(m => m.direcao === "entrada")?.total || 0);
@@ -1368,13 +1398,13 @@ export async function obterMetricasDetalhadas(escritorioId: number) {
     .where(and(
       eq(conversas.escritorioId, escritorioId),
       eq(conversas.status, "resolvido"),
-      sql`updatedAtConv >= CURDATE()`,
+      gte(conversas.updatedAt, inicioHoje),
     ));
 
   // Novas conversas hoje
   const [novasHoje] = await db.select({ count: sql<number>`COUNT(*)` })
     .from(conversas)
-    .where(and(eq(conversas.escritorioId, escritorioId), sql`createdAtConv >= CURDATE()`));
+    .where(and(eq(conversas.escritorioId, escritorioId), gte(conversas.createdAt, inicioHoje)));
 
   // Mensagens por canal (últimos 7 dias)
   const porCanal = await db.select({
@@ -1382,7 +1412,7 @@ export async function obterMetricasDetalhadas(escritorioId: number) {
     total: sql<number>`COUNT(*)`,
   }).from(mensagens)
     .innerJoin(conversas, eq(mensagens.conversaId, conversas.id))
-    .where(and(eq(conversas.escritorioId, escritorioId), sql`createdAtMsg >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)`))
+    .where(and(eq(conversas.escritorioId, escritorioId), gte(mensagens.createdAt, inicio7Dias)))
     .groupBy(conversas.canalId);
 
   // Nomes dos canais
@@ -1406,7 +1436,7 @@ export async function obterMetricasDetalhadas(escritorioId: number) {
     .where(and(
       eq(conversas.escritorioId, escritorioId),
       sql`atendenteIdConv IS NOT NULL`,
-      sql`createdAtConv >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`,
+      gte(conversas.createdAt, inicio30Dias),
     ))
     .groupBy(conversas.atendenteId);
 
@@ -1443,7 +1473,7 @@ export async function obterMetricasDetalhadas(escritorioId: number) {
     FROM conversas c
     JOIN mensagens m ON m.conversaIdMsg = c.id AND m.direcaoMsg = 'saida'
     WHERE c.escritorioIdConv = ${escritorioId}
-    AND c.createdAtConv >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+    AND c.createdAtConv >= ${inicio7Dias}
     GROUP BY c.id, c.createdAtConv
   ) sub`);
 
