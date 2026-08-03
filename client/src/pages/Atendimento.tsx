@@ -451,6 +451,13 @@ export default function Atendimento() {
   const [showNovo, setShowNovo] = useState(false); const [showIniciar, setShowIniciar] = useState(false); const [showNovoLead, setShowNovoLead] = useState(false);
   const [busca, setBusca] = useState(""); const [filtro, setFiltro] = useState("todos");
   const [inboxBusca, setInboxBusca] = useState("");
+  // A busca vai pro SERVIDOR (varre o banco inteiro, incluindo arquivadas).
+  // Debounce pra não disparar uma query por tecla digitada.
+  const [inboxBuscaDebounced, setInboxBuscaDebounced] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setInboxBuscaDebounced(inboxBusca.trim()), 300);
+    return () => clearTimeout(t);
+  }, [inboxBusca]);
   // Filtros avançados que vão pro backend (atendente, setor, período). Status
   // continua client-side pra contadores baterem.
   const [atendentesFiltro, setAtendentesFiltro] = useState<number[]>([]);
@@ -514,13 +521,16 @@ export default function Atendimento() {
   // Status vai pro SERVIDOR: filtrar client-side sobre as 300 mais recentes
   // fazia a aba "Aguardando 40" mostrar 1 conversa (as outras 39 eram antigas
   // e ficavam fora do corte) — contador certo, lista mentindo.
+  // Busca vai junto pro servidor: sem isso o filtro rodava em memória sobre
+  // as 300 mais recentes e conversa antiga (fora do corte) era invisível.
   const { data: convsAll, refetch: rC } = trpc.crm.listarConversas.useQuery(
     mostrarArquivadas
-      ? { arquivadas: true, limite: 300 }
+      ? { arquivadas: true, limite: 300, ...(inboxBuscaDebounced ? { busca: inboxBuscaDebounced } : {}) }
       : {
           ...(filtrosBackend ?? {}),
           ...(filtro !== "todos" ? { status: filtro as any } : {}),
           limite: 300,
+          ...(inboxBuscaDebounced ? { busca: inboxBuscaDebounced } : {}),
         },
     { refetchInterval: 5000 },
   );
@@ -577,6 +587,11 @@ export default function Atendimento() {
     }
     const q = inboxBusca.trim().toLowerCase();
     if (!q) return porStatus;
+    // O servidor já filtrou (nome, telefone principal/secundário/anterior,
+    // variantes BR do número e conversas arquivadas). Só enquanto o debounce
+    // não alcança o que foi digitado aplicamos um filtro local — resposta
+    // imediata na tecla, sem estreitar o resultado que vem do banco.
+    if (q === inboxBuscaDebounced.toLowerCase()) return porStatus;
     const qDigits = q.replace(/\D/g, "");
     return porStatus.filter((c: any) => {
       if (c.contatoNome?.toLowerCase().includes(q)) return true;
@@ -1198,6 +1213,16 @@ export default function Atendimento() {
                               {(c as any).atendenteNome && (
                                 <span className="text-[9px] px-1.5 py-0 rounded text-muted-foreground truncate max-w-[80px]" title={(c as any).atendenteNome}>
                                   · {(c as any).atendenteNome.split(" ")[0]}
+                                </span>
+                              )}
+                              {/* Busca traz arquivadas junto — o badge avisa
+                                  por que a conversa não estava na lista. */}
+                              {!mostrarArquivadas && (c as any).arquivadaEm && (
+                                <span
+                                  className="text-[9px] px-1.5 py-0 rounded bg-muted text-muted-foreground shrink-0"
+                                  title="Conversa arquivada — encontrada pela busca"
+                                >
+                                  Arquivada
                                 </span>
                               )}
                               {mostrarArquivadas && (
