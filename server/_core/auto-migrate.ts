@@ -243,6 +243,11 @@ async function ensureAuthColumns(connection: mysql.Connection): Promise<void> {
     const indexOps = [
       { name: "idx_users_googleSub", sql: "CREATE INDEX idx_users_googleSub ON users (googleSub)" },
       { name: "idx_users_email", sql: "CREATE INDEX idx_users_email ON users (email)" },
+      // Filtro de período do Atendimento (EXISTS "teve mensagem entre X e Y").
+      {
+        name: "idx_mensagens_conversa_data",
+        sql: "CREATE INDEX idx_mensagens_conversa_data ON mensagens (conversaIdMsg, createdAtMsg)",
+      },
     ];
     for (const op of indexOps) {
       try {
