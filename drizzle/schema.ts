@@ -817,6 +817,9 @@ export const mensagens = mysqlTable("mensagens", {
   createdAt: timestamp("createdAtMsg").defaultNow().notNull(),
 }, (t) => ({
   idxIdExterno: index("idx_mensagens_id_externo").on(t.idExterno),
+  // Filtro de período do Atendimento pergunta "houve mensagem entre X e Y"
+  // (EXISTS por conversa) — sem este índice a subquery varre a tabela toda.
+  idxConversaData: index("idx_mensagens_conversa_data").on(t.conversaId, t.createdAt),
 }));
 
 export type Mensagem = typeof mensagens.$inferSelect;

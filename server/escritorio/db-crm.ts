@@ -3,7 +3,7 @@
  * Fase 3 — Inclui algoritmo de distribuição inteligente de leads
  */
 
-import { eq, and, desc, asc, or, sql, gt, gte, lte, like, inArray, isNull, isNotNull, ne, type SQL } from "drizzle-orm";
+import { eq, and, desc, asc, or, sql, gt, gte, lte, like, inArray, isNull, isNotNull, ne, exists, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios, setores } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
@@ -519,15 +519,27 @@ async function condicoesConversa(
     conditions.push(inArray(conversas.atendenteId, atendentesFiltro));
   }
 
-  // Período: filtra por ultimaMensagemAt (atividade), não createdAt — usuário
-  // quer ver conversas com mensagem nova no intervalo.
-  if (filtros?.dataInicio) {
-    const dt = new Date(filtros.dataInicio);
-    if (!isNaN(dt.getTime())) conditions.push(gte(conversas.ultimaMensagemAt, dt));
-  }
-  if (filtros?.dataFim) {
-    const dt = new Date(filtros.dataFim);
-    if (!isNaN(dt.getTime())) conditions.push(lte(conversas.ultimaMensagemAt, dt));
+  // Período: "esta conversa teve mensagem dentro da janela?".
+  //
+  // Antes comparava `conversas.ultimaMensagemAt`, que é SOBRESCRITO a cada
+  // mensagem nova (db-crm: enviarMensagem). Isso respondia outra pergunta —
+  // "a última atividade de todos os tempos caiu na janela?" — então conversa
+  // atendida no período que seguiu recebendo mensagem depois sumia do filtro.
+  // Quanto mais antigo o intervalo, menos resultado sobrava.
+  //
+  // Agora o intervalo é testado contra as MENSAGENS (createdAt), que são
+  // imutáveis. Índice idx_mensagens_conversa_data cobre a subquery.
+  const inicio = filtros?.dataInicio ? new Date(filtros.dataInicio) : null;
+  const fim = filtros?.dataFim ? new Date(filtros.dataFim) : null;
+  const inicioOk = inicio && !isNaN(inicio.getTime()) ? inicio : null;
+  const fimOk = fim && !isNaN(fim.getTime()) ? fim : null;
+  if (inicioOk || fimOk) {
+    const janela: SQL[] = [eq(mensagens.conversaId, conversas.id)];
+    if (inicioOk) janela.push(gte(mensagens.createdAt, inicioOk));
+    if (fimOk) janela.push(lte(mensagens.createdAt, fimOk));
+    conditions.push(
+      exists(db.select({ um: sql`1` }).from(mensagens).where(and(...janela))),
+    );
   }
   return conditions;
 }
