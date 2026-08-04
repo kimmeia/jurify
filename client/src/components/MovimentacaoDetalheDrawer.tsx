@@ -295,49 +295,6 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
               </div>
             </div>
 
-            {/* Partes — quem é quem. A pergunta "de quem é esse processo?"
-                vem antes de qualquer resumo, e o rótulo do PJe nunca responde. */}
-            {data.partes.length > 0 && (
-              <section>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">
-                  Partes
-                </p>
-                <div className="rounded-lg border divide-y">
-                  {(["ativo", "passivo", "terceiro"] as const).map((polo) => {
-                    const doPolo = data.partes.filter((p) => p.polo === polo);
-                    if (doPolo.length === 0) return null;
-                    return (
-                      <div key={polo} className="flex items-start gap-3 px-3 py-2">
-                        <span className="text-[9.5px] font-bold uppercase tracking-wide text-muted-foreground w-16 shrink-0 pt-0.5">
-                          {POLO_LABEL[polo]}
-                          {doPolo.length > 1 ? "es" : ""}
-                        </span>
-                        <div className="flex-1 min-w-0 space-y-0.5">
-                          {doPolo.map((p, i) => (
-                            <p
-                              key={i}
-                              className={`text-[12.5px] leading-snug ${
-                                data.cliente && p.nome === data.cliente
-                                  ? "font-bold text-foreground"
-                                  : "text-muted-foreground"
-                              }`}
-                            >
-                              {p.nome}
-                              {data.cliente && p.nome === data.cliente && (
-                                <span className="ml-1.5 text-[10px] font-bold text-violet-700">
-                                  nosso cliente
-                                </span>
-                              )}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-
             {/* O que o juiz decidiu */}
             {data.pontos.length > 0 ? (
               <section>
