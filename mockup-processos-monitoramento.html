@@ -1,0 +1,280 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root{
+  --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+  --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+  --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+  --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+  --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+  --aviso:#b45309; --aviso-bg:#fffbeb; --aviso-borda:#fde68a;
+  --ok:#059669; --ok-bg:#ecfdf5;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1600px;height:1050px;overflow:hidden}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
+.wrap{padding:22px 26px;height:100%;display:flex;flex-direction:column}
+
+.topo{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex:0 0 auto}
+.h1{font-family:'Poppins';font-weight:700;font-size:27px;letter-spacing:-.01em;line-height:1}
+.sub{margin-top:6px;font-size:13.5px;color:var(--mudo)}
+.pst-l{display:flex;gap:8px;margin-top:12px}
+.pst{background:#fff;border:1px solid var(--borda);border-radius:10px;padding:6px 12px;display:flex;align-items:baseline;gap:6px}
+.pst b{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+.pst span{font-size:11.5px;color:var(--mudo)}
+.pst.vermelha{background:var(--alerta-bg);border-color:var(--alerta-borda)}
+.pst.vermelha b{color:var(--alerta)}.pst.vermelha span{color:var(--alerta-forte)}
+.acoes{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.btn{height:36px;border:1px solid var(--borda);background:#fff;border-radius:9px;padding:0 14px;display:flex;
+  align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--corpo)}
+.btn.primary{background:var(--acento);border-color:var(--acento);color:#fff;box-shadow:0 8px 18px -9px #7c3aed99}
+.btn.alerta{background:var(--alerta);border-color:var(--alerta);color:#fff;box-shadow:0 8px 18px -9px #dc262699}
+.btn.sm{height:31px;font-size:11.5px;padding:0 11px}
+.cred{display:flex;align-items:center;gap:6px;border:1px solid var(--borda);background:#fff;border-radius:9px;
+  padding:6px 11px;font-size:11.5px;font-weight:600;color:var(--corpo-2)}
+.cred b{font-size:13px;color:var(--tinta);font-variant-numeric:tabular-nums}
+
+/* abas do módulo */
+.abas{margin-top:15px;flex:0 0 auto;display:flex;gap:3px;background:var(--hairline);padding:3px;border-radius:10px;align-self:flex-start}
+.abas span{padding:7px 14px;font-size:12.5px;font-weight:600;color:var(--mudo);border-radius:8px;display:flex;align-items:center;gap:7px}
+.abas span.on{background:#fff;color:var(--tinta);box-shadow:0 1px 3px #0f172a1a}
+.abas i{font-style:normal;font-size:10px;font-weight:800;background:#e2e8f0;color:#475569;border-radius:20px;padding:0 5px}
+.abas span.on i{background:var(--acento);color:#fff}
+.abas i.vermelho{background:var(--alerta);color:#fff}
+
+/* diagnóstico */
+.diag{margin-top:14px;flex:0 0 auto;background:#fff;border:1px solid var(--alerta-borda);border-left:3px solid var(--alerta);
+  border-radius:12px;padding:14px 16px;display:flex;align-items:flex-start;gap:13px}
+.diag .ic{width:34px;height:34px;border-radius:10px;background:var(--alerta-bg);color:var(--alerta);
+  display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.diag .co{flex:1;min-width:0}
+.diag .t{font-size:15px;font-weight:700;color:var(--tinta)}
+.diag .d{margin-top:4px;font-size:12.5px;color:var(--corpo);line-height:1.45;max-width:920px}
+.diag .d b{color:var(--tinta);font-weight:600}
+.diag .bts{display:flex;gap:8px;flex:0 0 auto}
+
+.diag2{margin-top:9px;flex:0 0 auto;background:#fff;border:1px solid var(--borda);border-left:3px solid #f59e0b;
+  border-radius:12px;padding:10px 15px;display:flex;align-items:center;gap:11px;font-size:12.5px;color:var(--corpo)}
+.diag2 .ic{color:var(--aviso);display:flex;flex:0 0 auto}
+.diag2 b{color:var(--tinta);font-weight:700}
+
+/* filtro */
+.filtros{margin-top:14px;flex:0 0 auto;background:#fff;border:1px solid var(--borda);border-radius:12px;
+  padding:9px 11px;display:flex;align-items:center;gap:9px}
+.busca{flex:1;min-width:0;height:34px;border:1px solid var(--borda);border-radius:8px;display:flex;align-items:center;
+  gap:8px;padding:0 11px;color:var(--fraco);font-size:12.5px}
+.segs{display:flex;gap:3px;background:var(--hairline);padding:3px;border-radius:9px;flex:0 0 auto}
+.segs span{padding:6px 12px;font-size:12px;font-weight:600;color:var(--mudo);border-radius:7px;display:flex;align-items:center;gap:6px}
+.segs span.on{background:#fff;color:var(--tinta);box-shadow:0 1px 3px #0f172a1a}
+.segs i{font-style:normal;font-size:10px;font-weight:800;background:#e2e8f0;color:#475569;border-radius:20px;padding:0 5px}
+.segs span.on i{background:var(--acento);color:#fff}
+
+/* seções + lista */
+.sec{margin-top:15px;display:flex;align-items:center;gap:9px;flex:0 0 auto}
+.sec .t{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--fraco)}
+.sec .n{font-size:10.5px;font-weight:800;color:#fff;background:var(--alerta);border-radius:20px;padding:1px 7px;font-variant-numeric:tabular-nums}
+.sec .n.calmo{background:#e2e8f0;color:#475569}
+.sec .l{flex:1;height:1px;background:var(--borda)}
+.lista{margin-top:8px;flex:0 0 auto;background:#fff;border:1px solid var(--borda);border-radius:12px;overflow:hidden}
+.lin{height:56px;display:flex;align-items:center;gap:12px;padding:0 14px 0 12px;border-bottom:1px solid var(--hairline)}
+.lin:last-child{border-bottom:0}
+.dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+.dot.verde{background:var(--ok)} .dot.vermelho{background:var(--alerta)} .dot.ambar{background:#f59e0b}
+.lp{width:250px;flex:0 0 auto;min-width:0}
+.lp-n{display:block;font-size:12.5px;font-weight:700;color:var(--tinta-2);line-height:1.2;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lp-c{display:block;margin-top:2px;font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fraco)}
+.lt{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+.lt-x{font-size:12.5px;color:var(--corpo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lt-x.erro{color:var(--alerta-forte);font-weight:500}
+.lt-x.aviso{color:var(--aviso);font-weight:500}
+.tag{flex:0 0 auto;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-radius:5px;padding:2px 6px}
+.tag.nova{background:var(--acento-bg);color:var(--acento-forte)}
+.ld{width:88px;flex:0 0 auto;text-align:right;font-size:11.5px;font-weight:600;color:var(--corpo-2)}
+.ld span{display:block;font-size:10px;font-weight:500;color:var(--fraco);margin-top:1px}
+.lseta{color:var(--fantasma);flex:0 0 auto;display:flex}
+.rodape{margin-top:12px;flex:0 0 auto;background:#fff;border:1px solid var(--borda);border-radius:11px;
+  padding:10px 15px;display:flex;align-items:center;gap:9px;font-size:12px;color:var(--corpo-2)}
+.rodape b{color:var(--tinta);font-weight:700}
+.rodape .ic{color:var(--fraco);display:flex;flex:0 0 auto}
+.rodape .sep{width:1px;height:14px;background:var(--borda);margin:0 4px}
+.maislinha{padding:9px 14px;font-size:12px;font-weight:600;color:var(--acento-forte);background:#fbfaff;
+  border-top:1px solid var(--hairline)}
+</style></head>
+<body>
+<div class="wrap">
+
+  <div class="topo">
+    <div>
+      <div class="h1">Processos</div>
+      <div class="sub">419 processos vigiados nos tribunais — o robô entra todo dia e avisa o que mudou</div>
+      <div class="pst-l">
+        <div class="pst"><b>419</b><span>monitorados</span></div>
+        <div class="pst vermelha"><b>418</b><span>parados</span></div>
+        <div class="pst"><b>1</b><span>nova ação</span></div>
+      </div>
+    </div>
+    <div class="acoes">
+      <div class="cred"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg> <b>7.860</b> créditos</div>
+      <div class="btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> Atualizar todos</div>
+      <div class="btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg> Importar Advbox</div>
+      <div class="btn primary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Novo</div>
+    </div>
+  </div>
+
+  <div class="abas">
+    <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg> Consultar</span>
+    <span class="on"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.247 7.761a6 6 0 0 1 0 8.478"/><path d="M19.075 4.933a10 10 0 0 1 0 14.134"/><path d="M4.925 19.067a10 10 0 0 1 0-14.134"/><path d="M7.753 16.239a6 6 0 0 1 0-8.478"/><circle cx="12" cy="12" r="2"/></svg> Monitoramento <i class="vermelho">418</i></span>
+    <span>Novas Ações <i>1</i></span>
+    <span>Alertas <i>1</i></span>
+    <span>Cofre</span>
+  </div>
+
+  <!-- o diagnóstico: uma frase no lugar de 412 cards vermelhos iguais -->
+  <div class="diag">
+    <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg></div>
+    <div class="co">
+      <div class="t">412 processos pararam de atualizar desde 28/07</div>
+      <div class="d">
+        A credencial <b>OAB CE 38828 (Bruno Boyadjian)</b> expirou no PJe do TJCE. Enquanto ela não for
+        revalidada no Cofre, o robô não consegue entrar e <b>nenhuma movimentação nova chega</b> — nem
+        aqui, nem na Agenda, nem no resumo diário. Revalidar resolve os 412 de uma vez.
+      </div>
+    </div>
+    <div class="bts">
+      <div class="btn alerta"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg> Revalidar no Cofre</div>
+      <div class="btn">Ver os 412</div>
+    </div>
+  </div>
+
+  <div class="diag2">
+    <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
+    <span><b>6</b> processos param por outros motivos: <b>4</b> com número não encontrado no tribunal e
+      <b>2</b> sem credencial cadastrada para o TRF5.</span>
+    <div class="btn sm" style="margin-left:auto">Ver os 6</div>
+  </div>
+
+  <div class="filtros">
+    <div class="busca"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg> Buscar por cliente, CPF ou número do processo…</div>
+    <div class="segs">
+      <span class="on">Todos <i>419</i></span>
+      <span>Parados <i>418</i></span>
+      <span>Monitorando <i>1</i></span>
+      <span>Pausados <i>0</i></span>
+    </div>
+  </div>
+
+  <div class="sec"><span class="t">Parados — precisam de você</span><span class="n">418</span><span class="l"></span></div>
+  <div class="lista">
+    
+  <div class="lin">
+    <span class="dot vermelho"></span>
+    <span class="lp">
+      <span class="lp-n">Carine Sousa × Creditas</span>
+      <span class="lp-c">3071026-54.2026.8.06.0001 · TJCE</span>
+    </span>
+    <span class="lt">
+      <span class="lt-x erro">Credencial do Cofre expirada — o robô não consegue entrar no PJe</span>
+    </span>
+    <span class="ld">há 7 dias<span>desde 28/07</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="dot vermelho"></span>
+    <span class="lp">
+      <span class="lp-n">Carlos Jefferson × Banco Pan</span>
+      <span class="lp-c">3057803-68.2025.8.06.0001 · TJCE</span>
+    </span>
+    <span class="lt">
+      <span class="lt-x erro">Credencial do Cofre expirada — o robô não consegue entrar no PJe</span>
+    </span>
+    <span class="ld">há 7 dias<span>desde 28/07</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="dot vermelho"></span>
+    <span class="lp">
+      <span class="lp-n">Edlane Silva × Itaú Consignado</span>
+      <span class="lp-c">3044182-90.2025.8.06.0001 · TJCE</span>
+    </span>
+    <span class="lt">
+      <span class="lt-x erro">Credencial do Cofre expirada — o robô não consegue entrar no PJe</span>
+    </span>
+    <span class="ld">há 7 dias<span>desde 28/07</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="dot vermelho"></span>
+    <span class="lp">
+      <span class="lp-n">Marcelo Tavares × Enel Ceará</span>
+      <span class="lp-c">3028417-06.2025.8.06.0001 · TJCE</span>
+    </span>
+    <span class="lt">
+      <span class="lt-x erro">Credencial do Cofre expirada — o robô não consegue entrar no PJe</span>
+    </span>
+    <span class="ld">há 7 dias<span>desde 28/07</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="dot ambar"></span>
+    <span class="lp">
+      <span class="lp-n">Lourdes Abreu × Bradesco</span>
+      <span class="lp-c">3061190-77.2025.8.06.0001 · TJCE</span>
+    </span>
+    <span class="lt">
+      <span class="lt-x aviso">Número não encontrado no tribunal — confira o CNJ</span>
+    </span>
+    <span class="ld">há 23 dias<span>desde 12/07</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="dot ambar"></span>
+    <span class="lp">
+      <span class="lp-n">Tereza Nunes × INSS</span>
+      <span class="lp-c">0801234-55.2026.4.05.8100 · TRF5</span>
+    </span>
+    <span class="lt">
+      <span class="lt-x aviso">Nenhuma credencial cadastrada para o TRF5</span>
+    </span>
+    <span class="ld">há 33 dias<span>desde 02/07</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="dot vermelho"></span>
+    <span class="lp">
+      <span class="lp-n">Carlos André × 99 Tecnologia</span>
+      <span class="lp-c">3099743-13.2025.8.06.0001 · TJCE</span>
+    </span>
+    <span class="lt">
+      <span class="lt-x erro">Credencial do Cofre expirada — o robô não consegue entrar no PJe</span>
+    </span>
+    <span class="ld">há 7 dias<span>desde 28/07</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+    <div class="maislinha">Ver os outros 411 processos parados →</div>
+  </div>
+
+  <div class="sec"><span class="t">Monitorando normalmente</span><span class="n calmo">1</span><span class="l"></span></div>
+  <div class="lista">
+  <div class="lin">
+    <span class="dot verde"></span>
+    <span class="lp">
+      <span class="lp-n">Bruno Boyadjian × José Renato</span>
+      <span class="lp-c">3016744-11.2026.8.06.0001 · TJCE</span>
+    </span>
+    <span class="lt">
+      <span class="tag nova">Nova</span>
+      <span class="lt-x">Designada audiência de conciliação no Juizado Especial Cível.</span>
+    </span>
+    <span class="ld">há 4h<span>última mov.</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div></div>
+
+  <div class="rodape">
+    <span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></span>
+    Última varredura hoje às <b>06:00</b> · próxima às <b>18:00</b> · duas vezes por dia, sem consumir créditos.
+    <span class="sep"></span>
+    Créditos são gastos só na <b>consulta avulsa</b> e na <b>1ª captura</b> de um processo novo.
+  </div>
+</div>
+</body></html>
