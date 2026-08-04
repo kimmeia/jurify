@@ -26,7 +26,7 @@
  * `PdpjCloudScraper` parametrizável.
  */
 
-import type { Browser, Page } from "@playwright/test";
+import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { chromium } from "@playwright/test";
 import { gerarCodigoTotp, gerarCodigosVizinhos, type CodigosVizinhos } from "./tjce-totp";
 import type {
@@ -157,6 +157,22 @@ interface DiagnosticoTotp {
   vizinhos: CodigosVizinhos;
 }
 
+/** Opções por consulta. Existe pra o caller decidir se paga o custo de
+ *  abrir documentos — o baseline (1ª execução de um monitoramento) puxa o
+ *  histórico inteiro e não pode disparar dezenas de downloads. */
+export interface OpcoesConsulta {
+  /** Quantos documentos, no máximo, baixar nesta consulta. 0 = nenhum. */
+  teorMaximo?: number;
+}
+
+/** Pausa entre downloads de documento. O motor já foi bloqueado antes por
+ *  volume; documento é requisição extra e vai devagar de propósito. */
+const PAUSA_ENTRE_TEORES_MS = 1_500;
+
+/** Teto de bytes por documento. Sentença com anexo digitalizado passa de
+ *  100 MB e travaria o worker sem ganho nenhum (é imagem, não tem texto). */
+const MAX_BYTES_TEOR = 12 * 1024 * 1024;
+
 export class PjeTjceScraper {
   readonly tribunal: string;
   readonly nome: string;
@@ -236,6 +252,7 @@ export class PjeTjceScraper {
   async consultarPorCnj(
     cnj: string,
     storageStateJson: string,
+    opts?: OpcoesConsulta,
   ): Promise<ResultadoScraper> {
     const inicio = Date.now();
     const cnjMascarado = mascararCnj(cnj);
@@ -453,6 +470,7 @@ export class PjeTjceScraper {
 
       const capa = await this.extrairCapa(page, cnjMascarado);
       const movimentacoes = await this.extrairMovimentacoes(page);
+      await this.baixarTeores(context, movimentacoes, opts?.teorMaximo ?? 0);
 
       // Validação básica: se não pegou nada, é provável que extração
       // falhou (selectors errados ou página não é a de detalhe)
@@ -1151,6 +1169,59 @@ export class PjeTjceScraper {
    * Extrai movimentações. PJe geralmente lista em <table> com colunas
    * "Data" e "Movimento". Cada linha é uma movimentação.
    */
+  /**
+   * Baixa o documento de cada movimentação que plausivelmente decide algo.
+   *
+   * Usa `context.request` em vez de abrir uma aba: a APIRequestContext do
+   * Playwright compartilha os cookies da sessão, então o download já vai
+   * autenticado sem custo de renderizar página.
+   *
+   * Nunca lança — falha vira `teorStatus` na própria movimentação, porque a
+   * consulta em si (movimentações + capa) tem valor mesmo sem o documento, e
+   * quebrar tudo por causa de um PDF sigiloso seria uma péssima troca.
+   */
+  private async baixarTeores(
+    context: BrowserContext,
+    movs: MovimentacaoProcesso[],
+    teorMaximo: number,
+  ): Promise<void> {
+    if (teorMaximo <= 0) return;
+
+    const { deveBuscarTeor, textoDoDocumento, classificarFalhaTeor } = await import(
+      "../../../../server/processos/teor-documento"
+    );
+
+    // Da mais nova pra mais antiga: se o teto cortar, que corte o histórico.
+    const candidatas = movs
+      .filter((m) => m.documentoUrl && deveBuscarTeor(m.texto))
+      .sort((a, b) => (a.data < b.data ? 1 : -1))
+      .slice(0, teorMaximo);
+
+    for (const [i, mov] of candidatas.entries()) {
+      if (i > 0) await new Promise((r) => setTimeout(r, PAUSA_ENTRE_TEORES_MS));
+      try {
+        const resp = await context.request.get(mov.documentoUrl!, {
+          timeout: TIMEOUT_NAV_MS,
+          maxRedirects: 5,
+        });
+        if (!resp.ok()) throw new Error(`HTTP ${resp.status()} ${resp.statusText()}`);
+
+        const corpo = await resp.body();
+        if (corpo.length > MAX_BYTES_TEOR) {
+          throw new Error(`documento grande demais (${Math.round(corpo.length / 1024 / 1024)} MB)`);
+        }
+        mov.teor = await textoDoDocumento(corpo, resp.headers()["content-type"] ?? null);
+        mov.teorStatus = "ok";
+        mov.teorErro = null;
+      } catch (err) {
+        const { status, motivo } = classificarFalhaTeor(err);
+        mov.teor = null;
+        mov.teorStatus = status;
+        mov.teorErro = motivo;
+      }
+    }
+  }
+
   private async extrairMovimentacoes(page: Page): Promise<MovimentacaoProcesso[]> {
     // PJe TJCE 1º grau: timeline das movimentações fica em #divTimeLine
     // (visto no diagnóstico). Estrutura típica é uma lista de cards
@@ -1163,7 +1234,32 @@ export class PjeTjceScraper {
           texto: string;
           tipo: string | null;
           documento: string | null;
+          documentoUrl: string | null;
         }> = [];
+
+        // O documento assinado fica atrás de um link no item da timeline. O
+        // PJe não marca esses links com classe estável, então filtramos por
+        // href: os que apontam pra download/visualização de documento.
+        const RE_DOC = /(documento|download|arquivo|anexo|conteudo|visualizar|inteiroTeor|pdf)/i;
+        const linkDoDocumento = (el: Element): { url: string; nome: string } | null => {
+          const anchors = Array.from(el.querySelectorAll("a[href]")) as HTMLAnchorElement[];
+          for (const a of anchors) {
+            const href = a.getAttribute("href") ?? "";
+            // javascript:void(0) é o padrão de link JSF que só dispara AJAX —
+            // não dá pra baixar por HTTP, então não adianta capturar.
+            if (!href || /^javascript:/i.test(href) || href === "#") continue;
+            if (!RE_DOC.test(href) && !RE_DOC.test(a.className || "") && !RE_DOC.test(a.title || "")) continue;
+            try {
+              return {
+                url: new URL(href, document.baseURI).toString(),
+                nome: (a.title || a.textContent || "").trim().replace(/\s+/g, " ").slice(0, 200),
+              };
+            } catch {
+              continue;
+            }
+          }
+          return null;
+        };
 
         // PJe TJCE 1º grau: estrutura real revelada via diag (commit d8aa569):
         //   <div id="divTimeLine:divEventosTimeLine" class="eventos-timeline">
@@ -1278,11 +1374,13 @@ export class PjeTjceScraper {
           if (horaMatch && dataAtual) {
             const textoSemHora = texto.slice(0, horaMatch.index).trim();
             if (textoSemHora.length >= 3) {
+              const doc1 = linkDoDocumento(el);
               out.push({
                 data: `${dataAtual}T${horaMatch[1]}:${horaMatch[2]}:00`,
                 texto: textoSemHora,
                 tipo: null,
-                documento: null,
+                documento: doc1?.nome ?? null,
+                documentoUrl: doc1?.url ?? null,
               });
               continue;
             }
@@ -1295,11 +1393,13 @@ export class PjeTjceScraper {
           if (inicioBR) {
             const [d, m, y] = inicioBR[1].split("/");
             const hora = inicioBR[2] ? `T${inicioBR[2]}:00` : "";
+            const doc2 = linkDoDocumento(el);
             out.push({
               data: `${y}-${m}-${d}${hora}`,
               texto: inicioBR[3].trim(),
               tipo: null,
-              documento: null,
+              documento: doc2?.nome ?? null,
+              documentoUrl: doc2?.url ?? null,
             });
             continue;
           }
@@ -1324,11 +1424,13 @@ export class PjeTjceScraper {
           // (cria mov com hora 00:00). Só se o texto parece descrição
           // de mov (>10 chars, não só números).
           if (dataAtual && texto.length > 10 && /[a-zA-Z]/.test(texto)) {
+            const doc3 = linkDoDocumento(el);
             out.push({
               data: `${dataAtual}T00:00:00`,
               texto: texto.slice(0, 500),
               tipo: null,
-              documento: null,
+              documento: doc3?.nome ?? null,
+              documentoUrl: doc3?.url ?? null,
             });
           }
         }

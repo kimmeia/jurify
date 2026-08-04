@@ -74,6 +74,16 @@ export interface MovimentacaoProcesso {
   tipo: string | null;
   /** Documento anexado (id ou nome), quando há */
   documento: string | null;
+  /** URL absoluta do documento assinado (despacho/decisão/sentença), quando o
+   *  item da timeline expõe um link. É o que permite ler o que o juiz
+   *  escreveu — `texto` sozinho é só o rótulo do movimento. */
+  documentoUrl?: string | null;
+  /** Texto integral do documento, preenchido só quando o adapter foi
+   *  chamado com `teorMaximo > 0` e o download deu certo. */
+  teor?: string | null;
+  /** Por que não há teor, quando não há. Ver `TeorStatus` no servidor. */
+  teorStatus?: "pendente" | "ok" | "sem_documento" | "indisponivel" | "erro";
+  teorErro?: string | null;
 }
 
 /**

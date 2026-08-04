@@ -17,7 +17,13 @@
  * for desligado. Por ora reutilizamos via import.
  */
 
-import { PjeTjceScraper, TJCE_1G, TJCE_2G, type TribunalPdpjConfig } from "../../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/pje-tjce";
+import {
+  PjeTjceScraper,
+  TJCE_1G,
+  TJCE_2G,
+  type TribunalPdpjConfig,
+  type OpcoesConsulta,
+} from "../../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/pje-tjce";
 import type { ResultadoScraper } from "../../../scripts/spike-motor-proprio/lib/types-spike";
 
 /**
@@ -36,6 +42,7 @@ export async function consultarTjce(
   cnj: string,
   storageStateJson: string,
   config: TribunalPdpjConfig = TJCE_1G,
+  opts?: OpcoesConsulta,
 ): Promise<ResultadoScraper> {
   // PjeTjceScraper exige credencial no constructor pra fluxo de login,
   // mas `consultarPorCnj` usa só `storageStateJson` (sessão pré-criada).
@@ -45,7 +52,7 @@ export async function consultarTjce(
     { username: "(via-sessao)", password: "(via-sessao)", totpSecret: null },
     config,
   );
-  return scraper.consultarPorCnj(cnj, storageStateJson);
+  return scraper.consultarPorCnj(cnj, storageStateJson, opts);
 }
 
 /**
@@ -65,4 +72,4 @@ export async function consultarTjcePorCpf(
 }
 
 export { PjeTjceScraper, TJCE_1G, TJCE_2G };
-export type { TribunalPdpjConfig };
+export type { TribunalPdpjConfig, OpcoesConsulta };

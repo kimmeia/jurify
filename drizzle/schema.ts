@@ -3361,6 +3361,32 @@ export const eventosProcesso = mysqlTable(
      */
     desfecho: mysqlEnum("desfechoEvento", ["favoravel", "desfavoravel", "parcial", "neutro"]),
     relevancia: mysqlEnum("relevanciaEvento", ["relevante", "rotina"]),
+    /**
+     * Teor do documento vinculado à movimentação (o despacho/decisão que o
+     * juiz assinou). `conteudo` é só o RÓTULO do movimento na timeline; sem o
+     * teor não existe "o que o juiz decidiu" pra resumir.
+     *
+     * `teorStatus` deixa a UI ser honesta quando não dá pra ler o documento
+     * (segredo de justiça, PDF escaneado, tribunal que não expõe) em vez de
+     * mostrar um resumo vazio.
+     */
+    teorUrl: varchar("teorUrl", { length: 1024 }),
+    teorNome: varchar("teorNome", { length: 255 }),
+    teor: text("teor"),
+    teorStatus: mysqlEnum("teorStatus", [
+      "pendente",
+      "ok",
+      "sem_documento",
+      "indisponivel",
+      "erro",
+    ])
+      .default("pendente")
+      .notNull(),
+    teorTentativas: int("teorTentativas").default(0).notNull(),
+    teorErro: varchar("teorErro", { length: 255 }),
+    teorObtidoEm: timestamp("teorObtidoEm"),
+    /** Análise IA estruturada — ver `AnaliseMovimentacao` em resumir-movimentacao.ts. */
+    analiseJson: text("analiseJson"),
     lido: boolean("lido").default(false).notNull(),
     /**
      * Desfecho do card de nova ação (feed de Processos). `pendente` = ainda
