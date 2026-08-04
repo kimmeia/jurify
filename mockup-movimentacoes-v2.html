@@ -1,0 +1,420 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root{
+  --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+  --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+  --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+  --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+  --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+  --ok:#059669;
+
+  /* menu — um degrau acima do quase-preto de hoje (#14171f) */
+  --menu:#2a3547; --menu-2:#3d4b61; --menu-txt:#d3dbe6; --menu-forte:#fff;
+  --menu-rot:#93a4bb; --menu-borda:rgba(255,255,255,.10); --menu-acento:#b39dfb;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1600px;height:1050px;overflow:hidden}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta);display:flex}
+
+/* ── menu ── */
+.menu{width:248px;flex:0 0 248px;background:var(--menu);display:flex;flex-direction:column;color:var(--menu-txt)}
+.mtopo{height:60px;display:flex;align-items:center;gap:9px;padding:0 15px;flex:0 0 auto}
+.mlogo{font-family:'Poppins';font-weight:800;font-size:24px;line-height:1;color:#fff}
+.mword{font-family:'Poppins';font-weight:800;font-size:15px;letter-spacing:-.01em;color:#fff}
+.msino{margin-left:auto;position:relative;color:#b9c6d6}
+.msino b{position:absolute;top:-5px;right:-6px;background:#f43f5e;color:#fff;font-size:9.5px;font-weight:800;
+  padding:1px 5px;border-radius:20px;border:2px solid var(--menu)}
+.mgrupo{padding:0 8px 2px}
+.mrot{padding:9px 8px 3px;font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--menu-rot)}
+.mitem{position:relative;height:34px;border-radius:8px;display:flex;align-items:center;gap:9px;padding:0 9px;
+  font-size:13px;font-weight:500;margin-bottom:3px}
+.mitem.on{background:var(--menu-2);color:var(--menu-forte);font-weight:600}
+.mitem .mic{display:flex;color:#93a4b8}
+.mitem.on .mic{color:var(--menu-acento)}
+.mnome{flex:1}
+.mbarra{position:absolute;left:-8px;top:5px;bottom:5px;width:3px;border-radius:0 3px 3px 0;background:var(--menu-acento)}
+.mbadge{background:rgba(167,139,250,.22);color:#c4b5fd;font-size:10px;font-weight:800;padding:1px 6px;border-radius:20px}
+.mbadge.alerta{background:rgba(244,63,94,.2);color:#fda4af}
+.mrod{margin-top:auto;padding:11px 12px;display:flex;align-items:center;gap:8px;border-top:1px solid var(--menu-borda)}
+.mav{width:31px;height:31px;border-radius:50%;background:rgba(167,139,250,.2);color:#c4b5fd;font-size:12px;
+  font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.mu{flex:1;min-width:0}
+.mu b{display:block;font-size:12.5px;font-weight:600;color:#e2e8f0;line-height:1.1}
+.mu span{display:block;font-size:10.5px;color:#8296b0;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mbtn{width:29px;height:29px;border-radius:8px;border:1px solid var(--menu-borda);display:flex;align-items:center;
+  justify-content:center;color:#a5b4c8;flex:0 0 auto}
+.mbtn.sair{border-color:rgba(244,63,94,.35);background:rgba(244,63,94,.1);color:#fda4af}
+
+/* ── conteúdo ── */
+.main{flex:1;min-width:0;display:flex;flex-direction:column;padding:22px 26px}
+.topo{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex:0 0 auto}
+.h1{font-family:'Poppins';font-weight:700;font-size:26px;letter-spacing:-.01em}
+.sub{margin-top:3px;font-size:13px;color:var(--mudo)}
+.pst-l{display:flex;gap:8px;margin-top:11px}
+.pst{background:#fff;border:1px solid var(--borda);border-radius:10px;padding:6px 12px;display:flex;align-items:baseline;gap:6px}
+.pst b{font-size:15px;font-weight:700}.pst span{font-size:11.5px;color:var(--mudo)}
+.pst.vermelha{background:var(--alerta-bg);border-color:var(--alerta-borda)}
+.pst.vermelha b{color:var(--alerta)}.pst.vermelha span{color:var(--alerta-forte)}
+.acoes{display:flex;gap:8px;flex:0 0 auto}
+.btn{height:36px;border:1px solid var(--borda);background:#fff;border-radius:9px;padding:0 14px;display:flex;
+  align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--corpo)}
+.btn.primary{background:var(--acento);border-color:var(--acento);color:#fff;box-shadow:0 8px 18px -9px #7c3aed99}
+
+/* barra de filtro */
+.filtros{margin-top:15px;flex:0 0 auto;background:#fff;border:1px solid var(--borda);border-radius:12px;
+  padding:9px 11px;display:flex;align-items:center;gap:9px}
+.busca{flex:1;min-width:0;height:34px;border:1px solid var(--borda);border-radius:8px;display:flex;align-items:center;
+  gap:8px;padding:0 11px;color:var(--fraco);font-size:12.5px}
+.sel{height:34px;border:1px solid var(--borda);border-radius:8px;padding:0 11px;display:flex;align-items:center;gap:8px;
+  font-size:12.5px;font-weight:500;color:var(--corpo);flex:0 0 auto}
+.abas{display:flex;gap:3px;background:var(--hairline);padding:3px;border-radius:9px;flex:0 0 auto}
+.abas span{padding:6px 12px;font-size:12px;font-weight:600;color:var(--mudo);border-radius:7px;display:flex;align-items:center;gap:6px}
+.abas span.on{background:#fff;color:var(--tinta);box-shadow:0 1px 3px #0f172a1a}
+.abas i{font-style:normal;font-size:10px;font-weight:800;background:#e2e8f0;color:#475569;border-radius:20px;padding:0 5px}
+.abas span.on i{background:var(--acento);color:#fff}
+
+/* seções */
+.sec{margin-top:16px;display:flex;align-items:center;gap:9px;flex:0 0 auto}
+.sec .t{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--fraco)}
+.sec .n{font-size:10.5px;font-weight:800;color:#fff;background:var(--alerta);border-radius:20px;padding:1px 7px}
+.sec .n.calmo{background:#e2e8f0;color:#475569}
+.sec .l{flex:1;height:1px;background:var(--borda)}
+
+/* card de ação */
+.acao{margin-top:9px;flex:0 0 auto;background:#fff;border:1px solid var(--borda);border-left:3px solid var(--alerta);
+  border-radius:12px;padding:13px 15px;display:flex;align-items:center;gap:16px}
+.acao .corpo{flex:1;min-width:0}
+.acao .cab{display:flex;align-items:center;gap:8px}
+.acao .partes{font-size:13.5px;font-weight:700;color:var(--tinta)}
+.acao .cnj{font-size:10.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fraco)}
+.acao .trib{font-size:9.5px;font-weight:800;letter-spacing:.04em;color:var(--corpo-2);border:1px solid var(--borda);
+  border-radius:5px;padding:1px 5px}
+.acao .frase{margin-top:5px;font-size:14px;font-weight:600;color:var(--tinta-2);line-height:1.3}
+.acao .rod{margin-top:8px;display:flex;align-items:center;gap:10px}
+.pz{background:var(--alerta-bg);border:1px solid var(--alerta-borda);color:var(--alerta-forte);border-radius:7px;
+  padding:4px 9px;font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;gap:6px}
+.nota{font-size:11.5px;color:var(--mudo);display:inline-flex;align-items:center;gap:5px}
+.acao .bts{display:flex;flex-direction:column;gap:7px;flex:0 0 auto;width:148px}
+.acao .bts .btn{width:100%;justify-content:center;height:34px}
+
+/* lista */
+.lista{margin-top:9px;flex:0 0 auto;background:#fff;border:1px solid var(--borda);border-radius:12px;overflow:hidden}
+.lin{height:54px;display:flex;align-items:center;gap:12px;padding:0 14px 0 11px;border-bottom:1px solid var(--hairline)}
+.lin:last-child{border-bottom:0}
+.ponto{width:6px;height:6px;border-radius:50%;background:transparent;flex:0 0 auto}
+.ponto.on{background:var(--acento)}
+.lp{width:236px;flex:0 0 auto;min-width:0}
+.lp-n{display:block;font-size:12.5px;font-weight:700;color:var(--tinta-2);line-height:1.2;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lp-c{display:block;margin-top:2px;font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fraco)}
+.lt{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+.lt-x{font-size:12.5px;color:var(--corpo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{flex:0 0 auto;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-radius:5px;padding:2px 6px}
+.tag.verde{background:#ecfdf5;color:#047857}
+.tag.azul{background:#eff6ff;color:#1d4ed8}
+.tag.cinza{background:#f1f5f9;color:#475569}
+.ld{width:78px;flex:0 0 auto;text-align:right;font-size:11.5px;font-weight:600;color:var(--corpo-2)}
+.ld span{display:block;font-size:10px;font-weight:500;color:var(--fraco);margin-top:1px}
+.lseta{color:var(--fantasma);flex:0 0 auto;display:flex}
+
+/* rodapé de rotina */
+.rotina{margin-top:9px;flex:0 0 auto;background:#fff;border:1px dashed var(--borda);border-radius:12px;
+  padding:10px 15px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--corpo-2)}
+.rotina b{color:var(--tinta)}
+.rotina .btn{height:30px;font-size:11.5px;padding:0 11px;margin-left:auto}
+</style></head>
+<body>
+
+<aside class="menu">
+  <div class="mtopo">
+    <span class="mlogo">J<span style="color:#a78bfa">.</span></span>
+    <span class="mword">Jurid<span style="color:#a78bfa">Flow</span></span>
+    <span class="msino"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><b>25</b></span>
+  </div>
+  
+  <div class="mgrupo">
+    <p class="mrot">Dia a dia</p>
+    
+      <div class="mitem">
+        
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span>
+        <span class="mnome">Dashboard</span>
+        
+      </div>
+      <div class="mitem on">
+        <span class="mbarra"></span>
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"/><path d="m16 16 6-6"/><path d="m21.5 10.5-8-8"/><path d="m8 8 6-6"/><path d="m8.5 7.5 8 8"/></svg></span>
+        <span class="mnome">Movimentações</span>
+        <span class="mbadge">25</span>
+      </div>
+      <div class="mitem">
+        
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg></span>
+        <span class="mnome">Agenda</span>
+        <span class="mbadge alerta">7</span>
+      </div>
+      <div class="mitem">
+        
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg></span>
+        <span class="mnome">Atendimento</span>
+        
+      </div>
+  </div>
+  <div class="mgrupo">
+    <p class="mrot">Carteira</p>
+    
+      <div class="mitem">
+        
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg></span>
+        <span class="mnome">Clientes</span>
+        
+      </div>
+      <div class="mitem">
+        
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M4.268 21a2 2 0 0 0 1.727 1H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3"/><path d="m9 18-1.5-1.5"/><circle cx="5" cy="14" r="3"/></svg></span>
+        <span class="mnome">Processos</span>
+        
+      </div>
+      <div class="mitem">
+        
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></svg></span>
+        <span class="mnome">Acordos</span>
+        
+      </div>
+      <div class="mitem">
+        
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></span>
+        <span class="mnome">Kanban</span>
+        
+      </div>
+  </div>
+  <div class="mgrupo">
+    <p class="mrot">Ferramentas</p>
+    
+      <div class="mitem">
+        
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg></span>
+        <span class="mnome">Cálculos</span>
+        
+      </div>
+      <div class="mitem">
+        
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span>
+        <span class="mnome">Modelos</span>
+        
+      </div>
+      <div class="mitem">
+        
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span>
+        <span class="mnome">Automações</span>
+        
+      </div>
+  </div>
+  <div class="mgrupo">
+    <p class="mrot">Gestão</p>
+    
+      <div class="mitem">
+        
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+        <span class="mnome">Financeiro</span>
+        
+      </div>
+      <div class="mitem">
+        
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></span>
+        <span class="mnome">Relatórios</span>
+        
+      </div>
+      <div class="mitem">
+        
+        <span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg></span>
+        <span class="mnome">Roadmap</span>
+        
+      </div>
+  </div>
+  <div class="mrod">
+    <span class="mav">B</span>
+    <span class="mu"><b>Bruno Boyadjian</b><span>escritorio@boyadjian.adv.br</span></span>
+    <span class="mbtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg></span>
+    <span class="mbtn sair"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg></span>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="topo">
+    <div>
+      <div class="h1">Movimentações</div>
+      <div class="sub">O que os tribunais publicaram nos seus processos</div>
+      <div class="pst-l">
+        <div class="pst"><b>25</b><span>nos últimos 7 dias</span></div>
+        <div class="pst vermelha"><b>1</b><span>exige ação sua</span></div>
+        <div class="pst"><b>12</b><span>não lidas</span></div>
+      </div>
+    </div>
+    <div class="acoes">
+      <div class="btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg> Resumo diário</div>
+      <div class="btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg> Marcar rotina como lida</div>
+    </div>
+  </div>
+
+  <div class="filtros">
+    <div class="busca"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg> Buscar por cliente, CNJ ou trecho da decisão…</div>
+    <div class="sel">Últimos 7 dias <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+    <div class="abas">
+      <span class="on">Tudo <i>25</i></span>
+      <span>Exigem ação <i>1</i></span>
+      <span>Relevantes <i>9</i></span>
+      <span>Não lidas <i>12</i></span>
+    </div>
+  </div>
+
+  <div class="sec"><span class="t">Exige ação sua</span><span class="n">1</span><span class="l"></span></div>
+
+  <div class="acao">
+    <div class="corpo">
+      <div class="cab">
+        <span class="partes">Bruno Boyadjian × José Renato</span>
+        <span class="cnj">3016744-11.2026.8.06.0001</span>
+        <span class="trib">TJCE</span>
+      </div>
+      <div class="frase">Designada audiência de conciliação no Juizado Especial Cível de Fortaleza.</div>
+      <div class="rod">
+        <span class="pz"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg> Audiência 31/07 · venceu há 2 dias</span>
+        <span class="nota"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m14.5 12.5-5 5"/><path d="m9.5 12.5 5 5"/></svg> íntegra não disponível no PJe</span>
+      </div>
+    </div>
+    <div class="bts">
+      <div class="btn primary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19h6"/><path d="M16 2v4"/><path d="M19 16v6"/><path d="M21 12.598V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8.5"/><path d="M3 10h18"/><path d="M8 2v4"/></svg> Agendar prazo</div>
+      <div class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg> Ver no tribunal</div>
+    </div>
+  </div>
+
+  <div class="sec"><span class="t">Relevantes, sem prazo pra você</span><span class="n calmo">9</span><span class="l"></span></div>
+
+  <div class="lista">
+  <div class="lin">
+    <span class="ponto on"></span>
+    <span class="lp">
+      <span class="lp-n">Banco do Brasil × Bruno Marcatto</span>
+      <span class="lp-c">0265310-21.2023.8.06.0001</span>
+    </span>
+    <span class="lt">
+      
+      <span class="lt-x">Conclusos para despacho</span>
+    </span>
+    <span class="ld">30/07<span>há 5 dias</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="ponto on"></span>
+    <span class="lp">
+      <span class="lp-n">Carlos Jefferson × Banco Pan</span>
+      <span class="lp-c">3057803-68.2025.8.06.0001</span>
+    </span>
+    <span class="lt">
+      <span class="tag verde">Sentença</span>
+      <span class="lt-x">Juiz julgou parcialmente procedente o pedido e condenou o banco a devolver os valores.</span>
+    </span>
+    <span class="ld">30/07<span>há 5 dias</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="ponto on"></span>
+    <span class="lp">
+      <span class="lp-n">Carlos André × 99 Tecnologia</span>
+      <span class="lp-c">3099743-13.2025.8.06.0001</span>
+    </span>
+    <span class="lt">
+      <span class="tag cinza">Extinção</span>
+      <span class="lt-x">Reconhecida a prescrição e extinto o processo com resolução de mérito.</span>
+    </span>
+    <span class="ld">30/07<span>há 5 dias</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="ponto"></span>
+    <span class="lp">
+      <span class="lp-n">Carine Sousa × Creditas</span>
+      <span class="lp-c">3071026-54.2026.8.06.0001</span>
+    </span>
+    <span class="lt">
+      <span class="tag cinza">Juntada</span>
+      <span class="lt-x">Petição inicial e documentos juntados aos autos (4 documentos).</span>
+    </span>
+    <span class="ld">30/07<span>há 5 dias</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="ponto"></span>
+    <span class="lp">
+      <span class="lp-n">Carine Sousa × Creditas</span>
+      <span class="lp-c">3071026-54.2026.8.06.0001</span>
+    </span>
+    <span class="lt">
+      
+      <span class="lt-x">Distribuído por sorteio à 12ª Vara Cível de Fortaleza.</span>
+    </span>
+    <span class="ld">30/07<span>há 5 dias</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="ponto"></span>
+    <span class="lp">
+      <span class="lp-n">Edlane Silva × Itaú Consignado</span>
+      <span class="lp-c">3044182-90.2025.8.06.0001</span>
+    </span>
+    <span class="lt">
+      <span class="tag azul">Decisão</span>
+      <span class="lt-x">Deferida a gratuidade da justiça e determinada a citação da parte ré.</span>
+    </span>
+    <span class="ld">29/07<span>há 6 dias</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="ponto"></span>
+    <span class="lp">
+      <span class="lp-n">Tereza Nunes × INSS</span>
+      <span class="lp-c">0801234-55.2026.4.05.8100</span>
+    </span>
+    <span class="lt">
+      <span class="tag azul">Perícia</span>
+      <span class="lt-x">Laudo pericial anexado; abertura de vista às partes por 10 dias.</span>
+    </span>
+    <span class="ld">29/07<span>há 6 dias</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="ponto"></span>
+    <span class="lp">
+      <span class="lp-n">Marcelo Tavares × Enel Ceará</span>
+      <span class="lp-c">3028417-06.2025.8.06.0001</span>
+    </span>
+    <span class="lt">
+      <span class="tag cinza">Contestação</span>
+      <span class="lt-x">Contestação apresentada pela ré; réplica facultada em 15 dias.</span>
+    </span>
+    <span class="ld">28/07<span>há 7 dias</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="ponto"></span>
+    <span class="lp">
+      <span class="lp-n">Lourdes Abreu × Bradesco</span>
+      <span class="lp-c">3061190-77.2025.8.06.0001</span>
+    </span>
+    <span class="lt">
+      <span class="tag verde">Acordo</span>
+      <span class="lt-x">Homologado o acordo e determinada a suspensão até o fim do pagamento.</span>
+    </span>
+    <span class="ld">28/07<span>há 7 dias</span></span>
+    <span class="lseta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div></div>
+
+  <div class="rotina">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> <b>34</b> movimentações de rotina (juntadas, publicações, expedientes) foram escondidas.
+    <div class="btn">Ver todas</div>
+    <div class="btn" style="margin-left:0">Marcar como lidas</div>
+  </div>
+</main>
+</body></html>
