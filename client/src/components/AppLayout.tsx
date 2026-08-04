@@ -426,11 +426,11 @@ function AppSidebarContent({
             <div className={"flex items-center w-full transition-all " + (isCollapsed ? "justify-center" : "gap-2 px-2")}>
               <button
                 onClick={toggleSidebar}
-                className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-sidebar-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring shrink-0"
                 aria-label="Alternar navegação"
                 title="Recolher / expandir menu"
               >
-                <MarcaJ size={26} wordmark={!isCollapsed} />
+                <MarcaJ size={26} wordmark={!isCollapsed} tom="sidebar" />
               </button>
               {!isCollapsed && isAdmin && (
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
@@ -455,10 +455,10 @@ function AppSidebarContent({
                 <div key={grupo.titulo} className="px-2 pb-1">
                   {/* O rótulo some no modo ícone — sobra o separador, que já
                       diz onde um grupo termina. */}
-                  <p className="px-2 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground/70 group-data-[collapsible=icon]:hidden">
+                  <p className="px-2 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
                     {grupo.titulo}
                   </p>
-                  <div className="hidden group-data-[collapsible=icon]:block mx-auto my-1.5 h-px w-6 bg-border" />
+                  <div className="hidden group-data-[collapsible=icon]:block mx-auto my-1.5 h-px w-6 bg-sidebar-border" />
                   <SidebarMenu>
                     {visiveis.map((item) => {
                       const ativo = item.prefixo
@@ -472,7 +472,7 @@ function AppSidebarContent({
                               tem overflow-hidden, e dentro dele o marcador
                               seria cortado. */}
                           {ativo && (
-                            <span className="absolute left-0 top-1.5 bottom-1.5 z-10 w-[3px] rounded-r bg-primary group-data-[collapsible=icon]:hidden" />
+                            <span className="absolute left-0 top-1.5 bottom-1.5 z-10 w-[3px] rounded-r bg-sidebar-primary group-data-[collapsible=icon]:hidden" />
                           )}
                           <SidebarMenuButton
                             isActive={ativo}
@@ -480,15 +480,15 @@ function AppSidebarContent({
                             tooltip={item.rotulo}
                             className={`h-9 relative transition-all ${ativo ? "font-semibold" : "font-normal"} ${itemsLocked ? "opacity-50" : ""}`}
                           >
-                            <Icone className={`h-4 w-4 ${ativo ? "text-primary" : ""}`} />
+                            <Icone className={`h-4 w-4 ${ativo ? "text-sidebar-primary" : ""}`} />
                             <span className="flex-1">{item.rotulo}</span>
                             {contagem > 0 && (
                               <>
                                 <span
                                   className={`ml-auto rounded-full px-1.5 py-px text-[10px] font-extrabold tabular-nums group-data-[collapsible=icon]:hidden ${
                                     item.tomBadge === "alerta"
-                                      ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-200"
-                                      : "bg-primary/10 text-primary"
+                                      ? "bg-rose-500/20 text-rose-200"
+                                      : "bg-sidebar-primary/20 text-sidebar-primary"
                                   }`}
                                 >
                                   {contagem > 99 ? "99+" : contagem}
@@ -497,7 +497,7 @@ function AppSidebarContent({
                                     responde "tem algo esperando aqui?". */}
                                 <span
                                   className={`absolute right-1.5 top-1.5 hidden h-1.5 w-1.5 rounded-full group-data-[collapsible=icon]:block ${
-                                    item.tomBadge === "alerta" ? "bg-rose-500" : "bg-primary"
+                                    item.tomBadge === "alerta" ? "bg-rose-400" : "bg-sidebar-primary"
                                   }`}
                                 />
                               </>
@@ -537,17 +537,17 @@ function AppSidebarContent({
             <div className="flex items-center gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex flex-1 min-w-0 items-center gap-2.5 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors text-left group-data-[collapsible=icon]:flex-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <button className="flex flex-1 min-w-0 items-center gap-2.5 rounded-lg px-1 py-1 hover:bg-sidebar-accent transition-colors text-left group-data-[collapsible=icon]:flex-none focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
                     <Avatar className="h-8 w-8 border shrink-0">
-                      <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
+                      <AvatarFallback className="text-xs font-medium bg-sidebar-primary/20 text-sidebar-primary">
                         {user?.name?.charAt(0).toUpperCase() || "U"}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                      <p className="text-[12.5px] font-semibold truncate leading-none text-foreground">
+                      <p className="text-[12.5px] font-semibold truncate leading-none text-sidebar-foreground">
                         {user?.name || "Utilizador"}
                       </p>
-                      <p className="text-[10.5px] text-muted-foreground truncate mt-1">
+                      <p className="text-[10.5px] text-sidebar-foreground/55 truncate mt-1">
                         {user?.email || "-"}
                       </p>
                     </div>
@@ -607,8 +607,10 @@ function AppSidebarContent({
                   onClick={() => navigateOrBlock("/configuracoes")}
                   title="Configurações"
                   aria-label="Configurações"
-                  className={`h-8 w-8 shrink-0 rounded-lg border flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors ${
-                    location === "/configuracoes" ? "border-primary text-primary bg-primary/5" : ""
+                  className={`h-8 w-8 shrink-0 rounded-lg border border-sidebar-border flex items-center justify-center text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors ${
+                    location === "/configuracoes"
+                      ? "border-sidebar-primary text-sidebar-primary bg-sidebar-primary/10"
+                      : ""
                   }`}
                 >
                   <Settings className="h-4 w-4" />
@@ -618,7 +620,7 @@ function AppSidebarContent({
                 onClick={logout}
                 title="Sair"
                 aria-label="Sair"
-                className="h-8 w-8 shrink-0 rounded-lg border border-destructive/30 bg-destructive/5 flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
+                className="h-8 w-8 shrink-0 rounded-lg border border-rose-400/40 bg-rose-500/10 flex items-center justify-center text-rose-300 hover:bg-rose-500/20 transition-colors"
               >
                 <LogOut className="h-4 w-4" />
               </button>
@@ -661,7 +663,7 @@ function AppSidebarContent({
                 <DropdownMenuTrigger asChild>
                   <button className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Perfil">
                     <Avatar className="h-8 w-8 border">
-                      <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
+                      <AvatarFallback className="text-xs font-medium bg-sidebar-primary/20 text-sidebar-primary">
                         {user?.name?.charAt(0).toUpperCase() || "U"}
                       </AvatarFallback>
                     </Avatar>
