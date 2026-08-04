@@ -3121,6 +3121,45 @@ function ResultadoAtendimentoDialog({ evento, open, onOpenChange, onConcluido }:
 // PÁGINA PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Pastilha de contador. O número vem primeiro e em negrito porque é ele que
+ * decide se o advogado vai clicar; o rótulo é só a legenda.
+ */
+function PastilhaContador({
+  valor,
+  rotulo,
+  alerta,
+  onClick,
+}: {
+  valor: number;
+  rotulo: string;
+  alerta?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-baseline gap-1.5 rounded-[10px] border px-3 py-1.5 transition-colors ${
+        alerta
+          ? "border-rose-200 bg-rose-50 hover:bg-rose-100"
+          : "border-slate-200 bg-white hover:bg-slate-50"
+      }`}
+    >
+      <span
+        className={`text-[15px] font-bold tabular-nums leading-none ${
+          alerta ? "text-rose-600" : "text-slate-900"
+        }`}
+      >
+        {valor}
+      </span>
+      <span className={`text-[11.5px] font-medium ${alerta ? "text-rose-700" : "text-slate-500"}`}>
+        {rotulo}
+      </span>
+    </button>
+  );
+}
+
 export default function Agenda() {
   const { user } = useAuth();
   const [tab, setTab] = useState("eventos");
@@ -3227,32 +3266,6 @@ export default function Agenda() {
           <h1 className="text-[27px] font-bold tracking-tight leading-none">Agenda</h1>
           <p className="text-[13.5px] text-slate-500 mt-1.5">
             Compromissos, prazos e tarefas do escritório
-            {contadores ? (
-              <>
-                {" · "}
-                <button
-                  type="button"
-                  className="font-semibold text-slate-700 hover:underline"
-                  onClick={() => { setFiltroStatus("pendentes"); setTab("eventos"); }}
-                >
-                  {contadores.hojeCount ?? 0} hoje
-                </button>
-                {(contadores.atrasadosCount ?? 0) > 0 && (
-                  <>
-                    {" · "}
-                    <button
-                      type="button"
-                      className="font-bold text-rose-600 hover:underline"
-                      onClick={() => { setFiltroStatus("pendentes"); setTab("eventos"); }}
-                    >
-                      {contadores.atrasadosCount} atrasado(s)
-                    </button>
-                  </>
-                )}
-                {" · "}
-                <span className="text-slate-500">{contadores.pendentesCount ?? 0} pendentes</span>
-              </>
-            ) : null}
           </p>
         </div>
         {podeCriar && (
@@ -3267,6 +3280,7 @@ export default function Agenda() {
 
       {/* ═══════════ TABS PILL ═══════════ */}
       <Tabs value={tab} onValueChange={setTab}>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="bg-slate-100 rounded-[9px] p-[3px] inline-flex">
           <TabsList className="bg-transparent gap-1 p-0 h-auto">
             <TabsTrigger
@@ -3282,6 +3296,31 @@ export default function Agenda() {
               <CalendarDays className="h-3.5 w-3.5" /> Calendário
             </TabsTrigger>
           </TabsList>
+        </div>
+
+        {/* Números do dia. Ficam fora do subtítulo de propósito: "66
+            atrasados" é um alarme e, escrito no meio de uma frase cinza,
+            passava despercebido. */}
+        {contadores && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <PastilhaContador
+              valor={contadores.hojeCount ?? 0}
+              rotulo="hoje"
+              onClick={() => { setFiltroStatus("pendentes"); setTab("eventos"); }}
+            />
+            <PastilhaContador
+              valor={contadores.atrasadosCount ?? 0}
+              rotulo={(contadores.atrasadosCount ?? 0) === 1 ? "atrasado" : "atrasados"}
+              alerta={(contadores.atrasadosCount ?? 0) > 0}
+              onClick={() => { setFiltroStatus("pendentes"); setTab("eventos"); }}
+            />
+            <PastilhaContador
+              valor={contadores.pendentesCount ?? 0}
+              rotulo="pendentes"
+              onClick={() => { setFiltroStatus("pendentes"); setTab("eventos"); }}
+            />
+          </div>
+        )}
         </div>
 
         {/* EVENTOS (antiga "Lista" + integra "Hoje" — hero/timeline aparecem
