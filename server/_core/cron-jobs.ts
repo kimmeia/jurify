@@ -251,6 +251,21 @@ export function iniciarJobs() {
   setTimeout(rodarHealthCheckWhatsApp, 2 * 60 * 1000);
   setInterval(rodarHealthCheckWhatsApp, 60 * 60 * 1000);
 
+  // Resumo diário das movimentações: o tick é HORÁRIO porque quem decide a
+  // hora é o fuso de cada escritório — um cron fixo em UTC mandaria o resumo
+  // de madrugada pra metade do país. A idempotência (escritório, dia, canal)
+  // garante que ticks extras não redisparem.
+  const rodarResumoMovimentacoes = async () => {
+    try {
+      const { rodarResumoDiario } = await import("../processos/cron-resumo-diario");
+      await rodarResumoDiario();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] resumo diário falhou");
+    }
+  };
+  setTimeout(rodarResumoMovimentacoes, 3 * 60 * 1000);
+  setInterval(rodarResumoMovimentacoes, 60 * 60 * 1000);
+
   // 1x por dia: catch-up de cobranças que o webhook eventualmente
   // perdeu (race condition, downtime curto). Webhook (asaas-webhook.ts)
   // é a fonte primária e cobre eventos em tempo real — não precisamos

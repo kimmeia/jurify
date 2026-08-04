@@ -41,7 +41,12 @@ import {
 } from "./polo-matcher";
 import { extrairAnoCnj } from "./cnj-parser";
 import { hashEvento as hashEventoNorm } from "../../scripts/spike-motor-proprio/lib/parser-utils";
-import { classificarMovimentacao, modeloParaEscritorio } from "./resumir-movimentacao";
+import {
+  analisarMovimentacao,
+  modeloParaEscritorio,
+  type LadoCliente,
+} from "./resumir-movimentacao";
+import { persistirAnalise } from "./aplicar-analise";
 
 /**
  * Idade máxima (em anos) que um CNJ pode ter pra ser considerado "novo"
@@ -58,6 +63,21 @@ import { classificarMovimentacao, modeloParaEscritorio } from "./resumir-movimen
  */
 const ANOS_MAXIMOS_SEM_DATA_REF = 3;
 
+/**
+ * Quantos documentos abrir por consulta.
+ *
+ * Cada teor é uma requisição extra no tribunal, e volume foi o que derrubou o
+ * motor antes. 3 cobre o caso real (é raro um processo receber mais de uma
+ * decisão entre dois polls de 1h) sem virar rajada quando um processo antigo
+ * despeja muita coisa de uma vez. O que passar do teto fica com
+ * teorStatus='pendente' e pode ser baixado sob demanda no painel.
+ *
+ * O baseline (1ª execução do monitoramento) passa 0 de propósito: ele importa
+ * o histórico inteiro, e abrir dezenas de documentos de uma vez é exatamente
+ * o padrão de tráfego que chama atenção.
+ */
+const TEOR_MAXIMO_POR_CONSULTA = 3;
+
 const log = createLogger("motor-cron");
 
 /**
@@ -73,6 +93,40 @@ const log = createLogger("motor-cron");
  */
 let pollMovsRodando = false;
 let pollNovasAcoesRodando = false;
+
+/**
+ * Campos de teor prontos pro INSERT do evento.
+ *
+ * `sem_documento` e `pendente` dizem coisas diferentes e a UI depende da
+ * distinção: sem_documento é um fato do movimento (rotina não tem documento e
+ * nunca vai ter), pendente é "ainda não tentamos" — só o segundo justifica um
+ * botão de "buscar o documento".
+ */
+function camposTeor(mov: {
+  texto: string;
+  documentoUrl?: string | null;
+  documento?: string | null;
+  teor?: string | null;
+  teorStatus?: string;
+  teorErro?: string | null;
+}) {
+  const status = (mov.teorStatus ??
+    (mov.documentoUrl ? "pendente" : "sem_documento")) as
+    | "pendente"
+    | "ok"
+    | "sem_documento"
+    | "indisponivel"
+    | "erro";
+  return {
+    teorUrl: mov.documentoUrl ?? null,
+    teorNome: mov.documento?.slice(0, 255) ?? null,
+    teor: mov.teor ?? null,
+    teorStatus: status,
+    teorTentativas: mov.teorStatus ? 1 : 0,
+    teorErro: mov.teorErro?.slice(0, 255) ?? null,
+    teorObtidoEm: mov.teor ? new Date() : null,
+  };
+}
 
 /**
  * Hash determinístico das movimentações pra detectar mudanças rápido.
@@ -201,6 +255,9 @@ export async function pollarUmMonitoramentoMovs(
     // Decisão antes de qualquer check de credencial pra TRF-5 não cair em
     // "Credencial não vinculada".
     const requerCred = tribunalRequerCredencial(mon.tribunal);
+    // Baseline não abre documento: a 1ª execução importa o histórico inteiro
+    // e viraria uma rajada de downloads no tribunal.
+    const teorMaximo = mon.hashUltimasMovs ? TEOR_MAXIMO_POR_CONSULTA : 0;
 
     let resultado: Awaited<ReturnType<typeof consultarTjce>>;
     const cfgTribunal = getConfigTribunal(mon.tribunal);
@@ -256,7 +313,7 @@ export async function pollarUmMonitoramentoMovs(
         return { ok: false, detectadas: 0, erro: `Tribunal ${mon.tribunal} sem adapter` };
       }
 
-      resultado = await consultarTjce(mon.searchKey, sessao, cfgTribunal);
+      resultado = await consultarTjce(mon.searchKey, sessao, cfgTribunal, { teorMaximo });
 
       // Sessão morta no ponto de uso (o PDPJ derrubou antes da nossa estimativa
       // de 90min): força relogin e tenta de novo UMA vez. Sem isto o auto-login
@@ -268,7 +325,7 @@ export async function pollarUmMonitoramentoMovs(
           forcarRelogin: true,
         });
         if (sessaoNova) {
-          resultado = await consultarTjce(mon.searchKey, sessaoNova, cfgTribunal);
+          resultado = await consultarTjce(mon.searchKey, sessaoNova, cfgTribunal, { teorMaximo });
         }
       }
     }
@@ -312,7 +369,7 @@ export async function pollarUmMonitoramentoMovs(
       try {
         const sessao2 = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
         if (sessao2) {
-          const r2 = await consultarTjce(mon.searchKey, sessao2, cfg2grau);
+          const r2 = await consultarTjce(mon.searchKey, sessao2, cfg2grau, { teorMaximo });
           if (r2.ok && r2.movimentacoes.length > 0) {
             resultado.movimentacoes = mesclarMovimentacoes(
               resultado.movimentacoes,
@@ -361,6 +418,7 @@ export async function pollarUmMonitoramentoMovs(
             cnjAfetado: mon.searchKey,
             hashDedup: dedup,
             lido: true,
+            ...camposTeor(mov),
           });
         } catch (err) {
           const errAny = err as any;
@@ -423,6 +481,7 @@ export async function pollarUmMonitoramentoMovs(
             cnjAfetado: mon.searchKey,
             hashDedup: dedup,
             lido: false,
+            ...camposTeor(mov),
           });
           const eventoId = (result as { insertId: number }).insertId;
           movsNovas.push({ mov, eventoId });
@@ -430,9 +489,12 @@ export async function pollarUmMonitoramentoMovs(
           // Detecta sugestão de prazo na mov (audiência/prazo
           // processual). UNIQUE em evento_id garante idempotência —
           // se cron re-rodar, INSERT falha silenciosamente.
-          const sugestao = detectarSugestaoPrazo(mov.texto, {
-            dataEvento: new Date(mov.data),
-          });
+          // Com teor na mão a IA faz muito melhor que a regex — e o UNIQUE em
+          // evento_id só deixa UMA sugestão por evento, então rodar as duas
+          // faria a pior chegar primeiro e bloquear a melhor.
+          const sugestao = mov.teor
+            ? null
+            : detectarSugestaoPrazo(mov.texto, { dataEvento: new Date(mov.data) });
           if (sugestao) {
             try {
               await db.insert(prazosSugeridos).values({
@@ -495,30 +557,44 @@ export async function pollarUmMonitoramentoMovs(
           })
           .where(eq(motorMonitoramentos.id, mon.id));
 
-        // Resumo IA: gera SÓ pras movs que vão pra notificação (top 3) pra
-        // bounded cost. As outras ficam com resumo_ia=NULL — UI pode
-        // hidratá-las depois sob demanda. Em paralelo pra não somar latência.
-        // Qualquer falha do resumirMovimentacao retorna null (silent) → caímos
-        // no comportamento atual (texto bruto truncado).
+        // Análise IA: roda SÓ pras movs que vão pra notificação (top 3) pra
+        // custo previsível. As outras ficam sem análise — a UI hidrata sob
+        // demanda. Em paralelo pra não somar latência; qualquer falha volta
+        // null e caímos no texto bruto, como antes.
+        //
+        // De que lado o cliente está muda a leitura do documento inteiro
+        // ("cite-se o réu para contestar" é prazo NOSSO ou da outra parte?),
+        // então vale resolver o polo antes de chamar a IA.
         const movsParaNotif = movsNovas.slice(0, 3);
         const modelo = await modeloParaEscritorio(mon.escritorioId);
+        const polo = resultado.capa?.partes?.length
+          ? identificarPoloDoCliente(mon.apelido, mon.searchKey, resultado.capa.partes)
+          : "desconhecido";
+        const ladoCliente: LadoCliente =
+          polo === "ativo" ? "autor" : polo === "passivo" ? "reu" : "desconhecido";
+
         await Promise.all(
           movsParaNotif.map(async (m) => {
-            const cls = await classificarMovimentacao(m.mov.texto, modelo, { escritorioId: mon.escritorioId });
-            m.resumoIa = cls?.resumo ?? null;
-            if (cls) {
-              try {
-                await db
-                  .update(eventosProcesso)
-                  .set({ resumoIa: cls.resumo, desfecho: cls.desfecho, relevancia: cls.relevancia })
-                  .where(eq(eventosProcesso.id, m.eventoId));
-              } catch (errUpd) {
-                log.warn(
-                  { eventoId: m.eventoId, err: errUpd instanceof Error ? errUpd.message : String(errUpd) },
-                  "[motor-cron] UPDATE resumo/classificacao falhou (segue sem)",
-                );
-              }
-            }
+            const analise = await analisarMovimentacao(
+              {
+                rotulo: m.mov.texto,
+                teor: m.mov.teor ?? null,
+                dataEvento: new Date(m.mov.data),
+              },
+              modelo,
+              { escritorioId: mon.escritorioId, ladoCliente, nomeCliente: mon.apelido ?? undefined },
+            );
+            m.resumoIa = analise?.titulo ?? null;
+            if (!analise) return;
+            await persistirAnalise({
+              eventoId: m.eventoId,
+              escritorioId: mon.escritorioId,
+              monitoramentoId: mon.id,
+              cnj: mon.searchKey,
+              dataEvento: new Date(m.mov.data),
+              teor: m.mov.teor ?? null,
+              analise,
+            });
           }),
         );
 

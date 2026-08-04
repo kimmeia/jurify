@@ -1,17 +1,19 @@
 /**
- * Drawer com detalhe de uma movimentação processual.
+ * Painel de detalhe de uma movimentação.
  *
- * Renderizado pelo NotificacoesSino quando o usuário clica numa notif
- * `tipo='movimentacao'` que tem `eventoId`. Mostra o texto completo da
- * mov + dados do monitoramento (apelido, CNJ, tribunal, data real
- * extraída do PJe — não a de detecção pelo cron).
+ * A ordem da tela responde às perguntas na ordem em que o advogado as faz:
+ * tenho prazo? o que o juiz decidiu? o que ele escreveu exatamente? o que
+ * veio antes? — e só então as ações. A versão anterior mostrava o rótulo do
+ * PJe num box cinza e nada mais, o que respondia só "esse processo mexeu".
  *
- * PR 3 vai adicionar botões de "Criar prazo" e "Criar tarefa"
- * pré-preenchidos com dados da mov.
+ * Quando o documento não pôde ser lido (sigilo, PDF escaneado, tribunal que
+ * não expõe), a tela DIZ isso. Resumo vazio disfarçado de resumo é pior que
+ * assumir a falha: o advogado deixa de abrir os autos confiando em algo que
+ * não existe.
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { addBusinessDays, format } from "date-fns";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import {
@@ -44,14 +46,18 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ExternalLink,
-  Clock,
   FileText,
-  User,
   Loader2,
   CalendarClock,
   CheckSquare,
   Archive,
   Sparkles,
+  AlertTriangle,
+  Check,
+  Lock,
+  ChevronDown,
+  ChevronUp,
+  Download,
 } from "lucide-react";
 
 interface Props {
@@ -59,205 +65,463 @@ interface Props {
   onClose: () => void;
 }
 
-const TIPO_LABEL: Record<string, string> = {
-  lawsuit_cnj: "Processo",
-  cpf: "CPF",
-  cnpj: "CNPJ",
-};
-
-// Selo de desfecho da movimentação (classificação IA).
 const DESFECHO_META: Record<string, { label: string; emoji: string; cls: string }> = {
   favoravel: { label: "Favorável", emoji: "🟢", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   desfavoravel: { label: "Desfavorável", emoji: "🔴", cls: "bg-rose-50 text-rose-700 border-rose-200" },
-  parcial: { label: "Parcial", emoji: "🟡", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  parcial: { label: "Parcialmente favorável", emoji: "🟡", cls: "bg-amber-50 text-amber-700 border-amber-200" },
   neutro: { label: "Sem mérito", emoji: "⚪", cls: "bg-slate-100 text-slate-600 border-slate-200" },
 };
+
+const ATO_LABEL: Record<string, string> = {
+  decisao: "⚖️ Decisão",
+  sentenca: "⚖️ Sentença",
+  acordao: "⚖️ Acórdão",
+  despacho: "📄 Despacho",
+  intimacao: "📬 Intimação",
+  audiencia: "📅 Audiência",
+  expediente: "📎 Expediente",
+  outro: "📄 Ato processual",
+};
+
+/** Por que não há teor, em linguagem que diz o que fazer a seguir. */
+const TEOR_FALHA: Record<
+  string,
+  { titulo: string; detalhe: string; podeBaixar: boolean; podeAnalisar: boolean }
+> = {
+  sem_documento: {
+    titulo: "Esta movimentação não tem documento",
+    detalhe:
+      "É um movimento de expediente — o tribunal não anexou peça nenhuma. O rótulo abaixo é tudo o que existe.",
+    podeBaixar: false,
+    podeAnalisar: false,
+  },
+  indisponivel: {
+    titulo: "O documento não pôde ser aberto",
+    detalhe:
+      "Em geral é segredo de justiça ou peça sigilosa. Só consultando os autos diretamente no tribunal.",
+    podeBaixar: false,
+    podeAnalisar: false,
+  },
+  erro: {
+    titulo: "Falhou ao baixar o documento",
+    detalhe: "Pode ser instabilidade do tribunal ou PDF escaneado (sem texto). Vale tentar de novo.",
+    podeBaixar: true,
+    podeAnalisar: true,
+  },
+  pendente: {
+    titulo: "Documento ainda não baixado",
+    detalhe:
+      "O monitoramento abre no máximo 3 documentos por consulta pra não sobrecarregar o tribunal. Este ficou na fila.",
+    podeBaixar: true,
+    podeAnalisar: false,
+  },
+};
+
+function dataBR(d: Date | string) {
+  return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function diaSemana(d: Date | string) {
+  return new Date(d).toLocaleDateString("pt-BR", { weekday: "long", timeZone: "UTC" });
+}
 
 export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) {
   const [, setLocation] = useLocation();
   const [criarPrazoOpen, setCriarPrazoOpen] = useState(false);
   const [criarTarefaOpen, setCriarTarefaOpen] = useState(false);
+  const [teorExpandido, setTeorExpandido] = useState(false);
 
-  const { data, isLoading, error, refetch } = trpc.notificacoes.detalheEvento.useQuery(
+  const utils = trpc.useUtils();
+  const { data, isLoading, error, refetch } = trpc.movimentacoes.detalhe.useQuery(
     { eventoId: eventoId ?? 0 },
     { enabled: eventoId !== null && eventoId > 0, retry: false },
   );
 
-  // Classifica a movimentação sob demanda (movs antigas não passaram pelo cron).
-  const classificarMut = (trpc as any).processos.classificarEvento.useMutation({
-    onSuccess: (r: any) => {
-      if (r?.ok) { toast.success("Movimentação classificada ✨"); refetch(); }
-      else toast.error("IA indisponível", { description: "Verifique a chave de IA nas configurações." });
+  const analisarMut = trpc.movimentacoes.analisar.useMutation({
+    onSuccess: (r) => {
+      if (r.ok) {
+        toast.success("Movimentação analisada", {
+          description: r.prazoCriado ? "Um prazo foi sugerido a partir do documento." : undefined,
+        });
+        refetch();
+        utils.movimentacoes.central.invalidate();
+      } else {
+        toast.error("Não deu para analisar", { description: r.motivo });
+      }
     },
-    onError: (e: any) => toast.error("Falha ao classificar", { description: e.message }),
+    onError: (e) => toast.error("Falha ao analisar", { description: e.message }),
+  });
+
+  const baixarMut = trpc.movimentacoes.baixarTeor.useMutation({
+    onSuccess: (r) => {
+      if (r.ok) {
+        toast.success("Documento baixado", {
+          description: r.analisado ? "Já analisado — veja o resumo acima." : undefined,
+        });
+        refetch();
+        utils.movimentacoes.central.invalidate();
+      } else {
+        toast.error("Não deu para baixar", { description: r.motivo });
+      }
+    },
+    onError: (e) => toast.error("Falha ao baixar", { description: e.message }),
+  });
+
+  const marcarMut = trpc.movimentacoes.marcarLidas.useMutation({
+    onSuccess: () => {
+      utils.movimentacoes.central.invalidate();
+      onClose();
+    },
   });
 
   const open = eventoId !== null;
+  const prazo = data?.prazo;
+  const prazoAberto = prazo && prazo.status === "pendente";
+  const falhaTeor = data && data.teorStatus !== "ok" ? TEOR_FALHA[data.teorStatus] : null;
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>Detalhe da movimentação</SheetTitle>
-          <SheetDescription>
-            Movimentação detectada pelo monitoramento automático.
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-0">
+        {/* Faixa de urgência: a primeira pergunta é sempre "tenho prazo?" */}
+        {prazoAberto && prazo.data && (
+          <div className="bg-rose-50 border-b border-rose-200 px-5 py-3 flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-rose-600 flex items-center justify-center shrink-0">
+              <AlertTriangle className="h-4 w-4 text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-rose-900">
+                {prazo.tipo === "audiencia" ? "Você tem audiência marcada" : "Você tem prazo neste processo"}
+              </p>
+              <p className="text-xs text-rose-700 font-medium">
+                {prazo.dias ? `${prazo.dias} dias ${prazo.uteis ? "úteis" : "corridos"} · ` : ""}
+                {prazo.tipo === "audiencia" ? "em" : "vence"} {diaSemana(prazo.data)}, {dataBR(prazo.data)}
+              </p>
+            </div>
+            {typeof prazo.diasUteisRestantes === "number" && (
+              <div className="ml-auto text-right shrink-0">
+                <p className="text-xl font-bold text-rose-600 leading-none">
+                  {Math.abs(prazo.diasUteisRestantes)}
+                </p>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-rose-700">
+                  {prazo.diasUteisRestantes < 0 ? "dias vencido" : "dias úteis"}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        <SheetHeader className="px-5 pt-4 pb-0">
+          <SheetTitle className="sr-only">Detalhe da movimentação</SheetTitle>
+          <SheetDescription className="sr-only">
+            O que o tribunal publicou neste processo.
           </SheetDescription>
         </SheetHeader>
 
         {isLoading ? (
-          <div className="px-4 py-6 space-y-3">
-            <Skeleton className="h-4 w-3/4" />
+          <div className="px-5 py-6 space-y-3">
+            <Skeleton className="h-6 w-3/4" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-32 w-full" />
           </div>
         ) : error?.data?.code === "NOT_FOUND" ? (
-          // Evento foi limpo do banco (cron remove eventos antigos pra
-          // liberar espaço — notificacoes.eventoId é intencionalmente um
-          // soft FK). Mostra estado arquivado em vez de toast de erro.
-          <div className="px-4 py-8 flex flex-col items-center gap-2 text-center">
+          <div className="px-5 py-10 flex flex-col items-center gap-2 text-center">
             <Archive className="h-10 w-10 text-muted-foreground/40" />
             <p className="text-sm font-medium">Movimentação arquivada</p>
             <p className="text-xs text-muted-foreground max-w-xs">
-              Esta movimentação foi limpa do histórico (eventos antigos são
-              removidos periodicamente para liberar espaço). O título e a
-              data da notificação continuam disponíveis no inbox.
+              Esta movimentação foi limpa do histórico. O título e a data continuam no inbox de
+              notificações.
             </p>
           </div>
         ) : error ? (
-          <div className="px-4 py-6 text-sm text-destructive">
+          <div className="px-5 py-6 text-sm text-destructive">
             Não foi possível carregar: {error.message}
           </div>
         ) : data ? (
-          <div className="px-4 py-4 space-y-4">
-            {/* Classificação IA (desfecho / relevância / prazo) */}
-            {(data.desfecho || data.relevancia || (data as any).prazoSugerido) && (
-              <section className="flex items-center gap-1.5 flex-wrap">
+          <div className="px-5 pb-6 space-y-5">
+            <div>
+              <h2 className="text-lg font-bold leading-snug tracking-tight">{data.titulo}</h2>
+
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {data.ato && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-indigo-50 text-indigo-700 border-indigo-200">
+                    {ATO_LABEL[data.ato] ?? ATO_LABEL.outro}
+                  </span>
+                )}
                 {data.desfecho && DESFECHO_META[data.desfecho] && (
-                  <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${DESFECHO_META[data.desfecho].cls}`}>
+                  <span
+                    className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${DESFECHO_META[data.desfecho].cls}`}
+                  >
                     {DESFECHO_META[data.desfecho].emoji} {DESFECHO_META[data.desfecho].label}
                   </span>
                 )}
-                {data.relevancia === "rotina" ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-slate-100 text-slate-500 border-slate-200">📄 Rotina</span>
-                ) : data.relevancia === "relevante" ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-violet-50 text-violet-700 border-violet-200">⭐ Relevante</span>
-                ) : null}
-                {(data as any).prazoSugerido && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-orange-100 text-orange-700 border-orange-300">⏰ Requer prazo</span>
+                {data.providencia?.exigida && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-rose-50 text-rose-700 border-rose-200">
+                    ⏰ Exige providência sua
+                  </span>
                 )}
-              </section>
-            )}
+                {data.relevancia === "rotina" && !data.providencia?.exigida && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-slate-100 text-slate-500 border-slate-200">
+                    📄 Rotina
+                  </span>
+                )}
+              </div>
 
-            {/* Resumo IA (quando gerado) */}
-            {data.resumoIa ? (
-              <section className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Resumo (IA)</p>
-                <p className="text-sm font-medium leading-snug">{data.resumoIa}</p>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-3 pb-3 border-b text-[11px] text-muted-foreground">
+                <span className="font-semibold text-foreground">
+                  {data.cliente || data.searchKey || "(sem apelido)"}
+                </span>
+                <span className="text-slate-300">•</span>
+                <span className="font-mono font-medium text-slate-600">{data.cnj || "—"}</span>
+                {data.tribunal && (
+                  <>
+                    <span className="text-slate-300">•</span>
+                    <Badge variant="outline" className="text-[9px] uppercase h-4 px-1.5">
+                      {data.tribunal}
+                    </Badge>
+                  </>
+                )}
+                <span className="text-slate-300">•</span>
+                <span>
+                  Intimação em <span className="font-semibold text-foreground">{dataBR(data.dataEvento)}</span>
+                </span>
+              </div>
+            </div>
+
+            {/* O que o juiz decidiu */}
+            {data.pontos.length > 0 ? (
+              <section>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-2 mb-2">
+                  O que o juiz decidiu
+                  <span className="bg-violet-50 text-violet-700 border border-violet-200 rounded-full px-1.5 py-px text-[8.5px]">
+                    RESUMO IA
+                  </span>
+                </p>
+                <ul className="space-y-1.5">
+                  {data.pontos.map((p, i) => (
+                    <li key={i} className="flex gap-2 text-sm leading-relaxed">
+                      <span className="h-1.5 w-1.5 rounded-full bg-violet-600 shrink-0 mt-[7px]" />
+                      <span>{p}</span>
+                    </li>
+                  ))}
+                </ul>
               </section>
             ) : (
               <Button
                 size="sm"
                 variant="outline"
-                className="w-full border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                disabled={classificarMut.isPending}
-                onClick={() => classificarMut.mutate({ eventoId: data.id })}
+                className="w-full border-violet-200 text-violet-700 hover:bg-violet-50"
+                disabled={analisarMut.isPending}
+                onClick={() => analisarMut.mutate({ eventoId: data.id })}
               >
-                {classificarMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
-                Classificar com IA
+                {analisarMut.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Analisar com IA
               </Button>
             )}
 
-            {/* Cliente monitorado */}
-            <section className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-                <User className="h-3 w-3" /> Cliente monitorado
+            {/* Exatamente o que ele escreveu */}
+            <section>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">
+                Exatamente o que ele escreveu
               </p>
-              <p className="text-sm font-medium">
-                {data.apelido || data.searchKey || "(sem apelido)"}
-              </p>
-              {data.searchType && (
-                <Badge variant="outline" className="text-[9px]">
-                  {TIPO_LABEL[data.searchType] || data.searchType}: {data.searchKey}
-                </Badge>
+
+              {data.teor ? (
+                <div className="rounded-lg border overflow-hidden">
+                  <div className="bg-muted/40 border-b px-3 py-1.5 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
+                    <FileText className="h-3 w-3" />
+                    <span className="truncate">{data.teorNome || "Documento do processo"}</span>
+                    {data.teorUrl && (
+                      <a
+                        href={data.teorUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ml-auto text-violet-700 font-bold hover:underline shrink-0"
+                      >
+                        Abrir no tribunal ↗
+                      </a>
+                    )}
+                  </div>
+                  <div
+                    className={`px-3 py-2.5 text-[12.5px] leading-relaxed whitespace-pre-wrap text-slate-700 ${
+                      teorExpandido ? "" : "max-h-56 overflow-hidden relative"
+                    }`}
+                  >
+                    <TeorComGrifo teor={data.teor} trecho={data.trechoGrifado} />
+                    {!teorExpandido && (
+                      <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-background to-transparent" />
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTeorExpandido((v) => !v)}
+                    className="w-full border-t py-1.5 text-[11px] font-bold text-violet-700 hover:bg-violet-50 flex items-center justify-center gap-1"
+                  >
+                    {teorExpandido ? (
+                      <>
+                        Recolher <ChevronUp className="h-3 w-3" />
+                      </>
+                    ) : (
+                      <>
+                        Ver íntegra <ChevronDown className="h-3 w-3" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+                  <p className="text-[12.5px] font-bold text-amber-900 flex items-center gap-1.5">
+                    <Lock className="h-3.5 w-3.5" />
+                    {falhaTeor?.titulo ?? "Documento indisponível"}
+                  </p>
+                  <p className="text-[11.5px] text-amber-800 mt-0.5 leading-snug">
+                    {falhaTeor?.detalhe}
+                    {data.teorErro ? ` (${data.teorErro})` : ""}
+                  </p>
+                  <div className="mt-2 rounded border border-amber-200 bg-white/70 px-2.5 py-1.5">
+                    <p className="text-[9.5px] font-bold uppercase tracking-wide text-amber-700">
+                      Rótulo publicado pelo tribunal
+                    </p>
+                    <p className="text-[12px] text-slate-700 mt-0.5">{data.rotulo}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {falhaTeor?.podeBaixar && data.teorUrl && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px] border-amber-300 bg-white"
+                        disabled={baixarMut.isPending}
+                        onClick={() => baixarMut.mutate({ eventoId: data.id })}
+                      >
+                        {baixarMut.isPending ? (
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
+                          <Download className="h-3 w-3 mr-1" />
+                        )}
+                        Buscar o documento agora
+                      </Button>
+                    )}
+                    {falhaTeor?.podeAnalisar && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px] border-amber-300 bg-white"
+                        disabled={analisarMut.isPending}
+                        onClick={() => analisarMut.mutate({ eventoId: data.id })}
+                      >
+                        {analisarMut.isPending ? (
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-3 w-3 mr-1" />
+                        )}
+                        Analisar só pelo rótulo
+                      </Button>
+                    )}
+                  </div>
+                </div>
               )}
             </section>
 
-            {/* CNJ + tribunal */}
-            <section className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Processo
-              </p>
-              <p className="text-sm font-mono">{data.cnjAfetado || "—"}</p>
-              {data.tribunal && (
-                <Badge variant="outline" className="text-[9px] uppercase">
-                  {data.tribunal}
-                </Badge>
-              )}
-            </section>
+            {/* Prazo com a conta aberta */}
+            {prazoAberto && prazo.data && (
+              <section className="rounded-xl border-2 border-rose-200 bg-rose-50/40 px-4 py-3">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-rose-700">
+                      {prazo.tipo === "audiencia" ? "Audiência designada" : "Prazo detectado no documento"}
+                    </p>
+                    <p className="text-base font-bold mt-0.5">
+                      {prazo.tipo === "audiencia" ? "Em" : "Vence"} {dataBR(prazo.data)} · {diaSemana(prazo.data)}
+                    </p>
+                    <p className="text-[11.5px] text-muted-foreground mt-0.5">{prazo.titulo}</p>
+                  </div>
+                  <Button size="sm" className="bg-rose-600 hover:bg-rose-700 shrink-0" onClick={() => setCriarPrazoOpen(true)}>
+                    <CalendarClock className="h-3.5 w-3.5 mr-1.5" />
+                    Criar na agenda
+                  </Button>
+                </div>
+                {prazo.motivo && (
+                  <p className="mt-2.5 pt-2 border-t border-dashed border-rose-200 text-[11px] text-muted-foreground leading-snug">
+                    {prazo.motivo}
+                  </p>
+                )}
+              </section>
+            )}
 
-            {/* Data real */}
-            <section className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-                <Clock className="h-3 w-3" /> Data da movimentação
-              </p>
-              <p className="text-sm">
-                {new Date(data.dataEvento).toLocaleDateString("pt-BR", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  year: "numeric",
-                })}
-              </p>
-            </section>
-
-            {/* Conteúdo */}
-            <section className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-                <FileText className="h-3 w-3" /> Texto da movimentação
-              </p>
-              <div className="rounded-md border bg-muted/30 p-3 text-sm whitespace-pre-wrap">
-                {data.conteudo}
-              </div>
-            </section>
+            {/* Contexto do processo */}
+            {data.anteriores.length > 0 && (
+              <section>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">
+                  O que veio antes neste processo
+                </p>
+                <div className="rounded-lg border divide-y">
+                  {data.anteriores.map((a) => (
+                    <div key={a.id} className="flex items-start gap-2.5 px-3 py-2">
+                      <span className="text-[10.5px] font-bold text-muted-foreground tabular-nums w-10 shrink-0 pt-px">
+                        {format(new Date(a.dataEvento), "dd/MM")}
+                      </span>
+                      <span className="flex-1 text-[12px] text-slate-700 leading-snug">{a.titulo}</span>
+                      <span
+                        className={`text-[9.5px] font-bold rounded-full px-2 py-0.5 shrink-0 ${
+                          a.relevancia === "rotina"
+                            ? "bg-slate-100 text-slate-500"
+                            : "bg-violet-50 text-violet-700"
+                        }`}
+                      >
+                        {a.relevancia === "rotina" ? "Rotina" : "Relevante"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* Ações */}
-            <section className="flex flex-col gap-2 pt-2">
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => setCriarPrazoOpen(true)}
-                >
+            <section className="flex flex-wrap items-center gap-2 pt-1 border-t pt-3">
+              {!prazoAberto && (
+                <Button size="sm" variant="outline" onClick={() => setCriarPrazoOpen(true)}>
                   <CalendarClock className="h-3.5 w-3.5 mr-1.5" />
                   Criar prazo
                 </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={() => setCriarTarefaOpen(true)}>
+                <CheckSquare className="h-3.5 w-3.5 mr-1.5" />
+                Criar tarefa
+              </Button>
+              {!data.lido && (
                 <Button
-                  variant="default"
                   size="sm"
-                  onClick={() => setCriarTarefaOpen(true)}
+                  variant="outline"
+                  className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                  disabled={marcarMut.isPending}
+                  onClick={() => marcarMut.mutate({ eventoIds: [data.id] })}
                 >
-                  <CheckSquare className="h-3.5 w-3.5 mr-1.5" />
-                  Criar tarefa
+                  <Check className="h-3.5 w-3.5 mr-1.5" />
+                  Já providenciei
                 </Button>
-              </div>
+              )}
               {data.monitoramentoId && (
                 <Button
-                  variant="outline"
                   size="sm"
+                  variant="ghost"
                   onClick={() => {
-                    setLocation(`/processos?tab=movimentacoes`);
+                    setLocation("/processos?tab=movimentacoes");
                     onClose();
                   }}
                 >
                   <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                  Ver monitoramento completo
+                  Monitoramento
                 </Button>
               )}
             </section>
-          </div>
-        ) : eventoId !== null ? (
-          <div className="px-4 py-6 flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
+
+            <p className="text-[10px] text-muted-foreground leading-snug">
+              Coletado de {(data.fonte ?? "").toUpperCase()} em {dataBR(data.coletadoEm)}. Resumo e prazo
+              gerados por IA a partir do documento — confira a íntegra antes de peticionar.
+            </p>
           </div>
         ) : null}
       </SheetContent>
@@ -288,55 +552,77 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
   );
 }
 
+/**
+ * Grifa dentro do teor o trecho que fundamenta o prazo. O servidor só manda
+ * `trecho` quando ele existe literalmente no documento, então aqui um
+ * `indexOf` basta — e se não achar, mostra o teor limpo em vez de arriscar
+ * um destaque no lugar errado.
+ */
+function TeorComGrifo({ teor, trecho }: { teor: string; trecho: string | null }) {
+  if (!trecho) return <>{teor}</>;
+  const i = teor.indexOf(trecho);
+  if (i < 0) return <>{teor}</>;
+  return (
+    <>
+      {teor.slice(0, i)}
+      <mark className="bg-amber-100 text-amber-900 font-semibold rounded px-0.5">{trecho}</mark>
+      {teor.slice(i + trecho.length)}
+    </>
+  );
+}
+
+type EventoDialog = {
+  id: number;
+  cnj: string | null;
+  cliente: string | null;
+  searchKey: string | null;
+  dataEvento: Date | string;
+  rotulo: string;
+  titulo: string;
+  teor: string | null;
+  prazo: {
+    titulo: string;
+    data: Date | string | null;
+    dias: number | null;
+    uteis: boolean;
+    motivo: string | null;
+  } | null;
+};
+
 interface DialogProps {
   open: boolean;
   onClose: () => void;
-  evento: {
-    cnjAfetado: string | null;
-    apelido: string | null;
-    searchKey: string | null;
-    dataEvento: Date | string;
-    conteudo: string;
-    prazoSugerido?: { titulo: string; dataSugerida: Date | string | null; prazoDias: number | null; prazoUteis: boolean } | null;
-  };
+  evento: EventoDialog;
   onSuccess: () => void;
 }
 
-/**
- * Sugestão de prazo: 5 dias úteis após a data da movimentação. Reflete
- * prazo padrão CPC pra resposta a despachos. Usuário pode ajustar.
- */
-function dataSugerida(dataEvento: Date | string): string {
-  const base = typeof dataEvento === "string" ? new Date(dataEvento) : dataEvento;
-  return format(addBusinessDays(base, 5), "yyyy-MM-dd");
+function nomeCliente(e: EventoDialog) {
+  return e.cliente || e.searchKey || "cliente";
 }
 
-function tituloSugerido(evento: DialogProps["evento"]): string {
-  const cliente = evento.apelido || evento.searchKey || "cliente";
-  const trecho = evento.conteudo.split("\n")[0].slice(0, 60);
-  return `${cliente}: ${trecho}`;
+/** Fallback quando não há prazo calculado: hoje + 5 dias, só pra abrir o
+ *  formulário com algo. A data boa vem do `prazo`, calculada no servidor com
+ *  as regras do CPC. */
+function dataFallback(): string {
+  return format(new Date(Date.now() + 5 * 86_400_000), "yyyy-MM-dd");
 }
 
 function CriarPrazoDialog({ open, onClose, evento, onSuccess }: DialogProps) {
-  // Se a IA detectou um prazo (prazos_sugeridos), pré-preenche com ele:
-  // título do prazo real + a data já calculada. Senão, cai no default (5 dias
-  // úteis após a movimentação).
-  const prazoSug = evento.prazoSugerido;
   const [titulo, setTitulo] = useState(
-    prazoSug?.titulo
-      ? `${evento.apelido || evento.searchKey || "cliente"}: ${prazoSug.titulo}`
-      : tituloSugerido(evento),
+    evento.prazo?.titulo
+      ? `${nomeCliente(evento)}: ${evento.prazo.titulo}`
+      : `${nomeCliente(evento)}: ${evento.titulo.slice(0, 80)}`,
   );
   const [dataLimite, setDataLimite] = useState(
-    prazoSug?.dataSugerida
-      ? format(new Date(prazoSug.dataSugerida), "yyyy-MM-dd")
-      : dataSugerida(evento.dataEvento),
+    evento.prazo?.data ? format(new Date(evento.prazo.data), "yyyy-MM-dd") : dataFallback(),
   );
-  const [prioridade, setPrioridade] = useState<"baixa" | "normal" | "alta" | "critica">("normal");
+  const [prioridade, setPrioridade] = useState<"baixa" | "normal" | "alta" | "critica">(
+    evento.prazo ? "alta" : "normal",
+  );
 
   const criarMut = trpc.agendamento.criar.useMutation({
     onSuccess: () => {
-      toast.success("Prazo criado!");
+      toast.success("Prazo criado na agenda");
       onSuccess();
     },
     onError: (e) => toast.error("Falha ao criar prazo", { description: e.message }),
@@ -348,18 +634,14 @@ function CriarPrazoDialog({ open, onClose, evento, onSuccess }: DialogProps) {
         <DialogHeader>
           <DialogTitle>Criar prazo a partir da movimentação</DialogTitle>
           <DialogDescription>
-            CNJ: <span className="font-mono">{evento.cnjAfetado || "—"}</span>
+            CNJ: <span className="font-mono">{evento.cnj || "—"}</span>
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="prazo-titulo">Título</Label>
-            <Input
-              id="prazo-titulo"
-              value={titulo}
-              onChange={(e) => setTitulo(e.target.value)}
-            />
+            <Input id="prazo-titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -386,10 +668,16 @@ function CriarPrazoDialog({ open, onClose, evento, onSuccess }: DialogProps) {
               </Select>
             </div>
           </div>
-          <p className="text-[11px] text-muted-foreground">
-            Sugestão: 5 dias úteis após a movimentação. Ajuste se a regra
-            do processo for diferente.
-          </p>
+          {evento.prazo?.motivo ? (
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              <span className="font-semibold text-foreground">Como chegamos nesta data:</span>{" "}
+              {evento.prazo.motivo}
+            </p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              Sem prazo detectado no documento — a data acima é um chute de 5 dias. Ajuste.
+            </p>
+          )}
         </div>
 
         <DialogFooter>
@@ -401,7 +689,7 @@ function CriarPrazoDialog({ open, onClose, evento, onSuccess }: DialogProps) {
               criarMut.mutate({
                 tipo: "prazo_processual",
                 titulo,
-                descricao: evento.conteudo,
+                descricao: evento.teor?.slice(0, 4000) || evento.rotulo,
                 dataInicio: `${dataLimite}T09:00:00`,
                 diaInteiro: true,
                 prioridade,
@@ -419,14 +707,16 @@ function CriarPrazoDialog({ open, onClose, evento, onSuccess }: DialogProps) {
 }
 
 function CriarTarefaDialog({ open, onClose, evento, onSuccess }: DialogProps) {
-  const [titulo, setTitulo] = useState(tituloSugerido(evento));
-  const [descricao, setDescricao] = useState(evento.conteudo);
-  const [dataVencimento, setDataVencimento] = useState(dataSugerida(evento.dataEvento));
+  const [titulo, setTitulo] = useState(`${nomeCliente(evento)}: ${evento.titulo.slice(0, 80)}`);
+  const [descricao, setDescricao] = useState(evento.teor?.slice(0, 4000) || evento.rotulo);
+  const [dataVencimento, setDataVencimento] = useState(
+    evento.prazo?.data ? format(new Date(evento.prazo.data), "yyyy-MM-dd") : dataFallback(),
+  );
   const [prioridade, setPrioridade] = useState<"baixa" | "normal" | "alta" | "urgente">("normal");
 
   const criarMut = trpc.tarefas.criar.useMutation({
     onSuccess: () => {
-      toast.success("Tarefa criada!");
+      toast.success("Tarefa criada");
       onSuccess();
     },
     onError: (e) => toast.error("Falha ao criar tarefa", { description: e.message }),
@@ -438,18 +728,14 @@ function CriarTarefaDialog({ open, onClose, evento, onSuccess }: DialogProps) {
         <DialogHeader>
           <DialogTitle>Criar tarefa a partir da movimentação</DialogTitle>
           <DialogDescription>
-            CNJ: <span className="font-mono">{evento.cnjAfetado || "—"}</span>
+            CNJ: <span className="font-mono">{evento.cnj || "—"}</span>
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="tarefa-titulo">Título</Label>
-            <Input
-              id="tarefa-titulo"
-              value={titulo}
-              onChange={(e) => setTitulo(e.target.value)}
-            />
+            <Input id="tarefa-titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="tarefa-desc">Descrição</Label>
