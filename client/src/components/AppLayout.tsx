@@ -11,6 +11,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -51,12 +52,16 @@ import {
   Monitor,
   Smartphone,
   Download,
+  Sun,
+  Moon,
+  Check,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { moduloOcultoNoMenu } from "@/config/visibility";
+import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
 import { InstalarAppDialog } from "@/components/InstalarAppDialog";
 import { dispararInstalacao, pwaInstalado } from "@/lib/pwa-install";
@@ -65,6 +70,75 @@ const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 260;
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 420;
+
+/**
+ * Ordem e agrupamento do menu.
+ *
+ * A ordem anterior era a de nascimento dos módulos (Cálculos em 2º, o feed de
+ * Movimentações em 8º). Esta agrupa por momento de uso — "o que estou fazendo
+ * agora" — e troca 15 itens soltos por 4 blocos de 3 a 4, que é o que o olho
+ * varre sem precisar ler item por item.
+ */
+type ItemMenu = {
+  id: string;
+  rotulo: string;
+  rota: string;
+  icone: React.ComponentType<{ className?: string }>;
+  /**
+   * Quem pode ver. Cada item traz o seu gate porque eles não são uniformes:
+   * Acordos herda de "clientes", Automações aceita smartflow OU agentesIa, e
+   * Roadmap não passa por permissão nenhuma. Uniformizar aqui esconderia
+   * módulo de quem tem acesso.
+   */
+  ver?: (canSee: (m: string) => boolean) => boolean;
+  /** Chave usada em `moduloOcultoNoMenu`, quando existe. */
+  ocultaPor?: string;
+  /** Ativo por prefixo (páginas com sub-rotas, como /automacoes/fluxos). */
+  prefixo?: boolean;
+  tomBadge?: "alerta" | "novidade";
+};
+
+const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
+  {
+    titulo: "Dia a dia",
+    itens: [
+      { id: "dashboard", rotulo: "Dashboard", rota: "/dashboard", icone: LayoutDashboard, ver: (c) => c("dashboard") },
+      { id: "movimentacoes", rotulo: "Movimentações", rota: "/movimentacoes", icone: Gavel, ver: (c) => c("processos"), ocultaPor: "processos", tomBadge: "novidade" },
+      { id: "agenda", rotulo: "Agenda", rota: "/agenda", icone: CalendarDays, ver: (c) => c("agenda"), ocultaPor: "agenda", tomBadge: "alerta" },
+      { id: "atendimento", rotulo: "Atendimento", rota: "/atendimento", icone: Headphones, ver: (c) => c("atendimento"), ocultaPor: "atendimento", tomBadge: "novidade" },
+    ],
+  },
+  {
+    titulo: "Carteira",
+    itens: [
+      { id: "clientes", rotulo: "Clientes", rota: "/clientes", icone: Users, ver: (c) => c("clientes") },
+      { id: "processos", rotulo: "Processos", rota: "/processos", icone: FileSearch, ver: (c) => c("processos"), ocultaPor: "processos" },
+      // Acordo é vinculado a cliente; o gate herda de "clientes" e o
+      // verProprios filtra por responsável no backend.
+      { id: "acordos", rotulo: "Acordos", rota: "/acordos", icone: Handshake, ver: (c) => c("clientes") },
+      { id: "kanban", rotulo: "Kanban", rota: "/kanban", icone: LayoutGrid, ver: (c) => c("kanban"), ocultaPor: "kanban" },
+    ],
+  },
+  {
+    titulo: "Ferramentas",
+    itens: [
+      { id: "calculos", rotulo: "Cálculos", rota: "/calculos", icone: Calculator, ver: (c) => c("calculos"), ocultaPor: "calculos" },
+      { id: "modelos", rotulo: "Modelos", rota: "/modelos-contrato", icone: FileText, ver: (c) => c("modelos") },
+      // Fusão de SmartFlow (Fluxos) + Agentes IA: aparece com qualquer um dos
+      // dois; o gate por sub-aba fica dentro da página.
+      { id: "automacoes", rotulo: "Automações", rota: "/automacoes", icone: Zap, ver: (c) => c("smartflow") || c("agentesIa"), ocultaPor: "smartflow", prefixo: true },
+    ],
+  },
+  {
+    titulo: "Gestão",
+    itens: [
+      { id: "financeiro", rotulo: "Financeiro", rota: "/financeiro", icone: DollarSign, ver: (c) => c("financeiro"), ocultaPor: "financeiro" },
+      { id: "relatorios", rotulo: "Relatórios", rota: "/relatorios", icone: BarChart3, ver: (c) => c("relatorios"), ocultaPor: "relatorios" },
+      // Roadmap não está no sistema de permissões — todo logado vê e vota.
+      { id: "roadmap", rotulo: "Roadmap", rota: "/roadmap", icone: Lightbulb, ocultaPor: "roadmap" },
+    ],
+  },
+];
 
 export default function AppLayout({
   children,
@@ -275,7 +349,31 @@ function AppSidebarContent({
     }
   };
 
+  const { preferencia, setPreferencia } = useTheme();
+
   const isAdmin = user?.role === "admin";
+
+  // Contadores dos badges. Cada um é uma query barata (COUNT) — o menu vive
+  // em toda tela, então puxar as listas completas só pra mostrar um número
+  // seria caro a cada navegação.
+  const { data: contMovs } = (trpc as any).movimentacoes?.contador?.useQuery?.(undefined, {
+    refetchInterval: 2 * 60_000,
+    retry: false,
+  }) ?? { data: null };
+  const { data: contAgenda } = trpc.agenda.contadores.useQuery(undefined, {
+    refetchInterval: 2 * 60_000,
+    retry: false,
+  });
+  const { data: contConversas } = (trpc as any).crm?.contarConversas?.useQuery?.(undefined, {
+    refetchInterval: 2 * 60_000,
+    retry: false,
+  }) ?? { data: null };
+
+  const badges: Record<string, number> = {
+    movimentacoes: contMovs?.naoLidas ?? 0,
+    agenda: contAgenda?.atrasadosCount ?? 0,
+    atendimento: contConversas?.aguardando ?? 0,
+  };
 
   // Modo "app de atendimento" no celular (opção A): quem tem o módulo
   // Atendimento abre o app focado nele, sem o menu dos outros módulos.
@@ -348,302 +446,183 @@ function AppSidebarContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
-            <SidebarMenu className="px-2 py-1">
-              {/* Dashboard */}
-              {canSee("dashboard") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/dashboard"}
-                  onClick={() => navigateOrBlock("/dashboard")}
-                  tooltip="Dashboard"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <LayoutDashboard
-                    className={`h-4 w-4 ${location === "/dashboard" ? "text-primary" : ""}`}
-                  />
-                  <span>Dashboard</span>
-                  {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground ml-1" />}
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
+            {GRUPOS_MENU.map((grupo) => {
+              const visiveis = grupo.itens.filter(
+                (i) => !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) && (i.ver ? i.ver(canSee) : true),
+              );
+              if (visiveis.length === 0) return null;
+              return (
+                <div key={grupo.titulo} className="px-2 pb-1">
+                  {/* O rótulo some no modo ícone — sobra o separador, que já
+                      diz onde um grupo termina. */}
+                  <p className="px-2 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground/70 group-data-[collapsible=icon]:hidden">
+                    {grupo.titulo}
+                  </p>
+                  <div className="hidden group-data-[collapsible=icon]:block mx-auto my-1.5 h-px w-6 bg-border" />
+                  <SidebarMenu>
+                    {visiveis.map((item) => {
+                      const ativo = item.prefixo
+                        ? location.startsWith(item.rota)
+                        : location === item.rota;
+                      const contagem = badges[item.id] ?? 0;
+                      const Icone = item.icone;
+                      return (
+                        <SidebarMenuItem key={item.id}>
+                          {/* A barra fica FORA do botão: o SidebarMenuButton
+                              tem overflow-hidden, e dentro dele o marcador
+                              seria cortado. */}
+                          {ativo && (
+                            <span className="absolute left-0 top-1.5 bottom-1.5 z-10 w-[3px] rounded-r bg-primary group-data-[collapsible=icon]:hidden" />
+                          )}
+                          <SidebarMenuButton
+                            isActive={ativo}
+                            onClick={() => navigateOrBlock(item.rota)}
+                            tooltip={item.rotulo}
+                            className={`h-9 relative transition-all ${ativo ? "font-semibold" : "font-normal"} ${itemsLocked ? "opacity-50" : ""}`}
+                          >
+                            <Icone className={`h-4 w-4 ${ativo ? "text-primary" : ""}`} />
+                            <span className="flex-1">{item.rotulo}</span>
+                            {contagem > 0 && (
+                              <>
+                                <span
+                                  className={`ml-auto rounded-full px-1.5 py-px text-[10px] font-extrabold tabular-nums group-data-[collapsible=icon]:hidden ${
+                                    item.tomBadge === "alerta"
+                                      ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-200"
+                                      : "bg-primary/10 text-primary"
+                                  }`}
+                                >
+                                  {contagem > 99 ? "99+" : contagem}
+                                </span>
+                                {/* Recolhido o número não cabe; o ponto ainda
+                                    responde "tem algo esperando aqui?". */}
+                                <span
+                                  className={`absolute right-1.5 top-1.5 hidden h-1.5 w-1.5 rounded-full group-data-[collapsible=icon]:block ${
+                                    item.tomBadge === "alerta" ? "bg-rose-500" : "bg-primary"
+                                  }`}
+                                />
+                              </>
+                            )}
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </div>
+              );
+            })}
 
-              {/* Cálculos — navega pro hub /calculos (sem submenu).
-                  As 5 ferramentas aparecem como cards visuais dentro do hub. */}
-              {canSee("calculos") && !moduloOcultoNoMenu("calculos") && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    tooltip="Cálculos"
-                    className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                    isActive={location === "/calculos" || location.startsWith("/calculos/")}
-                    onClick={() => navigateOrBlock("/calculos")}
-                  >
-                    <Calculator
-                      className={`h-4 w-4 ${location.startsWith("/calculos") ? "text-primary" : ""}`}
-                    />
-                    <span className="flex-1">Cálculos</span>
-                    {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground ml-1" />}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-
-              {/* Clientes */}
-              {canSee("clientes") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/clientes"}
-                  onClick={() => navigateOrBlock("/clientes")}
-                  tooltip="Clientes"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <Users className={`h-4 w-4 ${location === "/clientes" ? "text-primary" : ""}`} />
-                  <span className="flex-1">Clientes</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* Acordos — tratativas extrajudiciais. Gate herda de "clientes"
-                  (acordo é vinculado a cliente; verProprios filtra por
-                  responsável no backend). */}
-              {canSee("clientes") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/acordos"}
-                  onClick={() => navigateOrBlock("/acordos")}
-                  tooltip="Acordos"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <Handshake className={`h-4 w-4 ${location === "/acordos" ? "text-primary" : ""}`} />
-                  <span className="flex-1">Acordos</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* Modelos de contrato — módulo próprio "modelos". Herda de
-                  "clientes" pra cargos antigos (ver check-permission / MODULO_HERANCA). */}
-              {canSee("modelos") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/modelos-contrato"}
-                  onClick={() => navigateOrBlock("/modelos-contrato")}
-                  tooltip="Modelos de contrato"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <FileText className={`h-4 w-4 ${location === "/modelos-contrato" ? "text-primary" : ""}`} />
-                  <span className="flex-1">Modelos</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* Agente Jurídico saiu daqui: agora vive dentro de "Agentes IA"
-                  (é um agente). Card de acesso na página /agentes-ia. */}
-
-              {/* Agenda (unifica Tarefas + Agendamento) */}
-              {canSee("agenda") && !moduloOcultoNoMenu("agenda") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/agenda"}
-                  onClick={() => navigateOrBlock("/agenda")}
-                  tooltip="Agenda"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <CalendarDays className={`h-4 w-4 ${location === "/agenda" ? "text-primary" : ""}`} />
-                  <span className="flex-1">Agenda</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* Processos */}
-              {canSee("processos") && !moduloOcultoNoMenu("processos") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/processos"}
-                  onClick={() => navigateOrBlock("/processos")}
-                  tooltip="Processos"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <FileSearch
-                    className={`h-4 w-4 ${location === "/processos" ? "text-primary" : ""}`}
-                  />
-                  <span>Processos</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* Movimentações — triagem do que os tribunais publicaram */}
-              {canSee("processos") && !moduloOcultoNoMenu("processos") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/movimentacoes"}
-                  onClick={() => navigateOrBlock("/movimentacoes")}
-                  tooltip="Movimentações"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <Gavel
-                    className={`h-4 w-4 ${location === "/movimentacoes" ? "text-primary" : ""}`}
-                  />
-                  <span>Movimentações</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* Atendimento */}
-              {canSee("atendimento") && !moduloOcultoNoMenu("atendimento") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/atendimento"}
-                  onClick={() => navigateOrBlock("/atendimento")}
-                  tooltip="Atendimento"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <Headphones className={`h-4 w-4 ${location === "/atendimento" ? "text-primary" : ""}`} />
-                  <span className="flex-1">Atendimento</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* Automações — fusão de SmartFlow (Fluxos) + Agentes IA
-                  (Agentes). Aparece se o usuário pode ver ao menos um dos
-                  dois; o gate por sub-aba fica dentro da página. */}
-              {(canSee("smartflow") || canSee("agentesIa")) && !moduloOcultoNoMenu("smartflow") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location.startsWith("/automacoes")}
-                  onClick={() => navigateOrBlock("/automacoes")}
-                  tooltip="Automações"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <Zap className={`h-4 w-4 ${location.startsWith("/automacoes") ? "text-primary" : ""}`} />
-                  <span>Automações</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* Kanban */}
-              {canSee("kanban") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/kanban"}
-                  onClick={() => navigateOrBlock("/kanban")}
-                  tooltip="Kanban"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <LayoutGrid className={`h-4 w-4 ${location === "/kanban" ? "text-primary" : ""}`} />
-                  <span className="flex-1">Kanban</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* Relatórios */}
-              {canSee("relatorios") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/relatorios"}
-                  onClick={() => navigateOrBlock("/relatorios")}
-                  tooltip="Relatórios"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <BarChart3 className={`h-4 w-4 ${location === "/relatorios" ? "text-primary" : ""}`} />
-                  <span>Relatórios</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* Financeiro */}
-              {canSee("financeiro") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/financeiro"}
-                  onClick={() => navigateOrBlock("/financeiro")}
-                  tooltip="Financeiro"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <DollarSign className={`h-4 w-4 ${location === "/financeiro" ? "text-primary" : ""}`} />
-                  <span className="flex-1">Financeiro</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* Configurações */}
-              {canSee("configuracoes") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/configuracoes"}
-                  onClick={() => navigateOrBlock("/configuracoes")}
-                  tooltip="Configurações"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <Settings className={`h-4 w-4 ${location === "/configuracoes" ? "text-primary" : ""}`} />
-                  <span>Configurações</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* Roadmap — todos os usuários logados podem ver e votar.
-                  Sem canSee() porque não está no sistema de permissões. */}
-              {!moduloOcultoNoMenu("roadmap") && <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/roadmap"}
-                  onClick={() => navigateOrBlock("/roadmap")}
-                  tooltip="Roadmap"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <Lightbulb className={`h-4 w-4 ${location === "/roadmap" ? "text-primary" : ""}`} />
-                  <span className="flex-1">Roadmap</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>}
-
-              {/* Meu Plano migrou pra aba dentro de /configuracoes
-                  (visível apenas pro Dono do escritório / admin). Aqui
-                  fica só o atalho "Assinar plano" quando a conta está
-                  sem assinatura ativa — guia o usuário pra ação. */}
-              {(user?.role === "admin" || minhasPerms?.cargo === "Dono") && itemsLocked && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setLocation("/configuracoes?tab=meu-plano")}
-                    tooltip="Assinar plano"
-                    className="h-10 transition-all font-normal"
-                  >
-                    <CreditCard className="h-4 w-4" />
-                    <span>Assinar plano</span>
-                    <Badge variant="destructive" className="text-[9px] px-1.5 py-0 ml-auto">
-                      !
-                    </Badge>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-            </SidebarMenu>
+            {/* Sem assinatura ativa: atalho pra resolver, fora dos grupos. */}
+            {(user?.role === "admin" || minhasPerms?.cargo === "Dono") && itemsLocked && (
+              <div className="px-2 pb-2">
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setLocation("/configuracoes?tab=meu-plano")}
+                      tooltip="Assinar plano"
+                      className="h-9 transition-all font-normal"
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      <span>Assinar plano</span>
+                      <Badge variant="destructive" className="text-[9px] px-1.5 py-0 ml-auto">
+                        !
+                      </Badge>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </div>
+            )}
           </SidebarContent>
 
           <SidebarFooter className="p-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-9 w-9 border shrink-0">
-                    <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
-                      {user?.name?.charAt(0).toUpperCase() || "U"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none text-foreground">
-                      {user?.name || "Utilizador"}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
-                      {user?.email || "-"}
-                    </p>
-                  </div>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {isAdmin && (
-                  <>
+            <div className="flex items-center gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex flex-1 min-w-0 items-center gap-2.5 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors text-left group-data-[collapsible=icon]:flex-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <Avatar className="h-8 w-8 border shrink-0">
+                      <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
+                        {user?.name?.charAt(0).toUpperCase() || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
+                      <p className="text-[12.5px] font-semibold truncate leading-none text-foreground">
+                        {user?.name || "Utilizador"}
+                      </p>
+                      <p className="text-[10.5px] text-muted-foreground truncate mt-1">
+                        {user?.email || "-"}
+                      </p>
+                    </div>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Aparência
+                  </DropdownMenuLabel>
+                  {(["claro", "escuro", "sistema"] as const).map((op) => (
                     <DropdownMenuItem
-                      onClick={() => setLocation("/admin")}
-                      className="cursor-pointer"
+                      key={op}
+                      onClick={() => setPreferencia(op)}
+                      className="cursor-pointer capitalize"
                     >
-                      <ShieldCheck className="mr-2 h-4 w-4" />
-                      <span>Painel Admin</span>
+                      {op === "claro" ? (
+                        <Sun className="mr-2 h-4 w-4" />
+                      ) : op === "escuro" ? (
+                        <Moon className="mr-2 h-4 w-4" />
+                      ) : (
+                        <Monitor className="mr-2 h-4 w-4" />
+                      )}
+                      <span>{op}</span>
+                      {preferencia === op && <Check className="ml-auto h-3.5 w-3.5 text-primary" />}
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                {isMobile && canSee("atendimento") && (
-                  <>
+                  ))}
+                  <DropdownMenuSeparator />
+                  {isAdmin && (
+                    <>
+                      <DropdownMenuItem onClick={() => setLocation("/admin")} className="cursor-pointer">
+                        <ShieldCheck className="mr-2 h-4 w-4" />
+                        <span>Painel Admin</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  {isMobile && canSee("atendimento") && (
                     <DropdownMenuItem onClick={voltarModoAtendimento} className="cursor-pointer">
                       <Smartphone className="mr-2 h-4 w-4" />
                       <span>Modo atendimento</span>
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                {mostrarInstalar && (
-                  <DropdownMenuItem onClick={instalarApp} className="cursor-pointer">
-                    <Download className="mr-2 h-4 w-4" />
-                    <span>Instalar app</span>
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  onClick={logout}
-                  className="cursor-pointer text-destructive focus:text-destructive"
+                  )}
+                  {mostrarInstalar && (
+                    <DropdownMenuItem onClick={instalarApp} className="cursor-pointer">
+                      <Download className="mr-2 h-4 w-4" />
+                      <span>Instalar app</span>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Configurações e sair saem do menu suspenso: um é ajuste (não
+                  trabalho do dia, então não merece linha na lista), o outro
+                  estava escondido a dois cliques. */}
+              {canSee("configuracoes") && (
+                <button
+                  onClick={() => navigateOrBlock("/configuracoes")}
+                  title="Configurações"
+                  aria-label="Configurações"
+                  className={`h-8 w-8 shrink-0 rounded-lg border flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors ${
+                    location === "/configuracoes" ? "border-primary text-primary bg-primary/5" : ""
+                  }`}
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Sair</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <Settings className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                onClick={logout}
+                title="Sair"
+                aria-label="Sair"
+                className="h-8 w-8 shrink-0 rounded-lg border border-destructive/30 bg-destructive/5 flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
           </SidebarFooter>
         </Sidebar>
         <div

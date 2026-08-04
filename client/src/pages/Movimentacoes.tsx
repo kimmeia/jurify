@@ -53,7 +53,7 @@ const DESFECHO_SELO: Record<string, { label: string; cls: string }> = {
   favoravel: { label: "🟢 Favorável", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   desfavoravel: { label: "🔴 Desfavorável", cls: "bg-rose-50 text-rose-700 border-rose-200" },
   parcial: { label: "🟡 Parcialmente favorável", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  neutro: { label: "⚪ Sem mérito", cls: "bg-slate-100 text-slate-600 border-slate-200" },
+  neutro: { label: "⚪ Sem mérito", cls: "bg-muted text-muted-foreground border-border" },
 };
 
 const ATO_SELO: Record<string, string> = {
@@ -341,7 +341,7 @@ export default function Movimentacoes() {
 const STATUS_ENVIO: Record<string, { label: string; cls: string }> = {
   enviado: { label: "Enviado", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   falha: { label: "Falhou", cls: "bg-rose-50 text-rose-700 border-rose-200" },
-  sem_conteudo: { label: "Nada a enviar", cls: "bg-slate-100 text-slate-600 border-slate-200" },
+  sem_conteudo: { label: "Nada a enviar", cls: "bg-muted text-muted-foreground border-border" },
   nao_configurado: { label: "Não configurado", cls: "bg-amber-50 text-amber-800 border-amber-200" },
 };
 
@@ -625,15 +625,15 @@ function CardAcao({
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
           <span className="font-bold text-sm text-foreground">{nomeDoCaso(item)}</span>
           {item.clientePolo && POLO_LABEL[item.clientePolo] && (
-            <span className="rounded-full bg-slate-100 text-slate-600 px-1.5 py-px text-[10px] font-bold">
+            <span className="rounded-full bg-muted text-muted-foreground px-1.5 py-px text-[10px] font-bold">
               nosso cliente: {POLO_LABEL[item.clientePolo]}
             </span>
           )}
-          <span className="text-slate-300">•</span>
+          <span className="text-muted-foreground/50">•</span>
           <span className="font-mono font-medium">{item.cnj}</span>
           {item.tribunal && (
             <>
-              <span className="text-slate-300">•</span>
+              <span className="text-muted-foreground/50">•</span>
               <span className="uppercase">{item.tribunal}</span>
             </>
           )}
@@ -647,7 +647,7 @@ function CardAcao({
         </button>
 
         {item.pontos.length > 0 && (
-          <p className="text-[13px] text-slate-600 mt-1 leading-snug line-clamp-2">
+          <p className="text-[13px] text-muted-foreground mt-1 leading-snug line-clamp-2">
             {item.pontos.join(" ")}
           </p>
         )}
@@ -730,7 +730,7 @@ function LinhaRelevante({ item, onAbrir }: { item: Item; onAbrir: () => void }) 
         </p>
         <p className="text-[10.5px] text-muted-foreground font-mono truncate">{item.cnj}</p>
       </div>
-      <p className="flex-1 text-[12.5px] text-slate-700 leading-snug line-clamp-2 min-w-0">{item.titulo}</p>
+      <p className="flex-1 text-[12.5px] text-foreground/90 leading-snug line-clamp-2 min-w-0">{item.titulo}</p>
       {item.teorStatus === "indisponivel" ? (
         <span className="shrink-0 rounded-md border border-amber-200 bg-amber-50 text-amber-800 px-2 py-0.5 text-[10.5px] font-bold inline-flex items-center gap-1">
           <AlertTriangle className="h-3 w-3" /> Sem teor

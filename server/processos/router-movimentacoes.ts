@@ -517,6 +517,34 @@ export const movimentacoesRouter = router({
       return { ok: true as const, analisado: !!analise, titulo: analise?.titulo ?? null };
     }),
 
+  /**
+   * Contagem para o badge do menu. Existe separada de `central` porque o
+   * menu vive em toda tela: puxar a lista inteira (com teor e análise) a cada
+   * navegação só pra saber "tem 25" seria caro à toa.
+   */
+  contador: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "processos", "ver");
+    if (!perm.allowed) return { naoLidas: 0 };
+
+    const db = await getDb();
+    if (!db) return { naoLidas: 0 };
+
+    const desde = new Date(Date.now() - 30 * 86_400_000);
+    const [row] = await db
+      .select({ n: sql<number>`COUNT(*)` })
+      .from(eventosProcesso)
+      .where(
+        and(
+          eq(eventosProcesso.escritorioId, perm.escritorioId),
+          eq(eventosProcesso.tipo, "movimentacao"),
+          eq(eventosProcesso.lido, false),
+          gte(eventosProcesso.dataEvento, desde),
+        ),
+      );
+
+    return { naoLidas: Number(row?.n ?? 0) };
+  }),
+
   /** Marca uma ou várias como lidas — é o "ok, li" da central. */
   marcarLidas: protectedProcedure
     .input(z.object({ eventoIds: z.array(z.number().int().positive()).min(1).max(500) }))
