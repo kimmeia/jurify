@@ -70,7 +70,9 @@
 :root {
   --primary: oklch(0.45 0.18 260);
   --primary-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.45 0.18 260);
+  /* Mais claro que `--primary` do tema claro: o acento agora vive sobre
+   * fundo escuro, e o tom original sumiria. */
+  --sidebar-primary: oklch(0.68 0.16 265);
   --sidebar-primary-foreground: oklch(0.98 0 0);
   --chart-1: oklch(0.65 0.15 260);
   --chart-2: oklch(0.55 0.18 260);
@@ -95,12 +97,21 @@
   --border: oklch(0.91 0.005 260);
   --input: oklch(0.91 0.005 260);
   --ring: oklch(0.45 0.18 260);
-  --sidebar: oklch(0.98 0.003 260);
-  --sidebar-foreground: oklch(0.18 0.02 260);
-  --sidebar-accent: oklch(0.945 0.01 260);
-  --sidebar-accent-foreground: oklch(0.18 0.02 260);
-  --sidebar-border: oklch(0.91 0.005 260);
-  --sidebar-ring: oklch(0.45 0.18 260);
+  /* Menu SEMPRE escuro, inclusive no tema claro.
+   *
+   * O contraste é o ponto: barra escura à esquerda faz o conteúdo claro
+   * "saltar" e separa navegação de trabalho sem precisar de borda. É a razão
+   * de o shadcn manter uma paleta `--sidebar-*` independente da paleta geral
+   * — trocar aqui não mexe em mais nada.
+   *
+   * No tema escuro estes valores são sobrescritos em `.dark` (um pouco mais
+   * claros que o fundo, senão o menu some no plano de fundo). */
+  --sidebar: oklch(0.19 0.012 265);
+  --sidebar-foreground: oklch(0.87 0.008 265);
+  --sidebar-accent: oklch(0.27 0.02 265);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.62 0.17 265);
   /* Paleta semântica — light. OKLCH consistente com o restante do tema. */
   --info: oklch(0.55 0.18 250);
   --info-bg: oklch(0.96 0.04 250);
@@ -153,7 +164,7 @@
   --chart-3: oklch(0.50 0.18 260);
   --chart-4: oklch(0.40 0.15 260);
   --chart-5: oklch(0.30 0.10 260);
-  --sidebar: oklch(0.21 0.006 285.885);
+  --sidebar: oklch(0.185 0.006 285.885);
   --sidebar-foreground: oklch(0.85 0.005 65);
   --sidebar-accent: oklch(0.274 0.006 286.033);
   --sidebar-accent-foreground:  oklch(0.985 0 0);

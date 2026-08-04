@@ -3297,18 +3297,20 @@ function PastilhaContador({
       onClick={onClick}
       className={`inline-flex items-baseline gap-1.5 rounded-[10px] border px-3 py-1.5 transition-colors ${
         alerta
-          ? "border-rose-200 bg-rose-50 hover:bg-rose-100"
+          ? "border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:hover:bg-rose-500/20"
           : "border-border bg-card hover:bg-muted/50"
       }`}
     >
       <span
         className={`text-[15px] font-bold tabular-nums leading-none ${
-          alerta ? "text-rose-600" : "text-foreground"
+          alerta ? "text-rose-600 dark:text-rose-400" : "text-foreground"
         }`}
       >
         {valor}
       </span>
-      <span className={`text-[11.5px] font-medium ${alerta ? "text-rose-700" : "text-muted-foreground"}`}>
+      <span
+        className={`text-[11.5px] font-medium ${alerta ? "text-rose-700 dark:text-rose-300" : "text-muted-foreground"}`}
+      >
         {rotulo}
       </span>
     </button>
