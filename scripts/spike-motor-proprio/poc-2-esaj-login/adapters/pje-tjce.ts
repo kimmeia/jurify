@@ -173,6 +173,49 @@ const PAUSA_ENTRE_TEORES_MS = 1_500;
  *  100 MB e travaria o worker sem ganho nenhum (é imagem, não tem texto). */
 const MAX_BYTES_TEOR = 12 * 1024 * 1024;
 
+/**
+ * Baixa UM documento avulso usando uma sessão já autenticada.
+ *
+ * Serve o caminho sob demanda: movimentação antiga (anterior à captura de
+ * teor), as que passaram do teto por consulta, e as que falharam por
+ * instabilidade. Sem isso o painel oferece "tentar de novo" e não tem o que
+ * chamar.
+ *
+ * Abre um contexto próprio e fecha no fim — é uma requisição isolada, não
+ * vale reaproveitar estado entre chamadas de usuários diferentes.
+ */
+export async function baixarDocumentoAvulso(
+  url: string,
+  storageStateJson: string,
+): Promise<{ ok: true; texto: string } | { ok: false; erro: string }> {
+  let context: BrowserContext | null = null;
+  try {
+    const browser = await getBrowserPje();
+    context = await browser.newContext({
+      userAgent: USER_AGENT,
+      locale: "pt-BR",
+      timezoneId: "America/Fortaleza",
+      storageState: JSON.parse(storageStateJson),
+    });
+
+    const resp = await context.request.get(url, { timeout: TIMEOUT_NAV_MS, maxRedirects: 5 });
+    if (!resp.ok()) return { ok: false, erro: `HTTP ${resp.status()} ${resp.statusText()}` };
+
+    const corpo = await resp.body();
+    if (corpo.length > MAX_BYTES_TEOR) {
+      return { ok: false, erro: `documento grande demais (${Math.round(corpo.length / 1024 / 1024)} MB)` };
+    }
+
+    const { textoDoDocumento } = await import("../../../../server/processos/teor-documento");
+    const texto = await textoDoDocumento(corpo, resp.headers()["content-type"] ?? null);
+    return { ok: true, texto };
+  } catch (err) {
+    return { ok: false, erro: err instanceof Error ? err.message : String(err) };
+  } finally {
+    await context?.close().catch(() => {});
+  }
+}
+
 export class PjeTjceScraper {
   readonly tribunal: string;
   readonly nome: string;

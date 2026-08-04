@@ -395,6 +395,104 @@ export const movimentacoesRouter = router({
       return { ok: true as const, prazoCriado, titulo: analise.titulo };
     }),
 
+  /**
+   * Baixa o documento desta movimentação agora, sob demanda.
+   *
+   * O cron abre no máximo 3 documentos por consulta (volume foi o que
+   * derrubou o motor antes), então sobra fila. Aqui o advogado paga uma
+   * requisição pontual pelo documento que ele realmente quer ler — e a
+   * análise sai junto, porque teor sem análise não resolve nada pra ele.
+   */
+  baixarTeor: protectedProcedure
+    .input(z.object({ eventoId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "processos", "ver");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a processos" });
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de dados indisponível" });
+
+      const [row] = await db
+        .select({
+          ev: eventosProcesso,
+          apelido: motorMonitoramentos.apelido,
+          credencialId: motorMonitoramentos.credencialId,
+        })
+        .from(eventosProcesso)
+        .leftJoin(motorMonitoramentos, eq(motorMonitoramentos.id, eventosProcesso.monitoramentoId))
+        .where(eq(eventosProcesso.id, input.eventoId))
+        .limit(1);
+
+      if (!row || row.ev.escritorioId !== perm.escritorioId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Movimentação não encontrada" });
+      }
+      if (!row.ev.teorUrl) {
+        return { ok: false as const, motivo: "Esta movimentação não tem documento anexo no tribunal." };
+      }
+      if (!row.credencialId) {
+        return {
+          ok: false as const,
+          motivo: "O documento exige sessão autenticada e este monitoramento não tem credencial vinculada.",
+        };
+      }
+
+      const { recuperarSessao } = await import("../escritorio/cofre-helpers");
+      const sessao = await recuperarSessao(row.credencialId, { tentarRelogin: true });
+      if (!sessao) {
+        return { ok: false as const, motivo: "Sessão do tribunal expirada — revalide a credencial no cofre." };
+      }
+
+      const { baixarDocumentoAvulso } = await import("./adapters/pje-tjce");
+      const { classificarFalhaTeor } = await import("./teor-documento");
+      const r = await baixarDocumentoAvulso(row.ev.teorUrl, sessao);
+
+      if (!r.ok) {
+        const { status, motivo } = classificarFalhaTeor(new Error(r.erro));
+        await db
+          .update(eventosProcesso)
+          .set({
+            teorStatus: status,
+            teorErro: motivo.slice(0, 255),
+            teorTentativas: row.ev.teorTentativas + 1,
+          })
+          .where(eq(eventosProcesso.id, row.ev.id));
+        return { ok: false as const, motivo };
+      }
+
+      await db
+        .update(eventosProcesso)
+        .set({
+          teor: r.texto,
+          teorStatus: "ok",
+          teorErro: null,
+          teorObtidoEm: new Date(),
+          teorTentativas: row.ev.teorTentativas + 1,
+        })
+        .where(eq(eventosProcesso.id, row.ev.id));
+
+      // Com o documento na mão, analisar é o que transforma texto em decisão.
+      const { analisarMovimentacao, modeloParaEscritorio } = await import("./resumir-movimentacao");
+      const { persistirAnalise } = await import("./aplicar-analise");
+      const analise = await analisarMovimentacao(
+        { rotulo: row.ev.conteudo, teor: r.texto, dataEvento: row.ev.dataEvento },
+        await modeloParaEscritorio(perm.escritorioId),
+        { escritorioId: perm.escritorioId, nomeCliente: row.apelido ?? undefined },
+      );
+      if (analise) {
+        await persistirAnalise({
+          eventoId: row.ev.id,
+          escritorioId: perm.escritorioId,
+          monitoramentoId: row.ev.monitoramentoId,
+          cnj: row.ev.cnjAfetado,
+          dataEvento: row.ev.dataEvento,
+          teor: r.texto,
+          analise,
+        });
+      }
+
+      return { ok: true as const, analisado: !!analise, titulo: analise?.titulo ?? null };
+    }),
+
   /** Marca uma ou várias como lidas — é o "ok, li" da central. */
   marcarLidas: protectedProcedure
     .input(z.object({ eventoIds: z.array(z.number().int().positive()).min(1).max(500) }))

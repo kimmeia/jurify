@@ -23,6 +23,7 @@ import {
   TJCE_2G,
   type TribunalPdpjConfig,
   type OpcoesConsulta,
+  baixarDocumentoAvulso,
 } from "../../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/pje-tjce";
 import type { ResultadoScraper } from "../../../scripts/spike-motor-proprio/lib/types-spike";
 
@@ -71,5 +72,5 @@ export async function consultarTjcePorCpf(
   return scraper.consultarPorCpf(documento, storageStateJson);
 }
 
-export { PjeTjceScraper, TJCE_1G, TJCE_2G };
+export { PjeTjceScraper, TJCE_1G, TJCE_2G, baixarDocumentoAvulso };
 export type { TribunalPdpjConfig, OpcoesConsulta };

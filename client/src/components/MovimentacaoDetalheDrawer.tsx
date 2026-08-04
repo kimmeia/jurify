@@ -57,6 +57,7 @@ import {
   Lock,
   ChevronDown,
   ChevronUp,
+  Download,
 } from "lucide-react";
 
 interface Props {
@@ -83,28 +84,36 @@ const ATO_LABEL: Record<string, string> = {
 };
 
 /** Por que não há teor, em linguagem que diz o que fazer a seguir. */
-const TEOR_FALHA: Record<string, { titulo: string; detalhe: string; podeAnalisar: boolean }> = {
+const TEOR_FALHA: Record<
+  string,
+  { titulo: string; detalhe: string; podeBaixar: boolean; podeAnalisar: boolean }
+> = {
   sem_documento: {
     titulo: "Esta movimentação não tem documento",
     detalhe:
       "É um movimento de expediente — o tribunal não anexou peça nenhuma. O rótulo abaixo é tudo o que existe.",
+    podeBaixar: false,
     podeAnalisar: false,
   },
   indisponivel: {
     titulo: "O documento não pôde ser aberto",
     detalhe:
       "Em geral é segredo de justiça ou peça sigilosa. Só consultando os autos diretamente no tribunal.",
+    podeBaixar: false,
     podeAnalisar: false,
   },
   erro: {
     titulo: "Falhou ao baixar o documento",
     detalhe: "Pode ser instabilidade do tribunal ou PDF escaneado (sem texto). Vale tentar de novo.",
+    podeBaixar: true,
     podeAnalisar: true,
   },
   pendente: {
     titulo: "Documento ainda não baixado",
-    detalhe: "O monitoramento abre no máximo 3 documentos por consulta. Este ficou para depois.",
-    podeAnalisar: true,
+    detalhe:
+      "O monitoramento abre no máximo 3 documentos por consulta pra não sobrecarregar o tribunal. Este ficou na fila.",
+    podeBaixar: true,
+    podeAnalisar: false,
   },
 };
 
@@ -141,6 +150,21 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
       }
     },
     onError: (e) => toast.error("Falha ao analisar", { description: e.message }),
+  });
+
+  const baixarMut = trpc.movimentacoes.baixarTeor.useMutation({
+    onSuccess: (r) => {
+      if (r.ok) {
+        toast.success("Documento baixado", {
+          description: r.analisado ? "Já analisado — veja o resumo acima." : undefined,
+        });
+        refetch();
+        utils.movimentacoes.central.invalidate();
+      } else {
+        toast.error("Não deu para baixar", { description: r.motivo });
+      }
+    },
+    onError: (e) => toast.error("Falha ao baixar", { description: e.message }),
   });
 
   const marcarMut = trpc.movimentacoes.marcarLidas.useMutation({
@@ -363,22 +387,40 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                     </p>
                     <p className="text-[12px] text-slate-700 mt-0.5">{data.rotulo}</p>
                   </div>
-                  {falhaTeor?.podeAnalisar && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="mt-2 h-7 text-[11px] border-amber-300 bg-white"
-                      disabled={analisarMut.isPending}
-                      onClick={() => analisarMut.mutate({ eventoId: data.id })}
-                    >
-                      {analisarMut.isPending ? (
-                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-3 w-3 mr-1" />
-                      )}
-                      Tentar analisar mesmo assim
-                    </Button>
-                  )}
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {falhaTeor?.podeBaixar && data.teorUrl && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px] border-amber-300 bg-white"
+                        disabled={baixarMut.isPending}
+                        onClick={() => baixarMut.mutate({ eventoId: data.id })}
+                      >
+                        {baixarMut.isPending ? (
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
+                          <Download className="h-3 w-3 mr-1" />
+                        )}
+                        Buscar o documento agora
+                      </Button>
+                    )}
+                    {falhaTeor?.podeAnalisar && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px] border-amber-300 bg-white"
+                        disabled={analisarMut.isPending}
+                        onClick={() => analisarMut.mutate({ eventoId: data.id })}
+                      >
+                        {analisarMut.isPending ? (
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-3 w-3 mr-1" />
+                        )}
+                        Analisar só pelo rótulo
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
             </section>
