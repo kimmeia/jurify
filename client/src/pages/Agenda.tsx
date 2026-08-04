@@ -18,12 +18,13 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   CalendarDays, Plus, Loader2, Clock, CheckCircle, ChevronLeft, ChevronRight,
   Trash2, ListTodo, CalendarClock, Sun, AlertTriangle, Search,
   Briefcase, Scale, Users, PhoneCall, MoreHorizontal, Check, MapPin, Bell,
   Pencil, FileText, Paperclip, ExternalLink, XCircle, RotateCcw, MessageSquareText,
-  Ban, CalendarOff, Download,
+  Ban, CalendarOff, Download, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -523,13 +524,19 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
 // VIEW: CALENDÁRIO MENSAL
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRangeChange }: {
+function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRangeChange, coresPorResponsavel }: {
   eventos: any[];
   onCriarEvento?: () => void;
   onCardClick?: (ev: any) => void;
   podeCriar?: boolean;
   /** Avisa o pai do intervalo (grade) do mês visível, pra buscar só ele. */
   onRangeChange?: (r: { inicio: string; fim: string }) => void;
+  /**
+   * Ordem dos colaboradores pra colorir por PESSOA em vez de por tipo. Só
+   * chega preenchido quando há filtro de responsável ativo: fora disso a cor
+   * por tipo (prazo/audiência/tarefa) continua sendo a informação mais útil.
+   */
+  coresPorResponsavel?: number[] | null;
 }) {
   const [mes, setMes] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
 
@@ -884,7 +891,10 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
                   {eventosDoDia
                     .sort((a: any, b: any) => new Date(a.dataInicio).getTime() - new Date(b.dataInicio).getTime())
                     .map((ev: any) => {
-                      const cor = corDoEvento(ev);
+                      const cor =
+                        coresPorResponsavel && ev.responsavelId
+                          ? corDaPessoa(ev.responsavelId, coresPorResponsavel)
+                          : corDoEvento(ev);
                       const concluido = ev.status === "concluido" || ev.status === "concluida";
                       const inicio = new Date(ev.dataInicio);
                       return (
@@ -1332,6 +1342,265 @@ function TimelineHorariaHoje({ eventos, onCardClick }: { eventos: any[]; onCardC
   );
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FILTRO POR RESPONSÁVEL / EQUIPE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Paleta fixa e nesta ordem, para a mesma pessoa manter a mesma cor entre
+ * telas. A partir da 6ª pessoa a sequência repete com opacidade — o filtro
+ * não precisa provar que escala até 30 nomes, precisa ser reconhecível.
+ */
+export const CORES_PESSOA = ["#7c3aed", "#0891b2", "#d97706", "#059669", "#e11d48"];
+
+export function corDaPessoa(colaboradorId: number, ordem: number[]): string {
+  const i = ordem.indexOf(colaboradorId);
+  return CORES_PESSOA[(i < 0 ? colaboradorId : i) % CORES_PESSOA.length];
+}
+
+export function iniciaisDe(nome: string): string {
+  const partes = (nome || "").trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return "?";
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+}
+
+type Pessoa = { id: number; nome: string; cargo: string; setorId: number | null; setorNome: string | null; eventos: number };
+
+/**
+ * Seletor de responsáveis. Fica aberto num popover porque a informação útil
+ * (quantos eventos cada um tem) só aparece dentro dele — um select fechado
+ * mostrando "3 selecionados" não ajuda a decidir.
+ */
+function FiltroResponsaveis({
+  pessoas,
+  setoresLista,
+  selecionados,
+  setSelecionados,
+  setorId,
+  setSetorId,
+}: {
+  pessoas: Pessoa[];
+  setoresLista: Array<{ id: number; nome: string; cor: string }>;
+  selecionados: number[];
+  setSelecionados: (ids: number[]) => void;
+  setorId: number | null;
+  setSetorId: (id: number | null) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [buscaPessoa, setBuscaPessoa] = useState("");
+
+  const ordem = useMemo(() => pessoas.map((p) => p.id), [pessoas]);
+  const visiveis = useMemo(() => {
+    const t = buscaPessoa.trim().toLowerCase();
+    const base = setorId ? pessoas.filter((p) => p.setorId === setorId) : pessoas;
+    return t ? base.filter((p) => p.nome.toLowerCase().includes(t)) : base;
+  }, [pessoas, buscaPessoa, setorId]);
+
+  const porSetor = useMemo(() => {
+    const mapa = new Map<string, Pessoa[]>();
+    for (const p of visiveis) {
+      const chave = p.setorNome ?? "Sem equipe";
+      if (!mapa.has(chave)) mapa.set(chave, []);
+      mapa.get(chave)!.push(p);
+    }
+    return [...mapa.entries()];
+  }, [visiveis]);
+
+  const alternar = (id: number) =>
+    setSelecionados(
+      selecionados.includes(id) ? selecionados.filter((x) => x !== id) : [...selecionados, id],
+    );
+
+  const escolhidos = pessoas.filter((p) => selecionados.includes(p.id));
+  const ativo = selecionados.length > 0 || setorId !== null;
+
+  return (
+    <div className="flex items-center gap-2">
+      {setoresLista.length > 0 && (
+        <Select
+          value={setorId === null ? "todas" : String(setorId)}
+          onValueChange={(v) => {
+            const novo = v === "todas" ? null : Number(v);
+            setSetorId(novo);
+            // Trocar de equipe mantendo gente de outra equipe marcada devolve
+            // lista vazia e parece bug — limpa a seleção junto.
+            if (novo !== setorId) setSelecionados([]);
+          }}
+        >
+          <SelectTrigger className="w-40 h-10 text-xs bg-white rounded-lg">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-1">
+              Equipe
+            </span>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas</SelectItem>
+            {setoresLista.map((s) => (
+              <SelectItem key={s.id} value={String(s.id)}>
+                {s.nome}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
+      <Popover open={aberto} onOpenChange={setAberto}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={`h-10 rounded-lg px-3 flex items-center gap-2 text-xs font-semibold border transition-all ${
+              ativo
+                ? "border-violet-600 bg-violet-50 text-violet-800 ring-[3px] ring-violet-600/10"
+                : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+            }`}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Responsáveis
+            </span>
+            {escolhidos.length > 0 ? (
+              <span className="flex items-center">
+                {escolhidos.slice(0, 4).map((p, i) => (
+                  <span
+                    key={p.id}
+                    className="w-[22px] h-[22px] rounded-full border-2 border-white flex items-center justify-center text-white text-[9px] font-bold"
+                    style={{ backgroundColor: corDaPessoa(p.id, ordem), marginLeft: i === 0 ? 0 : -7 }}
+                  >
+                    {iniciaisDe(p.nome)}
+                  </span>
+                ))}
+                {escolhidos.length > 4 && (
+                  <span className="ml-1 text-[11px] text-violet-700">+{escolhidos.length - 4}</span>
+                )}
+              </span>
+            ) : (
+              <span>Todos</span>
+            )}
+            <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        </PopoverTrigger>
+
+        <PopoverContent align="start" className="w-80 p-3">
+          <Input
+            value={buscaPessoa}
+            onChange={(e) => setBuscaPessoa(e.target.value)}
+            placeholder="Buscar pessoa…"
+            className="h-8 text-xs mb-2"
+          />
+
+          <div className="max-h-72 overflow-y-auto -mx-1 px-1">
+            {porSetor.length === 0 ? (
+              <p className="text-xs text-slate-400 py-6 text-center">Ninguém encontrado.</p>
+            ) : (
+              porSetor.map(([nomeSetor, lista]) => (
+                <div key={nomeSetor}>
+                  <div className="flex items-center justify-between mt-2 mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      {nomeSetor}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-[10.5px] font-bold text-violet-700 hover:underline"
+                      onClick={() => {
+                        const ids = lista.map((p) => p.id);
+                        const todosMarcados = ids.every((id) => selecionados.includes(id));
+                        setSelecionados(
+                          todosMarcados
+                            ? selecionados.filter((id) => !ids.includes(id))
+                            : [...new Set([...selecionados, ...ids])],
+                        );
+                      }}
+                    >
+                      {lista.every((p) => selecionados.includes(p.id)) ? "Limpar" : "Todos"}
+                    </button>
+                  </div>
+                  {lista.map((p) => {
+                    const on = selecionados.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => alternar(p.id)}
+                        className={`w-full flex items-center gap-2.5 px-1.5 py-1.5 rounded-md text-left ${
+                          on ? "bg-violet-50" : "hover:bg-slate-50"
+                        }`}
+                      >
+                        <span
+                          className={`w-[15px] h-[15px] rounded border-[1.6px] flex items-center justify-center shrink-0 ${
+                            on ? "bg-violet-600 border-violet-600" : "border-slate-300"
+                          }`}
+                        >
+                          {on && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3.5} />}
+                        </span>
+                        <span
+                          className="w-[22px] h-[22px] rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+                          style={{ backgroundColor: corDaPessoa(p.id, ordem) }}
+                        >
+                          {iniciaisDe(p.nome)}
+                        </span>
+                        <span className="flex-1 text-[12.8px] font-medium text-slate-800 truncate">
+                          {p.nome}
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-400 shrink-0">
+                          {p.eventos}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="border-t mt-2 pt-2 flex items-center justify-between">
+            <span className="text-[11.5px] font-semibold text-slate-500">
+              {selecionados.length === 0
+                ? "Mostrando todos"
+                : `${selecionados.length} de ${pessoas.length}`}
+            </span>
+            <button
+              type="button"
+              className="text-[11.5px] font-bold text-slate-500 hover:text-slate-800"
+              onClick={() => {
+                setSelecionados([]);
+                setSetorId(null);
+              }}
+            >
+              Limpar filtro
+            </button>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+/** Legenda: quem está sendo mostrado, com a contagem — sem ela a cor no
+ *  calendário vira enfeite. */
+function LegendaPessoas({ pessoas, selecionados }: { pessoas: Pessoa[]; selecionados: number[] }) {
+  const ordem = pessoas.map((p) => p.id);
+  const mostrar = selecionados.length ? pessoas.filter((p) => selecionados.includes(p.id)) : [];
+  if (mostrar.length === 0) return null;
+  return (
+    <div className="flex items-center gap-4 flex-wrap px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl">
+      <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+        Mostrando
+      </span>
+      {mostrar.map((p) => (
+        <span key={p.id} className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
+          <span
+            className="w-2.5 h-2.5 rounded-[3px]"
+            style={{ backgroundColor: corDaPessoa(p.id, ordem) }}
+          />
+          {p.nome}
+          <span className="text-[11px] font-semibold text-slate-400">{p.eventos}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // VIEW: EVENTOS (busca + filtros + grupos + hero/timeline em "pendentes")
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1353,6 +1622,7 @@ function ListaView({
   eventos, isLoading,
   onStatusChange, onConcluir, onDelete, onEdit, onCardClick,
   podeEditar, podeExcluir,
+  filtroResponsaveis,
 }: {
   busca: string; setBusca: (s: string) => void;
   filtroFonte: string; setFiltroFonte: (s: string) => void;
@@ -1366,6 +1636,7 @@ function ListaView({
   onCardClick?: (ev: any) => void;
   podeEditar?: boolean;
   podeExcluir?: boolean;
+  filtroResponsaveis?: React.ReactNode;
 }) {
   // Filtra por tipo no client (backend filtra por fonte/status; tipo é mais específico)
   const eventosFiltrados = useMemo(() => {
@@ -1463,6 +1734,7 @@ function ListaView({
             <SelectItem value="tarefa">Tarefas</SelectItem>
           </SelectContent>
         </Select>
+        {filtroResponsaveis}
       </div>
 
       {/* Chips: tipo + status */}
@@ -2934,6 +3206,8 @@ export default function Agenda() {
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
   const [filtroStatus, setFiltroStatus] = useState("pendentes");
   const [busca, setBusca] = useState("");
+  const [responsaveis, setResponsaveis] = useState<number[]>([]);
+  const [setorFiltro, setSetorFiltro] = useState<number | null>(null);
 
   // Permissões — esconde botões de criação/edição/exclusão pra quem não pode.
   // O backend já bloqueia, mas mostrar botões que disparam erro é UX ruim.
@@ -2954,7 +3228,13 @@ export default function Agenda() {
 
   const statusFilter = filtroStatus === "pendentes" ? "pendente" : filtroStatus === "concluidos" ? "concluido" : undefined;
   const { data: eventos, isLoading, refetch } = trpc.agenda.listar.useQuery(
-    { fonte: filtroFonte as any, status: statusFilter, busca: busca || undefined },
+    {
+      fonte: filtroFonte as any,
+      status: statusFilter,
+      busca: busca || undefined,
+      responsaveis: responsaveis.length ? responsaveis : undefined,
+      setorId: setorFiltro ?? undefined,
+    },
     { refetchInterval: 30000 }
   );
 
@@ -2963,9 +3243,37 @@ export default function Agenda() {
   // antigos, o teto da query enchia só de passado e o futuro sumia.
   const [calRange, setCalRange] = useState(() => rangeGradeCalendario(new Date()));
   const { data: eventosCalendario } = trpc.agenda.listar.useQuery(
-    { fonte: "todos", status: undefined, dataInicio: calRange.inicio, dataFim: calRange.fim },
+    {
+      fonte: "todos",
+      status: undefined,
+      dataInicio: calRange.inicio,
+      dataFim: calRange.fim,
+      responsaveis: responsaveis.length ? responsaveis : undefined,
+      setorId: setorFiltro ?? undefined,
+    },
     { refetchInterval: 60000, enabled: tab === "calendario" },
   );
+
+  // Pessoas da agenda + contagem na janela do calendário. A contagem é o que
+  // permite escolher sabendo o volume de cada um, em vez de no escuro.
+  const { data: pessoasData } = trpc.agenda.pessoas.useQuery(
+    { dataInicio: calRange.inicio, dataFim: calRange.fim },
+    { refetchInterval: 5 * 60_000 },
+  );
+  const pessoas = pessoasData?.pessoas ?? [];
+  const setoresLista = pessoasData?.setores ?? [];
+
+  const filtroResponsaveisNode =
+    pessoas.length > 1 ? (
+      <FiltroResponsaveis
+        pessoas={pessoas}
+        setoresLista={setoresLista}
+        selecionados={responsaveis}
+        setSelecionados={setResponsaveis}
+        setorId={setorFiltro}
+        setSetorId={setSetorFiltro}
+      />
+    ) : null;
 
   const atualizarMut = trpc.agenda.atualizarStatus.useMutation({ onSuccess: () => { refetch(); toast.success("Atualizado"); } });
   const excluirMut = trpc.agenda.excluir.useMutation({ onSuccess: () => { refetch(); toast.success("Excluído"); } });
@@ -3113,17 +3421,23 @@ export default function Agenda() {
             onCardClick={(ev) => setDetalhesEvento(ev)}
             podeEditar={podeEditar}
             podeExcluir={podeExcluir}
+            filtroResponsaveis={filtroResponsaveisNode}
           />
         </TabsContent>
 
         {/* CALENDÁRIO */}
-        <TabsContent value="calendario" className="mt-5">
+        <TabsContent value="calendario" className="mt-5 space-y-3">
+          {filtroResponsaveisNode && (
+            <div className="flex items-center gap-2 flex-wrap">{filtroResponsaveisNode}</div>
+          )}
+          <LegendaPessoas pessoas={pessoas} selecionados={responsaveis} />
           <CalendarioMensal
             eventos={eventosCalendario || []}
             onCriarEvento={() => setCriarOpen(true)}
             onCardClick={(ev) => setDetalhesEvento(ev)}
             podeCriar={podeCriar}
             onRangeChange={setCalRange}
+            coresPorResponsavel={responsaveis.length > 0 ? pessoas.map((p) => p.id) : null}
           />
         </TabsContent>
       </Tabs>
