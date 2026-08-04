@@ -15,7 +15,7 @@ import { escapeLikePattern } from "../_core/sql-helpers";
 import { getDb } from "../db";
 import { toIsoString } from "../_core/dates";
 import { getEscritorioPorUsuario } from "./db-escritorio";
-import { agendamentos, agendamentoLembretes, agendamentoAnexos, tarefas, contatos, users, colaboradores, escritorios } from "../../drizzle/schema";
+import { agendamentos, agendamentoLembretes, agendamentoAnexos, tarefas, contatos, users, colaboradores, escritorios, setores } from "../../drizzle/schema";
 import { eq, and, desc, gte, lte, or, like, asc, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { criarNotificacao } from "../processos/router-notificacoes";
@@ -140,6 +140,12 @@ export const agendaRouter = router({
       fonte: z.enum(["todos", "compromisso", "tarefa"]).default("todos"),
       status: z.string().optional(),
       busca: z.string().optional(),
+      /** IDs de colaborador. Vazio/ausente = toda a agenda que a permissão
+       *  deixa ver — o filtro é um recorte, não um gate de segurança. */
+      responsaveis: z.array(z.number().int().positive()).max(100).optional(),
+      /** Recorte por setor. Resolvido em colaboradores no servidor pra o
+       *  client não precisar saber quem é de qual equipe. */
+      setorId: z.number().int().positive().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       // Permissão: módulo "agenda" — verTodos permite ver do escritório
@@ -177,6 +183,32 @@ export const agendaRouter = router({
         const userId = colabUserMap[colabId];
         return userId ? userNameMap[userId] : undefined;
       };
+
+      // Recorte por pessoa/equipe. Empilha COM o filtro de permissão em vez
+      // de substituí-lo: quem só vê os próprios não passa a ver os dos outros
+      // porque marcou alguém no filtro.
+      let recorteResponsaveis: number[] | null = null;
+      if (input?.setorId) {
+        const doSetor = await db
+          .select({ id: colaboradores.id })
+          .from(colaboradores)
+          .where(
+            and(
+              eq(colaboradores.escritorioId, escritorioId),
+              eq(colaboradores.setorId, input.setorId),
+            ),
+          );
+        recorteResponsaveis = doSetor.map((c: { id: number }) => c.id);
+      }
+      if (input?.responsaveis?.length) {
+        const escolhidos = new Set(input.responsaveis);
+        recorteResponsaveis = recorteResponsaveis
+          ? recorteResponsaveis.filter((id) => escolhidos.has(id))
+          : [...escolhidos];
+      }
+      // Setor vazio (ou interseção vazia) devolve lista vazia — mostrar tudo
+      // aqui faria o filtro parecer quebrado.
+      if (recorteResponsaveis && recorteResponsaveis.length === 0) return [];
 
       // Pré-calcula clientes do colaborador (uma vez só)
       const clientesDoColab = filtrarProprios
@@ -220,6 +252,9 @@ export const agendaRouter = router({
           agConditions.push(
             lte(agendamentos.dataInicio, fimDoDiaNoFuso(input.dataFim, fusoHorario)),
           );
+        }
+        if (recorteResponsaveis) {
+          agConditions.push(inArray(agendamentos.responsavelId, recorteResponsaveis));
         }
         if (input?.status) agConditions.push(eq(agendamentos.status, input.status as any));
         if (input?.busca) {
@@ -281,6 +316,9 @@ export const agendaRouter = router({
           tConditions.push(
             lte(tarefas.dataVencimento, fimDoDiaNoFuso(input.dataFim, fusoHorario)),
           );
+        }
+        if (recorteResponsaveis) {
+          tConditions.push(inArray(tarefas.responsavelId, recorteResponsaveis));
         }
         if (input?.status) {
           // Mapear status unificado para status de tarefa
@@ -349,6 +387,136 @@ export const agendaRouter = router({
       eventos.sort((a, b) => new Date(a.dataInicio).getTime() - new Date(b.dataInicio).getTime());
 
       return eventos;
+    }),
+
+  /**
+   * Pessoas da agenda — quem pode ser responsável, com a equipe e quantos
+   * eventos cada um tem na janela pedida.
+   *
+   * A contagem é o que transforma o filtro em informação: escolher "Ana"
+   * sabendo que ela tem 14 compromissos no mês é diferente de escolher no
+   * escuro. Vem do servidor porque o client só recebe a lista já filtrada e
+   * não teria como contar quem ficou de fora.
+   */
+  pessoas: protectedProcedure
+    .input(
+      z
+        .object({
+          dataInicio: z.string().optional(),
+          dataFim: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "agenda", "ver");
+      if (!perm.allowed) return { pessoas: [], setores: [] };
+
+      const db = await getDb();
+      if (!db) return { pessoas: [], setores: [] };
+
+      const escritorioId = perm.escritorioId;
+      const fusoHorario = await obterFusoHorarioEscritorio(db, escritorioId);
+
+      const colabs = await db
+        .select({
+          id: colaboradores.id,
+          userId: colaboradores.userId,
+          cargo: colaboradores.cargo,
+          setorId: colaboradores.setorId,
+          ativo: colaboradores.ativo,
+        })
+        .from(colaboradores)
+        .where(eq(colaboradores.escritorioId, escritorioId));
+
+      // Quem só enxerga a própria agenda não deve ver nem a lista nem a
+      // contagem dos colegas — a contagem sozinha já diz quanta coisa cada um
+      // tem, e além disso o número não bateria com o que a pessoa consegue ver.
+      // Com uma pessoa só na lista, o client esconde o filtro sozinho.
+      const visiveis = perm.verTodos
+        ? colabs
+        : colabs.filter((c: { id: number }) => c.id === perm.colaboradorId);
+
+      const ativos = visiveis.filter((c: { ativo: boolean }) => c.ativo !== false);
+      if (ativos.length === 0) return { pessoas: [], setores: [] };
+
+      const usersData = await db
+        .select({ id: users.id, name: users.name })
+        .from(users)
+        .where(inArray(users.id, ativos.map((c: { userId: number }) => c.userId)));
+      const nomePorUser: Record<number, string> = {};
+      usersData.forEach((u: { id: number; name: string | null }) => {
+        nomePorUser[u.id] = u.name || "Sem nome";
+      });
+
+      const setoresRows = await db
+        .select({ id: setores.id, nome: setores.nome, cor: setores.cor })
+        .from(setores)
+        .where(eq(setores.escritorioId, escritorioId));
+      const setorPorId: Record<number, { nome: string; cor: string }> = {};
+      setoresRows.forEach((s: { id: number; nome: string; cor: string }) => {
+        setorPorId[s.id] = { nome: s.nome, cor: s.cor };
+      });
+
+      // Contagem na janela — compromissos e tarefas somados, porque na
+      // agenda eles ocupam o mesmo dia da mesma pessoa.
+      const contagem: Record<number, number> = {};
+      const janela: any[] = [];
+      if (input?.dataInicio && input?.dataFim) {
+        janela.push(
+          gte(agendamentos.dataInicio, inicioDoDiaNoFuso(input.dataInicio, fusoHorario)),
+          lte(agendamentos.dataInicio, fimDoDiaNoFuso(input.dataFim, fusoHorario)),
+        );
+      }
+      const idsVisiveis = ativos.map((c: { id: number }) => c.id);
+      const ags = await db
+        .select({ responsavelId: agendamentos.responsavelId })
+        .from(agendamentos)
+        .where(
+          and(
+            eq(agendamentos.escritorioId, escritorioId),
+            inArray(agendamentos.responsavelId, idsVisiveis),
+            ...janela,
+          ),
+        )
+        .limit(5000);
+      for (const a of ags) contagem[a.responsavelId] = (contagem[a.responsavelId] ?? 0) + 1;
+
+      const janelaT: any[] = [];
+      if (input?.dataInicio && input?.dataFim) {
+        janelaT.push(
+          gte(tarefas.dataVencimento, inicioDoDiaNoFuso(input.dataInicio, fusoHorario)),
+          lte(tarefas.dataVencimento, fimDoDiaNoFuso(input.dataFim, fusoHorario)),
+        );
+      }
+      const trs = await db
+        .select({ responsavelId: tarefas.responsavelId })
+        .from(tarefas)
+        .where(
+          and(
+            eq(tarefas.escritorioId, escritorioId),
+            inArray(tarefas.responsavelId, idsVisiveis),
+            ...janelaT,
+          ),
+        )
+        .limit(5000);
+      for (const t of trs) {
+        if (t.responsavelId) contagem[t.responsavelId] = (contagem[t.responsavelId] ?? 0) + 1;
+      }
+
+      const pessoas = ativos
+        .map((c: { id: number; userId: number; cargo: string; setorId: number | null }) => ({
+          id: c.id,
+          nome: nomePorUser[c.userId] ?? "Sem nome",
+          cargo: c.cargo,
+          setorId: c.setorId,
+          setorNome: c.setorId ? (setorPorId[c.setorId]?.nome ?? null) : null,
+          eventos: contagem[c.id] ?? 0,
+        }))
+        .sort((a: { eventos: number; nome: string }, b: { eventos: number; nome: string }) =>
+          b.eventos - a.eventos || a.nome.localeCompare(b.nome),
+        );
+
+      return { pessoas, setores: setoresRows };
     }),
 
   /**
