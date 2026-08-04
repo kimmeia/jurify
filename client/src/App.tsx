@@ -33,6 +33,7 @@ import Tributario from "./pages/calculos/Tributario";
 import Previdenciario from "./pages/calculos/Previdenciario";
 import CalculosDiversos from "./pages/calculos/CalculosDiversos";
 import Processos from "./pages/Processos";
+import Movimentacoes from "./pages/Movimentacoes";
 import Configuracoes from "./pages/Configuracoes";
 import ModelosContrato from "./pages/ModelosContrato";
 import AgenteJuridico from "./pages/AgenteJuridico";
@@ -242,6 +243,11 @@ function Router() {
       <Route path="/processos">
         <ClientArea>
           <Processos />
+        </ClientArea>
+      </Route>
+      <Route path="/movimentacoes">
+        <ClientArea>
+          <Movimentacoes />
         </ClientArea>
       </Route>
       <Route path="/financeiro/atribuir">

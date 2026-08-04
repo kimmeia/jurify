@@ -17,6 +17,7 @@ import { calculosDiversosRouter } from "./calculos/router-calculos-diversos";
 
 // Notificações in-app
 import { notificacoesRouter } from "./processos/router-notificacoes";
+import { movimentacoesRouter } from "./processos/router-movimentacoes";
 
 import { cofreCredenciaisRouter } from "./escritorio/router-cofre-credenciais";
 
@@ -96,6 +97,9 @@ export const appRouter = router({
 
   // Notificações in-app
   notificacoes: notificacoesRouter,
+
+  // Central de movimentações — triagem do que o tribunal publicou
+  movimentacoes: movimentacoesRouter,
 
   // Web Push (PWA) — notificação com o app fechado
   push: pushRouter,
