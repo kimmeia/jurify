@@ -25,6 +25,7 @@ import { createLogger } from "../_core/logger";
 import { enviarEmail } from "../_core/email";
 import { diasUteisAte, ehDiaUtil } from "./prazo-processual";
 import { classificarGrupo } from "./router-movimentacoes";
+import { parsearPartes, resumirPartes } from "./partes-processo";
 import {
   assuntoEmail,
   htmlEmail,
@@ -111,6 +112,8 @@ export async function montarResumoDoEscritorio(
       analiseJson: eventosProcesso.analiseJson,
       cnj: eventosProcesso.cnjAfetado,
       apelido: motorMonitoramentos.apelido,
+      searchKey: motorMonitoramentos.searchKey,
+      partesJson: motorMonitoramentos.partesJson,
       prazoId: prazosSugeridos.id,
       prazoTipo: prazosSugeridos.tipo,
       prazoData: prazosSugeridos.dataSugerida,
@@ -143,7 +146,13 @@ export async function montarResumoDoEscritorio(
     const analise = parseAnalise(r.analiseJson);
     const temPrazoPendente = !!r.prazoId && r.prazoStatus === "pendente";
     const grupo = classificarGrupo({ relevancia: r.relevancia, temPrazoPendente, analise });
-    const cliente = r.apelido ?? r.cnj ?? "(sem apelido)";
+    // Mesmo nome do caso que a central mostra — o resumo do e-mail não pode
+    // chamar o processo por um nome que a tela chama por outro.
+    const p = resumirPartes(parsearPartes(r.partesJson), {
+      searchKey: r.searchKey,
+      apelido: r.apelido,
+    });
+    const cliente = p.cliente ?? p.rotulo ?? r.apelido ?? r.cnj ?? "(sem apelido)";
     const titulo = analise?.titulo ?? r.resumoIa ?? r.conteudo.slice(0, 140);
 
     if (grupo === "exigem_acao") {
