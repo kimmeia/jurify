@@ -422,7 +422,10 @@ function AppSidebarContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center">
+          {/* `shrink-0` não é decorativo: a regra global `.flex{min-height:0}`
+              deixa header e rodapé encolherem, e com o menu comprido o rodapé
+              (conta, engrenagem, sair) aparecia cortado. */}
+          <SidebarHeader className="h-16 shrink-0 justify-center">
             <div className={"flex items-center w-full transition-all " + (isCollapsed ? "justify-center" : "gap-2 px-2")}>
               <button
                 onClick={toggleSidebar}
@@ -445,17 +448,17 @@ function AppSidebarContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0">
+          <SidebarContent className="gap-0 rolagem-menu">
             {GRUPOS_MENU.map((grupo) => {
               const visiveis = grupo.itens.filter(
                 (i) => !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) && (i.ver ? i.ver(canSee) : true),
               );
               if (visiveis.length === 0) return null;
               return (
-                <div key={grupo.titulo} className="px-2 pb-1">
+                <div key={grupo.titulo} className="px-2 pb-0.5">
                   {/* O rótulo some no modo ícone — sobra o separador, que já
                       diz onde um grupo termina. */}
-                  <p className="px-2 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
+                  <p className="px-2 pt-2 pb-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
                     {grupo.titulo}
                   </p>
                   <div className="hidden group-data-[collapsible=icon]:block mx-auto my-1.5 h-px w-6 bg-sidebar-border" />
@@ -478,7 +481,7 @@ function AppSidebarContent({
                             isActive={ativo}
                             onClick={() => navigateOrBlock(item.rota)}
                             tooltip={item.rotulo}
-                            className={`h-9 relative transition-all ${ativo ? "font-semibold" : "font-normal"} ${itemsLocked ? "opacity-50" : ""}`}
+                            className={`h-[34px] relative transition-all ${ativo ? "font-semibold" : "font-normal"} ${itemsLocked ? "opacity-50" : ""}`}
                           >
                             <Icone className={`h-4 w-4 ${ativo ? "text-sidebar-primary" : ""}`} />
                             <span className="flex-1">{item.rotulo}</span>
@@ -533,7 +536,7 @@ function AppSidebarContent({
             )}
           </SidebarContent>
 
-          <SidebarFooter className="p-3">
+          <SidebarFooter className="p-3 shrink-0">
             <div className="flex items-center gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

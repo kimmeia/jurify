@@ -211,6 +211,64 @@
   }
 }
 
+/* ============================================================
+   Menu lateral — barra de rolagem.
+
+   O menu é escuro mesmo no tema claro, e o `color-scheme` do documento
+   é claro: sem isso o navegador pinta uma barra CINZA CLARA cortando o
+   painel escuro. Declarar `color-scheme: dark` na própria barra resolve
+   o padrão nativo; o resto abaixo é só pra ela ficar discreta — some
+   quando o ponteiro não está no menu.
+   ============================================================ */
+[data-slot="sidebar"],
+[data-slot="sidebar-container"],
+[data-slot="sidebar-inner"] {
+  color-scheme: dark;
+}
+
+.rolagem-menu {
+  scrollbar-width: thin;
+  /* Repouso quase invisível, mas não zero: some no painel escuro e ainda
+   * avisa que tem mais coisa abaixo. Trilho sempre transparente. */
+  scrollbar-color: oklch(1 0 0 / 12%) transparent;
+  /* Rolar o menu até o fim não deve puxar a página junto. */
+  overscroll-behavior: contain;
+}
+
+.rolagem-menu::-webkit-scrollbar {
+  width: 8px;
+}
+
+.rolagem-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Safari antigo ignora `scrollbar-width`/`scrollbar-color`; nos navegadores
+ * que suportam os dois, o padrão vence e estas regras são inertes. */
+.rolagem-menu::-webkit-scrollbar-thumb {
+  background-color: oklch(1 0 0 / 12%);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  transition: background-color 150ms ease;
+}
+
+[data-slot="sidebar-container"]:hover .rolagem-menu,
+[data-slot="sidebar"]:hover .rolagem-menu,
+.rolagem-menu:focus-within {
+  scrollbar-color: oklch(1 0 0 / 22%) transparent;
+}
+
+[data-slot="sidebar-container"]:hover .rolagem-menu::-webkit-scrollbar-thumb,
+[data-slot="sidebar"]:hover .rolagem-menu::-webkit-scrollbar-thumb,
+.rolagem-menu:focus-within::-webkit-scrollbar-thumb {
+  background-color: oklch(1 0 0 / 22%);
+}
+
+.rolagem-menu::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(1 0 0 / 34%);
+}
+
 @layer components {
   /**
    * Custom container utility that centers content and adds responsive padding.
