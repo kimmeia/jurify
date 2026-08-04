@@ -14,12 +14,13 @@
  * que vão usar imediatamente e descartar.
  */
 
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { authenticator } from "otplib";
 import { decrypt, encrypt } from "./crypto-utils";
 import { getDb } from "../db";
 import { cofreCredenciais, cofreSessoes } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
+import { classificarErroMonitor } from "../processos/diagnostico-monitoramento";
 import { configPorSistema } from "../processos/tribunais-pdpj";
 
 const log = createLogger("cofre-helpers");
@@ -92,6 +93,55 @@ export function gerarCodigoTotp(secret: string): string {
 }
 
 /**
+ * Religa os monitoramentos que estavam presos NESTA credencial.
+ *
+ * O `ultimoErro` do monitoramento só era limpo numa consulta bem-sucedida,
+ * então revalidar a credencial não mudava nada na tela: os processos
+ * continuavam dizendo "credencial expirada" até a próxima varredura, até
+ * 12h depois. O dono revalidava, olhava e concluía que não tinha
+ * funcionado.
+ *
+ * Só limpa erro que é DESTA causa. Processo com CNJ errado continua com
+ * CNJ errado depois de revalidar credencial — apagar isso seria mentir na
+ * direção contrária. Pausado também fica como está: pausa é escolha, não
+ * falha.
+ */
+export function deveReligarMonitoramento(m: {
+  status: string;
+  ultimoErro: string | null;
+}): boolean {
+  // Pausa é escolha do escritório, não falha — religar por baixo seria
+  // desfazer uma decisão de quem usa.
+  if (m.status === "pausado") return false;
+  const c = classificarErroMonitor(m.ultimoErro);
+  return c?.causa === "sessao_expirada" || c?.causa === "sem_credencial";
+}
+
+async function religarMonitoramentosDaCredencial(credencialId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const { motorMonitoramentos } = await import("../../drizzle/schema");
+
+  const presos = await db
+    .select({
+      id: motorMonitoramentos.id,
+      status: motorMonitoramentos.status,
+      ultimoErro: motorMonitoramentos.ultimoErro,
+    })
+    .from(motorMonitoramentos)
+    .where(eq(motorMonitoramentos.credencialId, credencialId));
+
+  const ids = presos.filter(deveReligarMonitoramento).map((m) => m.id);
+  if (ids.length === 0) return 0;
+
+  await db
+    .update(motorMonitoramentos)
+    .set({ ultimoErro: null, status: "ativo" })
+    .where(inArray(motorMonitoramentos.id, ids));
+  return ids.length;
+}
+
+/**
  * Atualiza status da credencial após tentativa de login.
  *
  * Sucesso → status="ativa", limpa erro, marca timestamp.
@@ -117,7 +167,14 @@ export async function atualizarStatusAposLogin(
         ultimoErro: null,
       })
       .where(eq(cofreCredenciais.id, id));
-    log.info({ credencialId: id }, "[cofre] credencial validada com sucesso");
+
+    // Auto-cura: sem isto o painel seguia mostrando "credencial expirada"
+    // nos processos mesmo depois da revalidação dar certo.
+    const religados = await religarMonitoramentosDaCredencial(id);
+    log.info(
+      { credencialId: id, monitoramentosReligados: religados },
+      "[cofre] credencial validada com sucesso",
+    );
   } else {
     await db
       .update(cofreCredenciais)
