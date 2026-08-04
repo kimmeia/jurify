@@ -295,3 +295,208 @@ export function parseClassificacao(raw: string): ResumoClassificado | null {
   if (fallback.length < 3) return null;
   return { resumo: fallback.slice(0, 240), desfecho: null, relevancia: "relevante" };
 }
+
+// ─── Análise completa (sobre o TEOR do documento) ────────────────────────────
+
+/** Natureza do ato — decide o tom da UI e o que faz sentido oferecer. */
+export type AtoProcessual =
+  | "decisao"
+  | "sentenca"
+  | "acordao"
+  | "despacho"
+  | "intimacao"
+  | "audiencia"
+  | "expediente"
+  | "outro";
+
+export type ProvidenciaAnalise = {
+  /** O prazo é NOSSO? Prazo de contestação do réu quando somos o autor não é. */
+  exigida: boolean;
+  /** O que precisa ser feito, em uma frase de ação. */
+  descricao: string | null;
+  prazoDias: number | null;
+  prazoUteis: boolean;
+  /** Data explícita quando o documento traz uma (audiência, perícia). YYYY-MM-DD. */
+  dataExplicita: string | null;
+  /** O que acontece se descumprir ("preclusão", "multa de 2% do valor da causa"). */
+  consequencia: string | null;
+  /** Trecho LITERAL do documento que fundamenta — é o que a UI grifa. */
+  citacao: string | null;
+};
+
+export type AnaliseMovimentacao = {
+  /** Manchete em linguagem de advogado ocupado, não o rótulo do PJe. */
+  titulo: string;
+  /** 1 a 4 frases do que mudou no processo. */
+  pontos: string[];
+  ato: AtoProcessual;
+  desfecho: Desfecho | null;
+  relevancia: Relevancia;
+  providencia: ProvidenciaAnalise;
+};
+
+const ATOS: AtoProcessual[] = [
+  "decisao", "sentenca", "acordao", "despacho", "intimacao", "audiencia", "expediente", "outro",
+];
+
+/**
+ * O prompt insiste em duas coisas porque são as que estragam o produto quando
+ * a IA erra:
+ *
+ * 1. **De quem é o prazo.** "Cite-se o réu para contestar em 15 dias" não é
+ *    prazo do escritório quando o cliente é o autor. Marcar como nosso gera
+ *    prazo fantasma na agenda; a confiança some no primeiro falso positivo.
+ * 2. **Citação literal.** O advogado precisa ver a frase do juiz, não uma
+ *    paráfrase — é o que ele vai colar na petição. Parafrasear aqui é pior
+ *    que não citar, porque parece verificado e não é.
+ */
+const SYSTEM_PROMPT_ANALISE = `Você analisa UM ato processual de um processo brasileiro para um advogado que não vai abrir os autos.
+
+Responda APENAS com JSON válido, sem markdown e sem crases:
+{"titulo":"...","pontos":["..."],"ato":"decisao|sentenca|acordao|despacho|intimacao|audiencia|expediente|outro","desfecho":"favoravel|desfavoravel|parcial|neutro"|null,"relevancia":"relevante|rotina","providencia":{"exigida":true|false,"descricao":"..."|null,"prazoDias":15|null,"prazoUteis":true|false,"dataExplicita":"AAAA-MM-DD"|null,"consequencia":"..."|null,"citacao":"..."|null}}
+
+titulo: uma frase que diz o que mudou e, se houver, o que o juiz mandou fazer. Escreva como quem avisa um colega no corredor. Nada de "Movimentação processual" nem de repetir o rótulo do PJe.
+
+pontos: de 1 a 4 frases curtas. Cada uma deve carregar informação que só está no documento — o que foi deferido, o que foi negado e por quê, valores, condições. Se o juiz negou algo "por ora" ou "sem prejuízo de", diga, porque muda a estratégia.
+
+ato: a natureza do que o juiz assinou.
+
+desfecho: só quando o ato resolve algo a favor ou contra alguém, avaliado do ponto de vista do NOSSO cliente (informado na mensagem). Use null para intimação, expediente e ato sem vencedor.
+
+relevancia: "rotina" para mero expediente; "relevante" para tudo que o advogado precisaria ler.
+
+providencia.exigida: true SOMENTE se o ato impõe um prazo ou uma conduta AO NOSSO CLIENTE ou ao advogado dele. Preste atenção em quem é intimado. "Cite-se o réu para contestar em 15 dias", quando o nosso cliente é o autor, é prazo da parte contrária: exigida=false. Na dúvida sobre de quem é o prazo, use false e explique a dúvida no último ponto — prazo inventado na agenda de um advogado destrói a confiança no sistema inteiro.
+
+providencia.citacao: quando exigida=true, copie a frase do documento que impõe o prazo, LITERALMENTE, com a pontuação e as palavras originais. Não resuma, não corrija, não traduza. Se não conseguir localizar a frase exata, use null.
+
+providencia.prazoDias / prazoUteis: o número que o documento diz. Prazo processual é em dias úteis (art. 219 do CPC) salvo se o texto disser "corridos". Não calcule a data de vencimento — só devolva a quantidade.
+
+providencia.dataExplicita: só quando o documento marca uma data (audiência, perícia, sessão). Formato AAAA-MM-DD.
+
+Não invente nada que não esteja no texto.`;
+
+/**
+ * Analisa um ato processual a partir do TEOR do documento (ou, na falta dele,
+ * do rótulo da movimentação — com resultado bem mais pobre, que é exatamente
+ * o problema que a captura de teor resolve).
+ *
+ * Nunca lança. Retorna null quando não vale analisar ou a IA está fora.
+ */
+export async function analisarMovimentacao(
+  entrada: {
+    /** Rótulo do movimento na timeline do tribunal. */
+    rotulo: string;
+    /** Texto integral do documento, quando disponível. */
+    teor?: string | null;
+    /** Data do ato — a IA usa pra resolver "audiência na próxima terça". */
+    dataEvento?: Date | null;
+  },
+  modelo: string = MODELO_DEFAULT,
+  opts?: { ladoCliente?: LadoCliente; escritorioId?: number; nomeCliente?: string },
+): Promise<AnaliseMovimentacao | null> {
+  const rotulo = (entrada.rotulo ?? "").trim();
+  const teor = (entrada.teor ?? "").trim();
+  const corpo = teor || rotulo;
+  if (corpo.length < 40) return null;
+
+  const truncado = corpo.length > MAX_INPUT_ANALISE_CHARS ? corpo.slice(0, MAX_INPUT_ANALISE_CHARS) : corpo;
+
+  const lado = opts?.ladoCliente ?? "desconhecido";
+  const quem = opts?.nomeCliente ? `O NOSSO cliente é ${opts.nomeCliente}. ` : "";
+  const ladoTxt =
+    lado === "autor" ? `${quem}Ele é o AUTOR (polo ativo).`
+    : lado === "reu" ? `${quem}Ele é o RÉU (polo passivo).`
+    : `${quem}Não se sabe de que lado o nosso cliente está — se não der pra inferir com segurança pelo texto, use desfecho null e providencia.exigida false.`;
+
+  const dataTxt = entrada.dataEvento
+    ? `\nData do ato: ${entrada.dataEvento.toISOString().slice(0, 10)}.`
+    : "";
+  const teorTxt = teor
+    ? `\n\nTeor do documento:\n${truncado}`
+    : `\n\n(O documento não pôde ser lido — só temos o rótulo do movimento. Não invente conteúdo; classifique com o que há e deixe providencia.exigida false se o rótulo não afirmar um prazo.)`;
+
+  const user = `${ladoTxt}${dataTxt}\n\nRótulo do movimento no tribunal: ${rotulo}${teorTxt}`;
+
+  let raw: string | null;
+  try {
+    raw = await chamarProvider(SYSTEM_PROMPT_ANALISE, user, modelo, 1200, opts?.escritorioId);
+  } catch (err: any) {
+    if (err?.name === "AbortError" || err?.name === "TimeoutError") log.warn({ modelo }, "timeout na análise IA");
+    else log.warn({ modelo, err: err?.message ?? String(err) }, "erro inesperado na análise IA");
+    return null;
+  }
+  if (!raw) return null;
+  return parseAnalise(raw);
+}
+
+/** Teor cabe muito mais que o resumo curto — é o ponto do recurso. */
+const MAX_INPUT_ANALISE_CHARS = 24_000;
+
+/**
+ * Extrai e valida o JSON da resposta. Tolerante a crases e texto ao redor,
+ * mas rígido no conteúdo: campo com tipo errado vira o default seguro em vez
+ * de vazar `undefined` pra UI ou pra agenda.
+ */
+export function parseAnalise(raw: string): AnaliseMovimentacao | null {
+  const ini = raw.indexOf("{");
+  const fim = raw.lastIndexOf("}");
+  if (ini < 0 || fim <= ini) return null;
+
+  let obj: Record<string, unknown>;
+  try {
+    obj = JSON.parse(raw.slice(ini, fim + 1)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+
+  const titulo = typeof obj.titulo === "string" ? obj.titulo.trim() : "";
+  if (!titulo) return null;
+
+  const pontos = Array.isArray(obj.pontos)
+    ? obj.pontos.filter((p): p is string => typeof p === "string" && p.trim().length > 0)
+        .map((p) => p.trim().slice(0, 400))
+        .slice(0, 4)
+    : [];
+
+  const ato = ATOS.includes(obj.ato as AtoProcessual) ? (obj.ato as AtoProcessual) : "outro";
+  const desfecho = DESFECHOS.includes(obj.desfecho as Desfecho) ? (obj.desfecho as Desfecho) : null;
+  const relevancia: Relevancia = obj.relevancia === "rotina" ? "rotina" : "relevante";
+
+  const p = (obj.providencia ?? {}) as Record<string, unknown>;
+  const prazoDias =
+    typeof p.prazoDias === "number" && Number.isFinite(p.prazoDias) && p.prazoDias > 0 && p.prazoDias <= 365
+      ? Math.round(p.prazoDias)
+      : null;
+
+  const providencia: ProvidenciaAnalise = {
+    exigida: p.exigida === true,
+    descricao: typeof p.descricao === "string" && p.descricao.trim() ? p.descricao.trim().slice(0, 300) : null,
+    prazoDias,
+    // Default do CPC é dia útil; só cai pra corrido quando a IA afirma.
+    prazoUteis: p.prazoUteis === false ? false : true,
+    dataExplicita: validarDataIso(p.dataExplicita),
+    consequencia:
+      typeof p.consequencia === "string" && p.consequencia.trim()
+        ? p.consequencia.trim().slice(0, 200)
+        : null,
+    citacao: typeof p.citacao === "string" && p.citacao.trim().length > 12 ? p.citacao.trim().slice(0, 1200) : null,
+  };
+
+  // Providência sem prazo nem data nem descrição não é providência — é ruído
+  // que acenderia a faixa vermelha do painel sem ter o que fazer.
+  if (providencia.exigida && !providencia.prazoDias && !providencia.dataExplicita && !providencia.descricao) {
+    providencia.exigida = false;
+  }
+
+  return { titulo: titulo.slice(0, 240), pontos, ato, desfecho, relevancia, providencia };
+}
+
+function validarDataIso(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const m = v.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const [, a, mes, dia] = m;
+  const d = new Date(Date.UTC(Number(a), Number(mes) - 1, Number(dia)));
+  if (d.getUTCMonth() + 1 !== Number(mes) || d.getUTCDate() !== Number(dia)) return null;
+  return `${a}-${mes}-${dia}`;
+}

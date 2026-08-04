@@ -35,6 +35,7 @@ import {
   CreditCard,
   Lock,
   FileSearch,
+  Gavel,
   FileText,
   Handshake,
   Headphones,
@@ -453,6 +454,21 @@ function AppSidebarContent({
                     className={`h-4 w-4 ${location === "/processos" ? "text-primary" : ""}`}
                   />
                   <span>Processos</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>}
+
+              {/* Movimentações — triagem do que os tribunais publicaram */}
+              {canSee("processos") && !moduloOcultoNoMenu("processos") && <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location === "/movimentacoes"}
+                  onClick={() => navigateOrBlock("/movimentacoes")}
+                  tooltip="Movimentações"
+                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
+                >
+                  <Gavel
+                    className={`h-4 w-4 ${location === "/movimentacoes" ? "text-primary" : ""}`}
+                  />
+                  <span>Movimentações</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
