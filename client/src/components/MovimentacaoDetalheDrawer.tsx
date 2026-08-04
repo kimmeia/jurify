@@ -69,7 +69,7 @@ const DESFECHO_META: Record<string, { label: string; emoji: string; cls: string 
   favoravel: { label: "Favorável", emoji: "🟢", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   desfavoravel: { label: "Desfavorável", emoji: "🔴", cls: "bg-rose-50 text-rose-700 border-rose-200" },
   parcial: { label: "Parcialmente favorável", emoji: "🟡", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  neutro: { label: "Sem mérito", emoji: "⚪", cls: "bg-slate-100 text-slate-600 border-slate-200" },
+  neutro: { label: "Sem mérito", emoji: "⚪", cls: "bg-muted text-muted-foreground border-border" },
 };
 
 const ATO_LABEL: Record<string, string> = {
@@ -263,7 +263,7 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                   </span>
                 )}
                 {data.relevancia === "rotina" && !data.providencia?.exigida && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-slate-100 text-slate-500 border-slate-200">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-muted text-muted-foreground border-border">
                     📄 Rotina
                   </span>
                 )}
@@ -274,21 +274,21 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                   {data.partesRotulo || data.cliente || data.searchKey || "(sem apelido)"}
                 </span>
                 {data.clientePolo && POLO_LABEL[data.clientePolo] && (
-                  <span className="rounded-full bg-slate-100 text-slate-600 px-1.5 py-px text-[10px] font-bold">
+                  <span className="rounded-full bg-muted text-muted-foreground px-1.5 py-px text-[10px] font-bold">
                     nosso cliente: {POLO_LABEL[data.clientePolo]}
                   </span>
                 )}
-                <span className="text-slate-300">•</span>
-                <span className="font-mono font-medium text-slate-600">{data.cnj || "—"}</span>
+                <span className="text-muted-foreground/50">•</span>
+                <span className="font-mono font-medium text-muted-foreground">{data.cnj || "—"}</span>
                 {data.tribunal && (
                   <>
-                    <span className="text-slate-300">•</span>
+                    <span className="text-muted-foreground/50">•</span>
                     <Badge variant="outline" className="text-[9px] uppercase h-4 px-1.5">
                       {data.tribunal}
                     </Badge>
                   </>
                 )}
-                <span className="text-slate-300">•</span>
+                <span className="text-muted-foreground/50">•</span>
                 <span>
                   Intimação em <span className="font-semibold text-foreground">{dataBR(data.dataEvento)}</span>
                 </span>
@@ -319,7 +319,7 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                               className={`text-[12.5px] leading-snug ${
                                 data.cliente && p.nome === data.cliente
                                   ? "font-bold text-foreground"
-                                  : "text-slate-600"
+                                  : "text-muted-foreground"
                               }`}
                             >
                               {p.nome}
@@ -396,7 +396,7 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                     )}
                   </div>
                   <div
-                    className={`px-3 py-2.5 text-[12.5px] leading-relaxed whitespace-pre-wrap text-slate-700 ${
+                    className={`px-3 py-2.5 text-[12.5px] leading-relaxed whitespace-pre-wrap text-foreground/90 ${
                       teorExpandido ? "" : "max-h-56 overflow-hidden relative"
                     }`}
                   >
@@ -431,18 +431,18 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                     {falhaTeor?.detalhe}
                     {data.teorErro ? ` (${data.teorErro})` : ""}
                   </p>
-                  <div className="mt-2 rounded border border-amber-200 bg-white/70 px-2.5 py-1.5">
+                  <div className="mt-2 rounded border border-amber-200 bg-card/70 px-2.5 py-1.5">
                     <p className="text-[9.5px] font-bold uppercase tracking-wide text-amber-700">
                       Rótulo publicado pelo tribunal
                     </p>
-                    <p className="text-[12px] text-slate-700 mt-0.5">{data.rotulo}</p>
+                    <p className="text-[12px] text-foreground/90 mt-0.5">{data.rotulo}</p>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {falhaTeor?.podeBaixar && data.teorUrl && (
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-[11px] border-amber-300 bg-white"
+                        className="h-7 text-[11px] border-amber-300 bg-card"
                         disabled={baixarMut.isPending}
                         onClick={() => baixarMut.mutate({ eventoId: data.id })}
                       >
@@ -458,7 +458,7 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-[11px] border-amber-300 bg-white"
+                        className="h-7 text-[11px] border-amber-300 bg-card"
                         disabled={analisarMut.isPending}
                         onClick={() => analisarMut.mutate({ eventoId: data.id })}
                       >
@@ -513,11 +513,11 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                       <span className="text-[10.5px] font-bold text-muted-foreground tabular-nums w-10 shrink-0 pt-px">
                         {format(new Date(a.dataEvento), "dd/MM")}
                       </span>
-                      <span className="flex-1 text-[12px] text-slate-700 leading-snug">{a.titulo}</span>
+                      <span className="flex-1 text-[12px] text-foreground/90 leading-snug">{a.titulo}</span>
                       <span
                         className={`text-[9.5px] font-bold rounded-full px-2 py-0.5 shrink-0 ${
                           a.relevancia === "rotina"
-                            ? "bg-slate-100 text-slate-500"
+                            ? "bg-muted text-muted-foreground"
                             : "bg-violet-50 text-violet-700"
                         }`}
                       >

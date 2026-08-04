@@ -66,8 +66,8 @@ const PRIOR_BADGE: Record<string, string> = {
   urgente: "bg-rose-100 text-rose-700",
   critica: "bg-rose-100 text-rose-700",
   alta: "bg-orange-100 text-orange-700",
-  normal: "bg-slate-100 text-slate-600",
-  baixa: "bg-slate-100 text-slate-500",
+  normal: "bg-muted text-muted-foreground",
+  baixa: "bg-muted text-muted-foreground",
 };
 
 /** Cor da faixa lateral do EventoCard por tipo. Tarefas sempre violet. */
@@ -95,7 +95,7 @@ const HORA_BLOCK_TEXT: Record<string, string> = {
   reuniao_comercial: "text-emerald-700",
   tarefa: "text-amber-700",
   follow_up: "text-cyan-700",
-  outro: "text-slate-700",
+  outro: "text-foreground/90",
 };
 
 const TIPO_BADGE: Record<string, string> = {
@@ -104,7 +104,7 @@ const TIPO_BADGE: Record<string, string> = {
   reuniao_comercial: "bg-emerald-50 text-emerald-700 border-emerald-200",
   tarefa: "bg-amber-50 text-amber-700 border-amber-200",
   follow_up: "bg-cyan-50 text-cyan-700 border-cyan-200",
-  outro: "bg-slate-100 text-slate-600 border-slate-200",
+  outro: "bg-muted text-muted-foreground border-border",
 };
 
 function corDoEvento(ev: any): string {
@@ -171,7 +171,7 @@ function ConfirmarExclusaoButton({ onConfirm, titulo, variant = "card" }: {
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 text-[10.5px] rounded-lg text-slate-500 hover:bg-slate-100 px-2.5"
+          className="h-7 text-[10.5px] rounded-lg text-muted-foreground hover:bg-muted px-2.5"
           onClick={(e) => {
             e.stopPropagation();
             setOpen(true);
@@ -199,7 +199,7 @@ function ConfirmarExclusaoButton({ onConfirm, titulo, variant = "card" }: {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir este evento?</AlertDialogTitle>
             <AlertDialogDescription>
-              {titulo ? <>O evento "<b className="text-slate-900">{titulo}</b>" será excluído.</> : "Esse evento será excluído."}
+              {titulo ? <>O evento "<b className="text-foreground">{titulo}</b>" será excluído.</> : "Esse evento será excluído."}
               {" "}Essa ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -294,28 +294,28 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
 
   // Bg do card por estado
   const cardBg = concluido
-    ? "bg-slate-50"
+    ? "bg-muted/50"
     : overdue
       ? "bg-gradient-to-r from-rose-50/60 to-white"
       : rel?.urgencia === "agora"
         ? "bg-gradient-to-r from-orange-50/40 to-white"
-        : "bg-white";
+        : "bg-card";
 
   const cardBorder = overdue
     ? "border-rose-200"
     : rel?.urgencia === "agora"
       ? "border-orange-200 ring-2 ring-orange-100"
-      : "border-slate-200";
+      : "border-border";
 
   // Badge de status/tempo
   const statusBadge = (() => {
     if (concluido) return { txt: `✓ Concluído${ev.dataConclusao ? " " + formatTime(ev.dataConclusao) : ""}`, cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
-    if (cancelado) return { txt: "Cancelado", cls: "bg-slate-100 text-slate-500 border-slate-200" };
+    if (cancelado) return { txt: "Cancelado", cls: "bg-muted text-muted-foreground border-border" };
     if (!rel) return null;
     if (rel.urgencia === "atrasado") return { txt: `⚠ ${rel.texto}`, cls: "bg-rose-100 text-rose-700 border-rose-200 animate-pulse" };
     if (rel.urgencia === "agora") return { txt: `⏳ ${rel.texto}`, cls: "bg-orange-100 text-orange-700 border-orange-200 animate-pulse" };
     if (rel.urgencia === "futuro") return { txt: rel.texto, cls: "bg-blue-50 text-blue-700 border-blue-200" };
-    return { txt: rel.texto, cls: "bg-slate-100 text-slate-600 border-slate-200" };
+    return { txt: rel.texto, cls: "bg-muted text-muted-foreground border-border" };
   })();
 
   return (
@@ -377,7 +377,7 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
           {/* Título */}
           <p
             className={`text-sm font-bold tracking-tight leading-snug mt-1.5 ${
-              concluido ? "line-through text-slate-400" : cancelado ? "text-slate-400" : "text-slate-900"
+              concluido ? "line-through text-muted-foreground/80" : cancelado ? "text-muted-foreground/80" : "text-foreground"
             }`}
           >
             {ev.titulo}
@@ -388,8 +388,8 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
             <div className="mt-1.5 space-y-1">
               {ev.comparecimento && <ComparecimentoBadge valor={ev.comparecimento} />}
               {ev.observacaoAtendimento && (
-                <p className="text-[11.5px] text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1.5 flex gap-1.5">
-                  <MessageSquareText className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
+                <p className="text-[11.5px] text-muted-foreground bg-muted/50 border border-border/60 rounded-lg px-2 py-1.5 flex gap-1.5">
+                  <MessageSquareText className="h-3.5 w-3.5 text-muted-foreground/80 mt-0.5 shrink-0" />
                   <span className="whitespace-pre-wrap break-words line-clamp-2">{ev.observacaoAtendimento}</span>
                 </p>
               )}
@@ -398,7 +398,7 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
 
           {/* Linha 2: cliente + processo */}
           {(contato || cnj || ev.local || ev.contatoTelefone) && (
-            <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-600 flex-wrap">
+            <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground flex-wrap">
               {contato && (
                 <span className="inline-flex items-center gap-1.5">
                   <span
@@ -413,7 +413,7 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
               )}
               {ev.contatoTelefone && (
                 <>
-                  {contato && <span className="text-slate-300">·</span>}
+                  {contato && <span className="text-muted-foreground/50">·</span>}
                   <a
                     href={`https://wa.me/55${String(ev.contatoTelefone).replace(/\D/g, "")}`}
                     target="_blank"
@@ -429,19 +429,19 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
               )}
               {cnj && (
                 <>
-                  {(contato || ev.contatoTelefone) && <span className="text-slate-300">·</span>}
+                  {(contato || ev.contatoTelefone) && <span className="text-muted-foreground/50">·</span>}
                   <span className="inline-flex items-center gap-1">
                     <Scale className="w-3 h-3 text-indigo-500" />
                     <span className="font-mono text-indigo-700 text-[10.5px]">{cnj}</span>
-                    {tribunal && <span className="text-slate-400 text-[10px] uppercase">{tribunal}</span>}
+                    {tribunal && <span className="text-muted-foreground/80 text-[10px] uppercase">{tribunal}</span>}
                   </span>
                 </>
               )}
               {ev.local && (
                 <>
-                  {(contato || ev.contatoTelefone || cnj) && <span className="text-slate-300">·</span>}
+                  {(contato || ev.contatoTelefone || cnj) && <span className="text-muted-foreground/50">·</span>}
                   <span className="inline-flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-slate-400" />
+                    <MapPin className="w-3 h-3 text-muted-foreground/80" />
                     <span className="truncate max-w-[160px]">{ev.local}</span>
                   </span>
                 </>
@@ -453,7 +453,7 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
           {(responsavel || (ev.lembretes && ev.lembretes.length > 0)) && (
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               {responsavel && (
-                <span className="inline-flex items-center gap-1.5 text-[10.5px] text-slate-500">
+                <span className="inline-flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
                   <span
                     className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br ${gradientAvatar(responsavel)}`}
                     title={responsavel}
@@ -493,7 +493,7 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-[10.5px] rounded-lg border-slate-200 hover:bg-slate-50 px-2.5"
+              className="h-7 text-[10.5px] rounded-lg border-border hover:bg-muted/50 px-2.5"
               onClick={(e) => {
                 e.stopPropagation();
                 onEdit(ev);
@@ -538,6 +538,7 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
   // período (sem isso, o calendário pedia todo o histórico e estourava o teto).
   useEffect(() => { onRangeChange?.(rangeGradeCalendario(mes)); }, [mes, onRangeChange]);
   const [diaSelecionado, setDiaSelecionado] = useState<Date | null>(() => new Date());
+  const [diaAberto, setDiaAberto] = useState<Date | null>(null);
   const [bloquearDialog, setBloquearDialog] = useState<Date | null>(null);
 
   // Bloqueios da agenda (feriados + indisponibilidades). A IA do SmartFlow
@@ -666,28 +667,28 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
   const totalNoMes = grade.filter((d) => !d.outroMes).reduce((acc, d) => acc + d.eventos.length, 0);
 
   return (
-    <div className="bg-white border border-slate-200 rounded-[14px] overflow-hidden">
+    <div className="bg-card border border-border rounded-[14px] overflow-hidden">
       {/* Cabeçalho: mês + navegação à esquerda, ações à direita */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 flex-wrap">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border/60 flex-wrap">
         <div className="flex items-center gap-3">
           <button
             type="button"
-            className="w-[30px] h-[30px] border border-slate-200 rounded-lg flex items-center justify-center hover:bg-slate-50"
+            className="w-[30px] h-[30px] border border-border rounded-lg flex items-center justify-center hover:bg-muted/50"
             onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() - 1, 1))}
           >
-            <ChevronLeft className="h-3.5 w-3.5 text-slate-600" />
+            <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
           </button>
           <h2 className="text-base font-bold tracking-tight">{mesLabel}</h2>
           <button
             type="button"
-            className="w-[30px] h-[30px] border border-slate-200 rounded-lg flex items-center justify-center hover:bg-slate-50"
+            className="w-[30px] h-[30px] border border-border rounded-lg flex items-center justify-center hover:bg-muted/50"
             onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() + 1, 1))}
           >
-            <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
           </button>
           <button
             type="button"
-            className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            className="border border-border rounded-lg px-3 py-1.5 text-xs font-semibold text-foreground/90 hover:bg-muted/50"
             onClick={() => {
               const hj = new Date();
               setMes(new Date(hj.getFullYear(), hj.getMonth(), 1));
@@ -696,7 +697,7 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
           >
             Hoje
           </button>
-          <span className="text-xs text-slate-400 font-medium">{totalNoMes} no mês</span>
+          <span className="text-xs text-muted-foreground/80 font-medium">{totalNoMes} no mês</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -749,11 +750,11 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
       </div>
 
       {/* Dias da semana */}
-      <div className="grid grid-cols-7 border-b border-slate-100">
+      <div className="grid grid-cols-7 border-b border-border/60">
         {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => (
           <div
             key={d}
-            className="py-2 text-center text-[10.5px] font-bold uppercase tracking-[0.06em] text-slate-400"
+            className="py-2 text-center text-[10.5px] font-bold uppercase tracking-[0.06em] text-muted-foreground/80"
           >
             {d}
           </div>
@@ -777,9 +778,12 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
           return (
             <div
               key={i}
-              onClick={() => setDiaSelecionado(dia.date)}
-              className={`border-r border-b border-slate-100 px-1.5 py-1.5 overflow-hidden cursor-pointer transition-colors [&:nth-child(7n)]:border-r-0 ${
-                diaInteiroBloq ? "bg-red-50/60" : "hover:bg-slate-50/60"
+              onClick={() => {
+                setDiaSelecionado(dia.date);
+                setDiaAberto(dia.date);
+              }}
+              className={`border-r border-b border-border/60 px-1.5 py-1.5 overflow-hidden cursor-pointer transition-colors [&:nth-child(7n)]:border-r-0 ${
+                diaInteiroBloq ? "bg-red-50/60" : "hover:bg-muted/50"
               } ${isSelected(dia.date) ? "bg-violet-50/50" : ""}`}
               title={motivoBloq ?? undefined}
             >
@@ -790,7 +794,7 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
                   </span>
                 ) : (
                   <span
-                    className={`text-[11.5px] font-semibold ${dia.outroMes ? "text-slate-300" : "text-slate-700"}`}
+                    className={`text-[11.5px] font-semibold ${dia.outroMes ? "text-muted-foreground/50" : "text-foreground/90"}`}
                   >
                     {dia.date.getDate()}
                   </span>
@@ -833,7 +837,7 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
               })}
 
               {resto > 0 && (
-                <p className="mt-[3px] text-[9.5px] font-semibold text-slate-400">+{resto} eventos</p>
+                <p className="mt-[3px] text-[9.5px] font-semibold text-muted-foreground/80">+{resto} eventos</p>
               )}
             </div>
           );
@@ -841,12 +845,163 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
       </div>
 
 
+      <DiaDoCalendarioDialog
+        data={diaAberto}
+        eventos={
+          diaAberto
+            ? (grade.find(
+                (d) =>
+                  d.date.getDate() === diaAberto.getDate() &&
+                  d.date.getMonth() === diaAberto.getMonth() &&
+                  d.date.getFullYear() === diaAberto.getFullYear(),
+              )?.eventos ?? [])
+            : []
+        }
+        bloqueios={diaAberto ? bloqueiosPorDia.get(dateKeyStr(diaAberto)) ?? [] : []}
+        onOpenChange={(o) => { if (!o) setDiaAberto(null); }}
+        onCardClick={(ev) => { setDiaAberto(null); onCardClick?.(ev); }}
+        onCriarEvento={onCriarEvento ? () => { setDiaAberto(null); onCriarEvento(); } : undefined}
+        onBloquear={() => { if (diaAberto) { setBloquearDialog(diaAberto); setDiaAberto(null); } }}
+        podeCriar={podeCriar}
+      />
+
       <BloquearDiaDialog
         data={bloquearDialog}
         onOpenChange={(o) => { if (!o) setBloquearDialog(null); }}
         onCreated={() => bloqueiosQuery.refetch()}
       />
     </div>
+  );
+}
+
+/**
+ * Lista de um dia do calendário.
+ *
+ * Antes o clique no dia só selecionava — o dia mostrava no máximo 3 eventos e
+ * o "+N eventos" não levava a lugar nenhum, então os outros ficavam
+ * inacessíveis pelo calendário.
+ */
+function DiaDoCalendarioDialog({
+  data,
+  eventos,
+  bloqueios,
+  onOpenChange,
+  onCardClick,
+  onCriarEvento,
+  onBloquear,
+  podeCriar,
+}: {
+  data: Date | null;
+  eventos: any[];
+  bloqueios: any[];
+  onOpenChange: (o: boolean) => void;
+  onCardClick?: (ev: any) => void;
+  onCriarEvento?: () => void;
+  onBloquear?: () => void;
+  podeCriar?: boolean;
+}) {
+  if (!data) return null;
+
+  const ordenados = [...eventos].sort(
+    (a, b) => new Date(a.dataInicio).getTime() - new Date(b.dataInicio).getTime(),
+  );
+  const titulo = data.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+  const diaSemana = data.toLocaleDateString("pt-BR", { weekday: "long" });
+
+  return (
+    <Dialog open={!!data} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="capitalize">
+            {diaSemana}, {titulo}
+          </DialogTitle>
+          <DialogDescription>
+            {ordenados.length === 0
+              ? "Nenhum compromisso neste dia."
+              : `${ordenados.length} ${ordenados.length === 1 ? "compromisso" : "compromissos"}`}
+          </DialogDescription>
+        </DialogHeader>
+
+        {bloqueios.length > 0 && (
+          <div className="space-y-1.5">
+            {bloqueios.map((b: any) => (
+              <div
+                key={b.id}
+                className="flex items-center gap-1.5 text-[11.5px] bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5 text-red-700"
+              >
+                <CalendarOff className="h-3.5 w-3.5 shrink-0" />
+                <span className="font-semibold">
+                  {b.horaInicio && b.horaFim ? `${b.horaInicio}–${b.horaFim}` : "Dia inteiro"}
+                </span>
+                {b.motivo && <span className="truncate">· {b.motivo}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="max-h-[52vh] overflow-y-auto -mx-1 px-1">
+          {ordenados.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              Dia livre.
+            </p>
+          ) : (
+            <div className="divide-y rounded-lg border">
+              {ordenados.map((ev: any) => {
+                const cor = corDoEvento(ev);
+                const concluido = ev.status === "concluido" || ev.status === "concluida";
+                const inicio = new Date(ev.dataInicio);
+                const hora = ev.diaInteiro
+                  ? "Dia todo"
+                  : inicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+                return (
+                  <button
+                    key={`${ev.fonte}-${ev.id}`}
+                    type="button"
+                    onClick={() => onCardClick?.(ev)}
+                    className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors"
+                  >
+                    <span
+                      className="w-1 self-stretch rounded-full shrink-0"
+                      style={{ background: cor }}
+                    />
+                    <span className="text-[11px] font-bold text-muted-foreground tabular-nums w-14 shrink-0 pt-0.5">
+                      {hora}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span
+                        className={`block text-[13px] font-semibold leading-snug ${concluido ? "line-through text-muted-foreground" : ""}`}
+                      >
+                        {ev.titulo}
+                      </span>
+                      <span className="block text-[11px] text-muted-foreground mt-0.5">
+                        {TIPO_LABELS[ev.tipo] ?? ev.tipo}
+                        {ev.responsavelNome ? ` · ${ev.responsavelNome}` : ""}
+                        {ev.contatoNome ? ` · ${ev.contatoNome}` : ""}
+                        {ev.local ? ` · ${ev.local}` : ""}
+                      </span>
+                    </span>
+                    {concluido && <Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button variant="ghost" size="sm" onClick={onBloquear} className="text-red-600 hover:text-red-700">
+            <Ban className="h-3.5 w-3.5 mr-1.5" />
+            Bloquear o dia
+          </Button>
+          {podeCriar && onCriarEvento && (
+            <Button size="sm" onClick={onCriarEvento}>
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              Novo compromisso
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -896,14 +1051,14 @@ function BloquearDiaDialog({
             <button
               type="button"
               onClick={() => setModo("dia")}
-              className={`flex-1 px-3 py-2 text-sm rounded-md border ${modo === "dia" ? "border-blue-400 bg-blue-50 font-medium" : "border-slate-200"}`}
+              className={`flex-1 px-3 py-2 text-sm rounded-md border ${modo === "dia" ? "border-blue-400 bg-blue-50 font-medium" : "border-border"}`}
             >
               Dia inteiro
             </button>
             <button
               type="button"
               onClick={() => setModo("horario")}
-              className={`flex-1 px-3 py-2 text-sm rounded-md border ${modo === "horario" ? "border-blue-400 bg-blue-50 font-medium" : "border-slate-200"}`}
+              className={`flex-1 px-3 py-2 text-sm rounded-md border ${modo === "horario" ? "border-blue-400 bg-blue-50 font-medium" : "border-border"}`}
             >
               Horário específico
             </button>
@@ -1013,7 +1168,7 @@ function ProximoEventoHero({ ev, onStatusChange, onConcluir, onEdit, onCardClick
         <div className="flex flex-col">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-orange-700 mb-1">Próximo evento</p>
           <div className="flex items-baseline gap-2">
-            <p className="text-3xl font-extrabold text-slate-900 tabular-nums leading-none tracking-tight">{horaStr}</p>
+            <p className="text-3xl font-extrabold text-foreground tabular-nums leading-none tracking-tight">{horaStr}</p>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-600 text-white text-[10px] font-bold animate-pulse">
               ⏳ {countdownTxt}
             </span>
@@ -1033,8 +1188,8 @@ function ProximoEventoHero({ ev, onStatusChange, onConcluir, onEdit, onCardClick
               </span>
             )}
           </div>
-          <p className="text-base font-bold tracking-tight text-slate-900">{ev.titulo}</p>
-          <div className="flex items-center gap-2.5 mt-1.5 text-[11px] text-slate-600 flex-wrap">
+          <p className="text-base font-bold tracking-tight text-foreground">{ev.titulo}</p>
+          <div className="flex items-center gap-2.5 mt-1.5 text-[11px] text-muted-foreground flex-wrap">
             {ev.contatoNome && (
               <span className="inline-flex items-center gap-1.5">
                 <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br ${gradientAvatar(ev.contatoNome)}`}>
@@ -1045,16 +1200,16 @@ function ProximoEventoHero({ ev, onStatusChange, onConcluir, onEdit, onCardClick
             )}
             {ev.local && (
               <>
-                <span className="text-slate-300">·</span>
+                <span className="text-muted-foreground/50">·</span>
                 <span className="inline-flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-slate-400" />
+                  <MapPin className="w-3 h-3 text-muted-foreground/80" />
                   {ev.local}
                 </span>
               </>
             )}
             {ev.responsavelNome && (
               <>
-                <span className="text-slate-300">·</span>
+                <span className="text-muted-foreground/50">·</span>
                 <span className="inline-flex items-center gap-1.5">
                   <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br ${gradientAvatar(ev.responsavelNome)}`}>
                     {gerarIniciais(ev.responsavelNome)}
@@ -1084,7 +1239,7 @@ function ProximoEventoHero({ ev, onStatusChange, onConcluir, onEdit, onCardClick
             <Button
               size="sm"
               variant="outline"
-              className="h-8 text-xs rounded-lg border-slate-200 bg-white"
+              className="h-8 text-xs rounded-lg border-border bg-card"
               onClick={(e) => {
                 e.stopPropagation();
                 onEdit(ev);
@@ -1142,7 +1297,7 @@ function TimelineHorariaHoje({ eventos, onCardClick }: { eventos: any[]; onCardC
         <Sun className="h-4 w-4 text-amber-500" />
         Hoje ({eventos.length})
       </h3>
-      <div className="bg-white border border-slate-200 rounded-2xl p-5">
+      <div className="bg-card border border-border rounded-2xl p-5">
         <div className="relative" style={{ height: ALTURA_PX }}>
           {/* Marcações de hora */}
           {Array.from({ length: TOTAL_HORAS + 1 }, (_, i) => {
@@ -1150,10 +1305,10 @@ function TimelineHorariaHoje({ eventos, onCardClick }: { eventos: any[]; onCardC
             const top = (i / TOTAL_HORAS) * ALTURA_PX;
             return (
               <div key={h} style={{ position: "absolute", top, left: 0, right: 0 }}>
-                <span className="absolute left-0 -translate-y-1/2 text-[10px] font-semibold text-slate-400 tabular-nums w-12 text-right pr-2">
+                <span className="absolute left-0 -translate-y-1/2 text-[10px] font-semibold text-muted-foreground/80 tabular-nums w-12 text-right pr-2">
                   {String(h).padStart(2, "0")}:00
                 </span>
-                <div className="ml-12 border-t border-dashed border-slate-200" />
+                <div className="ml-12 border-t border-dashed border-border" />
               </div>
             );
           })}
@@ -1202,12 +1357,12 @@ function TimelineHorariaHoje({ eventos, onCardClick }: { eventos: any[]; onCardC
                 <div className="flex items-start justify-between gap-2 h-full">
                   <div className="flex-1 min-w-0 overflow-hidden">
                     <p
-                      className={`text-xs font-semibold truncate ${concluido ? "line-through text-slate-400" : "text-slate-900"}`}
+                      className={`text-xs font-semibold truncate ${concluido ? "line-through text-muted-foreground/80" : "text-foreground"}`}
                     >
                       {ev.titulo}
                     </p>
                     {altura > 36 && (
-                      <p className="text-[10px] text-slate-500 tabular-nums truncate">
+                      <p className="text-[10px] text-muted-foreground tabular-nums truncate">
                         {horaStr} · {tipoLabel}
                         {ev.local && ` · ${ev.local}`}
                       </p>
@@ -1320,8 +1475,8 @@ function FiltroResponsaveis({
             if (novo !== setorId) setSelecionados([]);
           }}
         >
-          <SelectTrigger className="w-40 h-10 text-xs bg-white rounded-lg">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-1">
+          <SelectTrigger className="w-40 h-10 text-xs bg-card rounded-lg">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80 mr-1">
               Equipe
             </span>
             <SelectValue />
@@ -1344,10 +1499,10 @@ function FiltroResponsaveis({
             className={`h-10 rounded-lg px-3 flex items-center gap-2 text-xs font-semibold border transition-all ${
               ativo
                 ? "border-violet-600 bg-violet-50 text-violet-800 ring-[3px] ring-violet-600/10"
-                : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                : "bg-card border-border text-muted-foreground hover:border-foreground/25"
             }`}
           >
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
               Responsáveis
             </span>
             {escolhidos.length > 0 ? (
@@ -1368,7 +1523,7 @@ function FiltroResponsaveis({
             ) : (
               <span>Todos</span>
             )}
-            <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/80" />
           </button>
         </PopoverTrigger>
 
@@ -1382,12 +1537,12 @@ function FiltroResponsaveis({
 
           <div className="max-h-72 overflow-y-auto -mx-1 px-1">
             {porSetor.length === 0 ? (
-              <p className="text-xs text-slate-400 py-6 text-center">Ninguém encontrado.</p>
+              <p className="text-xs text-muted-foreground/80 py-6 text-center">Ninguém encontrado.</p>
             ) : (
               porSetor.map(([nomeSetor, lista]) => (
                 <div key={nomeSetor}>
                   <div className="flex items-center justify-between mt-2 mb-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
                       {nomeSetor}
                     </span>
                     <button
@@ -1414,12 +1569,12 @@ function FiltroResponsaveis({
                         type="button"
                         onClick={() => alternar(p.id)}
                         className={`w-full flex items-center gap-2.5 px-1.5 py-1.5 rounded-md text-left ${
-                          on ? "bg-violet-50" : "hover:bg-slate-50"
+                          on ? "bg-violet-50" : "hover:bg-muted/50"
                         }`}
                       >
                         <span
                           className={`w-[15px] h-[15px] rounded border-[1.6px] flex items-center justify-center shrink-0 ${
-                            on ? "bg-violet-600 border-violet-600" : "border-slate-300"
+                            on ? "bg-violet-600 border-violet-600" : "border-foreground/25"
                           }`}
                         >
                           {on && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3.5} />}
@@ -1430,10 +1585,10 @@ function FiltroResponsaveis({
                         >
                           {iniciaisDe(p.nome)}
                         </span>
-                        <span className="flex-1 text-[12.8px] font-medium text-slate-800 truncate">
+                        <span className="flex-1 text-[12.8px] font-medium text-foreground truncate">
                           {p.nome}
                         </span>
-                        <span className="text-[11px] font-semibold text-slate-400 shrink-0">
+                        <span className="text-[11px] font-semibold text-muted-foreground/80 shrink-0">
                           {p.eventos}
                         </span>
                       </button>
@@ -1445,14 +1600,14 @@ function FiltroResponsaveis({
           </div>
 
           <div className="border-t mt-2 pt-2 flex items-center justify-between">
-            <span className="text-[11.5px] font-semibold text-slate-500">
+            <span className="text-[11.5px] font-semibold text-muted-foreground">
               {selecionados.length === 0
                 ? "Mostrando todos"
                 : `${selecionados.length} de ${pessoas.length}`}
             </span>
             <button
               type="button"
-              className="text-[11.5px] font-bold text-slate-500 hover:text-slate-800"
+              className="text-[11.5px] font-bold text-muted-foreground hover:text-foreground"
               onClick={() => {
                 setSelecionados([]);
                 setSetorId(null);
@@ -1474,8 +1629,8 @@ function FiltroResponsaveis({
           }
           className={`h-10 rounded-lg px-3 flex items-center gap-1.5 text-xs font-semibold border transition-all ${
             selecionados.length === 1 && selecionados[0] === euId
-              ? "bg-slate-900 text-white border-slate-900"
-              : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+              ? "bg-foreground text-background border-foreground"
+              : "bg-card border-border text-muted-foreground hover:border-foreground/25"
           }`}
         >
           <User className="h-3.5 w-3.5" />
@@ -1501,23 +1656,23 @@ function LegendaPessoas({
   const mostrar = selecionados.length ? pessoas.filter((p) => selecionados.includes(p.id)) : [];
   if (mostrar.length === 0) return null;
   return (
-    <div className="flex items-center gap-4 flex-wrap px-3.5 py-2.5 bg-white border border-slate-200 rounded-[11px]">
-      <span className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-slate-400">
+    <div className="flex items-center gap-4 flex-wrap px-3.5 py-2.5 bg-card border border-border rounded-[11px]">
+      <span className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-muted-foreground/80">
         Cor por responsável
       </span>
       {mostrar.map((p) => (
-        <span key={p.id} className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
+        <span key={p.id} className="flex items-center gap-1.5 text-xs font-medium text-foreground/90">
           <span
             className="w-2.5 h-2.5 rounded-[3px]"
             style={{ backgroundColor: corDaPessoa(p.id, ordem) }}
           />
           {p.nome}
-          <span className="text-[11px] font-semibold text-slate-400">{p.eventos}</span>
+          <span className="text-[11px] font-semibold text-muted-foreground/80">{p.eventos}</span>
         </span>
       ))}
       {typeof total === "number" && (
-        <span className="ml-auto text-xs text-slate-500">
-          <b className="font-bold text-slate-900 tabular-nums">{total}</b> compromissos no filtro atual
+        <span className="ml-auto text-xs text-muted-foreground">
+          <b className="font-bold text-foreground tabular-nums">{total}</b> compromissos no filtro atual
         </span>
       )}
     </div>
@@ -1640,19 +1795,19 @@ function ListaView({
 
       {/* Filtros — busca, recortes e chips no mesmo card, como no desenho:
           uma superfície só em vez de controles soltos sobre o fundo. */}
-      <div className="bg-white border border-slate-200 rounded-[14px] p-3.5 space-y-2.5">
+      <div className="bg-card border border-border rounded-[14px] p-3.5 space-y-2.5">
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[260px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/80" />
           <Input
             placeholder="Buscar por título, cliente, descrição…"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            className="pl-10 h-10 bg-white rounded-lg"
+            className="pl-10 h-10 bg-card rounded-lg"
           />
         </div>
         <Select value={filtroFonte} onValueChange={setFiltroFonte}>
-          <SelectTrigger className="w-36 h-10 text-xs bg-white rounded-lg"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-36 h-10 text-xs bg-card rounded-lg"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos</SelectItem>
             <SelectItem value="compromisso">Compromissos</SelectItem>
@@ -1667,7 +1822,7 @@ function ListaView({
         {TIPO_FILTRO_OPTS.map((opt) => {
           const active = filtroTipo === opt.id;
           const ativoCls: Record<string, string> = {
-            slate: "bg-slate-900 text-white border-slate-900 shadow-sm",
+            slate: "bg-foreground text-background border-foreground shadow-sm",
             violet: "bg-violet-600 text-white border-violet-600 shadow-sm",
             rose: "bg-rose-600 text-white border-rose-600 shadow-sm",
             amber: "bg-amber-500 text-white border-amber-500 shadow-sm",
@@ -1684,17 +1839,17 @@ function ListaView({
               type="button"
               onClick={() => setFiltroTipo(opt.id)}
               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                active ? ativoCls[opt.cor] : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                active ? ativoCls[opt.cor] : "bg-card text-muted-foreground border-border hover:border-foreground/25 hover:bg-muted/50"
               }`}
             >
               {opt.id !== "todos" && (
-                <span className={`w-1.5 h-1.5 rounded-full ${active ? "bg-white/85" : inativoDot[opt.cor]}`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${active ? "bg-card/85" : inativoDot[opt.cor]}`} />
               )}
               {opt.label}
             </button>
           );
         })}
-        <span className="text-slate-300 mx-1">·</span>
+        <span className="text-muted-foreground/50 mx-1">·</span>
         {[
           { id: "pendentes", label: "Pendentes" },
           { id: "todos_status", label: "Todos status" },
@@ -1707,7 +1862,7 @@ function ListaView({
               type="button"
               onClick={() => setFiltroStatus(opt.id)}
               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                active ? "bg-slate-900 text-white border-slate-900 shadow-sm" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                active ? "bg-foreground text-background border-foreground shadow-sm" : "bg-card text-muted-foreground border-border hover:border-foreground/25 hover:bg-muted/50"
               }`}
             >
               {opt.label}
@@ -1718,8 +1873,8 @@ function ListaView({
       </div>
 
       {/* Contador */}
-      <p className="text-[11px] text-slate-500">
-        <b className="font-semibold text-slate-700 tabular-nums">{totalFiltrado}</b> {totalFiltrado === 1 ? "evento" : "eventos"}
+      <p className="text-[11px] text-muted-foreground">
+        <b className="font-semibold text-foreground/90 tabular-nums">{totalFiltrado}</b> {totalFiltrado === 1 ? "evento" : "eventos"}
         {grupos.atrasado.length > 0 && (
           <> · <b className="font-semibold text-rose-600 tabular-nums">{grupos.atrasado.length}</b> atrasado{grupos.atrasado.length === 1 ? "" : "s"}</>
         )}
@@ -1737,12 +1892,12 @@ function ListaView({
           <Skeleton className="h-20 w-full" />
         </div>
       ) : totalFiltrado === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-amber-50/30 py-14 text-center space-y-2">
+        <div className="rounded-2xl border border-dashed border-border bg-gradient-to-br from-slate-50 to-amber-50/30 py-14 text-center space-y-2">
           <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 flex items-center justify-center mx-auto mb-1">
             <CalendarClock className="h-7 w-7 text-amber-500/70" />
           </div>
-          <p className="font-semibold text-slate-700">Nenhum evento com este filtro</p>
-          <p className="text-xs text-slate-500">Tente trocar o filtro ou criar um novo evento.</p>
+          <p className="font-semibold text-foreground/90">Nenhum evento com este filtro</p>
+          <p className="text-xs text-muted-foreground">Tente trocar o filtro ou criar um novo evento.</p>
         </div>
       ) : (
         <div className="space-y-5">
@@ -1751,8 +1906,8 @@ function ListaView({
             { key: "hoje", titulo: "Hoje", icon: Sun, color: "text-orange-600" },
             { key: "amanha", titulo: "Amanhã", icon: Clock, color: "text-blue-600" },
             { key: "semana", titulo: "Esta semana", icon: CalendarDays, color: "text-violet-600" },
-            { key: "proximaSemana", titulo: "Próxima semana", icon: CalendarDays, color: "text-slate-600" },
-            { key: "maisTarde", titulo: "Mais tarde", icon: CalendarDays, color: "text-slate-500" },
+            { key: "proximaSemana", titulo: "Próxima semana", icon: CalendarDays, color: "text-muted-foreground" },
+            { key: "maisTarde", titulo: "Mais tarde", icon: CalendarDays, color: "text-muted-foreground" },
           ].map((secao) => {
             let lista = grupos[secao.key];
             // Se a timeline horária já está mostrando os eventos de hoje COM
@@ -1771,7 +1926,7 @@ function ListaView({
                 <div className="flex items-center gap-2">
                   <Icon className={`h-4 w-4 ${secao.color}`} />
                   <h3 className={`text-sm font-semibold tracking-tight ${secao.color}`}>{tituloFinal}</h3>
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold tabular-nums">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-bold tabular-nums">
                     {lista.length}
                   </span>
                 </div>
@@ -1908,11 +2063,11 @@ function DetalhesEventoDialog({
                     {PRIOR_LABEL[prioridade] || prioridade}
                   </span>
                 )}
-                <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border ${STATUS_CORES[evento.status] || "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border ${STATUS_CORES[evento.status] || "bg-muted text-muted-foreground border-border"}`}>
                   {overdue && !concluido && !cancelado ? "⚠ Atrasado" : statusLabel}
                 </span>
               </div>
-              <DialogTitle className={`text-base tracking-tight ${concluido ? "line-through text-slate-400" : cancelado ? "text-slate-400" : "text-slate-900"}`}>
+              <DialogTitle className={`text-base tracking-tight ${concluido ? "line-through text-muted-foreground/80" : cancelado ? "text-muted-foreground/80" : "text-foreground"}`}>
                 {evento.titulo}
               </DialogTitle>
               <DialogDescription className="sr-only">Detalhes do evento da agenda</DialogDescription>
@@ -1923,16 +2078,16 @@ function DetalhesEventoDialog({
         <div className="space-y-3 pt-1">
           {/* Data / hora */}
           <div className="flex items-start gap-2.5 text-sm">
-            <CalendarDays className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+            <CalendarDays className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
                 {evento.fonte === "tarefa" ? "Prazo" : "Data e hora"}
               </p>
-              <p className="text-sm text-slate-800 capitalize">
+              <p className="text-sm text-foreground capitalize">
                 {formatDateTimeFull(evento.dataInicio, evento.diaInteiro)}
               </p>
               {evento.dataFim && (
-                <p className="text-[11px] text-slate-500 mt-0.5">
+                <p className="text-[11px] text-muted-foreground mt-0.5">
                   até {formatDateTimeFull(evento.dataFim, evento.diaInteiro)}
                 </p>
               )}
@@ -1942,10 +2097,10 @@ function DetalhesEventoDialog({
           {/* Local */}
           {evento.local && (
             <div className="flex items-start gap-2.5 text-sm">
-              <MapPin className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <MapPin className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Local</p>
-                <p className="text-sm text-slate-800 break-words">{evento.local}</p>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Local</p>
+                <p className="text-sm text-foreground break-words">{evento.local}</p>
               </div>
             </div>
           )}
@@ -1953,14 +2108,14 @@ function DetalhesEventoDialog({
           {/* Cliente */}
           {evento.contatoNome && (
             <div className="flex items-start gap-2.5 text-sm">
-              <Users className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <Users className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Cliente</p>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Cliente</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(evento.contatoNome)}`}>
                     {gerarIniciais(evento.contatoNome)}
                   </span>
-                  <span className="text-sm font-medium text-slate-800 truncate">{evento.contatoNome}</span>
+                  <span className="text-sm font-medium text-foreground truncate">{evento.contatoNome}</span>
                 </div>
               </div>
             </div>
@@ -1969,9 +2124,9 @@ function DetalhesEventoDialog({
           {/* Telefone do contato (com link WhatsApp) */}
           {evento.contatoTelefone && (
             <div className="flex items-start gap-2.5 text-sm">
-              <PhoneCall className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <PhoneCall className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Telefone / WhatsApp</p>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Telefone / WhatsApp</p>
                 <a
                   href={`https://wa.me/55${String(evento.contatoTelefone).replace(/\D/g, "")}`}
                   target="_blank"
@@ -1990,9 +2145,9 @@ function DetalhesEventoDialog({
             <div className="flex items-start gap-2.5 text-sm">
               <Scale className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Processo</p>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Processo</p>
                 <p className="text-sm font-mono font-semibold text-indigo-700 truncate">{evento.cnj}</p>
-                {evento.tribunal && <p className="text-[11px] text-slate-500">{evento.tribunal}</p>}
+                {evento.tribunal && <p className="text-[11px] text-muted-foreground">{evento.tribunal}</p>}
               </div>
             </div>
           )}
@@ -2000,14 +2155,14 @@ function DetalhesEventoDialog({
           {/* Responsável */}
           {evento.responsavelNome && (
             <div className="flex items-start gap-2.5 text-sm">
-              <Briefcase className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <Briefcase className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Responsável</p>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Responsável</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(evento.responsavelNome)}`}>
                     {gerarIniciais(evento.responsavelNome)}
                   </span>
-                  <span className="text-sm text-slate-800 truncate">{evento.responsavelNome}</span>
+                  <span className="text-sm text-foreground truncate">{evento.responsavelNome}</span>
                 </div>
               </div>
             </div>
@@ -2016,10 +2171,10 @@ function DetalhesEventoDialog({
           {/* Descrição */}
           {evento.descricao && (
             <div className="flex items-start gap-2.5 text-sm">
-              <FileText className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <FileText className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Descrição</p>
-                <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">{evento.descricao}</p>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Descrição</p>
+                <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{evento.descricao}</p>
               </div>
             </div>
           )}
@@ -2027,12 +2182,12 @@ function DetalhesEventoDialog({
           {/* Resultado do atendimento */}
           {(evento.comparecimento || evento.observacaoAtendimento) && (
             <div className="flex items-start gap-2.5 text-sm">
-              <MessageSquareText className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <MessageSquareText className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Resultado do atendimento</p>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Resultado do atendimento</p>
                 {evento.comparecimento && <div className="mt-1"><ComparecimentoBadge valor={evento.comparecimento} /></div>}
                 {evento.observacaoAtendimento && (
-                  <p className="text-sm text-slate-700 whitespace-pre-wrap break-words mt-1">{evento.observacaoAtendimento}</p>
+                  <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words mt-1">{evento.observacaoAtendimento}</p>
                 )}
               </div>
             </div>
@@ -2041,9 +2196,9 @@ function DetalhesEventoDialog({
           {/* Anexos (só compromisso) */}
           {isCompromisso && Array.isArray(anexos) && anexos.length > 0 && (
             <div className="flex items-start gap-2.5 text-sm">
-              <Paperclip className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <Paperclip className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
                   Arquivos · {anexos.length}
                 </p>
                 <div className="space-y-1">
@@ -2060,7 +2215,7 @@ function DetalhesEventoDialog({
                         <span className="text-base shrink-0">{isImg ? "🖼️" : a.mimeType?.includes?.("pdf") ? "📄" : "📎"}</span>
                         <div className="flex-1 min-w-0">
                           <p className="text-[11.5px] font-medium text-violet-700 truncate" title={a.nome}>{a.nome}</p>
-                          <p className="text-[10px] text-slate-500">{formatTamanho(a.tamanho || 0)}</p>
+                          <p className="text-[10px] text-muted-foreground">{formatTamanho(a.tamanho || 0)}</p>
                         </div>
                         <ExternalLink className="h-3 w-3 text-violet-600 shrink-0" />
                       </a>
@@ -2074,9 +2229,9 @@ function DetalhesEventoDialog({
           {/* Lembretes (só compromisso) */}
           {isCompromisso && Array.isArray(lembretes) && lembretes.length > 0 && (
             <div className="flex items-start gap-2.5 text-sm">
-              <Bell className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <Bell className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
                   Lembretes · {lembretes.length}
                 </p>
                 <div className="space-y-1.5">
@@ -2103,10 +2258,10 @@ function DetalhesEventoDialog({
                             {dests.map((id) => {
                               const col = colaboradoresMap[id];
                               if (!col) return (
-                                <span key={id} className="text-[10px] text-slate-500">Colaborador #{id}</span>
+                                <span key={id} className="text-[10px] text-muted-foreground">Colaborador #{id}</span>
                               );
                               return (
-                                <span key={id} className="inline-flex items-center gap-1 text-[10px] text-slate-700">
+                                <span key={id} className="inline-flex items-center gap-1 text-[10px] text-foreground/90">
                                   <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)}`}>
                                     {gerarIniciais(col.nome)}
                                   </span>
@@ -2597,7 +2752,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                         type="button"
                         onClick={() => setLembreteMinutos(ativo ? lembreteMinutos.filter((m) => m !== p.id) : [...lembreteMinutos, p.id])}
                         className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                          ativo ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                          ativo ? "bg-blue-600 text-white border-blue-600" : "bg-card text-muted-foreground border-border hover:border-blue-300"
                         }`}
                       >
                         {p.label}
@@ -2624,11 +2779,11 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                     >
                       Todos
                     </button>
-                    <span className="text-slate-300">·</span>
+                    <span className="text-muted-foreground/50">·</span>
                     <button
                       type="button"
                       onClick={() => setLembreteDestinatarios([])}
-                      className="text-slate-500 hover:underline"
+                      className="text-muted-foreground hover:underline"
                     >
                       Limpar
                     </button>
@@ -2668,12 +2823,12 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                   placeholder="Buscar colaborador por nome…"
                   value={destinatariosBusca}
                   onChange={(e) => setDestinatariosBusca(e.target.value)}
-                  className="h-8 text-xs bg-white rounded-lg mb-1.5"
+                  className="h-8 text-xs bg-card rounded-lg mb-1.5"
                 />
                 {colaboradores.length === 0 ? (
-                  <p className="text-[10.5px] text-slate-500 italic">Carregando colaboradores…</p>
+                  <p className="text-[10.5px] text-muted-foreground italic">Carregando colaboradores…</p>
                 ) : (
-                  <div className="max-h-40 overflow-y-auto bg-white rounded-lg border border-blue-200/50 divide-y divide-slate-100">
+                  <div className="max-h-40 overflow-y-auto bg-card rounded-lg border border-blue-200/50 divide-y divide-slate-100">
                     {colaboradores
                       .filter((c) => !destinatariosBusca || c.nome.toLowerCase().includes(destinatariosBusca.toLowerCase()))
                       .map((col) => {
@@ -2686,7 +2841,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                               ativo ? lembreteDestinatarios.filter((d) => d !== col.id) : [...lembreteDestinatarios, col.id],
                             )}
                             className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 text-left transition-colors ${
-                              ativo ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-slate-50"
+                              ativo ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-muted/50"
                             }`}
                           >
                             <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)} ${ativo ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}>
@@ -2694,7 +2849,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                             </span>
                             <div className="flex-1 min-w-0">
                               <p className="text-[11px] font-semibold truncate" title={col.nome}>{col.nome}</p>
-                              {col.cargo && <p className="text-[9.5px] text-slate-500 truncate">{col.cargo}</p>}
+                              {col.cargo && <p className="text-[9.5px] text-muted-foreground truncate">{col.cargo}</p>}
                             </div>
                             {ativo && (
                               <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />
@@ -2723,8 +2878,8 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                           ativo
                             ? "bg-blue-600 text-white border-blue-600"
                             : disabled
-                              ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
-                              : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                              ? "bg-muted/50 text-muted-foreground/80 border-border cursor-not-allowed"
+                              : "bg-card text-muted-foreground border-border hover:border-blue-300"
                         }`}
                       >
                         <span className="mr-1">{c.icon}</span>
@@ -2769,7 +2924,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                   onBlur={() => setTimeout(() => setContatoMenuOpen(false), 200)}
                 />
                 {contatoMenuOpen && contatoBusca.length >= 2 && clientesOptions.length > 0 && (
-                  <div className="absolute z-20 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg divide-y">
+                  <div className="absolute z-20 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-card border border-border rounded-lg shadow-lg divide-y">
                     {clientesOptions.map((c: any) => (
                       <button
                         type="button"
@@ -2782,7 +2937,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                         </span>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium truncate">{c.nome}</p>
-                          {c.cpfCnpj && <p className="text-[10px] text-slate-500 font-mono">{c.cpfCnpj}</p>}
+                          {c.cpfCnpj && <p className="text-[10px] text-muted-foreground font-mono">{c.cpfCnpj}</p>}
                         </div>
                       </button>
                     ))}
@@ -2796,7 +2951,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
           <div>
             <Label className="text-xs">Telefone / WhatsApp do contato (opcional)</Label>
             <div className="mt-1 relative">
-              <PhoneCall className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <PhoneCall className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/80" />
               <Input
                 placeholder="(85) 9 9999-0000"
                 value={contatoTelefone}
@@ -2815,7 +2970,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                 </a>
               )}
             </div>
-            <p className="text-[10px] text-slate-400 mt-1">Útil pra contato rápido antes/durante a reunião — não vincula contato do CRM.</p>
+            <p className="text-[10px] text-muted-foreground/80 mt-1">Útil pra contato rápido antes/durante a reunião — não vincula contato do CRM.</p>
           </div>
 
           {/* Processo monitorado */}
@@ -2844,7 +2999,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                   onBlur={() => setTimeout(() => setProcessoMenuOpen(false), 200)}
                 />
                 {processoMenuOpen && processosOptions.length > 0 && (
-                  <div className="absolute z-20 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg divide-y">
+                  <div className="absolute z-20 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-card border border-border rounded-lg shadow-lg divide-y">
                     {processosOptions.map((m: any) => (
                       <button
                         type="button"
@@ -2859,7 +3014,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                         <Scale className="h-4 w-4 text-indigo-600 shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-mono font-bold truncate">{m.searchKey}</p>
-                          {m.apelido && <p className="text-[10px] text-slate-500 truncate">{m.apelido}</p>}
+                          {m.apelido && <p className="text-[10px] text-muted-foreground truncate">{m.apelido}</p>}
                         </div>
                       </button>
                     ))}
@@ -2913,7 +3068,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                     const isImg = a.mimeType.startsWith("image/");
                     const sizeKB = a.tamanho < 1024 * 1024 ? `${Math.round(a.tamanho / 1024)} KB` : `${(a.tamanho / 1024 / 1024).toFixed(1)} MB`;
                     return (
-                      <div key={i} className="flex items-center gap-2 px-2 py-1.5 bg-white border border-violet-200/60 rounded-lg">
+                      <div key={i} className="flex items-center gap-2 px-2 py-1.5 bg-card border border-violet-200/60 rounded-lg">
                         <span className="text-base shrink-0">{isImg ? "🖼️" : a.mimeType.includes("pdf") ? "📄" : "📎"}</span>
                         <div className="flex-1 min-w-0">
                           <a
@@ -2925,12 +3080,12 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                           >
                             {a.nome}
                           </a>
-                          <p className="text-[9.5px] text-slate-500">{sizeKB}</p>
+                          <p className="text-[9.5px] text-muted-foreground">{sizeKB}</p>
                         </div>
                         <button
                           type="button"
                           onClick={() => handleRemoverAnexo(a)}
-                          className="text-slate-400 hover:text-rose-600 p-1"
+                          className="text-muted-foreground/80 hover:text-rose-600 p-1"
                           title="Remover"
                         >
                           <Trash2 className="h-3 w-3" />
@@ -3049,7 +3204,7 @@ function ResultadoAtendimentoDialog({ evento, open, onOpenChange, onConcluido }:
 
         <div className="space-y-4 py-1 flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
           <div>
-            <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">O cliente compareceu?</Label>
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">O cliente compareceu?</Label>
             <div className="grid grid-cols-3 gap-2 mt-2">
               {opcoes.map(({ v, label, Icon, active }) => {
                 const sel = comparecimento === v;
@@ -3058,7 +3213,7 @@ function ResultadoAtendimentoDialog({ evento, open, onOpenChange, onConcluido }:
                     key={v}
                     type="button"
                     onClick={() => setComparecimento(v)}
-                    className={`flex flex-col items-center gap-1 py-3 rounded-xl border-2 text-xs font-semibold transition ${sel ? active : "border-slate-200 text-slate-500 hover:border-slate-300"}`}
+                    className={`flex flex-col items-center gap-1 py-3 rounded-xl border-2 text-xs font-semibold transition ${sel ? active : "border-border text-muted-foreground hover:border-foreground/25"}`}
                   >
                     <Icon className="h-5 w-5" /> {label}
                   </button>
@@ -3074,12 +3229,12 @@ function ResultadoAtendimentoDialog({ evento, open, onOpenChange, onConcluido }:
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-[11px] text-slate-600">Nova data *</Label>
-                  <Input type="date" value={dataRetorno} onChange={(e) => setDataRetorno(e.target.value)} className="mt-1 bg-white" />
+                  <Label className="text-[11px] text-muted-foreground">Nova data *</Label>
+                  <Input type="date" value={dataRetorno} onChange={(e) => setDataRetorno(e.target.value)} className="mt-1 bg-card" />
                 </div>
                 <div>
-                  <Label className="text-[11px] text-slate-600">Hora</Label>
-                  <Input type="time" value={horaRetorno} onChange={(e) => setHoraRetorno(e.target.value)} className="mt-1 bg-white" />
+                  <Label className="text-[11px] text-muted-foreground">Hora</Label>
+                  <Input type="time" value={horaRetorno} onChange={(e) => setHoraRetorno(e.target.value)} className="mt-1 bg-card" />
                 </div>
               </div>
               <label className="flex items-center gap-2 text-xs text-amber-800 font-medium cursor-pointer">
@@ -3090,7 +3245,7 @@ function ResultadoAtendimentoDialog({ evento, open, onOpenChange, onConcluido }:
           )}
 
           <div>
-            <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Observação do atendimento</Label>
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Observação do atendimento</Label>
             <Textarea
               value={observacao}
               onChange={(e) => setObservacao(e.target.value)}
@@ -3143,17 +3298,17 @@ function PastilhaContador({
       className={`inline-flex items-baseline gap-1.5 rounded-[10px] border px-3 py-1.5 transition-colors ${
         alerta
           ? "border-rose-200 bg-rose-50 hover:bg-rose-100"
-          : "border-slate-200 bg-white hover:bg-slate-50"
+          : "border-border bg-card hover:bg-muted/50"
       }`}
     >
       <span
         className={`text-[15px] font-bold tabular-nums leading-none ${
-          alerta ? "text-rose-600" : "text-slate-900"
+          alerta ? "text-rose-600" : "text-foreground"
         }`}
       >
         {valor}
       </span>
-      <span className={`text-[11.5px] font-medium ${alerta ? "text-rose-700" : "text-slate-500"}`}>
+      <span className={`text-[11.5px] font-medium ${alerta ? "text-rose-700" : "text-muted-foreground"}`}>
         {rotulo}
       </span>
     </button>
@@ -3259,12 +3414,12 @@ export default function Agenda() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-4 bg-slate-50/60 min-h-full">
+    <div className="p-4 md:p-6 space-y-4 bg-muted/30 min-h-full">
       {/* ═══════════ CABEÇALHO ═══════════ */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[27px] font-bold tracking-tight leading-none">Agenda</h1>
-          <p className="text-[13.5px] text-slate-500 mt-1.5">
+          <p className="text-[13.5px] text-muted-foreground mt-1.5">
             Compromissos, prazos e tarefas do escritório
           </p>
         </div>
@@ -3281,17 +3436,17 @@ export default function Agenda() {
       {/* ═══════════ TABS PILL ═══════════ */}
       <Tabs value={tab} onValueChange={setTab}>
         <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="bg-slate-100 rounded-[9px] p-[3px] inline-flex">
+        <div className="bg-muted rounded-[9px] p-[3px] inline-flex">
           <TabsList className="bg-transparent gap-1 p-0 h-auto">
             <TabsTrigger
               value="eventos"
-              className="text-xs font-semibold text-slate-500 gap-1.5 px-3.5 py-1.5 rounded-[7px] data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-[0_1px_3px_#0f172a1a]"
+              className="text-xs font-semibold text-muted-foreground gap-1.5 px-3.5 py-1.5 rounded-[7px] data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_3px_#0f172a1a]"
             >
               <ListTodo className="h-3.5 w-3.5" /> Eventos
             </TabsTrigger>
             <TabsTrigger
               value="calendario"
-              className="text-xs font-semibold text-slate-500 gap-1.5 px-3.5 py-1.5 rounded-[7px] data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-[0_1px_3px_#0f172a1a]"
+              className="text-xs font-semibold text-muted-foreground gap-1.5 px-3.5 py-1.5 rounded-[7px] data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_3px_#0f172a1a]"
             >
               <CalendarDays className="h-3.5 w-3.5" /> Calendário
             </TabsTrigger>
@@ -3351,7 +3506,7 @@ export default function Agenda() {
         {/* CALENDÁRIO */}
         <TabsContent value="calendario" className="mt-4 space-y-3">
           {filtroResponsaveisNode && (
-            <div className="bg-white border border-slate-200 rounded-[14px] p-3.5 flex items-center gap-2 flex-wrap">
+            <div className="bg-card border border-border rounded-[14px] p-3.5 flex items-center gap-2 flex-wrap">
               {filtroResponsaveisNode}
             </div>
           )}
