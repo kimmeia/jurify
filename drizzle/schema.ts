@@ -254,6 +254,22 @@ export const escritorios = mysqlTable("escritorios", {
   endereco: text("endereco"),
   logoUrl: varchar("logoUrl", { length: 512 }),
   fusoHorario: varchar("fusoHorario", { length: 64 }).default("America/Sao_Paulo").notNull(),
+
+  /**
+   * Resumo diário das movimentações. O disparo respeita `fusoHorario` — um
+   * escritório em Manaus não quer o resumo às 4h da manhã porque o servidor
+   * roda em UTC.
+   *
+   * `resumoDiarioTemplate` é o nome do template aprovado na Meta: WhatsApp
+   * fora da janela de 24h só sai por HSM, e sem template configurado o envio
+   * é recusado (o log registra `nao_configurado` em vez de fingir sucesso).
+   */
+  resumoDiarioAtivo: boolean("resumoDiarioAtivo").default(false).notNull(),
+  resumoDiarioHora: int("resumoDiarioHora").default(7).notNull(),
+  resumoDiarioSomenteUteis: boolean("resumoDiarioSomenteUteis").default(true).notNull(),
+  resumoDiarioEmail: varchar("resumoDiarioEmail", { length: 255 }),
+  resumoDiarioWhatsapp: varchar("resumoDiarioWhatsapp", { length: 32 }),
+  resumoDiarioTemplate: varchar("resumoDiarioTemplate", { length: 128 }),
   horarioAbertura: varchar("horarioAbertura", { length: 5 }).default("08:00").notNull(),
   horarioFechamento: varchar("horarioFechamento", { length: 5 }).default("18:00").notNull(),
   diasFuncionamento: text("diasFuncionamento"), // JSON: ["seg","ter","qua","qui","sex"]
@@ -3647,3 +3663,36 @@ export const fontesJuridicas = mysqlTable("fontes_juridicas", {
 });
 export type FonteJuridica = typeof fontesJuridicas.$inferSelect;
 export type InsertFonteJuridica = typeof fontesJuridicas.$inferInsert;
+
+/**
+ * Log de envios do resumo diário — 1 linha por (escritório, dia, canal).
+ *
+ * Existe pelo mesmo motivo de `convites_colaborador.ultimoErroEmail`: erro de
+ * integração externa que vive só no response some, e o painel fica mostrando
+ * "ok" estagnado enquanto ninguém recebe nada. O UNIQUE também serve de
+ * idempotência: reinício do processo no mesmo dia não redispara.
+ */
+export const resumoDiarioEnvios = mysqlTable(
+  "resumo_diario_envios",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdResumo").notNull(),
+    /** Dia de referência no fuso do escritório (YYYY-MM-DD). */
+    dataRef: varchar("dataRefResumo", { length: 10 }).notNull(),
+    canal: mysqlEnum("canalResumo", ["email", "whatsapp"]).notNull(),
+    status: mysqlEnum("statusResumo", ["enviado", "falha", "sem_conteudo", "nao_configurado"]).notNull(),
+    destino: varchar("destinoResumo", { length: 255 }),
+    erro: varchar("erroResumo", { length: 500 }),
+    exigemAcao: int("exigemAcaoResumo").default(0).notNull(),
+    relevantes: int("relevantesResumo").default(0).notNull(),
+    rotina: int("rotinaResumo").default(0).notNull(),
+    criadoEm: timestamp("criadoEmResumo").defaultNow().notNull(),
+  },
+  (t) => ({
+    uniqDiaCanal: uniqueIndex("uniq_resumo_dia_canal").on(t.escritorioId, t.dataRef, t.canal),
+    idxEscrData: index("idx_resumo_escritorio_data").on(t.escritorioId, t.dataRef),
+  }),
+);
+
+export type ResumoDiarioEnvio = typeof resumoDiarioEnvios.$inferSelect;
+export type InsertResumoDiarioEnvio = typeof resumoDiarioEnvios.$inferInsert;

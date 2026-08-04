@@ -13,6 +13,16 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -32,6 +42,8 @@ import {
   ChevronUp,
   Lock,
   ListFilter,
+  Mail,
+  Send,
 } from "lucide-react";
 import MovimentacaoDetalheDrawer from "@/components/MovimentacaoDetalheDrawer";
 
@@ -80,6 +92,7 @@ export default function Movimentacoes() {
   const [somenteNaoLidas, setSomenteNaoLidas] = useState(false);
   const [eventoAberto, setEventoAberto] = useState<number | null>(null);
   const [rotinaAberta, setRotinaAberta] = useState(false);
+  const [configAberta, setConfigAberta] = useState(false);
 
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.movimentacoes.central.useQuery({
@@ -147,6 +160,11 @@ export default function Movimentacoes() {
             )}
           </p>
         </div>
+        <div className="flex items-center gap-2">
+        <Button size="sm" variant="outline" onClick={() => setConfigAberta(true)}>
+          <Mail className="h-4 w-4 mr-1.5" />
+          Resumo diário
+        </Button>
         {contagem.rotina > 0 && (
           <Button
             size="sm"
@@ -161,6 +179,7 @@ export default function Movimentacoes() {
             Marcar rotina como lida
           </Button>
         )}
+        </div>
       </div>
 
       {/* Filtros */}
@@ -306,7 +325,212 @@ export default function Movimentacoes() {
       )}
 
       <MovimentacaoDetalheDrawer eventoId={eventoAberto} onClose={() => setEventoAberto(null)} />
+      <ConfigResumoDiario open={configAberta} onClose={() => setConfigAberta(false)} />
     </div>
+  );
+}
+
+const STATUS_ENVIO: Record<string, { label: string; cls: string }> = {
+  enviado: { label: "Enviado", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  falha: { label: "Falhou", cls: "bg-rose-50 text-rose-700 border-rose-200" },
+  sem_conteudo: { label: "Nada a enviar", cls: "bg-slate-100 text-slate-600 border-slate-200" },
+  nao_configurado: { label: "Não configurado", cls: "bg-amber-50 text-amber-800 border-amber-200" },
+};
+
+/**
+ * Configuração do resumo diário.
+ *
+ * O bloco de últimos envios é a parte que importa: integração que falha
+ * calada faz o painel dizer "ativo" enquanto ninguém recebe nada. Aqui o
+ * status vem do que aconteceu de fato em cada canal.
+ */
+function ConfigResumoDiario({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const utils = trpc.useUtils();
+  const { data, isLoading } = trpc.resumoDiario.obter.useQuery(undefined, { enabled: open });
+
+  const [ativo, setAtivo] = useState(false);
+  const [hora, setHora] = useState("7");
+  const [somenteUteis, setSomenteUteis] = useState(true);
+  const [email, setEmail] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
+  const [template, setTemplate] = useState("");
+  const [carregado, setCarregado] = useState(false);
+
+  if (data && !carregado) {
+    setAtivo(data.ativo);
+    setHora(String(data.hora));
+    setSomenteUteis(data.somenteUteis);
+    setEmail(data.email ?? "");
+    setWhatsapp(data.whatsapp ?? "");
+    setTemplate(data.template ?? "");
+    setCarregado(true);
+  }
+
+  const salvarMut = trpc.resumoDiario.salvar.useMutation({
+    onSuccess: () => {
+      toast.success("Resumo diário atualizado");
+      utils.resumoDiario.obter.invalidate();
+    },
+    onError: (e) => toast.error("Falha ao salvar", { description: e.message }),
+  });
+
+  const enviarMut = trpc.resumoDiario.enviarAgora.useMutation({
+    onSuccess: (r) => {
+      const partes = [`e-mail: ${r.email}`, `WhatsApp: ${r.whatsapp}`];
+      toast.success("Disparo executado", { description: partes.join(" · ") });
+      utils.resumoDiario.obter.invalidate();
+    },
+    onError: (e) => toast.error("Falha ao disparar", { description: e.message }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Resumo diário das movimentações</DialogTitle>
+          <DialogDescription>
+            Chega pronto, com o que o juiz decidiu e o prazo já calculado — sem precisar abrir o
+            sistema.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-full" />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <Label className="text-sm font-semibold">Enviar resumo diário</Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Fuso do escritório: {data?.fusoHorario}
+                </p>
+              </div>
+              <Switch checked={ativo} onCheckedChange={setAtivo} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Horário</Label>
+                <Select value={hora} onValueChange={setHora}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <SelectItem key={h} value={String(h)}>
+                        {String(h).padStart(2, "0")}:00
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end pb-1.5 gap-2">
+                <Switch id="uteis" checked={somenteUteis} onCheckedChange={setSomenteUteis} />
+                <Label htmlFor="uteis" className="text-xs">
+                  Só em dias úteis
+                </Label>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">E-mail (vazio = e-mail do dono)</Label>
+              <Input
+                className="h-9"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="voce@escritorio.adv.br"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">WhatsApp</Label>
+                <Input
+                  className="h-9"
+                  value={whatsapp}
+                  onChange={(e) => setWhatsapp(e.target.value)}
+                  placeholder="5585999999999"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Template aprovado na Meta</Label>
+                <Input
+                  className="h-9"
+                  value={template}
+                  onChange={(e) => setTemplate(e.target.value)}
+                  placeholder="resumo_diario"
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-snug -mt-1">
+              O WhatsApp sai fora da janela de 24h, então a Meta só aceita template aprovado (HSM)
+              com uma variável de texto no corpo. Sem template configurado, o resumo vai só por
+              e-mail.
+            </p>
+
+            {data?.ultimosEnvios?.length ? (
+              <div className="rounded-lg border">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground px-3 pt-2.5 pb-1.5">
+                  Últimos envios
+                </p>
+                <div className="divide-y">
+                  {data.ultimosEnvios.map((e, i) => (
+                    <div key={i} className="px-3 py-2 flex items-center gap-2 text-[11.5px]">
+                      <span className="font-semibold w-16 shrink-0 capitalize">{e.canal}</span>
+                      <span className="text-muted-foreground w-20 shrink-0">{e.dataRef}</span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-bold shrink-0 ${
+                          STATUS_ENVIO[e.status]?.cls ?? ""
+                        }`}
+                      >
+                        {STATUS_ENVIO[e.status]?.label ?? e.status}
+                      </span>
+                      <span className="text-muted-foreground truncate">{e.erro ?? e.destino ?? ""}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={enviarMut.isPending}
+            onClick={() => enviarMut.mutate()}
+          >
+            {enviarMut.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Send className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Enviar agora (teste)
+          </Button>
+          <Button
+            size="sm"
+            disabled={salvarMut.isPending}
+            onClick={() =>
+              salvarMut.mutate({
+                ativo,
+                hora: Number(hora),
+                somenteUteis,
+                email: email.trim() || null,
+                whatsapp: whatsapp.trim() || null,
+                template: template.trim() || null,
+              })
+            }
+          >
+            {salvarMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+            Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

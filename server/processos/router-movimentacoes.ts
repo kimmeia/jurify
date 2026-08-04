@@ -20,7 +20,13 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
-import { eventosProcesso, motorMonitoramentos, prazosSugeridos } from "../../drizzle/schema";
+import {
+  escritorios,
+  eventosProcesso,
+  motorMonitoramentos,
+  prazosSugeridos,
+  resumoDiarioEnvios,
+} from "../../drizzle/schema";
 import { diasUteisAte } from "./prazo-processual";
 import { localizarTrecho } from "./teor-documento";
 import type { AnaliseMovimentacao } from "./resumir-movimentacao";
@@ -440,4 +446,109 @@ export const movimentacoesRouter = router({
 
       return { ok: true };
     }),
+});
+
+/**
+ * Configuração do resumo diário. Vive junto da central porque é a mesma
+ * feature vista de outro ângulo — e porque o status do último envio precisa
+ * ser visível aqui: integração que falha calada é o padrão que já nos custou
+ * caro (painel dizendo "ok" enquanto ninguém recebia nada).
+ */
+export const resumoDiarioRouter = router({
+  obter: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de dados indisponível" });
+
+    const ultimos = await db
+      .select({
+        canal: resumoDiarioEnvios.canal,
+        status: resumoDiarioEnvios.status,
+        destino: resumoDiarioEnvios.destino,
+        erro: resumoDiarioEnvios.erro,
+        dataRef: resumoDiarioEnvios.dataRef,
+        exigemAcao: resumoDiarioEnvios.exigemAcao,
+        criadoEm: resumoDiarioEnvios.criadoEm,
+      })
+      .from(resumoDiarioEnvios)
+      .where(eq(resumoDiarioEnvios.escritorioId, esc.escritorio.id))
+      .orderBy(desc(resumoDiarioEnvios.id))
+      .limit(6);
+
+    return {
+      ativo: esc.escritorio.resumoDiarioAtivo,
+      hora: esc.escritorio.resumoDiarioHora,
+      somenteUteis: esc.escritorio.resumoDiarioSomenteUteis,
+      email: esc.escritorio.resumoDiarioEmail,
+      whatsapp: esc.escritorio.resumoDiarioWhatsapp,
+      template: esc.escritorio.resumoDiarioTemplate,
+      fusoHorario: esc.escritorio.fusoHorario,
+      ultimosEnvios: ultimos,
+    };
+  }),
+
+  salvar: protectedProcedure
+    .input(
+      z.object({
+        ativo: z.boolean(),
+        hora: z.number().int().min(0).max(23),
+        somenteUteis: z.boolean(),
+        email: z.string().email().or(z.literal("")).nullable().optional(),
+        whatsapp: z.string().max(32).nullable().optional(),
+        template: z.string().max(128).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "configuracoes", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para configurar" });
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de dados indisponível" });
+
+      await db
+        .update(escritorios)
+        .set({
+          resumoDiarioAtivo: input.ativo,
+          resumoDiarioHora: input.hora,
+          resumoDiarioSomenteUteis: input.somenteUteis,
+          resumoDiarioEmail: input.email?.trim() || null,
+          resumoDiarioWhatsapp: input.whatsapp?.replace(/\D/g, "") || null,
+          resumoDiarioTemplate: input.template?.trim() || null,
+        })
+        .where(eq(escritorios.id, perm.escritorioId));
+
+      return { ok: true };
+    }),
+
+  /**
+   * Dispara agora, ignorando horário e idempotência do dia.
+   *
+   * Existe porque "configurei e agora espero até amanhã pra saber se
+   * funciona" é o jeito mais rápido de o usuário desistir do recurso — e
+   * porque é assim que ele descobre que falta o template da Meta.
+   */
+  enviarAgora: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "configuracoes", "editar");
+    if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+    const { dispararResumoEscritorio } = await import("./cron-resumo-diario");
+    return dispararResumoEscritorio(
+      {
+        id: esc.escritorio.id,
+        nome: esc.escritorio.nome,
+        fusoHorario: esc.escritorio.fusoHorario,
+        resumoDiarioEmail: esc.escritorio.resumoDiarioEmail,
+        resumoDiarioWhatsapp: esc.escritorio.resumoDiarioWhatsapp,
+        resumoDiarioTemplate: esc.escritorio.resumoDiarioTemplate,
+      },
+      ctx.user.email ?? null,
+      ctx.user.name ?? null,
+      { ignorarJaEnviado: true },
+    );
+  }),
 });
