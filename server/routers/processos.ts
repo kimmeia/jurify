@@ -16,7 +16,7 @@
  */
 
 import { z } from "zod";
-import { eq, desc, and, or, ne, sql, isNull } from "drizzle-orm";
+import { eq, desc, and, or, ne, sql, isNull, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -33,6 +33,8 @@ import {
 } from "../../drizzle/schema";
 import { decrypt as adminDecrypt } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
+import { classificarErroMonitor } from "../processos/diagnostico-monitoramento";
+import { parsearPartes, resumirPartes } from "../processos/partes-processo";
 import { ambienteSuportaTeste } from "../_core/ambiente";
 import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resumir-movimentacao";
 import { createLogger } from "../_core/logger";
@@ -1107,6 +1109,80 @@ export const processosRouter = router({
         filtros.push(eq(motorMonitoramentos.tipoMonitoramento, input.tipoMonitoramento));
       }
 
+      /**
+       * Última movimentação de cada monitoramento, numa query só.
+       *
+       * É o que faz a aba responder "está vigiando, e a última coisa que
+       * aconteceu foi isto" em vez de só "419 monitorados". Buscar evento por
+       * evento seriam 419 queries; aqui é uma, com o id máximo por
+       * monitoramento (o id cresce junto com a data de coleta).
+       */
+      const ultimaMovPorMon = async (ids: number[]) => {
+        const mapa = new Map<number, { titulo: string; dataEvento: Date }>();
+        if (ids.length === 0) return mapa;
+        const { eventosProcesso } = await import("../../drizzle/schema");
+        const ultimos = await db
+          .select({
+            monitoramentoId: eventosProcesso.monitoramentoId,
+            id: sql<number>`MAX(${eventosProcesso.id})`,
+          })
+          .from(eventosProcesso)
+          .where(
+            and(
+              inArray(eventosProcesso.monitoramentoId, ids),
+              eq(eventosProcesso.tipo, "movimentacao"),
+            ),
+          )
+          .groupBy(eventosProcesso.monitoramentoId);
+
+        const eventoIds = ultimos.map((u) => Number(u.id)).filter((n) => Number.isFinite(n));
+        if (eventoIds.length === 0) return mapa;
+
+        const detalhes = await db
+          .select({
+            id: eventosProcesso.id,
+            monitoramentoId: eventosProcesso.monitoramentoId,
+            dataEvento: eventosProcesso.dataEvento,
+            conteudo: eventosProcesso.conteudo,
+            resumoIa: eventosProcesso.resumoIa,
+            analiseJson: eventosProcesso.analiseJson,
+          })
+          .from(eventosProcesso)
+          .where(inArray(eventosProcesso.id, eventoIds));
+
+        for (const d of detalhes) {
+          if (d.monitoramentoId == null) continue;
+          const analise = d.analiseJson
+            ? (safeParse(d.analiseJson) as { titulo?: unknown } | null)
+            : null;
+          const titulo: string =
+            (typeof analise?.titulo === "string" ? analise.titulo : null) ??
+            d.resumoIa ??
+            d.conteudo.slice(0, 160);
+          mapa.set(d.monitoramentoId, { titulo, dataEvento: d.dataEvento });
+        }
+        return mapa;
+      };
+
+      const enriquecer = async (mons: Array<Record<string, any>>) => {
+        const movs = await ultimaMovPorMon(mons.map((m) => m.id).filter((n) => typeof n === "number"));
+        return mons.map((m) => ({
+          ...enriquecerMonitorComCapa(m as any),
+          /** Motivo em português da última falha — `null` quando está saudável. */
+          diagnostico: classificarErroMonitor(m.ultimoErro),
+          ultimaMovimentacao: movs.get(m.id) ?? null,
+          /**
+           * "Fulano × Banco Tal", pelo mesmo caminho da central de
+           * movimentações. Sem isso a lista mostrava a linha crua do PJe, com
+           * CPF e "(AUTOR)" pendurados no nome.
+           */
+          partesRotulo: resumirPartes(parsearPartes(m.partesJson), {
+            searchKey: m.searchKey,
+            apelido: m.apelido,
+          }).rotulo,
+        }));
+      };
+
       let rows;
       if (filtraPorResponsavel) {
         // INNER JOIN com contatos: monitoramento.searchKey = contato.cpfCnpj
@@ -1127,7 +1203,7 @@ export const processosRouter = router({
           )
           .where(and(...filtros))
           .orderBy(desc(motorMonitoramentos.createdAt));
-        return rows.map((r) => enriquecerMonitorComCapa(r.mon));
+        return await enriquecer(rows.map((r) => r.mon));
       }
 
       // Gestor/dono: tudo do escritório
@@ -1136,7 +1212,7 @@ export const processosRouter = router({
         .from(motorMonitoramentos)
         .where(and(...filtros))
         .orderBy(desc(motorMonitoramentos.createdAt));
-      return rows.map((r) => enriquecerMonitorComCapa(r));
+      return await enriquecer(rows);
     }),
 
   criarMonitoramento: protectedProcedure
