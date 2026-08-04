@@ -29,6 +29,7 @@ import {
 } from "../../drizzle/schema";
 import { diasUteisAte } from "./prazo-processual";
 import { localizarTrecho } from "./teor-documento";
+import { parsearPartes, resumirPartes } from "./partes-processo";
 import type { AnaliseMovimentacao } from "./resumir-movimentacao";
 
 export type Grupo = "exigem_acao" | "relevante" | "rotina";
@@ -131,6 +132,8 @@ export const movimentacoesRouter = router({
           lido: eventosProcesso.lido,
           monitoramentoId: eventosProcesso.monitoramentoId,
           apelido: motorMonitoramentos.apelido,
+          searchKey: motorMonitoramentos.searchKey,
+          partesJson: motorMonitoramentos.partesJson,
           tribunal: motorMonitoramentos.tribunal,
           prazoId: prazosSugeridos.id,
           prazoTipo: prazosSugeridos.tipo,
@@ -164,11 +167,21 @@ export const movimentacoesRouter = router({
         });
         contagem[grupo]++;
 
+        // Sem as partes, o card repetia o CNJ no lugar do nome — não dava pra
+        // reconhecer o caso de relance, que é a única coisa que a linha
+        // precisa fazer antes de o advogado decidir abrir.
+        const partes = resumirPartes(parsearPartes(r.partesJson), {
+          searchKey: r.searchKey,
+          apelido: r.apelido,
+        });
+
         return {
           id: r.id,
           grupo,
           dataEvento: r.dataEvento,
-          cliente: r.apelido ?? r.cnjAfetado ?? "(sem apelido)",
+          cliente: partes.cliente ?? partes.rotulo ?? r.apelido ?? r.cnjAfetado ?? "(sem apelido)",
+          partes: partes.rotulo,
+          clientePolo: partes.clientePolo,
           cnj: r.cnjAfetado,
           tribunal: r.tribunal,
           monitoramentoId: r.monitoramentoId,
@@ -232,6 +245,7 @@ export const movimentacoesRouter = router({
           searchKey: motorMonitoramentos.searchKey,
           searchType: motorMonitoramentos.searchType,
           tribunal: motorMonitoramentos.tribunal,
+          partesJson: motorMonitoramentos.partesJson,
         })
         .from(eventosProcesso)
         .leftJoin(motorMonitoramentos, eq(motorMonitoramentos.id, eventosProcesso.monitoramentoId))
@@ -275,6 +289,12 @@ export const movimentacoesRouter = router({
       const analise = parseAnaliseJson(row.ev.analiseJson);
       const citacao = analise?.providencia.citacao ?? null;
 
+      const listaPartes = parsearPartes(row.partesJson);
+      const partes = resumirPartes(listaPartes, {
+        searchKey: row.searchKey,
+        apelido: row.apelido,
+      });
+
       return {
         id: row.ev.id,
         dataEvento: row.ev.dataEvento,
@@ -295,7 +315,11 @@ export const movimentacoesRouter = router({
         trechoGrifado: citacao && row.ev.teor ? localizarTrecho(row.ev.teor, citacao) : null,
         cnj: row.ev.cnjAfetado,
         tribunal: row.tribunal,
-        cliente: row.apelido,
+        cliente: partes.cliente ?? row.apelido,
+        clientePolo: partes.clientePolo,
+        /** "Fulano × Banco Tal" — como o advogado se refere ao caso. */
+        partesRotulo: partes.rotulo,
+        partes: listaPartes,
         searchKey: row.searchKey,
         searchType: row.searchType,
         monitoramentoId: row.ev.monitoramentoId,
