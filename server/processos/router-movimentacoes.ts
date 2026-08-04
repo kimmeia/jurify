@@ -83,12 +83,12 @@ export const movimentacoesRouter = router({
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "processos", "ver");
       if (!perm.allowed) {
-        return { itens: [], contagem: { exigem_acao: 0, relevante: 0, rotina: 0 }, total: 0 };
+        return { itens: [], contagem: { exigem_acao: 0, relevante: 0, rotina: 0, naoLidas: 0 }, total: 0 };
       }
 
       const db = await getDb();
       if (!db) {
-        return { itens: [], contagem: { exigem_acao: 0, relevante: 0, rotina: 0 }, total: 0 };
+        return { itens: [], contagem: { exigem_acao: 0, relevante: 0, rotina: 0, naoLidas: 0 }, total: 0 };
       }
 
       const dias = input?.dias ?? 7;
@@ -100,8 +100,6 @@ export const movimentacoesRouter = router({
         eq(eventosProcesso.tipo, "movimentacao"),
         gte(eventosProcesso.dataEvento, desde),
       ];
-      if (input?.somenteNaoLidas) conds.push(eq(eventosProcesso.lido, false));
-
       const termo = input?.busca?.trim();
       if (termo) {
         const padrao = `%${termo.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
@@ -214,14 +212,17 @@ export const movimentacoesRouter = router({
         };
       });
 
-      // O filtro de grupo é aplicado depois de classificar, mas a contagem
-      // reflete tudo — senão o chip "Com prazo" zeraria os outros contadores e
+      // Grupo e "não lidas" são filtrados DEPOIS de classificar e contar. A
+      // contagem precisa refletir a janela inteira: se ela mudasse junto com
+      // a aba ativa, cada aba mostraria um número diferente pra mesma coisa e
       // o advogado perderia a noção do que sobrou.
-      const filtrados = input?.grupos?.length
+      const naoLidas = itens.filter((i) => !i.lido).length;
+      let filtrados = input?.grupos?.length
         ? itens.filter((i) => input.grupos!.includes(i.grupo))
         : itens;
+      if (input?.somenteNaoLidas) filtrados = filtrados.filter((i) => !i.lido);
 
-      return { itens: filtrados, contagem, total: itens.length };
+      return { itens: filtrados, contagem: { ...contagem, naoLidas }, total: itens.length };
     }),
 
   /**
