@@ -117,6 +117,8 @@ const TEOR_FALHA: Record<
   },
 };
 
+const POLO_LABEL: Record<string, string> = { ativo: "Autor", passivo: "Réu", terceiro: "Terceiro" };
+
 function dataBR(d: Date | string) {
   return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
@@ -269,8 +271,13 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
 
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-3 pb-3 border-b text-[11px] text-muted-foreground">
                 <span className="font-semibold text-foreground">
-                  {data.cliente || data.searchKey || "(sem apelido)"}
+                  {data.partesRotulo || data.cliente || data.searchKey || "(sem apelido)"}
                 </span>
+                {data.clientePolo && POLO_LABEL[data.clientePolo] && (
+                  <span className="rounded-full bg-slate-100 text-slate-600 px-1.5 py-px text-[10px] font-bold">
+                    nosso cliente: {POLO_LABEL[data.clientePolo]}
+                  </span>
+                )}
                 <span className="text-slate-300">•</span>
                 <span className="font-mono font-medium text-slate-600">{data.cnj || "—"}</span>
                 {data.tribunal && (
@@ -287,6 +294,49 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                 </span>
               </div>
             </div>
+
+            {/* Partes — quem é quem. A pergunta "de quem é esse processo?"
+                vem antes de qualquer resumo, e o rótulo do PJe nunca responde. */}
+            {data.partes.length > 0 && (
+              <section>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">
+                  Partes
+                </p>
+                <div className="rounded-lg border divide-y">
+                  {(["ativo", "passivo", "terceiro"] as const).map((polo) => {
+                    const doPolo = data.partes.filter((p) => p.polo === polo);
+                    if (doPolo.length === 0) return null;
+                    return (
+                      <div key={polo} className="flex items-start gap-3 px-3 py-2">
+                        <span className="text-[9.5px] font-bold uppercase tracking-wide text-muted-foreground w-16 shrink-0 pt-0.5">
+                          {POLO_LABEL[polo]}
+                          {doPolo.length > 1 ? "es" : ""}
+                        </span>
+                        <div className="flex-1 min-w-0 space-y-0.5">
+                          {doPolo.map((p, i) => (
+                            <p
+                              key={i}
+                              className={`text-[12.5px] leading-snug ${
+                                data.cliente && p.nome === data.cliente
+                                  ? "font-bold text-foreground"
+                                  : "text-slate-600"
+                              }`}
+                            >
+                              {p.nome}
+                              {data.cliente && p.nome === data.cliente && (
+                                <span className="ml-1.5 text-[10px] font-bold text-violet-700">
+                                  nosso cliente
+                                </span>
+                              )}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             {/* O que o juiz decidiu */}
             {data.pontos.length > 0 ? (

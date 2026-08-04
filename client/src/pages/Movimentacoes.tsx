@@ -74,6 +74,14 @@ const JANELAS = [
   { valor: 90, label: "Últimos 90 dias" },
 ];
 
+const POLO_LABEL: Record<string, string> = { ativo: "Autor", passivo: "Réu", terceiro: "Terceiro" };
+
+/** Nome do caso: "Fulano × Banco Tal" quando a capa foi coletada; senão o
+ *  que houver. Repetir o CNJ aqui não diz de quem é o processo. */
+function nomeDoCaso(item: { partes: string | null; cliente: string }) {
+  return item.partes || item.cliente;
+}
+
 function dataCurta(d: Date | string) {
   return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
@@ -615,7 +623,12 @@ function CardAcao({
       <div className={`w-1 shrink-0 ${audiencia ? "bg-orange-500" : "bg-rose-600"}`} />
       <div className="flex-1 p-3.5 min-w-0">
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
-          <span className="font-bold text-sm text-foreground">{item.cliente}</span>
+          <span className="font-bold text-sm text-foreground">{nomeDoCaso(item)}</span>
+          {item.clientePolo && POLO_LABEL[item.clientePolo] && (
+            <span className="rounded-full bg-slate-100 text-slate-600 px-1.5 py-px text-[10px] font-bold">
+              nosso cliente: {POLO_LABEL[item.clientePolo]}
+            </span>
+          )}
           <span className="text-slate-300">•</span>
           <span className="font-mono font-medium">{item.cnj}</span>
           {item.tribunal && (
@@ -711,8 +724,10 @@ function LinhaRelevante({ item, onAbrir }: { item: Item; onAbrir: () => void }) 
       onClick={onAbrir}
       className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-muted/40"
     >
-      <div className="w-44 shrink-0 min-w-0">
-        <p className="text-[12.5px] font-bold truncate">{item.cliente}</p>
+      <div className="w-56 shrink-0 min-w-0">
+        <p className="text-[12.5px] font-bold truncate" title={nomeDoCaso(item)}>
+          {nomeDoCaso(item)}
+        </p>
         <p className="text-[10.5px] text-muted-foreground font-mono truncate">{item.cnj}</p>
       </div>
       <p className="flex-1 text-[12.5px] text-slate-700 leading-snug line-clamp-2 min-w-0">{item.titulo}</p>

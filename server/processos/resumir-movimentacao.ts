@@ -413,7 +413,9 @@ export async function analisarMovimentacao(
     : "";
   const teorTxt = teor
     ? `\n\nTeor do documento:\n${truncado}`
-    : `\n\n(O documento não pôde ser lido — só temos o rótulo do movimento. Não invente conteúdo; classifique com o que há e deixe providencia.exigida false se o rótulo não afirmar um prazo.)`;
+    : `\n\n(O documento não pôde ser lido — só temos o rótulo do movimento.
+Nesse caso: devolva NO MÁXIMO 1 ponto, e só se ele acrescentar algo que já não esteja no título. É melhor "pontos": [] do que frases de enchimento como "a decisão pode impactar as partes" ou "não há informações sobre valores" — o advogado lê isso como ruído e passa a desconfiar do resumo inteiro.
+Não invente conteúdo, e deixe providencia.exigida false se o rótulo não afirmar um prazo.)`;
 
   const user = `${ladoTxt}${dataTxt}\n\nRótulo do movimento no tribunal: ${rotulo}${teorTxt}`;
 
