@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<!-- ajuste o caminho conforme a profundidade do arquivo -->
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  /* ── tokens ───────────────────────────────────────────────
+     Não invente cores fora desta paleta. Se precisar de um tom
+     novo, ele quase sempre já existe aqui com outro nome. */
+  :root {
+    --bg:#f8fafc;         /* fundo da página */
+    --surface:#fff;       /* cards, popovers, inputs */
+    --borda:#e2e8f0;      /* borda de card/input/botão neutro */
+    --hairline:#f1f5f9;   /* divisórias internas, trilhos, fundo do segmented */
+    --hairline-2:#f8fafc; /* divisória ainda mais fraca (linhas de hora) */
+
+    --tinta:#0f172a;      /* títulos e números */
+    --tinta-2:#1e293b;    /* texto forte dentro de lista */
+    --corpo:#334155;      /* texto de controle */
+    --corpo-2:#475569;    /* texto de rodapé/chip */
+    --mudo:#64748b;       /* subtítulo, legenda */
+    --fraco:#94a3b8;      /* micro-label, placeholder, ícone */
+    --fantasma:#cbd5e1;   /* dia fora do mês, estado vazio */
+
+    --acento:#7c3aed;     /* violeta: ação primária e "o que é novo" */
+    --acento-forte:#5b21b6;
+    --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff;  /* fundo de controle selecionado */
+    --acento-bg-2:#f5f3ff;/* fundo de linha selecionada em lista */
+
+    --alerta:#dc2626; --alerta-forte:#b91c1c;
+    --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  /* trava o palco no tamanho exato do screenshot: overflow vira bug visível */
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:26px 30px; height:100%; display:flex; flex-direction:column; }
+
+  /* ── cabeçalho da página ── */
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .btn-primary { background:var(--acento); color:#fff; font-weight:600; font-size:13.5px;
+                 border-radius:10px; padding:11px 18px; display:flex; align-items:center; gap:8px;
+                 box-shadow:0 8px 18px -8px #7c3aed88; }
+
+  /* ── superfícies ── */
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .pop { background:var(--surface); border:1px solid var(--borda); border-radius:13px; padding:11px;
+         box-shadow:0 24px 50px -18px #0f172a44; }
+
+  /* ── controles ── */
+  .select { height:38px; border:1px solid var(--borda); background:var(--surface); border-radius:9px;
+            padding:0 12px; display:flex; align-items:center; gap:9px;
+            font-size:13px; font-weight:500; color:var(--corpo); }
+  .cap { color:var(--fraco); font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .select.on { border:1.5px solid var(--acento); background:var(--acento-bg); color:var(--acento-forte);
+               font-weight:600; box-shadow:0 0 0 3px #7c3aed1f; }
+  .busca { position:relative; flex:1; min-width:300px; max-width:420px; }
+  .busca input { width:100%; height:38px; border:1px solid var(--borda); border-radius:9px;
+                 padding:0 12px 0 36px; font-family:'Inter'; font-size:13.5px; color:var(--tinta); outline:none; }
+  .busca input::placeholder { color:var(--fraco); }
+  .busca svg { position:absolute; left:11px; top:50%; transform:translateY(-50%); }
+
+  .chip { border:1px solid var(--borda); background:var(--surface); color:var(--corpo-2);
+          border-radius:999px; padding:5px 11px; font-size:11.5px; font-weight:500;
+          display:inline-flex; align-items:center; gap:6px; }
+  .chip.on { background:var(--tinta); color:#fff; border-color:var(--tinta); }
+
+  .views { display:flex; gap:4px; background:var(--hairline); padding:3px; border-radius:9px; }
+  .views span { padding:6px 13px; font-size:12px; font-weight:600; color:var(--mudo); border-radius:7px; }
+  .views span.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  /* ── pessoas ── */
+  .avs { display:flex; }
+  .av { width:23px; height:23px; border-radius:50%; border:2px solid #fff; margin-left:-7px;
+        display:flex; align-items:center; justify-content:center;
+        color:#fff; font-size:9.5px; font-weight:700; }
+  .av:first-child { margin-left:0; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topo">
+      <div>
+        <div class="h1">Título do módulo</div>
+        <div class="sub">Uma linha dizendo o que a tela resolve</div>
+      </div>
+      <div class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+        Ação primária
+      </div>
+    </div>
+
+    <!-- conteúdo -->
+  </div>
+</body>
+</html>
