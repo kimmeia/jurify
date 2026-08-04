@@ -153,13 +153,13 @@ export default function NotificacoesSino() {
         <Button
           variant="ghost"
           size="sm"
-          className="relative h-9 w-9 p-0"
+          className="relative h-9 w-9 p-0 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           aria-label="Notificações"
         >
           <Bell className="h-4.5 w-4.5" />
           {count > 0 && (
             <Badge
-              className="absolute -top-0.5 -right-0.5 h-4.5 min-w-[18px] px-1 text-[10px] font-bold bg-destructive text-destructive-foreground border-2 border-background"
+              className="absolute -top-0.5 -right-0.5 h-4.5 min-w-[18px] px-1 text-[10px] font-bold bg-rose-500 text-white border-2 border-sidebar"
             >
               {count > 99 ? "99+" : count}
             </Badge>
