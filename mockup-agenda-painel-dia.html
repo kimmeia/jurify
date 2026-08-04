@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:22px 26px; height:100%; display:flex; flex-direction:column; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .btn-primary { background:var(--acento); color:#fff; font-weight:600; font-size:13.5px;
+                 border-radius:10px; padding:11px 18px; display:flex; align-items:center; gap:8px;
+                 box-shadow:0 8px 18px -8px #7c3aed88; }
+  .pastilhas { display:flex; gap:8px; margin-top:11px; }
+  .pst { background:#fff; border:1px solid var(--borda); border-radius:10px; padding:6px 12px;
+         display:flex; align-items:baseline; gap:6px; }
+  .pst b { font-size:15px; font-weight:700; }
+  .pst span { font-size:11.5px; color:var(--mudo); }
+  .pst.alerta { background:var(--alerta-bg); border-color:var(--alerta-borda); }
+  .pst.alerta b { color:var(--alerta); } .pst.alerta span { color:var(--alerta-forte); }
+
+  .barra { margin-top:14px; flex:0 0 auto; display:flex; align-items:center; gap:10px; }
+  .views { display:flex; gap:4px; background:var(--hairline); padding:3px; border-radius:9px; }
+  .views span { padding:6px 13px; font-size:12px; font-weight:600; color:var(--mudo); border-radius:7px; }
+  .views span.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+  .select { height:36px; border:1px solid var(--borda); background:var(--surface); border-radius:9px;
+            padding:0 12px; display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:500; color:var(--corpo); }
+  .select.on { border:1.5px solid var(--acento); background:var(--acento-bg); color:var(--acento-forte); font-weight:600; }
+  .cap { color:var(--fraco); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+
+  /* ── área calendário + painel ── */
+  .palco { margin-top:13px; flex:1; min-height:0; display:flex; gap:14px; }
+
+  .cal { flex:1; min-width:0; background:var(--surface); border:1px solid var(--borda);
+         border-radius:14px; display:flex; flex-direction:column; overflow:hidden; }
+  .cal-top { display:flex; align-items:center; justify-content:space-between; padding:11px 15px;
+             border-bottom:1px solid var(--hairline); flex:0 0 auto; }
+  .mes { font-family:'Poppins'; font-weight:700; font-size:16px; }
+  .nav { display:flex; align-items:center; gap:7px; }
+  .nav-b { width:29px; height:29px; border:1px solid var(--borda); border-radius:8px;
+           display:flex; align-items:center; justify-content:center; }
+  .hoje-b { border:1px solid var(--borda); border-radius:8px; padding:6px 13px; font-size:12px; font-weight:600; color:var(--corpo); }
+  .dows { display:grid; grid-template-columns:repeat(7,1fr); border-bottom:1px solid var(--hairline); flex:0 0 auto; }
+  .dows div { padding:7px 0; text-align:center; font-size:10.5px; font-weight:700;
+              letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .grid { flex:1; min-height:0; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; }
+  .cel { border-right:1px solid var(--hairline); border-bottom:1px solid var(--hairline);
+         padding:5px 6px; overflow:hidden; }
+  .cel:nth-child(7n) { border-right:0; }
+  .cel .num { font-size:11.5px; font-weight:600; color:var(--corpo); }
+  .cel.out .num { color:var(--fantasma); }
+  .cel.hoje .num { background:var(--acento); color:#fff; width:20px; height:20px; border-radius:50%;
+                   display:flex; align-items:center; justify-content:center; font-size:11px; }
+  /* dia aberto no painel: o vínculo visual entre a célula e a lateral */
+  .cel.sel { background:var(--acento-bg-2); box-shadow:inset 0 0 0 1.5px var(--acento); }
+  .ev { margin-top:3px; border-radius:5px; padding:2.5px 6px; font-size:10px; font-weight:600; color:#fff;
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:4px; }
+  .ev .ini { font-weight:800; opacity:.75; font-size:8.5px; }
+  .mais { margin-top:3px; font-size:9.5px; color:var(--fraco); font-weight:600; }
+  .bloq { margin-top:3px; border-radius:5px; padding:2.5px 6px; font-size:9.5px; font-weight:700;
+          background:var(--alerta-bg); color:var(--alerta-forte); border:1px solid var(--alerta-borda);
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* ── painel lateral do dia ── */
+  .painel { flex:0 0 352px; background:var(--surface); border:1px solid var(--borda);
+            border-radius:14px; display:flex; flex-direction:column; overflow:hidden; }
+  .pn-top { padding:13px 15px 12px; border-bottom:1px solid var(--hairline); flex:0 0 auto;
+            display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .pn-dia { font-family:'Poppins'; font-weight:700; font-size:19px; line-height:1.1; }
+  .pn-data { margin-top:3px; font-size:11.5px; color:var(--mudo); font-weight:500; }
+  .pn-qtd { flex:0 0 auto; background:var(--acento-bg); color:var(--acento-forte); border:1px solid #ddd6fe;
+            border-radius:999px; padding:4px 10px; font-size:11px; font-weight:700; white-space:nowrap; }
+  .pn-x { width:26px; height:26px; border-radius:7px; border:1px solid var(--borda);
+          display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+
+  .pn-aviso { margin:10px 12px 0; display:flex; align-items:center; gap:7px; flex:0 0 auto;
+              background:var(--alerta-bg); border:1px solid var(--alerta-borda); border-radius:8px;
+              padding:6px 9px; font-size:11px; color:var(--alerta-forte); font-weight:600; }
+
+  .pn-lista { flex:1; min-height:0; overflow:hidden; padding:0 6px; }
+  .pn-sec { display:flex; align-items:center; gap:8px; padding:9px 8px 5px; }
+  .pn-sec .t { font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--fraco); }
+  .pn-sec .l { flex:1; height:1px; background:var(--hairline); }
+  .item { display:flex; align-items:flex-start; gap:9px; padding:6px 8px; border-radius:8px; }
+  .item.on { background:var(--acento-bg-2); }
+  .item .faixa { width:3px; align-self:stretch; border-radius:2px; flex:0 0 auto; }
+  .item .h { display:block; font-size:10.5px; font-weight:700; color:var(--corpo); font-variant-numeric:tabular-nums;
+             width:34px; flex:0 0 auto; padding-top:1px; }
+  .item .txt { flex:1; min-width:0; display:block; }
+  .item .tt { display:block; font-size:12.5px; font-weight:600; color:var(--tinta-2); line-height:1.25;
+              white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item .sb { display:block; margin-top:2px; font-size:10.5px; color:var(--mudo); line-height:1.25;
+              white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item.feito .tt { text-decoration:line-through; color:var(--fraco); font-weight:500; }
+  .item .ok { flex:0 0 auto; padding-top:2px; }
+  .tag { font-size:9px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+         border-radius:4px; padding:1.5px 5px; margin-left:5px; vertical-align:1px; }
+  .tag.prazo { background:var(--alerta-bg); color:var(--alerta-forte); }
+  .tag.aud { background:#eff6ff; color:#1d4ed8; }
+
+  .pn-rod { flex:0 0 auto; border-top:1px solid var(--hairline); padding:11px 12px;
+            display:flex; align-items:center; gap:9px; }
+  .pn-rod .novo { flex:1; background:var(--acento); color:#fff; font-size:12.5px; font-weight:600;
+                  border-radius:9px; padding:9px 0; display:flex; align-items:center; justify-content:center; gap:7px;
+                  box-shadow:0 8px 18px -10px #7c3aed99; }
+  .pn-rod .bloq-b { border:1px solid var(--alerta-borda); background:var(--alerta-bg); color:var(--alerta-forte);
+                    font-size:12px; font-weight:600; border-radius:9px; padding:9px 12px;
+                    display:flex; align-items:center; gap:6px; white-space:nowrap; }
+
+  .novo-wrap { position:relative; }
+  .badge-novo { position:absolute; top:-10px; left:12px; background:var(--ok); color:#fff;
+                font-size:9px; font-weight:800; letter-spacing:.06em; padding:2.5px 8px; border-radius:20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topo">
+    <div>
+      <div class="h1">Agenda</div>
+      <div class="sub">Compromissos, prazos e tarefas do escritório</div>
+      <div class="pastilhas">
+        <div class="pst"><b>11</b><span>hoje</span></div>
+        <div class="pst"><b>38</b><span>nesta semana</span></div>
+        <div class="pst alerta"><b>66</b><span>atrasados</span></div>
+      </div>
+    </div>
+    <div class="btn-primary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+      Novo compromisso
+    </div>
+  </div>
+
+  <div class="barra">
+    <div class="views"><span>Lista</span><span class="on">Calendário</span><span>Semana</span></div>
+    <div class="select on">
+      <span class="cap" style="color:#7c3aed">Resp.</span> 3 pessoas
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#5b21b6" stroke-width="2.4" stroke-linecap="round"/></svg>
+    </div>
+    <div class="select"><span class="cap">Tipo</span> Todos
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#94a3b8" stroke-width="2.4" stroke-linecap="round"/></svg>
+    </div>
+    <div class="select"><span class="cap">Status</span> Pendentes
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#94a3b8" stroke-width="2.4" stroke-linecap="round"/></svg>
+    </div>
+  </div>
+
+  <div class="palco">
+
+    <!-- CALENDÁRIO — continua inteiro à vista -->
+    <div class="cal">
+      <div class="cal-top">
+        <div class="mes">Agosto de 2026</div>
+        <div class="nav">
+          <div class="hoje-b">Hoje</div>
+          <div class="nav-b"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="#334155" stroke-width="2.4" stroke-linecap="round"/></svg></div>
+          <div class="nav-b"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="#334155" stroke-width="2.4" stroke-linecap="round"/></svg></div>
+        </div>
+      </div>
+      <div class="dows"><div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div></div>
+      <div class="grid">
+        <!-- linha 1: 26/07 a 01/08 -->
+        <div class="cel out"><div class="num">26</div></div>
+        <div class="cel out"><div class="num">27</div>
+          <div class="ev" style="background:#7c3aed"><span class="ini">09:00</span>Reunião Ateliê</div>
+          <div class="mais">+2 eventos</div></div>
+        <div class="cel out"><div class="num">28</div>
+          <div class="ev" style="background:#0891b2"><span class="ini">14:00</span>Perícia médica</div></div>
+        <div class="cel out"><div class="num">29</div></div>
+        <div class="cel out"><div class="num">30</div>
+          <div class="ev" style="background:#d97706"><span class="ini">10:30</span>Protocolo INSS</div></div>
+        <div class="cel out"><div class="num">31</div>
+          <div class="ev" style="background:#7c3aed"><span class="ini">16:00</span>Fechamento</div></div>
+        <div class="cel"><div class="num">1</div></div>
+
+        <!-- linha 2: 02 a 08/08 -->
+        <div class="cel"><div class="num">2</div></div>
+        <div class="cel"><div class="num">3</div>
+          <div class="ev" style="background:#0891b2"><span class="ini">08:00</span>Atendimento</div>
+          <div class="ev" style="background:#7c3aed"><span class="ini">15:00</span>Contestação</div>
+          <div class="mais">+6 eventos</div></div>
+
+        <!-- dia aberto no painel -->
+        <div class="cel hoje sel"><div class="num">4</div>
+          <div class="ev" style="background:#7c3aed"><span class="ini">08:30</span>Edmarina Oliveira</div>
+          <div class="ev" style="background:#0891b2"><span class="ini">09:00</span>Edlane Silva</div>
+          <div class="mais">+9 eventos</div></div>
+
+        <div class="cel"><div class="num">5</div>
+          <div class="ev" style="background:#d97706"><span class="ini">09:30</span>Audiência TJCE</div>
+          <div class="mais">+4 eventos</div></div>
+        <div class="cel"><div class="num">6</div>
+          <div class="ev" style="background:#059669"><span class="ini">11:00</span>Assinatura</div>
+          <div class="mais">+3 eventos</div></div>
+        <div class="cel"><div class="num">7</div>
+          <div class="ev" style="background:#7c3aed"><span class="ini">14:30</span>Cliente novo</div></div>
+        <div class="cel"><div class="num">8</div></div>
+
+        <!-- linha 3: 09 a 15/08 -->
+        <div class="cel"><div class="num">9</div></div>
+        <div class="cel"><div class="num">10</div>
+          <div class="ev" style="background:#e11d48"><span class="ini">17:00</span>Prazo recurso</div>
+          <div class="mais">+5 eventos</div></div>
+        <div class="cel"><div class="num">11</div>
+          <div class="ev" style="background:#0891b2"><span class="ini">10:00</span>Perícia INSS</div>
+          <div class="mais">+2 eventos</div></div>
+        <div class="cel"><div class="num">12</div>
+          <div class="bloq">Bloqueado · feriado interno</div></div>
+        <div class="cel"><div class="num">13</div>
+          <div class="ev" style="background:#7c3aed"><span class="ini">09:00</span>Reunião equipe</div>
+          <div class="mais">+4 eventos</div></div>
+        <div class="cel"><div class="num">14</div>
+          <div class="ev" style="background:#d97706"><span class="ini">15:30</span>Acordo Banco</div></div>
+        <div class="cel"><div class="num">15</div></div>
+
+        <!-- linha 4: 16 a 22/08 -->
+        <div class="cel"><div class="num">16</div></div>
+        <div class="cel"><div class="num">17</div>
+          <div class="ev" style="background:#0891b2"><span class="ini">08:30</span>Atendimentos</div>
+          <div class="mais">+7 eventos</div></div>
+        <div class="cel"><div class="num">18</div>
+          <div class="ev" style="background:#7c3aed"><span class="ini">14:00</span>Audiência</div>
+          <div class="mais">+3 eventos</div></div>
+        <div class="cel"><div class="num">19</div>
+          <div class="ev" style="background:#059669"><span class="ini">11:30</span>Cálculo revisão</div></div>
+        <div class="cel"><div class="num">20</div>
+          <div class="ev" style="background:#e11d48"><span class="ini">18:00</span>Prazo contestar</div>
+          <div class="mais">+2 eventos</div></div>
+        <div class="cel"><div class="num">21</div>
+          <div class="ev" style="background:#d97706"><span class="ini">16:00</span>Fechamento</div></div>
+        <div class="cel"><div class="num">22</div></div>
+
+        <!-- linha 5: 23 a 29/08 -->
+        <div class="cel"><div class="num">23</div></div>
+        <div class="cel"><div class="num">24</div>
+          <div class="ev" style="background:#7c3aed"><span class="ini">09:00</span>Reunião Ateliê</div>
+          <div class="mais">+4 eventos</div></div>
+        <div class="cel"><div class="num">25</div>
+          <div class="ev" style="background:#0891b2"><span class="ini">10:00</span>Perícia médica</div></div>
+        <div class="cel"><div class="num">26</div>
+          <div class="ev" style="background:#059669"><span class="ini">13:00</span>Assinatura</div>
+          <div class="mais">+1 evento</div></div>
+        <div class="cel"><div class="num">27</div>
+          <div class="ev" style="background:#7c3aed"><span class="ini">15:00</span>Atendimento</div></div>
+        <div class="cel"><div class="num">28</div>
+          <div class="ev" style="background:#d97706"><span class="ini">11:00</span>Protocolo</div>
+          <div class="mais">+2 eventos</div></div>
+        <div class="cel"><div class="num">29</div></div>
+
+        <!-- linha 6: 30/08 a 05/09 -->
+        <div class="cel"><div class="num">30</div></div>
+        <div class="cel"><div class="num">31</div>
+          <div class="ev" style="background:#e11d48"><span class="ini">17:00</span>Prazo apelação</div></div>
+        <div class="cel out"><div class="num">1</div></div>
+        <div class="cel out"><div class="num">2</div></div>
+        <div class="cel out"><div class="num">3</div></div>
+        <div class="cel out"><div class="num">4</div></div>
+        <div class="cel out"><div class="num">5</div></div>
+      </div>
+    </div>
+
+    <!-- PAINEL LATERAL DO DIA -->
+    <div class="painel">
+      <div class="pn-top">
+        <div>
+          <div class="pn-dia">Terça-feira</div>
+          <div class="pn-data">4 de agosto de 2026 · hoje</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:7px">
+          <div class="pn-qtd">11 compromissos</div>
+          <div class="pn-x"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="#94a3b8" stroke-width="2.4" stroke-linecap="round"/></svg></div>
+        </div>
+      </div>
+
+      <div class="pn-aviso">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4.9 4.9l14.2 14.2" stroke="#b91c1c" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="#b91c1c" stroke-width="2.2"/></svg>
+        12:00–14:00 bloqueado · almoço da equipe
+      </div>
+
+      <div class="pn-lista">
+        <div class="pn-sec"><span class="t">Manhã</span><span class="l"></span><span class="t" style="letter-spacing:0">5</span></div>
+
+        <div class="item feito">
+          <span class="faixa" style="background:#7c3aed"></span>
+          <span class="h">08:30</span>
+          <span class="txt">
+            <span class="tt">Presencial — Edmarina Oliveira</span>
+            <span class="sb">Reunião · Pablo Sousa Silva</span>
+          </span>
+          <span class="ok"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#059669" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+
+        <div class="item">
+          <span class="faixa" style="background:#0891b2"></span>
+          <span class="h">09:00</span>
+          <span class="txt">
+            <span class="tt">Agendamento — Edlane Silva</span>
+            <span class="sb">Reunião · Isaac Luca Cavalcante</span>
+          </span>
+        </div>
+
+        <div class="item feito">
+          <span class="faixa" style="background:#7c3aed"></span>
+          <span class="h">10:00</span>
+          <span class="txt">
+            <span class="tt">Reunião com Sandro Lacerda</span>
+            <span class="sb">Reunião · Pablo Sousa Silva</span>
+          </span>
+          <span class="ok"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#059669" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+
+        <div class="item feito">
+          <span class="faixa" style="background:#0891b2"></span>
+          <span class="h">11:00</span>
+          <span class="txt">
+            <span class="tt">Agendamento confirmado — Vanessa Prado</span>
+            <span class="sb">Reunião · Isaac Luca Cavalcante</span>
+          </span>
+          <span class="ok"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#059669" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+
+        <div class="item">
+          <span class="faixa" style="background:#d97706"></span>
+          <span class="h">11:45</span>
+          <span class="txt">
+            <span class="tt">Oliveira presencial (campanha: ligação)</span>
+            <span class="sb">Reunião · Francisco Wesley Freitas</span>
+          </span>
+        </div>
+
+        <div class="pn-sec"><span class="t">Tarde</span><span class="l"></span><span class="t" style="letter-spacing:0">6</span></div>
+
+        <div class="item">
+          <span class="faixa" style="background:#d97706"></span>
+          <span class="h">12:00</span>
+          <span class="txt">
+            <span class="tt">Retorno — Francisco Marcelo</span>
+            <span class="sb">Reunião · Milena Mello Mansur · escritório</span>
+          </span>
+        </div>
+
+        <div class="item">
+          <span class="faixa" style="background:#0891b2"></span>
+          <span class="h">14:00</span>
+          <span class="txt">
+            <span class="tt">Agendamento — Lourdes Abreu</span>
+            <span class="sb">Reunião · Isaac Luca Cavalcante</span>
+          </span>
+        </div>
+
+        <div class="item on">
+          <span class="faixa" style="background:#e11d48"></span>
+          <span class="h">15:00</span>
+          <span class="txt">
+            <span class="tt">Audiência de conciliação<span class="tag aud">TJCE</span></span>
+            <span class="sb">0801234-55.2026.8.06.0001 · Milena Mello Mansur</span>
+          </span>
+        </div>
+
+        <div class="item">
+          <span class="faixa" style="background:#e11d48"></span>
+          <span class="h">16:30</span>
+          <span class="txt">
+            <span class="tt">Contestação<span class="tag prazo">Prazo</span></span>
+            <span class="sb">Ribeiro × Banco Cearense · Pablo Sousa Silva</span>
+          </span>
+        </div>
+
+        <div class="item">
+          <span class="faixa" style="background:#059669"></span>
+          <span class="h">17:00</span>
+          <span class="txt">
+            <span class="tt">Ligação — Tereza Nunes</span>
+            <span class="sb">Tarefa · Francisco Wesley Freitas</span>
+          </span>
+        </div>
+
+        <div class="item">
+          <span class="faixa" style="background:#7c3aed"></span>
+          <span class="h">18:00</span>
+          <span class="txt">
+            <span class="tt">Follow-up da proposta — Marcelo Tavares</span>
+            <span class="sb">Tarefa · Pablo Sousa Silva</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="pn-rod">
+        <div class="novo">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>
+          Novo neste dia
+        </div>
+        <div class="bloq-b">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#b91c1c" stroke-width="2.2"/><path d="M5.6 5.6l12.8 12.8" stroke="#b91c1c" stroke-width="2.2" stroke-linecap="round"/></svg>
+          Bloquear
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

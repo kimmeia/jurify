@@ -319,7 +319,6 @@ export const movimentacoesRouter = router({
         clientePolo: partes.clientePolo,
         /** "Fulano × Banco Tal" — como o advogado se refere ao caso. */
         partesRotulo: partes.rotulo,
-        partes: listaPartes,
         searchKey: row.searchKey,
         searchType: row.searchType,
         monitoramentoId: row.ev.monitoramentoId,

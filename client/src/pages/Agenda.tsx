@@ -19,12 +19,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   CalendarDays, Plus, Loader2, Clock, CheckCircle, ChevronLeft, ChevronRight,
   Trash2, ListTodo, CalendarClock, Sun, AlertTriangle, Search,
   Briefcase, Scale, Users, PhoneCall, MoreHorizontal, Check, MapPin, Bell,
   Pencil, FileText, Paperclip, ExternalLink, XCircle, RotateCcw, MessageSquareText,
-  Ban, CalendarOff, Download, ChevronDown, User,
+  Ban, CalendarOff, Download, ChevronDown, User, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -34,9 +35,43 @@ import { gradientAvatar, gerarIniciais } from "./dashboards/common";
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Abaixo de `lg` a coluna do dia espremeria o calendário, então o mesmo
+ * conteúdo vira folha de baixo pra cima. Precisa ser JS e não só classe
+ * CSS: o `SheetContent` monta um overlay que `lg:hidden` não alcança — ele
+ * cobriria a tela inteira no desktop e engoliria todos os cliques.
+ */
+function useTelaEstreita() {
+  const [estreita, setEstreita] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 1023.98px)");
+    const aplicar = () => setEstreita(mql.matches);
+    aplicar();
+    mql.addEventListener("change", aplicar);
+    return () => mql.removeEventListener("change", aplicar);
+  }, []);
+  return estreita;
+}
+
 const TIPO_LABELS: Record<string, string> = {
   prazo_processual: "Prazo", audiencia: "Audiência", reuniao_comercial: "Reunião",
   tarefa: "Tarefa", follow_up: "Follow-up", outro: "Outro",
+};
+
+/**
+ * Só prazo e audiência ganham selo na lista do dia: são os dois que não
+ * podem passar batidos no meio dos atendimentos. Marcar todos os tipos
+ * devolveria o problema — se tudo é destaque, nada é.
+ */
+const MARCA_TIPO: Record<string, { rotulo: string; cls: string }> = {
+  prazo_processual: {
+    rotulo: "Prazo",
+    cls: "bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300",
+  },
+  audiencia: {
+    rotulo: "Audiência",
+    cls: "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
+  },
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -538,7 +573,10 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
   // período (sem isso, o calendário pedia todo o histórico e estourava o teto).
   useEffect(() => { onRangeChange?.(rangeGradeCalendario(mes)); }, [mes, onRangeChange]);
   const [diaSelecionado, setDiaSelecionado] = useState<Date | null>(() => new Date());
-  const [diaAberto, setDiaAberto] = useState<Date | null>(null);
+  // O painel do dia é uma coluna fixa, não um popup: o calendário continua
+  // à vista e trocar de dia é um clique, não fechar-abrir.
+  const [painelAberto, setPainelAberto] = useState(true);
+  const telaEstreita = useTelaEstreita();
   const [bloquearDialog, setBloquearDialog] = useState<Date | null>(null);
 
   // Bloqueios da agenda (feriados + indisponibilidades). A IA do SmartFlow
@@ -666,8 +704,38 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
   const mesLabel = mesLabelBruto.charAt(0).toUpperCase() + mesLabelBruto.slice(1);
   const totalNoMes = grade.filter((d) => !d.outroMes).reduce((acc, d) => acc + d.eventos.length, 0);
 
+  const eventosDoDia = useMemo(() => {
+    if (!diaSelecionado) return [];
+    return (
+      grade.find(
+        (d) =>
+          d.date.getDate() === diaSelecionado.getDate() &&
+          d.date.getMonth() === diaSelecionado.getMonth() &&
+          d.date.getFullYear() === diaSelecionado.getFullYear(),
+      )?.eventos ?? []
+    );
+  }, [grade, diaSelecionado]);
+
+  const painel = (className: string) =>
+    diaSelecionado && painelAberto ? (
+      <PainelDoDia
+        className={className}
+        data={diaSelecionado}
+        eventos={eventosDoDia}
+        bloqueios={bloqueiosPorDia.get(dateKeyStr(diaSelecionado)) ?? []}
+        onFechar={() => setPainelAberto(false)}
+        onCardClick={onCardClick}
+        onCriarEvento={onCriarEvento}
+        onBloquear={() => setBloquearDialog(diaSelecionado)}
+        onRemoverBloqueio={(id) => removerBloqueioMut.mutate({ id })}
+        podeCriar={podeCriar}
+        coresPorResponsavel={coresPorResponsavel}
+      />
+    ) : null;
+
   return (
-    <div className="bg-card border border-border rounded-[14px] overflow-hidden">
+    <div className="flex items-start gap-3.5">
+    <div className="flex-1 min-w-0 bg-card border border-border rounded-[14px] overflow-hidden">
       {/* Cabeçalho: mês + navegação à esquerda, ações à direita */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border/60 flex-wrap">
         <div className="flex items-center gap-3">
@@ -700,36 +768,17 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
           <span className="text-xs text-muted-foreground/80 font-medium">{totalNoMes} no mês</span>
         </div>
 
+        {/* Bloqueio do dia vive no painel lateral — aqui ficaria repetido. */}
         <div className="flex items-center gap-2">
-          {diaSelecionado && (
-            <>
-              {(bloqueiosPorDia.get(dateKeyStr(diaSelecionado)) || []).map((b) => (
-                <span
-                  key={b.id}
-                  className="inline-flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold"
-                >
-                  <CalendarOff className="h-3 w-3 shrink-0" />
-                  {b.horaInicio && b.horaFim ? `${b.horaInicio}–${b.horaFim}` : "Dia inteiro"}
-                  {b.motivo ? ` · ${b.motivo}` : ""}
-                  <button
-                    type="button"
-                    className="text-red-500 hover:text-red-800"
-                    onClick={() => removerBloqueioMut.mutate({ id: b.id })}
-                    title="Remover bloqueio"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
-              <button
-                type="button"
-                onClick={() => setBloquearDialog(diaSelecionado)}
-                className="border border-dashed border-red-300 text-red-600 hover:bg-red-50 rounded-lg px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
-              >
-                <Ban className="h-3 w-3" />
-                Bloquear {diaSelecionado.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
-              </button>
-            </>
+          {!painelAberto && diaSelecionado && (
+            <button
+              type="button"
+              onClick={() => setPainelAberto(true)}
+              className="border border-border rounded-lg px-3 py-1.5 text-xs font-semibold text-foreground/90 hover:bg-muted/50 flex items-center gap-1.5"
+            >
+              <ListTodo className="h-3.5 w-3.5" />
+              Ver o dia
+            </button>
           )}
           <Button
             variant="outline"
@@ -780,11 +829,17 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
               key={i}
               onClick={() => {
                 setDiaSelecionado(dia.date);
-                setDiaAberto(dia.date);
+                setPainelAberto(true);
               }}
               className={`border-r border-b border-border/60 px-1.5 py-1.5 overflow-hidden cursor-pointer transition-colors [&:nth-child(7n)]:border-r-0 ${
-                diaInteiroBloq ? "bg-red-50/60" : "hover:bg-muted/50"
-              } ${isSelected(dia.date) ? "bg-violet-50/50" : ""}`}
+                diaInteiroBloq ? "bg-red-50/60 dark:bg-red-950/30" : "hover:bg-muted/50"
+              } ${
+                isSelected(dia.date) && painelAberto
+                  ? "bg-violet-50/70 dark:bg-violet-950/30 ring-[1.5px] ring-inset ring-violet-500"
+                  : isSelected(dia.date)
+                    ? "bg-violet-50/50 dark:bg-violet-950/20"
+                    : ""
+              }`}
               title={motivoBloq ?? undefined}
             >
               <div className="flex items-center gap-1">
@@ -837,7 +892,9 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
               })}
 
               {resto > 0 && (
-                <p className="mt-[3px] text-[9.5px] font-semibold text-muted-foreground/80">+{resto} eventos</p>
+                <p className="mt-[3px] text-[9.5px] font-semibold text-muted-foreground/80">
+                  +{resto} {resto === 1 ? "evento" : "eventos"}
+                </p>
               )}
             </div>
           );
@@ -845,163 +902,244 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
       </div>
 
 
-      <DiaDoCalendarioDialog
-        data={diaAberto}
-        eventos={
-          diaAberto
-            ? (grade.find(
-                (d) =>
-                  d.date.getDate() === diaAberto.getDate() &&
-                  d.date.getMonth() === diaAberto.getMonth() &&
-                  d.date.getFullYear() === diaAberto.getFullYear(),
-              )?.eventos ?? [])
-            : []
-        }
-        bloqueios={diaAberto ? bloqueiosPorDia.get(dateKeyStr(diaAberto)) ?? [] : []}
-        onOpenChange={(o) => { if (!o) setDiaAberto(null); }}
-        onCardClick={(ev) => { setDiaAberto(null); onCardClick?.(ev); }}
-        onCriarEvento={onCriarEvento ? () => { setDiaAberto(null); onCriarEvento(); } : undefined}
-        onBloquear={() => { if (diaAberto) { setBloquearDialog(diaAberto); setDiaAberto(null); } }}
-        podeCriar={podeCriar}
-      />
-
       <BloquearDiaDialog
         data={bloquearDialog}
         onOpenChange={(o) => { if (!o) setBloquearDialog(null); }}
         onCreated={() => bloqueiosQuery.refetch()}
       />
     </div>
+
+      {telaEstreita ? (
+        <Sheet
+          open={!!diaSelecionado && painelAberto}
+          onOpenChange={(o) => { if (!o) setPainelAberto(false); }}
+        >
+          <SheetContent side="bottom" className="h-[85vh] p-0 gap-0">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Compromissos do dia</SheetTitle>
+            </SheetHeader>
+            {painel("h-full")}
+          </SheetContent>
+        </Sheet>
+      ) : (
+        // Sem o guarda, a coluna vazia continuaria reservando 352px depois
+        // de fechar o painel.
+        diaSelecionado &&
+        painelAberto && (
+          <aside className="w-[352px] shrink-0 sticky top-4">
+            {painel("border border-border rounded-[14px] max-h-[calc(100vh-6rem)]")}
+          </aside>
+        )
+      )}
+    </div>
   );
 }
 
 /**
- * Lista de um dia do calendário.
+ * Coluna com os compromissos do dia escolhido no calendário.
  *
- * Antes o clique no dia só selecionava — o dia mostrava no máximo 3 eventos e
- * o "+N eventos" não levava a lugar nenhum, então os outros ficavam
- * inacessíveis pelo calendário.
+ * Era um dialog central, e isso obrigava a fechar pra comparar dois dias —
+ * o calendário some justo quando você quer olhar pra ele. Como coluna, o
+ * mês fica à vista e trocar de dia é um clique só.
  */
-function DiaDoCalendarioDialog({
+function PainelDoDia({
   data,
   eventos,
   bloqueios,
-  onOpenChange,
+  onFechar,
   onCardClick,
   onCriarEvento,
   onBloquear,
+  onRemoverBloqueio,
   podeCriar,
+  coresPorResponsavel,
+  className = "",
 }: {
-  data: Date | null;
+  data: Date;
   eventos: any[];
   bloqueios: any[];
-  onOpenChange: (o: boolean) => void;
+  onFechar: () => void;
   onCardClick?: (ev: any) => void;
   onCriarEvento?: () => void;
   onBloquear?: () => void;
+  onRemoverBloqueio?: (id: number) => void;
   podeCriar?: boolean;
+  coresPorResponsavel?: number[] | null;
+  className?: string;
 }) {
-  if (!data) return null;
-
   const ordenados = [...eventos].sort(
     (a, b) => new Date(a.dataInicio).getTime() - new Date(b.dataInicio).getTime(),
   );
-  const titulo = data.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
-  const diaSemana = data.toLocaleDateString("pt-BR", { weekday: "long" });
+
+  // Manhã/tarde em vez de lista corrida: com 11 compromissos no dia, a lista
+  // sem corte vira parede e some a noção de "o que ainda falta hoje".
+  const grupos: Array<{ titulo: string; itens: any[] }> = [
+    { titulo: "Dia todo", itens: ordenados.filter((e) => e.diaInteiro) },
+    {
+      titulo: "Manhã",
+      itens: ordenados.filter((e) => !e.diaInteiro && new Date(e.dataInicio).getHours() < 12),
+    },
+    {
+      titulo: "Tarde",
+      itens: ordenados.filter((e) => !e.diaInteiro && new Date(e.dataInicio).getHours() >= 12),
+    },
+  ].filter((g) => g.itens.length > 0);
+
+  const diaSemanaBruto = data.toLocaleDateString("pt-BR", { weekday: "long" });
+  // `capitalize` do Tailwind subiria também o "feira" ("Terça-Feira").
+  const diaSemana = diaSemanaBruto.charAt(0).toUpperCase() + diaSemanaBruto.slice(1);
+  const hoje = new Date();
+  const ehHoje =
+    data.getDate() === hoje.getDate() &&
+    data.getMonth() === hoje.getMonth() &&
+    data.getFullYear() === hoje.getFullYear();
+  // O ano só entra quando não é o corrente: com ele a linha quebrava, e o
+  // mês/ano já está no cabeçalho do calendário, colado aqui do lado.
+  const dataLonga = data.toLocaleDateString("pt-BR", {
+    day: "numeric",
+    month: "long",
+    ...(data.getFullYear() === hoje.getFullYear() ? {} : { year: "numeric" as const }),
+  });
 
   return (
-    <Dialog open={!!data} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="capitalize">
-            {diaSemana}, {titulo}
-          </DialogTitle>
-          <DialogDescription>
+    <div className={`bg-card flex flex-col overflow-hidden ${className}`}>
+      <div className="flex items-start justify-between gap-2.5 px-4 py-3 border-b border-border/60 shrink-0">
+        <div className="min-w-0">
+          <p className="text-[19px] font-bold tracking-tight leading-tight truncate">{diaSemana}</p>
+          <p className="mt-0.5 text-[11.5px] font-medium text-muted-foreground truncate">
+            {dataLonga}
+            {ehHoje && " · hoje"}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="rounded-full bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 px-2.5 py-1 text-[11px] font-bold whitespace-nowrap">
             {ordenados.length === 0
-              ? "Nenhum compromisso neste dia."
+              ? "livre"
               : `${ordenados.length} ${ordenados.length === 1 ? "compromisso" : "compromissos"}`}
-          </DialogDescription>
-        </DialogHeader>
+          </span>
+          <button
+            type="button"
+            onClick={onFechar}
+            title="Fechar o painel do dia"
+            className="w-[26px] h-[26px] rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:bg-muted/60"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
 
-        {bloqueios.length > 0 && (
-          <div className="space-y-1.5">
-            {bloqueios.map((b: any) => (
-              <div
-                key={b.id}
-                className="flex items-center gap-1.5 text-[11.5px] bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5 text-red-700"
-              >
-                <CalendarOff className="h-3.5 w-3.5 shrink-0" />
-                <span className="font-semibold">
-                  {b.horaInicio && b.horaFim ? `${b.horaInicio}–${b.horaFim}` : "Dia inteiro"}
+      {bloqueios.length > 0 && (
+        <div className="px-3 pt-2.5 space-y-1.5 shrink-0">
+          {bloqueios.map((b: any) => (
+            <div
+              key={b.id}
+              className="flex items-center gap-1.5 text-[11px] font-semibold bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg px-2.5 py-1.5 text-red-700 dark:text-red-300"
+            >
+              <CalendarOff className="h-3 w-3 shrink-0" />
+              <span className="shrink-0">
+                {b.horaInicio && b.horaFim ? `${b.horaInicio}–${b.horaFim}` : "Dia inteiro"}
+              </span>
+              {b.motivo && <span className="truncate font-medium">· {b.motivo}</span>}
+              {onRemoverBloqueio && (
+                <button
+                  type="button"
+                  className="ml-auto shrink-0 text-red-500 hover:text-red-800 dark:hover:text-red-200"
+                  onClick={() => onRemoverBloqueio(b.id)}
+                  title="Remover bloqueio"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-1.5 pb-1">
+        {ordenados.length === 0 ? (
+          <p className="py-12 text-center text-[12.5px] text-muted-foreground">Dia livre.</p>
+        ) : (
+          grupos.map((g) => (
+            <div key={g.titulo}>
+              <div className="flex items-center gap-2 px-2 pt-2.5 pb-1">
+                <span className="text-[10px] font-bold uppercase tracking-[0.07em] text-muted-foreground/80">
+                  {g.titulo}
                 </span>
-                {b.motivo && <span className="truncate">· {b.motivo}</span>}
+                <span className="flex-1 h-px bg-border/60" />
+                <span className="text-[10px] font-bold text-muted-foreground/80">{g.itens.length}</span>
               </div>
-            ))}
-          </div>
-        )}
-
-        <div className="max-h-[52vh] overflow-y-auto -mx-1 px-1">
-          {ordenados.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              Dia livre.
-            </p>
-          ) : (
-            <div className="divide-y rounded-lg border">
-              {ordenados.map((ev: any) => {
-                const cor = corDoEvento(ev);
+              {g.itens.map((ev: any) => {
+                const cor =
+                  coresPorResponsavel && ev.responsavelId
+                    ? corDaPessoa(ev.responsavelId, coresPorResponsavel)
+                    : corDoEvento(ev);
                 const concluido = ev.status === "concluido" || ev.status === "concluida";
                 const inicio = new Date(ev.dataInicio);
                 const hora = ev.diaInteiro
-                  ? "Dia todo"
+                  ? "—"
                   : inicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+                const marca = MARCA_TIPO[ev.tipo];
                 return (
                   <button
                     key={`${ev.fonte}-${ev.id}`}
                     type="button"
                     onClick={() => onCardClick?.(ev)}
-                    className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors"
+                    className="w-full flex items-start gap-2.5 px-2 py-1.5 rounded-lg text-left hover:bg-muted/50 transition-colors"
                   >
-                    <span
-                      className="w-1 self-stretch rounded-full shrink-0"
-                      style={{ background: cor }}
-                    />
-                    <span className="text-[11px] font-bold text-muted-foreground tabular-nums w-14 shrink-0 pt-0.5">
+                    <span className="w-[3px] self-stretch rounded-sm shrink-0" style={{ background: cor }} />
+                    <span className="text-[10.5px] font-bold text-foreground/80 tabular-nums w-[34px] shrink-0 pt-px">
                       {hora}
                     </span>
                     <span className="flex-1 min-w-0">
                       <span
-                        className={`block text-[13px] font-semibold leading-snug ${concluido ? "line-through text-muted-foreground" : ""}`}
+                        className={`flex items-center gap-1.5 text-[12.5px] font-semibold leading-tight ${
+                          concluido ? "line-through text-muted-foreground font-medium" : ""
+                        }`}
                       >
-                        {ev.titulo}
+                        <span className="truncate">{ev.titulo}</span>
+                        {marca && (
+                          <span
+                            className={`shrink-0 rounded px-1 py-px text-[9px] font-extrabold uppercase tracking-[0.04em] ${marca.cls}`}
+                          >
+                            {marca.rotulo}
+                          </span>
+                        )}
                       </span>
-                      <span className="block text-[11px] text-muted-foreground mt-0.5">
-                        {TIPO_LABELS[ev.tipo] ?? ev.tipo}
-                        {ev.responsavelNome ? ` · ${ev.responsavelNome}` : ""}
-                        {ev.contatoNome ? ` · ${ev.contatoNome}` : ""}
-                        {ev.local ? ` · ${ev.local}` : ""}
+                      <span className="block mt-0.5 text-[10.5px] text-muted-foreground truncate">
+                        {[TIPO_LABELS[ev.tipo] ?? ev.tipo, ev.responsavelNome, ev.contatoNome, ev.local]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </span>
                     </span>
-                    {concluido && <Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />}
+                    {concluido && <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />}
                   </button>
                 );
               })}
             </div>
-          )}
-        </div>
+          ))
+        )}
+      </div>
 
-        <DialogFooter className="gap-2 sm:justify-between">
-          <Button variant="ghost" size="sm" onClick={onBloquear} className="text-red-600 hover:text-red-700">
-            <Ban className="h-3.5 w-3.5 mr-1.5" />
-            Bloquear o dia
+      <div className="flex items-center gap-2 px-3 py-2.5 border-t border-border/60 shrink-0">
+        {podeCriar && onCriarEvento && (
+          <Button size="sm" className="flex-1" onClick={onCriarEvento}>
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            Novo neste dia
           </Button>
-          {podeCriar && onCriarEvento && (
-            <Button size="sm" onClick={onCriarEvento}>
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
-              Novo compromisso
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        )}
+        {podeCriar && onBloquear && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onBloquear}
+            className="border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-950/60"
+          >
+            <Ban className="h-3.5 w-3.5 mr-1.5" />
+            Bloquear
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 

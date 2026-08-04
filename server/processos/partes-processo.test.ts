@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { parsearPartes, resumirPartes, nomeCurto } from "./partes-processo";
+import {
+  parsearPartes,
+  resumirPartes,
+  nomeCurto,
+  limparNomeParte,
+  extrairPapel,
+  titulizar,
+} from "./partes-processo";
 
 const partes = [
   { nome: "Maria Aparecida do Nascimento", polo: "ativo", tipo: "fisica", documento: "123.456.789-00", advogados: [] },
@@ -36,16 +43,82 @@ describe("parsearPartes", () => {
 });
 
 describe("nomeCurto", () => {
-  it("preserva nome curto", () => {
-    expect(nomeCurto("Banco Exemplo S/A")).toBe("Banco Exemplo S/A");
+  it("preserva nome de duas palavras significativas", () => {
+    expect(nomeCurto("Maria da Silva")).toBe("Maria da Silva");
   });
 
-  it("encurta nome longo mantendo primeiro e último", () => {
-    expect(nomeCurto("Maria Aparecida do Nascimento Silva Santos")).toBe("Maria Santos");
+  it("encurta nome longo pras duas primeiras palavras", () => {
+    expect(nomeCurto("Carlos Jefferson Ribeiro dos Santos")).toBe("Carlos Jefferson");
+  });
+
+  it("conectivo não conta como palavra", () => {
+    expect(nomeCurto("Maria Aparecida do Nascimento Silva")).toBe("Maria Aparecida");
+  });
+
+  it("razão social vira nome + marca", () => {
+    expect(nomeCurto("BANCO PAN S.A.")).toBe("BANCO PAN");
   });
 
   it("nome de uma palavra passa igual", () => {
     expect(nomeCurto("Fulano")).toBe("Fulano");
+  });
+});
+
+describe("limparNomeParte", () => {
+  it("tira CPF e papel da linha crua do PJe", () => {
+    expect(limparNomeParte("CARLOS JEFFERSON RIBEIRO DOS SANTOS - CPF: 066.968.283-70 (AUTOR)")).toBe(
+      "CARLOS JEFFERSON RIBEIRO DOS SANTOS",
+    );
+  });
+
+  it("tira CNPJ e papel de pessoa jurídica", () => {
+    expect(limparNomeParte("BANCO PAN S.A. - CNPJ: 59.285.411/0001-13 (REU)")).toBe("BANCO PAN S.A.");
+  });
+
+  it("corta o 'registrado(a) civilmente como' do advogado", () => {
+    expect(
+      limparNomeParte(
+        "BRUNO BOYADJIAN SOBREIRA registrado(a) civilmente como BRUNO BOYADJIAN SOBREIRA - OAB CE38828 - CPF: 062.885.473-01 (ADVOGADO)",
+      ),
+    ).toBe("BRUNO BOYADJIAN SOBREIRA");
+  });
+
+  it("nome já limpo passa intacto", () => {
+    expect(limparNomeParte("Banco Exemplo S/A")).toBe("Banco Exemplo S/A");
+  });
+});
+
+describe("extrairPapel", () => {
+  it("lê o papel entre parênteses no fim", () => {
+    expect(extrairPapel("FULANO - CPF: 111 (AUTOR)")).toBe("AUTOR");
+    expect(extrairPapel("SERGIO SCHULZE - OAB SC7629-A (ADVOGADO)")).toBe("ADVOGADO");
+  });
+
+  it("sem parênteses devolve null", () => {
+    expect(extrairPapel("Banco Exemplo S/A")).toBeNull();
+  });
+
+  it("não confunde o (a) de 'registrado(a)' com papel", () => {
+    expect(
+      extrairPapel("FULANO registrado(a) civilmente como FULANO - OAB CE1 - CPF: 1"),
+    ).toBeNull();
+  });
+});
+
+describe("titulizar", () => {
+  it("capitula nome que veio gritando do tribunal", () => {
+    expect(titulizar("CARLOS JEFFERSON")).toBe("Carlos Jefferson");
+    expect(titulizar("MARIA DA SILVA")).toBe("Maria da Silva");
+  });
+
+  it("preserva sigla de razão social", () => {
+    expect(titulizar("BANCO PAN S.A.")).toBe("Banco Pan S.A.");
+    expect(titulizar("BANCO EXEMPLO S/A")).toBe("Banco Exemplo S/A");
+  });
+
+  it("nome que já tem minúscula não é mexido", () => {
+    expect(titulizar("Banco Exemplo S/A")).toBe("Banco Exemplo S/A");
+    expect(titulizar("João da Silva ME")).toBe("João da Silva ME");
   });
 });
 
@@ -54,7 +127,7 @@ describe("resumirPartes", () => {
 
   it("monta o rótulo do caso", () => {
     const r = resumirPartes(lista);
-    expect(r.rotulo).toBe("Maria Nascimento × Banco Exemplo S/A");
+    expect(r.rotulo).toBe("Maria Aparecida × Banco Exemplo");
     expect(r.autores).toEqual(["Maria Aparecida do Nascimento"]);
     expect(r.reus).toEqual(["Banco Exemplo S/A"]);
   });
@@ -98,7 +171,7 @@ describe("resumirPartes", () => {
 
   it("só um polo ainda produz rótulo", () => {
     const soAutor = parsearPartes(JSON.stringify([partes[0]]));
-    expect(resumirPartes(soAutor).rotulo).toBe("Maria Nascimento");
+    expect(resumirPartes(soAutor).rotulo).toBe("Maria Aparecida");
   });
 
   it("apelido continua valendo como nome quando não bate com nenhuma parte", () => {
@@ -119,5 +192,32 @@ describe("resumirPartes", () => {
     const r = resumirPartes(varios);
     expect(r.reus).toHaveLength(2);
     expect(r.rotulo).toContain("Banco Exemplo");
+  });
+  it("linha crua do PJe vira 'Cliente × Outra parte'", () => {
+    // Advogado listado antes da parte, que é como o PJe às vezes devolve —
+    // sem o filtro por papel o rótulo mostraria o escritório.
+    const cru = parsearPartes(
+      JSON.stringify([
+        {
+          nome: "BRUNO BOYADJIAN SOBREIRA registrado(a) civilmente como BRUNO BOYADJIAN SOBREIRA - OAB CE38828 - CPF: 062.885.473-01 (ADVOGADO)",
+          polo: "ativo",
+        },
+        { nome: "CARLOS JEFFERSON RIBEIRO DOS SANTOS - CPF: 066.968.283-70 (AUTOR)", polo: "ativo" },
+        { nome: "SERGIO SCHULZE - OAB SC7629-A - CPF: 312.387.349-87 (ADVOGADO)", polo: "passivo" },
+        { nome: "BANCO PAN S.A. - CNPJ: 59.285.411/0001-13 (REU)", polo: "passivo" },
+      ]),
+    );
+    const r = resumirPartes(cru, { searchKey: "066.968.283-70" });
+    expect(r.rotulo).toBe("Carlos Jefferson × Banco Pan");
+    expect(r.cliente).toBe("Carlos Jefferson Ribeiro dos Santos");
+    expect(r.clientePolo).toBe("ativo");
+  });
+
+  it("CPF pendurado no nome ainda identifica o cliente", () => {
+    // O scraper nem sempre preenche `documento`; o número vem no meio do nome.
+    const cru = parsearPartes(
+      JSON.stringify([{ nome: "FULANO DE TAL - CPF: 111.222.333-44 (AUTOR)", polo: "ativo" }]),
+    );
+    expect(resumirPartes(cru, { searchKey: "11122233344" }).clientePolo).toBe("ativo");
   });
 });
