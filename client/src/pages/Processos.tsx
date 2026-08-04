@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import type { SistemaCofre } from "@shared/cofre-credenciais-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -861,6 +861,27 @@ function parsePartes(partesJson: string | null | undefined): Array<{
  * identificar rapidamente "qual processo é esse". Se for inverso
  * (cliente é réu), o user pode usar o `apelido` pra customizar.
  */
+/**
+ * Nome do caso na lista: "Fulano × Banco Tal" quando a capa já foi coletada.
+ * O rótulo vem pronto do servidor, pelo mesmo caminho da central de
+ * movimentações — as duas telas precisam chamar o processo pelo mesmo nome.
+ */
+function nomeDoCasoMon(mon: any): string {
+  return mon.partesRotulo || identificadorPrincipal(mon);
+}
+
+function haQuantoTempoMon(d: Date | string): string {
+  const ms = Date.now() - new Date(d).getTime();
+  const horas = Math.floor(ms / 3_600_000);
+  if (horas < 1) return "agora há pouco";
+  if (horas < 24) return `há ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  if (dias === 1) return "ontem";
+  if (dias < 30) return `há ${dias} dias`;
+  const meses = Math.floor(dias / 30);
+  return `há ${meses} ${meses === 1 ? "mês" : "meses"}`;
+}
+
 function identificadorPrincipal(mon: any): string {
   if (mon.apelido && mon.apelido.trim()) return mon.apelido.trim();
   const partes = parsePartes(mon.partesJson);
@@ -1082,18 +1103,18 @@ function MonitoramentoCard({
   const temErro = !!mon.ultimoErro || status === "erro";
   const pausado = status === "paused" || status === "pausado";
   const corLateral = temErro
-    ? "border-l-rose-500"
+    ? mon.diagnostico?.severidade === "aviso"
+      ? "border-l-amber-500"
+      : "border-l-rose-500"
     : pausado
       ? "border-l-slate-400"
       : "border-l-emerald-500";
 
   // Estilo do avatar/ícone — pausado vira cinza, erro vira gradient rose
-  const avatarStyle = temErro
-    ? "bg-gradient-to-br from-rose-500 to-pink-600"
-    : pausado
-      ? "bg-slate-200"
-      : "bg-gradient-to-br from-indigo-500 to-violet-600";
-  const avatarIconColor = pausado ? "text-slate-500" : "text-white";
+  // A borda lateral, o ponto de saúde e o texto do motivo já dizem que está
+  // quebrado; pintar o avatar também deixava quatro vermelhos na mesma linha.
+  const avatarStyle = temErro || pausado ? "bg-muted" : "bg-gradient-to-br from-indigo-500 to-violet-600";
+  const avatarIconColor = temErro || pausado ? "text-muted-foreground" : "text-white";
 
   // Tempo relativo "há X" pra última atualização
   const tempoRelativo = (() => {
@@ -1111,11 +1132,7 @@ function MonitoramentoCard({
   })();
 
   // Card "erro" tem bg sutil rose
-  const cardBg = temErro
-    ? "bg-gradient-to-r from-rose-50/40 to-white"
-    : pausado
-      ? "bg-slate-50/40"
-      : "bg-white";
+  const cardBg = pausado ? "bg-muted/30" : "bg-card";
 
   return (
     <>
@@ -1126,46 +1143,27 @@ function MonitoramentoCard({
             {searchType === "lawsuit_cnj" ? <Scale className={`h-5 w-5 ${avatarIconColor}`} /> : <Users className={`h-5 w-5 ${avatarIconColor}`} />}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
+            {/* Linha em ritmo fixo, no padrão da central de movimentações:
+                quem é o caso, o que está acontecendo, desde quando. O detalhe
+                (classe, valor, vara, polos) continua no card expandido. */}
+            <div className="flex items-center gap-2">
               <MonitorHealthDot
                 statusJudit={status}
                 updatedAt={mon.updatedAt ? (typeof mon.updatedAt === "string" ? mon.updatedAt : (mon.updatedAt as Date).toISOString()) : null}
                 createdAt={mon.createdAt ? (typeof mon.createdAt === "string" ? mon.createdAt : (mon.createdAt as Date).toISOString()) : null}
                 ultimoErro={mon.ultimoErro}
               />
-              <p
-                className="text-sm font-bold truncate max-w-[320px]"
-                title={identificadorPrincipal(mon)}
-              >
-                {identificadorPrincipal(mon)}
+              <p className="text-[13px] font-bold truncate" title={nomeDoCasoMon(mon)}>
+                {nomeDoCasoMon(mon)}
               </p>
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-indigo-50 text-indigo-700">
-                {TIPO_LABELS[searchType] || searchType}
-              </span>
-              {temErro && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-rose-100 text-rose-800 animate-pulse">
-                  <AlertTriangle className="h-2.5 w-2.5" />
-                  Credencial expirada
-                </span>
-              )}
               {pausado && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-slate-200 text-slate-600">
+                <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.04em] bg-muted text-muted-foreground">
                   Pausado
-                </span>
-              )}
-              {!temErro && !pausado && mon.apelido && mon.apelido !== searchKey && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-violet-100 text-violet-800 max-w-[180px] truncate" title={mon.apelido}>
-                  {mon.apelido}
-                </span>
-              )}
-              {aguardandoCapa && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-blue-100 text-blue-700 border border-blue-200">
-                  Aguardando 1ª sync
                 </span>
               )}
               {mon.subiu2grau && (
                 <span
-                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                  className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.04em] bg-amber-50 text-amber-700"
                   title={mon.indicios2grau ? `Indícios de 2º grau: ${mon.indicios2grau}` : "As movimentações sugerem que o processo subiu pro 2º grau (recurso)."}
                 >
                   2º grau?
@@ -1173,93 +1171,55 @@ function MonitoramentoCard({
               )}
             </div>
 
-            {/* Linha "Título do processo" (classe + 1º assunto) — quando capa disponível */}
-            {(classeProcesso || assuntoPrincipal) && (
-              <p className="text-[13px] font-bold tracking-tight text-slate-900 mt-1.5 leading-snug truncate">
-                {classeProcesso}
-                {classeProcesso && assuntoPrincipal && <span className="font-normal text-slate-600"> · </span>}
-                {assuntoPrincipal && <span className="font-normal text-slate-600">{assuntoPrincipal}</span>}
-              </p>
-            )}
+            <p className="text-[10.5px] font-mono text-muted-foreground mt-0.5 truncate">
+              {mon.searchKey}
+              {mon.tribunal ? ` · ${mon.tribunal}` : ""}
+            </p>
 
-            {/* Linha "Partes" — 1º ativo → 1º passivo com mini-avatares */}
-            {(polosAtivosNomes.length > 0 || polosPassivosNomes.length > 0) && (
-              <div className="flex items-center gap-2 mt-1.5 text-[11.5px] flex-wrap">
-                {polosAtivosNomes.length > 0 && (
-                  <span className="inline-flex items-center gap-1.5 min-w-0">
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0 bg-gradient-to-br ${gradientAvatar(polosAtivosNomes[0])}`}>
-                      {gerarIniciais(polosAtivosNomes[0])}
-                    </span>
-                    <span className="font-medium text-blue-700 truncate max-w-[180px]" title={polosAtivosNomes[0]}>
-                      {polosAtivosNomes[0]}
-                    </span>
-                    {polosAtivosNomes.length > 1 && (
-                      <span className="text-[10px] text-slate-400">+{polosAtivosNomes.length - 1}</span>
-                    )}
-                  </span>
-                )}
-                {polosAtivosNomes.length > 0 && polosPassivosNomes.length > 0 && (
-                  <svg className="w-3 h-3 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M5 12h14m-7-7l7 7-7 7" />
-                  </svg>
-                )}
-                {polosPassivosNomes.length > 0 && (
-                  <span className="inline-flex items-center gap-1.5 min-w-0">
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0 bg-gradient-to-br ${gradientAvatar(polosPassivosNomes[0])}`}>
-                      {gerarIniciais(polosPassivosNomes[0])}
-                    </span>
-                    <span className="font-medium text-rose-700 truncate max-w-[180px]" title={polosPassivosNomes[0]}>
-                      {polosPassivosNomes[0]}
-                    </span>
-                    {polosPassivosNomes.length > 1 && (
-                      <span className="text-[10px] text-slate-400">+{polosPassivosNomes.length - 1}</span>
-                    )}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* "Aguardando 1ª sync" — explicação quando não tem capa ainda */}
-            {aguardandoCapa && (
-              <p className="text-[11px] text-slate-500 italic mt-1.5">
-                Detalhes do processo serão exibidos após a primeira sincronização do tribunal.
-              </p>
-            )}
-
-            <div className="flex items-center gap-2.5 text-[11px] text-slate-500 mt-2 flex-wrap">
-              {valorCausaBRL && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold tabular-nums">
-                  <CircleDollarSign className="h-3 w-3" />
-                  {valorCausaBRL}
+            {/* O que está acontecendo: o motivo da parada, ou a última coisa
+                que o tribunal publicou. Antes aqui vinha a mensagem crua da
+                exceção entre aspas. */}
+            <div className="flex items-center gap-2 mt-1.5 min-w-0">
+              {mon.diagnostico ? (
+                <span
+                  className={`text-[12px] truncate ${
+                    mon.diagnostico.severidade === "alerta"
+                      ? "text-rose-700 dark:text-rose-300"
+                      : "text-amber-700 dark:text-amber-300"
+                  }`}
+                  title={mon.ultimoErro || undefined}
+                >
+                  {mon.diagnostico.motivo}
                 </span>
-              )}
-              {orgaoJulgador && (
-                <span className="inline-flex items-center gap-1 truncate max-w-[260px]" title={orgaoJulgador}>
-                  <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
-                  {orgaoJulgador}
+              ) : mon.ultimaMovimentacao ? (
+                <span className="text-[12px] text-muted-foreground truncate" title={mon.ultimaMovimentacao.titulo}>
+                  {mon.ultimaMovimentacao.titulo}
                 </span>
-              )}
-              {(valorCausaBRL || orgaoJulgador) && tempoRelativo && (
-                <span className="text-slate-300">·</span>
-              )}
-              {tempoRelativo && (
-                <span className="inline-flex items-center gap-1">
-                  <span className={`h-1.5 w-1.5 rounded-full ${temErro ? "bg-rose-500" : pausado ? "bg-slate-400" : "bg-emerald-500"}`} />
-                  Última mov. <b className="font-semibold text-slate-700">{tempoRelativo}</b>
+              ) : aguardandoCapa ? (
+                <span className="text-[12px] text-muted-foreground italic truncate">
+                  Aguardando a primeira sincronização com o tribunal…
                 </span>
-              )}
-              {tempoRelativo && <span className="text-slate-300">·</span>}
-              <span className="tabular-nums">{mon.totalAtualizacoes || 0} atualização{mon.totalAtualizacoes === 1 ? "" : "ões"}</span>
-              {mon.ultimoErro && (
-                <>
-                  <span className="text-slate-300">·</span>
-                  <span className="text-rose-600 truncate max-w-[260px]" title={mon.ultimoErro}>
-                    "{mon.ultimoErro}"
-                  </span>
-                </>
+              ) : (
+                <span className="text-[12px] text-muted-foreground truncate">
+                  Sem movimentação registrada ainda
+                </span>
               )}
             </div>
           </div>
+
+          <div className="shrink-0 text-right mr-1">
+            <p className="text-[11.5px] font-semibold text-foreground/70">
+              {mon.diagnostico
+                ? tempoRelativo ?? "—"
+                : mon.ultimaMovimentacao
+                  ? haQuantoTempoMon(mon.ultimaMovimentacao.dataEvento)
+                  : tempoRelativo ?? "—"}
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              {mon.diagnostico ? "parado" : "última mov."}
+            </p>
+          </div>
+
           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
             {searchType === "lawsuit_cnj" && (
               <>
@@ -1485,7 +1445,7 @@ function MonitoramentoCard({
 // ABA: MONITORAR CLIENTES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function MonitorarTab() {
+function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
   const [novoOpen, setNovoOpen] = useState(false);
   const [novoValor, setNovoValor] = useState("");
   const [novoCredencialId, setNovoCredencialId] = useState<string>("");
@@ -1648,6 +1608,22 @@ function MonitorarTab() {
   }, [refetch]);
 
   const totalAtualizaveis = listaMons.filter((m: any) => m.status === "ativo").length;
+  // 418 cards vermelhos iguais não são 418 problemas: quase sempre são UM
+  // problema repetido. Agrupar por causa vira uma frase e um botão.
+  const diagnostico = useMemo(() => {
+    const mapa = new Map<string, { causa: any; total: number }>();
+    for (const m of listaMons as any[]) {
+      if (!m.diagnostico) continue;
+      const atual = mapa.get(m.diagnostico.causa);
+      if (atual) atual.total++;
+      else mapa.set(m.diagnostico.causa, { causa: m.diagnostico, total: 1 });
+    }
+    return [...mapa.values()].sort((a, b) => b.total - a.total);
+  }, [listaMons]);
+  const principal = diagnostico[0] ?? null;
+  const secundarios = diagnostico.slice(1);
+  const totalSecundarios = secundarios.reduce((acc, g) => acc + g.total, 0);
+
   const contaPorStatus = {
     todos: listaMons.length,
     ativo: listaMons.filter((m: any) => (m.statusJudit || m.status) === "ativo" || (m.statusJudit || m.status) === "created" || (m.statusJudit || m.status) === "updated").length,
@@ -1778,40 +1754,96 @@ function MonitorarTab() {
                 </button>
               )}
             </div>
-            {[
-              { id: "todos", label: "Todos", count: contaPorStatus.todos, cor: "indigo" },
-              { id: "ativo", label: "Ativos", count: contaPorStatus.ativo, cor: "emerald" },
-              { id: "pausado", label: "Pausados", count: contaPorStatus.pausado, cor: "amber" },
-              { id: "erro", label: "Com erro", count: contaPorStatus.erro, cor: "rose" },
-            ].map((chip) => {
-              const active = filtroStatus === chip.id;
-              const ativoColors: Record<string, string> = {
-                indigo: "bg-indigo-600 text-white border-indigo-600 shadow-sm",
-                emerald: "bg-emerald-600 text-white border-emerald-600 shadow-sm",
-                amber: "bg-amber-500 text-white border-amber-500 shadow-sm",
-                rose: "bg-rose-600 text-white border-rose-600 shadow-sm",
-              };
-              return (
-                <button
-                  key={chip.id}
-                  type="button"
-                  onClick={() => setFiltroStatus(chip.id as "todos" | "ativo" | "pausado" | "erro")}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                    active
-                      ? ativoColors[chip.cor]
-                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                  }`}
-                >
-                  {chip.label}
-                  <span className={`tabular-nums ${active ? "text-white/85" : "text-slate-400"}`}>
-                    {chip.count}
-                  </span>
-                </button>
-              );
-            })}
+            <div className="flex gap-1 bg-muted p-[3px] rounded-[10px]">
+              {[
+                { id: "todos", label: "Todos", count: contaPorStatus.todos },
+                { id: "erro", label: "Parados", count: contaPorStatus.erro },
+                { id: "ativo", label: "Monitorando", count: contaPorStatus.ativo },
+                { id: "pausado", label: "Pausados", count: contaPorStatus.pausado },
+              ].map((aba) => {
+                const ativa = filtroStatus === aba.id;
+                return (
+                  <button
+                    key={aba.id}
+                    type="button"
+                    onClick={() => setFiltroStatus(aba.id as "todos" | "ativo" | "pausado" | "erro")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                      ativa ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {aba.label}
+                    <span
+                      className={`rounded-full px-1.5 text-[10px] font-extrabold tabular-nums ${
+                        ativa ? "bg-primary text-primary-foreground" : "bg-border text-muted-foreground"
+                      }`}
+                    >
+                      {aba.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
+
+      {principal && (
+        <div className="rounded-xl border bg-card border-l-[3px] border-l-rose-500 p-4 flex items-start gap-3.5 flex-wrap">
+          <div
+            className={`h-9 w-9 rounded-[10px] flex items-center justify-center shrink-0 ${
+              principal.causa.severidade === "alerta"
+                ? "bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400"
+                : "bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400"
+            }`}
+          >
+            <KeyRound className="h-[18px] w-[18px]" />
+          </div>
+          <div className="flex-1 min-w-[320px]">
+            <p className="text-[15px] font-bold">
+              {principal.causa.titulo.replace("{n}", String(principal.total))}
+            </p>
+            <p className="text-[12.5px] text-muted-foreground mt-1 leading-relaxed max-w-3xl">
+              {principal.causa.explicacao}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {principal.causa.acao && principal.causa.destino === "cofre" && onIrAoCofre && (
+              <Button size="sm" className="bg-rose-600 hover:bg-rose-700" onClick={onIrAoCofre}>
+                <KeyRound className="h-3.5 w-3.5 mr-1.5" />
+                {principal.causa.acao}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => setFiltroStatus("erro")}>
+              Ver os {principal.total}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {secundarios.length > 0 && (
+        <div className="rounded-xl border bg-card border-l-[3px] border-l-amber-500 px-4 py-2.5 flex items-center gap-3 flex-wrap">
+          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+          <p className="text-[12.5px] text-muted-foreground min-w-0">
+            <b className="font-bold text-foreground">{totalSecundarios}</b>{" "}
+            {totalSecundarios === 1 ? "processo para" : "processos param"} por{" "}
+            {secundarios.length === 1 ? "outro motivo" : "outros motivos"}:{" "}
+            {secundarios.map((g, i) => (
+              <span key={g.causa.causa}>
+                {i > 0 && " · "}
+                <b className="font-bold text-foreground">{g.total}</b> {g.causa.motivo}
+              </span>
+            ))}
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto shrink-0"
+            onClick={() => setFiltroStatus("erro")}
+          >
+            Ver {totalSecundarios === 1 ? "o" : "os"} {totalSecundarios}
+          </Button>
+        </div>
+      )}
 
       {/* Drawer de progresso da atualização em lote */}
       <Dialog open={atualDrawerOpen} onOpenChange={setAtualDrawerOpen}>
@@ -1911,7 +1943,7 @@ function MonitorarTab() {
         <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-10 text-center space-y-2">
           <Radar className="h-7 w-7 text-slate-300 mx-auto" />
           <p className="text-sm font-medium text-slate-600">Nenhum monitoramento com este filtro</p>
-          <p className="text-xs text-slate-400">Tente outro chip de filtro acima.</p>
+          <p className="text-xs text-slate-400">Tente outra aba de filtro acima.</p>
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50/30 py-14 text-center space-y-2">
@@ -1924,6 +1956,24 @@ function MonitorarTab() {
               ? "Cadastre uma credencial OAB no Cofre para começar."
               : "Adicione um número de processo (CNJ) para acompanhar movimentações."}
           </p>
+        </div>
+      )}
+
+      {/* O saldo aparecia em destaque sem dizer o que o consome, e não havia
+          nada na tela dizendo com que frequência o robô roda. */}
+      {listaMons.length > 0 && (
+        <div className="rounded-xl border bg-card px-4 py-2.5 flex items-center gap-2.5 flex-wrap text-[12px] text-muted-foreground">
+          <RefreshCcw className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            O robô varre os tribunais <b className="font-bold text-foreground">duas vezes por dia</b>, sem
+            consumir créditos.
+          </span>
+          <span className="h-3.5 w-px bg-border" />
+          <span>
+            Crédito é gasto só na <b className="font-bold text-foreground">consulta avulsa</b>, no{" "}
+            <b className="font-bold text-foreground">histórico completo</b> e no{" "}
+            <b className="font-bold text-foreground">resumo IA</b> de um processo.
+          </span>
         </div>
       )}
 
@@ -2028,7 +2078,14 @@ function MonitorarTab() {
 // PAGINA PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function HeroProcessos({ saldo }: { saldo: number }) {
+/**
+ * Cabeçalho do módulo.
+ *
+ * Era um banner roxo em degradê que comemorava "419 monitorados" enquanto
+ * 418 deles estavam quebrados. O número que manda passou a ser pastilha, no
+ * mesmo padrão da Agenda e da central de movimentações.
+ */
+function CabecalhoProcessos({ saldo }: { saldo: number }) {
   const { data: monsData } = trpc.processos.meusMonitoramentos.useQuery(
     { tipoMonitoramento: "movimentacoes" },
     { retry: false, refetchOnWindowFocus: false },
@@ -2037,62 +2094,72 @@ function HeroProcessos({ saldo }: { saldo: number }) {
     { apenasNaoLidas: true, limite: 1 },
     { retry: false, refetchInterval: 60000 },
   );
-  const { data: alertasData } = trpc.prazosSugeridos?.contador?.useQuery?.(
-    undefined,
-    { retry: false, refetchInterval: 60000 },
-  ) ?? { data: undefined };
 
-  const totalMons = (monsData || []).length;
+  const mons = monsData || [];
+  const totalMons = mons.length;
+  const parados = mons.filter((m: any) => !!m.diagnostico).length;
   const totalNovas = novasAcoesData?.totalNaoLidas ?? 0;
-  const totalAlertas = alertasData?.pendentes ?? 0;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 p-6 shadow-[0_4px_20px_-4px_rgba(79,70,229,0.35)]">
-      <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
-      <div className="absolute -bottom-12 -left-8 h-32 w-32 rounded-full bg-violet-300/20 blur-3xl" />
-      <div className="relative flex items-start justify-between gap-4 flex-wrap">
-        <div className="space-y-2.5 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-            </span>
-            <p className="text-[11px] font-semibold tracking-[0.18em] text-white/85 uppercase">Processos</p>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Comando central de processos</h1>
-          <div className="flex items-center gap-2 flex-wrap text-[11px] text-white/80">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-sm">
-              <Radar className="h-3 w-3" />
-              {totalMons} {totalMons === 1 ? "monitorado" : "monitorados"}
-            </span>
-            {totalNovas > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-400/20 border border-rose-300/40 text-rose-50 backdrop-blur-sm">
-                <Siren className="h-3 w-3" />
-                {totalNovas} nova{totalNovas === 1 ? "" : "s"} ação{totalNovas === 1 ? "" : "ões"}
-              </span>
-            )}
-            {totalAlertas > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-300/20 border border-amber-200/40 text-amber-50 backdrop-blur-sm">
-                <Bell className="h-3 w-3" />
-                {totalAlertas} alerta{totalAlertas === 1 ? "" : "s"}
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-sm">
-              <Sparkles className="h-3 w-3" />
-              +90 tribunais
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-white/15 border border-white/25 rounded-xl backdrop-blur-sm">
-            <Coins className="h-4 w-4 text-amber-200" />
-            <div className="leading-tight">
-              <p className="text-base font-bold tabular-nums text-white">{saldo}</p>
-              <p className="text-[9px] text-white/70 uppercase tracking-wider">créditos</p>
-            </div>
-          </div>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 className="text-[27px] font-bold tracking-tight leading-none">Processos</h1>
+        <p className="text-[13.5px] text-muted-foreground mt-1.5">
+          O robô entra nos tribunais todo dia e avisa o que mudou nos seus processos
+        </p>
+        <div className="flex flex-wrap gap-2 mt-3">
+          <PastilhaProc valor={totalMons} rotulo={totalMons === 1 ? "monitorado" : "monitorados"} />
+          {parados > 0 && (
+            <PastilhaProc valor={parados} rotulo={parados === 1 ? "parado" : "parados"} tom="alerta" />
+          )}
+          {totalNovas > 0 && (
+            <PastilhaProc
+              valor={totalNovas}
+              rotulo={totalNovas === 1 ? "nova ação" : "novas ações"}
+            />
+          )}
         </div>
       </div>
+      <div className="inline-flex items-center gap-2 rounded-[10px] border bg-card px-3 py-1.5 shrink-0">
+        <Coins className="h-4 w-4 text-amber-500" />
+        <span className="text-[13px] font-bold tabular-nums">{saldo}</span>
+        <span className="text-[11.5px] text-muted-foreground">créditos</span>
+      </div>
+    </div>
+  );
+}
+
+function PastilhaProc({
+  valor,
+  rotulo,
+  tom = "neutro",
+}: {
+  valor: number;
+  rotulo: string;
+  tom?: "neutro" | "alerta";
+}) {
+  return (
+    <div
+      className={`rounded-[10px] border px-3 py-1.5 flex items-baseline gap-1.5 ${
+        tom === "alerta"
+          ? "bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-900"
+          : "bg-card border-border"
+      }`}
+    >
+      <b
+        className={`text-[15px] font-bold tabular-nums ${
+          tom === "alerta" ? "text-rose-600 dark:text-rose-400" : ""
+        }`}
+      >
+        {valor}
+      </b>
+      <span
+        className={`text-[11.5px] ${
+          tom === "alerta" ? "text-rose-700 dark:text-rose-300" : "text-muted-foreground"
+        }`}
+      >
+        {rotulo}
+      </span>
     </div>
   );
 }
@@ -2152,7 +2219,7 @@ export default function Processos() {
 
   return (
     <div className="space-y-5">
-      <HeroProcessos saldo={saldo} />
+      <CabecalhoProcessos saldo={saldo} />
 
       {saldo < 5 && (
         <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200/70 px-4 py-2.5">
@@ -2173,7 +2240,7 @@ export default function Processos() {
             value="movimentacoes"
             className="gap-1.5 text-xs py-2 px-3.5 !rounded-lg !text-slate-600 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm font-medium"
           >
-            <Radar className="h-3.5 w-3.5" />Movimentações
+            <Radar className="h-3.5 w-3.5" />Monitoramento
             <MonitoramentosCount />
           </TabsTrigger>
           <TabsTrigger
@@ -2201,7 +2268,9 @@ export default function Processos() {
         </TabsList>
 
         <TabsContent value="consultar" className="mt-5"><ConsultarTab /></TabsContent>
-        <TabsContent value="movimentacoes" className="mt-5"><MonitorarTab /></TabsContent>
+        <TabsContent value="movimentacoes" className="mt-5">
+          <MonitorarTab onIrAoCofre={podeCofre ? () => setTab("cofre") : undefined} />
+        </TabsContent>
         <TabsContent value="novas-acoes" className="mt-5"><NovasAcoesTab /></TabsContent>
         <TabsContent value="alertas" className="mt-5"><AlertasTab /></TabsContent>
         {podeCofre && <TabsContent value="cofre" className="mt-5"><CofreTab /></TabsContent>}
@@ -2468,11 +2537,21 @@ function MonitoramentosCount() {
     { tipoMonitoramento: "movimentacoes" },
     { retry: false, refetchOnWindowFocus: false },
   );
-  const count = (data || []).length;
-  if (count === 0) return null;
+  const mons = data || [];
+  if (mons.length === 0) return null;
+  // Quando há processo parado, o badge mostra QUANTOS pararam, em vermelho.
+  // Mostrar o total ali dizia "419 monitorados" enquanto 418 estavam mudos.
+  const parados = mons.filter((m: any) => !!m.diagnostico).length;
   return (
-    <span className="ml-1 text-[10px] bg-indigo-100 text-indigo-700 px-1.5 rounded-full tabular-nums font-semibold">
-      {count}
+    <span
+      className={`ml-1 text-[10px] px-1.5 rounded-full tabular-nums font-semibold ${
+        parados > 0
+          ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300"
+          : "bg-indigo-100 text-indigo-700"
+      }`}
+      title={parados > 0 ? `${parados} de ${mons.length} pararam de atualizar` : undefined}
+    >
+      {parados > 0 ? parados : mons.length}
     </span>
   );
 }
