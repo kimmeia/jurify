@@ -72,7 +72,7 @@
   --primary-foreground: oklch(0.98 0 0);
   /* Mais claro que `--primary` do tema claro: o acento agora vive sobre
    * fundo escuro, e o tom original sumiria. */
-  --sidebar-primary: oklch(0.68 0.16 265);
+  --sidebar-primary: oklch(0.752 0.134 294);
   --sidebar-primary-foreground: oklch(0.98 0 0);
   --chart-1: oklch(0.65 0.15 260);
   --chart-2: oklch(0.55 0.18 260);
@@ -105,13 +105,16 @@
    * — trocar aqui não mexe em mais nada.
    *
    * No tema escuro estes valores são sobrescritos em `.dark` (um pouco mais
-   * claros que o fundo, senão o menu some no plano de fundo). */
-  --sidebar: oklch(0.19 0.012 265);
-  --sidebar-foreground: oklch(0.87 0.008 265);
-  --sidebar-accent: oklch(0.27 0.02 265);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.62 0.17 265);
+   * claros que o fundo, senão o menu some no plano de fundo).
+   *
+   * Ardósia, não quase-preto: o contraste com o conteúdo branco continua
+   * fazendo o trabalho, e a barra para de pesar na tela. */
+  --sidebar: oklch(0.327 0.035 260);
+  --sidebar-foreground: oklch(0.889 0.017 256);
+  --sidebar-accent: oklch(0.41 0.041 259);
+  --sidebar-accent-foreground: oklch(0.99 0 0);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.75 0.134 294);
   /* Paleta semântica — light. OKLCH consistente com o restante do tema. */
   --info: oklch(0.55 0.18 250);
   --info-bg: oklch(0.96 0.04 250);
@@ -278,7 +281,7 @@
   scrollbar-width: thin;
   /* Repouso quase invisível, mas não zero: some no painel escuro e ainda
    * avisa que tem mais coisa abaixo. Trilho sempre transparente. */
-  scrollbar-color: oklch(1 0 0 / 12%) transparent;
+  scrollbar-color: oklch(1 0 0 / 16%) transparent;
   /* Rolar o menu até o fim não deve puxar a página junto. */
   overscroll-behavior: contain;
 }
@@ -294,7 +297,7 @@
 /* Safari antigo ignora `scrollbar-width`/`scrollbar-color`; nos navegadores
  * que suportam os dois, o padrão vence e estas regras são inertes. */
 .rolagem-menu::-webkit-scrollbar-thumb {
-  background-color: oklch(1 0 0 / 12%);
+  background-color: oklch(1 0 0 / 16%);
   border: 2px solid transparent;
   border-radius: 999px;
   background-clip: content-box;

@@ -40,8 +40,8 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
-  Lock,
-  ListFilter,
+  ChevronRight,
+  FileX,
   Mail,
   Send,
 } from "lucide-react";
@@ -49,23 +49,31 @@ import MovimentacaoDetalheDrawer from "@/components/MovimentacaoDetalheDrawer";
 
 type Grupo = "exigem_acao" | "relevante" | "rotina";
 
+/**
+ * Selos sem emoji: em 10px eles viram ruído, variam de desenho por
+ * plataforma e ainda desalinham a linha de base do texto ao lado.
+ */
 const DESFECHO_SELO: Record<string, { label: string; cls: string }> = {
-  favoravel: { label: "🟢 Favorável", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  desfavoravel: { label: "🔴 Desfavorável", cls: "bg-rose-50 text-rose-700 border-rose-200" },
-  parcial: { label: "🟡 Parcialmente favorável", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  neutro: { label: "⚪ Sem mérito", cls: "bg-muted text-muted-foreground border-border" },
+  favoravel: { label: "Favorável", cls: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" },
+  desfavoravel: { label: "Desfavorável", cls: "bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300" },
+  parcial: { label: "Parcial", cls: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300" },
+  neutro: { label: "Sem mérito", cls: "bg-muted text-muted-foreground" },
 };
 
 const ATO_SELO: Record<string, string> = {
-  decisao: "⚖️ Decisão",
-  sentenca: "⚖️ Sentença",
-  acordao: "⚖️ Acórdão",
-  despacho: "📄 Despacho",
-  intimacao: "📬 Intimação",
-  audiencia: "📅 Audiência",
-  expediente: "📎 Expediente",
-  outro: "📄 Ato",
+  decisao: "Decisão",
+  sentenca: "Sentença",
+  acordao: "Acórdão",
+  despacho: "Despacho",
+  intimacao: "Intimação",
+  audiencia: "Audiência",
+  expediente: "Expediente",
+  outro: "Ato",
 };
+
+/** Abas da barra de filtro. Uma escolha por vez — antes eram chips que
+ *  podiam combinar, e ninguém entendia o resultado de duas ligadas. */
+type Aba = "tudo" | "exigem_acao" | "relevante" | "nao_lidas";
 
 const JANELAS = [
   { valor: 1, label: "Últimas 24h" },
@@ -96,18 +104,20 @@ function haQuantoTempo(d: Date | string) {
 export default function Movimentacoes() {
   const [busca, setBusca] = useState("");
   const [dias, setDias] = useState(7);
-  const [grupos, setGrupos] = useState<Grupo[] | null>(null);
-  const [somenteNaoLidas, setSomenteNaoLidas] = useState(false);
+  const [aba, setAba] = useState<Aba>("tudo");
   const [eventoAberto, setEventoAberto] = useState<number | null>(null);
   const [rotinaAberta, setRotinaAberta] = useState(false);
   const [configAberta, setConfigAberta] = useState(false);
+
+  const grupos: Grupo[] | null =
+    aba === "exigem_acao" ? ["exigem_acao"] : aba === "relevante" ? ["relevante"] : null;
 
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.movimentacoes.central.useQuery({
     busca: busca.trim() || undefined,
     dias,
     grupos: grupos ?? undefined,
-    somenteNaoLidas: somenteNaoLidas || undefined,
+    somenteNaoLidas: aba === "nao_lidas" || undefined,
   });
 
   const marcarRotinaMut = trpc.movimentacoes.marcarRotinaLida.useMutation({
@@ -123,7 +133,7 @@ export default function Movimentacoes() {
   });
 
   const itens = data?.itens ?? [];
-  const contagem = data?.contagem ?? { exigem_acao: 0, relevante: 0, rotina: 0 };
+  const contagem = data?.contagem ?? { exigem_acao: 0, relevante: 0, rotina: 0, naoLidas: 0 };
 
   const porGrupo = useMemo(
     () => ({
@@ -134,65 +144,42 @@ export default function Movimentacoes() {
     [itens],
   );
 
-  const vencendoHoje = porGrupo.exigem_acao.filter(
-    (i) => i.prazo && typeof i.prazo.diasUteisRestantes === "number" && i.prazo.diasUteisRestantes <= 0,
-  ).length;
-
-  const alternarGrupo = (g: Grupo) => {
-    setGrupos((atual) => {
-      if (!atual) return [g];
-      if (atual.length === 1 && atual[0] === g) return null;
-      return [g];
-    });
-  };
+  const janela = dias === 1 ? "nas últimas 24h" : `nos últimos ${dias} dias`;
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* Cabeçalho */}
+      {/* Cabeçalho — números fora da frase. Escondidos numa sentença colorida
+          eles viravam texto; como pastilha, viram atalho pro filtro. */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Movimentações</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {isLoading ? (
-              "Carregando…"
-            ) : (
-              <>
-                {data?.total ?? 0} nos últimos {dias === 1 ? "24h" : `${dias} dias`} ·{" "}
-                <span className="font-bold text-rose-600">{contagem.exigem_acao} exigem ação sua</span>
-                {vencendoHoje > 0 ? (
-                  <span className="font-bold text-rose-600"> · {vencendoHoje} vence hoje ou já venceu</span>
-                ) : (
-                  " · nenhuma vence hoje"
-                )}
-              </>
-            )}
+          <h1 className="text-[27px] font-bold tracking-tight leading-none">Movimentações</h1>
+          <p className="text-[13.5px] text-muted-foreground mt-1.5">
+            O que os tribunais publicaram nos seus processos
           </p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <Pastilha valor={isLoading ? null : data?.total ?? 0} rotulo={janela} />
+            <Pastilha
+              valor={isLoading ? null : contagem.exigem_acao}
+              rotulo={contagem.exigem_acao === 1 ? "exige ação sua" : "exigem ação sua"}
+              tom={contagem.exigem_acao > 0 ? "alerta" : "neutro"}
+              onClick={() => setAba(aba === "exigem_acao" ? "tudo" : "exigem_acao")}
+            />
+            <Pastilha
+              valor={isLoading ? null : contagem.naoLidas}
+              rotulo={contagem.naoLidas === 1 ? "não lida" : "não lidas"}
+              onClick={() => setAba(aba === "nao_lidas" ? "tudo" : "nao_lidas")}
+            />
+          </div>
         </div>
-        <div className="flex items-center gap-2">
         <Button size="sm" variant="outline" onClick={() => setConfigAberta(true)}>
           <Mail className="h-4 w-4 mr-1.5" />
           Resumo diário
         </Button>
-        {contagem.rotina > 0 && (
-          <Button
-            size="sm"
-            disabled={marcarRotinaMut.isPending}
-            onClick={() => marcarRotinaMut.mutate({ dias })}
-          >
-            {marcarRotinaMut.isPending ? (
-              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-            ) : (
-              <Check className="h-4 w-4 mr-1.5" />
-            )}
-            Marcar rotina como lida
-          </Button>
-        )}
-        </div>
       </div>
 
       {/* Filtros */}
-      <div className="rounded-xl border bg-card p-3 flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[240px] max-w-sm">
+      <div className="rounded-xl border bg-card p-2.5 flex flex-wrap items-center gap-2.5">
+        <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={busca}
@@ -215,19 +202,23 @@ export default function Movimentacoes() {
           </SelectContent>
         </Select>
 
-        <div className="flex items-center gap-1.5 ml-auto flex-wrap">
-          <Chip ativo={!grupos && !somenteNaoLidas} onClick={() => { setGrupos(null); setSomenteNaoLidas(false); }}>
+        <div className="flex gap-1 bg-muted p-[3px] rounded-[10px]">
+          <AbaBotao ativa={aba === "tudo"} onClick={() => setAba("tudo")} n={data?.total ?? 0}>
             Tudo
-          </Chip>
-          <Chip ativo={grupos?.[0] === "exigem_acao"} onClick={() => alternarGrupo("exigem_acao")} cor="bg-rose-500">
+          </AbaBotao>
+          <AbaBotao
+            ativa={aba === "exigem_acao"}
+            onClick={() => setAba("exigem_acao")}
+            n={contagem.exigem_acao}
+          >
             Exigem ação
-          </Chip>
-          <Chip ativo={grupos?.[0] === "relevante"} onClick={() => alternarGrupo("relevante")} cor="bg-violet-500">
+          </AbaBotao>
+          <AbaBotao ativa={aba === "relevante"} onClick={() => setAba("relevante")} n={contagem.relevante}>
             Relevantes
-          </Chip>
-          <Chip ativo={somenteNaoLidas} onClick={() => setSomenteNaoLidas((v) => !v)} cor="bg-slate-400">
+          </AbaBotao>
+          <AbaBotao ativa={aba === "nao_lidas"} onClick={() => setAba("nao_lidas")} n={contagem.naoLidas}>
             Não lidas
-          </Chip>
+          </AbaBotao>
         </div>
       </div>
 
@@ -249,15 +240,9 @@ export default function Movimentacoes() {
         </div>
       ) : (
         <div className="space-y-5">
-          {/* Exigem ação */}
           {porGrupo.exigem_acao.length > 0 && (
             <section>
-              <CabecalhoGrupo
-                titulo="Exigem ação sua"
-                total={porGrupo.exigem_acao.length}
-                cls="text-rose-700"
-                clsBadge="bg-rose-100 text-rose-700"
-              />
+              <CabecalhoGrupo titulo="Exigem ação sua" total={porGrupo.exigem_acao.length} tom="alerta" />
               <div className="space-y-2.5">
                 {porGrupo.exigem_acao.map((m) => (
                   <CardAcao
@@ -271,16 +256,10 @@ export default function Movimentacoes() {
             </section>
           )}
 
-          {/* Relevantes */}
           {porGrupo.relevante.length > 0 && (
             <section>
-              <CabecalhoGrupo
-                titulo="Relevantes, sem prazo para você"
-                total={porGrupo.relevante.length}
-                cls="text-violet-700"
-                clsBadge="bg-violet-100 text-violet-700"
-              />
-              <div className="rounded-xl border bg-card divide-y">
+              <CabecalhoGrupo titulo="Relevantes, sem prazo pra você" total={porGrupo.relevante.length} />
+              <div className="rounded-xl border bg-card divide-y overflow-hidden">
                 {porGrupo.relevante.map((m) => (
                   <LinhaRelevante key={m.id} item={m} onAbrir={() => setEventoAberto(m.id)} />
                 ))}
@@ -288,45 +267,48 @@ export default function Movimentacoes() {
             </section>
           )}
 
-          {/* Rotina */}
+          {/* Rotina fica numa barra discreta no rodapé: é o volume que polui a
+              tela sem nunca ser o que a pessoa veio fazer aqui. */}
           {porGrupo.rotina.length > 0 && (
-            <section>
-              <CabecalhoGrupo
-                titulo="Rotina — nada exige ação"
-                total={porGrupo.rotina.length}
-                cls="text-muted-foreground"
-                clsBadge="bg-muted text-muted-foreground"
-              />
-              <div className="rounded-xl border bg-card">
-                <button
-                  type="button"
-                  onClick={() => setRotinaAberta((v) => !v)}
-                  className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-muted/40"
-                >
-                  <div className="h-7 w-7 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                    <ListFilter className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">
-                      {porGrupo.rotina.length} movimentações de expediente
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {resumoRotina(porGrupo.rotina.map((r) => r.titulo))}
-                    </p>
-                  </div>
-                  <span className="ml-auto text-xs font-semibold text-muted-foreground flex items-center gap-1 shrink-0">
+            <section className="space-y-2.5">
+              <div className="rounded-xl border border-dashed bg-card px-4 py-2.5 flex items-center gap-3 flex-wrap">
+                <Check className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <p className="text-[12.5px] text-muted-foreground min-w-0">
+                  <b className="font-bold text-foreground">{porGrupo.rotina.length}</b>{" "}
+                  {porGrupo.rotina.length === 1 ? "movimentação de rotina" : "movimentações de rotina"} (
+                  {resumoRotina(porGrupo.rotina.map((r) => r.titulo))}) fora da lista.
+                </p>
+                <div className="ml-auto flex items-center gap-2 shrink-0">
+                  <Button size="sm" variant="outline" onClick={() => setRotinaAberta((v) => !v)}>
                     {rotinaAberta ? "Recolher" : "Ver todas"}
-                    {rotinaAberta ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                  </span>
-                </button>
-                {rotinaAberta && (
-                  <div className="border-t divide-y">
-                    {porGrupo.rotina.map((m) => (
-                      <LinhaRelevante key={m.id} item={m} onAbrir={() => setEventoAberto(m.id)} />
-                    ))}
-                  </div>
-                )}
+                    {rotinaAberta ? (
+                      <ChevronUp className="h-3.5 w-3.5 ml-1.5" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 ml-1.5" />
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={marcarRotinaMut.isPending}
+                    onClick={() => marcarRotinaMut.mutate({ dias })}
+                  >
+                    {marcarRotinaMut.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Check className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    Marcar como lidas
+                  </Button>
+                </div>
               </div>
+              {rotinaAberta && (
+                <div className="rounded-xl border bg-card divide-y overflow-hidden">
+                  {porGrupo.rotina.map((m) => (
+                    <LinhaRelevante key={m.id} item={m} onAbrir={() => setEventoAberto(m.id)} />
+                  ))}
+                </div>
+              )}
             </section>
           )}
         </div>
@@ -559,27 +541,77 @@ function resumoRotina(titulos: string[]): string {
     .join(" · ");
 }
 
-function Chip({
-  children,
-  ativo,
+function Pastilha({
+  valor,
+  rotulo,
+  tom = "neutro",
   onClick,
-  cor,
+}: {
+  valor: number | null;
+  rotulo: string;
+  tom?: "neutro" | "alerta";
+  onClick?: () => void;
+}) {
+  const cls =
+    `rounded-[10px] border px-3 py-1.5 flex items-baseline gap-1.5 transition-colors ` +
+    (tom === "alerta"
+      ? "bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-900 "
+      : "bg-card border-border ") +
+    (onClick ? "hover:bg-muted/60 cursor-pointer" : "");
+  const corpo = (
+    <>
+      <b
+        className={`text-[15px] font-bold tabular-nums ${
+          tom === "alerta" ? "text-rose-600 dark:text-rose-400" : ""
+        }`}
+      >
+        {valor === null ? "—" : valor}
+      </b>
+      <span
+        className={`text-[11.5px] ${
+          tom === "alerta" ? "text-rose-700 dark:text-rose-300" : "text-muted-foreground"
+        }`}
+      >
+        {rotulo}
+      </span>
+    </>
+  );
+  return onClick ? (
+    <button type="button" onClick={onClick} className={cls}>
+      {corpo}
+    </button>
+  ) : (
+    <div className={cls}>{corpo}</div>
+  );
+}
+
+function AbaBotao({
+  children,
+  ativa,
+  onClick,
+  n,
 }: {
   children: React.ReactNode;
-  ativo?: boolean;
+  ativa: boolean;
   onClick: () => void;
-  cor?: string;
+  n: number;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-xs font-medium inline-flex items-center gap-1.5 transition-colors ${
-        ativo ? "bg-foreground text-background border-foreground" : "bg-background hover:bg-muted"
+      className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
+        ativa ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
       }`}
     >
-      {cor && <span className={`h-1.5 w-1.5 rounded-full ${cor}`} />}
       {children}
+      <span
+        className={`rounded-full px-1.5 text-[10px] font-extrabold tabular-nums ${
+          ativa ? "bg-primary text-primary-foreground" : "bg-border text-muted-foreground"
+        }`}
+      >
+        {n}
+      </span>
     </button>
   );
 }
@@ -587,23 +619,36 @@ function Chip({
 function CabecalhoGrupo({
   titulo,
   total,
-  cls,
-  clsBadge,
+  tom = "neutro",
 }: {
   titulo: string;
   total: number;
-  cls: string;
-  clsBadge: string;
+  tom?: "neutro" | "alerta";
 }) {
   return (
     <div className="flex items-center gap-2 mb-2">
-      <span className={`text-[11px] font-bold uppercase tracking-wide ${cls}`}>{titulo}</span>
-      <span className={`text-[10px] font-extrabold rounded-full px-2 py-0.5 ${clsBadge}`}>{total}</span>
+      <span className="text-[10.5px] font-extrabold uppercase tracking-[0.07em] text-muted-foreground">
+        {titulo}
+      </span>
+      <span
+        className={`text-[10.5px] font-extrabold rounded-full px-2 py-0.5 tabular-nums ${
+          tom === "alerta" ? "bg-rose-600 text-white" : "bg-muted text-muted-foreground"
+        }`}
+      >
+        {total}
+      </span>
       <span className="flex-1 h-px bg-border" />
     </div>
   );
 }
 
+/**
+ * Card do que exige ação.
+ *
+ * Antes ele tinha rosa, laranja, âmbar e verde disputando ao mesmo tempo —
+ * com quatro alertas na tela, nenhum alerta. Agora só o prazo pinta de
+ * vermelho, e só quando está mesmo apertado; o resto é neutro.
+ */
 function CardAcao({
   item,
   onAbrir,
@@ -617,138 +662,160 @@ function CardAcao({
   const audiencia = p?.tipo === "audiencia";
   const restantes = p?.diasUteisRestantes ?? null;
   const urgente = typeof restantes === "number" && restantes <= 2;
+  const selo = item.desfecho ? DESFECHO_SELO[item.desfecho] : undefined;
 
   return (
     <div className="rounded-xl border bg-card overflow-hidden flex">
-      <div className={`w-1 shrink-0 ${audiencia ? "bg-orange-500" : "bg-rose-600"}`} />
-      <div className="flex-1 p-3.5 min-w-0">
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
-          <span className="font-bold text-sm text-foreground">{nomeDoCaso(item)}</span>
-          {item.clientePolo && POLO_LABEL[item.clientePolo] && (
-            <span className="rounded-full bg-muted text-muted-foreground px-1.5 py-px text-[10px] font-bold">
-              nosso cliente: {POLO_LABEL[item.clientePolo]}
+      <div className="w-[3px] shrink-0 bg-rose-500" />
+      <div className="flex-1 min-w-0 p-4 flex flex-col sm:flex-row items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={onAbrir}
+              className="text-[13.5px] font-bold text-left hover:underline"
+            >
+              {nomeDoCaso(item)}
+            </button>
+            <span className="text-[10.5px] font-mono text-muted-foreground">{item.cnj}</span>
+            {item.tribunal && (
+              <span className="text-[9.5px] font-bold uppercase tracking-[0.04em] text-muted-foreground border rounded px-1.5 py-px">
+                {item.tribunal}
+              </span>
+            )}
+            {item.clientePolo && POLO_LABEL[item.clientePolo] && (
+              <span className="text-[10px] font-bold text-muted-foreground">
+                nosso cliente: {POLO_LABEL[item.clientePolo]}
+              </span>
+            )}
+            <span className="ml-auto text-[11px] font-semibold text-muted-foreground shrink-0">
+              {dataCurta(item.dataEvento)} · {haQuantoTempo(item.dataEvento)}
             </span>
+          </div>
+
+          <button type="button" onClick={onAbrir} className="block w-full text-left mt-1.5">
+            <p className="text-[14.5px] font-semibold leading-snug">{item.titulo}</p>
+          </button>
+
+          {item.pontos.length > 0 && (
+            <p className="text-[12.5px] text-muted-foreground mt-1 leading-snug line-clamp-2">
+              {item.pontos.join(" ")}
+            </p>
           )}
-          <span className="text-muted-foreground/50">•</span>
-          <span className="font-mono font-medium">{item.cnj}</span>
-          {item.tribunal && (
-            <>
-              <span className="text-muted-foreground/50">•</span>
-              <span className="uppercase">{item.tribunal}</span>
-            </>
+
+          {item.citacao && (
+            <p className="mt-2 border-l-2 border-border pl-2.5 text-[11.5px] text-muted-foreground leading-snug line-clamp-2 italic">
+              “{item.citacao}”
+            </p>
           )}
-          <span className="ml-auto font-semibold shrink-0">
-            {dataCurta(item.dataEvento)} · {haQuantoTempo(item.dataEvento)}
-          </span>
+
+          <div className="flex items-center gap-x-3 gap-y-2 mt-2.5 flex-wrap">
+            {p?.data && (
+              <span
+                className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-bold inline-flex items-center gap-1.5 ${
+                  urgente
+                    ? "bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300"
+                    : "bg-muted border-border text-foreground/80"
+                }`}
+              >
+                <CalendarClock className="h-3.5 w-3.5" />
+                {audiencia ? "Audiência" : "Vence"} {dataCurta(p.data)}
+                {typeof restantes === "number" &&
+                  ` · ${
+                    restantes < 0
+                      ? `venceu há ${Math.abs(restantes)} ${Math.abs(restantes) === 1 ? "dia" : "dias"}`
+                      : `${restantes} ${restantes === 1 ? "dia útil" : "dias úteis"}`
+                  }`}
+              </span>
+            )}
+            {selo && (
+              <span className={`rounded-md px-2 py-0.5 text-[10.5px] font-bold ${selo.cls}`}>
+                {selo.label}
+              </span>
+            )}
+            {/* Nota, não alerta: é contexto sobre o que a IA conseguiu ler. */}
+            {item.teorStatus !== "ok" && (
+              <span className="text-[11.5px] text-muted-foreground inline-flex items-center gap-1.5">
+                <FileX className="h-3.5 w-3.5" /> íntegra não disponível no tribunal
+              </span>
+            )}
+          </div>
         </div>
 
-        <button type="button" onClick={onAbrir} className="text-left w-full">
-          <h3 className="text-[15px] font-bold mt-1 leading-snug hover:underline">{item.titulo}</h3>
-        </button>
-
-        {item.pontos.length > 0 && (
-          <p className="text-[13px] text-muted-foreground mt-1 leading-snug line-clamp-2">
-            {item.pontos.join(" ")}
-          </p>
-        )}
-
-        {item.citacao && (
-          <p className="mt-1.5 border-l-[3px] border-amber-300 bg-amber-50 rounded-r-md px-2.5 py-1.5 text-[11.5px] text-amber-900 leading-snug line-clamp-2">
-            “{item.citacao}”
-          </p>
-        )}
-
-        <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-          {item.desfecho && DESFECHO_SELO[item.desfecho] && (
-            <span
-              className={`rounded-full border px-2 py-0.5 text-[10.5px] font-bold ${DESFECHO_SELO[item.desfecho].cls}`}
-            >
-              {DESFECHO_SELO[item.desfecho].label}
-            </span>
-          )}
-          {p?.data && (
-            <span
-              className={`rounded-full border px-2.5 py-1 text-[11px] font-bold inline-flex items-center gap-1.5 ${
-                urgente
-                  ? "bg-rose-600 border-rose-600 text-white"
-                  : audiencia
-                    ? "bg-orange-50 border-orange-200 text-orange-700"
-                    : "bg-rose-50 border-rose-200 text-rose-700"
-              }`}
-            >
-              {audiencia ? "📌" : "⏰"} {audiencia ? "Audiência em" : "Vence"} {dataCurta(p.data)}
-              {typeof restantes === "number" &&
-                ` · ${restantes < 0 ? `${Math.abs(restantes)} dias vencido` : `${restantes} dias úteis`}`}
-            </span>
-          )}
-          {item.teorStatus !== "ok" && (
-            <span className="rounded-full border border-amber-200 bg-amber-50 text-amber-800 px-2 py-0.5 text-[10.5px] font-bold inline-flex items-center gap-1">
-              <Lock className="h-3 w-3" /> Sem o documento
-            </span>
-          )}
-
-          <div className="ml-auto flex items-center gap-1.5 shrink-0">
-            <Button size="sm" variant="outline" className="h-7 text-[11.5px]" onClick={onAbrir}>
-              Ver íntegra
-            </Button>
-            {!item.lido && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-[11.5px] border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                onClick={onMarcarLida}
-              >
-                <Check className="h-3 w-3 mr-1" />
-                Já providenciei
-              </Button>
-            )}
+        <div className="shrink-0 flex flex-row sm:flex-col gap-2 w-full sm:w-[152px]">
+          <Button size="sm" className="flex-1 sm:w-full" onClick={onAbrir}>
+            <CalendarClock className="h-3.5 w-3.5 mr-1.5" />
+            {audiencia ? "Agendar" : "Criar prazo"}
+          </Button>
+          <Button size="sm" variant="outline" className="flex-1 sm:w-full" onClick={onAbrir}>
+            Ver íntegra
+          </Button>
+          {!item.lido && (
             <Button
               size="sm"
-              className={`h-7 text-[11.5px] ${audiencia ? "bg-orange-600 hover:bg-orange-700" : "bg-rose-600 hover:bg-rose-700"}`}
-              onClick={onAbrir}
+              variant="ghost"
+              className="flex-1 sm:w-full text-muted-foreground hover:text-foreground"
+              onClick={onMarcarLida}
             >
-              <CalendarClock className="h-3 w-3 mr-1" />
-              {audiencia ? "Agendar" : "Criar prazo"}
+              <Check className="h-3.5 w-3.5 mr-1.5" />
+              Já providenciei
             </Button>
-          </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
+/**
+ * Uma linha por movimentação relevante.
+ *
+ * Altura fixa é a decisão que muda a tela: o rótulo cru do tribunal às vezes
+ * é uma parede de números de documento, e com `line-clamp-2` cada linha
+ * ganhava uma altura diferente — a lista perdia o ritmo e virava sopa.
+ */
 function LinhaRelevante({ item, onAbrir }: { item: Item; onAbrir: () => void }) {
+  const selo = item.desfecho ? DESFECHO_SELO[item.desfecho] : undefined;
   return (
     <button
       type="button"
       onClick={onAbrir}
-      className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-muted/40"
+      className="w-full h-[54px] flex items-center gap-3 pl-3 pr-3.5 text-left hover:bg-muted/40 transition-colors"
     >
-      <div className="w-56 shrink-0 min-w-0">
-        <p className="text-[12.5px] font-bold truncate" title={nomeDoCaso(item)}>
+      <span
+        className={`h-1.5 w-1.5 rounded-full shrink-0 ${item.lido ? "bg-transparent" : "bg-primary"}`}
+        title={item.lido ? undefined : "Não lida"}
+      />
+      <span className="w-[220px] shrink-0 min-w-0">
+        <span className="block text-[12.5px] font-bold truncate" title={nomeDoCaso(item)}>
           {nomeDoCaso(item)}
-        </p>
-        <p className="text-[10.5px] text-muted-foreground font-mono truncate">{item.cnj}</p>
-      </div>
-      <p className="flex-1 text-[12.5px] text-foreground/90 leading-snug line-clamp-2 min-w-0">{item.titulo}</p>
-      {item.teorStatus === "indisponivel" ? (
-        <span className="shrink-0 rounded-md border border-amber-200 bg-amber-50 text-amber-800 px-2 py-0.5 text-[10.5px] font-bold inline-flex items-center gap-1">
-          <AlertTriangle className="h-3 w-3" /> Sem teor
         </span>
-      ) : item.desfecho && DESFECHO_SELO[item.desfecho] ? (
-        <span
-          className={`shrink-0 rounded-full border px-2 py-0.5 text-[10.5px] font-bold ${DESFECHO_SELO[item.desfecho].cls}`}
-        >
-          {DESFECHO_SELO[item.desfecho].label}
-        </span>
-      ) : item.ato ? (
-        <span className="shrink-0 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200 px-2 py-0.5 text-[10.5px] font-bold">
-          {ATO_SELO[item.ato] ?? ATO_SELO.outro}
-        </span>
-      ) : null}
-      <span className="shrink-0 w-10 text-right text-[11px] font-semibold text-muted-foreground">
-        {dataCurta(item.dataEvento)}
+        <span className="block text-[10px] font-mono text-muted-foreground truncate">{item.cnj}</span>
       </span>
+      <span className="flex-1 min-w-0 flex items-center gap-2">
+        {selo ? (
+          <span className={`shrink-0 rounded-md px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.04em] ${selo.cls}`}>
+            {selo.label}
+          </span>
+        ) : item.ato ? (
+          <span className="shrink-0 rounded-md bg-muted text-muted-foreground px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.04em]">
+            {ATO_SELO[item.ato] ?? ATO_SELO.outro}
+          </span>
+        ) : null}
+        <span className="text-[12.5px] text-foreground/80 truncate" title={item.titulo}>
+          {item.titulo}
+        </span>
+        {item.teorStatus === "indisponivel" && (
+          <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        )}
+      </span>
+      <span className="shrink-0 w-[74px] text-right">
+        <span className="block text-[11.5px] font-semibold text-foreground/70">
+          {dataCurta(item.dataEvento)}
+        </span>
+        <span className="block text-[10px] text-muted-foreground">{haQuantoTempo(item.dataEvento)}</span>
+      </span>
+      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
     </button>
   );
 }
