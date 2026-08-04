@@ -16,6 +16,8 @@ export type ParteResumo = {
   nome: string;
   polo: PoloParte;
   documento: string | null;
+  /** "AUTOR", "REU", "ADVOGADO"… vem entre parênteses no nome cru do PJe. */
+  papel: string | null;
 };
 
 export type PartesDoProcesso = {
@@ -49,6 +51,83 @@ function normalizar(s: string): string {
     .trim();
 }
 
+/**
+ * O PJe não entrega o nome limpo: vem tudo numa linha só, como
+ * `CARLOS JEFFERSON RIBEIRO DOS SANTOS - CPF: 066.968.283-70 (AUTOR)`.
+ * Sem separar isso, encurtar o nome produzia coisas como "CARLOS (AUTOR)".
+ */
+const RE_PAPEL = /\(\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s/.-]{1,30})\s*\)\s*$/;
+const RE_REGISTRADO = /\s+registrad[oa]\(a\)\s+civilmente\s+como\s+.*$/i;
+const RE_DOC_TAIL = /\s*[-–—]?\s*\b(?:CPF|CNPJ|OAB|RG|CPF\/CNPJ)\b\s*[:.]?.*$/i;
+const RE_DOC_VALOR = /\b(?:CPF|CNPJ)\s*[:.]?\s*([\d][\d.\-/]{9,20})/i;
+
+/** Papéis que aparecem na lista de partes mas não SÃO parte do processo. */
+const PAPEIS_AUXILIARES = new Set([
+  "ADVOGADO",
+  "ADVOGADA",
+  "PROCURADOR",
+  "PROCURADORA",
+  "DEFENSOR",
+  "DEFENSORA",
+  "DEFENSOR PUBLICO",
+  "PERITO",
+  "PERITA",
+  "TESTEMUNHA",
+  "REPRESENTANTE",
+  "CUSTOS LEGIS",
+  "FISCAL DA LEI",
+]);
+
+const CONECTIVOS = new Set(["de", "da", "do", "das", "dos", "e", "di", "del", "van", "von", "y"]);
+
+function semAcento(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+export function extrairPapel(bruto: string): string | null {
+  // Casa no fim da linha crua: o "(a)" de "registrado(a)" fica no meio e é
+  // curto demais pro padrão, então não confunde.
+  const m = bruto.trim().match(RE_PAPEL);
+  if (!m) return null;
+  return semAcento(m[1]).toUpperCase().replace(/\s+/g, " ").trim();
+}
+
+/** Só o nome: sem o papel entre parênteses, sem CPF/CNPJ/OAB pendurados. */
+export function limparNomeParte(bruto: string): string {
+  return bruto
+    .trim()
+    .replace(RE_REGISTRADO, "")
+    .replace(RE_PAPEL, "")
+    .replace(RE_DOC_TAIL, "")
+    .replace(/\s+/g, " ")
+    .replace(/[\s,;:–—-]+$/, "")
+    .trim();
+}
+
+function documentoNoNome(bruto: string): string | null {
+  const m = bruto.match(RE_DOC_VALOR);
+  return m ? m[1] : null;
+}
+
+/**
+ * CAIXA ALTA num cabeçalho grita. Quando o nome vem todo em maiúsculas — que
+ * é como o tribunal manda — vira capitulação; se já tem minúscula (apelido
+ * digitado pelo usuário, por exemplo), fica exatamente como está.
+ */
+export function titulizar(nome: string): string {
+  if (/[a-zà-ÿ]/.test(nome)) return nome;
+  return nome
+    .split(/\s+/)
+    .map((palavra, i) => {
+      const min = palavra.toLowerCase();
+      if (i > 0 && CONECTIVOS.has(semAcento(min))) return min;
+      // "S.A.", "S/A", "ME", "EPP" — sigla não vira "S.a."
+      if (/[./]/.test(palavra) || palavra.length <= 2) return palavra;
+      return palavra.charAt(0) + min.slice(1);
+    })
+    .join(" ");
+}
+
 /** Tolerante a JSON quebrado e a formatos antigos — nunca lança. */
 export function parsearPartes(json: string | null | undefined): ParteResumo[] {
   if (!json) return [];
@@ -68,29 +147,36 @@ export function parsearPartes(json: string | null | undefined): ParteResumo[] {
   const out: ParteResumo[] = [];
   for (const p of lista) {
     const o = p as Record<string, unknown>;
-    const nome = typeof o?.nome === "string" ? o.nome.trim() : "";
-    if (!nome) continue;
+    const bruto = typeof o?.nome === "string" ? o.nome.trim() : "";
+    if (!bruto) continue;
+    // Se a limpeza levar tudo (linha só com documento, por exemplo), fica o
+    // original: nome estranho é melhor que parte sumida.
+    const nome = limparNomeParte(bruto) || bruto;
     const polo: PoloParte =
       o?.polo === "passivo" ? "passivo" : o?.polo === "terceiro" ? "terceiro" : "ativo";
     out.push({
       nome: nome.slice(0, 160),
       polo,
-      documento: typeof o?.documento === "string" ? o.documento : null,
+      documento:
+        (typeof o?.documento === "string" ? o.documento : null) ?? documentoNoNome(bruto),
+      papel: extrairPapel(bruto),
     });
   }
   return out;
 }
 
 /**
- * Encurta nome de parte para caber num card sem virar sopa de letras.
- * Mantém primeiro e último nome — é como o processo é citado na prática.
+ * Encurta nome de parte para caber num card sem virar sopa de letras:
+ * "Carlos Jefferson Ribeiro dos Santos" → "Carlos Jefferson".
+ *
+ * Conta só palavras significativas — "Maria da Silva" tem duas, não três,
+ * senão o corte devolveria "Maria da".
  */
-export function nomeCurto(nome: string, maxPalavras = 3): string {
-  const partes = nome.trim().split(/\s+/);
-  // 3 palavras cobre razão social curta ("Banco Exemplo S/A") sem cortar;
-  // acima disso é nome de pessoa, e "Maria … Nascimento" já identifica.
-  if (partes.length <= maxPalavras) return nome.trim();
-  return `${partes[0]} ${partes[partes.length - 1]}`;
+export function nomeCurto(nome: string, maxPalavras = 2): string {
+  const palavras = nome.trim().split(/\s+/).filter(Boolean);
+  const significativas = palavras.filter((p) => !CONECTIVOS.has(semAcento(p.toLowerCase())));
+  if (significativas.length <= maxPalavras) return nome.trim();
+  return significativas.slice(0, maxPalavras).join(" ");
 }
 
 /**
@@ -114,14 +200,17 @@ export function resumirPartes(
   const autores = partes.filter((p) => p.polo === "ativo").map((p) => p.nome);
   const reus = partes.filter((p) => p.polo === "passivo").map((p) => p.nome);
 
-  const rotulo =
-    autores.length && reus.length
-      ? `${nomeCurto(autores[0])} × ${nomeCurto(reus[0])}`
-      : autores.length
-        ? nomeCurto(autores[0])
-        : reus.length
-          ? nomeCurto(reus[0])
-          : null;
+  // Advogado vem misturado no mesmo polo da parte que representa; se ele
+  // vier primeiro, o rótulo mostraria o escritório no lugar do cliente.
+  const primeiroDoPolo = (polo: PoloParte): string | null => {
+    const doPolo = partes.filter((p) => p.polo === polo);
+    const parte = doPolo.find((p) => !p.papel || !PAPEIS_AUXILIARES.has(p.papel)) ?? doPolo[0];
+    return parte ? titulizar(nomeCurto(parte.nome)) : null;
+  };
+
+  const autor = primeiroDoPolo("ativo");
+  const reu = primeiroDoPolo("passivo");
+  const rotulo = autor && reu ? `${autor} × ${reu}` : (autor ?? reu ?? null);
 
   // 1) documento da busca bate com o de alguma parte
   const chave = digitos(opts?.searchKey);
@@ -144,7 +233,7 @@ export function resumirPartes(
     autores,
     reus,
     rotulo,
-    cliente: cliente?.nome ?? opts?.apelido?.trim() ?? null,
+    cliente: cliente ? titulizar(cliente.nome) : (opts?.apelido?.trim() ?? null),
     clientePolo: cliente?.polo ?? null,
   };
 }

@@ -212,6 +212,54 @@
 }
 
 /* ============================================================
+   Toasts (sonner) — cartão compacto.
+
+   O sonner injeta o CSS dele em runtime, depois desta folha; por isso as
+   regras abaixo precisam do ancestral `[data-sonner-toaster]` pra ganhar
+   em especificidade. Sem ele, o padrão (16px de padding, 13px de fonte)
+   continua valendo.
+   ============================================================ */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  padding: 11px 13px;
+  gap: 9px;
+  border-radius: 12px;
+  align-items: flex-start;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-content] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-title] {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-description] {
+  font-size: 11.5px;
+  line-height: 1.35;
+  /* Mensagem de cliente pode ser um textão; sem o corte o cartão vira
+   * parede e ainda empurra os outros pra fora da tela. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button] {
+  height: 26px;
+  padding-left: 10px;
+  padding-right: 10px;
+  font-size: 11.5px;
+  border-radius: 7px;
+  align-self: center;
+}
+
+/* ============================================================
    Menu lateral — barra de rolagem.
 
    O menu é escuro mesmo no tema claro, e o `color-scheme` do documento
