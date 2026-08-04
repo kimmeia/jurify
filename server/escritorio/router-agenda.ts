@@ -409,10 +409,10 @@ export const agendaRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "agenda", "ver");
-      if (!perm.allowed) return { pessoas: [], setores: [] };
+      if (!perm.allowed) return { pessoas: [], setores: [], euId: null };
 
       const db = await getDb();
-      if (!db) return { pessoas: [], setores: [] };
+      if (!db) return { pessoas: [], setores: [], euId: null };
 
       const escritorioId = perm.escritorioId;
       const fusoHorario = await obterFusoHorarioEscritorio(db, escritorioId);
@@ -437,7 +437,7 @@ export const agendaRouter = router({
         : colabs.filter((c: { id: number }) => c.id === perm.colaboradorId);
 
       const ativos = visiveis.filter((c: { ativo: boolean }) => c.ativo !== false);
-      if (ativos.length === 0) return { pessoas: [], setores: [] };
+      if (ativos.length === 0) return { pessoas: [], setores: [], euId: perm.colaboradorId ?? null };
 
       const usersData = await db
         .select({ id: users.id, name: users.name })
@@ -516,7 +516,9 @@ export const agendaRouter = router({
           b.eventos - a.eventos || a.nome.localeCompare(b.nome),
         );
 
-      return { pessoas, setores: setoresRows };
+      // Quem sou eu na lista — habilita o atalho "Só os meus" sem o client
+      // precisar cruzar userId com colaboradorId.
+      return { pessoas, setores: setoresRows, euId: perm.colaboradorId ?? null };
     }),
 
   /**

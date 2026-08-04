@@ -24,11 +24,11 @@ import {
   Trash2, ListTodo, CalendarClock, Sun, AlertTriangle, Search,
   Briefcase, Scale, Users, PhoneCall, MoreHorizontal, Check, MapPin, Bell,
   Pencil, FileText, Paperclip, ExternalLink, XCircle, RotateCcw, MessageSquareText,
-  Ban, CalendarOff, Download, ChevronDown,
+  Ban, CalendarOff, Download, ChevronDown, User,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
+import { gradientAvatar, gerarIniciais } from "./dashboards/common";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -113,12 +113,6 @@ function corDoEvento(ev: any): string {
   return COR_TIPO[ev.tipo] || COR_TIPO.outro;
 }
 
-function saudacaoContextual(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Bom dia";
-  if (h < 18) return "Boa tarde";
-  return "Boa noite";
-}
 
 function formatDate(iso: string) {
   if (!iso) return "";
@@ -666,291 +660,186 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
     );
   };
 
-  const mesLabel = mes.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const mesLabelBruto = mes.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  // `capitalize` do Tailwind subiria também o "de" ("Julho De 2026").
+  const mesLabel = mesLabelBruto.charAt(0).toUpperCase() + mesLabelBruto.slice(1);
   const totalNoMes = grade.filter((d) => !d.outroMes).reduce((acc, d) => acc + d.eventos.length, 0);
 
-  // Eventos do dia selecionado (pro painel lateral)
-  const eventosDoDia = useMemo(() => {
-    if (!diaSelecionado) return [];
-    return grade.find(
-      (d) =>
-        d.date.getDate() === diaSelecionado.getDate() &&
-        d.date.getMonth() === diaSelecionado.getMonth() &&
-        d.date.getFullYear() === diaSelecionado.getFullYear(),
-    )?.eventos ?? [];
-  }, [grade, diaSelecionado]);
-
-  // Heatmap tier: 0 = sem evento, 1 = 1-2 (amber), 2 = 3-4 (orange), 3 = 5+ (rose)
-  function tier(count: number): 0 | 1 | 2 | 3 {
-    if (count === 0) return 0;
-    if (count <= 2) return 1;
-    if (count <= 4) return 2;
-    return 3;
-  }
-
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h2 className="text-lg font-bold tracking-tight capitalize">{mesLabel}</h2>
-          <p className="text-xs text-slate-500">{totalNoMes} evento(s) no mês</p>
+    <div className="bg-white border border-slate-200 rounded-[14px] overflow-hidden">
+      {/* Cabeçalho: mês + navegação à esquerda, ações à direita */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 flex-wrap">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="w-[30px] h-[30px] border border-slate-200 rounded-lg flex items-center justify-center hover:bg-slate-50"
+            onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() - 1, 1))}
+          >
+            <ChevronLeft className="h-3.5 w-3.5 text-slate-600" />
+          </button>
+          <h2 className="text-base font-bold tracking-tight">{mesLabel}</h2>
+          <button
+            type="button"
+            className="w-[30px] h-[30px] border border-slate-200 rounded-lg flex items-center justify-center hover:bg-slate-50"
+            onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() + 1, 1))}
+          >
+            <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
+          </button>
+          <button
+            type="button"
+            className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={() => {
+              const hj = new Date();
+              setMes(new Date(hj.getFullYear(), hj.getMonth(), 1));
+              setDiaSelecionado(hj);
+            }}
+          >
+            Hoje
+          </button>
+          <span className="text-xs text-slate-400 font-medium">{totalNoMes} no mês</span>
         </div>
-        <div className="flex gap-1.5 items-center flex-wrap">
+
+        <div className="flex items-center gap-2">
+          {diaSelecionado && (
+            <>
+              {(bloqueiosPorDia.get(dateKeyStr(diaSelecionado)) || []).map((b) => (
+                <span
+                  key={b.id}
+                  className="inline-flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold"
+                >
+                  <CalendarOff className="h-3 w-3 shrink-0" />
+                  {b.horaInicio && b.horaFim ? `${b.horaInicio}–${b.horaFim}` : "Dia inteiro"}
+                  {b.motivo ? ` · ${b.motivo}` : ""}
+                  <button
+                    type="button"
+                    className="text-red-500 hover:text-red-800"
+                    onClick={() => removerBloqueioMut.mutate({ id: b.id })}
+                    title="Remover bloqueio"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={() => setBloquearDialog(diaSelecionado)}
+                className="border border-dashed border-red-300 text-red-600 hover:bg-red-50 rounded-lg px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
+              >
+                <Ban className="h-3 w-3" />
+                Bloquear {diaSelecionado.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+              </button>
+            </>
+          )}
           <Button
             variant="outline"
             size="sm"
-            className="h-8 text-xs"
+            className="h-[30px] text-xs"
             onClick={() => importarMut.mutate({ ano: mes.getFullYear() })}
             disabled={importarMut.isPending}
             title={`Cria os 12 feriados federais brasileiros de ${mes.getFullYear()} como bloqueios anuais recorrentes. Idempotente — não duplica se já existirem.`}
           >
-            {importarMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
+            {importarMut.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+            )}
             Feriados {mes.getFullYear()}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() - 1, 1))}
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs font-medium"
-            onClick={() => {
-              const hoje = new Date();
-              setMes(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
-              setDiaSelecionado(hoje);
-            }}
-          >
-            Hoje
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() + 1, 1))}
-          >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
-        {/* Grid de dias */}
-        <div>
-          <div className="grid grid-cols-7 gap-1.5 mb-1.5">
-            {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => (
-              <div
-                key={d}
-                className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 text-center py-1"
-              >
-                {d}
-              </div>
-            ))}
+      {/* Dias da semana */}
+      <div className="grid grid-cols-7 border-b border-slate-100">
+        {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => (
+          <div
+            key={d}
+            className="py-2 text-center text-[10.5px] font-bold uppercase tracking-[0.06em] text-slate-400"
+          >
+            {d}
           </div>
-          <div className="grid grid-cols-7 gap-1.5">
-            {grade.map((dia, i) => {
-              const dKey = dateKeyStr(dia.date);
-              const bloqDoDia = bloqueiosPorDia.get(dKey) || [];
-              const diaInteiroBloq = bloqDoDia.some((b) => !b.horaInicio);
-              const t = tier(dia.eventos.length);
-              const heatmapCls =
-                dia.outroMes
-                  ? "opacity-40 bg-slate-50 border-slate-200"
-                  : diaInteiroBloq
-                    ? "bg-red-100 border-red-300"
-                    : t === 0
-                      ? "bg-white border-slate-200"
-                      : t === 1
-                        ? "bg-amber-100 border-amber-200"
-                        : t === 2
-                          ? "bg-orange-200 border-orange-300"
-                          : "bg-rose-200 border-rose-300";
+        ))}
+      </div>
 
-              const numText =
-                diaInteiroBloq
-                  ? "text-red-700"
-                  : t === 0
-                    ? "text-slate-400"
-                    : t === 1
-                      ? "text-amber-700"
-                      : t === 2
-                        ? "text-orange-700"
-                        : "text-rose-700";
+      {/* Grade do mês — os eventos vivem DENTRO da célula. É o que evita ter
+          que clicar num dia pra descobrir o que tem nele. */}
+      <div className="grid grid-cols-7" style={{ gridAutoRows: "minmax(92px, 1fr)" }}>
+        {grade.map((dia, i) => {
+          const dKey = dateKeyStr(dia.date);
+          const bloqDoDia = bloqueiosPorDia.get(dKey) || [];
+          const diaInteiroBloq = bloqDoDia.some((b) => !b.horaInicio);
+          const motivoBloq = bloqDoDia.find((b) => !b.horaInicio)?.motivo;
+          const doDia = [...dia.eventos].sort(
+            (a: any, b: any) => new Date(a.dataInicio).getTime() - new Date(b.dataInicio).getTime(),
+          );
+          const visiveis = doDia.slice(0, 3);
+          const resto = doDia.length - visiveis.length;
 
-              const motivoBloq = bloqDoDia.find((b) => !b.horaInicio)?.motivo || (diaInteiroBloq ? "Dia bloqueado" : undefined);
-
-              return (
-                <button
-                  key={i}
-                  onClick={() => setDiaSelecionado(dia.date)}
-                  className={`aspect-square rounded-lg p-1.5 border text-left transition-all hover:scale-[1.02] ${heatmapCls} ${
-                    isToday(dia.date)
-                      ? "ring-2 ring-orange-500"
-                      : isSelected(dia.date)
-                        ? "ring-2 ring-slate-900"
-                        : ""
-                  }`}
-                  title={motivoBloq}
-                >
-                  <p
-                    className={`text-xs font-semibold ${dia.outroMes ? "text-slate-400" : diaInteiroBloq ? "text-red-700 font-bold" : isToday(dia.date) ? "text-orange-600 font-bold" : ""}`}
+          return (
+            <div
+              key={i}
+              onClick={() => setDiaSelecionado(dia.date)}
+              className={`border-r border-b border-slate-100 px-1.5 py-1.5 overflow-hidden cursor-pointer transition-colors [&:nth-child(7n)]:border-r-0 ${
+                diaInteiroBloq ? "bg-red-50/60" : "hover:bg-slate-50/60"
+              } ${isSelected(dia.date) ? "bg-violet-50/50" : ""}`}
+              title={motivoBloq ?? undefined}
+            >
+              <div className="flex items-center gap-1">
+                {isToday(dia.date) ? (
+                  <span className="w-5 h-5 rounded-full bg-violet-600 text-white text-[11px] font-bold flex items-center justify-center">
+                    {dia.date.getDate()}
+                  </span>
+                ) : (
+                  <span
+                    className={`text-[11.5px] font-semibold ${dia.outroMes ? "text-slate-300" : "text-slate-700"}`}
                   >
                     {dia.date.getDate()}
-                  </p>
-                  {!dia.outroMes && diaInteiroBloq ? (
-                    <p className="text-[9px] font-medium mt-1 text-red-700 truncate flex items-center gap-0.5">
-                      <CalendarOff className="h-2.5 w-2.5 shrink-0" />
-                      <span className="truncate">{motivoBloq?.slice(0, 8) || "bloq."}</span>
-                    </p>
-                  ) : !dia.outroMes && dia.eventos.length > 0 ? (
-                    <p className={`text-[9px] font-medium mt-1 ${numText}`}>
-                      {isToday(dia.date) ? "HOJE · " : ""}
-                      {dia.eventos.length} ev
-                    </p>
-                  ) : !dia.outroMes && bloqDoDia.length > 0 ? (
-                    <p className="text-[9px] font-medium mt-1 text-red-600">
-                      {bloqDoDia.length} bloq.
-                    </p>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Legenda heatmap */}
-          <div className="mt-4 flex items-center gap-2 text-[10px] text-slate-500 flex-wrap">
-            <span>Eventos:</span>
-            <span className="px-2 py-0.5 rounded border border-slate-200 bg-white">0</span>
-            <span className="px-2 py-0.5 rounded border border-amber-200 bg-amber-100">1–2</span>
-            <span className="px-2 py-0.5 rounded border border-orange-300 bg-orange-200">3–4</span>
-            <span className="px-2 py-0.5 rounded border border-rose-300 bg-rose-200">5+</span>
-          </div>
-        </div>
-
-        {/* Painel lateral: eventos do dia selecionado */}
-        <aside className="bg-slate-50/50 border border-slate-200 rounded-xl p-3">
-          {diaSelecionado ? (
-            <>
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">
-                    {diaSelecionado.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })}
-                  </p>
-                  <p className="text-base font-bold capitalize">
-                    {diaSelecionado.toLocaleDateString("pt-BR", { weekday: "long" })}
-                  </p>
-                </div>
-                <span
-                  className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                    eventosDoDia.length === 0
-                      ? "bg-slate-100 text-slate-500"
-                      : "bg-orange-100 text-orange-700"
-                  }`}
-                >
-                  {eventosDoDia.length} evento{eventosDoDia.length !== 1 ? "s" : ""}
-                </span>
+                  </span>
+                )}
+                {diaInteiroBloq && (
+                  <span className="text-[9px] font-bold text-red-600 truncate flex items-center gap-0.5">
+                    <CalendarOff className="h-2.5 w-2.5 shrink-0" />
+                    {motivoBloq?.slice(0, 10) || "bloqueado"}
+                  </span>
+                )}
               </div>
 
-              {(() => {
-                const dKey = dateKeyStr(diaSelecionado);
-                const bloqDoDia = bloqueiosPorDia.get(dKey) || [];
-                if (bloqDoDia.length === 0) return null;
+              {visiveis.map((ev: any) => {
+                const cor =
+                  coresPorResponsavel && ev.responsavelId
+                    ? corDaPessoa(ev.responsavelId, coresPorResponsavel)
+                    : corDoEvento(ev);
+                const concluido = ev.status === "concluido" || ev.status === "concluida";
+                const inicio = new Date(ev.dataInicio);
+                const hora = ev.diaInteiro
+                  ? ""
+                  : inicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
                 return (
-                  <div className="space-y-1.5 mb-3">
-                    {bloqDoDia.map((b) => (
-                      <div key={b.id} className="flex items-center gap-1.5 text-[11px] bg-red-50 border border-red-200 rounded-md px-2 py-1.5">
-                        <CalendarOff className="h-3 w-3 text-red-600 shrink-0" />
-                        <span className="font-medium text-red-700">
-                          {b.horaInicio && b.horaFim ? `${b.horaInicio}–${b.horaFim}` : "Dia inteiro"}
-                        </span>
-                        {b.motivo && <span className="text-red-600/80 truncate">· {b.motivo}</span>}
-                        {b.recorrenteAnual && <span className="ml-1 text-[9px] px-1 py-0.5 rounded border border-red-300 text-red-700">anual</span>}
-                        <button
-                          className="ml-auto text-red-600 hover:text-red-800 shrink-0"
-                          onClick={() => removerBloqueioMut.mutate({ id: b.id })}
-                          title="Remover bloqueio"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                  <button
+                    key={`${ev.fonte}-${ev.id}`}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCardClick?.(ev);
+                    }}
+                    style={{ background: cor }}
+                    className={`w-full mt-[3px] rounded-[5px] px-1.5 py-[3px] text-white text-[10px] font-semibold flex items-center gap-1 overflow-hidden ${
+                      concluido ? "opacity-60 line-through" : ""
+                    }`}
+                  >
+                    {hora && <span className="text-[8.5px] font-extrabold opacity-75 shrink-0">{hora}</span>}
+                    <span className="truncate">{ev.titulo}</span>
+                  </button>
                 );
-              })()}
+              })}
 
-              {eventosDoDia.length === 0 ? (
-                <p className="text-xs text-slate-400 italic text-center py-4">
-                  Dia sem compromissos.
-                </p>
-              ) : (
-                <div className="space-y-1.5">
-                  {eventosDoDia
-                    .sort((a: any, b: any) => new Date(a.dataInicio).getTime() - new Date(b.dataInicio).getTime())
-                    .map((ev: any) => {
-                      const cor =
-                        coresPorResponsavel && ev.responsavelId
-                          ? corDaPessoa(ev.responsavelId, coresPorResponsavel)
-                          : corDoEvento(ev);
-                      const concluido = ev.status === "concluido" || ev.status === "concluida";
-                      const inicio = new Date(ev.dataInicio);
-                      return (
-                        <button
-                          key={`${ev.fonte}-${ev.id}`}
-                          type="button"
-                          onClick={onCardClick ? () => onCardClick(ev) : undefined}
-                          className={`w-full text-left flex items-center gap-2 py-1.5 px-2 rounded hover:bg-white transition-colors ${concluido ? "opacity-60" : ""} ${onCardClick ? "cursor-pointer" : "cursor-default"}`}
-                        >
-                          <span
-                            className="w-1 h-7 rounded-full shrink-0"
-                            style={{ background: cor }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p
-                              className={`text-xs font-medium truncate ${concluido ? "line-through text-slate-400" : ""}`}
-                            >
-                              {ev.titulo}
-                            </p>
-                            <p className="text-[10px] text-slate-500 tabular-nums">
-                              {ev.diaInteiro
-                                ? "dia inteiro"
-                                : `${String(inicio.getHours()).padStart(2, "0")}:${String(inicio.getMinutes()).padStart(2, "0")}`}
-                              {ev.fonte === "compromisso" && ev.tipo === "prazo_processual" && " · prazo"}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                </div>
+              {resto > 0 && (
+                <p className="mt-[3px] text-[9.5px] font-semibold text-slate-400">+{resto} eventos</p>
               )}
-
-              {onCriarEvento && podeCriar !== false && (
-                <button
-                  onClick={onCriarEvento}
-                  className="w-full mt-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 border border-dashed border-slate-300 rounded-lg hover:border-slate-400 transition-colors"
-                >
-                  + Adicionar evento neste dia
-                </button>
-              )}
-              {podeCriar !== false && (
-                <button
-                  onClick={() => setBloquearDialog(diaSelecionado)}
-                  className="w-full mt-2 py-2 text-xs font-medium text-red-600 hover:text-red-800 border border-dashed border-red-300 rounded-lg hover:border-red-400 transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <Ban className="h-3 w-3" /> Bloquear este dia
-                </button>
-              )}
-            </>
-          ) : (
-            <p className="text-xs text-slate-400 italic text-center py-8">
-              Clique em um dia pra ver os eventos.
-            </p>
-          )}
-        </aside>
+            </div>
+          );
+        })}
       </div>
+
 
       <BloquearDiaDialog
         data={bloquearDialog}
@@ -1380,6 +1269,7 @@ function FiltroResponsaveis({
   setSelecionados,
   setorId,
   setSetorId,
+  euId,
 }: {
   pessoas: Pessoa[];
   setoresLista: Array<{ id: number; nome: string; cor: string }>;
@@ -1387,6 +1277,7 @@ function FiltroResponsaveis({
   setSelecionados: (ids: number[]) => void;
   setorId: number | null;
   setSetorId: (id: number | null) => void;
+  euId?: number | null;
 }) {
   const [aberto, setAberto] = useState(false);
   const [buscaPessoa, setBuscaPessoa] = useState("");
@@ -1572,20 +1463,47 @@ function FiltroResponsaveis({
           </div>
         </PopoverContent>
       </Popover>
+
+      {euId != null && pessoas.some((p) => p.id === euId) && (
+        <button
+          type="button"
+          onClick={() =>
+            setSelecionados(
+              selecionados.length === 1 && selecionados[0] === euId ? [] : [euId],
+            )
+          }
+          className={`h-10 rounded-lg px-3 flex items-center gap-1.5 text-xs font-semibold border transition-all ${
+            selecionados.length === 1 && selecionados[0] === euId
+              ? "bg-slate-900 text-white border-slate-900"
+              : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+          }`}
+        >
+          <User className="h-3.5 w-3.5" />
+          Só os meus
+        </button>
+      )}
     </div>
   );
 }
 
 /** Legenda: quem está sendo mostrado, com a contagem — sem ela a cor no
  *  calendário vira enfeite. */
-function LegendaPessoas({ pessoas, selecionados }: { pessoas: Pessoa[]; selecionados: number[] }) {
+function LegendaPessoas({
+  pessoas,
+  selecionados,
+  total,
+}: {
+  pessoas: Pessoa[];
+  selecionados: number[];
+  total?: number;
+}) {
   const ordem = pessoas.map((p) => p.id);
   const mostrar = selecionados.length ? pessoas.filter((p) => selecionados.includes(p.id)) : [];
   if (mostrar.length === 0) return null;
   return (
-    <div className="flex items-center gap-4 flex-wrap px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl">
-      <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
-        Mostrando
+    <div className="flex items-center gap-4 flex-wrap px-3.5 py-2.5 bg-white border border-slate-200 rounded-[11px]">
+      <span className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-slate-400">
+        Cor por responsável
       </span>
       {mostrar.map((p) => (
         <span key={p.id} className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
@@ -1597,6 +1515,11 @@ function LegendaPessoas({ pessoas, selecionados }: { pessoas: Pessoa[]; selecion
           <span className="text-[11px] font-semibold text-slate-400">{p.eventos}</span>
         </span>
       ))}
+      {typeof total === "number" && (
+        <span className="ml-auto text-xs text-slate-500">
+          <b className="font-bold text-slate-900 tabular-nums">{total}</b> compromissos no filtro atual
+        </span>
+      )}
     </div>
   );
 }
@@ -1715,7 +1638,9 @@ function ListaView({
         />
       )}
 
-      {/* Barra de busca + select fonte (compromisso vs tarefa) */}
+      {/* Filtros — busca, recortes e chips no mesmo card, como no desenho:
+          uma superfície só em vez de controles soltos sobre o fundo. */}
+      <div className="bg-white border border-slate-200 rounded-[14px] p-3.5 space-y-2.5">
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[260px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -1789,6 +1714,7 @@ function ListaView({
             </button>
           );
         })}
+      </div>
       </div>
 
       {/* Contador */}
@@ -3272,6 +3198,7 @@ export default function Agenda() {
         setSelecionados={setResponsaveis}
         setorId={setorFiltro}
         setSetorId={setSetorFiltro}
+        euId={pessoasData?.euId ?? null}
       />
     ) : null;
 
@@ -3292,108 +3219,65 @@ export default function Agenda() {
     }
   };
 
-  const nomeUser = user?.name?.split(" ")[0] || "Usuário";
-  const hoje = new Date();
-  const dataLabel = hoje.toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-
   return (
-    <div className="rounded-2xl bg-gradient-to-br from-amber-50/40 via-white to-orange-50/20 p-6 space-y-5">
-      {/* ═══════════ HERO ═══════════ */}
-      <div className="rounded-2xl bg-gradient-to-br from-amber-600 via-orange-600 to-rose-600 p-7 text-white relative overflow-hidden shadow-lg">
-        <CalendarDays className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
-        <div className="relative">
-          <div className="flex items-start justify-between mb-2 flex-wrap gap-3">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <PulseDot />
-                <p className="text-xs font-medium text-white/85 uppercase tracking-wider">Agenda</p>
-              </div>
-              <p className="text-xs text-white/70 capitalize">{dataLabel}</p>
-            </div>
-            {podeCriar && (
-              <Button
-                onClick={() => setCriarOpen(true)}
-                className="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-9"
-              >
-                <Plus className="h-4 w-4 mr-1" /> Novo evento
-              </Button>
-            )}
-          </div>
-
-          <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
-            <div className="lg:col-span-6">
-              <p className="text-sm font-medium text-white/85 mb-1">
-                {saudacaoContextual()}, {nomeUser}
-              </p>
-              <p className="text-xs text-white/65 mb-3">Eventos de hoje</p>
-              <div className="flex items-baseline gap-3 flex-wrap">
-                <span className="num-hero text-5xl font-extrabold tracking-tight tabular-nums leading-none">
-                  {contadores?.hojeCount ?? 0}
-                </span>
-                {(contadores?.hojeCount ?? 0) === 0 && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-white/15 text-white border border-white/20">
-                    Dia tranquilo
-                  </span>
+    <div className="p-4 md:p-6 space-y-4 bg-slate-50/60 min-h-full">
+      {/* ═══════════ CABEÇALHO ═══════════ */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[27px] font-bold tracking-tight leading-none">Agenda</h1>
+          <p className="text-[13.5px] text-slate-500 mt-1.5">
+            Compromissos, prazos e tarefas do escritório
+            {contadores ? (
+              <>
+                {" · "}
+                <button
+                  type="button"
+                  className="font-semibold text-slate-700 hover:underline"
+                  onClick={() => { setFiltroStatus("pendentes"); setTab("eventos"); }}
+                >
+                  {contadores.hojeCount ?? 0} hoje
+                </button>
+                {(contadores.atrasadosCount ?? 0) > 0 && (
+                  <>
+                    {" · "}
+                    <button
+                      type="button"
+                      className="font-bold text-rose-600 hover:underline"
+                      onClick={() => { setFiltroStatus("pendentes"); setTab("eventos"); }}
+                    >
+                      {contadores.atrasadosCount} atrasado(s)
+                    </button>
+                  </>
                 )}
-              </div>
-              <p className="text-xs text-white/65 mt-2">
-                <b className="text-white">{contadores?.pendentesCount ?? 0}</b> pendente(s) no total
-              </p>
-            </div>
-
-            <div className="lg:col-span-6">
-              <p className="text-[10px] text-white/65 uppercase tracking-wider mb-2">Atenção</p>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  onClick={() => { setFiltroStatus("pendentes"); setTab("eventos"); }}
-                  className="bg-white/10 rounded-lg px-3 py-2 border border-white/15 text-left hover:bg-white/15 transition-colors"
-                >
-                  <p className="text-xs text-white/70 mb-1">Hoje</p>
-                  <p className="text-2xl font-bold tabular-nums leading-none">
-                    {contadores?.hojeCount ?? 0}
-                  </p>
-                </button>
-                <button
-                  onClick={() => { setFiltroStatus("pendentes"); setTab("eventos"); }}
-                  className="bg-white/10 rounded-lg px-3 py-2 border border-white/15 text-left hover:bg-white/15 transition-colors"
-                >
-                  <p className="text-xs text-white/70 mb-1">⚠ Atrasados</p>
-                  <p
-                    className={`text-2xl font-bold tabular-nums leading-none ${(contadores?.atrasadosCount ?? 0) > 0 ? "text-rose-200" : ""}`}
-                  >
-                    {contadores?.atrasadosCount ?? 0}
-                  </p>
-                </button>
-                <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
-                  <p className="text-xs text-white/70 mb-1">Pendentes</p>
-                  <p className="text-2xl font-bold tabular-nums leading-none">
-                    {contadores?.pendentesCount ?? 0}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+                {" · "}
+                <span className="text-slate-500">{contadores.pendentesCount ?? 0} pendentes</span>
+              </>
+            ) : null}
+          </p>
         </div>
+        {podeCriar && (
+          <Button
+            onClick={() => setCriarOpen(true)}
+            className="bg-violet-600 hover:bg-violet-700 text-white font-semibold h-10 rounded-[10px] px-4 shadow-[0_8px_18px_-8px_#7c3aed88]"
+          >
+            <Plus className="h-4 w-4 mr-1.5" /> Novo compromisso
+          </Button>
+        )}
       </div>
 
       {/* ═══════════ TABS PILL ═══════════ */}
       <Tabs value={tab} onValueChange={setTab}>
-        <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex">
+        <div className="bg-slate-100 rounded-[9px] p-[3px] inline-flex">
           <TabsList className="bg-transparent gap-1 p-0 h-auto">
             <TabsTrigger
               value="eventos"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs font-semibold text-slate-500 gap-1.5 px-3.5 py-1.5 rounded-[7px] data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-[0_1px_3px_#0f172a1a]"
             >
               <ListTodo className="h-3.5 w-3.5" /> Eventos
             </TabsTrigger>
             <TabsTrigger
               value="calendario"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs font-semibold text-slate-500 gap-1.5 px-3.5 py-1.5 rounded-[7px] data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-[0_1px_3px_#0f172a1a]"
             >
               <CalendarDays className="h-3.5 w-3.5" /> Calendário
             </TabsTrigger>
@@ -3402,7 +3286,7 @@ export default function Agenda() {
 
         {/* EVENTOS (antiga "Lista" + integra "Hoje" — hero/timeline aparecem
             quando filtroStatus = pendentes) */}
-        <TabsContent value="eventos" className="mt-5 space-y-4">
+        <TabsContent value="eventos" className="mt-4 space-y-3">
           <ListaView
             busca={busca}
             setBusca={setBusca}
@@ -3426,11 +3310,17 @@ export default function Agenda() {
         </TabsContent>
 
         {/* CALENDÁRIO */}
-        <TabsContent value="calendario" className="mt-5 space-y-3">
+        <TabsContent value="calendario" className="mt-4 space-y-3">
           {filtroResponsaveisNode && (
-            <div className="flex items-center gap-2 flex-wrap">{filtroResponsaveisNode}</div>
+            <div className="bg-white border border-slate-200 rounded-[14px] p-3.5 flex items-center gap-2 flex-wrap">
+              {filtroResponsaveisNode}
+            </div>
           )}
-          <LegendaPessoas pessoas={pessoas} selecionados={responsaveis} />
+          <LegendaPessoas
+            pessoas={pessoas}
+            selecionados={responsaveis}
+            total={eventosCalendario?.length}
+          />
           <CalendarioMensal
             eventos={eventosCalendario || []}
             onCriarEvento={() => setCriarOpen(true)}
