@@ -58,6 +58,8 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
+  Minus,
+  X,
 } from "lucide-react";
 
 interface Props {
@@ -118,6 +120,17 @@ const TEOR_FALHA: Record<
 };
 
 const POLO_LABEL: Record<string, string> = { ativo: "Autor", passivo: "Réu", terceiro: "Terceiro" };
+
+const STATUS_PEDIDO_META = {
+  deferido: { label: "Deferido", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", icone: Check },
+  parcial: { label: "Parcial", cls: "bg-amber-50 text-amber-700 border-amber-200", icone: Minus },
+  negado: { label: "Negado", cls: "bg-rose-50 text-rose-700 border-rose-200", icone: X },
+  prejudicado: { label: "Prejudicado", cls: "bg-muted text-muted-foreground border-border", icone: Minus },
+} as const;
+
+function formatBRL(v: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
 
 function dataBR(d: Date | string) {
   return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -180,6 +193,12 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
   const prazo = data?.prazo;
   const prazoAberto = prazo && prazo.status === "pendente";
   const falhaTeor = data && data.teorStatus !== "ok" ? TEOR_FALHA[data.teorStatus] : null;
+  // Só soma o que o juiz de fato concedeu — pedido negado com valor no texto
+  // entraria como se fosse dinheiro a receber.
+  const totalDeferido = (data?.itens ?? []).reduce(
+    (acc, i) => acc + (i.status === "deferido" || i.status === "parcial" ? (i.valor ?? 0) : 0),
+    0,
+  );
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -267,6 +286,20 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                     📄 Rotina
                   </span>
                 )}
+            {/* Fonte do que está escrito acima. Sem o documento, o título saiu
+                do rótulo do tribunal — e isso precisa estar visível antes de
+                qualquer conteúdo, não depois. */}
+            {data.teor ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-violet-100 text-violet-800 border-violet-300">
+                <FileText className="h-3 w-3" />
+                Lido no documento
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-amber-100 text-amber-800 border-amber-300">
+                <Lock className="h-3 w-3" />
+                Só o rótulo do tribunal
+              </span>
+            )}
               </div>
 
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-3 pb-3 border-b text-[11px] text-muted-foreground">
@@ -295,7 +328,123 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
               </div>
             </div>
 
-            {/* O que o juiz decidiu */}
+            {/* Sem o documento, buscar o teor É o assunto do painel — não um
+                botão no rodapé de um resumo que não sabe de nada. */}
+            {!data.teor && (
+              <section className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3.5">
+                <p className="text-sm font-bold text-amber-900 flex items-center gap-2">
+                  <Lock className="h-4 w-4 shrink-0" />
+                  {falhaTeor?.titulo ?? "Documento indisponível"}
+                </p>
+                <p className="text-[12.5px] text-amber-800 mt-1 leading-snug">
+                  {falhaTeor?.detalhe}
+                  {data.teorErro ? ` (${data.teorErro})` : ""}
+                  {" Sem o documento, a única coisa que sabemos é o rótulo publicado pelo tribunal:"}
+                </p>
+                <div className="mt-2.5 rounded-lg border border-amber-200 bg-card px-3 py-2">
+                  <p className="text-[9.5px] font-bold uppercase tracking-wide text-amber-700">
+                    Rótulo publicado pelo tribunal
+                  </p>
+                  <p className="text-[12.5px] text-foreground/90 mt-0.5">{data.rotulo}</p>
+                </div>
+                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                  {falhaTeor?.podeBaixar && data.teorUrl && (
+                    <>
+                      <Button
+                        size="sm"
+                        className="bg-amber-600 hover:bg-amber-700 text-white"
+                        disabled={baixarMut.isPending}
+                        onClick={() => baixarMut.mutate({ eventoId: data.id })}
+                      >
+                        {baixarMut.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4 mr-1.5" />
+                        )}
+                        Buscar o documento agora
+                      </Button>
+                      <span className="text-[11px] text-amber-800">o resumo sai junto</span>
+                    </>
+                  )}
+                  <div className="flex-1" />
+                  {data.teorUrl && (
+                    <a
+                      href={data.teorUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11.5px] font-bold text-amber-800 underline underline-offset-2"
+                    >
+                      Abrir no tribunal ↗
+                    </a>
+                  )}
+                </div>
+                {falhaTeor?.podeAnalisar && (
+                  <button
+                    type="button"
+                    className="mt-2 text-[11px] text-amber-800/80 underline underline-offset-2 disabled:opacity-50"
+                    disabled={analisarMut.isPending}
+                    onClick={() => analisarMut.mutate({ eventoId: data.id })}
+                  >
+                    Analisar só pelo rótulo (resultado pobre)
+                  </button>
+                )}
+              </section>
+            )}
+
+            {/* O que foi decidido, pedido a pedido.
+                "Procedente em parte" sozinho não diz nada — o que o advogado
+                precisa é o que caiu, o que passou e quanto. */}
+            {data.itens.length > 0 && (
+              <section>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-2 mb-2">
+                  O que foi decidido, pedido a pedido
+                  <span className="bg-violet-50 text-violet-700 border border-violet-200 rounded-full px-1.5 py-px text-[8.5px]">
+                    RESUMO IA
+                  </span>
+                </p>
+                <div className="rounded-lg border divide-y overflow-hidden">
+                  {data.itens.map((item, i) => {
+                    const meta = STATUS_PEDIDO_META[item.status];
+                    const Icone = meta.icone;
+                    return (
+                      <div key={i} className="flex items-start gap-3 px-3 py-2.5">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold shrink-0 mt-px ${meta.cls}`}
+                        >
+                          <Icone className="h-3 w-3" />
+                          {meta.label}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-semibold leading-snug">{item.pedido}</p>
+                          {item.razao && (
+                            <p className="text-[11.5px] text-muted-foreground leading-snug mt-px">{item.razao}</p>
+                          )}
+                        </div>
+                        <span
+                          className={`text-[13px] font-bold tabular-nums shrink-0 ${
+                            item.valor != null ? "text-emerald-700" : "text-muted-foreground/40"
+                          }`}
+                        >
+                          {item.valor != null ? formatBRL(item.valor) : "—"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {totalDeferido > 0 && (
+                    <div className="flex items-center gap-3 px-3 py-2.5 bg-muted/40">
+                      <span className="text-[12.5px] font-bold flex-1">Resultado da decisão</span>
+                      <span className="text-[15px] font-bold tabular-nums text-emerald-700">
+                        {formatBRL(totalDeferido)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* O que o juiz decidiu — só quando há o que dizer. Sem o
+                documento este bloco não aparece: o painel não promete
+                resumo do que não leu. */}
             {data.pontos.length > 0 ? (
               <section>
                 <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-2 mb-2">
@@ -313,7 +462,7 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                   ))}
                 </ul>
               </section>
-            ) : (
+            ) : data.teor ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -328,15 +477,15 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                 )}
                 Analisar com IA
               </Button>
-            )}
+            ) : null}
 
             {/* Exatamente o que ele escreveu */}
-            <section>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">
-                Exatamente o que ele escreveu
-              </p>
+            {data.teor && (
+              <section>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">
+                  Exatamente o que ele escreveu
+                </p>
 
-              {data.teor ? (
                 <div className="rounded-lg border overflow-hidden">
                   <div className="bg-muted/40 border-b px-3 py-1.5 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
                     <FileText className="h-3 w-3" />
@@ -377,60 +526,9 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                       </>
                     )}
                   </button>
-                </div>
-              ) : (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
-                  <p className="text-[12.5px] font-bold text-amber-900 flex items-center gap-1.5">
-                    <Lock className="h-3.5 w-3.5" />
-                    {falhaTeor?.titulo ?? "Documento indisponível"}
-                  </p>
-                  <p className="text-[11.5px] text-amber-800 mt-0.5 leading-snug">
-                    {falhaTeor?.detalhe}
-                    {data.teorErro ? ` (${data.teorErro})` : ""}
-                  </p>
-                  <div className="mt-2 rounded border border-amber-200 bg-card/70 px-2.5 py-1.5">
-                    <p className="text-[9.5px] font-bold uppercase tracking-wide text-amber-700">
-                      Rótulo publicado pelo tribunal
-                    </p>
-                    <p className="text-[12px] text-foreground/90 mt-0.5">{data.rotulo}</p>
                   </div>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {falhaTeor?.podeBaixar && data.teorUrl && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-[11px] border-amber-300 bg-card"
-                        disabled={baixarMut.isPending}
-                        onClick={() => baixarMut.mutate({ eventoId: data.id })}
-                      >
-                        {baixarMut.isPending ? (
-                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                        ) : (
-                          <Download className="h-3 w-3 mr-1" />
-                        )}
-                        Buscar o documento agora
-                      </Button>
-                    )}
-                    {falhaTeor?.podeAnalisar && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-[11px] border-amber-300 bg-card"
-                        disabled={analisarMut.isPending}
-                        onClick={() => analisarMut.mutate({ eventoId: data.id })}
-                      >
-                        {analisarMut.isPending ? (
-                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                        ) : (
-                          <Sparkles className="h-3 w-3 mr-1" />
-                        )}
-                        Analisar só pelo rótulo
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </section>
+              </section>
+            )}
 
             {/* Prazo com a conta aberta */}
             {prazoAberto && prazo.data && (
