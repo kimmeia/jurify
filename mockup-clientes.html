@@ -1,0 +1,290 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root{
+  --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+  --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+  --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+  --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+  --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+  --aviso:#b45309; --aviso-bg:#fffbeb;
+  --ok:#059669; --ok-bg:#ecfdf5;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1600px;height:710px;overflow:hidden}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
+.wrap{padding:24px 28px;height:100%;display:flex;flex-direction:column}
+
+.topo{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex:0 0 auto}
+.h1{font-family:'Poppins';font-weight:700;font-size:27px;letter-spacing:-.01em;line-height:1}
+.sub{margin-top:6px;font-size:13.5px;color:var(--mudo)}
+.pst-l{display:flex;gap:8px;margin-top:12px}
+.pst{background:#fff;border:1px solid var(--borda);border-radius:10px;padding:6px 12px;display:flex;align-items:baseline;gap:6px}
+.pst b{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+.pst span{font-size:11.5px;color:var(--mudo)}
+.pst.vermelha{background:var(--alerta-bg);border-color:var(--alerta-borda)}
+.pst.vermelha b{color:var(--alerta)}.pst.vermelha span{color:var(--alerta-forte)}
+.acoes{display:flex;gap:8px;flex:0 0 auto}
+.btn{height:36px;border:1px solid var(--borda);background:#fff;border-radius:9px;padding:0 14px;display:flex;
+  align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--corpo)}
+.btn.primary{background:var(--acento);border-color:var(--acento);color:#fff;box-shadow:0 8px 18px -9px #7c3aed99}
+
+.filtros{margin-top:15px;flex:0 0 auto;background:#fff;border:1px solid var(--borda);border-radius:12px;
+  padding:9px 11px;display:flex;align-items:center;gap:9px}
+.busca{flex:1;min-width:0;height:34px;border:1px solid var(--borda);border-radius:8px;display:flex;align-items:center;
+  gap:8px;padding:0 11px;color:var(--fraco);font-size:12.5px}
+.segs{display:flex;gap:3px;background:var(--hairline);padding:3px;border-radius:9px;flex:0 0 auto}
+.segs span{padding:6px 12px;font-size:12px;font-weight:600;color:var(--mudo);border-radius:7px;display:flex;align-items:center;gap:6px}
+.segs span.on{background:#fff;color:var(--tinta);box-shadow:0 1px 3px #0f172a1a}
+.segs i{font-style:normal;font-size:10px;font-weight:800;background:#e2e8f0;color:#475569;border-radius:20px;padding:0 5px}
+.segs span.on i{background:var(--acento);color:#fff}
+.sel{height:34px;border:1px solid var(--borda);border-radius:8px;padding:0 11px;display:flex;align-items:center;gap:8px;
+  font-size:12.5px;font-weight:500;color:var(--corpo);flex:0 0 auto}
+
+/* cabeçalho da tabela — a lista ganhou colunas, então elas precisam de nome */
+.thead{margin-top:14px;flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:0 16px 7px 16px}
+.thead span{font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--fraco)}
+.th-cli{flex:1;min-width:0;padding-left:44px}
+.th-proc{width:132px;flex:0 0 auto}
+.th-fin{width:210px;flex:0 0 auto}
+.th-cont{width:132px;flex:0 0 auto}
+.th-resp{width:128px;flex:0 0 auto}
+.th-seta{width:14px;flex:0 0 auto}
+
+.lista{flex:0 0 auto;background:#fff;border:1px solid var(--borda);border-radius:13px;overflow:hidden}
+.lin{height:62px;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--hairline)}
+.lin:last-child{border-bottom:0}
+.dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;margin-left:-4px}
+.av{width:32px;height:32px;border-radius:50%;background:var(--acento-bg);color:var(--acento-forte);
+  display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700;flex:0 0 auto;
+  border:1px solid #ede9fe}
+.lp{flex:1;min-width:0}
+.lp-n{display:block;font-size:13px;font-weight:700;color:var(--tinta-2);line-height:1.2;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lp-c{display:block;margin-top:2px;font-size:10.5px;color:var(--fraco)}
+.col{display:flex;align-items:center;gap:6px;flex:0 0 auto;font-size:12px;color:var(--corpo-2)}
+.col b{font-weight:600;color:var(--tinta-2)}
+.col.proc{width:132px} .col.fin{width:210px} .col.cont{width:132px}
+.col.fin.vencido{color:var(--alerta-forte)} .col.fin.vencido b{color:var(--alerta-forte);font-weight:700}
+.col.fin.ok{color:var(--mudo)} .col.fin.ok b{color:var(--mudo);font-weight:500}
+.col.fin.aberto{color:var(--corpo-2)}
+.mini{font-style:normal;font-size:9.5px;font-weight:800;border-radius:5px;padding:1.5px 5px}
+.mini.alerta{background:var(--alerta-bg);color:var(--alerta-forte)}
+.resp{width:128px;flex:0 0 auto;font-size:11px;color:var(--mudo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seta{color:var(--fantasma);flex:0 0 auto;display:flex;width:14px}
+
+.rodape{margin-top:12px;flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:10px 15px;background:#fff;
+  border:1px solid var(--borda);border-radius:11px;font-size:12px;color:var(--corpo-2)}
+.rodape b{color:var(--tinta)}
+.rodape .sep{width:1px;height:14px;background:var(--borda)}
+</style></head>
+<body>
+<div class="wrap">
+
+  <div class="topo">
+    <div>
+      <div class="h1">Clientes</div>
+      <div class="sub">Quem é a carteira do escritório — e quem dela está precisando de você</div>
+      <div class="pst-l">
+        <div class="pst"><b>312</b><span>ativos</span></div>
+        <div class="pst vermelha"><b>23</b><span>precisam de atenção</span></div>
+        <div class="pst"><b>8</b><span>novos este mês</span></div>
+      </div>
+    </div>
+    <div class="acoes">
+      <div class="btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg> Duplicatas (PDF)</div>
+      <div class="btn primary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Novo cliente</div>
+    </div>
+  </div>
+
+  <div class="filtros">
+    <div class="busca"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg> Buscar por nome, CPF/CNPJ, processo ou telefone…</div>
+    <div class="sel">Responsável: todos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+    <div class="segs">
+      <span class="on">Todos <i>312</i></span>
+      <span>Precisam de atenção <i>23</i></span>
+      <span>Sem contato há 30d <i>41</i></span>
+      <span>Suspensos <i>6</i></span>
+    </div>
+  </div>
+
+  <div class="thead">
+    <span class="th-cli">Cliente</span>
+    <span class="th-proc">Processos</span>
+    <span class="th-fin">Financeiro</span>
+    <span class="th-cont">Último contato</span>
+    <span class="th-resp">Responsável</span>
+    <span class="th-seta"></span>
+  </div>
+
+  <div class="lista">
+  <div class="lin">
+    <span class="dot" style="background:#dc2626"></span>
+    <span class="av">C</span>
+    <span class="lp">
+      <span class="lp-n">Carine de Sousa Peixoto Felicio</span>
+      <span class="lp-c">671.983.413-49 · cliente desde 2026</span>
+    </span>
+    <span class="col proc">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"/><path d="m16 16 6-6"/><path d="m21.5 10.5-8-8"/><path d="m8 8 6-6"/><path d="m8.5 7.5 8 8"/></svg>
+      <b>3</b>
+      <i class="mini alerta">1 parado</i>
+    </span>
+    <span class="col fin vencido">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <b>R$ 4.850 vencido há 22d</b>
+    </span>
+    <span class="col cont">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>
+      <b>há 3 dias</b>
+    </span>
+    <span class="resp">Pablo Sousa</span>
+    <span class="seta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="dot" style="background:#dc2626"></span>
+    <span class="av">M</span>
+    <span class="lp">
+      <span class="lp-n">Marcelo Tavares</span>
+      <span class="lp-c">012.445.788-20 · cliente desde 2024</span>
+    </span>
+    <span class="col proc">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"/><path d="m16 16 6-6"/><path d="m21.5 10.5-8-8"/><path d="m8 8 6-6"/><path d="m8.5 7.5 8 8"/></svg>
+      <b>2</b>
+      
+    </span>
+    <span class="col fin vencido">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <b>R$ 6.400 vencido há 41d</b>
+    </span>
+    <span class="col cont">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>
+      <b>há 2 meses</b>
+    </span>
+    <span class="resp">Milena Mansur</span>
+    <span class="seta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="dot" style="background:#f59e0b"></span>
+    <span class="av">B</span>
+    <span class="lp">
+      <span class="lp-n">Banco Pan S.A.</span>
+      <span class="lp-c">59.285.411/0001-13 · cliente desde 2023</span>
+    </span>
+    <span class="col proc">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"/><path d="m16 16 6-6"/><path d="m21.5 10.5-8-8"/><path d="m8 8 6-6"/><path d="m8.5 7.5 8 8"/></svg>
+      <b>14</b>
+      <i class="mini alerta">2 parados</i>
+    </span>
+    <span class="col fin ok">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <b>em dia</b>
+    </span>
+    <span class="col cont">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>
+      <b>há 8 dias</b>
+    </span>
+    <span class="resp">Pablo Sousa</span>
+    <span class="seta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="dot" style="background:#059669"></span>
+    <span class="av">E</span>
+    <span class="lp">
+      <span class="lp-n">Edlane Silva</span>
+      <span class="lp-c">445.109.332-11 · cliente desde 2025</span>
+    </span>
+    <span class="col proc">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"/><path d="m16 16 6-6"/><path d="m21.5 10.5-8-8"/><path d="m8 8 6-6"/><path d="m8.5 7.5 8 8"/></svg>
+      <b>1</b>
+      
+    </span>
+    <span class="col fin ok">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <b>em dia</b>
+    </span>
+    <span class="col cont">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>
+      <b>ontem</b>
+    </span>
+    <span class="resp">Isaac Cavalcante</span>
+    <span class="seta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="dot" style="background:#059669"></span>
+    <span class="av">C</span>
+    <span class="lp">
+      <span class="lp-n">Carlos Jefferson Ribeiro dos Santos</span>
+      <span class="lp-c">066.968.283-70 · cliente desde 2025</span>
+    </span>
+    <span class="col proc">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"/><path d="m16 16 6-6"/><path d="m21.5 10.5-8-8"/><path d="m8 8 6-6"/><path d="m8.5 7.5 8 8"/></svg>
+      <b>2</b>
+      
+    </span>
+    <span class="col fin ok">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <b>em dia</b>
+    </span>
+    <span class="col cont">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>
+      <b>há 5 dias</b>
+    </span>
+    <span class="resp">Pablo Sousa</span>
+    <span class="seta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="dot" style="background:#f59e0b"></span>
+    <span class="av">T</span>
+    <span class="lp">
+      <span class="lp-n">Tereza Nunes</span>
+      <span class="lp-c">788.221.045-93 · cliente desde 2026</span>
+    </span>
+    <span class="col proc">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"/><path d="m16 16 6-6"/><path d="m21.5 10.5-8-8"/><path d="m8 8 6-6"/><path d="m8.5 7.5 8 8"/></svg>
+      <b>1</b>
+      <i class="mini alerta">1 parado</i>
+    </span>
+    <span class="col fin aberto">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <b>R$ 1.200 a vencer</b>
+    </span>
+    <span class="col cont">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>
+      <b>há 1 mês</b>
+    </span>
+    <span class="resp">Francisco Wesley</span>
+    <span class="seta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="lin">
+    <span class="dot" style="background:#dc2626"></span>
+    <span class="av">L</span>
+    <span class="lp">
+      <span class="lp-n">Lourdes Abreu</span>
+      <span class="lp-c">330.887.221-04 · cliente desde 2024</span>
+    </span>
+    <span class="col proc">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"/><path d="m16 16 6-6"/><path d="m21.5 10.5-8-8"/><path d="m8 8 6-6"/><path d="m8.5 7.5 8 8"/></svg>
+      <b>4</b>
+      
+    </span>
+    <span class="col fin vencido">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <b>R$ 3.120 vencido há 15d</b>
+    </span>
+    <span class="col cont">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>
+      <b>há 12 dias</b>
+    </span>
+    <span class="resp">Milena Mansur</span>
+    <span class="seta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div></div>
+
+  <div class="rodape">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+    <span>O sinal à esquerda combina três coisas: <b>processo parado</b>, <b>cobrança vencida</b> e <b>tempo sem contato</b>.</span>
+    <span class="sep"></span>
+    <span>Vermelho = pelo menos um dos três está ruim. Âmbar = vale olhar.</span>
+  </div>
+</div>
+</body></html>

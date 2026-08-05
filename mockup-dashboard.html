@@ -1,0 +1,252 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root{
+  --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+  --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+  --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+  --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+  --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+  --aviso:#b45309; --aviso-bg:#fffbeb; --aviso-borda:#fde68a;
+  --ok:#059669; --ok-bg:#ecfdf5;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1600px;height:930px;overflow:hidden}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
+.wrap{padding:24px 28px;height:100%;display:flex;flex-direction:column}
+
+.topo{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex:0 0 auto}
+.h1{font-family:'Poppins';font-weight:700;font-size:27px;letter-spacing:-.01em;line-height:1}
+.sub{margin-top:6px;font-size:13.5px;color:var(--mudo)}
+.chip{display:flex;align-items:center;gap:7px;border:1px solid var(--borda);background:#fff;border-radius:10px;
+  padding:7px 12px;font-size:12px;font-weight:600;color:var(--corpo-2)}
+.chip b{color:var(--tinta)}
+
+/* ── a fila ── */
+.sec{margin-top:18px;display:flex;align-items:center;gap:9px;flex:0 0 auto}
+.sec .t{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--fraco)}
+.sec .n{font-size:10.5px;font-weight:800;color:#fff;background:var(--alerta);border-radius:20px;padding:1px 7px}
+.sec .l{flex:1;height:1px;background:var(--borda)}
+
+.fila{margin-top:9px;flex:0 0 auto;background:#fff;border:1px solid var(--borda);border-radius:13px;overflow:hidden}
+.fila-item{height:66px;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--hairline)}
+.fila-item:last-child{border-bottom:0}
+.fi-ic{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.fi-ic.vermelho{background:var(--alerta-bg);color:var(--alerta)}
+.fi-ic.ambar{background:var(--aviso-bg);color:var(--aviso)}
+.fi-n{font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;width:56px;flex:0 0 auto;line-height:1}
+.fi-n.vermelho{color:var(--alerta)} .fi-n.ambar{color:var(--aviso)}
+.fi-txt{flex:1;min-width:0}
+.fi-t{display:block;font-size:14px;font-weight:600;color:var(--tinta);line-height:1.25}
+.fi-d{display:block;margin-top:3px;font-size:11.5px;color:var(--mudo);line-height:1.25}
+.fi-mod{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--fraco);
+  border:1px solid var(--borda);border-radius:5px;padding:2px 7px;flex:0 0 auto}
+.fi-cta{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--acento-forte);
+  background:var(--acento-bg);border:1px solid #ddd6fe;border-radius:8px;padding:7px 11px;flex:0 0 auto;width:172px;
+  justify-content:center;white-space:nowrap}
+
+/* ── faixa de baixo ── */
+.baixo{margin-top:16px;flex:1;min-height:0;display:grid;grid-template-columns:1.15fr 1fr;gap:14px}
+.card{background:#fff;border:1px solid var(--borda);border-radius:13px;display:flex;flex-direction:column;overflow:hidden}
+.card-top{padding:12px 15px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:9px;flex:0 0 auto}
+.card-top .ct{font-family:'Poppins';font-weight:700;font-size:14.5px}
+.card-top .cs{font-size:11.5px;color:var(--mudo);margin-left:auto}
+
+.ag{padding:4px 8px}
+.ag-i{height:46px;display:flex;align-items:center;gap:11px;padding:0 7px;border-radius:8px}
+.ag-h{font-size:11px;font-weight:700;color:var(--corpo);font-variant-numeric:tabular-nums;width:36px;flex:0 0 auto}
+.ag-f{width:3px;height:26px;border-radius:2px;flex:0 0 auto}
+.ag-t{flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--tinta-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ag-t.feito{text-decoration:line-through;color:var(--fraco);font-weight:500}
+.ag-r{font-size:10.5px;color:var(--mudo);flex:0 0 auto}
+
+.din{padding:14px 15px;display:flex;flex-direction:column;gap:12px}
+.din-l{display:flex;align-items:baseline;justify-content:space-between}
+.din-l .k{font-size:12.5px;color:var(--corpo-2)}
+.din-l .v{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+.din-l .v.ok{color:var(--ok)} .din-l .v.mau{color:var(--alerta)}
+.barra{height:7px;background:var(--hairline);border-radius:4px;overflow:hidden;display:flex}
+.barra i{display:block;height:100%}
+.leg{display:flex;gap:14px;flex-wrap:wrap}
+.leg span{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--corpo-2);font-weight:500}
+.leg .sw{width:9px;height:9px;border-radius:3px}
+.atrasos{margin-top:4px;border-top:1px solid var(--hairline);padding-top:10px}
+.at-t{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--fraco);margin-bottom:6px}
+.at-i{display:flex;align-items:baseline;gap:10px;padding:5px 0}
+.at-n{flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--tinta-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.at-v{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--alerta)}
+.at-h{font-size:10.5px;color:var(--fraco);width:62px;text-align:right}
+.din-rod{margin-top:auto;padding-top:10px;border-top:1px solid var(--hairline);font-size:11.5px;color:var(--mudo)}
+.din-rod b{color:var(--tinta)}
+</style></head>
+<body>
+<div class="wrap">
+
+  <div class="topo">
+    <div>
+      <div class="h1">Bom dia, Bruno</div>
+      <div class="sub">Terça-feira, 4 de agosto — cinco coisas esperam por você</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <div class="chip"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg> <b>7.860</b> créditos</div>
+      <div class="chip"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg> <b>312</b> clientes ativos</div>
+    </div>
+  </div>
+
+  <div class="sec"><span class="t">Precisa de você agora</span><span class="n">5</span><span class="l"></span></div>
+  <div class="fila">
+  <div class="fila-item">
+    <span class="fi-ic vermelho"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"/><path d="m16 16 6-6"/><path d="m21.5 10.5-8-8"/><path d="m8 8 6-6"/><path d="m8.5 7.5 8 8"/></svg></span>
+    <span class="fi-n vermelho">3</span>
+    <span class="fi-txt">
+      <span class="fi-t">movimentações exigem ação sua</span>
+      <span class="fi-d">1 audiência já venceu · 2 prazos vencem esta semana</span>
+    </span>
+    <span class="fi-mod">Movimentações</span>
+    <span class="fi-cta">Ver na central <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="fila-item">
+    <span class="fi-ic vermelho"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg></span>
+    <span class="fi-n vermelho">66</span>
+    <span class="fi-txt">
+      <span class="fi-t">compromissos atrasados na agenda</span>
+      <span class="fi-d">o mais antigo é de 12/06 · 9 são prazos processuais</span>
+    </span>
+    <span class="fi-mod">Agenda</span>
+    <span class="fi-cta">Abrir agenda <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="fila-item">
+    <span class="fi-ic vermelho"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.247 7.761a6 6 0 0 1 0 8.478"/><path d="M19.075 4.933a10 10 0 0 1 0 14.134"/><path d="M4.925 19.067a10 10 0 0 1 0-14.134"/><path d="M7.753 16.239a6 6 0 0 1 0-8.478"/><circle cx="12" cy="12" r="2"/></svg></span>
+    <span class="fi-n vermelho">412</span>
+    <span class="fi-txt">
+      <span class="fi-t">processos pararam de atualizar</span>
+      <span class="fi-d">credencial OAB CE 38828 expirou em 28/07</span>
+    </span>
+    <span class="fi-mod">Processos</span>
+    <span class="fi-cta">Revalidar no Cofre <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="fila-item">
+    <span class="fi-ic ambar"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg></span>
+    <span class="fi-n ambar">7</span>
+    <span class="fi-txt">
+      <span class="fi-t">conversas sem resposta há mais de 2h</span>
+      <span class="fi-d">3 fora da janela de 24h do WhatsApp</span>
+    </span>
+    <span class="fi-mod">Atendimento</span>
+    <span class="fi-cta">Ir pro atendimento <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div>
+  <div class="fila-item">
+    <span class="fi-ic ambar"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+    <span class="fi-n ambar">14</span>
+    <span class="fi-txt">
+      <span class="fi-t">cobranças vencidas</span>
+      <span class="fi-d">R$ 23.480 · a mais antiga há 41 dias</span>
+    </span>
+    <span class="fi-mod">Financeiro</span>
+    <span class="fi-cta">Ver no financeiro <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+  </div></div>
+
+  <div class="baixo">
+    <div class="card">
+      <div class="card-top">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg>
+        <span class="ct">Sua agenda de hoje</span>
+        <span class="cs">11 compromissos · 2 concluídos</span>
+      </div>
+      <div class="ag">
+        
+          <div class="ag-i">
+            <span class="ag-h">08:30</span>
+            <span class="ag-f" style="background:#cbd5e1"></span>
+            <span class="ag-t feito">Presencial — Edmarina Oliveira</span>
+            <span class="ag-r">Pablo Sousa</span>
+          </div>
+          <div class="ag-i">
+            <span class="ag-h">10:00</span>
+            <span class="ag-f" style="background:#cbd5e1"></span>
+            <span class="ag-t feito">Reunião com Sandro Lacerda</span>
+            <span class="ag-r">Pablo Sousa</span>
+          </div>
+          <div class="ag-i">
+            <span class="ag-h">11:45</span>
+            <span class="ag-f" style="background:#7c3aed"></span>
+            <span class="ag-t">Oliveira presencial (campanha)</span>
+            <span class="ag-r">Francisco Wesley</span>
+          </div>
+          <div class="ag-i">
+            <span class="ag-h">15:00</span>
+            <span class="ag-f" style="background:#7c3aed"></span>
+            <span class="ag-t">Audiência de conciliação — TJCE</span>
+            <span class="ag-r">Milena Mansur</span>
+          </div>
+          <div class="ag-i">
+            <span class="ag-h">16:30</span>
+            <span class="ag-f" style="background:#7c3aed"></span>
+            <span class="ag-t">Contestação — Ribeiro × Banco</span>
+            <span class="ag-r">Pablo Sousa</span>
+          </div>
+          <div class="ag-i">
+            <span class="ag-h">17:00</span>
+            <span class="ag-f" style="background:#7c3aed"></span>
+            <span class="ag-t">Ligação — Tereza Nunes</span>
+            <span class="ag-r">Francisco Wesley</span>
+          </div>
+          <div class="ag-i">
+            <span class="ag-h">18:00</span>
+            <span class="ag-f" style="background:#7c3aed"></span>
+            <span class="ag-t">Follow-up da proposta — Marcelo</span>
+            <span class="ag-r">Pablo Sousa</span>
+          </div>
+        <div class="ag-i" style="color:#5b21b6;font-size:12px;font-weight:700;padding-left:7px">
+          Ver os outros 6 →
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <span class="ct">Dinheiro do mês</span>
+        <span class="cs">agosto/2026</span>
+      </div>
+      <div class="din">
+        <div class="din-l"><span class="k">Recebido</span><span class="v ok">R$ 84.320</span></div>
+        <div class="barra">
+          <i style="background:#059669;width:62%"></i>
+          <i style="background:#38bdf8;width:21%"></i>
+          <i style="background:#dc2626;width:17%"></i>
+        </div>
+        <div class="leg">
+          <span><i class="sw" style="background:#059669"></i> Recebido 62%</span>
+          <span><i class="sw" style="background:#38bdf8"></i> A receber 21%</span>
+          <span><i class="sw" style="background:#dc2626"></i> Vencido 17%</span>
+        </div>
+        <div class="din-l"><span class="k">A receber em dia</span><span class="v">R$ 28.100</span></div>
+        <div class="din-l"><span class="k">Vencido</span><span class="v mau">R$ 23.480</span></div>
+        <div class="atrasos">
+          <p class="at-t">Maiores atrasos</p>
+          
+            <div class="at-i">
+              <span class="at-n">Marcelo Tavares</span>
+              <span class="at-v">R$ 6.400</span>
+              <span class="at-h">há 41 dias</span>
+            </div>
+            <div class="at-i">
+              <span class="at-n">Creditas Sociedade</span>
+              <span class="at-v">R$ 4.850</span>
+              <span class="at-h">há 22 dias</span>
+            </div>
+            <div class="at-i">
+              <span class="at-n">Lourdes Abreu</span>
+              <span class="at-v">R$ 3.120</span>
+              <span class="at-h">há 15 dias</span>
+            </div>
+        </div>
+        <div class="din-rod">
+          Mesmo dia do mês passado: <b>R$ 71.900</b> recebido — você está <b style="color:#059669">17% acima</b>.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

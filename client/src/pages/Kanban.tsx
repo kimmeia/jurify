@@ -18,7 +18,7 @@ import {
   LayoutGrid, Plus, Trash2, Loader2, GripVertical, Calendar,
   User, AlertTriangle, Clock, ChevronLeft, Edit, Scale,
   ExternalLink, ArrowRight, Tag, X, Settings, Upload, CheckCircle2,
-  Archive, Search, Briefcase, MessageSquare, Paperclip, AlertCircle,
+  Archive, FileDown, Search, Briefcase, MessageSquare, Paperclip, AlertCircle,
   Wallet,
 } from "lucide-react";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
@@ -29,6 +29,7 @@ import { LancarCobrancaCardModal, type LancarCobrancaCardCtx } from "./kanban/la
 import { ComentariosSection } from "./kanban/comentarios-section";
 import { FiltrosBar, type FiltrosKanban, FILTROS_VAZIOS } from "./kanban/filtros-bar";
 import { ImportarTrelloDialog } from "./kanban/ImportarTrelloDialog";
+import { baixarBlob, base64ToBlob } from "./financeiro/helpers";
 import { TimelineCard } from "./kanban/timeline-card";
 
 const PRIORIDADE_COR: Record<string, string> = {
@@ -116,6 +117,16 @@ export default function Kanban() {
       refetchOnWindowFocus: !dragCardId && !dragColunaId,
     },
   );
+
+  const exportarPdfMut = (trpc as any).kanban?.exportarCardsPdf?.useMutation?.({
+    onSuccess: (r: { filename: string; base64: string; mimeType: string; total: number }) => {
+      baixarBlob(base64ToBlob(r.base64, r.mimeType), r.filename, r.mimeType);
+      toast.success(
+        r.total === 1 ? "PDF com 1 card baixado" : `PDF com ${r.total} cards baixado`,
+      );
+    },
+    onError: (e: any) => toast.error("Erro ao exportar PDF", { description: e.message }),
+  });
 
   // Tags
   const { data: tags, refetch: refetchTags } = (trpc as any).kanban.listarTags.useQuery();
@@ -786,6 +797,29 @@ export default function Kanban() {
             >
               <Archive className="h-3 w-3" />
               {mostrarArquivados ? "Mostrando arquivados" : "Arquivados"}
+            </button>
+
+            {/* Exporta a lista exatamente como está na tela — os mesmos
+                filtros, inclusive a busca textual. */}
+            <button
+              onClick={() =>
+                exportarPdfMut?.mutate?.({
+                  funilId: funilAtivo ?? undefined,
+                  ...filtros,
+                  busca: buscaTexto.trim() || undefined,
+                  mostrarArquivados,
+                })
+              }
+              disabled={!funilAtivo || exportarPdfMut?.isPending}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-white border-slate-200 text-slate-600 hover:border-slate-300 transition-all disabled:opacity-50"
+              title="Baixa a lista de cards em PDF, com os filtros aplicados"
+            >
+              {exportarPdfMut?.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <FileDown className="h-3 w-3" />
+              )}
+              Exportar PDF
             </button>
           </div>
 

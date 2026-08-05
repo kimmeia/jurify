@@ -1,0 +1,282 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatórios — Agenda</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root{
+  --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+  --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+  --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+  --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+  --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2;
+  --aviso:#b45309; --aviso-bg:#fffbeb;
+  --ok:#059669; --ok-bg:#ecfdf5;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
+.wrap{padding:24px 28px}
+.topo{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.h1{font-family:'Poppins';font-weight:700;font-size:27px;letter-spacing:-.01em;line-height:1}
+.sub{margin-top:6px;font-size:13.5px;color:var(--mudo)}
+.acoes{display:flex;gap:8px}
+.btn{height:36px;border:1px solid var(--borda);background:#fff;border-radius:9px;padding:0 14px;display:flex;
+  align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--corpo)}
+.btn.primary{background:var(--acento);border-color:var(--acento);color:#fff;box-shadow:0 8px 18px -9px #7c3aed99}
+.rels{margin-top:15px;display:flex;gap:3px;background:var(--hairline);padding:3px;border-radius:10px;width:fit-content}
+.rels span{padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--mudo);border-radius:8px;display:flex;align-items:center;gap:7px}
+.rels span.on{background:#fff;color:var(--tinta);box-shadow:0 1px 3px #0f172a1a}
+.filtros{margin-top:12px;background:#fff;border:1px solid var(--borda);border-radius:12px;
+  padding:9px 11px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.per{display:flex;gap:3px;background:var(--hairline);padding:3px;border-radius:9px}
+.per span{padding:6px 11px;font-size:12px;font-weight:600;color:var(--mudo);border-radius:7px}
+.per span.on{background:#fff;color:var(--tinta);box-shadow:0 1px 3px #0f172a1a}
+.sel{height:34px;border:1px solid var(--borda);border-radius:8px;padding:0 11px;display:flex;align-items:center;gap:8px;
+  font-size:12.5px;font-weight:500;color:var(--corpo)}
+.cap{color:var(--fraco);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.comp{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--corpo-2);
+  border:1px solid var(--borda);border-radius:8px;padding:0 11px;height:34px}
+.comp .cx{width:15px;height:15px;border-radius:4px;background:var(--acento);display:flex;align-items:center;
+  justify-content:center;color:#fff}
+
+.kpis{margin-top:13px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpis.tres{grid-template-columns:repeat(3,1fr)}
+.kpis.dois{grid-template-columns:repeat(2,1fr)}
+.kpis.seis{grid-template-columns:repeat(6,1fr)}
+.kpi{background:#fff;border:1px solid var(--borda);border-radius:12px;padding:13px 15px}
+.k-l{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--fraco)}
+.k-linha{display:flex;align-items:baseline;gap:9px;margin-top:6px}
+.k-v{font-size:26px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+.kpis.seis .k-v{font-size:22px}
+.k-d{display:inline-flex;align-items:center;gap:2px;font-size:11.5px;font-weight:700;border-radius:6px;padding:2px 6px}
+.k-d.sobe{background:var(--ok-bg);color:var(--ok)}
+.k-d.desce{background:var(--alerta-bg);color:var(--alerta)}
+.k-s{margin-top:5px;font-size:11px;color:var(--mudo);min-height:14px}
+
+.grade{margin-top:12px;display:grid;gap:12px}
+.g-2{grid-template-columns:1.55fr 1fr}
+.g-2i{grid-template-columns:1fr 1.55fr}
+.g-11{grid-template-columns:1fr 1fr}
+.card{background:#fff;border:1px solid var(--borda);border-radius:12px;display:flex;flex-direction:column;overflow:hidden}
+.card-top{padding:11px 15px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:9px}
+.card-top .ct{font-family:'Poppins';font-weight:700;font-size:14px}
+.card-top .cs{font-size:11px;color:var(--mudo);margin-left:auto}
+
+.graf{padding:14px 15px 8px;display:flex;align-items:flex-end;gap:4px}
+.barra{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px;height:100%}
+.barra i{display:block;width:100%;border-radius:4px 4px 0 0;background:#7c3aed}
+.barra i.ciano{background:#0891b2}
+.barra i.indigo{background:#6366f1}
+.barra i.verde{background:#059669}
+.barra i.fds{opacity:.28}
+.barra b{font-size:9px;font-weight:600;color:var(--fraco);height:10px}
+
+.lista-b{padding:11px 13px;display:flex;flex-direction:column;gap:11px}
+.lb{display:flex;align-items:center;gap:10px}
+.lb .nm{width:196px;flex:0 0 auto;font-size:12px;color:var(--corpo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb .tr{flex:1;height:16px;background:var(--hairline);border-radius:4px;overflow:hidden}
+.lb .tr i{display:block;height:100%;border-radius:4px}
+.lb .qt{width:64px;text-align:right;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lb.largo .qt{width:104px}
+.lb .pc{width:44px;text-align:right;font-size:11px;color:var(--fraco);font-weight:600}
+
+table{width:100%;border-collapse:collapse}
+th{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--fraco);
+  text-align:center;padding:9px 10px;border-bottom:1px solid var(--hairline)}
+th:first-child{text-align:left} th:last-child{text-align:right}
+td{font-size:12.5px;padding:10px;text-align:center;border-bottom:1px solid var(--hairline);font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+td:first-child{text-align:left;font-weight:600;color:var(--tinta-2)}
+td:last-child{text-align:right;font-weight:700}
+td.g{color:var(--ok);font-weight:700} td.p{color:var(--alerta);font-weight:700}
+td.mudo{color:var(--mudo)}
+tr.total td{background:#f8fafc;font-weight:800}
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700}
+.pill.verde{background:var(--ok-bg);color:var(--ok)}
+.pill.ambar{background:var(--aviso-bg);color:var(--aviso)}
+.pill.vermelho{background:var(--alerta-bg);color:var(--alerta-forte)}
+.tdnome{display:flex;align-items:center;gap:8px}
+.tdnome .av{width:22px;height:22px;border-radius:50%;color:#fff;font-size:8.5px;font-weight:700;display:flex;
+  align-items:center;justify-content:center;flex:0 0 auto}
+
+.sec{margin-top:22px;display:flex;align-items:center;gap:9px}
+.sec .t{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--fraco)}
+.sec .l{flex:1;height:1px;background:var(--borda)}
+
+.envio{margin-top:12px;background:#fff;border:1px solid var(--borda);border-radius:11px;padding:11px 15px;
+  display:flex;align-items:center;gap:10px;font-size:12px;color:var(--corpo-2)}
+.envio b{color:var(--tinta)}
+.envio .cta{margin-left:auto;color:#5b21b6;font-weight:700}
+
+/* funil */
+.funil{padding:14px 15px;display:flex;flex-direction:column;gap:9px}
+.fn{display:flex;align-items:center;gap:11px}
+.fn .et{width:112px;flex:0 0 auto;font-size:12px;font-weight:600;color:var(--corpo)}
+.fn .bar{flex:1;height:30px;background:var(--hairline);border-radius:6px;overflow:hidden;position:relative}
+.fn .bar i{display:block;height:100%;border-radius:6px}
+.fn .bar span{position:absolute;left:10px;top:0;height:30px;display:flex;align-items:center;font-size:12px;
+  font-weight:800;color:#fff}
+.fn .vl{width:118px;text-align:right;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.fn .cv{width:92px;text-align:right;font-size:10.5px;color:var(--fraco);font-weight:600}
+
+html,body{width:1600px;height:876px;overflow:hidden}
+</style></head><body><div class="wrap">
+
+  <div class="topo">
+    <div>
+      <div class="h1">Relatórios</div>
+      <div class="sub">Atendimento, comercial, produção, agenda, cálculos e financeiro — no mesmo período</div>
+    </div>
+    <div class="acoes">
+      <div class="btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg> Enviar por e-mail</div>
+      <div class="btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg> CSV</div>
+      <div class="btn primary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg> Exportar PDF</div>
+    </div>
+  </div>
+
+  <div class="rels">
+    <span class=""><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg> Atendimento</span><span class=""><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg> Comercial</span><span class=""><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg> Produção</span><span class="on"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg> Agenda</span><span class=""><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg> Cálculos</span><span class=""><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg> Financeiro</span>
+  </div>
+
+  <div class="filtros">
+    <div class="per">
+      <span>7 dias</span><span class="on">30 dias</span><span>90 dias</span><span>Este mês</span><span>Personalizado</span>
+    </div>
+    <div class="sel"><span class="cap">Tipo</span> Todos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div><div class="sel"><span class="cap">Responsável</span> Todos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+    <div class="comp"><span class="cx"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span> Comparar com período anterior</div>
+  </div>
+<div class="kpis seis">
+  
+  <div class="kpi">
+    <p class="k-l">Agendamentos</p>
+    <div class="k-linha">
+      <span class="k-v">338</span>
+      <span class="k-d sobe"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>9%</span>
+    </div>
+    <p class="k-s">310 antes</p>
+  </div>
+  
+  <div class="kpi">
+    <p class="k-l">Compareceram</p>
+    <div class="k-linha">
+      <span class="k-v" style="color:#059669">258</span>
+      <span class="k-d sobe"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>12%</span>
+    </div>
+    <p class="k-s">230 antes</p>
+  </div>
+  
+  <div class="kpi">
+    <p class="k-l">Não vieram</p>
+    <div class="k-linha">
+      <span class="k-v" style="color:#dc2626">54</span>
+      <span class="k-d sobe"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10"/><path d="M17 7v10H7"/></svg>8%</span>
+    </div>
+    <p class="k-s">59 antes</p>
+  </div>
+  
+  <div class="kpi">
+    <p class="k-l">Remarcaram</p>
+    <div class="k-linha">
+      <span class="k-v" style="color:#b45309">26</span>
+      <span class="k-d sobe"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>4%</span>
+    </div>
+    <p class="k-s">25 antes</p>
+  </div>
+  
+  <div class="kpi">
+    <p class="k-l">Sem resultado</p>
+    <div class="k-linha">
+      <span class="k-v">0</span>
+      
+    </div>
+    <p class="k-s">todos registrados</p>
+  </div>
+  
+  <div class="kpi">
+    <p class="k-l">Comparecimento</p>
+    <div class="k-linha">
+      <span class="k-v">76%</span>
+      <span class="k-d sobe"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>2%</span>
+    </div>
+    <p class="k-s">74% antes</p>
+  </div>
+</div>
+<div class="grade g-2">
+  <div class="card">
+    <div class="card-top"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg><span class="ct">Agendamentos por dia</span>
+      <span class="cs">338 no período · média de 11/dia</span></div>
+    
+  <div class="graf" style="height:168px">
+    <span class="barra"><i class="" style="height:78%"></i><b>01</b></span><span class="barra"><i class="" style="height:61%"></i><b></b></span><span class="barra"><i class="" style="height:89%"></i><b>03</b></span><span class="barra"><i class="" style="height:100%"></i><b></b></span><span class="barra"><i class="" style="height:67%"></i><b>05</b></span><span class="barra"><i class=" fds" style="height:11%"></i><b></b></span><span class="barra"><i class=" fds" style="height:17%"></i><b>07</b></span><span class="barra"><i class="" style="height:72%"></i><b></b></span><span class="barra"><i class="" style="height:83%"></i><b>09</b></span><span class="barra"><i class="" style="height:94%"></i><b></b></span><span class="barra"><i class="" style="height:67%"></i><b>11</b></span><span class="barra"><i class="" style="height:89%"></i><b></b></span><span class="barra"><i class=" fds" style="height:11%"></i><b>13</b></span><span class="barra"><i class=" fds" style="height:6%"></i><b></b></span><span class="barra"><i class="" style="height:67%"></i><b>15</b></span><span class="barra"><i class="" style="height:83%"></i><b></b></span><span class="barra"><i class="" style="height:89%"></i><b>17</b></span><span class="barra"><i class="" style="height:72%"></i><b></b></span><span class="barra"><i class="" style="height:78%"></i><b>19</b></span><span class="barra"><i class=" fds" style="height:17%"></i><b></b></span><span class="barra"><i class=" fds" style="height:11%"></i><b>21</b></span><span class="barra"><i class="" style="height:83%"></i><b></b></span><span class="barra"><i class="" style="height:67%"></i><b>23</b></span><span class="barra"><i class="" style="height:94%"></i><b></b></span><span class="barra"><i class="" style="height:72%"></i><b>25</b></span><span class="barra"><i class="" style="height:78%"></i><b></b></span><span class="barra"><i class=" fds" style="height:17%"></i><b>27</b></span><span class="barra"><i class=" fds" style="height:11%"></i><b></b></span><span class="barra"><i class="" style="height:89%"></i><b>29</b></span><span class="barra"><i class="" style="height:72%"></i><b></b></span>
+  </div>
+  </div>
+  <div class="card">
+    <div class="card-top"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg><span class="ct">Por tipo de compromisso</span>
+      <span class="cs">338 no período</span></div>
+    <div class="lista-b">
+      
+  <div class="lb">
+    <span class="nm">Reunião comercial</span>
+    <span class="tr"><i style="width:100%;background:#7c3aed"></i></span>
+    <span class="qt">148</span>
+    <span class="pc">44%</span>
+  </div>
+  <div class="lb">
+    <span class="nm">Prazo processual</span>
+    <span class="tr"><i style="width:48%;background:#e11d48"></i></span>
+    <span class="qt">71</span>
+    <span class="pc">21%</span>
+  </div>
+  <div class="lb">
+    <span class="nm">Audiência</span>
+    <span class="tr"><i style="width:30%;background:#0891b2"></i></span>
+    <span class="qt">44</span>
+    <span class="pc">13%</span>
+  </div>
+  <div class="lb">
+    <span class="nm">Follow-up</span>
+    <span class="tr"><i style="width:26%;background:#d97706"></i></span>
+    <span class="qt">39</span>
+    <span class="pc">12%</span>
+  </div>
+  <div class="lb">
+    <span class="nm">Tarefa</span>
+    <span class="tr"><i style="width:16%;background:#059669"></i></span>
+    <span class="qt">24</span>
+    <span class="pc">7%</span>
+  </div>
+  <div class="lb">
+    <span class="nm">Outro</span>
+    <span class="tr"><i style="width:8%;background:#94a3b8"></i></span>
+    <span class="qt">12</span>
+    <span class="pc">4%</span>
+  </div>
+    </div>
+  </div>
+</div>
+<div class="grade">
+  <div class="card">
+    <div class="card-top"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg><span class="ct">Por responsável</span>
+      <span class="cs">quem consegue trazer o cliente</span></div>
+    <table>
+      <thead><tr><th>Responsável</th><th>Total</th><th>Veio</th><th>Não veio</th><th>Remarcou</th><th>Taxa</th></tr></thead>
+      <tbody>
+        
+          <tr><td>Isaac Luca Cavalcante</td><td>118</td><td class="g">91</td><td class="p">18</td>
+            <td class="mudo">9</td>
+            <td><span class="pill ambar">77%</span></td></tr>
+          <tr><td>Francisco Wesley Freitas</td><td>94</td><td class="g">68</td><td class="p">19</td>
+            <td class="mudo">7</td>
+            <td><span class="pill ambar">72%</span></td></tr>
+          <tr><td>Milena Mello Mansur</td><td>76</td><td class="g">61</td><td class="p">9</td>
+            <td class="mudo">6</td>
+            <td><span class="pill verde">80%</span></td></tr>
+          <tr><td>Pablo Sousa Silva</td><td>50</td><td class="g">38</td><td class="p">8</td>
+            <td class="mudo">4</td>
+            <td><span class="pill ambar">76%</span></td></tr>
+        <tr class="total"><td>Total</td><td>338</td><td class="g">258</td><td class="p">54</td>
+          <td class="mudo">26</td><td><span class="pill ambar">76%</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+<div class="envio"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="10"/></svg>
+  <span>Este relatório pode ir sozinho pro seu e-mail <b>toda segunda</b> — mesmo motor do resumo diário.</span>
+  <span class="cta">Programar envio →</span></div></div></body></html>
