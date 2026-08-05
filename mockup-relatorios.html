@@ -1,0 +1,269 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root{
+  --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+  --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+  --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+  --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+  --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2;
+  --ok:#059669; --ok-bg:#ecfdf5;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1600px;height:900px;overflow:hidden}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
+.wrap{padding:24px 28px;height:100%;display:flex;flex-direction:column}
+
+.topo{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex:0 0 auto}
+.h1{font-family:'Poppins';font-weight:700;font-size:27px;letter-spacing:-.01em;line-height:1}
+.sub{margin-top:6px;font-size:13.5px;color:var(--mudo)}
+.acoes{display:flex;gap:8px;flex:0 0 auto}
+.btn{height:36px;border:1px solid var(--borda);background:#fff;border-radius:9px;padding:0 14px;display:flex;
+  align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--corpo)}
+.btn.primary{background:var(--acento);border-color:var(--acento);color:#fff;box-shadow:0 8px 18px -9px #7c3aed99}
+
+/* os seis relatórios à vista, no lugar do combobox */
+.rels{margin-top:15px;flex:0 0 auto;display:flex;gap:3px;background:var(--hairline);padding:3px;border-radius:10px;align-self:flex-start}
+.rels span{padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--mudo);border-radius:8px;display:flex;align-items:center;gap:7px}
+.rels span.on{background:#fff;color:var(--tinta);box-shadow:0 1px 3px #0f172a1a}
+
+/* filtro único: vale pros seis e não zera quando troca de relatório */
+.filtros{margin-top:12px;flex:0 0 auto;background:#fff;border:1px solid var(--borda);border-radius:12px;
+  padding:9px 11px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.per{display:flex;gap:3px;background:var(--hairline);padding:3px;border-radius:9px}
+.per span{padding:6px 11px;font-size:12px;font-weight:600;color:var(--mudo);border-radius:7px}
+.per span.on{background:#fff;color:var(--tinta);box-shadow:0 1px 3px #0f172a1a}
+.sel{height:34px;border:1px solid var(--borda);border-radius:8px;padding:0 11px;display:flex;align-items:center;gap:8px;
+  font-size:12.5px;font-weight:500;color:var(--corpo)}
+.cap{color:var(--fraco);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.comp{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--corpo-2);
+  border:1px solid var(--borda);border-radius:8px;padding:0 11px;height:34px}
+.comp .cx{width:15px;height:15px;border-radius:4px;background:var(--acento);display:flex;align-items:center;
+  justify-content:center;color:#fff}
+
+/* KPIs */
+.kpis{margin-top:13px;flex:0 0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{background:#fff;border:1px solid var(--borda);border-radius:12px;padding:13px 15px}
+.k-l{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--fraco)}
+.k-linha{display:flex;align-items:baseline;gap:9px;margin-top:6px}
+.k-v{font-size:26px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+.k-d{display:inline-flex;align-items:center;gap:2px;font-size:11.5px;font-weight:700;border-radius:6px;padding:2px 6px}
+.k-d.sobe{background:var(--ok-bg);color:var(--ok)}
+.k-d.desce{background:var(--alerta-bg);color:var(--alerta)}
+.k-s{margin-top:5px;font-size:11px;color:var(--mudo)}
+
+/* corpo */
+.corpo{margin-top:13px;flex:1;min-height:0;display:grid;grid-template-columns:1.4fr 1fr;grid-template-rows:auto 1fr;gap:13px}
+.card{background:#fff;border:1px solid var(--borda);border-radius:12px;display:flex;flex-direction:column;overflow:hidden}
+.card-top{padding:11px 15px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:9px;flex:0 0 auto}
+.card-top .ct{font-family:'Poppins';font-weight:700;font-size:14px}
+.card-top .cs{font-size:11px;color:var(--mudo);margin-left:auto}
+
+.graf{flex:1;min-height:0;padding:14px 15px 10px;display:flex;align-items:flex-end;gap:5px}
+.barra{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px;height:100%}
+.barra i{display:block;width:100%;border-radius:4px 4px 0 0;background:#7c3aed}
+.barra i.fds{background:#ddd6fe}
+.barra b{font-size:9px;font-weight:600;color:var(--fraco)}
+
+.rank{padding:9px 13px;display:flex;flex-direction:column;gap:11px}
+.rk{display:flex;align-items:center;gap:10px}
+.rk .av{width:26px;height:26px;border-radius:50%;color:#fff;font-size:9.5px;font-weight:700;display:flex;
+  align-items:center;justify-content:center;flex:0 0 auto}
+.rk .co{flex:1;min-width:0}
+.rk .nm{font-size:12.5px;font-weight:600;color:var(--tinta-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rk .tr{height:5px;background:var(--hairline);border-radius:3px;margin-top:5px;overflow:hidden}
+.rk .tr i{display:block;height:100%;border-radius:3px}
+.rk .nums{text-align:right;flex:0 0 auto;width:118px}
+.rk .n1{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.rk .n2{font-size:10px;color:var(--mudo);margin-top:1px}
+
+.canais{padding:11px 13px;display:flex;flex-direction:column;gap:10px}
+.cn{display:flex;align-items:center;gap:10px}
+.cn .sw{width:10px;height:10px;border-radius:3px;flex:0 0 auto}
+.cn .nm{flex:1;min-width:0;font-size:12.5px;color:var(--corpo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cn .qt{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+.cn .pc{width:42px;text-align:right;font-size:11px;color:var(--fraco);font-weight:600}
+
+.envio{padding:12px 15px;display:flex;align-items:center;gap:11px;font-size:12px;color:var(--corpo-2)}
+.envio b{color:var(--tinta)}
+</style></head>
+<body>
+<div class="wrap">
+
+  <div class="topo">
+    <div>
+      <div class="h1">Relatórios</div>
+      <div class="sub">Atendimento, comercial, produção, agenda, cálculos e financeiro — no mesmo período</div>
+    </div>
+    <div class="acoes">
+      <div class="btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg> Enviar por e-mail</div>
+      <div class="btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg> CSV</div>
+      <div class="btn primary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg> Exportar PDF</div>
+    </div>
+  </div>
+
+  <div class="rels">
+    <span class="on"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg> Atendimento</span><span class=""><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg> Comercial</span><span class=""><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg> Produção</span><span class=""><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg> Agenda</span><span class=""><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg> Cálculos</span><span class=""><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg> Financeiro</span>
+  </div>
+
+  <div class="filtros">
+    <div class="per">
+      <span>7 dias</span><span class="on">30 dias</span><span>90 dias</span><span>Este mês</span><span>Personalizado</span>
+    </div>
+    <div class="sel"><span class="cap">Setor</span> Todos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+    <div class="sel"><span class="cap">Atendente</span> Todos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+    <div class="sel"><span class="cap">Canal</span> Todos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+    <div class="comp"><span class="cx"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span> Comparar com período anterior</div>
+  </div>
+
+  <div class="kpis">
+  <div class="kpi">
+    <p class="k-l">Atendimentos</p>
+    <div class="k-linha">
+      <span class="k-v">1.284</span>
+      <span class="k-d sobe">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>12%
+      </span>
+    </div>
+    <p class="k-s">836 no mês passado</p>
+  </div>
+  <div class="kpi">
+    <p class="k-l">Msgs recebidas</p>
+    <div class="k-linha">
+      <span class="k-v">9.417</span>
+      <span class="k-d sobe">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>8%
+      </span>
+    </div>
+    <p class="k-s">8.720 no mês passado</p>
+  </div>
+  <div class="kpi">
+    <p class="k-l">Msgs enviadas</p>
+    <div class="k-linha">
+      <span class="k-v">7.902</span>
+      <span class="k-d desce">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10"/><path d="M17 7v10H7"/></svg>3%
+      </span>
+    </div>
+    <p class="k-s">8.140 no mês passado</p>
+  </div>
+  <div class="kpi">
+    <p class="k-l">Tempo p/ 1ª resposta</p>
+    <div class="k-linha">
+      <span class="k-v">14 min</span>
+      <span class="k-d sobe">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10"/><path d="M17 7v10H7"/></svg>22%
+      </span>
+    </div>
+    <p class="k-s">18 min no mês passado</p>
+  </div></div>
+
+  <div class="corpo">
+    <div class="card" style="grid-row:span 2">
+      <div class="card-top">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>
+        <span class="ct">Atendimentos por dia</span>
+        <span class="cs">1.284 no período · média de 43/dia · fim de semana em tom claro</span>
+      </div>
+      <div class="graf">
+        <span class="barra"><i class="" style="height:85%"></i><b>01</b></span><span class="barra"><i class="" style="height:75%"></i><b></b></span><span class="barra"><i class="" style="height:88%"></i><b>03</b></span><span class="barra"><i class="" style="height:100%"></i><b></b></span><span class="barra"><i class="" style="height:71%"></i><b>05</b></span><span class="barra"><i class="fds" style="height:9%"></i><b></b></span><span class="barra"><i class="fds" style="height:22%"></i><b>07</b></span><span class="barra"><i class="" style="height:74%"></i><b></b></span><span class="barra"><i class="" style="height:86%"></i><b>09</b></span><span class="barra"><i class="" style="height:98%"></i><b></b></span><span class="barra"><i class="" style="height:72%"></i><b>11</b></span><span class="barra"><i class="" style="height:95%"></i><b></b></span><span class="barra"><i class="fds" style="height:14%"></i><b>13</b></span><span class="barra"><i class="fds" style="height:9%"></i><b></b></span><span class="barra"><i class="" style="height:72%"></i><b>15</b></span><span class="barra"><i class="" style="height:91%"></i><b></b></span><span class="barra"><i class="" style="height:91%"></i><b>17</b></span><span class="barra"><i class="" style="height:74%"></i><b></b></span><span class="barra"><i class="" style="height:82%"></i><b>19</b></span><span class="barra"><i class="fds" style="height:11%"></i><b></b></span><span class="barra"><i class="fds" style="height:22%"></i><b>21</b></span><span class="barra"><i class="" style="height:89%"></i><b></b></span><span class="barra"><i class="" style="height:72%"></i><b>23</b></span><span class="barra"><i class="" style="height:98%"></i><b></b></span><span class="barra"><i class="" style="height:75%"></i><b>25</b></span><span class="barra"><i class="" style="height:82%"></i><b></b></span><span class="barra"><i class="fds" style="height:25%"></i><b>27</b></span><span class="barra"><i class="fds" style="height:25%"></i><b></b></span><span class="barra"><i class="" style="height:97%"></i><b>29</b></span><span class="barra"><i class="" style="height:72%"></i><b></b></span>
+      </div>
+      <div class="envio" style="border-top:1px solid var(--hairline)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="10"/></svg>
+        <span>Este relatório pode ir sozinho pro seu e-mail <b>toda segunda</b> — mesmo motor do resumo diário.</span>
+        <span style="margin-left:auto;color:#5b21b6;font-weight:700">Programar envio →</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg>
+        <span class="ct">Ranking de atendentes</span>
+        <span class="cs">por atendimentos</span>
+      </div>
+      <div class="rank">
+        
+          <div class="rk">
+            <span class="av" style="background:#7c3aed">IL</span>
+            <span class="co">
+              <span class="nm">Isaac Luca Cavalcante</span>
+              <span class="tr"><i style="width:100%;background:#7c3aed"></i></span>
+            </span>
+            <span class="nums">
+              <span class="n1">412</span>
+              <span class="n2">1ª resp. 11 min</span>
+            </span>
+          </div>
+          <div class="rk">
+            <span class="av" style="background:#0891b2">FW</span>
+            <span class="co">
+              <span class="nm">Francisco Wesley Freitas</span>
+              <span class="tr"><i style="width:86%;background:#0891b2"></i></span>
+            </span>
+            <span class="nums">
+              <span class="n1">356</span>
+              <span class="n2">1ª resp. 16 min</span>
+            </span>
+          </div>
+          <div class="rk">
+            <span class="av" style="background:#d97706">MM</span>
+            <span class="co">
+              <span class="nm">Milena Mello Mansur</span>
+              <span class="tr"><i style="width:70%;background:#d97706"></i></span>
+            </span>
+            <span class="nums">
+              <span class="n1">289</span>
+              <span class="n2">1ª resp. 13 min</span>
+            </span>
+          </div>
+          <div class="rk">
+            <span class="av" style="background:#059669">PS</span>
+            <span class="co">
+              <span class="nm">Pablo Sousa Silva</span>
+              <span class="tr"><i style="width:55%;background:#059669"></i></span>
+            </span>
+            <span class="nums">
+              <span class="n1">227</span>
+              <span class="n2">1ª resp. 22 min</span>
+            </span>
+          </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>
+        <span class="ct">Por canal</span>
+        <span class="cs">1284 atendimentos</span>
+      </div>
+      <div class="canais">
+        
+          <div class="cn">
+            <span class="sw" style="background:#25d366"></span>
+            <span class="nm">WhatsApp — Comercial</span>
+            <span class="qt">742</span>
+            <span class="pc">58%</span>
+          </div>
+          <div class="cn">
+            <span class="sw" style="background:#22c55e"></span>
+            <span class="nm">WhatsApp — Suporte</span>
+            <span class="qt">361</span>
+            <span class="pc">28%</span>
+          </div>
+          <div class="cn">
+            <span class="sw" style="background:#e1306c"></span>
+            <span class="nm">Instagram Direct</span>
+            <span class="qt">128</span>
+            <span class="pc">10%</span>
+          </div>
+          <div class="cn">
+            <span class="sw" style="background:#0ea5e9"></span>
+            <span class="nm">Site (formulário)</span>
+            <span class="qt">53</span>
+            <span class="pc">4%</span>
+          </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>
