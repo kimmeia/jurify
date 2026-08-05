@@ -1,0 +1,341 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>Central de movimentações</title><link rel="stylesheet" href="app.css">
+<style>body{width:1520px}main{padding:24px 24px 32px}</style>
+</head><body class="bg-background text-foreground"><main>
+  <h1 class="text-2xl font-bold tracking-tight">Central de movimentações — o que ainda falta resolver</h1>
+  <p class="text-sm text-muted-foreground mt-1 mb-6" style="max-width:1100px">
+    A barra de hoje mistura dois eixos: <b class="text-foreground">o que é a movimentação</b>
+    (exige ação / relevante) e <b class="text-foreground">se você já cuidou dela</b> (lida / não lida).
+    Como os dois viram abas irmãs, a que contém o trabalho de verdade parece só mais um filtro.
+  </p>
+
+  
+<div class="mb-3">
+  <p class="text-[11px] font-bold uppercase tracking-widest text-rose-600">Hoje</p>
+  <p class="text-base font-bold mt-0.5">Dois eixos disputando a mesma barra</p>
+  <p class="text-[12.5px] text-muted-foreground leading-snug mt-1" style="max-width:1000px">As pastilhas repetem números que já estão nas abas — <b class='text-foreground'>0 exigem ação sua</b> aparece duas vezes e sugere que não há nada a fazer, enquanto as 9 pendências vivem na última aba da direita.</p>
+</div>
+  
+<div class="rounded-xl border bg-card p-4">
+  <div class="flex flex-wrap gap-2">
+    
+<div style="" class="rounded-[10px] border px-3 py-1.5 flex items-baseline gap-1.5 bg-card border-border">
+  <b class="text-[15px] font-bold tabular-nums ">35</b>
+  <span class="text-[11.5px] text-muted-foreground">nos últimos 7 dias</span>
+</div>
+    
+<div style="outline:2px solid #fb7185;outline-offset:3px;border-radius:11px" class="rounded-[10px] border px-3 py-1.5 flex items-baseline gap-1.5 bg-card border-border">
+  <b class="text-[15px] font-bold tabular-nums ">0</b>
+  <span class="text-[11.5px] text-muted-foreground">exigem ação sua</span>
+</div>
+    
+<div style="" class="rounded-[10px] border px-3 py-1.5 flex items-baseline gap-1.5 bg-card border-border">
+  <b class="text-[15px] font-bold tabular-nums ">9</b>
+  <span class="text-[11.5px] text-muted-foreground">não lidas</span>
+</div>
+  </div>
+  <div class="rounded-xl border bg-card p-2.5 flex flex-wrap items-center gap-2.5 mt-3">
+    <div class="relative flex-1 min-w-[240px]">
+      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+      <div class="pl-9 h-9 rounded-md border bg-background flex items-center text-[13px] text-muted-foreground">Buscar por cliente, CNJ ou trecho da decisão…</div>
+    </div>
+    <div class="h-9 w-[170px] rounded-md border bg-background flex items-center justify-between px-3 text-[13px]">Últimos 7 dias <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-muted-foreground"><path d="m6 9 6 6 6-6"/></svg></div>
+    <div class="flex gap-1 bg-muted p-[3px] rounded-[10px]">
+      
+<button style="" class="px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 text-muted-foreground">Tudo<span class="rounded-full px-1.5 text-[10px] font-extrabold tabular-nums bg-border text-muted-foreground">35</span></button>
+      
+<button style="outline:2px solid #fb7185;outline-offset:3px;border-radius:11px" class="px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 text-muted-foreground">Exigem ação<span class="rounded-full px-1.5 text-[10px] font-extrabold tabular-nums bg-border text-muted-foreground">0</span></button>
+      
+<button style="" class="px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 text-muted-foreground">Relevantes<span class="rounded-full px-1.5 text-[10px] font-extrabold tabular-nums bg-border text-muted-foreground">18</span></button>
+      
+<button style="outline:2px solid #fb7185;outline-offset:3px;border-radius:11px" class="px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 bg-card text-foreground shadow-sm">Não lidas<span class="rounded-full px-1.5 text-[10px] font-extrabold tabular-nums bg-primary text-primary-foreground">9</span></button>
+    </div>
+  </div>
+  <div class="flex items-center gap-6 mt-2.5 px-1">
+    <p class="text-[11.5px] text-rose-600 font-semibold">O mesmo “exigem ação” em dois controles, com o mesmo zero.</p>
+    <p class="text-[11.5px] text-rose-600 font-semibold ml-auto">As 9 pendências do dia ficam na última aba da direita.</p>
+  </div>
+</div>
+
+  <div style="margin:28px 0" class="h-px bg-border"></div>
+
+  
+<div class="mb-3">
+  <p class="text-[11px] font-bold uppercase tracking-widest text-violet-600">Proposta</p>
+  <p class="text-base font-bold mt-0.5">Uma pergunta por vez: já resolvi ou não?</p>
+  <p class="text-[12.5px] text-muted-foreground leading-snug mt-1" style="max-width:1000px">As abas passam a responder só <b class='text-foreground'>o estado</b> — e absorvem as pastilhas, que viravam número duplicado. A classificação continua existindo, mas onde ela já funcionava: como seções dentro da lista (“Exigem ação sua” no topo, relevantes em seguida, rotina recolhida). O vocabulário troca <b class='text-foreground'>lida/não lida</b> por <b class='text-foreground'>a resolver/resolvida</b>, que é o que o botão do card já dizia.</p>
+</div>
+  <div class="rounded-2xl border bg-muted/30 p-4">
+<div class="flex flex-wrap items-start justify-between gap-3">
+  <div>
+    <h1 class="text-[27px] font-bold tracking-tight leading-none">Movimentações</h1>
+    <p class="text-[13.5px] text-muted-foreground mt-1.5">O que os tribunais publicaram nos seus processos</p>
+  </div>
+  <button class="h-9 px-3 rounded-md border bg-card text-[13px] font-semibold inline-flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>Resumo diário</button>
+</div>
+
+<div class="flex items-stretch gap-2.5 mt-4">
+  
+<button style="width:248px" class="shrink-0 text-left rounded-xl border-2 px-3.5 py-3 border-violet-400 bg-violet-50">
+  <div class="flex items-baseline gap-2">
+    <b class="text-[26px] font-bold tabular-nums leading-none text-violet-700">9</b>
+    <span class="text-[14px] font-bold text-violet-800">a resolver</span>
+  </div>
+  <p class="text-[11.5px] leading-snug mt-1 text-violet-700">ainda esperando você — é aqui que o dia acontece</p>
+</button>
+  
+<button style="width:248px" class="shrink-0 text-left rounded-xl border-2 px-3.5 py-3 border-border bg-card">
+  <div class="flex items-baseline gap-2">
+    <b class="text-[26px] font-bold tabular-nums leading-none text-foreground">26</b>
+    <span class="text-[14px] font-bold text-foreground">resolvidas</span>
+  </div>
+  <p class="text-[11.5px] leading-snug mt-1 text-muted-foreground">você já providenciou ou marcou como vista</p>
+</button>
+  
+<button style="width:248px" class="shrink-0 text-left rounded-xl border-2 px-3.5 py-3 border-border bg-card">
+  <div class="flex items-baseline gap-2">
+    <b class="text-[26px] font-bold tabular-nums leading-none text-foreground">35</b>
+    <span class="text-[14px] font-bold text-foreground">no período</span>
+  </div>
+  <p class="text-[11.5px] leading-snug mt-1 text-muted-foreground">tudo que foi publicado nos últimos 7 dias</p>
+</button>
+  <div class="flex-1 rounded-xl border border-dashed bg-card px-4 py-3 flex items-center gap-2.5">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-muted-foreground shrink-0"><path d="M20 6 9 17l-5-5"/></svg>
+    <p class="text-[12px] text-muted-foreground leading-snug">
+      Uma movimentação sai de <b class="text-foreground">A resolver</b> quando você clica em
+      <b class="text-foreground">Já resolvi</b> — ou quando cria o prazo a partir dela.
+      Nada some sozinho.
+    </p>
+  </div>
+</div>
+
+<div class="rounded-xl border bg-card p-2.5 flex flex-wrap items-center gap-2.5 mt-3">
+  <div class="relative flex-1 min-w-[240px]">
+    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+    <div class="pl-9 h-9 rounded-md border bg-background flex items-center text-[13px] text-muted-foreground">Buscar por cliente, CNJ ou trecho da decisão…</div>
+  </div>
+  <div style="width:168px" class="h-9 rounded-md border bg-background flex items-center justify-between px-3 text-[13px] font-medium">Últimos 7 dias <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-muted-foreground"><path d="m6 9 6 6 6-6"/></svg></div>
+  <div style="width:196px" class="h-9 rounded-md border bg-background flex items-center justify-between px-3 text-[13px] font-medium">Todos os tipos <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-muted-foreground"><path d="m6 9 6 6 6-6"/></svg></div>
+</div>
+
+<div class="space-y-5 mt-4">
+  <section>
+    
+<div class="flex items-center gap-2 mb-2">
+  <span class="text-[10.5px] font-extrabold uppercase tracking-[0.07em] text-muted-foreground">Exigem ação sua</span>
+  <span class="text-[10.5px] font-extrabold rounded-full px-2 py-0.5 tabular-nums bg-rose-600 text-white">2</span>
+  <span class="flex-1 h-px bg-border"></span>
+</div>
+    <div class="space-y-2.5">
+<div class="rounded-xl border bg-card overflow-hidden flex">
+  <div class="w-[3px] shrink-0 bg-rose-500"></div>
+  <div class="flex-1 min-w-0 p-4 flex items-start gap-4">
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-[13.5px] font-bold">Maria Aparecida Nunes × Banco Bradesco S/A</span>
+        <span class="text-[10.5px] font-mono text-muted-foreground">3057803-68.2025.8.06.0001</span>
+        <span class="text-[9.5px] font-bold uppercase tracking-[0.04em] text-muted-foreground border rounded px-1.5 py-px">TJCE</span>
+        <span class="text-[10px] font-bold text-muted-foreground">nosso cliente: Autor</span>
+        <span class="ml-auto text-[11px] font-semibold text-muted-foreground shrink-0">04/08 · ontem</span>
+      </div>
+      <p class="text-[14.5px] font-semibold leading-snug mt-1.5">Procedente em parte: R$ 18.400 deferidos, dano moral negado</p>
+      <p class="text-[12.5px] text-muted-foreground mt-1 leading-snug">Devolução em dobro das parcelas de seguro não contratado deferida. Dano moral afastado por ausência de prova do abalo.</p>
+      <p class="mt-2 border-l-2 border-border pl-2.5 text-[11.5px] text-muted-foreground leading-snug italic">“Do trânsito em julgado, intime-se o réu para cumprimento voluntário no prazo de 15 dias, sob pena da multa do art. 523.”</p>
+      <div class="flex items-center gap-x-3 gap-y-2 mt-2.5 flex-wrap">
+        <span class="rounded-lg border px-2.5 py-1 text-[11.5px] font-bold inline-flex items-center gap-1.5 bg-muted border-border text-foreground/80"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>Vence 26/08 · 12 dias úteis</span>
+        <span class="rounded-md px-2 py-0.5 text-[10.5px] font-bold bg-amber-50 text-amber-700">Parcial</span>
+      </div>
+    </div>
+    <div style="width:152px" class="shrink-0 flex flex-col gap-2">
+      <button class="h-8 rounded-md bg-primary text-primary-foreground text-[12.5px] font-semibold inline-flex items-center justify-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>Criar prazo</button>
+      <button class="h-8 rounded-md border bg-card text-[12.5px] font-semibold">Ver íntegra</button>
+      <button class="h-8 rounded-md text-[12.5px] font-semibold text-muted-foreground inline-flex items-center justify-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><path d="M20 6 9 17l-5-5"/></svg>Já resolvi</button>
+    </div>
+  </div>
+</div>
+<div class="rounded-xl border bg-card overflow-hidden flex">
+  <div class="w-[3px] shrink-0 bg-rose-500"></div>
+  <div class="flex-1 min-w-0 p-4 flex items-start gap-4">
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-[13.5px] font-bold">Construtora Vale Verde Ltda × José Ribamar Freitas</span>
+        <span class="text-[10.5px] font-mono text-muted-foreground">0812445-19.2024.8.06.0167</span>
+        <span class="text-[9.5px] font-bold uppercase tracking-[0.04em] text-muted-foreground border rounded px-1.5 py-px">TJCE</span>
+        <span class="text-[10px] font-bold text-muted-foreground">nosso cliente: Réu</span>
+        <span class="ml-auto text-[11px] font-semibold text-muted-foreground shrink-0">05/08 · hoje</span>
+      </div>
+      <p class="text-[14.5px] font-semibold leading-snug mt-1.5">Audiência de instrução designada para 12/08, às 14h30</p>
+      <p class="text-[12.5px] text-muted-foreground mt-1 leading-snug">Rol de testemunhas deve ser apresentado até 5 dias antes. Comparecimento pessoal das partes é obrigatório.</p>
+      <p class="mt-2 border-l-2 border-border pl-2.5 text-[11.5px] text-muted-foreground leading-snug italic">“Designo audiência de instrução e julgamento para o dia 12/08/2026, às 14h30, na sala virtual desta 3ª Vara Cível.”</p>
+      <div class="flex items-center gap-x-3 gap-y-2 mt-2.5 flex-wrap">
+        <span class="rounded-lg border px-2.5 py-1 text-[11.5px] font-bold inline-flex items-center gap-1.5 bg-rose-50 border-rose-200 text-rose-700"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>Audiência 12/08 · 4 dias úteis</span>
+        
+      </div>
+    </div>
+    <div style="width:152px" class="shrink-0 flex flex-col gap-2">
+      <button class="h-8 rounded-md bg-primary text-primary-foreground text-[12.5px] font-semibold inline-flex items-center justify-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>Agendar</button>
+      <button class="h-8 rounded-md border bg-card text-[12.5px] font-semibold">Ver íntegra</button>
+      <button class="h-8 rounded-md text-[12.5px] font-semibold text-muted-foreground inline-flex items-center justify-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><path d="M20 6 9 17l-5-5"/></svg>Já resolvi</button>
+    </div>
+  </div>
+</div></div>
+  </section>
+
+  <section>
+    
+<div class="flex items-center gap-2 mb-2">
+  <span class="text-[10.5px] font-extrabold uppercase tracking-[0.07em] text-muted-foreground">Relevantes, sem prazo pra você</span>
+  <span class="text-[10.5px] font-extrabold rounded-full px-2 py-0.5 tabular-nums bg-muted text-muted-foreground">5</span>
+  <span class="flex-1 h-px bg-border"></span>
+</div>
+    <div class="rounded-xl border bg-card divide-y overflow-hidden">
+<div class="w-full h-[54px] flex items-center gap-3 pl-3 pr-2 text-left">
+  <span class="h-1.5 w-1.5 rounded-full shrink-0 bg-primary"></span>
+  <span class="w-[220px] shrink-0 min-w-0">
+    <span class="block text-[12.5px] font-bold truncate">Antônio Carlos Vasconcelos × Município de Fortaleza</span>
+    <span class="block text-[10px] font-mono text-muted-foreground truncate">0154892-30.2025.8.06.0001</span>
+  </span>
+  <span class="flex-1 min-w-0 flex items-center gap-2">
+    <span class="shrink-0 rounded-md px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.04em] bg-emerald-50 text-emerald-700">Favorável</span>
+    <span class="text-[12.5px] text-foreground/80 truncate">Acórdão: negado provimento ao recurso do Município, sentença mantida</span>
+    
+  </span>
+  <span class="shrink-0 w-[74px] text-right">
+    <span class="block text-[11.5px] font-semibold text-foreground/70">05/08</span>
+    <span class="block text-[10px] text-muted-foreground">hoje</span>
+  </span>
+  <span class="shrink-0 h-7 px-2 rounded-md border bg-card inline-flex items-center gap-1 text-[11px] font-bold text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><path d="M20 6 9 17l-5-5"/></svg>Resolvi</span>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground/40 shrink-0"><path d="m9 18 6-6-6-6"/></svg>
+</div>
+<div class="w-full h-[54px] flex items-center gap-3 pl-3 pr-2 text-left">
+  <span class="h-1.5 w-1.5 rounded-full shrink-0 bg-primary"></span>
+  <span class="w-[220px] shrink-0 min-w-0">
+    <span class="block text-[12.5px] font-bold truncate">Rita de Cássia Moreira × Seguradora Líder DPVAT</span>
+    <span class="block text-[10px] font-mono text-muted-foreground truncate">0700231-88.2025.8.06.0064</span>
+  </span>
+  <span class="flex-1 min-w-0 flex items-center gap-2">
+    <span class="shrink-0 rounded-md px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.04em] bg-muted text-muted-foreground">Decisão</span>
+    <span class="text-[12.5px] text-foreground/80 truncate">Perícia médica deferida; laudo em até 30 dias, honorários pelo réu</span>
+    
+  </span>
+  <span class="shrink-0 w-[74px] text-right">
+    <span class="block text-[11.5px] font-semibold text-foreground/70">05/08</span>
+    <span class="block text-[10px] text-muted-foreground">hoje</span>
+  </span>
+  <span class="shrink-0 h-7 px-2 rounded-md border bg-card inline-flex items-center gap-1 text-[11px] font-bold text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><path d="M20 6 9 17l-5-5"/></svg>Resolvi</span>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground/40 shrink-0"><path d="m9 18 6-6-6-6"/></svg>
+</div>
+<div class="w-full h-[54px] flex items-center gap-3 pl-3 pr-2 text-left">
+  <span class="h-1.5 w-1.5 rounded-full shrink-0 bg-primary"></span>
+  <span class="w-[220px] shrink-0 min-w-0">
+    <span class="block text-[12.5px] font-bold truncate">Francisco Edilson de Sousa × Energisa Ceará</span>
+    <span class="block text-[10px] font-mono text-muted-foreground truncate">3011876-52.2025.8.06.0001</span>
+  </span>
+  <span class="flex-1 min-w-0 flex items-center gap-2">
+    <span class="shrink-0 rounded-md px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.04em] bg-rose-50 text-rose-700">Desfavorável</span>
+    <span class="text-[12.5px] text-foreground/80 truncate">Liminar indeferida: cobrança segue até o julgamento do mérito</span>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground shrink-0"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 13 4 4"/><path d="m13 13-4 4"/></svg>
+  </span>
+  <span class="shrink-0 w-[74px] text-right">
+    <span class="block text-[11.5px] font-semibold text-foreground/70">04/08</span>
+    <span class="block text-[10px] text-muted-foreground">ontem</span>
+  </span>
+  <span class="shrink-0 h-7 px-2 rounded-md border bg-card inline-flex items-center gap-1 text-[11px] font-bold text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><path d="M20 6 9 17l-5-5"/></svg>Resolvi</span>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground/40 shrink-0"><path d="m9 18 6-6-6-6"/></svg>
+</div>
+<div class="w-full h-[54px] flex items-center gap-3 pl-3 pr-2 text-left">
+  <span class="h-1.5 w-1.5 rounded-full shrink-0 bg-primary"></span>
+  <span class="w-[220px] shrink-0 min-w-0">
+    <span class="block text-[12.5px] font-bold truncate">Luciana Bezerra Timbó × Unimed Fortaleza</span>
+    <span class="block text-[10px] font-mono text-muted-foreground truncate">0895412-07.2024.8.06.0001</span>
+  </span>
+  <span class="flex-1 min-w-0 flex items-center gap-2">
+    <span class="shrink-0 rounded-md px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.04em] bg-emerald-50 text-emerald-700">Favorável</span>
+    <span class="text-[12.5px] text-foreground/80 truncate">Acordo homologado: R$ 12.000 em três parcelas, extinto com resolução</span>
+    
+  </span>
+  <span class="shrink-0 w-[74px] text-right">
+    <span class="block text-[11.5px] font-semibold text-foreground/70">03/08</span>
+    <span class="block text-[10px] text-muted-foreground">há 2 dias</span>
+  </span>
+  <span class="shrink-0 h-7 px-2 rounded-md border bg-card inline-flex items-center gap-1 text-[11px] font-bold text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><path d="M20 6 9 17l-5-5"/></svg>Resolvi</span>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground/40 shrink-0"><path d="m9 18 6-6-6-6"/></svg>
+</div>
+<div class="w-full h-[54px] flex items-center gap-3 pl-3 pr-2 text-left">
+  <span class="h-1.5 w-1.5 rounded-full shrink-0 bg-primary"></span>
+  <span class="w-[220px] shrink-0 min-w-0">
+    <span class="block text-[12.5px] font-bold truncate">Raimundo Nonato da Silva × INSS</span>
+    <span class="block text-[10px] font-mono text-muted-foreground truncate">0500918-44.2025.4.05.8100</span>
+  </span>
+  <span class="flex-1 min-w-0 flex items-center gap-2">
+    <span class="shrink-0 rounded-md px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.04em] bg-muted text-muted-foreground">Despacho</span>
+    <span class="text-[12.5px] text-foreground/80 truncate">Ciência da juntada do laudo pericial pelo perito nomeado</span>
+    
+  </span>
+  <span class="shrink-0 w-[74px] text-right">
+    <span class="block text-[11.5px] font-semibold text-foreground/70">02/08</span>
+    <span class="block text-[10px] text-muted-foreground">há 3 dias</span>
+  </span>
+  <span class="shrink-0 h-7 px-2 rounded-md border bg-card inline-flex items-center gap-1 text-[11px] font-bold text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><path d="M20 6 9 17l-5-5"/></svg>Resolvi</span>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground/40 shrink-0"><path d="m9 18 6-6-6-6"/></svg>
+</div></div>
+  </section>
+
+  <section>
+    <div class="rounded-xl border border-dashed bg-card px-4 py-2.5 flex items-center gap-3 flex-wrap">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground shrink-0"><path d="M20 6 9 17l-5-5"/></svg>
+      <p class="text-[12.5px] text-muted-foreground min-w-0">
+        <b class="font-bold text-foreground">2</b> movimentações de rotina (Juntada de petição (1) · Certidão de publicação (1)) fora da lista.
+      </p>
+      <div class="ml-auto flex items-center gap-2 shrink-0">
+        <button class="h-8 px-3 rounded-md border bg-card text-[12.5px] font-semibold inline-flex items-center gap-1.5">Ver todas <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><path d="m6 9 6 6 6-6"/></svg></button>
+        <button class="h-8 px-3 rounded-md border bg-card text-[12.5px] font-semibold inline-flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><path d="M20 6 9 17l-5-5"/></svg>Marcar como resolvidas</button>
+      </div>
+    </div>
+  </section>
+</div></div>
+
+  <div style="margin:28px 0" class="h-px bg-border"></div>
+
+  
+<div class="mb-3">
+  <p class="text-[11px] font-bold uppercase tracking-widest text-violet-600">Proposta</p>
+  <p class="text-base font-bold mt-0.5">Quando zera, a tela diz que zerou</p>
+  <p class="text-[12.5px] text-muted-foreground leading-snug mt-1" style="max-width:1000px">Hoje uma lista vazia mostra “Nada por aqui”, que também é o que aparece quando a busca não achou nada. Aqui o vazio é o prêmio do dia, e lembra onde o histórico ficou.</p>
+</div>
+  <div class="rounded-2xl border bg-muted/30 p-4">
+<div class="flex items-stretch gap-2.5">
+  
+<button style="width:248px" class="shrink-0 text-left rounded-xl border-2 px-3.5 py-3 border-violet-400 bg-violet-50">
+  <div class="flex items-baseline gap-2">
+    <b class="text-[26px] font-bold tabular-nums leading-none text-violet-700">0</b>
+    <span class="text-[14px] font-bold text-violet-800">a resolver</span>
+  </div>
+  <p class="text-[11.5px] leading-snug mt-1 text-violet-700">ainda esperando você — é aqui que o dia acontece</p>
+</button>
+  
+<button style="width:248px" class="shrink-0 text-left rounded-xl border-2 px-3.5 py-3 border-border bg-card">
+  <div class="flex items-baseline gap-2">
+    <b class="text-[26px] font-bold tabular-nums leading-none text-foreground">35</b>
+    <span class="text-[14px] font-bold text-foreground">resolvidas</span>
+  </div>
+  <p class="text-[11.5px] leading-snug mt-1 text-muted-foreground">você já providenciou ou marcou como vista</p>
+</button>
+  
+<button style="width:248px" class="shrink-0 text-left rounded-xl border-2 px-3.5 py-3 border-border bg-card">
+  <div class="flex items-baseline gap-2">
+    <b class="text-[26px] font-bold tabular-nums leading-none text-foreground">35</b>
+    <span class="text-[14px] font-bold text-foreground">no período</span>
+  </div>
+  <p class="text-[11.5px] leading-snug mt-1 text-muted-foreground">tudo que foi publicado nos últimos 7 dias</p>
+</button>
+</div>
+<div class="rounded-xl border bg-card py-10 flex flex-col items-center gap-2 text-center mt-3">
+  <span class="h-11 w-11 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M20 6 9 17l-5-5"/></svg></span>
+  <p class="text-sm font-bold">Nada pendente nos últimos 7 dias</p>
+  <p class="text-xs text-muted-foreground max-w-sm">
+    As 35 movimentações do período já foram resolvidas. Elas continuam em
+    <b class="text-foreground">Resolvidas</b> se você precisar voltar em alguma.
+  </p>
+</div></div>
+</main></body></html>

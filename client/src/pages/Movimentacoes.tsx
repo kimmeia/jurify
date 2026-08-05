@@ -71,9 +71,24 @@ const ATO_SELO: Record<string, string> = {
   outro: "Ato",
 };
 
-/** Abas da barra de filtro. Uma escolha por vez — antes eram chips que
- *  podiam combinar, e ninguém entendia o resultado de duas ligadas. */
-type Aba = "tudo" | "exigem_acao" | "relevante" | "nao_lidas";
+/**
+ * Eixo principal da tela: o que ainda falta resolver.
+ *
+ * A classificação (exige ação / relevante / rotina) responde outra pergunta —
+ * *o que* a movimentação é — e já aparece como seção dentro da lista. Enquanto
+ * as duas moraram na mesma barra de abas, a que continha o trabalho do dia
+ * parecia só mais um filtro, e era preciso descobrir isso por tentativa.
+ */
+type Estado = "a_resolver" | "resolvidas" | "todas";
+
+type Tipo = "todos" | Grupo;
+
+const TIPOS: { valor: Tipo; label: string; chave?: Grupo }[] = [
+  { valor: "todos", label: "Todos os tipos" },
+  { valor: "exigem_acao", label: "Só as que exigem ação", chave: "exigem_acao" },
+  { valor: "relevante", label: "Só as relevantes", chave: "relevante" },
+  { valor: "rotina", label: "Só a rotina", chave: "rotina" },
+];
 
 const JANELAS = [
   { valor: 1, label: "Últimas 24h" },
@@ -104,20 +119,18 @@ function haQuantoTempo(d: Date | string) {
 export default function Movimentacoes() {
   const [busca, setBusca] = useState("");
   const [dias, setDias] = useState(7);
-  const [aba, setAba] = useState<Aba>("tudo");
+  const [estado, setEstado] = useState<Estado>("a_resolver");
+  const [tipo, setTipo] = useState<Tipo>("todos");
   const [eventoAberto, setEventoAberto] = useState<number | null>(null);
   const [rotinaAberta, setRotinaAberta] = useState(false);
   const [configAberta, setConfigAberta] = useState(false);
-
-  const grupos: Grupo[] | null =
-    aba === "exigem_acao" ? ["exigem_acao"] : aba === "relevante" ? ["relevante"] : null;
 
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.movimentacoes.central.useQuery({
     busca: busca.trim() || undefined,
     dias,
-    grupos: grupos ?? undefined,
-    somenteNaoLidas: aba === "nao_lidas" || undefined,
+    grupos: tipo === "todos" ? undefined : [tipo],
+    estado,
   });
 
   const marcarRotinaMut = trpc.movimentacoes.marcarRotinaLida.useMutation({
@@ -133,7 +146,13 @@ export default function Movimentacoes() {
   });
 
   const itens = data?.itens ?? [];
-  const contagem = data?.contagem ?? { exigem_acao: 0, relevante: 0, rotina: 0, naoLidas: 0 };
+  const contagem = data?.contagem ?? {
+    exigem_acao: 0,
+    relevante: 0,
+    rotina: 0,
+    aResolver: 0,
+    resolvidas: 0,
+  };
 
   const porGrupo = useMemo(
     () => ({
@@ -146,35 +165,66 @@ export default function Movimentacoes() {
 
   const janela = dias === 1 ? "nas últimas 24h" : `nos últimos ${dias} dias`;
 
+  // Lista vazia tem quatro causas distintas, e o "Nada por aqui" genérico
+  // servia igual pras quatro — inclusive pro dia em que tudo foi resolvido,
+  // que é o único caso em que a tela vazia é boa notícia.
+  const vazio: MotivoVazio = busca
+    ? "busca"
+    : (data?.total ?? 0) === 0
+      ? "periodo"
+      : estado === "a_resolver"
+        ? "tudo_resolvido"
+        : "nada_resolvido";
+
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* Cabeçalho — números fora da frase. Escondidos numa sentença colorida
-          eles viravam texto; como pastilha, viram atalho pro filtro. */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[27px] font-bold tracking-tight leading-none">Movimentações</h1>
           <p className="text-[13.5px] text-muted-foreground mt-1.5">
             O que os tribunais publicaram nos seus processos
           </p>
-          <div className="flex flex-wrap gap-2 mt-3">
-            <Pastilha valor={isLoading ? null : data?.total ?? 0} rotulo={janela} />
-            <Pastilha
-              valor={isLoading ? null : contagem.exigem_acao}
-              rotulo={contagem.exigem_acao === 1 ? "exige ação sua" : "exigem ação sua"}
-              tom={contagem.exigem_acao > 0 ? "alerta" : "neutro"}
-              onClick={() => setAba(aba === "exigem_acao" ? "tudo" : "exigem_acao")}
-            />
-            <Pastilha
-              valor={isLoading ? null : contagem.naoLidas}
-              rotulo={contagem.naoLidas === 1 ? "não lida" : "não lidas"}
-              onClick={() => setAba(aba === "nao_lidas" ? "tudo" : "nao_lidas")}
-            />
-          </div>
         </div>
         <Button size="sm" variant="outline" onClick={() => setConfigAberta(true)}>
           <Mail className="h-4 w-4 mr-1.5" />
           Resumo diário
         </Button>
+      </div>
+
+      {/* As três respondem a mesma pergunta em estados diferentes, e somam:
+          a resolver + resolvidas = o período inteiro. Por isso viram uma
+          escolha só, e não pastilha de leitura ao lado de aba de filtro
+          repetindo o mesmo número. */}
+      <div className="flex items-stretch gap-2.5 flex-wrap">
+        <CartaoEstado
+          valor={isLoading ? null : contagem.aResolver}
+          titulo="a resolver"
+          descricao="ainda esperando você — é aqui que o dia acontece"
+          ativo={estado === "a_resolver"}
+          onClick={() => setEstado("a_resolver")}
+        />
+        <CartaoEstado
+          valor={isLoading ? null : contagem.resolvidas}
+          titulo="resolvidas"
+          descricao="você já providenciou ou marcou como vista"
+          ativo={estado === "resolvidas"}
+          onClick={() => setEstado("resolvidas")}
+        />
+        <CartaoEstado
+          valor={isLoading ? null : data?.total ?? 0}
+          titulo="no período"
+          descricao={`tudo que foi publicado ${janela}`}
+          ativo={estado === "todas"}
+          onClick={() => setEstado("todas")}
+        />
+        <div className="flex-1 min-w-[280px] rounded-xl border border-dashed bg-card px-4 py-3 flex items-center gap-2.5">
+          <Check className="h-4 w-4 text-muted-foreground shrink-0" />
+          <p className="text-[12px] text-muted-foreground leading-snug">
+            Uma movimentação sai de <b className="text-foreground">A resolver</b> quando você clica em{" "}
+            <b className="text-foreground">Já resolvi</b> — ou quando cria o prazo a partir dela. Nada
+            some sozinho.
+          </p>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -202,24 +252,22 @@ export default function Movimentacoes() {
           </SelectContent>
         </Select>
 
-        <div className="flex gap-1 bg-muted p-[3px] rounded-[10px]">
-          <AbaBotao ativa={aba === "tudo"} onClick={() => setAba("tudo")} n={data?.total ?? 0}>
-            Tudo
-          </AbaBotao>
-          <AbaBotao
-            ativa={aba === "exigem_acao"}
-            onClick={() => setAba("exigem_acao")}
-            n={contagem.exigem_acao}
-          >
-            Exigem ação
-          </AbaBotao>
-          <AbaBotao ativa={aba === "relevante"} onClick={() => setAba("relevante")} n={contagem.relevante}>
-            Relevantes
-          </AbaBotao>
-          <AbaBotao ativa={aba === "nao_lidas"} onClick={() => setAba("nao_lidas")} n={contagem.naoLidas}>
-            Não lidas
-          </AbaBotao>
-        </div>
+        {/* A classificação continua acessível, mas como filtro — que é o que
+            ela sempre foi. Os números das opções vêm do período inteiro, senão
+            escolher um tipo zeraria os outros. */}
+        <Select value={tipo} onValueChange={(v) => setTipo(v as Tipo)}>
+          <SelectTrigger className="h-9 w-[210px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TIPOS.map((t) => (
+              <SelectItem key={t.valor} value={t.valor}>
+                {t.label}
+                {t.chave ? ` (${contagem[t.chave]})` : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading ? (
@@ -229,15 +277,7 @@ export default function Movimentacoes() {
           ))}
         </div>
       ) : itens.length === 0 ? (
-        <div className="rounded-xl border bg-card py-16 flex flex-col items-center gap-2 text-center">
-          <Inbox className="h-10 w-10 text-muted-foreground/40" />
-          <p className="text-sm font-medium">Nada por aqui</p>
-          <p className="text-xs text-muted-foreground max-w-sm">
-            {busca
-              ? "Nenhuma movimentação bate com essa busca no período escolhido."
-              : "Nenhuma movimentação nos processos monitorados neste período."}
-          </p>
-        </div>
+        <Vazio motivo={vazio} janela={janela} total={data?.total ?? 0} />
       ) : (
         <div className="space-y-5">
           {porGrupo.exigem_acao.length > 0 && (
@@ -261,7 +301,12 @@ export default function Movimentacoes() {
               <CabecalhoGrupo titulo="Relevantes, sem prazo pra você" total={porGrupo.relevante.length} />
               <div className="rounded-xl border bg-card divide-y overflow-hidden">
                 {porGrupo.relevante.map((m) => (
-                  <LinhaRelevante key={m.id} item={m} onAbrir={() => setEventoAberto(m.id)} />
+                  <LinhaRelevante
+                    key={m.id}
+                    item={m}
+                    onAbrir={() => setEventoAberto(m.id)}
+                    onResolver={() => marcarMut.mutate({ eventoIds: [m.id] })}
+                  />
                 ))}
               </div>
             </section>
@@ -287,25 +332,32 @@ export default function Movimentacoes() {
                       <ChevronDown className="h-3.5 w-3.5 ml-1.5" />
                     )}
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={marcarRotinaMut.isPending}
-                    onClick={() => marcarRotinaMut.mutate({ dias })}
-                  >
-                    {marcarRotinaMut.isPending ? (
-                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    ) : (
-                      <Check className="h-3.5 w-3.5 mr-1.5" />
-                    )}
-                    Marcar como lidas
-                  </Button>
+                  {estado !== "resolvidas" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={marcarRotinaMut.isPending}
+                      onClick={() => marcarRotinaMut.mutate({ dias })}
+                    >
+                      {marcarRotinaMut.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Marcar como resolvidas
+                    </Button>
+                  )}
                 </div>
               </div>
               {rotinaAberta && (
                 <div className="rounded-xl border bg-card divide-y overflow-hidden">
                   {porGrupo.rotina.map((m) => (
-                    <LinhaRelevante key={m.id} item={m} onAbrir={() => setEventoAberto(m.id)} />
+                    <LinhaRelevante
+                      key={m.id}
+                      item={m}
+                      onAbrir={() => setEventoAberto(m.id)}
+                      onResolver={() => marcarMut.mutate({ eventoIds: [m.id] })}
+                    />
                   ))}
                 </div>
               )}
@@ -541,78 +593,104 @@ function resumoRotina(titulos: string[]): string {
     .join(" · ");
 }
 
-function Pastilha({
+/**
+ * Cartão-aba: o número e a escolha no mesmo controle.
+ *
+ * A descrição embaixo não é enfeite — é ela que dispensa descobrir por
+ * tentativa o que cada estado contém.
+ */
+function CartaoEstado({
   valor,
-  rotulo,
-  tom = "neutro",
+  titulo,
+  descricao,
+  ativo,
   onClick,
 }: {
   valor: number | null;
-  rotulo: string;
-  tom?: "neutro" | "alerta";
-  onClick?: () => void;
-}) {
-  const cls =
-    `rounded-[10px] border px-3 py-1.5 flex items-baseline gap-1.5 transition-colors ` +
-    (tom === "alerta"
-      ? "bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-900 "
-      : "bg-card border-border ") +
-    (onClick ? "hover:bg-muted/60 cursor-pointer" : "");
-  const corpo = (
-    <>
-      <b
-        className={`text-[15px] font-bold tabular-nums ${
-          tom === "alerta" ? "text-rose-600 dark:text-rose-400" : ""
-        }`}
-      >
-        {valor === null ? "—" : valor}
-      </b>
-      <span
-        className={`text-[11.5px] ${
-          tom === "alerta" ? "text-rose-700 dark:text-rose-300" : "text-muted-foreground"
-        }`}
-      >
-        {rotulo}
-      </span>
-    </>
-  );
-  return onClick ? (
-    <button type="button" onClick={onClick} className={cls}>
-      {corpo}
-    </button>
-  ) : (
-    <div className={cls}>{corpo}</div>
-  );
-}
-
-function AbaBotao({
-  children,
-  ativa,
-  onClick,
-  n,
-}: {
-  children: React.ReactNode;
-  ativa: boolean;
+  titulo: string;
+  descricao: string;
+  ativo: boolean;
   onClick: () => void;
-  n: number;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
-        ativa ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+      aria-pressed={ativo}
+      className={`w-[236px] shrink-0 text-left rounded-xl border-2 px-3.5 py-3 transition-colors ${
+        ativo
+          ? "border-violet-400 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/40"
+          : "border-border bg-card hover:bg-muted/50"
       }`}
     >
-      {children}
-      <span
-        className={`rounded-full px-1.5 text-[10px] font-extrabold tabular-nums ${
-          ativa ? "bg-primary text-primary-foreground" : "bg-border text-muted-foreground"
+      <div className="flex items-baseline gap-2">
+        <b
+          className={`text-[26px] font-bold tabular-nums leading-none ${
+            ativo ? "text-violet-700 dark:text-violet-300" : ""
+          }`}
+        >
+          {valor === null ? "—" : valor}
+        </b>
+        <span
+          className={`text-[14px] font-bold ${ativo ? "text-violet-800 dark:text-violet-200" : ""}`}
+        >
+          {titulo}
+        </span>
+      </div>
+      <p
+        className={`text-[11.5px] leading-snug mt-1 ${
+          ativo ? "text-violet-700 dark:text-violet-300" : "text-muted-foreground"
         }`}
       >
-        {n}
-      </span>
+        {descricao}
+      </p>
     </button>
+  );
+}
+
+type MotivoVazio = "busca" | "periodo" | "tudo_resolvido" | "nada_resolvido";
+
+function Vazio({ motivo, janela, total }: { motivo: MotivoVazio; janela: string; total: number }) {
+  if (motivo === "tudo_resolvido") {
+    return (
+      <div className="rounded-xl border bg-card py-14 flex flex-col items-center gap-2 text-center">
+        <span className="h-11 w-11 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 flex items-center justify-center">
+          <Check className="h-6 w-6" />
+        </span>
+        <p className="text-sm font-bold">Nada pendente {janela}</p>
+        <p className="text-xs text-muted-foreground max-w-sm">
+          {total === 1
+            ? "A movimentação do período já foi resolvida."
+            : `As ${total} movimentações do período já foram resolvidas.`}{" "}
+          Elas continuam em <b className="text-foreground">Resolvidas</b> se você precisar voltar em
+          alguma.
+        </p>
+      </div>
+    );
+  }
+
+  const texto: Record<Exclude<MotivoVazio, "tudo_resolvido">, { titulo: string; corpo: string }> = {
+    busca: {
+      titulo: "Nada bate com essa busca",
+      corpo: "Nenhuma movimentação corresponde ao texto buscado no período e no estado escolhidos.",
+    },
+    periodo: {
+      titulo: "Nada por aqui",
+      corpo: "Nenhuma movimentação nos processos monitorados neste período.",
+    },
+    nada_resolvido: {
+      titulo: "Nada resolvido ainda",
+      corpo: "Quando você marcar uma movimentação como resolvida, ela passa a aparecer aqui.",
+    },
+  };
+  const t = texto[motivo];
+
+  return (
+    <div className="rounded-xl border bg-card py-16 flex flex-col items-center gap-2 text-center">
+      <Inbox className="h-10 w-10 text-muted-foreground/40" />
+      <p className="text-sm font-medium">{t.titulo}</p>
+      <p className="text-xs text-muted-foreground max-w-sm">{t.corpo}</p>
+    </div>
   );
 }
 
@@ -758,7 +836,7 @@ function CardAcao({
               onClick={onMarcarLida}
             >
               <Check className="h-3.5 w-3.5 mr-1.5" />
-              Já providenciei
+              Já resolvi
             </Button>
           )}
         </div>
@@ -774,13 +852,31 @@ function CardAcao({
  * é uma parede de números de documento, e com `line-clamp-2` cada linha
  * ganhava uma altura diferente — a lista perdia o ritmo e virava sopa.
  */
-function LinhaRelevante({ item, onAbrir }: { item: Item; onAbrir: () => void }) {
+function LinhaRelevante({
+  item,
+  onAbrir,
+  onResolver,
+}: {
+  item: Item;
+  onAbrir: () => void;
+  onResolver: () => void;
+}) {
   const selo = item.desfecho ? DESFECHO_SELO[item.desfecho] : undefined;
   return (
-    <button
-      type="button"
+    // Div e não button: o "Resolvi" é um botão dentro da linha, e button
+    // aninhado em button é HTML inválido — o navegador desfaz o aninhamento e
+    // o clique passa a cair no lugar errado.
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onAbrir}
-      className="w-full h-[54px] flex items-center gap-3 pl-3 pr-3.5 text-left hover:bg-muted/40 transition-colors"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onAbrir();
+        }
+      }}
+      className="w-full h-[54px] flex items-center gap-3 pl-3 pr-2 text-left cursor-pointer hover:bg-muted/40 transition-colors"
     >
       <span
         className={`h-1.5 w-1.5 rounded-full shrink-0 ${item.lido ? "bg-transparent" : "bg-primary"}`}
@@ -815,7 +911,23 @@ function LinhaRelevante({ item, onAbrir }: { item: Item; onAbrir: () => void }) 
         </span>
         <span className="block text-[10px] text-muted-foreground">{haQuantoTempo(item.dataEvento)}</span>
       </span>
+      {/* Resolver sem abrir: a maioria destas linhas o advogado só precisa
+          bater o olho e tirar da frente. */}
+      {!item.lido && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 px-2 shrink-0 text-[11px] text-muted-foreground hover:text-foreground"
+          onClick={(e) => {
+            e.stopPropagation();
+            onResolver();
+          }}
+        >
+          <Check className="h-3.5 w-3.5 mr-1" />
+          Resolvi
+        </Button>
+      )}
       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
-    </button>
+    </div>
   );
 }
