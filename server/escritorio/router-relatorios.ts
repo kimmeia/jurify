@@ -109,6 +109,23 @@ export function agruparFechamentosPorOrigem(rows: Array<{
 
 const log = createLogger("relatorios");
 
+/**
+ * Quantos CLIENTES distintos pagaram — não quantas cobranças entraram.
+ *
+ * A contagem antiga agrupava por parcelamento (`COALESCE(parcelamentoLocalId,
+ * id)`), o que dava "1" pra um parcelamento inteiro mas "2" pra duas cobranças
+ * avulsas do mesmo cliente. Como o card compara esse número com "contratos
+ * fechados" (leads ganhos), numerador e denominador estavam em unidades
+ * diferentes — a razão podia até passar de 100%.
+ *
+ * Cobrança não guarda vínculo com lead: o único elo com quem fechou é o
+ * contato. Então a unidade honesta dos dois lados é o cliente.
+ *
+ * O COALESCE do beneficiário resolve "esposa pagou pelo marido": a cobrança
+ * fica no contato dela, mas quem fechou (e quem conta) é ele.
+ */
+const CLIENTES_PAGANTES = sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId}))`;
+
 const PeriodoInput = z
   .object({ dias: z.number().min(1).max(365).optional() })
   .optional();
@@ -1353,9 +1370,10 @@ export const relatoriosRouter = router({
             faturado: 0,
             faturadoPeriodoAnterior: 0,
             variacaoFaturado: 0,
-            contratos: 0,
-            contratosPeriodoAnterior: 0,
-            variacaoContratos: 0,
+            clientesPagantes: 0,
+            clientesPagantesPeriodoAnterior: 0,
+            variacaoClientesPagantes: 0,
+            clientesFechados: 0,
             contratosFechados: 0,
             contratosFechadosPeriodoAnterior: 0,
             variacaoContratosFechados: 0,
@@ -1404,7 +1422,7 @@ export const relatoriosRouter = router({
       const [agg] = await db
         .select({
           totalFaturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
-          contratos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
+          clientesPagantes: CLIENTES_PAGANTES,
         })
         .from(asaasCobrancas)
         .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
@@ -1423,14 +1441,16 @@ export const relatoriosRouter = router({
         ));
 
       const totalFaturado = Number(agg?.totalFaturado || 0);
-      const contratos = Number(agg?.contratos || 0);
-      const ticketMedio = contratos > 0 ? +(totalFaturado / contratos).toFixed(2) : 0;
+      const clientesPagantes = Number(agg?.clientesPagantes || 0);
+      const ticketMedio = clientesPagantes > 0
+        ? +(totalFaturado / clientesPagantes).toFixed(2)
+        : 0;
 
       // ── KPIs período anterior ─────────────────────────────────────────────
       const [aggAnt] = await db
         .select({
           totalFaturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
-          contratos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
+          clientesPagantes: CLIENTES_PAGANTES,
         })
         .from(asaasCobrancas)
         .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
@@ -1444,20 +1464,27 @@ export const relatoriosRouter = router({
           sql`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId}) IN (${contatosFechadosAnt})`,
         ));
       const faturadoAnterior = Number(aggAnt?.totalFaturado || 0);
-      const contratosAnterior = Number(aggAnt?.contratos || 0);
+      const clientesPagantesAnterior = Number(aggAnt?.clientesPagantes || 0);
       const variacaoFaturado = faturadoAnterior > 0
         ? +(((totalFaturado - faturadoAnterior) / faturadoAnterior) * 100).toFixed(1)
         : totalFaturado > 0 ? 100 : 0;
-      const variacaoContratos = contratosAnterior > 0
-        ? +(((contratos - contratosAnterior) / contratosAnterior) * 100).toFixed(1)
-        : contratos > 0 ? 100 : 0;
+      const variacaoClientesPagantes = clientesPagantesAnterior > 0
+        ? +(((clientesPagantes - clientesPagantesAnterior) / clientesPagantesAnterior) * 100).toFixed(1)
+        : clientesPagantes > 0 ? 100 : 0;
 
       // ── Contratos fechados (leads.fechado_ganho) — atual e anterior ───────
       // Reusa o mesmo filtro do ranking (idsAtendentes + createdAt range).
       // O total do período atual também é refletido em `etapas.fechado_ganho.total`,
-      // mas mantemos no kpis pra alinhar com faturado/contratos (variação + payload anterior).
+      // mas mantemos no kpis pra alinhar com faturado (variação + payload anterior).
       const [contratosFechadosAtualAgg] = await db
-        .select({ total: sql<number>`COUNT(*)`, valor: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(14,2))), 0)` })
+        .select({
+          total: sql<number>`COUNT(*)`,
+          valor: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(14,2))), 0)`,
+          // Denominador de "clientes que pagaram" — precisa ser medido na
+          // mesma unidade do numerador, senão a razão compara coisas
+          // diferentes e pode passar de 100%.
+          clientes: sql<number>`COUNT(DISTINCT ${leads.contatoId})`,
+        })
         .from(leads)
         .where(and(
           eq(leads.escritorioId, eid),
@@ -1477,6 +1504,7 @@ export const relatoriosRouter = router({
           lte(leads.createdAt, dataFimAnterior),
         ));
       const contratosFechados = Number(contratosFechadosAtualAgg?.total || 0);
+      const clientesFechados = Number(contratosFechadosAtualAgg?.clientes || 0);
       const valorTotalFechado = Number(contratosFechadosAtualAgg?.valor || 0);
       const contratosFechadosPeriodoAnterior = Number(contratosFechadosAntAgg?.total || 0);
       const variacaoContratosFechados = contratosFechadosPeriodoAnterior > 0
@@ -1509,10 +1537,10 @@ export const relatoriosRouter = router({
       //     pagamentos manuais ou cobranças fora do Asaas.
       //  2) contratosFechados: count desses leads.
       //  3) faturado: soma valor das cobranças pagas (caixa real).
-      //  4) contratosPagos: count DISTINCT de contratos pagos
-      //     (agrupa parcelas de um mesmo parcelamentoLocalId como 1 só).
+      //  4) clientesPagantes: count DISTINCT de clientes que pagaram —
+      //     mesma unidade do KPI do topo (ver CLIENTES_PAGANTES).
       //
-      // Taxa de conversão = contratosPagos / contratosFechados.
+      // Taxa de conversão = clientesPagantes / contratosFechados.
       // Quando contratosFechados=0 mas tem cobrança paga avulsa: conversão NaN — tratamos como null no front.
 
       // 1+2: leads ganhos
@@ -1551,10 +1579,8 @@ export const relatoriosRouter = router({
           atendenteId: asaasCobrancas.atendenteId,
           totalFaturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
           cobrancas: sql<number>`COUNT(*)`,
-          // 1 contrato = 1 parcelamento (todas as parcelas) OU 1 cobrança avulsa.
-          // COALESCE pra não confundir distintos com NULLs. Usado pra
-          // computar ticketMedio internamente — não vai pro payload final.
-          contratosPagos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
+          // Usado pra computar ticketMedio internamente — não vai pro payload.
+          clientesPagantes: CLIENTES_PAGANTES,
         })
         .from(asaasCobrancas)
         .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
@@ -1572,14 +1598,14 @@ export const relatoriosRouter = router({
       const mapaPorAtendente = new Map<number, {
         faturado: number;
         cobrancas: number;
-        contratosPagos: number;
+        clientesPagantes: number;
       }>();
       for (const r of porAtendenteRows) {
         if (r.atendenteId == null) continue;
         mapaPorAtendente.set(Number(r.atendenteId), {
           faturado: Number(r.totalFaturado || 0),
           cobrancas: Number(r.cobrancas || 0),
-          contratosPagos: Number(r.contratosPagos || 0),
+          clientesPagantes: Number(r.clientesPagantes || 0),
         });
       }
 
@@ -1587,7 +1613,7 @@ export const relatoriosRouter = router({
       // pra dar visibilidade de quem não vendeu. Ordenado por faturado desc.
       const ranking = rankingAtendentes
         .map((c) => {
-          const pagos = mapaPorAtendente.get(c.id) ?? { faturado: 0, cobrancas: 0, contratosPagos: 0 };
+          const pagos = mapaPorAtendente.get(c.id) ?? { faturado: 0, cobrancas: 0, clientesPagantes: 0 };
           const leadsDados = mapaLeads.get(c.id) ?? { valorFechado: 0, contratosFechados: 0 };
           const meta = c.metaMensal != null ? Number(c.metaMensal) : null;
           // Proporcionalizar meta ao range: ranges não-mensais (1-7 mai)
@@ -1607,10 +1633,10 @@ export const relatoriosRouter = router({
             contratosFechados: leadsDados.contratosFechados,
             // Caixa (cobranças comissionáveis de clientes fechados no período)
             faturado: pagos.faturado,
-            // ticketMedio = faturado / contratosPagos, calculado aqui pra UI
-            // não precisar do contratosPagos no payload.
-            ticketMedio: pagos.contratosPagos > 0
-              ? +(pagos.faturado / pagos.contratosPagos).toFixed(2)
+            // ticketMedio = faturado / clientesPagantes, calculado aqui pra UI
+            // não precisar do clientesPagantes no payload.
+            ticketMedio: pagos.clientesPagantes > 0
+              ? +(pagos.faturado / pagos.clientesPagantes).toFixed(2)
               : 0,
             meta,
             metaPeriodo,
@@ -1626,10 +1652,6 @@ export const relatoriosRouter = router({
         .select({
           dia: sql<string>`DATE(${asaasCobrancas.dataPagamento})`,
           faturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
-          // Parcelas do mesmo parcelamento contam como 1 contrato, igual ao
-          // KPI agregado do topo — evita gráfico mostrar "3 contratos no
-          // dia X" quando são 3 parcelas do mesmo cliente.
-          contratos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
         })
         .from(asaasCobrancas)
         .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
@@ -1737,9 +1759,10 @@ export const relatoriosRouter = router({
           faturado: totalFaturado,
           faturadoPeriodoAnterior: faturadoAnterior,
           variacaoFaturado,
-          contratos,
-          contratosPeriodoAnterior: contratosAnterior,
-          variacaoContratos,
+          clientesPagantes,
+          clientesPagantesPeriodoAnterior: clientesPagantesAnterior,
+          variacaoClientesPagantes,
+          clientesFechados,
           contratosFechados,
           contratosFechadosPeriodoAnterior,
           variacaoContratosFechados,
@@ -1751,7 +1774,6 @@ export const relatoriosRouter = router({
         cobrancasPorDia: porDiaRows.map((r) => ({
           dia: String(r.dia),
           faturado: Number(r.faturado || 0),
-          contratos: Number(r.contratos || 0),
         })),
         etapas,
         contatosPorOrigem: contatosOrigemRows.map((r) => ({
