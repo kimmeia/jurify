@@ -3,12 +3,15 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 /**
  * Tema da aplicação.
  *
- * A preferência tem três valores porque "sistema" não é o mesmo que "claro":
- * quem deixa o notebook virar escuro à noite espera que o app acompanhe, e
- * gravar "claro" nesse caso congelaria a escolha errada.
+ * O padrão é claro: o app é usado o dia inteiro em escritório, e o escuro
+ * como padrão pegava de surpresa quem nunca escolheu nada. Quem quer que o
+ * app acompanhe o SO escolhe "sistema" — por isso a preferência tem três
+ * valores e não dois: gravar "claro" pra quem quer acompanhar o notebook
+ * congelaria a escolha errada.
  *
  * O que vai pro `<html>` é sempre o tema RESOLVIDO (claro ou escuro); a
- * preferência é o que fica salvo.
+ * preferência é o que fica salvo. Preferência já gravada manda — mudar o
+ * padrão não mexe em quem escolheu.
  */
 export type PreferenciaTema = "claro" | "escuro" | "sistema";
 export type TemaResolvido = "claro" | "escuro";

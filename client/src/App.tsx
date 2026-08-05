@@ -366,7 +366,7 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="sistema">
+      <ThemeProvider defaultTheme="claro">
         <TooltipProvider>
           <Toaster />
           <EnvironmentBanner />
