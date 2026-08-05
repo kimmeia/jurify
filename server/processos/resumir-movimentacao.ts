@@ -324,11 +324,31 @@ export type ProvidenciaAnalise = {
   citacao: string | null;
 };
 
+/** Como cada pedido saiu na decisão — é o "o que foi decidido". */
+export type StatusPedido = "deferido" | "negado" | "parcial" | "prejudicado";
+
+export type ItemDecidido = {
+  /** O pedido, na linguagem do processo ("dano moral", "revisão dos juros"). */
+  pedido: string;
+  status: StatusPedido;
+  /** Por que — o fundamento em uma frase curta. */
+  razao: string | null;
+  /** Valor em reais quando a decisão fixa um. */
+  valor: number | null;
+};
+
 export type AnaliseMovimentacao = {
   /** Manchete em linguagem de advogado ocupado, não o rótulo do PJe. */
   titulo: string;
   /** 1 a 4 frases do que mudou no processo. */
   pontos: string[];
+  /**
+   * Placar pedido a pedido. "Procedente em parte" sozinho não diz nada ao
+   * advogado — o que ele precisa saber é o que caiu, o que passou e quanto.
+   * Vazio quando o ato não julga pedidos (despacho, intimação) ou quando
+   * só temos o rótulo.
+   */
+  itens: ItemDecidido[];
   ato: AtoProcessual;
   desfecho: Desfecho | null;
   relevancia: Relevancia;
@@ -353,11 +373,13 @@ const ATOS: AtoProcessual[] = [
 const SYSTEM_PROMPT_ANALISE = `Você analisa UM ato processual de um processo brasileiro para um advogado que não vai abrir os autos.
 
 Responda APENAS com JSON válido, sem markdown e sem crases:
-{"titulo":"...","pontos":["..."],"ato":"decisao|sentenca|acordao|despacho|intimacao|audiencia|expediente|outro","desfecho":"favoravel|desfavoravel|parcial|neutro"|null,"relevancia":"relevante|rotina","providencia":{"exigida":true|false,"descricao":"..."|null,"prazoDias":15|null,"prazoUteis":true|false,"dataExplicita":"AAAA-MM-DD"|null,"consequencia":"..."|null,"citacao":"..."|null}}
+{"titulo":"...","pontos":["..."],"itens":[{"pedido":"...","status":"deferido|negado|parcial|prejudicado","razao":"..."|null,"valor":12480.00|null}],"ato":"decisao|sentenca|acordao|despacho|intimacao|audiencia|expediente|outro","desfecho":"favoravel|desfavoravel|parcial|neutro"|null,"relevancia":"relevante|rotina","providencia":{"exigida":true|false,"descricao":"..."|null,"prazoDias":15|null,"prazoUteis":true|false,"dataExplicita":"AAAA-MM-DD"|null,"consequencia":"..."|null,"citacao":"..."|null}}
 
 titulo: uma frase que diz o que mudou e, se houver, o que o juiz mandou fazer. Escreva como quem avisa um colega no corredor. Nada de "Movimentação processual" nem de repetir o rótulo do PJe.
 
 pontos: de 1 a 4 frases curtas. Cada uma deve carregar informação que só está no documento — o que foi deferido, o que foi negado e por quê, valores, condições. Se o juiz negou algo "por ora" ou "sem prejuízo de", diga, porque muda a estratégia.
+
+itens: o placar pedido a pedido, quando o ato JULGA pedidos (sentença, decisão, acórdão). Um item por pedido que o juiz apreciou, na ordem em que aparecem. "procedente em parte" sem dizer o que caiu e o que passou é inútil — é justamente isso que o advogado precisa saber. status: deferido (ganhou), negado (perdeu), parcial (ganhou menos do que pediu), prejudicado (perdeu o objeto, não foi apreciado). razao: o fundamento em uma frase curta, com as palavras do juiz quando couber. valor: só quando a decisão fixa um valor para AQUELE pedido, em número puro (12480.00, sem "R$" e sem texto). Use [] para despacho, intimação, expediente e para qualquer ato que não julgue pedido.
 
 ato: a natureza do que o juiz assinou.
 
@@ -373,7 +395,7 @@ providencia.prazoDias / prazoUteis: o número que o documento diz. Prazo process
 
 providencia.dataExplicita: só quando o documento marca uma data (audiência, perícia, sessão). Formato AAAA-MM-DD.
 
-Não invente nada que não esteja no texto.`;
+Não invente nada que não esteja no texto. Se o documento não permite afirmar algo, deixe o campo vazio — frase vaga preenchendo espaço é pior que campo vazio, porque parece informação verificada.`;
 
 /**
  * Analisa um ato processual a partir do TEOR do documento (ou, na falta dele,
@@ -415,7 +437,7 @@ export async function analisarMovimentacao(
     ? `\n\nTeor do documento:\n${truncado}`
     : `\n\n(O documento não pôde ser lido — só temos o rótulo do movimento.
 Nesse caso: devolva NO MÁXIMO 1 ponto, e só se ele acrescentar algo que já não esteja no título. É melhor "pontos": [] do que frases de enchimento como "a decisão pode impactar as partes" ou "não há informações sobre valores" — o advogado lê isso como ruído e passa a desconfiar do resumo inteiro.
-Não invente conteúdo, e deixe providencia.exigida false se o rótulo não afirmar um prazo.)`;
+Não invente conteúdo, deixe "itens": [] (o rótulo nunca diz o que caiu e o que passou) e deixe providencia.exigida false se o rótulo não afirmar um prazo.)`;
 
   const user = `${ladoTxt}${dataTxt}\n\nRótulo do movimento no tribunal: ${rotulo}${teorTxt}`;
 
@@ -433,6 +455,63 @@ Não invente conteúdo, e deixe providencia.exigida false se o rótulo não afir
 
 /** Teor cabe muito mais que o resumo curto — é o ponto do recurso. */
 const MAX_INPUT_ANALISE_CHARS = 24_000;
+
+/**
+ * Frases que a IA produz quando não tem o documento e mesmo assim tenta
+ * preencher os pontos. O prompt já pede pra não fazer isso — e o modelo faz
+ * assim mesmo. Um painel que exibe "a decisão pode impactar a estratégia das
+ * partes" sob o selo RESUMO IA ensina o advogado a ignorar o resumo inteiro,
+ * então a barreira precisa ser determinística e não um pedido no prompt.
+ */
+const RE_ENCHIMENTO = [
+  /n[ãa]o (h[áa]|existem?|foram|est[ãa]o|consta|se) .{0,40}(informa|detalh|dado|valor|especifica|dispon|menciona)/i,
+  /(detalhes?|informa[çc][õo]es|dados|valores) .{0,30}(adicionais? )?(n[ãa]o .{0,20})?(dispon[íi]ve|no r[óo]tulo|no texto|apresentad)/i,
+  /pode(m)? (impactar|afetar|influenciar) a (estrat[ée]gia|situa[çc][ãa]o|posi[çc][ãa]o)/i,
+  /(recomenda-se|é recomend[áa]vel|sugere-se) (a )?(consult|an[áa]lise|leitura|verifica)/i,
+  /(necess[áa]rio|preciso) (consultar|analisar|verificar) (os autos|o documento|o processo)/i,
+  /sem (mais )?(informa[çc][õo]es|detalhes) (dispon[íi]veis|no r[óo]tulo)/i,
+  // Pega "A sentença foi publicada" e também "Sentença publicada" — as duas
+  // só repetem o rótulo que já está no título.
+  /^((a|o) )?(decis[ãa]o|senten[çc]a|despacho|ac[óo]rd[ãa]o|movimenta[çc][ãa]o)( foi| est[áa])? ?(proferid|publicad|registrad|disponibilizad|prolatad)/i,
+];
+
+/**
+ * Um ponto vale a linha que ocupa? Descarta o que só diz que não sabe, e o
+ * que é curto demais pra afirmar qualquer coisa.
+ */
+export function pontoUtil(ponto: string): boolean {
+  const t = ponto.trim();
+  if (t.length < 18) return false;
+  return !RE_ENCHIMENTO.some((re) => re.test(t));
+}
+
+const STATUS_PEDIDO: StatusPedido[] = ["deferido", "negado", "parcial", "prejudicado"];
+
+/** Valida o placar por pedido. Item sem pedido ou com status inválido cai. */
+export function parseItens(bruto: unknown): ItemDecidido[] {
+  if (!Array.isArray(bruto)) return [];
+  const itens: ItemDecidido[] = [];
+  for (const b of bruto) {
+    if (!b || typeof b !== "object") continue;
+    const o = b as Record<string, unknown>;
+    const pedido = typeof o.pedido === "string" ? o.pedido.trim() : "";
+    if (!pedido || !STATUS_PEDIDO.includes(o.status as StatusPedido)) continue;
+    // Valor vem como número; string com "R$" e ponto de milhar seria pior
+    // que nada, porque somaria errado no total.
+    const valor =
+      typeof o.valor === "number" && Number.isFinite(o.valor) && o.valor > 0
+        ? Math.round(o.valor * 100) / 100
+        : null;
+    itens.push({
+      pedido: pedido.slice(0, 160),
+      status: o.status as StatusPedido,
+      razao: typeof o.razao === "string" && o.razao.trim() ? o.razao.trim().slice(0, 240) : null,
+      valor,
+    });
+    if (itens.length === 12) break;
+  }
+  return itens;
+}
 
 /**
  * Extrai e valida o JSON da resposta. Tolerante a crases e texto ao redor,
@@ -457,8 +536,11 @@ export function parseAnalise(raw: string): AnaliseMovimentacao | null {
   const pontos = Array.isArray(obj.pontos)
     ? obj.pontos.filter((p): p is string => typeof p === "string" && p.trim().length > 0)
         .map((p) => p.trim().slice(0, 400))
+        .filter(pontoUtil)
         .slice(0, 4)
     : [];
+
+  const itens = parseItens(obj.itens);
 
   const ato = ATOS.includes(obj.ato as AtoProcessual) ? (obj.ato as AtoProcessual) : "outro";
   const desfecho = DESFECHOS.includes(obj.desfecho as Desfecho) ? (obj.desfecho as Desfecho) : null;
@@ -490,7 +572,7 @@ export function parseAnalise(raw: string): AnaliseMovimentacao | null {
     providencia.exigida = false;
   }
 
-  return { titulo: titulo.slice(0, 240), pontos, ato, desfecho, relevancia, providencia };
+  return { titulo: titulo.slice(0, 240), pontos, itens, ato, desfecho, relevancia, providencia };
 }
 
 function validarDataIso(v: unknown): string | null {

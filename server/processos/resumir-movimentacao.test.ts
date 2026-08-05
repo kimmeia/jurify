@@ -17,6 +17,9 @@ import {
   parseClassificacao,
   MODELO_DEFAULT,
   MODELO_DEFAULT_ANTHROPIC,
+  pontoUtil,
+  parseItens,
+  parseAnalise,
 } from "./resumir-movimentacao";
 
 describe("providerDoModelo (dispatch por prefixo)", () => {
@@ -231,5 +234,156 @@ describe("parseClassificacao (JSON estruturado + fallback)", () => {
   it("vazio → null", () => {
     expect(parseClassificacao("")).toBeNull();
     expect(parseClassificacao("{}")).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Placar por pedido e barreira anti-enchimento
+//
+// O painel exibia, sob o selo RESUMO IA, quatro frases que só diziam que a
+// IA não tinha o documento ("não há informações sobre valores", "a decisão
+// pode impactar a estratégia das partes"). O prompt já pedia pra não fazer
+// isso e o modelo fez assim mesmo — por isso a barreira aqui é código, não
+// instrução.
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("pontoUtil", () => {
+  it("derruba as frases que só dizem que não se sabe", () => {
+    const enchimento = [
+      "Não há informações sobre valores ou condições específicas.",
+      "Detalhes adicionais não estão disponíveis no rótulo.",
+      "A decisão pode impactar a estratégia das partes.",
+      "Não foram informados os valores da condenação.",
+      "Recomenda-se a consulta aos autos para mais detalhes.",
+      "É necessário consultar os autos para entender a decisão.",
+      "Sem mais informações disponíveis.",
+    ];
+    for (const p of enchimento) {
+      expect(pontoUtil(p), p).toBe(false);
+    }
+  });
+
+  it("mantém o que afirma alguma coisa", () => {
+    const uteis = [
+      "O juiz afastou a capitalização mensal de juros e determinou a devolução em dobro.",
+      "Dano moral negado: o magistrado classificou a cobrança como mero aborrecimento.",
+      "Perícia contábil deferida, com honorários de R$ 3.200 a cargo do banco.",
+      "Prazo de 15 dias úteis para apelar, contados da intimação.",
+    ];
+    for (const p of uteis) {
+      expect(pontoUtil(p), p).toBe(true);
+    }
+  });
+
+  it("derruba frase curta demais pra afirmar qualquer coisa", () => {
+    expect(pontoUtil("Sentença publicada")).toBe(false);
+    expect(pontoUtil("Ok")).toBe(false);
+  });
+
+  it("não confunde negação legítima com enchimento", () => {
+    // "não há prova" é uma afirmação do juiz sobre o mérito, não sobre a
+    // ausência do documento.
+    expect(pontoUtil("Não há prova do dano alegado, segundo o juiz.")).toBe(true);
+  });
+});
+
+describe("parseItens", () => {
+  it("aceita o placar completo", () => {
+    const itens = parseItens([
+      { pedido: "Revisão dos juros", status: "deferido", razao: "Capitalização afastada", valor: 12480 },
+      { pedido: "Dano moral", status: "negado", razao: "Mero aborrecimento", valor: null },
+    ]);
+    expect(itens).toHaveLength(2);
+    expect(itens[0]).toEqual({
+      pedido: "Revisão dos juros", status: "deferido", razao: "Capitalização afastada", valor: 12480,
+    });
+    expect(itens[1].valor).toBeNull();
+  });
+
+  it("descarta item sem pedido ou com status inventado", () => {
+    expect(parseItens([{ pedido: "", status: "deferido" }])).toEqual([]);
+    expect(parseItens([{ pedido: "Dano moral", status: "ganhou" }])).toEqual([]);
+    expect(parseItens([{ pedido: "Dano moral" }])).toEqual([]);
+  });
+
+  it("recusa valor que não é número — 'R$ 12.480,00' somaria errado", () => {
+    const [item] = parseItens([{ pedido: "Juros", status: "deferido", valor: "R$ 12.480,00" }]);
+    expect(item.valor).toBeNull();
+  });
+
+  it("recusa valor zero ou negativo", () => {
+    expect(parseItens([{ pedido: "X", status: "deferido", valor: 0 }])[0].valor).toBeNull();
+    expect(parseItens([{ pedido: "X", status: "deferido", valor: -50 }])[0].valor).toBeNull();
+  });
+
+  it("arredonda pra centavos", () => {
+    expect(parseItens([{ pedido: "X", status: "deferido", valor: 1234.5678 }])[0].valor).toBe(1234.57);
+  });
+
+  it("devolve lista vazia pro que não é lista", () => {
+    expect(parseItens(undefined)).toEqual([]);
+    expect(parseItens(null)).toEqual([]);
+    expect(parseItens("procedente")).toEqual([]);
+  });
+
+  it("limita a 12 itens", () => {
+    const muitos = Array.from({ length: 30 }, (_, i) => ({ pedido: `Pedido ${i}`, status: "deferido" }));
+    expect(parseItens(muitos)).toHaveLength(12);
+  });
+});
+
+describe("parseAnalise com placar", () => {
+  const base = {
+    titulo: "Banco condenado a devolver R$ 18.402",
+    ato: "sentenca",
+    desfecho: "parcial",
+    relevancia: "relevante",
+    providencia: { exigida: false },
+  };
+
+  it("traz os itens junto da análise", () => {
+    const r = parseAnalise(JSON.stringify({
+      ...base,
+      pontos: ["O juiz afastou a capitalização mensal e mandou devolver em dobro."],
+      itens: [
+        { pedido: "Revisão dos juros", status: "deferido", valor: 12480 },
+        { pedido: "Dano moral", status: "negado", razao: "Mero aborrecimento" },
+      ],
+    }));
+    expect(r?.itens).toHaveLength(2);
+    expect(r?.itens[0].valor).toBe(12480);
+  });
+
+  it("análise sem itens continua válida — despacho não julga pedido", () => {
+    const r = parseAnalise(JSON.stringify({ ...base, ato: "despacho", pontos: [], itens: [] }));
+    expect(r?.itens).toEqual([]);
+  });
+
+  it("filtra o enchimento antes de chegar na tela", () => {
+    const r = parseAnalise(JSON.stringify({
+      ...base,
+      pontos: [
+        "O pedido foi julgado procedente em parte.",
+        "Não há informações sobre valores ou condições específicas.",
+        "A decisão pode impactar a estratégia das partes.",
+        "Detalhes adicionais não estão disponíveis no rótulo.",
+      ],
+      itens: [],
+    }));
+    // Sobra só a frase que afirma algo — as outras três eram sobre a
+    // ausência do documento, não sobre a decisão.
+    expect(r?.pontos).toEqual(["O pedido foi julgado procedente em parte."]);
+  });
+
+  it("resposta só com enchimento vira lista vazia, e a UI cai no estado sem resumo", () => {
+    const r = parseAnalise(JSON.stringify({
+      ...base,
+      pontos: [
+        "Não há informações sobre valores.",
+        "Detalhes adicionais não estão disponíveis no rótulo.",
+      ],
+      itens: [],
+    }));
+    expect(r?.pontos).toEqual([]);
   });
 });
