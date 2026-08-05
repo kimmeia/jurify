@@ -303,6 +303,8 @@ export const movimentacoesRouter = router({
         rotulo: row.ev.conteudo,
         titulo: analise?.titulo ?? row.ev.resumoIa ?? row.ev.conteudo.slice(0, 160),
         pontos: analise?.pontos ?? [],
+        /** Placar pedido a pedido — vazio quando o ato não julga pedidos. */
+        itens: analise?.itens ?? [],
         ato: analise?.ato ?? null,
         desfecho: row.ev.desfecho,
         relevancia: row.ev.relevancia,

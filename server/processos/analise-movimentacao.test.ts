@@ -64,10 +64,19 @@ describe("parseAnalise", () => {
   });
 
   it("limita a 4 pontos e descarta entrada não-texto", () => {
+    // Frases de verdade: o filtro anti-enchimento derruba texto curto demais
+    // pra afirmar qualquer coisa, então "a"/"b" não servem mais de fixture.
+    const frases = [
+      "O juiz afastou a capitalização mensal de juros do contrato.",
+      "Determinada a devolução em dobro dos valores cobrados a maior.",
+      "Dano moral negado por ausência de prova do abalo alegado.",
+      "Honorários fixados em 10% sobre o valor da condenação.",
+      "Custas processuais rateadas entre as partes na proporção da sucumbência.",
+    ];
     const a = parseAnalise(
-      JSON.stringify({ ...completo, pontos: ["a", "b", "c", "d", "e", 42, null, "  "] }),
+      JSON.stringify({ ...completo, pontos: [...frases, 42, null, "  "] }),
     )!;
-    expect(a.pontos).toEqual(["a", "b", "c", "d"]);
+    expect(a.pontos).toEqual(frases.slice(0, 4));
   });
 
   it("pontos ausente vira lista vazia", () => {
