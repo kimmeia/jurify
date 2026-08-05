@@ -30,14 +30,74 @@ import {
 import { diasUteisAte } from "./prazo-processual";
 import { localizarTrecho } from "./teor-documento";
 import { parsearPartes, resumirPartes } from "./partes-processo";
-import type { AnaliseMovimentacao } from "./resumir-movimentacao";
+import { pontoUtil, type AnaliseMovimentacao } from "./resumir-movimentacao";
 
 export type Grupo = "exigem_acao" | "relevante" | "rotina";
 
-function parseAnaliseJson(raw: string | null): AnaliseMovimentacao | null {
+/**
+ * O que a tela ainda deve a você. É o eixo principal da central: a
+ * classificação (exige ação / relevante / rotina) responde *o que* a
+ * movimentação é, e isso já aparece como seção dentro da lista — misturar as
+ * duas perguntas numa barra de abas só fazia o trabalho do dia se esconder
+ * atrás do que parecia um filtro secundário.
+ */
+export type Estado = "a_resolver" | "resolvidas" | "todas";
+
+/**
+ * Aplica os dois filtros da central e devolve os números que a barra mostra.
+ *
+ * A ordem importa. O tipo (grupo) filtra primeiro e as contagens de estado
+ * saem desse recorte: as três abas são uma partição do mesmo conjunto
+ * (`aResolver + resolvidas === total`), então elas precisam descrever o que
+ * está de fato na tela. Já a contagem por grupo sai do conjunto inteiro,
+ * porque ela rotula as opções do próprio seletor de tipo — se encolhesse
+ * junto, escolher um tipo zeraria os outros.
+ */
+export function triar<T extends { grupo: Grupo; lido: boolean }>(
+  itens: T[],
+  filtros: { grupos?: Grupo[]; estado?: Estado },
+) {
+  const porGrupo: Record<Grupo, number> = { exigem_acao: 0, relevante: 0, rotina: 0 };
+  for (const i of itens) porGrupo[i.grupo]++;
+
+  const visiveis = filtros.grupos?.length
+    ? itens.filter((i) => filtros.grupos!.includes(i.grupo))
+    : itens;
+
+  const aResolver = visiveis.filter((i) => !i.lido).length;
+  const estado = filtros.estado ?? "a_resolver";
+  const filtrados =
+    estado === "a_resolver"
+      ? visiveis.filter((i) => !i.lido)
+      : estado === "resolvidas"
+        ? visiveis.filter((i) => i.lido)
+        : visiveis;
+
+  return {
+    itens: filtrados,
+    contagem: { ...porGrupo, aResolver, resolvidas: visiveis.length - aResolver },
+    total: visiveis.length,
+  };
+}
+
+/**
+ * Lê a análise gravada — e passa os pontos pelo mesmo filtro de enchimento
+ * que roda na hora de analisar.
+ *
+ * Filtrar só na escrita limpava as análises futuras e deixava todas as
+ * antigas exatamente como estavam: quem abrisse uma movimentação já analisada
+ * continuava lendo "não há informações adicionais no rótulo". Como o filtro é
+ * puro e barato, aplicá-lo na leitura cura o acervo inteiro sem reanalisar
+ * nada.
+ */
+export function parseAnaliseJson(raw: string | null): AnaliseMovimentacao | null {
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as AnaliseMovimentacao;
+    const a = JSON.parse(raw) as AnaliseMovimentacao;
+    return {
+      ...a,
+      pontos: Array.isArray(a.pontos) ? a.pontos.filter(pontoUtil) : [],
+    };
   } catch {
     return null;
   }
@@ -75,7 +135,7 @@ export const movimentacoesRouter = router({
           /** Janela em dias a partir de hoje. */
           dias: z.number().int().min(1).max(365).default(7),
           grupos: z.array(z.enum(["exigem_acao", "relevante", "rotina"])).optional(),
-          somenteNaoLidas: z.boolean().optional(),
+          estado: z.enum(["a_resolver", "resolvidas", "todas"]).default("a_resolver"),
           limite: z.number().int().min(1).max(200).default(80),
         })
         .optional(),
@@ -83,12 +143,12 @@ export const movimentacoesRouter = router({
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "processos", "ver");
       if (!perm.allowed) {
-        return { itens: [], contagem: { exigem_acao: 0, relevante: 0, rotina: 0, naoLidas: 0 }, total: 0 };
+        return { itens: [], contagem: { exigem_acao: 0, relevante: 0, rotina: 0, aResolver: 0, resolvidas: 0 }, total: 0 };
       }
 
       const db = await getDb();
       if (!db) {
-        return { itens: [], contagem: { exigem_acao: 0, relevante: 0, rotina: 0, naoLidas: 0 }, total: 0 };
+        return { itens: [], contagem: { exigem_acao: 0, relevante: 0, rotina: 0, aResolver: 0, resolvidas: 0 }, total: 0 };
       }
 
       const dias = input?.dias ?? 7;
@@ -153,7 +213,6 @@ export const movimentacoesRouter = router({
         .limit(limite);
 
       const hoje = new Date();
-      const contagem: Record<Grupo, number> = { exigem_acao: 0, relevante: 0, rotina: 0 };
 
       const itens = rows.map((r) => {
         const analise = parseAnaliseJson(r.analiseJson);
@@ -163,7 +222,6 @@ export const movimentacoesRouter = router({
           temPrazoPendente,
           analise,
         });
-        contagem[grupo]++;
 
         // Sem as partes, o card repetia o CNJ no lugar do nome — não dava pra
         // reconhecer o caso de relance, que é a única coisa que a linha
@@ -212,17 +270,7 @@ export const movimentacoesRouter = router({
         };
       });
 
-      // Grupo e "não lidas" são filtrados DEPOIS de classificar e contar. A
-      // contagem precisa refletir a janela inteira: se ela mudasse junto com
-      // a aba ativa, cada aba mostraria um número diferente pra mesma coisa e
-      // o advogado perderia a noção do que sobrou.
-      const naoLidas = itens.filter((i) => !i.lido).length;
-      let filtrados = input?.grupos?.length
-        ? itens.filter((i) => input.grupos!.includes(i.grupo))
-        : itens;
-      if (input?.somenteNaoLidas) filtrados = filtrados.filter((i) => !i.lido);
-
-      return { itens: filtrados, contagem: { ...contagem, naoLidas }, total: itens.length };
+      return triar(itens, { grupos: input?.grupos, estado: input?.estado });
     }),
 
   /**

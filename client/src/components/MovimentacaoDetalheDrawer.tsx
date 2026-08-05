@@ -605,7 +605,7 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                   onClick={() => marcarMut.mutate({ eventoIds: [data.id] })}
                 >
                   <Check className="h-3.5 w-3.5 mr-1.5" />
-                  Já providenciei
+                  Já resolvi
                 </Button>
               )}
               {data.monitoramentoId && (
