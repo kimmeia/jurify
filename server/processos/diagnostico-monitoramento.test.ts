@@ -105,3 +105,29 @@ describe("agruparDiagnostico", () => {
     expect(tituloComTotal(r.grupos[0])).toBe("2 processos pararam de atualizar");
   });
 });
+
+describe("deveReligarMonitoramento", () => {
+  it("religa o que estava preso na credencial", async () => {
+    const { deveReligarMonitoramento } = await import("../escritorio/cofre-helpers");
+    expect(
+      deveReligarMonitoramento({ status: "erro", ultimoErro: "Sessão expirada — revalide a credencial" }),
+    ).toBe(true);
+    expect(deveReligarMonitoramento({ status: "erro", ultimoErro: "Credencial não vinculada" })).toBe(true);
+  });
+
+  it("não religa o que quebrou por outro motivo", async () => {
+    const { deveReligarMonitoramento } = await import("../escritorio/cofre-helpers");
+    // Revalidar credencial não conserta CNJ digitado errado; apagar esse erro
+    // seria mentir na direção contrária.
+    expect(
+      deveReligarMonitoramento({ status: "erro", ultimoErro: "PJe TJCE respondeu mas não localizou o processo" }),
+    ).toBe(false);
+    expect(deveReligarMonitoramento({ status: "erro", ultimoErro: "ERR_CONNECTION_RESET" })).toBe(false);
+  });
+
+  it("não mexe em quem está pausado nem em quem está saudável", async () => {
+    const { deveReligarMonitoramento } = await import("../escritorio/cofre-helpers");
+    expect(deveReligarMonitoramento({ status: "pausado", ultimoErro: "Sessão expirada" })).toBe(false);
+    expect(deveReligarMonitoramento({ status: "ativo", ultimoErro: null })).toBe(false);
+  });
+});

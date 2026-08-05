@@ -35,6 +35,7 @@ import { decrypt as adminDecrypt } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { classificarErroMonitor } from "../processos/diagnostico-monitoramento";
 import { parsearPartes, resumirPartes } from "../processos/partes-processo";
+import { siglasSuportadas } from "../processos/tribunais-pdpj";
 import { ambienteSuportaTeste } from "../_core/ambiente";
 import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resumir-movimentacao";
 import { createLogger } from "../_core/logger";
@@ -1237,7 +1238,9 @@ export const processosRouter = router({
       if (!tribunal.temMotorProprio) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
-          message: `Monitoramento para ${tribunal.siglaTribunal} ainda em desenvolvimento.`,
+          message:
+            `O robô ainda não entra no ${tribunal.siglaTribunal}. ` +
+            `Hoje ele cobre: ${siglasSuportadas()}.`,
         });
       }
 

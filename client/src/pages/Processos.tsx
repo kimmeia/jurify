@@ -21,7 +21,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy } from "lucide-react";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { marked } from "marked";
 import {
@@ -1220,46 +1227,49 @@ function MonitoramentoCard({
             </p>
           </div>
 
+          {/* Cinco controles coloridos por linha × centenas de linhas era o
+              que mais poluía a lista. Ficam num menu; o que sobra é abrir. */}
           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-            {searchType === "lawsuit_cnj" && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-[10px] text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                  title="Atualizar processo agora — consulta tribunal (1 crédito)"
-                  disabled={buscarCompletoMut.isPending}
-                  onClick={clickHistorico}
-                >
-                  {buscarCompletoMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Search className="h-3 w-3 mr-1" />}
-                  Histórico
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground">
+                  <MoreHorizontal className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-[10px] text-violet-600 hover:bg-violet-50 rounded-lg"
-                  title="Gerar resumo IA detalhado (1 crédito)"
-                  disabled={resumoMut.isPending}
-                  onClick={() => setConfirmResumoOpen(true)}
-                >
-                  {resumoMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <FileText className="h-3 w-3 mr-1" />}
-                  Resumo IA
-                </Button>
-              </>
-            )}
-            {(status === "created" || status === "updated" || status === "updating") && (
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-amber-600" title="Pausar" onClick={onPausar}>
-                <Pause className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {status === "paused" && (
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Reativar" onClick={onReativar}>
-                <Play className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" title="Excluir" onClick={onDeletar}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {searchType === "lawsuit_cnj" && (
+                  <>
+                    <DropdownMenuItem disabled={buscarCompletoMut.isPending} onClick={clickHistorico}>
+                      <Search className="h-3.5 w-3.5 mr-2" />
+                      Buscar histórico
+                      <span className="ml-auto text-[10px] text-muted-foreground">1 crédito</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={resumoMut.isPending} onClick={() => setConfirmResumoOpen(true)}>
+                      <FileText className="h-3.5 w-3.5 mr-2" />
+                      Resumo IA
+                      <span className="ml-auto text-[10px] text-muted-foreground">1 crédito</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                {(status === "created" || status === "updated" || status === "updating") && (
+                  <DropdownMenuItem onClick={onPausar}>
+                    <Pause className="h-3.5 w-3.5 mr-2" />
+                    Pausar monitoramento
+                  </DropdownMenuItem>
+                )}
+                {status === "paused" && (
+                  <DropdownMenuItem onClick={onReativar}>
+                    <Play className="h-3.5 w-3.5 mr-2" />
+                    Reativar
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDeletar}>
+                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                  Excluir
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setAberto(!aberto); }}>
               {aberto ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
@@ -1664,128 +1674,101 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl bg-gradient-to-br from-white to-indigo-50/50 border border-slate-200 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shrink-0 shadow-sm">
-              <Radar className="h-5 w-5 text-white" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold tracking-tight">Monitoramento de movimentações</p>
-              <p className="text-[11px] text-slate-500 mt-0.5 max-w-2xl">
-                Acompanhe despachos, sentenças e audiências em tempo real. Requer credencial OAB cadastrada no Cofre.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {ambTeste?.ehTeste && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-9 rounded-lg border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800"
-                disabled={seedTesteMut.isPending}
-                onClick={() => seedTesteMut.mutate()}
-                title="Cria um processo de teste com movimentações classificadas (só staging/dev)."
-              >
-                {seedTesteMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <span className="mr-1">🧪</span>}
-                Gerar teste
-              </Button>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 rounded-lg border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 text-indigo-700"
-              disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
-              onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: listaMons.map((m: any) => m.id) })}
-              title="Roda os polls de todos os monitoramentos (inclui os com erro, pra reprocessar) em paralelo (limit 3). Sem custo de créditos."
-            >
-              {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
-                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-              ) : (
-                <RefreshCcw className="h-3.5 w-3.5 mr-1" />
-              )}
-              Atualizar todos
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 rounded-lg"
-              onClick={() => setImportarAdvboxOpen(true)}
-              title="Importa em massa processos do export XLSX da Advbox."
-            >
-              <Upload className="h-3.5 w-3.5 mr-1" />
-              Importar Advbox
-            </Button>
-            <Button
-              size="sm"
-              className="h-9 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-sm"
-              onClick={() => setNovoOpen(true)}
-            >
-              <Plus className="h-3.5 w-3.5 mr-1" />Novo
-            </Button>
-          </div>
+      {/* Uma barra só. Antes isto era um card com ícone em degradê repetindo
+          "monitoramento" logo abaixo do título da página — três blocos de
+          cabeçalho empilhados antes de aparecer qualquer processo. */}
+      <div className="rounded-xl border bg-card p-2.5 flex flex-wrap items-center gap-2.5">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por cliente, CPF ou número do processo…"
+            value={buscaTexto}
+            onChange={(e) => setBuscaTexto(e.target.value)}
+            className="pl-9 h-9"
+          />
         </div>
 
-        <ImportarAdvboxDialog
-          open={importarAdvboxOpen}
-          onOpenChange={setImportarAdvboxOpen}
-          onSuccess={() => refetch()}
-        />
-
-        {/* Busca + Filtros (chips) */}
         {listaMons.length > 0 && (
-          <div className="flex items-center gap-2 mt-4 flex-wrap">
-            <div className="relative flex-1 min-w-[200px] max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-              <Input
-                placeholder="Buscar por nome, CPF ou número do processo…"
-                value={buscaTexto}
-                onChange={(e) => setBuscaTexto(e.target.value)}
-                className="pl-8 h-8 rounded-lg border-slate-200 bg-white text-xs focus-visible:ring-indigo-400"
-              />
-              {buscaTexto && (
+          <div className="flex gap-1 bg-muted p-[3px] rounded-[10px]">
+            {[
+              { id: "todos", label: "Todos", count: contaPorStatus.todos },
+              { id: "erro", label: "Parados", count: contaPorStatus.erro },
+              { id: "ativo", label: "Monitorando", count: contaPorStatus.ativo },
+              { id: "pausado", label: "Pausados", count: contaPorStatus.pausado },
+            ].map((abaF) => {
+              const ativa = filtroStatus === abaF.id;
+              return (
                 <button
+                  key={abaF.id}
                   type="button"
-                  onClick={() => setBuscaTexto("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
-                  title="Limpar"
+                  onClick={() => setFiltroStatus(abaF.id as "todos" | "ativo" | "pausado" | "erro")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                    ativa ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
-                  ✕
-                </button>
-              )}
-            </div>
-            <div className="flex gap-1 bg-muted p-[3px] rounded-[10px]">
-              {[
-                { id: "todos", label: "Todos", count: contaPorStatus.todos },
-                { id: "erro", label: "Parados", count: contaPorStatus.erro },
-                { id: "ativo", label: "Monitorando", count: contaPorStatus.ativo },
-                { id: "pausado", label: "Pausados", count: contaPorStatus.pausado },
-              ].map((aba) => {
-                const ativa = filtroStatus === aba.id;
-                return (
-                  <button
-                    key={aba.id}
-                    type="button"
-                    onClick={() => setFiltroStatus(aba.id as "todos" | "ativo" | "pausado" | "erro")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
-                      ativa ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  {abaF.label}
+                  <span
+                    className={`rounded-full px-1.5 text-[10px] font-extrabold tabular-nums ${
+                      ativa ? "bg-primary text-primary-foreground" : "bg-border text-muted-foreground"
                     }`}
                   >
-                    {aba.label}
-                    <span
-                      className={`rounded-full px-1.5 text-[10px] font-extrabold tabular-nums ${
-                        ativa ? "bg-primary text-primary-foreground" : "bg-border text-muted-foreground"
-                      }`}
-                    >
-                      {aba.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+                    {abaF.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
+
+        <div className="flex items-center gap-2 shrink-0">
+          {ambTeste?.ehTeste && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800"
+              disabled={seedTesteMut.isPending}
+              onClick={() => seedTesteMut.mutate()}
+              title="Cria um processo de teste com movimentações classificadas (só staging/dev)."
+            >
+              {seedTesteMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <span className="mr-1.5">🧪</span>}
+              Gerar teste
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
+            onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: listaMons.map((m: any) => m.id) })}
+            title="Reconsulta todos os monitoramentos, inclusive os parados. Sem custo de créditos."
+          >
+            {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <RefreshCcw className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Atualizar
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setImportarAdvboxOpen(true)}
+            title="Importa em massa processos do export XLSX da Advbox."
+          >
+            <Upload className="h-3.5 w-3.5 mr-1.5" />
+            Importar
+          </Button>
+          <Button size="sm" onClick={() => setNovoOpen(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            Novo
+          </Button>
+        </div>
       </div>
+
+      <ImportarAdvboxDialog
+        open={importarAdvboxOpen}
+        onOpenChange={setImportarAdvboxOpen}
+        onSuccess={() => refetch()}
+      />
 
       {principal && (
         <div className="rounded-xl border bg-card border-l-[3px] border-l-rose-500 p-4 flex items-start gap-3.5 flex-wrap">
@@ -1813,6 +1796,22 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
                 {principal.causa.acao}
               </Button>
             )}
+            {/* Fecha o ciclo: revalidar a credencial religa os monitoramentos,
+                mas os dados só chegam na próxima varredura — daqui o dono
+                força a releitura na hora. */}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
+              onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: listaMons.map((m: any) => m.id) })}
+            >
+              {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              Verificar agora
+            </Button>
             <Button size="sm" variant="outline" onClick={() => setFiltroStatus("erro")}>
               Ver os {principal.total}
             </Button>
@@ -2229,30 +2228,30 @@ export default function Processos() {
       )}
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="!bg-slate-100 !border !border-slate-200 !rounded-xl !p-1.5 !h-auto !inline-flex !w-auto gap-1 shadow-sm flex-wrap">
+        <TabsList className="!bg-muted !border-0 !rounded-[10px] !p-[3px] !h-auto !inline-flex !w-auto gap-1 flex-wrap">
           <TabsTrigger
             value="consultar"
-            className="gap-1.5 text-xs py-2 px-3.5 !rounded-lg !text-slate-600 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm font-medium"
+            className="gap-1.5 text-xs py-1.5 px-3 !rounded-lg !text-muted-foreground data-[state=active]:!bg-card data-[state=active]:!text-foreground data-[state=active]:!shadow-sm font-semibold"
           >
             <Search className="h-3.5 w-3.5" />Consultar
           </TabsTrigger>
           <TabsTrigger
             value="movimentacoes"
-            className="gap-1.5 text-xs py-2 px-3.5 !rounded-lg !text-slate-600 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm font-medium"
+            className="gap-1.5 text-xs py-1.5 px-3 !rounded-lg !text-muted-foreground data-[state=active]:!bg-card data-[state=active]:!text-foreground data-[state=active]:!shadow-sm font-semibold"
           >
             <Radar className="h-3.5 w-3.5" />Monitoramento
             <MonitoramentosCount />
           </TabsTrigger>
           <TabsTrigger
             value="novas-acoes"
-            className="gap-1.5 text-xs py-2 px-3.5 !rounded-lg !text-slate-600 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm font-medium"
+            className="gap-1.5 text-xs py-1.5 px-3 !rounded-lg !text-muted-foreground data-[state=active]:!bg-card data-[state=active]:!text-foreground data-[state=active]:!shadow-sm font-semibold"
           >
             <Siren className="h-3.5 w-3.5" />Novas Ações
             <NovasAcoesBadge />
           </TabsTrigger>
           <TabsTrigger
             value="alertas"
-            className="gap-1.5 text-xs py-2 px-3.5 !rounded-lg !text-slate-600 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm font-medium"
+            className="gap-1.5 text-xs py-1.5 px-3 !rounded-lg !text-muted-foreground data-[state=active]:!bg-card data-[state=active]:!text-foreground data-[state=active]:!shadow-sm font-semibold"
           >
             <Bell className="h-3.5 w-3.5" />Alertas
             <AlertasBadge />
@@ -2260,7 +2259,7 @@ export default function Processos() {
           {podeCofre && (
             <TabsTrigger
               value="cofre"
-              className="gap-1.5 text-xs py-2 px-3.5 !rounded-lg !text-slate-600 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm font-medium"
+              className="gap-1.5 text-xs py-1.5 px-3 !rounded-lg !text-muted-foreground data-[state=active]:!bg-card data-[state=active]:!text-foreground data-[state=active]:!shadow-sm font-semibold"
             >
               <KeyRound className="h-3.5 w-3.5" />Cofre
             </TabsTrigger>

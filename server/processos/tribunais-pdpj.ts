@@ -111,3 +111,12 @@ export const TRIBUNAIS_MOTOR_PROPRIO = [
   ...Object.keys(REGISTRO),
   ...TRIBUNAIS_CONSULTA_PUBLICA,
 ];
+
+/**
+ * Siglas suportadas, pra mensagem de erro. "Ainda em desenvolvimento" sem
+ * dizer o que funciona deixa quem cadastrou sem saber se o problema é o
+ * tribunal dele ou o número que digitou.
+ */
+export function siglasSuportadas(): string {
+  return TRIBUNAIS_MOTOR_PROPRIO.map((t) => t.toUpperCase()).sort().join(", ");
+}
