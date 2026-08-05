@@ -7,28 +7,27 @@
   --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
   --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
   --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2;
+  --aviso:#b45309; --aviso-bg:#fffbeb;
   --ok:#059669; --ok-bg:#ecfdf5;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:1600px;height:900px;overflow:hidden}
+html,body{width:1600px;height:1650px;overflow:hidden}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
-.wrap{padding:24px 28px;height:100%;display:flex;flex-direction:column}
+.wrap{padding:24px 28px}
 
-.topo{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex:0 0 auto}
+.topo{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
 .h1{font-family:'Poppins';font-weight:700;font-size:27px;letter-spacing:-.01em;line-height:1}
 .sub{margin-top:6px;font-size:13.5px;color:var(--mudo)}
-.acoes{display:flex;gap:8px;flex:0 0 auto}
+.acoes{display:flex;gap:8px}
 .btn{height:36px;border:1px solid var(--borda);background:#fff;border-radius:9px;padding:0 14px;display:flex;
   align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--corpo)}
 .btn.primary{background:var(--acento);border-color:var(--acento);color:#fff;box-shadow:0 8px 18px -9px #7c3aed99}
 
-/* os seis relatórios à vista, no lugar do combobox */
-.rels{margin-top:15px;flex:0 0 auto;display:flex;gap:3px;background:var(--hairline);padding:3px;border-radius:10px;align-self:flex-start}
+.rels{margin-top:15px;display:flex;gap:3px;background:var(--hairline);padding:3px;border-radius:10px;align-self:flex-start;width:fit-content}
 .rels span{padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--mudo);border-radius:8px;display:flex;align-items:center;gap:7px}
 .rels span.on{background:#fff;color:var(--tinta);box-shadow:0 1px 3px #0f172a1a}
 
-/* filtro único: vale pros seis e não zera quando troca de relatório */
-.filtros{margin-top:12px;flex:0 0 auto;background:#fff;border:1px solid var(--borda);border-radius:12px;
+.filtros{margin-top:12px;background:#fff;border:1px solid var(--borda);border-radius:12px;
   padding:9px 11px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .per{display:flex;gap:3px;background:var(--hairline);padding:3px;border-radius:9px}
 .per span{padding:6px 11px;font-size:12px;font-weight:600;color:var(--mudo);border-radius:7px}
@@ -41,8 +40,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
 .comp .cx{width:15px;height:15px;border-radius:4px;background:var(--acento);display:flex;align-items:center;
   justify-content:center;color:#fff}
 
-/* KPIs */
-.kpis{margin-top:13px;flex:0 0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpis{margin-top:13px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpis.tres{grid-template-columns:repeat(3,1fr)}
 .kpi{background:#fff;border:1px solid var(--borda);border-radius:12px;padding:13px 15px}
 .k-l{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--fraco)}
 .k-linha{display:flex;align-items:baseline;gap:9px;margin-top:6px}
@@ -52,20 +51,21 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
 .k-d.desce{background:var(--alerta-bg);color:var(--alerta)}
 .k-s{margin-top:5px;font-size:11px;color:var(--mudo)}
 
-/* corpo */
-.corpo{margin-top:13px;flex:1;min-height:0;display:grid;grid-template-columns:1.4fr 1fr;grid-template-rows:auto 1fr;gap:13px}
+.grade{margin-top:12px;display:grid;gap:12px}
+.g-2{grid-template-columns:1.55fr 1fr}
 .card{background:#fff;border:1px solid var(--borda);border-radius:12px;display:flex;flex-direction:column;overflow:hidden}
-.card-top{padding:11px 15px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:9px;flex:0 0 auto}
+.card-top{padding:11px 15px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:9px}
 .card-top .ct{font-family:'Poppins';font-weight:700;font-size:14px}
 .card-top .cs{font-size:11px;color:var(--mudo);margin-left:auto}
 
-.graf{flex:1;min-height:0;padding:14px 15px 10px;display:flex;align-items:flex-end;gap:5px}
+.graf{height:186px;padding:14px 15px 8px;display:flex;align-items:flex-end;gap:4px}
 .barra{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px;height:100%}
 .barra i{display:block;width:100%;border-radius:4px 4px 0 0;background:#7c3aed}
-.barra i.fds{background:#ddd6fe}
-.barra b{font-size:9px;font-weight:600;color:var(--fraco)}
+.barra i.ciano{background:#0891b2}
+.barra i.fds{opacity:.28}
+.barra b{font-size:9px;font-weight:600;color:var(--fraco);height:10px}
 
-.rank{padding:9px 13px;display:flex;flex-direction:column;gap:11px}
+.rank{padding:11px 13px;display:flex;flex-direction:column;gap:12px}
 .rk{display:flex;align-items:center;gap:10px}
 .rk .av{width:26px;height:26px;border-radius:50%;color:#fff;font-size:9.5px;font-weight:700;display:flex;
   align-items:center;justify-content:center;flex:0 0 auto}
@@ -77,15 +77,46 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
 .rk .n1{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
 .rk .n2{font-size:10px;color:var(--mudo);margin-top:1px}
 
-.canais{padding:11px 13px;display:flex;flex-direction:column;gap:10px}
+.canais{padding:11px 13px;display:flex;flex-direction:column;gap:11px}
 .cn{display:flex;align-items:center;gap:10px}
 .cn .sw{width:10px;height:10px;border-radius:3px;flex:0 0 auto}
 .cn .nm{flex:1;min-width:0;font-size:12.5px;color:var(--corpo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cn .qt{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
 .cn .pc{width:42px;text-align:right;font-size:11px;color:var(--fraco);font-weight:600}
 
-.envio{padding:12px 15px;display:flex;align-items:center;gap:11px;font-size:12px;color:var(--corpo-2)}
+.mot{padding:11px 13px;display:flex;flex-direction:column;gap:10px}
+.mt{display:flex;align-items:center;gap:10px}
+.mt .nm{width:210px;flex:0 0 auto;font-size:12px;color:var(--corpo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mt .tr{flex:1;height:16px;background:var(--hairline);border-radius:4px;overflow:hidden}
+.mt .tr i{display:block;height:100%;background:#fda4af;border-radius:4px}
+.mt .qt{width:56px;text-align:right;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+
+table{width:100%;border-collapse:collapse}
+th{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--fraco);
+  text-align:center;padding:9px 10px;border-bottom:1px solid var(--hairline)}
+th:first-child{text-align:left} th:last-child{text-align:right}
+td{font-size:12.5px;padding:10px;text-align:center;border-bottom:1px solid var(--hairline);font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+td:first-child{text-align:left;font-weight:600;color:var(--tinta-2)}
+td:last-child{text-align:right;font-weight:700}
+td.g{color:var(--ok);font-weight:700} td.p{color:var(--alerta);font-weight:700}
+td.mudo{color:var(--mudo)}
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700}
+.pill.verde{background:var(--ok-bg);color:var(--ok)}
+.pill.ambar{background:var(--aviso-bg);color:var(--aviso)}
+.pill.vermelho{background:var(--alerta-bg);color:var(--alerta-forte)}
+.tdnome{display:flex;align-items:center;gap:8px}
+.tdnome .av{width:22px;height:22px;border-radius:50%;color:#fff;font-size:8.5px;font-weight:700;display:flex;
+  align-items:center;justify-content:center;flex:0 0 auto}
+
+.sec{margin-top:22px;display:flex;align-items:center;gap:9px}
+.sec .t{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--fraco)}
+.sec .l{flex:1;height:1px;background:var(--borda)}
+
+.envio{margin-top:12px;background:#fff;border:1px solid var(--borda);border-radius:11px;padding:11px 15px;
+  display:flex;align-items:center;gap:10px;font-size:12px;color:var(--corpo-2)}
 .envio b{color:var(--tinta)}
+.envio .cta{margin-left:auto;color:#5b21b6;font-weight:700}
 </style></head>
 <body>
 <div class="wrap">
@@ -125,7 +156,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>12%
       </span>
     </div>
-    <p class="k-s">836 no mês passado</p>
+    <p class="k-s">1.147 no período anterior</p>
   </div>
   <div class="kpi">
     <p class="k-l">Msgs recebidas</p>
@@ -135,7 +166,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>8%
       </span>
     </div>
-    <p class="k-s">8.720 no mês passado</p>
+    <p class="k-s">8.720 no período anterior</p>
   </div>
   <div class="kpi">
     <p class="k-l">Msgs enviadas</p>
@@ -145,7 +176,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10"/><path d="M17 7v10H7"/></svg>3%
       </span>
     </div>
-    <p class="k-s">8.140 no mês passado</p>
+    <p class="k-s">8.140 no período anterior</p>
   </div>
   <div class="kpi">
     <p class="k-l">Tempo p/ 1ª resposta</p>
@@ -155,24 +186,51 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10"/><path d="M17 7v10H7"/></svg>22%
       </span>
     </div>
-    <p class="k-s">18 min no mês passado</p>
+    <p class="k-s">18 min no período anterior</p>
+  </div></div>
+  <div class="kpis tres" style="margin-top:12px">
+  <div class="kpi">
+    <p class="k-l">Taxa de conversão</p>
+    <div class="k-linha">
+      <span class="k-v">27%</span>
+      <span class="k-d sobe">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>4%
+      </span>
+    </div>
+    <p class="k-s">23% no período anterior</p>
+  </div>
+  <div class="kpi">
+    <p class="k-l">Ticket médio</p>
+    <div class="k-linha">
+      <span class="k-v">R$ 3.180</span>
+      <span class="k-d sobe">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>9%
+      </span>
+    </div>
+    <p class="k-s">R$ 2.910 no período anterior</p>
+  </div>
+  <div class="kpi">
+    <p class="k-l">Conversa → Lead</p>
+    <div class="k-linha">
+      <span class="k-v">41%</span>
+      <span class="k-d desce">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10"/><path d="M17 7v10H7"/></svg>2%
+      </span>
+    </div>
+    <p class="k-s">43% no período anterior</p>
   </div></div>
 
-  <div class="corpo">
-    <div class="card" style="grid-row:span 2">
+  <div class="grade g-2">
+    <div class="card">
       <div class="card-top">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>
-        <span class="ct">Atendimentos por dia</span>
-        <span class="cs">1.284 no período · média de 43/dia · fim de semana em tom claro</span>
+        <span class="ct">Volume diário</span>
+        <span class="cs">1.284 no período · média de 43/dia · fim de semana esmaecido</span>
       </div>
-      <div class="graf">
-        <span class="barra"><i class="" style="height:85%"></i><b>01</b></span><span class="barra"><i class="" style="height:75%"></i><b></b></span><span class="barra"><i class="" style="height:88%"></i><b>03</b></span><span class="barra"><i class="" style="height:100%"></i><b></b></span><span class="barra"><i class="" style="height:71%"></i><b>05</b></span><span class="barra"><i class="fds" style="height:9%"></i><b></b></span><span class="barra"><i class="fds" style="height:22%"></i><b>07</b></span><span class="barra"><i class="" style="height:74%"></i><b></b></span><span class="barra"><i class="" style="height:86%"></i><b>09</b></span><span class="barra"><i class="" style="height:98%"></i><b></b></span><span class="barra"><i class="" style="height:72%"></i><b>11</b></span><span class="barra"><i class="" style="height:95%"></i><b></b></span><span class="barra"><i class="fds" style="height:14%"></i><b>13</b></span><span class="barra"><i class="fds" style="height:9%"></i><b></b></span><span class="barra"><i class="" style="height:72%"></i><b>15</b></span><span class="barra"><i class="" style="height:91%"></i><b></b></span><span class="barra"><i class="" style="height:91%"></i><b>17</b></span><span class="barra"><i class="" style="height:74%"></i><b></b></span><span class="barra"><i class="" style="height:82%"></i><b>19</b></span><span class="barra"><i class="fds" style="height:11%"></i><b></b></span><span class="barra"><i class="fds" style="height:22%"></i><b>21</b></span><span class="barra"><i class="" style="height:89%"></i><b></b></span><span class="barra"><i class="" style="height:72%"></i><b>23</b></span><span class="barra"><i class="" style="height:98%"></i><b></b></span><span class="barra"><i class="" style="height:75%"></i><b>25</b></span><span class="barra"><i class="" style="height:82%"></i><b></b></span><span class="barra"><i class="fds" style="height:25%"></i><b>27</b></span><span class="barra"><i class="fds" style="height:25%"></i><b></b></span><span class="barra"><i class="" style="height:97%"></i><b>29</b></span><span class="barra"><i class="" style="height:72%"></i><b></b></span>
-      </div>
-      <div class="envio" style="border-top:1px solid var(--hairline)">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="10"/></svg>
-        <span>Este relatório pode ir sozinho pro seu e-mail <b>toda segunda</b> — mesmo motor do resumo diário.</span>
-        <span style="margin-left:auto;color:#5b21b6;font-weight:700">Programar envio →</span>
-      </div>
+      
+  <div class="graf">
+    <span class="barra"><i class="" style="height:85%"></i><b>01</b></span><span class="barra"><i class="" style="height:75%"></i><b></b></span><span class="barra"><i class="" style="height:88%"></i><b>03</b></span><span class="barra"><i class="" style="height:100%"></i><b></b></span><span class="barra"><i class="" style="height:71%"></i><b>05</b></span><span class="barra"><i class=" fds" style="height:9%"></i><b></b></span><span class="barra"><i class=" fds" style="height:22%"></i><b>07</b></span><span class="barra"><i class="" style="height:74%"></i><b></b></span><span class="barra"><i class="" style="height:86%"></i><b>09</b></span><span class="barra"><i class="" style="height:98%"></i><b></b></span><span class="barra"><i class="" style="height:72%"></i><b>11</b></span><span class="barra"><i class="" style="height:95%"></i><b></b></span><span class="barra"><i class=" fds" style="height:14%"></i><b>13</b></span><span class="barra"><i class=" fds" style="height:9%"></i><b></b></span><span class="barra"><i class="" style="height:72%"></i><b>15</b></span><span class="barra"><i class="" style="height:91%"></i><b></b></span><span class="barra"><i class="" style="height:91%"></i><b>17</b></span><span class="barra"><i class="" style="height:74%"></i><b></b></span><span class="barra"><i class="" style="height:82%"></i><b>19</b></span><span class="barra"><i class=" fds" style="height:11%"></i><b></b></span><span class="barra"><i class=" fds" style="height:22%"></i><b>21</b></span><span class="barra"><i class="" style="height:89%"></i><b></b></span><span class="barra"><i class="" style="height:72%"></i><b>23</b></span><span class="barra"><i class="" style="height:98%"></i><b></b></span><span class="barra"><i class="" style="height:75%"></i><b>25</b></span><span class="barra"><i class="" style="height:82%"></i><b></b></span><span class="barra"><i class=" fds" style="height:25%"></i><b>27</b></span><span class="barra"><i class=" fds" style="height:25%"></i><b></b></span><span class="barra"><i class="" style="height:97%"></i><b>29</b></span><span class="barra"><i class="" style="height:72%"></i><b></b></span>
+  </div>
     </div>
 
     <div class="card">
@@ -229,12 +287,50 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
           </div>
       </div>
     </div>
+  </div>
+
+  <div class="grade g-2">
+    <div class="card">
+      <div class="card-top">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>
+        <span class="ct">Motivos de perda</span>
+        <span class="cs">183 leads perdidos</span>
+      </div>
+      <div class="mot">
+        
+          <div class="mt">
+            <span class="nm">Preço acima do esperado</span>
+            <span class="tr"><i style="width:100%"></i></span>
+            <span class="qt">61</span>
+          </div>
+          <div class="mt">
+            <span class="nm">Contratou outro escritório</span>
+            <span class="tr"><i style="width:72%"></i></span>
+            <span class="qt">44</span>
+          </div>
+          <div class="mt">
+            <span class="nm">Sumiu / parou de responder</span>
+            <span class="tr"><i style="width:62%"></i></span>
+            <span class="qt">38</span>
+          </div>
+          <div class="mt">
+            <span class="nm">Caso fora da nossa área</span>
+            <span class="tr"><i style="width:39%"></i></span>
+            <span class="qt">24</span>
+          </div>
+          <div class="mt">
+            <span class="nm">Sem documentação</span>
+            <span class="tr"><i style="width:26%"></i></span>
+            <span class="qt">16</span>
+          </div>
+      </div>
+    </div>
 
     <div class="card">
       <div class="card-top">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>
-        <span class="ct">Por canal</span>
-        <span class="cs">1284 atendimentos</span>
+        <span class="ct">Atendimentos por canal</span>
+        <span class="cs">1284 no período</span>
       </div>
       <div class="canais">
         
@@ -264,6 +360,164 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tinta)}
           </div>
       </div>
     </div>
+  </div>
+
+  <div class="grade">
+    <div class="card">
+      <div class="card-top">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
+        <span class="ct">Detalhamento por atendente</span>
+        <span class="cs">volume × conversão × valor</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Atendente</th><th>Atend.</th><th>Leads</th><th>Ganhos</th><th>Perdidos</th>
+          <th>Em aberto</th><th>Conv.</th><th>Valor fechado</th>
+        </tr></thead>
+        <tbody>
+          
+            <tr>
+              <td><span class="tdnome"><span class="av" style="background:#7c3aed">IL</span>Isaac Luca Cavalcante</span></td>
+              <td>412</td><td>128</td><td class="g">41</td><td class="p">52</td>
+              <td class="mudo">35</td>
+              <td><span class="pill verde">32%</span></td>
+              <td>R$ 131.200</td>
+            </tr>
+            <tr>
+              <td><span class="tdnome"><span class="av" style="background:#0891b2">FW</span>Francisco Wesley Freitas</span></td>
+              <td>356</td><td>104</td><td class="g">27</td><td class="p">49</td>
+              <td class="mudo">28</td>
+              <td><span class="pill ambar">26%</span></td>
+              <td>R$ 84.600</td>
+            </tr>
+            <tr>
+              <td><span class="tdnome"><span class="av" style="background:#d97706">MM</span>Milena Mello Mansur</span></td>
+              <td>289</td><td>87</td><td class="g">15</td><td class="p">44</td>
+              <td class="mudo">28</td>
+              <td><span class="pill ambar">17%</span></td>
+              <td>R$ 46.300</td>
+            </tr>
+            <tr>
+              <td><span class="tdnome"><span class="av" style="background:#059669">PS</span>Pablo Sousa Silva</span></td>
+              <td>227</td><td>61</td><td class="g">7</td><td class="p">38</td>
+              <td class="mudo">16</td>
+              <td><span class="pill vermelho">11%</span></td>
+              <td>R$ 21.900</td>
+            </tr>
+          <tr style="background:#f8fafc">
+            <td style="font-weight:800">Total</td>
+            <td style="font-weight:800">1.284</td><td style="font-weight:800">380</td>
+            <td class="g" style="font-weight:800">90</td>
+            <td class="p" style="font-weight:800">183</td>
+            <td class="mudo" style="font-weight:800">107</td>
+            <td><span class="pill ambar">24%</span></td>
+            <td style="font-weight:800">R$ 284.000</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="sec"><span class="t">Ligações</span><span class="l"></span></div>
+
+  <div class="kpis" style="margin-top:9px">
+    
+  <div class="kpi">
+    <p class="k-l">Ligações feitas</p>
+    <div class="k-linha">
+      <span class="k-v">620</span>
+      <span class="k-d sobe">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>6%
+      </span>
+    </div>
+    <p class="k-s">585 no período anterior</p>
+  </div>
+  <div class="kpi">
+    <p class="k-l">Recebidas</p>
+    <div class="k-linha">
+      <span class="k-v">284</span>
+      <span class="k-d sobe">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>11%
+      </span>
+    </div>
+    <p class="k-s">256 no período anterior</p>
+  </div>
+  <div class="kpi">
+    <p class="k-l">Perdidas</p>
+    <div class="k-linha">
+      <span class="k-v">74</span>
+      <span class="k-d sobe">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10"/><path d="M17 7v10H7"/></svg>14%
+      </span>
+    </div>
+    <p class="k-s">86 no período anterior</p>
+  </div>
+  <div class="kpi">
+    <p class="k-l">Taxa de atendimento</p>
+    <div class="k-linha">
+      <span class="k-v">79%</span>
+      <span class="k-d sobe">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>5%
+      </span>
+    </div>
+    <p class="k-s">74% no período anterior</p>
+  </div>
+  </div>
+
+  <div class="grade g-2">
+    <div class="card">
+      <div class="card-top">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/></svg>
+        <span class="ct">Volume diário de ligações</span>
+        <span class="cs">904 chamadas no período</span>
+      </div>
+      
+  <div class="graf">
+    <span class="barra"><i class="ciano" style="height:96%"></i><b>01</b></span><span class="barra"><i class="ciano" style="height:96%"></i><b></b></span><span class="barra"><i class="ciano" style="height:96%"></i><b>03</b></span><span class="barra"><i class="ciano" style="height:100%"></i><b></b></span><span class="barra"><i class="ciano" style="height:78%"></i><b>05</b></span><span class="barra"><i class="ciano fds" style="height:13%"></i><b></b></span><span class="barra"><i class="ciano fds" style="height:26%"></i><b>07</b></span><span class="barra"><i class="ciano" style="height:98%"></i><b></b></span><span class="barra"><i class="ciano" style="height:76%"></i><b>09</b></span><span class="barra"><i class="ciano" style="height:72%"></i><b></b></span><span class="barra"><i class="ciano" style="height:96%"></i><b>11</b></span><span class="barra"><i class="ciano" style="height:85%"></i><b></b></span><span class="barra"><i class="ciano fds" style="height:13%"></i><b>13</b></span><span class="barra"><i class="ciano fds" style="height:11%"></i><b></b></span><span class="barra"><i class="ciano" style="height:67%"></i><b>15</b></span><span class="barra"><i class="ciano" style="height:91%"></i><b></b></span><span class="barra"><i class="ciano" style="height:96%"></i><b>17</b></span><span class="barra"><i class="ciano" style="height:76%"></i><b></b></span><span class="barra"><i class="ciano" style="height:65%"></i><b>19</b></span><span class="barra"><i class="ciano fds" style="height:26%"></i><b></b></span><span class="barra"><i class="ciano fds" style="height:11%"></i><b>21</b></span><span class="barra"><i class="ciano" style="height:67%"></i><b></b></span><span class="barra"><i class="ciano" style="height:67%"></i><b>23</b></span><span class="barra"><i class="ciano" style="height:78%"></i><b></b></span><span class="barra"><i class="ciano" style="height:80%"></i><b>25</b></span><span class="barra"><i class="ciano" style="height:65%"></i><b></b></span><span class="barra"><i class="ciano fds" style="height:24%"></i><b>27</b></span><span class="barra"><i class="ciano fds" style="height:20%"></i><b></b></span><span class="barra"><i class="ciano" style="height:96%"></i><b>29</b></span><span class="barra"><i class="ciano" style="height:80%"></i><b></b></span>
+  </div>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/></svg>
+        <span class="ct">Ligações por atendente</span>
+        <span class="cs">tempo total em chamada</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Atendente</th><th>Feitas</th><th>Receb.</th><th>Perd.</th><th>Taxa</th><th>Tempo</th>
+        </tr></thead>
+        <tbody>
+          
+            <tr>
+              <td>Isaac Luca Cavalcante</td><td>214</td><td>96</td><td class="p">18</td>
+              <td><span class="pill verde">84%</span></td>
+              <td>9h 12m</td>
+            </tr>
+            <tr>
+              <td>Francisco Wesley Freitas</td><td>176</td><td>81</td><td class="p">24</td>
+              <td><span class="pill ambar">77%</span></td>
+              <td>7h 41m</td>
+            </tr>
+            <tr>
+              <td>Milena Mello Mansur</td><td>132</td><td>64</td><td class="p">11</td>
+              <td><span class="pill verde">85%</span></td>
+              <td>5h 58m</td>
+            </tr>
+            <tr>
+              <td>Pablo Sousa Silva</td><td>98</td><td>43</td><td class="p">21</td>
+              <td><span class="pill vermelho">67%</span></td>
+              <td>3h 26m</td>
+            </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="envio">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="10"/></svg>
+    <span>Este relatório pode ir sozinho pro seu e-mail <b>toda segunda</b> — mesmo motor do resumo diário.</span>
+    <span class="cta">Programar envio →</span>
   </div>
 </div>
 </body></html>
