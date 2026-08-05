@@ -41,6 +41,7 @@ import {
 } from "../../shared/escritorio-types";
 import { gerarComercialPdf, type DetalheAtendentePdf } from "./relatorios-comercial-pdf";
 import { gerarAgendaPdf } from "./relatorios-agenda-pdf";
+import { gerarAtendimentoPdf } from "./relatorios-atendimento-pdf";
 
 /**
  * Agrupa fechamentos detalhados (leads fechado_ganho) por origem do
@@ -117,6 +118,10 @@ const AtendimentoInput = z
     setorId: z.number().int().positive().optional(),
     atendenteId: z.number().int().positive().optional(),
     canalId: z.number().int().positive().optional(),
+    /** Dobra os agregados de operação no período imediatamente anterior.
+     *  Opt-in porque custa um segundo conjunto de queries — a tela só liga
+     *  quando o usuário marca "comparar com período anterior". */
+    comparar: z.boolean().optional(),
   })
   .optional();
 
@@ -774,17 +779,115 @@ export const relatoriosRouter = router({
     const ticketMedio = leadsGanhos > 0 ? valorGanho / leadsGanhos : null;
     const cicloMedioDias = Number((cicloRows as any[])[0]?.diasMedio || 0);
     // Conversa → Lead: das conversas iniciadas, quantas geraram lead.
-    const convsComLeadRow = await db.execute(sql`
-      SELECT COUNT(DISTINCT c.id) AS total
-      FROM ${conversas} c
-      INNER JOIN ${leads} l ON l.conversaIdLead = c.id
-      WHERE c.escritorioIdConv = ${eid}
-        AND c.createdAtConv >= ${dataInicio}
-        AND c.createdAtConv <= ${dataFim}
-        ${input?.canalId ? sql`AND c.canalIdConv = ${input.canalId}` : sql``}
-    `);
-    const convsComLead = Number((convsComLeadRow as any)[0]?.[0]?.total ?? (convsComLeadRow as any).rows?.[0]?.total ?? 0);
+    // O filtro de atendente entra aqui também: sem ele o numerador varria o
+    // escritório inteiro contra um denominador já filtrado, e a razão podia
+    // passar de 100% ao escolher um atendente.
+    const filtroAtendSql = colaboradorIds
+      ? sql`AND c.atendenteIdConv IN (${sql.join(colaboradorIds.map((id) => sql`${id}`), sql`, `)})`
+      : sql``;
+    const contarConvsComLead = async (di: Date, df: Date): Promise<number> => {
+      const row = await db.execute(sql`
+        SELECT COUNT(DISTINCT c.id) AS total
+        FROM ${conversas} c
+        INNER JOIN ${leads} l ON l.conversaIdLead = c.id
+        WHERE c.escritorioIdConv = ${eid}
+          AND c.createdAtConv >= ${di}
+          AND c.createdAtConv <= ${df}
+          ${input?.canalId ? sql`AND c.canalIdConv = ${input.canalId}` : sql``}
+          ${filtroAtendSql}
+      `);
+      return Number((row as any)[0]?.[0]?.total ?? (row as any).rows?.[0]?.total ?? 0);
+    };
+    const convsComLead = await contarConvsComLead(dataInicio, dataFim);
     const conversaParaLead = totalConversas > 0 ? Math.round((convsComLead / totalConversas) * 100) : null;
+
+    // ─── Período anterior (opt-in) ──────────────────────────────────────
+    // Só os agregados que a tela compara — sem funil, tabelas nem séries.
+    const anterior = input?.comparar
+      ? await (async () => {
+          const [convsAntRows, msgsAntRows, priRespAntRow, chamAntRows, convsComLeadAnt] =
+            await Promise.all([
+              db.select({ total: sql<number>`COUNT(*)` }).from(conversas).where(and(
+                eq(conversas.escritorioId, eid),
+                gte(conversas.createdAt, dataInicioAnt),
+                lte(conversas.createdAt, dataFimAnt),
+                ...filtroAtendConv,
+                ...filtroCanal,
+              )),
+              db.select({ direcao: mensagens.direcao, total: sql<number>`COUNT(*)` })
+                .from(mensagens)
+                .innerJoin(conversas, eq(mensagens.conversaId, conversas.id))
+                .where(and(
+                  eq(conversas.escritorioId, eid),
+                  gte(mensagens.createdAt, dataInicioAnt),
+                  lte(mensagens.createdAt, dataFimAnt),
+                  ...filtroAtendConv,
+                  ...filtroCanal,
+                ))
+                .groupBy(mensagens.direcao),
+              db.execute(sql`
+                SELECT AVG(TIMESTAMPDIFF(SECOND, c.createdAtConv, m.primeiraSaida)) AS segMedio
+                FROM ${conversas} c
+                INNER JOIN (
+                  SELECT conversaIdMsg, MIN(createdAtMsg) AS primeiraSaida
+                  FROM ${mensagens}
+                  WHERE direcaoMsg = 'saida'
+                  GROUP BY conversaIdMsg
+                ) m ON m.conversaIdMsg = c.id
+                WHERE c.escritorioIdConv = ${eid}
+                  AND c.createdAtConv >= ${dataInicioAnt}
+                  AND c.createdAtConv <= ${dataFimAnt}
+                  ${input?.canalId ? sql`AND c.canalIdConv = ${input.canalId}` : sql``}
+                  ${filtroAtendSql}
+              `),
+              db.select({
+                direcao: chamadas.direcao,
+                status: chamadas.status,
+                total: sql<number>`COUNT(*)`,
+                durTotal: sql<number>`COALESCE(SUM(${chamadas.duracaoSegundos}), 0)`,
+              }).from(chamadas).where(and(
+                eq(chamadas.escritorioId, eid),
+                gte(chamadas.createdAt, dataInicioAnt),
+                lte(chamadas.createdAt, dataFimAnt),
+                ...(colaboradorIds ? [inArray(chamadas.atendenteId, colaboradorIds)] : []),
+                ...(input?.canalId ? [eq(chamadas.canalId, input.canalId)] : []),
+              )).groupBy(chamadas.direcao, chamadas.status),
+              contarConvsComLead(dataInicioAnt, dataFimAnt),
+            ]);
+
+          const totalConversasAnt = Number(convsAntRows[0]?.total || 0);
+          const msgsAnt: Record<string, number> = {};
+          for (const r of msgsAntRows) msgsAnt[r.direcao as string] = Number(r.total);
+
+          return {
+            periodo: {
+              dataInicio: dataInicioAnt.toISOString().slice(0, 10),
+              dataFim: dataFimAnt.toISOString().slice(0, 10),
+            },
+            totalConversas: totalConversasAnt,
+            mensagensRecebidas: msgsAnt["entrada"] || 0,
+            mensagensEnviadas: msgsAnt["saida"] || 0,
+            segMedioPriResp: Number(
+              (priRespAntRow as any)[0]?.[0]?.segMedio ?? (priRespAntRow as any).rows?.[0]?.segMedio ?? 0,
+            ),
+            taxaConversao: totalConversasAnt > 0
+              ? Math.round((leadsGanhosAnt / totalConversasAnt) * 100)
+              : null,
+            ticketMedio: leadsGanhosAnt > 0 ? valorGanhoAnt / leadsGanhosAnt : null,
+            conversaParaLead: totalConversasAnt > 0
+              ? Math.round((convsComLeadAnt / totalConversasAnt) * 100)
+              : null,
+            ligacoes: agregarLigacoes(
+              chamAntRows.map((r) => ({
+                direcao: String(r.direcao),
+                status: String(r.status),
+                total: Number(r.total),
+                durTotal: Number(r.durTotal),
+              })),
+            ),
+          };
+        })()
+      : null;
 
     return {
       periodo: {
@@ -808,6 +911,9 @@ export const relatoriosRouter = router({
       leadsPerdidos,
       valorPerdido,
       leadsPerdidosAnt,
+      /** Espelho dos agregados de operação no período anterior — `null`
+       *  quando a tela não pediu comparação. */
+      anterior,
       // KPIs Operação (mantém compat com nomes antigos)
       conversasPorStatus,
       totalConversas,
@@ -2250,6 +2356,91 @@ export const relatoriosPdfRouter = router({
       const ymd = (v: Date) => v.toISOString().slice(0, 10);
       return {
         filename: `relatorio_agendamentos_${ymd(data.periodo.inicio)}_${ymd(data.periodo.fim)}.pdf`,
+        base64: buffer.toString("base64"),
+        mimeType: "application/pdf",
+      };
+    }),
+
+  /**
+   * Export da aba Atendimento em PDF. Reusa `atendimento` via caller — mesmos
+   * filtros/permissão da tela, então os números do PDF batem com a UI. Pede
+   * o comparativo sempre: no papel o delta é o que dá leitura ao número.
+   */
+  exportarAtendimentoPdf: protectedProcedure
+    .input(
+      z
+        .object({
+          dataInicio: z.string().optional(),
+          dataFim: z.string().optional(),
+          setorId: z.number().int().positive().optional(),
+          atendenteId: z.number().int().positive().optional(),
+          canalId: z.number().int().positive().optional(),
+        })
+        .optional(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
+      }
+      const caller = chamarRelatorios(ctx);
+
+      const data = await caller.atendimento({ ...(input ?? {}), comparar: true });
+      if (!data) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Sem dados para o período." });
+      }
+
+      const db = await getDb();
+      const rotuloDe = async (
+        tabela: "setor" | "canal",
+        id: number | undefined,
+      ): Promise<string> => {
+        if (id == null) return "Todos";
+        if (!db) return `#${id}`;
+        if (tabela === "setor") {
+          const [row] = await db.select({ nome: setores.nome }).from(setores)
+            .where(and(eq(setores.id, id), eq(setores.escritorioId, esc.escritorio.id))).limit(1);
+          return row?.nome ?? `#${id}`;
+        }
+        const [row] = await db
+          .select({ nome: canaisIntegrados.nome, tipo: canaisIntegrados.tipo })
+          .from(canaisIntegrados)
+          .where(and(eq(canaisIntegrados.id, id), eq(canaisIntegrados.escritorioId, esc.escritorio.id)))
+          .limit(1);
+        return row?.nome || row?.tipo || `#${id}`;
+      };
+      const atendenteLabel = input?.atendenteId != null
+        ? (data.tabelaAtendentes.find((a) => a.colabId === input.atendenteId)?.nome ?? `#${input.atendenteId}`)
+        : "Todos";
+
+      const buffer = await gerarAtendimentoPdf({
+        data: {
+          periodo: data.periodo,
+          totalConversas: data.totalConversas,
+          mensagensRecebidas: data.mensagensRecebidas,
+          mensagensEnviadas: data.mensagensEnviadas,
+          segMedioPriResp: data.segMedioPriResp,
+          taxaConversao: data.taxaConversao,
+          ticketMedio: data.ticketMedio,
+          conversaParaLead: data.conversaParaLead,
+          leadsGanhos: data.leadsGanhos,
+          leadsPerdidos: data.leadsPerdidos,
+          anterior: data.anterior,
+          conversasPorDia: data.conversasPorDia,
+          porCanal: data.porCanal.map((c) => ({ nome: c.nome, total: c.total })),
+          motivosPerda: data.motivosPerda,
+          tabelaAtendentes: data.tabelaAtendentes,
+          ligacoes: data.ligacoes,
+          ligacoesPorAtendente: data.ligacoesPorAtendente,
+        },
+        nomeEscritorio: esc.escritorio.nome,
+        setorLabel: await rotuloDe("setor", input?.setorId),
+        atendenteLabel,
+        canalLabel: await rotuloDe("canal", input?.canalId),
+      });
+
+      return {
+        filename: `relatorio_atendimento_${data.periodo.dataInicio}_${data.periodo.dataFim}.pdf`,
         base64: buffer.toString("base64"),
         mimeType: "application/pdf",
       };
