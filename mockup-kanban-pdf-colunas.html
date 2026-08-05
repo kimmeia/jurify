@@ -1,0 +1,233 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>Exportar kanban por coluna</title><link rel="stylesheet" href="app.css">
+<style>body{width:1520px}main{padding:24px 24px 32px}</style>
+</head><body class="bg-background text-foreground"><main>
+  <h1 class="text-2xl font-bold tracking-tight">PDF do Kanban — escolher as colunas</h1>
+  <p class="text-sm text-muted-foreground mt-1 mb-6" style="max-width:1040px">
+    Hoje o botão baixa o funil inteiro, sem perguntar. O servidor já sabe filtrar por coluna —
+    falta a tela onde escolher. O botão passa a abrir esta janela.
+  </p>
+
+  
+<div class="mb-3">
+  <p class="text-[11px] font-bold uppercase tracking-widest text-violet-600">Proposta</p>
+  <p class="text-base font-bold mt-0.5">O botão vira uma escolha</p>
+  <p class="text-[12.5px] text-muted-foreground leading-snug mt-1" style="max-width:940px">A seta ao lado do rótulo avisa que abre algo. Quem só quer tudo dá dois cliques (abrir → baixar), com todas as colunas já marcadas por padrão.</p>
+</div>
+  
+<div class="rounded-xl border bg-card p-3 inline-flex items-center gap-2.5">
+  <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-card text-muted-foreground">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3"><path d="M3 6h18M7 12h10M10 18h4"/></svg>Arquivados
+  </span>
+  <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-violet-50 border-violet-300 text-violet-800">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>Exportar PDF<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3"><path d="m6 9 6 6 6-6"/></svg>
+  </span>
+</div>
+
+  <div style="margin:26px 0" class="h-px bg-border"></div>
+
+  
+<div class="mb-3">
+  <p class="text-[11px] font-bold uppercase tracking-widest text-violet-600">Proposta</p>
+  <p class="text-base font-bold mt-0.5">Uma linha por coluna, com o quanto vem em cada uma</p>
+  <p class="text-[12.5px] text-muted-foreground leading-snug mt-1" style="max-width:940px">A contagem é o que decide: dá pra ver na hora que “Encerrado” sozinho traz 38 cards e tirar da lista. Os números já respeitam os filtros e a busca do quadro, então o que está escrito aqui é o que sai no papel.</p>
+</div>
+  <div style="gap:40px" class="flex items-start">
+    <div>
+<div style="width:460px" class="rounded-xl border bg-card shadow-lg overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b">
+    <div class="flex items-start gap-3">
+      <div class="flex-1">
+        <h2 style="font-size:16px" class="font-bold leading-snug">Exportar cards em PDF</h2>
+        <p class="text-[12px] text-muted-foreground mt-0.5">Funil <b class="text-foreground">Cível — Revisional</b></p>
+      </div>
+      <button class="h-7 w-7 rounded-md border flex items-center justify-center text-muted-foreground shrink-0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </div>
+  </div>
+
+  <div class="px-5 py-3.5">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-[10px] font-extrabold uppercase tracking-[0.07em] text-muted-foreground">Colunas no PDF</p>
+      <div class="flex items-center gap-1">
+        <button class="h-6 px-2 rounded-md border bg-card text-[11px] font-bold text-muted-foreground">Todas</button>
+        <button class="h-6 px-2 rounded-md border bg-card text-[11px] font-bold text-muted-foreground">Nenhuma</button>
+      </div>
+    </div>
+
+    <div class="rounded-lg border divide-y overflow-hidden">
+      
+<label style="height:42px" class="flex items-center gap-3 px-3 cursor-pointer bg-violet-50">
+  <span class="h-[18px] w-[18px] rounded-[5px] border-2 shrink-0 flex items-center justify-center bg-violet-600 border-violet-600 text-white"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3"><path d="M20 6 9 17l-5-5"/></svg></span>
+  <span class="text-[13px] font-semibold flex-1 text-violet-900">Triagem</span>
+  <span class="text-[11.5px] tabular-nums font-bold text-violet-700">9 cards</span>
+</label>
+<label style="height:42px" class="flex items-center gap-3 px-3 cursor-pointer bg-violet-50">
+  <span class="h-[18px] w-[18px] rounded-[5px] border-2 shrink-0 flex items-center justify-center bg-violet-600 border-violet-600 text-white"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3"><path d="M20 6 9 17l-5-5"/></svg></span>
+  <span class="text-[13px] font-semibold flex-1 text-violet-900">Documentação</span>
+  <span class="text-[11.5px] tabular-nums font-bold text-violet-700">12 cards</span>
+</label>
+<label style="height:42px" class="flex items-center gap-3 px-3 cursor-pointer bg-violet-50">
+  <span class="h-[18px] w-[18px] rounded-[5px] border-2 shrink-0 flex items-center justify-center bg-violet-600 border-violet-600 text-white"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3"><path d="M20 6 9 17l-5-5"/></svg></span>
+  <span class="text-[13px] font-semibold flex-1 text-violet-900">Petição inicial</span>
+  <span class="text-[11.5px] tabular-nums font-bold text-violet-700">6 cards</span>
+</label>
+<label style="height:42px" class="flex items-center gap-3 px-3 cursor-pointer ">
+  <span class="h-[18px] w-[18px] rounded-[5px] border-2 shrink-0 flex items-center justify-center border-border bg-card"></span>
+  <span class="text-[13px] font-semibold flex-1 ">Protocolado</span>
+  <span class="text-[11.5px] tabular-nums text-muted-foreground">14 cards</span>
+</label>
+<label style="height:42px" class="flex items-center gap-3 px-3 cursor-pointer ">
+  <span class="h-[18px] w-[18px] rounded-[5px] border-2 shrink-0 flex items-center justify-center border-border bg-card"></span>
+  <span class="text-[13px] font-semibold flex-1 ">Aguardando decisão</span>
+  <span class="text-[11.5px] tabular-nums text-muted-foreground">21 cards</span>
+</label>
+<label style="height:42px" class="flex items-center gap-3 px-3 cursor-pointer ">
+  <span class="h-[18px] w-[18px] rounded-[5px] border-2 shrink-0 flex items-center justify-center border-border bg-card"></span>
+  <span class="text-[13px] font-semibold flex-1 ">Encerrado</span>
+  <span class="text-[11.5px] tabular-nums text-muted-foreground">38 cards</span>
+</label>
+    </div>
+
+    <p class="text-[11px] text-muted-foreground leading-snug mt-2.5">
+      A contagem já considera os filtros do quadro. As colunas saem no PDF na ordem do
+      quadro, e dentro de cada uma do cadastro mais recente para o mais antigo.
+    </p>
+  </div>
+
+  <div class="px-5 py-3 border-t bg-muted/40 flex items-center gap-3">
+    <p class="text-[12px] flex-1 min-w-0">
+      <b class="tabular-nums">3</b> de 6 colunas
+      <span class="text-muted-foreground"> · </span>
+      <b class="tabular-nums text-violet-700">27</b> cards
+    </p>
+    <button class="h-9 px-3 rounded-md border bg-card text-[13px] font-semibold">Cancelar</button>
+    <button class="h-9 px-3.5 rounded-md bg-primary text-primary-foreground text-[13px] font-semibold inline-flex items-center gap-1.5">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>Baixar PDF
+    </button>
+  </div>
+</div></div>
+    <div>
+      <p class="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Nada marcado</p>
+      
+<div style="width:460px" class="rounded-xl border bg-card shadow-lg overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b">
+    <h2 style="font-size:16px" class="font-bold leading-snug">Exportar cards em PDF</h2>
+    <p class="text-[12px] text-muted-foreground mt-0.5">Funil <b class="text-foreground">Cível — Revisional</b></p>
+  </div>
+  <div class="px-5 py-3.5">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-[10px] font-extrabold uppercase tracking-[0.07em] text-muted-foreground">Colunas no PDF</p>
+      <div class="flex items-center gap-1">
+        <button class="h-6 px-2 rounded-md border bg-card text-[11px] font-bold text-muted-foreground">Todas</button>
+        <button class="h-6 px-2 rounded-md border bg-card text-[11px] font-bold text-muted-foreground">Nenhuma</button>
+      </div>
+    </div>
+    <div class="rounded-lg border divide-y overflow-hidden">
+      
+<label style="height:42px" class="flex items-center gap-3 px-3 cursor-pointer ">
+  <span class="h-[18px] w-[18px] rounded-[5px] border-2 shrink-0 flex items-center justify-center border-border bg-card"></span>
+  <span class="text-[13px] font-semibold flex-1 ">Triagem</span>
+  <span class="text-[11.5px] tabular-nums text-muted-foreground">9 cards</span>
+</label>
+<label style="height:42px" class="flex items-center gap-3 px-3 cursor-pointer ">
+  <span class="h-[18px] w-[18px] rounded-[5px] border-2 shrink-0 flex items-center justify-center border-border bg-card"></span>
+  <span class="text-[13px] font-semibold flex-1 ">Documentação</span>
+  <span class="text-[11.5px] tabular-nums text-muted-foreground">12 cards</span>
+</label>
+<label style="height:42px" class="flex items-center gap-3 px-3 cursor-pointer ">
+  <span class="h-[18px] w-[18px] rounded-[5px] border-2 shrink-0 flex items-center justify-center border-border bg-card"></span>
+  <span class="text-[13px] font-semibold flex-1 ">Petição inicial</span>
+  <span class="text-[11.5px] tabular-nums text-muted-foreground">6 cards</span>
+</label>
+<label style="height:42px" class="flex items-center gap-3 px-3 cursor-pointer ">
+  <span class="h-[18px] w-[18px] rounded-[5px] border-2 shrink-0 flex items-center justify-center border-border bg-card"></span>
+  <span class="text-[13px] font-semibold flex-1 ">Protocolado</span>
+  <span class="text-[11.5px] tabular-nums text-muted-foreground">14 cards</span>
+</label>
+<label style="height:42px" class="flex items-center gap-3 px-3 cursor-pointer ">
+  <span class="h-[18px] w-[18px] rounded-[5px] border-2 shrink-0 flex items-center justify-center border-border bg-card"></span>
+  <span class="text-[13px] font-semibold flex-1 ">Aguardando decisão</span>
+  <span class="text-[11.5px] tabular-nums text-muted-foreground">21 cards</span>
+</label>
+<label style="height:42px" class="flex items-center gap-3 px-3 cursor-pointer ">
+  <span class="h-[18px] w-[18px] rounded-[5px] border-2 shrink-0 flex items-center justify-center border-border bg-card"></span>
+  <span class="text-[13px] font-semibold flex-1 ">Encerrado</span>
+  <span class="text-[11.5px] tabular-nums text-muted-foreground">38 cards</span>
+</label>
+    </div>
+  </div>
+  <div class="px-5 py-3 border-t bg-muted/40 flex items-center gap-3">
+    <p class="text-[12px] flex-1 min-w-0 text-amber-700 font-semibold inline-flex items-center gap-1.5">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>Marque uma coluna
+    </p>
+    <button class="h-9 px-3 rounded-md border bg-card text-[13px] font-semibold">Cancelar</button>
+    <button class="h-9 px-3.5 rounded-md bg-primary text-primary-foreground text-[13px] font-semibold inline-flex items-center gap-1.5 opacity-40">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>Baixar PDF
+    </button>
+  </div>
+</div>
+    </div>
+  </div>
+
+  <div style="margin:26px 0" class="h-px bg-border"></div>
+
+  
+<div class="mb-3">
+  <p class="text-[11px] font-bold uppercase tracking-widest text-violet-600">Proposta</p>
+  <p class="text-base font-bold mt-0.5">A escolha fica registrada no documento</p>
+  <p class="text-[12.5px] text-muted-foreground leading-snug mt-1" style="max-width:940px">O cabeçalho do PDF ganha a linha “Colunas”. Sem ela, dois PDFs do mesmo funil com recortes diferentes ficariam indistinguíveis depois de impressos — e é exatamente esse o uso.</p>
+</div>
+  
+<div style="width:700px" class="rounded-lg border bg-card overflow-hidden">
+  <div class="px-4 pt-3.5 pb-2.5">
+    <p class="text-[15px] font-bold">Cards do Kanban</p>
+    <p class="text-[10px] text-muted-foreground">Escritório Boyadjian Advocacia</p>
+  </div>
+  <div class="mx-4 mb-3 rounded border bg-muted/40 px-3 py-2.5 space-y-2.5">
+    <div class="flex gap-3">
+      
+<div style="width:152px" class="shrink-0">
+  <p class="text-[7px] font-bold uppercase tracking-[0.06em] text-muted-foreground">Funil</p>
+  <p class="text-[10px] font-bold mt-0.5 truncate">Cível — Revisional</p>
+</div>
+      
+<div style="width:152px" class="shrink-0">
+  <p class="text-[7px] font-bold uppercase tracking-[0.06em] text-muted-foreground">Colunas</p>
+  <p class="text-[10px] font-bold mt-0.5 truncate">Triagem, Documentação, Petição inicial</p>
+</div>
+      
+<div style="width:152px" class="shrink-0">
+  <p class="text-[7px] font-bold uppercase tracking-[0.06em] text-muted-foreground">Responsável</p>
+  <p class="text-[10px] font-bold mt-0.5 truncate">Todos</p>
+</div>
+      
+<div style="width:152px" class="shrink-0">
+  <p class="text-[7px] font-bold uppercase tracking-[0.06em] text-muted-foreground">Cadastrados em</p>
+  <p class="text-[10px] font-bold mt-0.5 truncate">Todo o período</p>
+</div>
+    </div>
+    <div class="flex gap-3">
+      
+<div style="width:152px" class="shrink-0">
+  <p class="text-[7px] font-bold uppercase tracking-[0.06em] text-muted-foreground">Cards na lista</p>
+  <p class="text-[10px] font-bold mt-0.5 truncate">27</p>
+</div>
+      
+<div style="width:152px" class="shrink-0">
+  <p class="text-[7px] font-bold uppercase tracking-[0.06em] text-muted-foreground">Valor estimado</p>
+  <p class="text-[10px] font-bold mt-0.5 truncate">R$ 318.400,00</p>
+</div>
+      
+<div style="width:152px" class="shrink-0">
+  <p class="text-[7px] font-bold uppercase tracking-[0.06em] text-muted-foreground">Com prazo vencido</p>
+  <p class="text-[10px] font-bold mt-0.5 truncate">4</p>
+</div>
+      
+<div style="width:152px" class="shrink-0">
+  <p class="text-[7px] font-bold uppercase tracking-[0.06em] text-muted-foreground">Card mais antigo</p>
+  <p class="text-[10px] font-bold mt-0.5 truncate">3 meses de cadastro</p>
+</div>
+    </div>
+  </div>
+</div>
+</main></body></html>
