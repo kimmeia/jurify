@@ -20,13 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Download,
-  FileText,
-  Loader2,
-  Search,
-  Wallet,
-} from "lucide-react";
+import { Download, Loader2, Search, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -34,11 +28,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatBRL, baixarBlob, base64ToBlob } from "./helpers";
+import { formatBRL, baixarBlob } from "./helpers";
 import {
   BarraFiltro, CardRel, FiltroSelect, KpiRel, TituloSecao, calcularDelta,
   calcularDeltaPontos, periodoAnterior, useRelatorios,
 } from "../relatorios/casca";
+import { AcoesRelatorio } from "../relatorios/acoes";
 
 export function RelatoriosTab() {
   const { periodo, comparar } = useRelatorios();
@@ -101,16 +96,6 @@ export function RelatoriosTab() {
     onError: (err: any) =>
       toast.error("Erro ao exportar CSV", { description: err.message }),
   });
-  const pdfMut = (trpc as any).financeiro?.exportarDrePdf?.useMutation?.({
-    onSuccess: (r: { filename: string; base64: string; mimeType: string }) => {
-      const blob = base64ToBlob(r.base64, r.mimeType);
-      baixarBlob(blob, r.filename, r.mimeType);
-      toast.success("PDF baixado");
-    },
-    onError: (err: any) =>
-      toast.error("Erro ao exportar PDF", { description: err.message }),
-  });
-
   // "Recebido de outros meses" = caixa (pago no período) − competência
   // (vence no período). Completa as tabelas de receita pro total do caixa.
   // No modo pagamento a tabela já é o caixa, então a ponte não se aplica.
@@ -144,46 +129,40 @@ export function RelatoriosTab() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-end gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-8"
-          onClick={() => setDiagnosticoOpen(true)}
-          disabled={!dre}
-          title="Quebra o número 'Caixa Asaas' por status e mostra cobranças nas bordas — pra você identificar se a divergência com o painel Asaas vem de RECEIVED_IN_CASH (pagamento manual) ou timezone (cobrança paga 21h-23h do último dia do mês anterior)"
-        >
-          <Search className="h-3.5 w-3.5 mr-1.5" />
-          Diagnosticar divergência
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-8"
-          onClick={() => csvMut?.mutate?.({ dataInicio, dataFim })}
-          disabled={!dre || csvMut?.isPending}
-        >
-          {csvMut?.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-          ) : (
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-          )}
-          CSV
-        </Button>
-        <Button
-          size="sm"
-          className="h-8"
-          onClick={() => pdfMut?.mutate?.({ dataInicio, dataFim })}
-          disabled={!dre || pdfMut?.isPending}
-        >
-          {pdfMut?.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-          ) : (
-            <FileText className="h-3.5 w-3.5 mr-1.5" />
-          )}
-          Exportar PDF
-        </Button>
-      </div>
+      <AcoesRelatorio
+        relatorio="financeiro"
+        filtros={{}}
+        pronto={!!dre}
+        extras={
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={() => setDiagnosticoOpen(true)}
+              disabled={!dre}
+              title="Quebra o número 'Caixa Asaas' por status e mostra cobranças nas bordas — pra você identificar se a divergência com o painel Asaas vem de RECEIVED_IN_CASH (pagamento manual) ou timezone (cobrança paga 21h-23h do último dia do mês anterior)"
+            >
+              <Search className="h-3.5 w-3.5 mr-1.5" />
+              Diagnosticar divergência
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={() => csvMut?.mutate?.({ dataInicio, dataFim })}
+              disabled={!dre || csvMut?.isPending}
+            >
+              {csvMut?.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              CSV
+            </Button>
+          </>
+        }
+      />
 
       <BarraFiltro>
         <FiltroSelect

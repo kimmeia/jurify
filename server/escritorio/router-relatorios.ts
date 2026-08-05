@@ -12,17 +12,19 @@
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { protectedProcedure, router, createCallerFactory } from "../_core/trpc";
+import { protectedProcedure, router, createCallerFactory, mergeRouters } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
 import { getDb } from "../db";
 import {
   agendamentos, conversas, mensagens, leads, contatos, calculosHistorico,
-  kanbanCards, kanbanColunas, kanbanMovimentacoes,
+  kanbanCards, kanbanColunas, kanbanMovimentacoes, kanbanFunis,
   colaboradores, setores, asaasCobrancas, categoriasCobranca,
   comissoesFechadas, users, canaisIntegrados, chamadas,
+  relatoriosProgramados,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { createLogger } from "../_core/logger";
 import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
 import { buildFiltroComissaoSQL } from "./router-financeiro";
@@ -42,6 +44,11 @@ import {
 import { gerarComercialPdf, type DetalheAtendentePdf } from "./relatorios-comercial-pdf";
 import { gerarAgendaPdf } from "./relatorios-agenda-pdf";
 import { gerarAtendimentoPdf } from "./relatorios-atendimento-pdf";
+import { gerarProducaoPdf } from "./relatorios-producao-pdf";
+import {
+  FiltrosEnvioSchema, RelatorioEnviavelSchema, enviarRelatorio, gerarRelatorioPdf,
+  normalizarDestinatarios,
+} from "./relatorios-envio";
 
 /**
  * Agrupa fechamentos detalhados (leads fechado_ganho) por origem do
@@ -205,9 +212,15 @@ const ComercialInput = z
 const ProducaoInput = z
   .object({
     dias: z.number().min(1).max(365).optional(),
+    dataInicio: z.string().optional(), // YYYY-MM-DD
+    dataFim: z.string().optional(),    // YYYY-MM-DD
     /** Se presente, filtra os KPIs de Produção ao funil escolhido.
      *  Ausente/null = todos os funis do escritório. */
     funilId: z.number().optional(),
+    responsavelId: z.number().int().positive().optional(),
+    /** Mesmo contrato do relatório de Atendimento: opt-in porque dobra as
+     *  queries de contagem. */
+    comparar: z.boolean().optional(),
   })
   .optional();
 
@@ -1956,8 +1969,12 @@ export const relatoriosRouter = router({
       return { itens, totalFechado, totalRecebido };
     }),
 
-  /** Produção — Kanban, cards, atrasados, movimentações.
-   *  Aceita filtro opcional por `funilId` (ou todos os funis do escritório).
+  /**
+   * Produção — Kanban: entrada, prazo, movimentação e entrega por responsável.
+   *
+   * Aceita `funilId` (ou todos os funis) e `responsavelId`. `comparar` liga o
+   * espelho do período anterior. Coluna com `tipo = 'conclusao'` é o que
+   * define "concluído" — múltiplas colunas podem sê-lo no mesmo funil.
    */
   producao: protectedProcedure.input(ProducaoInput).query(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -1965,9 +1982,23 @@ export const relatoriosRouter = router({
     const db = await getDb();
     if (!db) return null;
     const eid = esc.escritorio.id;
-    const dias = input?.dias || 30;
-    const desde = desdeDias(dias);
     const funilId = input?.funilId;
+
+    // Range: custom > preset de dias > 30 dias (no fuso do escritório).
+    const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+    let dataInicio: Date;
+    let dataFim: Date;
+    if (input?.dataInicio && input?.dataFim) {
+      const p = resolverPeriodoNoFuso(new Date(), tz, input);
+      dataInicio = p.dataInicio;
+      dataFim = p.dataFim;
+    } else {
+      dataInicio = desdeDias(input?.dias || 30);
+      dataFim = new Date();
+    }
+    const dur = dataFim.getTime() - dataInicio.getTime();
+    const dataInicioAnt = new Date(dataInicio.getTime() - dur);
+    const dataFimAnt = new Date(dataInicio.getTime() - 1);
 
     // Permissão: verProprios filtra cards por responsavelId
     const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
@@ -1979,7 +2010,12 @@ export const relatoriosRouter = router({
     }
     const soProprios = !perm.verTodos && perm.verProprios;
     const colabId = esc.colaborador.id;
-    const filtroResp = soProprios ? [eq(kanbanCards.responsavelId, colabId)] : [];
+    // verProprios trava no próprio colaborador e ignora o filtro escolhido —
+    // senão o usuário escaparia da restrição só trocando o select.
+    const respFiltrado = soProprios ? colabId : input?.responsavelId;
+    const filtroResp = respFiltrado != null
+      ? [eq(kanbanCards.responsavelId, respFiltrado)]
+      : [];
 
     log.debug({
       proc: "producao",
@@ -1990,7 +2026,7 @@ export const relatoriosRouter = router({
       perm: { verTodos: perm.verTodos, verProprios: perm.verProprios, allowed: perm.allowed },
       soProprios,
       funilId: funilId ?? null,
-      dias,
+      responsavelId: respFiltrado ?? null,
     }, "[relatorios] diagnóstico producao");
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -2009,32 +2045,44 @@ export const relatoriosRouter = router({
       }
       return q.where(and(...conditions));
     };
+    const noRange = (di: Date, df: Date) =>
+      and(gte(kanbanCards.createdAt, di), lte(kanbanCards.createdAt, df));
 
-    const [cardsTotal] = await cardsBase(gte(kanbanCards.createdAt, desde));
+    const [cardsTotal] = await cardsBase(noRange(dataInicio, dataFim));
     const [cardsAtrasados] = await cardsBase(
-      and(eq(kanbanCards.atrasado, true), gte(kanbanCards.createdAt, desde)),
+      and(eq(kanbanCards.atrasado, true), noRange(dataInicio, dataFim)),
     );
     const [cardsDentroPrazo] = await cardsBase(
-      and(eq(kanbanCards.atrasado, false), gte(kanbanCards.createdAt, desde)),
+      and(eq(kanbanCards.atrasado, false), noRange(dataInicio, dataFim)),
     );
 
     // ── Movimentações ──────────────────────────────────────────────────────
-    // IMPORTANTE: antes a query não filtrava por escritório, contando movs
-    // de todos os escritórios do sistema. Agora SEMPRE faz JOIN com card +
-    // coluna para garantir isolamento (e aplicar filtro de funil quando vier).
-    const movsQuery = db
-      .select({ total: sql<number>`COUNT(${kanbanMovimentacoes.id})` })
-      .from(kanbanMovimentacoes)
-      .innerJoin(kanbanCards, eq(kanbanMovimentacoes.cardId, kanbanCards.id))
-      .innerJoin(kanbanColunas, eq(kanbanCards.colunaId, kanbanColunas.id));
-
+    // Classificadas por ordem das colunas: avançou (destino depois da origem),
+    // voltou (destino antes) e concluiu (destino é coluna de conclusão).
+    // "Voltou" é o número que interessa — mede retrabalho.
+    // IMPORTANTE: sempre faz JOIN com card + coluna pra garantir isolamento
+    // por escritório (e aplicar filtro de funil quando vier).
+    const origem = alias(kanbanColunas, "col_origem");
+    const destino = alias(kanbanColunas, "col_destino");
     const movsConditions = [
-      gte(kanbanMovimentacoes.createdAt, desde),
+      gte(kanbanMovimentacoes.createdAt, dataInicio),
+      lte(kanbanMovimentacoes.createdAt, dataFim),
       eq(kanbanCards.escritorioId, eid),
       ...filtroResp,
     ];
-    if (funilId !== undefined) movsConditions.push(eq(kanbanColunas.funilId, funilId));
-    const [movsTotal] = await movsQuery.where(and(...movsConditions));
+    if (funilId !== undefined) movsConditions.push(eq(destino.funilId, funilId));
+    const [movsAgg] = await db
+      .select({
+        total: sql<number>`COUNT(${kanbanMovimentacoes.id})`,
+        avancaram: sql<number>`SUM(CASE WHEN ${destino.ordem} > ${origem.ordem} THEN 1 ELSE 0 END)`,
+        voltaram: sql<number>`SUM(CASE WHEN ${destino.ordem} < ${origem.ordem} THEN 1 ELSE 0 END)`,
+        concluidos: sql<number>`SUM(CASE WHEN ${destino.tipo} = 'conclusao' THEN 1 ELSE 0 END)`,
+      })
+      .from(kanbanMovimentacoes)
+      .innerJoin(kanbanCards, eq(kanbanMovimentacoes.cardId, kanbanCards.id))
+      .innerJoin(origem, eq(kanbanMovimentacoes.colunaOrigemId, origem.id))
+      .innerJoin(destino, eq(kanbanMovimentacoes.colunaDestinoId, destino.id))
+      .where(and(...movsConditions));
 
     // ── Distribuição por etapa (coluna) ────────────────────────────────────
     const colunasConditions = [eq(kanbanCards.escritorioId, eid), ...filtroResp];
@@ -2042,27 +2090,121 @@ export const relatoriosRouter = router({
     const cardsPorColuna = await db
       .select({
         colunaNome: kanbanColunas.nome,
+        tipo: kanbanColunas.tipo,
+        ordem: kanbanColunas.ordem,
         total: sql<number>`COUNT(${kanbanCards.id})`,
       })
       .from(kanbanCards)
       .innerJoin(kanbanColunas, eq(kanbanCards.colunaId, kanbanColunas.id))
       .where(and(...colunasConditions))
-      .groupBy(kanbanColunas.id, kanbanColunas.nome);
+      .groupBy(kanbanColunas.id, kanbanColunas.nome, kanbanColunas.tipo, kanbanColunas.ordem)
+      .orderBy(kanbanColunas.ordem);
+
+    // ── Por responsável ────────────────────────────────────────────────────
+    const respConditions = [
+      eq(kanbanCards.escritorioId, eid),
+      sql`${kanbanCards.responsavelId} IS NOT NULL`,
+      gte(kanbanCards.createdAt, dataInicio),
+      lte(kanbanCards.createdAt, dataFim),
+      ...filtroResp,
+    ];
+    const porRespQuery = db
+      .select({
+        colabId: kanbanCards.responsavelId,
+        atrasado: kanbanCards.atrasado,
+        total: sql<number>`COUNT(${kanbanCards.id})`,
+      })
+      .from(kanbanCards);
+    const porRespRows = funilId !== undefined
+      ? await porRespQuery
+        .innerJoin(kanbanColunas, eq(kanbanCards.colunaId, kanbanColunas.id))
+        .where(and(...respConditions, eq(kanbanColunas.funilId, funilId)))
+        .groupBy(kanbanCards.responsavelId, kanbanCards.atrasado)
+      : await porRespQuery
+        .where(and(...respConditions))
+        .groupBy(kanbanCards.responsavelId, kanbanCards.atrasado);
+
+    const nomeColabRows = await db
+      .select({ id: colaboradores.id, nome: users.name, email: users.email })
+      .from(colaboradores)
+      .innerJoin(users, eq(colaboradores.userId, users.id))
+      .where(eq(colaboradores.escritorioId, eid));
+    const nomePorColab = new Map<number, string>();
+    for (const c of nomeColabRows) nomePorColab.set(c.id, c.nome || c.email || `#${c.id}`);
+
+    const mapaResp = new Map<number, { colabId: number; nome: string; total: number; noPrazo: number; atrasados: number }>();
+    for (const r of porRespRows) {
+      const id = r.colabId;
+      if (id == null) continue;
+      if (!mapaResp.has(id)) {
+        mapaResp.set(id, { colabId: id, nome: nomePorColab.get(id) || `#${id}`, total: 0, noPrazo: 0, atrasados: 0 });
+      }
+      const x = mapaResp.get(id)!;
+      const n = Number(r.total);
+      x.total += n;
+      if (r.atrasado) x.atrasados += n;
+      else x.noPrazo += n;
+    }
+    const porResponsavel = [...mapaResp.values()]
+      .map((r) => ({
+        ...r,
+        taxaDentroPrazo: r.total > 0 ? Math.round((r.noPrazo / r.total) * 100) : null,
+      }))
+      .sort((a, b) => b.total - a.total);
 
     const total = Number(cardsTotal?.total || 0);
     const dentro = Number(cardsDentroPrazo?.total || 0);
+    const atrasados = Number(cardsAtrasados?.total || 0);
+
+    // ── Período anterior (opt-in) ──────────────────────────────────────────
+    const anterior = input?.comparar
+      ? await (async () => {
+          const [[totAnt], [dentroAnt], [atrasAnt]] = await Promise.all([
+            cardsBase(noRange(dataInicioAnt, dataFimAnt)),
+            cardsBase(and(eq(kanbanCards.atrasado, false), noRange(dataInicioAnt, dataFimAnt))),
+            cardsBase(and(eq(kanbanCards.atrasado, true), noRange(dataInicioAnt, dataFimAnt))),
+          ]);
+          const t = Number(totAnt?.total || 0);
+          const d = Number(dentroAnt?.total || 0);
+          return {
+            periodo: {
+              dataInicio: dataInicioAnt.toISOString().slice(0, 10),
+              dataFim: dataFimAnt.toISOString().slice(0, 10),
+            },
+            cardsTotal: t,
+            cardsDentroPrazo: d,
+            cardsAtrasados: Number(atrasAnt?.total || 0),
+            taxaDentroPrazo: t > 0 ? Math.round((d / t) * 100) : null,
+          };
+        })()
+      : null;
 
     return {
-      periodo: dias,
+      periodo: {
+        dataInicio: dataInicio.toISOString().slice(0, 10),
+        dataFim: dataFim.toISOString().slice(0, 10),
+      },
       funilId: funilId ?? null,
+      responsavelId: respFiltrado ?? null,
+      anterior,
       cardsTotal: total,
-      cardsAtrasados: Number(cardsAtrasados?.total || 0),
+      cardsAtrasados: atrasados,
       cardsDentroPrazo: dentro,
-      movimentacoes: Number(movsTotal?.total || 0),
+      /** Total de movimentações — mantém o nome antigo pra não quebrar caller. */
+      movimentacoes: Number(movsAgg?.total || 0),
+      movimentacaoDetalhe: {
+        entraram: total,
+        avancaram: Number(movsAgg?.avancaram || 0),
+        voltaram: Number(movsAgg?.voltaram || 0),
+        concluidos: Number(movsAgg?.concluidos || 0),
+        total: Number(movsAgg?.total || 0),
+      },
       cardsPorColuna: cardsPorColuna.map((c) => ({
         coluna: c.colunaNome,
         total: Number(c.total),
+        conclusao: c.tipo === "conclusao",
       })),
+      porResponsavel,
       taxaDentroPrazo: total > 0 ? Math.round((dentro / total) * 100) : 100,
     };
   }),
@@ -2248,7 +2390,35 @@ export const relatoriosRouter = router({
  * criar referência circular (se `exportarComercialPdf` vivesse dentro do
  * router, referenciá-lo no próprio inicializador seria erro de tipo).
  */
+/**
+ * Gate do módulo Financeiro. O relatório financeiro não passa pelas
+ * procedures deste router (o DRE é gerado direto), então sem esta checagem
+ * quem não enxerga o financeiro conseguiria receber o DRE por e-mail.
+ */
+async function exigirFinanceiroVer(userId: number): Promise<void> {
+  const perm = await checkPermission(userId, "financeiro", "ver");
+  if (!perm.verTodos && !perm.verProprios) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Sem permissão para ver no módulo Financeiro.",
+    });
+  }
+}
+
 const chamarRelatorios = createCallerFactory(relatoriosRouter);
+
+/**
+ * Caller que enxerga TAMBÉM as procedures de export — `enviarPorEmail` chama
+ * `exportarXPdf`, que vive no `relatoriosPdfRouter`. Construído sob demanda
+ * porque o router de PDF só existe depois deste ponto do módulo.
+ */
+let callerCompleto: ReturnType<typeof createCallerFactory> | null = null;
+function chamarTudo(ctx: any) {
+  if (!callerCompleto) {
+    callerCompleto = createCallerFactory(mergeRouters(relatoriosRouter, relatoriosPdfRouter));
+  }
+  return callerCompleto(ctx) as any;
+}
 
 /**
  * Export do dashboard Comercial em PDF. Mesclado no namespace `relatorios`
@@ -2444,5 +2614,260 @@ export const relatoriosPdfRouter = router({
         base64: buffer.toString("base64"),
         mimeType: "application/pdf",
       };
+    }),
+
+  /**
+   * Export da aba Produção em PDF. Reusa `producao` via caller — mesmos
+   * filtros/permissão da tela. Pede o comparativo sempre: no papel o delta é
+   * o que dá leitura ao número.
+   */
+  exportarProducaoPdf: protectedProcedure
+    .input(ProducaoInput)
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
+      }
+      const caller = chamarRelatorios(ctx);
+
+      const data = await caller.producao({ ...(input ?? {}), comparar: true });
+      if (!data) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Sem dados para o período." });
+      }
+
+      const db = await getDb();
+      let funilLabel = "Todos";
+      if (input?.funilId != null && db) {
+        const [f] = await db.select({ nome: kanbanFunis.nome }).from(kanbanFunis)
+          .where(and(eq(kanbanFunis.id, input.funilId), eq(kanbanFunis.escritorioId, esc.escritorio.id)))
+          .limit(1);
+        funilLabel = f?.nome ?? `#${input.funilId}`;
+      }
+      const responsavelLabel = data.responsavelId != null
+        ? (data.porResponsavel.find((r) => r.colabId === data.responsavelId)?.nome ?? `#${data.responsavelId}`)
+        : "Todos";
+
+      const buffer = await gerarProducaoPdf({
+        data: {
+          periodo: data.periodo,
+          cardsTotal: data.cardsTotal,
+          cardsDentroPrazo: data.cardsDentroPrazo,
+          cardsAtrasados: data.cardsAtrasados,
+          taxaDentroPrazo: data.taxaDentroPrazo,
+          anterior: data.anterior,
+          movimentacaoDetalhe: data.movimentacaoDetalhe,
+          cardsPorColuna: data.cardsPorColuna,
+          porResponsavel: data.porResponsavel,
+        },
+        nomeEscritorio: esc.escritorio.nome,
+        funilLabel,
+        responsavelLabel,
+      });
+
+      return {
+        filename: `relatorio_producao_${data.periodo.dataInicio}_${data.periodo.dataFim}.pdf`,
+        base64: buffer.toString("base64"),
+        mimeType: "application/pdf",
+      };
+    }),
+
+  // ─── Envio de relatórios por e-mail ──────────────────────────────────────
+
+  /**
+   * Manda o relatório por e-mail agora. Gera o mesmo PDF do botão de export
+   * e anexa; o corpo traz os destaques pra quem abrir no celular não precisar
+   * baixar nada.
+   */
+  enviarPorEmail: protectedProcedure
+    .input(
+      z.object({
+        relatorio: RelatorioEnviavelSchema,
+        filtros: FiltrosEnvioSchema.default({}),
+        destinatarios: z.string().min(3).max(1000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
+      }
+      const { validos, invalidos } = normalizarDestinatarios(input.destinatarios);
+      if (validos.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: invalidos.length > 0
+            ? `E-mail inválido: ${invalidos.slice(0, 3).join(", ")}`
+            : "Informe ao menos um destinatário.",
+        });
+      }
+
+      if (input.relatorio === "financeiro") await exigirFinanceiroVer(ctx.user.id);
+
+      const caller = chamarTudo(ctx);
+      const gerado = await gerarRelatorioPdf({
+        relatorio: input.relatorio,
+        filtros: input.filtros,
+        nomeEscritorio: esc.escritorio.nome,
+        escritorioId: esc.escritorio.id,
+        chamar: (proc, arg) => (caller as any)[proc](arg),
+      });
+      if (!gerado) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Sem dados para o período." });
+      }
+
+      const falhas: string[] = [];
+      for (const destinatario of validos) {
+        const r = await enviarRelatorio({
+          relatorio: input.relatorio,
+          gerado,
+          destinatario,
+          nomeEscritorio: esc.escritorio.nome,
+          escritorioId: esc.escritorio.id,
+          userId: ctx.user.id,
+          programado: false,
+        });
+        if (!r.success) falhas.push(`${destinatario}: ${r.error ?? "erro desconhecido"}`);
+      }
+
+      // O erro precisa chegar no usuário, não só no log — foi assim que o
+      // painel já mostrou "ok" com o Resend fora do ar.
+      if (falhas.length === validos.length) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Nenhum e-mail saiu. ${falhas[0]}`,
+        });
+      }
+      return {
+        enviados: validos.length - falhas.length,
+        total: validos.length,
+        ignorados: invalidos,
+        falhas,
+      };
+    }),
+
+  /** Agendamentos de envio do escritório. */
+  listarProgramados: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return [];
+    const db = await getDb();
+    if (!db) return [];
+    const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
+    if (!perm.allowed) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para acessar relatórios." });
+    }
+    const linhas = await db
+      .select()
+      .from(relatoriosProgramados)
+      .where(eq(relatoriosProgramados.escritorioId, esc.escritorio.id))
+      .orderBy(relatoriosProgramados.relatorio, relatoriosProgramados.id);
+    return linhas.map((l) => ({
+      ...l,
+      filtros: l.filtros ? (JSON.parse(l.filtros) as Record<string, unknown>) : {},
+      destinatarios: l.destinatarios.split(",").filter(Boolean),
+    }));
+  }),
+
+  /** Cria ou atualiza um agendamento. */
+  salvarProgramado: protectedProcedure
+    .input(
+      z.object({
+        id: z.number().int().positive().optional(),
+        relatorio: RelatorioEnviavelSchema,
+        frequencia: z.enum(["diaria", "semanal", "mensal"]),
+        diaSemana: z.number().int().min(0).max(6).default(1),
+        // 28 é o teto de propósito: 29/30/31 não existe em todo mês e o
+        // agendamento simplesmente não dispararia em fevereiro.
+        diaMes: z.number().int().min(1).max(28).default(1),
+        hora: z.number().int().min(0).max(23).default(8),
+        janelaDias: z.number().int().min(1).max(365).default(30),
+        filtros: FiltrosEnvioSchema.default({}),
+        destinatarios: z.string().min(3).max(1000),
+        ativo: z.boolean().default(true),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
+      }
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível." });
+      }
+      // Programar envio manda dado do escritório inteiro pra fora — exige
+      // quem enxerga o escritório inteiro, não só os próprios.
+      const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
+      if (!perm.allowed || !perm.verTodos) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Apenas quem vê os relatórios completos pode programar envios.",
+        });
+      }
+      if (input.relatorio === "financeiro") await exigirFinanceiroVer(ctx.user.id);
+      const { validos, invalidos } = normalizarDestinatarios(input.destinatarios);
+      if (validos.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: invalidos.length > 0
+            ? `E-mail inválido: ${invalidos.slice(0, 3).join(", ")}`
+            : "Informe ao menos um destinatário.",
+        });
+      }
+
+      const valores = {
+        escritorioId: esc.escritorio.id,
+        relatorio: input.relatorio,
+        frequencia: input.frequencia,
+        diaSemana: input.diaSemana,
+        diaMes: input.diaMes,
+        hora: input.hora,
+        janelaDias: input.janelaDias,
+        filtros: JSON.stringify(input.filtros),
+        destinatarios: validos.join(","),
+        ativo: input.ativo,
+        criadoPor: esc.colaborador.id,
+      };
+
+      if (input.id) {
+        // O WHERE carrega o escritório: sem isso um id de outro escritório
+        // seria editável por quem descobrisse o número.
+        await db.update(relatoriosProgramados).set(valores).where(
+          and(
+            eq(relatoriosProgramados.id, input.id),
+            eq(relatoriosProgramados.escritorioId, esc.escritorio.id),
+          ),
+        );
+        return { id: input.id, ignorados: invalidos };
+      }
+      const r = await db.insert(relatoriosProgramados).values(valores);
+      return { id: Number((r as any).insertId ?? 0), ignorados: invalidos };
+    }),
+
+  /** Remove um agendamento. */
+  removerProgramado: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
+      }
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível." });
+      }
+      const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
+      if (!perm.allowed || !perm.verTodos) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Apenas quem vê os relatórios completos pode alterar envios programados.",
+        });
+      }
+      await db.delete(relatoriosProgramados).where(
+        and(
+          eq(relatoriosProgramados.id, input.id),
+          eq(relatoriosProgramados.escritorioId, esc.escritorio.id),
+        ),
+      );
+      return { ok: true };
     }),
 });

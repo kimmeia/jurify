@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   BarChart3, MessageCircle, TrendingUp, DollarSign, ArrowUpRight, ArrowDownRight,
-  Activity, CheckCircle2, Target, AlertTriangle, Percent,
+  Activity, CheckCircle2, Target,
   LayoutGrid, Calculator, Wallet, FileText, Loader2,
   TrendingDown, Hourglass, Repeat,
   CalendarCheck, XCircle, Users,
@@ -44,6 +44,7 @@ import {
   KpiRel, PastilhaTaxa, ProvedorRelatorios, TituloSecao, calcularDelta,
   calcularDeltaPontos, useRelatorios,
 } from "./relatorios/casca";
+import { AcoesRelatorio } from "./relatorios/acoes";
 
 // ───────────────────────── helpers ─────────────────────────
 
@@ -336,44 +337,21 @@ function AbaAtendimento() {
     { refetchInterval: 60_000 },
   );
 
-  const pdfMut = (trpc as any).relatorios?.exportarAtendimentoPdf?.useMutation?.({
-    onSuccess: (r: { filename: string; base64: string; mimeType: string }) => {
-      baixarBlob(base64ToBlob(r.base64, r.mimeType), r.filename, r.mimeType);
-      toast.success("PDF baixado");
-    },
-    onError: (err: any) => toast.error("Erro ao exportar PDF", { description: err.message }),
-  });
-
   const canaisAtivos = (((canaisList as any)?.canais || []) as any[]).filter(
     (c) => c.status !== "removido" && TIPOS_CANAL_COMUNICACAO.includes(c.tipo),
   );
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-end">
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-8"
-          disabled={!data || pdfMut?.isPending}
-          onClick={() =>
-            pdfMut?.mutate?.({
-              dataInicio: periodo.inicio,
-              dataFim: periodo.fim,
-              setorId: setorId ?? undefined,
-              atendenteId: atendenteId ?? undefined,
-              canalId: canalId ?? undefined,
-            })
-          }
-        >
-          {pdfMut?.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-          ) : (
-            <FileText className="h-3.5 w-3.5 mr-1.5" />
-          )}
-          Exportar PDF
-        </Button>
-      </div>
+      <AcoesRelatorio
+        relatorio="atendimento"
+        filtros={{
+          setorId: setorId ?? undefined,
+          atendenteId: atendenteId ?? undefined,
+          canalId: canalId ?? undefined,
+        }}
+        pronto={!!data}
+      />
 
       <BarraFiltro>
         <FiltroSelect
@@ -1634,51 +1612,55 @@ function DashboardComercial() {
 // ───────────────────── aba: Produção ─────────────────────
 
 function AbaProducao() {
-  // "todos" = sem filtro (null no backend); senão, funilId numérico como string
-  const [funilSel, setFunilSel] = useState<string>("todos");
-  const [dias, setDias] = useState<string>(String(DIAS_DEFAULT_RELATORIO));
+  const { periodo, comparar } = useRelatorios();
+  // "todos" = sem filtro (undefined no backend); senão, funilId numérico
+  const [funilSel, setFunilSel] = useState<string>("");
+  const [respSel, setRespSel] = useState<string>("");
 
-  const { data: funis } = trpc.kanban.listarFunis.useQuery(undefined, {
-    retry: false,
-  });
+  const { data: funis } = trpc.kanban.listarFunis.useQuery(undefined, { retry: false });
+  const { data: colabsList } = trpc.configuracoes.listarColaboradoresParaFiltro.useQuery(
+    { modulo: "relatorios" },
+    { retry: false },
+  );
 
-  const funilIdInput = funilSel === "todos" ? undefined : Number(funilSel);
+  const filtros = {
+    dataInicio: periodo.inicio,
+    dataFim: periodo.fim,
+    funilId: funilSel === "" ? undefined : Number(funilSel),
+    responsavelId: respSel === "" ? undefined : Number(respSel),
+  };
   const { data, isLoading } = trpc.relatorios.producao.useQuery(
-    { dias: Number(dias), funilId: funilIdInput },
+    { ...filtros, comparar },
     { refetchInterval: 60_000 },
   );
 
   return (
-    <div className="space-y-4">
-      {/* Filtros locais */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-muted-foreground">Funil:</span>
-        <Select value={funilSel} onValueChange={setFunilSel}>
-          <SelectTrigger className="w-56 h-9 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos os funis</SelectItem>
-            {(funis || []).map((f: any) => (
-              <SelectItem key={f.id} value={String(f.id)}>
-                {f.nome}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="space-y-3">
+      <AcoesRelatorio relatorio="producao" filtros={filtros} pronto={!!data} />
 
-        <span className="text-xs text-muted-foreground ml-2">Período:</span>
-        <Select value={dias} onValueChange={setDias}>
-          <SelectTrigger className="w-36 h-9 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">Últimos 7 dias</SelectItem>
-            <SelectItem value="15">Últimos 15 dias</SelectItem>
-            <SelectItem value="30">Últimos 30 dias</SelectItem>
-            <SelectItem value="90">Últimos 90 dias</SelectItem>
-            <SelectItem value="365">Último ano</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <BarraFiltro>
+        <FiltroSelect
+          rotulo="Funil"
+          valor={funilSel}
+          onChange={setFunilSel}
+          opcoes={[
+            { value: "", label: "Todos" },
+            ...((funis || []) as any[]).map((f) => ({ value: String(f.id), label: f.nome })),
+          ]}
+        />
+        <FiltroSelect
+          rotulo="Responsável"
+          valor={respSel}
+          onChange={setRespSel}
+          opcoes={[
+            { value: "", label: "Todos" },
+            ...((colabsList?.colaboradores || []) as any[]).map((c) => ({
+              value: String(c.id),
+              label: c.userName || c.userEmail || `#${c.id}`,
+            })),
+          ]}
+        />
+      </BarraFiltro>
 
       {isLoading ? (
         <LoadingBlock />
@@ -1692,64 +1674,194 @@ function AbaProducao() {
 }
 
 function ProducaoConteudo({ data }: { data: any }) {
+  const ant = data.anterior as any | null;
+  const mov = data.movimentacaoDetalhe;
+  const colunas = (data.cardsPorColuna || []) as Array<{ coluna: string; total: number; conclusao: boolean }>;
+  const totalColunas = colunas.reduce((a, c) => a + c.total, 0);
+  const maxColuna = Math.max(...colunas.map((c) => c.total), 1);
+  const maxMov = Math.max(mov?.entraram || 0, mov?.avancaram || 0, mov?.concluidos || 0, mov?.voltaram || 0, 1);
+
+  const resp = (data.porResponsavel || []) as any[];
+  const totaisResp = resp.reduce(
+    (a, r) => ({ total: a.total + r.total, noPrazo: a.noPrazo + r.noPrazo, atrasados: a.atrasados + r.atrasados }),
+    { total: 0, noPrazo: 0, atrasados: 0 },
+  );
+  const taxaTotalResp = totaisResp.total > 0
+    ? Math.round((totaisResp.noPrazo / totaisResp.total) * 100)
+    : null;
+
+  const LINHAS_MOV = [
+    { rotulo: "Entraram", valor: mov?.entraram ?? 0, cor: "bg-indigo-500" },
+    { rotulo: "Avançaram de etapa", valor: mov?.avancaram ?? 0, cor: "bg-violet-500" },
+    { rotulo: "Concluídos", valor: mov?.concluidos ?? 0, cor: "bg-emerald-600" },
+    { rotulo: "Voltaram de etapa", valor: mov?.voltaram ?? 0, cor: "bg-amber-500" },
+  ];
+
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi icon={<LayoutGrid className="h-5 w-5 text-indigo-500" />} label="Processos no período" value={data.cardsTotal} />
-        <Kpi
-          icon={<CheckCircle2 className="h-5 w-5 text-emerald-500" />}
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiRel
+          label="Processos no período"
+          valor={data.cardsTotal.toLocaleString("pt-BR")}
+          delta={ant ? calcularDelta(data.cardsTotal, ant.cardsTotal) : undefined}
+          anterior={ant ? `${ant.cardsTotal.toLocaleString("pt-BR")} no período anterior` : null}
+        />
+        <KpiRel
           label="Dentro do prazo"
-          value={data.cardsDentroPrazo}
-          highlight="text-emerald-600"
+          valor={data.cardsDentroPrazo.toLocaleString("pt-BR")}
+          cor="text-emerald-600"
+          delta={ant ? calcularDelta(data.cardsDentroPrazo, ant.cardsDentroPrazo) : undefined}
+          anterior={ant ? `${ant.cardsDentroPrazo.toLocaleString("pt-BR")} no período anterior` : null}
         />
-        <Kpi
-          icon={<AlertTriangle className={`h-5 w-5 ${data.cardsAtrasados > 0 ? "text-red-500" : "text-gray-400"}`} />}
+        <KpiRel
           label="Atrasados"
-          value={data.cardsAtrasados}
-          highlight={data.cardsAtrasados > 0 ? "text-red-600" : ""}
+          valor={data.cardsAtrasados.toLocaleString("pt-BR")}
+          cor={data.cardsAtrasados > 0 ? "text-red-600" : undefined}
+          delta={ant ? calcularDelta(data.cardsAtrasados, ant.cardsAtrasados, true) : undefined}
+          anterior={ant ? `${ant.cardsAtrasados.toLocaleString("pt-BR")} no período anterior` : null}
         />
-        <Kpi
-          icon={<Percent className="h-5 w-5 text-blue-500" />}
+        <KpiRel
           label="Taxa dentro do prazo"
-          value={`${data.taxaDentroPrazo}%`}
-          highlight="text-blue-600"
+          valor={`${data.taxaDentroPrazo}%`}
+          delta={ant ? calcularDeltaPontos(data.taxaDentroPrazo, ant.taxaDentroPrazo) : undefined}
+          anterior={
+            ant?.taxaDentroPrazo != null
+              ? `${ant.taxaDentroPrazo}% no período anterior`
+              : "Cards sem prazo estourado"
+          }
         />
       </div>
 
-      {data.cardsPorColuna.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Distribuição por etapa</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.cardsPorColuna}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="coluna" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="total" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+        <CardRel
+          className="lg:col-span-3"
+          icone={<LayoutGrid className="h-4 w-4 text-muted-foreground" />}
+          titulo="Distribuição por etapa"
+          aviso={
+            colunas.length > 0
+              ? `${totalColunas.toLocaleString("pt-BR")} processos · concluído em verde`
+              : undefined
+          }
+        >
+          {colunas.length === 0 ? (
+            <p className="px-4 pb-4 text-xs text-muted-foreground">Nenhum card no funil.</p>
+          ) : (
+            <div className="px-4 pb-3.5 space-y-2">
+              {colunas.map((c) => (
+                <div key={c.coluna} className="flex items-center gap-3">
+                  <span className="w-[38%] shrink-0 truncate text-xs">{c.coluna}</span>
+                  <div className="flex-1 h-2.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${c.conclusao ? "bg-emerald-600" : "bg-indigo-500"}`}
+                      style={{ width: `${Math.max((c.total / maxColuna) * 100, 2)}%` }}
+                    />
+                  </div>
+                  <span className="w-12 shrink-0 text-right text-xs font-semibold tabular-nums">
+                    {c.total.toLocaleString("pt-BR")}
+                  </span>
+                  <span className="w-9 shrink-0 text-right text-[11px] text-muted-foreground tabular-nums">
+                    {totalColunas > 0 ? `${Math.round((c.total / totalColunas) * 100)}%` : "—"}
+                  </span>
+                </div>
+              ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardRel>
 
-      <Card>
-        <CardContent className="pt-4 pb-3">
-          <div className="flex items-center gap-3">
-            <ArrowUpRight className="h-6 w-6 text-blue-500" />
-            <div>
-              <p className="text-lg font-bold">{data.movimentacoes}</p>
-              <p className="text-[10px] text-muted-foreground">
-                Movimentações de cards no período (entradas, andamentos, conclusões)
-              </p>
-            </div>
+        <CardRel
+          className="lg:col-span-2"
+          icone={<Repeat className="h-4 w-4 text-muted-foreground" />}
+          titulo="Movimentação de cards"
+          aviso="no período"
+        >
+          <div className="px-4 pb-3.5 space-y-2">
+            {LINHAS_MOV.map((l) => (
+              <div key={l.rotulo} className="flex items-center gap-3">
+                <span className="w-[46%] shrink-0 truncate text-xs">{l.rotulo}</span>
+                <div className="flex-1 h-2.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${l.cor}`}
+                    style={{ width: `${Math.max((l.valor / maxMov) * 100, 2)}%` }}
+                  />
+                </div>
+                <span className="w-12 shrink-0 text-right text-xs font-semibold tabular-nums">
+                  {l.valor.toLocaleString("pt-BR")}
+                </span>
+              </div>
+            ))}
+            <p className="pt-1 text-[11px] text-muted-foreground">
+              <span className="font-semibold text-foreground">
+                {(mov?.total ?? 0).toLocaleString("pt-BR")}
+              </span>{" "}
+              movimentações no total. "Voltaram de etapa" é o número que vale olhar: mede retrabalho.
+            </p>
           </div>
-        </CardContent>
-      </Card>
+        </CardRel>
+      </div>
+
+      <CardRel
+        icone={<BarChart3 className="h-4 w-4 text-muted-foreground" />}
+        titulo="Produção por responsável"
+        aviso="quem entrega no prazo"
+      >
+        <div className="overflow-x-auto px-1 pb-2">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="text-[10px] uppercase tracking-wide">Responsável</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-wide text-center">Processos</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-wide text-center">No prazo</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-wide text-center">Atrasados</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-wide text-right">Taxa</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {resp.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-6">
+                    Nenhum processo com responsável no período.
+                  </TableCell>
+                </TableRow>
+              )}
+              {resp.map((r, i) => (
+                <TableRow key={r.colabId}>
+                  <TableCell className="text-xs font-medium">
+                    <span className="flex items-center gap-2">
+                      <Avatar nome={r.nome} indice={i} />
+                      <span className="truncate">{r.nome}</span>
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-center text-xs tabular-nums">{r.total}</TableCell>
+                  <TableCell className="text-center text-xs font-semibold tabular-nums text-emerald-600">
+                    {r.noPrazo}
+                  </TableCell>
+                  <TableCell className="text-center text-xs font-semibold tabular-nums text-rose-600">
+                    {r.atrasados}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <PastilhaTaxa taxa={r.taxaDentroPrazo} referencia={taxaTotalResp} />
+                  </TableCell>
+                </TableRow>
+              ))}
+              {resp.length > 0 && (
+                <TableRow className="bg-muted/40 hover:bg-muted/40 font-semibold">
+                  <TableCell className="text-xs">Total</TableCell>
+                  <TableCell className="text-center text-xs tabular-nums">{totaisResp.total}</TableCell>
+                  <TableCell className="text-center text-xs tabular-nums text-emerald-600">
+                    {totaisResp.noPrazo}
+                  </TableCell>
+                  <TableCell className="text-center text-xs tabular-nums text-rose-600">
+                    {totaisResp.atrasados}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <PastilhaTaxa taxa={taxaTotalResp} />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardRel>
     </div>
   );
 }

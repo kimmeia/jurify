@@ -266,6 +266,20 @@ export function iniciarJobs() {
   setTimeout(rodarResumoMovimentacoes, 3 * 60 * 1000);
   setInterval(rodarResumoMovimentacoes, 60 * 60 * 1000);
 
+  // Relatórios programados por e-mail: mesmo desenho do resumo diário — tick
+  // horário porque quem decide a hora é o fuso de cada escritório, e a
+  // idempotência (agendamento, dia local) barra ticks extras.
+  const rodarRelatoriosProgramadosJob = async () => {
+    try {
+      const { rodarRelatoriosProgramados } = await import("../escritorio/cron-relatorios-programados");
+      await rodarRelatoriosProgramados();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] relatórios programados falhou");
+    }
+  };
+  setTimeout(rodarRelatoriosProgramadosJob, 4 * 60 * 1000);
+  setInterval(rodarRelatoriosProgramadosJob, 60 * 60 * 1000);
+
   // 1x por dia: catch-up de cobranças que o webhook eventualmente
   // perdeu (race condition, downtime curto). Webhook (asaas-webhook.ts)
   // é a fonte primária e cobre eventos em tempo real — não precisamos
