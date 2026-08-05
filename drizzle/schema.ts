@@ -3696,3 +3696,72 @@ export const resumoDiarioEnvios = mysqlTable(
 
 export type ResumoDiarioEnvio = typeof resumoDiarioEnvios.$inferSelect;
 export type InsertResumoDiarioEnvio = typeof resumoDiarioEnvios.$inferInsert;
+
+/**
+ * Envio programado de relatórios por e-mail.
+ *
+ * O cron roda de hora em hora e dispara os agendamentos cuja hora LOCAL do
+ * escritório bate com `hora` — cron fixo em UTC mandaria relatório de
+ * madrugada pra metade do país.
+ */
+export const relatoriosProgramados = mysqlTable(
+  "relatorios_programados",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdRelProg").notNull(),
+    relatorio: mysqlEnum("relatorioRelProg", [
+      "atendimento", "comercial", "producao", "agenda", "financeiro",
+    ]).notNull(),
+    frequencia: mysqlEnum("frequenciaRelProg", ["diaria", "semanal", "mensal"])
+      .default("semanal").notNull(),
+    /** 0=domingo … 6=sábado. Só vale em `frequencia = 'semanal'`. */
+    diaSemana: int("diaSemanaRelProg").default(1).notNull(),
+    /** 1-28. Limitado a 28 de propósito: dia 29/30/31 não existe em todo mês
+     *  e o agendamento simplesmente não dispararia em fevereiro. */
+    diaMes: int("diaMesRelProg").default(1).notNull(),
+    /** Hora local do escritório (0-23). */
+    hora: int("horaRelProg").default(8).notNull(),
+    /** Janela do relatório em dias, contada pra trás a partir do disparo. */
+    janelaDias: int("janelaDiasRelProg").default(30).notNull(),
+    /** Filtros do relatório em JSON — evita uma coluna por filtro de cada um
+     *  dos cinco relatórios. */
+    filtros: text("filtrosRelProg"),
+    /** Lista de e-mails separada por vírgula. */
+    destinatarios: varchar("destinatariosRelProg", { length: 1000 }).notNull(),
+    ativo: boolean("ativoRelProg").default(true).notNull(),
+    criadoPor: int("criadoPorRelProg"),
+    ultimoEnvioEm: timestamp("ultimoEnvioEmRelProg"),
+    ultimoStatus: mysqlEnum("ultimoStatusRelProg", ["enviado", "falha", "parcial"]),
+    ultimoErro: varchar("ultimoErroRelProg", { length: 500 }),
+    criadoEm: timestamp("criadoEmRelProg").defaultNow().notNull(),
+    atualizadoEm: timestamp("atualizadoEmRelProg").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    idxEscritorio: index("idx_relprog_escritorio").on(t.escritorioId, t.ativo),
+  }),
+);
+
+export type RelatorioProgramado = typeof relatoriosProgramados.$inferSelect;
+export type InsertRelatorioProgramado = typeof relatoriosProgramados.$inferInsert;
+
+/** Log de disparos — a chave (agendamento, dia local) é a idempotência. */
+export const relatoriosProgramadosEnvios = mysqlTable(
+  "relatorios_programados_envios",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    programadoId: int("programadoIdRelEnv").notNull(),
+    escritorioId: int("escritorioIdRelEnv").notNull(),
+    /** Dia de referência no fuso do escritório (YYYY-MM-DD). */
+    dataRef: varchar("dataRefRelEnv", { length: 10 }).notNull(),
+    status: mysqlEnum("statusRelEnv", ["enviado", "falha", "parcial", "sem_dados"]).notNull(),
+    destinatarios: varchar("destinatariosRelEnv", { length: 1000 }),
+    erro: varchar("erroRelEnv", { length: 500 }),
+    criadoEm: timestamp("criadoEmRelEnv").defaultNow().notNull(),
+  },
+  (t) => ({
+    uniqDia: uniqueIndex("uniq_relprog_dia").on(t.programadoId, t.dataRef),
+    idxEscritorio: index("idx_relenv_escritorio").on(t.escritorioId, t.dataRef),
+  }),
+);
+
+export type RelatorioProgramadoEnvio = typeof relatoriosProgramadosEnvios.$inferSelect;

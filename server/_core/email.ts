@@ -30,6 +30,9 @@ interface EmailOptions {
   tipo?: string;
   escritorioId?: number;
   userId?: number;
+  /** Anexos (Resend aceita base64 em `content`). Usado pelos relatórios em
+   *  PDF — o corpo do email traz o resumo e o arquivo vai junto. */
+  attachments?: Array<{ filename: string; contentBase64: string }>;
 }
 
 /**
@@ -213,6 +216,14 @@ export async function enviarEmail(options: EmailOptions): Promise<{ success: boo
         subject: options.subject,
         html: options.html,
         text: options.text,
+        ...(options.attachments?.length
+          ? {
+              attachments: options.attachments.map((a) => ({
+                filename: a.filename,
+                content: a.contentBase64,
+              })),
+            }
+          : {}),
       }),
     });
 

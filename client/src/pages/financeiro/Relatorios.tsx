@@ -12,8 +12,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -22,17 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Download,
-  FileText,
-  Loader2,
-  Receipt,
-  Search,
-  TrendingDown,
-  TrendingUp,
-  Wallet,
-} from "lucide-react";
+import { Download, Loader2, Search, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -40,62 +28,42 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatBRL, baixarBlob, base64ToBlob } from "./helpers";
-
-function inicioDoMesIso(): string {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-}
-
-function fimDoMesIso(): string {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0)
-    .toISOString()
-    .slice(0, 10);
-}
-
-function presetParaRange(preset: "1m" | "3m" | "6m" | "12m"): {
-  inicio: string;
-  fim: string;
-} {
-  const meses = preset === "1m" ? 1 : preset === "3m" ? 3 : preset === "6m" ? 6 : 12;
-  const hoje = new Date();
-  const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - (meses - 1), 1);
-  const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
-  return {
-    inicio: inicio.toISOString().slice(0, 10),
-    fim: fim.toISOString().slice(0, 10),
-  };
-}
+import { formatBRL, baixarBlob } from "./helpers";
+import {
+  BarraFiltro, CardRel, FiltroSelect, KpiRel, TituloSecao, calcularDelta,
+  calcularDeltaPontos, periodoAnterior, useRelatorios,
+} from "../relatorios/casca";
+import { AcoesRelatorio } from "../relatorios/acoes";
 
 export function RelatoriosTab() {
-  const [preset, setPreset] = useState<"1m" | "3m" | "6m" | "12m" | "custom">("1m");
-  const [dataInicio, setDataInicio] = useState(inicioDoMesIso());
-  const [dataFim, setDataFim] = useState(fimDoMesIso());
+  const { periodo, comparar } = useRelatorios();
+  const [criterio, setCriterio] = useState<"vencimento" | "pagamento">("vencimento");
   const [diagnosticoOpen, setDiagnosticoOpen] = useState(false);
 
-  // Sincroniza datas com preset quando preset muda (não-custom)
-  function aplicarPreset(p: typeof preset) {
-    setPreset(p);
-    if (p !== "custom") {
-      const r = presetParaRange(p);
-      setDataInicio(r.inicio);
-      setDataFim(r.fim);
-    }
-  }
+  const dataInicio = periodo.inicio;
+  const dataFim = periodo.fim;
+  const rangeOk = dataInicio.length === 10 && dataFim.length === 10;
 
-  // Relatório sempre por VENCIMENTO (competência) — bate com o painel
-  // Asaas. A diferença pro caixa aparece na seção "Composição do recebido".
+  // Relatório por VENCIMENTO (competência) bate com o painel Asaas; por
+  // PAGAMENTO é o caixa puro. A ponte entre os dois vive na seção
+  // "Composição do recebido" — que só faz sentido no modo competência.
   const dreQ = (trpc as any).financeiro?.dre?.useQuery?.(
-    { dataInicio, dataFim, criterioReceita: "vencimento" },
-    { retry: false, enabled: dataInicio.length === 10 && dataFim.length === 10 },
+    { dataInicio, dataFim, criterioReceita: criterio },
+    { retry: false, enabled: rangeOk },
   );
   const dre = dreQ?.data;
+
+  const ant = periodoAnterior(dataInicio, dataFim);
+  const dreAntQ = (trpc as any).financeiro?.dre?.useQuery?.(
+    { dataInicio: ant.inicio, dataFim: ant.fim, criterioReceita: criterio },
+    { retry: false, enabled: rangeOk && comparar },
+  );
+  const dreAnt = comparar ? dreAntQ?.data : undefined;
 
   // Espelho do painel "Situação das cobranças" do Asaas (4 cards bruto/líquido)
   const situacaoQ = (trpc as any).financeiro?.situacaoCobrancasAsaas?.useQuery?.(
     { dataInicio, dataFim },
-    { retry: false, enabled: dataInicio.length === 10 && dataFim.length === 10 },
+    { retry: false, enabled: rangeOk },
   );
   const situacao = situacaoQ?.data;
 
@@ -109,14 +77,14 @@ export function RelatoriosTab() {
       vencimentoInicio: dataInicio,
       vencimentoFim: dataFim,
     },
-    { retry: false, enabled: dataInicio.length === 10 && dataFim.length === 10 },
+    { retry: false, enabled: rangeOk },
   );
   const kpis = kpisQ?.data;
 
   // Quebra por forma de pagamento do recebido POR VENCIMENTO (bate com Asaas)
   const formaVencQ = (trpc as any).financeiro?.recebidoVencimentoPorForma?.useQuery?.(
     { dataInicio, dataFim },
-    { retry: false, enabled: dataInicio.length === 10 && dataFim.length === 10 },
+    { retry: false, enabled: rangeOk },
   );
   const formaVenc = formaVencQ?.data;
 
@@ -128,26 +96,15 @@ export function RelatoriosTab() {
     onError: (err: any) =>
       toast.error("Erro ao exportar CSV", { description: err.message }),
   });
-  const pdfMut = (trpc as any).financeiro?.exportarDrePdf?.useMutation?.({
-    onSuccess: (r: { filename: string; base64: string; mimeType: string }) => {
-      const blob = base64ToBlob(r.base64, r.mimeType);
-      baixarBlob(blob, r.filename, r.mimeType);
-      toast.success("PDF baixado");
-    },
-    onError: (err: any) =>
-      toast.error("Erro ao exportar PDF", { description: err.message }),
-  });
-
   // "Recebido de outros meses" = caixa (pago no período) − competência
   // (vence no período). Completa as tabelas de receita pro total do caixa.
-  const outrosMesesValor = Math.max(
-    0,
-    (kpis?.recebido ?? 0) - (kpis?.recebidoComVencimentoNoPeriodo ?? 0),
-  );
-  const outrosMesesCount = Math.max(
-    0,
-    (kpis?.recebidoCount ?? 0) - (kpis?.recebidoComVencimentoNoPeriodoCount ?? 0),
-  );
+  // No modo pagamento a tabela já é o caixa, então a ponte não se aplica.
+  const outrosMesesValor = criterio === "vencimento"
+    ? Math.max(0, (kpis?.recebido ?? 0) - (kpis?.recebidoComVencimentoNoPeriodo ?? 0))
+    : 0;
+  const outrosMesesCount = criterio === "vencimento"
+    ? Math.max(0, (kpis?.recebidoCount ?? 0) - (kpis?.recebidoComVencimentoNoPeriodoCount ?? 0))
+    : 0;
   const outrosMeses =
     outrosMesesValor > 0
       ? { valor: outrosMesesValor, count: outrosMesesCount }
@@ -156,61 +113,43 @@ export function RelatoriosTab() {
   // KPIs do topo usam o CAIXA (receita de competência + outros meses), pra
   // bater com o total das tabelas e com o "Entrou no caixa" do Financeiro.
   const receitaCaixa = (dre?.receitas.total ?? 0) + outrosMesesValor;
-  const resultado = receitaCaixa - (dre?.despesas.total ?? 0);
+  const despesaTotal = dre?.despesas.total ?? 0;
+  const resultado = receitaCaixa - despesaTotal;
   const positivo = resultado >= 0;
   const margemCaixa = receitaCaixa > 0 ? (resultado / receitaCaixa) * 100 : NaN;
 
+  const receitaAnt = dreAnt?.receitas.total ?? null;
+  const despesaAnt = dreAnt?.despesas.total ?? null;
+  const resultadoAnt = dreAnt ? (receitaAnt ?? 0) - (despesaAnt ?? 0) : null;
+  const margemAnt = dreAnt && (receitaAnt ?? 0) > 0
+    ? ((resultadoAnt ?? 0) / (receitaAnt ?? 1)) * 100
+    : null;
+
+  const maxBarra = Math.max(receitaCaixa, despesaTotal, Math.abs(resultado), 1);
+
   return (
-    <div className="space-y-4">
-      {/* Filtros */}
-      <Card>
-        <CardContent className="pt-5">
-          <div className="flex items-end gap-3 flex-wrap">
-            <Tabs value={preset} onValueChange={(v) => aplicarPreset(v as any)}>
-              <TabsList className="h-8">
-                <TabsTrigger value="1m" className="text-xs px-3">
-                  Mês atual
-                </TabsTrigger>
-                <TabsTrigger value="3m" className="text-xs px-3">
-                  3m
-                </TabsTrigger>
-                <TabsTrigger value="6m" className="text-xs px-3">
-                  6m
-                </TabsTrigger>
-                <TabsTrigger value="12m" className="text-xs px-3">
-                  12m
-                </TabsTrigger>
-                <TabsTrigger value="custom" className="text-xs px-3">
-                  Custom
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            {preset === "custom" && (
-              <>
-                <div className="space-y-1">
-                  <Label className="text-xs">De</Label>
-                  <Input
-                    type="date"
-                    value={dataInicio}
-                    onChange={(e) => setDataInicio(e.target.value)}
-                    className="h-9 text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Até</Label>
-                  <Input
-                    type="date"
-                    value={dataFim}
-                    onChange={(e) => setDataFim(e.target.value)}
-                    className="h-9 text-sm"
-                  />
-                </div>
-              </>
-            )}
-            <div className="flex-1" />
+    <div className="space-y-3">
+      <AcoesRelatorio
+        relatorio="financeiro"
+        filtros={{}}
+        pronto={!!dre}
+        extras={
+          <>
             <Button
               size="sm"
               variant="outline"
+              className="h-8"
+              onClick={() => setDiagnosticoOpen(true)}
+              disabled={!dre}
+              title="Quebra o número 'Caixa Asaas' por status e mostra cobranças nas bordas — pra você identificar se a divergência com o painel Asaas vem de RECEIVED_IN_CASH (pagamento manual) ou timezone (cobrança paga 21h-23h do último dia do mês anterior)"
+            >
+              <Search className="h-3.5 w-3.5 mr-1.5" />
+              Diagnosticar divergência
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
               onClick={() => csvMut?.mutate?.({ dataInicio, dataFim })}
               disabled={!dre || csvMut?.isPending}
             >
@@ -221,31 +160,21 @@ export function RelatoriosTab() {
               )}
               CSV
             </Button>
-            <Button
-              size="sm"
-              onClick={() => pdfMut?.mutate?.({ dataInicio, dataFim })}
-              disabled={!dre || pdfMut?.isPending}
-            >
-              {pdfMut?.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-              ) : (
-                <FileText className="h-3.5 w-3.5 mr-1.5" />
-              )}
-              PDF
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setDiagnosticoOpen(true)}
-              disabled={!dre}
-              title="Quebra o número 'Caixa Asaas' por status e mostra cobranças nas bordas — pra você identificar se a divergência com o painel Asaas vem de RECEIVED_IN_CASH (pagamento manual) ou timezone (cobrança paga 21h-23h do último dia do mês anterior)"
-            >
-              <Search className="h-3.5 w-3.5 mr-1.5" />
-              Diagnosticar divergência
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </>
+        }
+      />
+
+      <BarraFiltro>
+        <FiltroSelect
+          rotulo="Critério"
+          valor={criterio}
+          onChange={(v) => setCriterio(v as "vencimento" | "pagamento")}
+          opcoes={[
+            { value: "vencimento", label: "Vencimento" },
+            { value: "pagamento", label: "Pagamento" },
+          ]}
+        />
+      </BarraFiltro>
 
       <DiagnosticoDivergenciaDialog
         open={diagnosticoOpen}
@@ -262,37 +191,69 @@ export function RelatoriosTab() {
 
       {dre && (
         <>
-          {/* KPI cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <DreKpi
-              icon={<TrendingUp className="h-4 w-4" />}
+            <KpiRel
               label="Receita total"
-              valor={receitaCaixa}
-              accent="text-emerald-600"
+              valor={formatBRL(receitaCaixa)}
+              cor="text-emerald-600"
+              delta={dreAnt ? calcularDelta(receitaCaixa, receitaAnt) : undefined}
+              anterior={dreAnt ? `${formatBRL(receitaAnt ?? 0)} no período anterior` : null}
             />
-            <DreKpi
-              icon={<TrendingDown className="h-4 w-4" />}
+            <KpiRel
               label="Despesa total"
-              valor={dre.despesas.total}
-              accent="text-red-600"
+              valor={formatBRL(despesaTotal)}
+              cor="text-red-600"
+              delta={dreAnt ? calcularDelta(despesaTotal, despesaAnt, true) : undefined}
+              anterior={dreAnt ? `${formatBRL(despesaAnt ?? 0)} no período anterior` : null}
             />
-            <DreKpi
-              icon={<Wallet className="h-4 w-4" />}
+            <KpiRel
               label="Resultado líquido"
-              valor={resultado}
-              accent={positivo ? "text-emerald-600" : "text-red-600"}
-              destaque
+              valor={formatBRL(resultado)}
+              cor={positivo ? "text-emerald-600" : "text-red-600"}
+              delta={dreAnt ? calcularDelta(resultado, resultadoAnt) : undefined}
+              anterior={dreAnt ? `${formatBRL(resultadoAnt ?? 0)} no período anterior` : null}
             />
-            <DreKpi
-              icon={<Receipt className="h-4 w-4" />}
+            <KpiRel
               label="Margem"
-              valor={null}
-              textoCustom={
-                isNaN(margemCaixa) ? "—" : `${margemCaixa.toFixed(1)}%`
+              valor={isNaN(margemCaixa) ? "—" : `${margemCaixa.toFixed(1)}%`}
+              cor={positivo ? "text-emerald-600" : "text-red-600"}
+              delta={dreAnt ? calcularDeltaPontos(margemCaixa, margemAnt) : undefined}
+              anterior={
+                margemAnt != null ? `${margemAnt.toFixed(1)}% no período anterior` : null
               }
-              accent={positivo ? "text-emerald-600" : "text-red-600"}
             />
           </div>
+
+          <CardRel
+            icone={<Wallet className="h-4 w-4 text-muted-foreground" />}
+            titulo="Resultado do período"
+            aviso="receita − despesa"
+          >
+            <div className="px-4 pb-4 space-y-2.5">
+              {[
+                { rotulo: "Receita", valor: receitaCaixa, cor: "bg-emerald-600" },
+                { rotulo: "Despesa", valor: despesaTotal, cor: "bg-red-600" },
+                {
+                  rotulo: "Resultado",
+                  valor: resultado,
+                  cor: positivo ? "bg-violet-600" : "bg-red-700",
+                },
+              ].map((l) => (
+                <div key={l.rotulo} className="flex items-center gap-3">
+                  <span className="w-20 shrink-0 text-xs">{l.rotulo}</span>
+                  <div className="flex-1 h-3 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${l.cor}`}
+                      style={{ width: `${Math.max((Math.abs(l.valor) / maxBarra) * 100, 1)}%` }}
+                    />
+                  </div>
+                  <span className="w-32 shrink-0 text-right text-xs font-semibold tabular-nums">
+                    {formatBRL(l.valor)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardRel>
 
           {/* Composição do recebido: ponte entre competência (relatório) e
               caixa (Financeiro) — discrimina o que entrou de outros meses. */}
@@ -307,44 +268,60 @@ export function RelatoriosTab() {
             />
           )}
 
-          {/* Tabela receitas — total bate com o caixa via linha "outros meses" */}
-          <DreSection
-            titulo="Receitas — por categoria"
-            total={dre.receitas.total}
-            categorias={dre.receitas.porCategoria}
-            accent="emerald"
-            outrosMeses={outrosMeses}
-          />
+          <TituloSecao>Receitas</TituloSecao>
 
-          {/* Quebra adicional das receitas: Caixa Asaas vs Caixa Escritório */}
-          {dre.receitas.porOrigem && dre.receitas.porOrigem.length > 0 && (
-            <DreSectionDimensao
-              titulo="Receitas — por origem (de onde veio)"
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <TabelaDre
+              titulo="Por categoria"
+              colunaLabel="Categoria"
               total={dre.receitas.total}
-              linhas={dre.receitas.porOrigem}
-              colunaLabel="Origem"
+              linhas={dre.receitas.porCategoria.map((c: any) => ({
+                chave: String(c.categoriaId ?? "null"),
+                nome: c.categoriaNome,
+                total: c.total,
+                count: c.count,
+                semClassificacao: c.categoriaId === null,
+              }))}
               accent="emerald"
               outrosMeses={outrosMeses}
             />
-          )}
+            {dre.receitas.porOrigem && dre.receitas.porOrigem.length > 0 && (
+              <TabelaDre
+                titulo="Por origem"
+                aviso="de onde veio"
+                colunaLabel="Origem"
+                total={dre.receitas.total}
+                linhas={dre.receitas.porOrigem}
+                accent="emerald"
+                outrosMeses={outrosMeses}
+              />
+            )}
+          </div>
 
-          {/* Quebra por forma de pagamento (Pix/Cartão/Dinheiro/etc) */}
           {dre.receitas.porFormaPagamento && dre.receitas.porFormaPagamento.length > 0 && (
-            <DreSectionDimensao
-              titulo="Receitas — por forma de pagamento"
+            <TabelaDre
+              titulo="Por forma de pagamento"
+              colunaLabel="Forma"
               total={dre.receitas.total}
               linhas={dre.receitas.porFormaPagamento}
-              colunaLabel="Forma"
               accent="emerald"
               outrosMeses={outrosMeses}
             />
           )}
 
-          {/* Tabela despesas */}
-          <DreSection
-            titulo="Despesas"
+          <TituloSecao>Despesas</TituloSecao>
+
+          <TabelaDre
+            titulo="Por categoria"
+            colunaLabel="Categoria"
             total={dre.despesas.total}
-            categorias={dre.despesas.porCategoria}
+            linhas={dre.despesas.porCategoria.map((c: any) => ({
+              chave: String(c.categoriaId ?? "null"),
+              nome: c.categoriaNome,
+              total: c.total,
+              count: c.count,
+              semClassificacao: c.categoriaId === null,
+            }))}
             accent="red"
           />
         </>
@@ -353,74 +330,83 @@ export function RelatoriosTab() {
   );
 }
 
-function DreSectionDimensao({
+interface LinhaDre {
+  chave: string;
+  nome: string;
+  total: number;
+  count: number;
+  /** Renderiza em itálico — lançamento sem categoria pede atenção. */
+  semClassificacao?: boolean;
+}
+
+/**
+ * Tabela de uma dimensão do DRE. Substitui as duas variantes que existiam
+ * (categoria e dimensão livre) — só mudava o rótulo da primeira coluna.
+ */
+function TabelaDre({
   titulo,
+  aviso,
+  colunaLabel,
   total,
   linhas,
-  colunaLabel,
   accent,
   outrosMeses,
 }: {
   titulo: string;
-  total: number;
-  linhas: Array<{
-    chave: string;
-    nome: string;
-    total: number;
-    count: number;
-    percentual: number;
-  }>;
+  aviso?: string;
   colunaLabel: string;
+  total: number;
+  linhas: LinhaDre[];
   accent: "emerald" | "red";
   /** Linha extra "Recebido de outros meses" — completa o total pro caixa. */
   outrosMeses?: { valor: number; count: number };
 }) {
-  const accentClass =
-    accent === "emerald" ? "text-emerald-600" : "text-red-600";
   const temOutros = !!outrosMeses && outrosMeses.valor > 0;
-  const totalCaixa = total + (temOutros ? outrosMeses!.valor : 0);
-  const pct = (v: number) => (totalCaixa > 0 ? (v / totalCaixa) * 100 : 0);
+  const totalCaixa = total + (temOutros ? outrosMeses.valor : 0);
+  const pct = (v: number) => (totalCaixa > 0 ? Math.round((v / totalCaixa) * 100) : 0);
+  const corTitulo = accent === "emerald" ? "text-emerald-600" : "text-red-600";
+
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className={`text-sm flex items-center gap-2 ${accentClass}`}>
-          {accent === "emerald" ? (
-            <TrendingUp className="h-4 w-4" />
-          ) : (
-            <TrendingDown className="h-4 w-4" />
-          )}
-          {titulo}
-          <span className="ml-auto font-mono text-base tabular-nums">
-            {formatBRL(totalCaixa)}
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        {linhas.length === 0 ? (
-          <p className="text-xs text-muted-foreground py-3 text-center">
-            Sem lançamentos no período.
-          </p>
-        ) : (
+    <div className="rounded-xl border bg-card">
+      <div className="flex items-center gap-2 px-4 pt-3.5 pb-1">
+        <h3 className={`text-sm font-semibold ${corTitulo}`}>{titulo}</h3>
+        <div className="flex-1" />
+        <span className="text-[11px] text-muted-foreground">
+          {aviso ?? formatBRL(totalCaixa)}
+        </span>
+      </div>
+      {linhas.length === 0 ? (
+        <p className="px-4 pb-4 text-xs text-muted-foreground">Sem lançamentos no período.</p>
+      ) : (
+        <div className="overflow-x-auto px-1 pb-2">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">{colunaLabel}</TableHead>
-                <TableHead className="text-xs text-right">Qtd</TableHead>
-                <TableHead className="text-xs text-right">% da seção</TableHead>
-                <TableHead className="text-xs text-right">Total</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="text-[10px] uppercase tracking-wide">{colunaLabel}</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-wide text-center">Qtd</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-wide text-center">% da seção</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-wide text-right">Total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {linhas.map((l) => (
                 <TableRow key={l.chave}>
-                  <TableCell className="text-xs">{l.nome}</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums">
+                  <TableCell className="text-xs">
+                    {l.semClassificacao ? (
+                      <span className="italic text-muted-foreground">{l.nome}</span>
+                    ) : (
+                      l.nome
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center text-xs tabular-nums text-muted-foreground">
                     {l.count}
                   </TableCell>
-                  <TableCell className="text-xs text-right tabular-nums">
-                    {pct(l.total).toFixed(1)}%
+                  <TableCell className="text-center">
+                    <span className="inline-block rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums">
+                      {pct(l.total)}%
+                    </span>
                   </TableCell>
-                  <TableCell className="text-xs text-right tabular-nums font-medium">
+                  <TableCell className="text-right text-xs font-semibold tabular-nums">
                     {formatBRL(l.total)}
                   </TableCell>
                 </TableRow>
@@ -431,167 +417,40 @@ function DreSectionDimensao({
                     + Recebido de outros meses{" "}
                     <span className="text-[10px] text-amber-600">(venceu antes, pago agora)</span>
                   </TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-amber-700">{outrosMeses!.count}</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-amber-700">{pct(outrosMeses!.valor).toFixed(1)}%</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums font-medium text-amber-700">{formatBRL(outrosMeses!.valor)}</TableCell>
+                  <TableCell className="text-center text-xs tabular-nums text-amber-700">
+                    {outrosMeses.count}
+                  </TableCell>
+                  <TableCell className="text-center text-xs tabular-nums text-amber-700">
+                    {pct(outrosMeses.valor)}%
+                  </TableCell>
+                  <TableCell className="text-right text-xs font-semibold tabular-nums text-amber-700">
+                    {formatBRL(outrosMeses.valor)}
+                  </TableCell>
                 </TableRow>
               )}
-            </TableBody>
-            {temOutros && (
-              <tfoot>
-                <TableRow className="bg-emerald-50/60 dark:bg-emerald-950/20 font-semibold border-t-2 border-emerald-200">
-                  <TableCell className="text-xs text-slate-900 dark:text-slate-100">Total recebido (caixa)</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-slate-600"></TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-slate-500">100%</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-emerald-700">{formatBRL(totalCaixa)}</TableCell>
-                </TableRow>
-              </tfoot>
-            )}
-          </Table>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function DreKpi({
-  icon,
-  label,
-  valor,
-  accent,
-  destaque,
-  textoCustom,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  valor: number | null;
-  accent?: string;
-  destaque?: boolean;
-  /** Quando preenchido, mostra esse texto em vez de formatBRL(valor). */
-  textoCustom?: string;
-}) {
-  return (
-    <Card className={destaque ? "border-primary/40" : ""}>
-      <CardContent className="pt-5 pb-5">
-        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-          <span className={accent ?? ""}>{icon}</span>
-          {label}
-        </div>
-        <p className={`text-xl font-semibold mt-1 ${accent ?? ""}`}>
-          {textoCustom ?? (valor !== null ? formatBRL(valor) : "—")}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function DreSection({
-  titulo,
-  total,
-  categorias,
-  accent,
-  outrosMeses,
-}: {
-  titulo: string;
-  total: number;
-  categorias: Array<{
-    categoriaId: number | null;
-    categoriaNome: string;
-    total: number;
-    count: number;
-    percentual: number;
-  }>;
-  accent: "emerald" | "red";
-  /** Linha extra "Recebido de outros meses" — completa o total pro caixa. */
-  outrosMeses?: { valor: number; count: number };
-}) {
-  const accentClass =
-    accent === "emerald"
-      ? "text-emerald-600"
-      : "text-red-600";
-  const temOutros = !!outrosMeses && outrosMeses.valor > 0;
-  const totalCaixa = total + (temOutros ? outrosMeses!.valor : 0);
-  const pct = (v: number) => (totalCaixa > 0 ? (v / totalCaixa) * 100 : 0);
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className={`text-sm flex items-center gap-2 ${accentClass}`}>
-          {accent === "emerald" ? (
-            <TrendingUp className="h-4 w-4" />
-          ) : (
-            <TrendingDown className="h-4 w-4" />
-          )}
-          {titulo}
-          <span className="ml-auto font-mono text-base tabular-nums">
-            {formatBRL(totalCaixa)}
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        {categorias.length === 0 ? (
-          <p className="text-xs text-muted-foreground py-3 text-center">
-            Sem lançamentos no período.
-          </p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Categoria</TableHead>
-                <TableHead className="text-xs text-right">Qtd</TableHead>
-                <TableHead className="text-xs text-right">% da seção</TableHead>
-                <TableHead className="text-xs text-right">Total</TableHead>
+              <TableRow className="bg-muted/40 hover:bg-muted/40 font-semibold">
+                <TableCell className="text-xs">
+                  {temOutros ? "Total recebido (caixa)" : "Total"}
+                </TableCell>
+                <TableCell className="text-center text-xs tabular-nums">
+                  {linhas.reduce((a, l) => a + l.count, 0) + (temOutros ? outrosMeses.count : 0)}
+                </TableCell>
+                <TableCell className="text-center text-xs tabular-nums text-muted-foreground">
+                  100%
+                </TableCell>
+                <TableCell
+                  className={`text-right text-xs tabular-nums ${
+                    accent === "emerald" ? "text-emerald-700" : "text-red-700"
+                  }`}
+                >
+                  {formatBRL(totalCaixa)}
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {categorias.map((cat) => (
-                <TableRow key={String(cat.categoriaId ?? "null")}>
-                  <TableCell className="text-xs">
-                    {cat.categoriaId === null ? (
-                      <span className="italic text-muted-foreground">
-                        {cat.categoriaNome}
-                      </span>
-                    ) : (
-                      cat.categoriaNome
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs text-right tabular-nums">
-                    {cat.count}
-                  </TableCell>
-                  <TableCell className="text-xs text-right tabular-nums">
-                    {pct(cat.total).toFixed(1)}%
-                  </TableCell>
-                  <TableCell className="text-xs text-right tabular-nums font-medium">
-                    {formatBRL(cat.total)}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {temOutros && (
-                <TableRow className="bg-amber-50/50 dark:bg-amber-950/10">
-                  <TableCell className="text-xs text-amber-800 dark:text-amber-300">
-                    + Recebido de outros meses{" "}
-                    <span className="text-[10px] text-amber-600">(venceu antes, pago agora)</span>
-                  </TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-amber-700">{outrosMeses!.count}</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-amber-700">{pct(outrosMeses!.valor).toFixed(1)}%</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums font-medium text-amber-700">{formatBRL(outrosMeses!.valor)}</TableCell>
-                </TableRow>
-              )}
             </TableBody>
-            {temOutros && (
-              <tfoot>
-                <TableRow className="bg-emerald-50/60 dark:bg-emerald-950/20 font-semibold border-t-2 border-emerald-200">
-                  <TableCell className="text-xs text-slate-900 dark:text-slate-100">Total recebido (caixa)</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums"></TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-slate-500">100%</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-emerald-700">{formatBRL(totalCaixa)}</TableCell>
-                </TableRow>
-              </tfoot>
-            )}
           </Table>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 }
 

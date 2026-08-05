@@ -7,9 +7,10 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanComentarios, kanbanResponsavelLog, kanbanTags, contatos, colaboradores, clienteProcessos, users } from "../../drizzle/schema";
-import { eq, and, desc, asc, or, like, gte, lte, lt, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, asc, like, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "./check-permission";
+import { casaBusca, casaTag, condicoesCards } from "./kanban-filtros";
 
 /** Verifica se o colaborador pode mexer nesse card quando a permissão é
  *  "verProprios" only. Considera owner = responsavelId. */
@@ -262,34 +263,21 @@ export const kanbanRouter = router({
 
       const filtrarProprios = !perm.verTodos && perm.verProprios;
 
-      // Pré-calcula bounds de prazo (uma vez, não dentro do loop).
-      const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-      const fimHoje = new Date(hoje); fimHoje.setHours(23, 59, 59, 999);
-      const fim7 = new Date(hoje); fim7.setDate(fim7.getDate() + 7); fim7.setHours(23, 59, 59, 999);
-
       // Filtros que valem pra TODOS os cards (independente da coluna) — usados
-      // numa única query bulk em vez de loop por coluna (N+1 → 1).
+      // numa única query bulk em vez de loop por coluna (N+1 → 1). As
+      // condições vêm de `kanban-filtros` porque o export em PDF precisa
+      // filtrar exatamente igual.
       const colunasIds = colunas.map((c) => c.id);
       if (colunasIds.length === 0) {
         return { funil, colunas: [] };
       }
 
-      const cardCondsGlobal: any[] = [
-        inArray(kanbanCards.colunaId, colunasIds),
-        eq(kanbanCards.escritorioId, perm.escritorioId),
-      ];
-      if (!input.mostrarArquivados) {
-        cardCondsGlobal.push(eq(kanbanCards.arquivado, false));
-      }
-      if (filtrarProprios) cardCondsGlobal.push(eq(kanbanCards.responsavelId, perm.colaboradorId));
-      if (input.responsavelId) cardCondsGlobal.push(eq(kanbanCards.responsavelId, input.responsavelId));
-      if (input.prioridade) cardCondsGlobal.push(eq(kanbanCards.prioridade, input.prioridade));
-      if (input.dataInicio) cardCondsGlobal.push(gte(kanbanCards.createdAt, new Date(`${input.dataInicio}T00:00:00`)));
-      if (input.dataFim) cardCondsGlobal.push(lte(kanbanCards.createdAt, new Date(`${input.dataFim}T23:59:59`)));
-      if (input.prazoFiltro === "vencidos") cardCondsGlobal.push(and(sql`${kanbanCards.prazo} IS NOT NULL`, lt(kanbanCards.prazo, hoje)));
-      else if (input.prazoFiltro === "hoje") cardCondsGlobal.push(and(gte(kanbanCards.prazo, hoje), lte(kanbanCards.prazo, fimHoje)));
-      else if (input.prazoFiltro === "7dias") cardCondsGlobal.push(and(gte(kanbanCards.prazo, hoje), lte(kanbanCards.prazo, fim7)));
-      else if (input.prazoFiltro === "sem_prazo") cardCondsGlobal.push(sql`${kanbanCards.prazo} IS NULL`);
+      const cardCondsGlobal = condicoesCards({
+        escritorioId: perm.escritorioId,
+        colunasIds,
+        filtros: input,
+        travarNoColaborador: filtrarProprios ? perm.colaboradorId : null,
+      });
 
       const todosCards = await db
         .select()
@@ -367,21 +355,12 @@ export const kanbanRouter = router({
         cardsPorColuna.set(card.colunaId, arr);
       }
 
-      // Filtro por tag (client-side aqui pois depende do enriquecimento).
-      const tagFiltro = input.tag?.toLowerCase();
-      const result = colunas.map((col) => {
-        let cardsCol = cardsPorColuna.get(col.id) ?? [];
-        if (tagFiltro) {
-          cardsCol = cardsCol.filter((c) => {
-            const lista = (c.tags || "")
-              .split(",")
-              .map((s: string) => s.trim().toLowerCase())
-              .filter(Boolean);
-            return lista.includes(tagFiltro);
-          });
-        }
-        return { ...col, cards: cardsCol };
-      });
+      // Filtro por tag (aqui e não em SQL: depende do enriquecimento, porque
+      // quando há cliente as tags dele vencem as do card).
+      const result = colunas.map((col) => ({
+        ...col,
+        cards: (cardsPorColuna.get(col.id) ?? []).filter((c) => casaTag(c, input.tag)),
+      }));
 
       return { funil, colunas: result };
     }),
@@ -1581,5 +1560,142 @@ export const kanbanRouter = router({
           message: err?.message ?? "Falha ao importar do Trello",
         });
       }
+    }),
+
+  /**
+   * Exporta os cards em PDF — a listagem que o quadro mostra, em papel.
+   *
+   * Recebe os MESMOS filtros da tela (inclusive a busca textual, que é
+   * client-side no quadro) porque um PDF que traz mais cards do que a tela
+   * mostrava é pior que nenhum PDF. `funilId` ausente = todos os funis.
+   */
+  exportarCardsPdf: protectedProcedure
+    .input(
+      z.object({
+        funilId: z.number().int().positive().optional(),
+        responsavelId: z.number().int().positive().optional(),
+        prioridade: z.enum(["baixa", "media", "alta"]).optional(),
+        prazoFiltro: z.enum(["vencidos", "hoje", "7dias", "sem_prazo"]).optional(),
+        dataInicio: z.string().optional(),
+        dataFim: z.string().optional(),
+        tag: z.string().max(64).optional(),
+        busca: z.string().max(120).optional(),
+        mostrarArquivados: z.boolean().optional(),
+      }).optional(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
+      }
+      const perm = await checkPermission(ctx.user.id, "kanban", "ver");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para ver o Kanban." });
+      }
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível." });
+      }
+      const filtros = input ?? {};
+
+      // Colunas do escopo: um funil ou todos os do escritório.
+      const colunasRows = await db
+        .select({
+          id: kanbanColunas.id,
+          nome: kanbanColunas.nome,
+          funilId: kanbanColunas.funilId,
+          funilNome: kanbanFunis.nome,
+        })
+        .from(kanbanColunas)
+        .innerJoin(kanbanFunis, eq(kanbanColunas.funilId, kanbanFunis.id))
+        .where(
+          and(
+            eq(kanbanFunis.escritorioId, esc.escritorio.id),
+            ...(filtros.funilId ? [eq(kanbanFunis.id, filtros.funilId)] : []),
+          ),
+        );
+
+      const filtrarProprios = !perm.verTodos && perm.verProprios;
+      const cards = colunasRows.length === 0
+        ? []
+        : await db
+          .select()
+          .from(kanbanCards)
+          .where(and(...condicoesCards({
+            escritorioId: esc.escritorio.id,
+            colunasIds: colunasRows.map((c) => c.id),
+            filtros,
+            travarNoColaborador: filtrarProprios ? perm.colaboradorId : null,
+          })))
+          // O pedido é sempre do cadastro mais recente pro mais antigo.
+          .orderBy(desc(kanbanCards.createdAt), desc(kanbanCards.id));
+
+      // Enriquecimento em lote — mesmo desenho de `obterFunil` (3 queries,
+      // não 3 por card).
+      const clienteIds = [...new Set(cards.map((c) => c.clienteId).filter(Boolean))] as number[];
+      const respIds = [...new Set(cards.map((c) => c.responsavelId).filter(Boolean))] as number[];
+
+      const contatosRows = clienteIds.length > 0
+        ? await db.select({ id: contatos.id, nome: contatos.nome, tags: contatos.tags })
+          .from(contatos).where(inArray(contatos.id, clienteIds))
+        : [];
+      const respRows = respIds.length > 0
+        ? await db
+          .select({ colaboradorId: colaboradores.id, nome: users.name, email: users.email })
+          .from(colaboradores)
+          .innerJoin(users, eq(colaboradores.userId, users.id))
+          .where(inArray(colaboradores.id, respIds))
+        : [];
+
+      const mapContato = new Map(contatosRows.map((c) => [c.id, c]));
+      const mapResp = new Map(respRows.map((r) => [r.colaboradorId, r.nome ?? r.email ?? null]));
+      const mapColuna = new Map(colunasRows.map((c) => [c.id, c]));
+
+      const enriquecidos = cards.map((card) => {
+        const ctt = card.clienteId ? mapContato.get(card.clienteId) : null;
+        const col = mapColuna.get(card.colunaId);
+        return {
+          // Tags single-source: cliente vence card próprio quando há cliente.
+          tags: card.clienteId ? (ctt?.tags ?? null) : card.tags,
+          clienteNome: ctt?.nome ?? null,
+          titulo: card.titulo,
+          funilNome: col?.funilNome ?? "—",
+          colunaNome: col?.nome ?? "—",
+          responsavelNome: card.responsavelId ? mapResp.get(card.responsavelId) ?? null : null,
+          criadoEm: card.createdAt.toISOString(),
+          prazo: card.prazo ? card.prazo.toISOString() : null,
+          valorEstimado: card.valorEstimado != null ? Number(card.valorEstimado) : null,
+          prioridade: card.prioridade,
+          arquivado: card.arquivado,
+        };
+      })
+        .filter((c) => casaTag(c, filtros.tag) && casaBusca(c, filtros.busca));
+
+      const funilLabel = filtros.funilId
+        ? (colunasRows[0]?.funilNome ?? `#${filtros.funilId}`)
+        : "Todos";
+      const responsavelLabel = filtrarProprios
+        ? (esc.colaborador ? "Somente os meus" : "—")
+        : filtros.responsavelId
+          ? (mapResp.get(filtros.responsavelId) ?? `#${filtros.responsavelId}`)
+          : "Todos";
+      const br = (d?: string) => (d ? d.split("-").reverse().join("/") : null);
+      const periodoLabel = filtros.dataInicio || filtros.dataFim
+        ? [br(filtros.dataInicio) ?? "início", br(filtros.dataFim) ?? "hoje"].join(" a ")
+        : "Todo o período";
+
+      const { gerarKanbanCardsPdf } = await import("./kanban-cards-pdf");
+      const buffer = await gerarKanbanCardsPdf({
+        data: { cards: enriquecidos, funilLabel, responsavelLabel, periodoLabel },
+        nomeEscritorio: esc.escritorio.nome,
+      });
+
+      const hoje = new Date().toISOString().slice(0, 10);
+      return {
+        filename: `cards_kanban_${hoje}.pdf`,
+        base64: buffer.toString("base64"),
+        mimeType: "application/pdf",
+        total: enriquecidos.length,
+      };
     }),
 });
