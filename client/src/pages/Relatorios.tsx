@@ -1253,14 +1253,17 @@ function DashboardComercial() {
           {/* KPIs principais — 4 cards com métrica principal + secundária derivada */}
           {(() => {
             const faturado = data.kpis.faturado || 0;
-            const contratosPagos = data.kpis.contratos || 0;
+            const clientesPagantes = data.kpis.clientesPagantes || 0;
+            const clientesFechados = data.kpis.clientesFechados || 0;
             const contratosFechados = data.kpis.contratosFechados || 0;
             const valorTotalFechado = data.kpis.valorTotalFechado || 0;
             const pctRecebidoDoFechado = valorTotalFechado > 0
               ? (faturado / valorTotalFechado) * 100
               : null;
-            const pctPagosDosFechados = contratosFechados > 0
-              ? (contratosPagos / contratosFechados) * 100
+            // Cliente sobre cliente. Contra "contratos fechados" a razão
+            // comparava unidades diferentes e podia passar de 100%.
+            const pctPagantesDosFechados = clientesFechados > 0
+              ? (clientesPagantes / clientesFechados) * 100
               : null;
             const ticketMedioFechado = contratosFechados > 0
               ? valorTotalFechado / contratosFechados
@@ -1320,21 +1323,21 @@ function DashboardComercial() {
                   <CardContent className="pt-4 space-y-1.5">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <CheckCircle2 className="h-3.5 w-3.5 text-indigo-500" />
-                      Contratos pagos
+                      Clientes que pagaram
                     </div>
-                    <p className="text-2xl font-bold text-indigo-600 tabular-nums">{contratosPagos}</p>
+                    <p className="text-2xl font-bold text-indigo-600 tabular-nums">{clientesPagantes}</p>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] text-muted-foreground">vs anterior</span>
-                      <VariacaoBadge pct={data.kpis.variacaoContratos} />
+                      <VariacaoBadge pct={data.kpis.variacaoClientesPagantes} />
                     </div>
                     <div className="rounded bg-indigo-50 border border-indigo-200 px-1.5 py-1 dark:bg-indigo-950/30">
-                      {pctPagosDosFechados != null ? (
+                      {pctPagantesDosFechados != null ? (
                         <>
                           <p className="text-[10px] text-indigo-700 font-semibold">
-                            {pctPagosDosFechados.toFixed(1).replace(".", ",")}% dos fechados
+                            {pctPagantesDosFechados.toFixed(1).replace(".", ",")}% dos que fecharam
                           </p>
                           <p className="text-[9px] text-muted-foreground">
-                            {contratosPagos} de {contratosFechados} contratos
+                            {clientesPagantes} de {clientesFechados} clientes
                           </p>
                         </>
                       ) : (
@@ -1342,7 +1345,7 @@ function DashboardComercial() {
                       )}
                     </div>
                     <p className="text-[10px] text-muted-foreground italic">
-                      parcelas do mesmo contrato contam como 1
+                      quantas cobranças ele pagou não muda
                     </p>
                   </CardContent>
                 </Card>
@@ -1362,7 +1365,7 @@ function DashboardComercial() {
                         {formatBRL(ticketMedioPago)} recebido
                       </p>
                       <p className="text-[9px] text-muted-foreground">
-                        recebido ÷ contratos pagos
+                        recebido ÷ clientes que pagaram
                       </p>
                     </div>
                   </CardContent>

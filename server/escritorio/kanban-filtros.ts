@@ -108,3 +108,34 @@ export function casaTag(card: { tags?: string | null }, tag: string | undefined)
     .filter(Boolean)
     .includes(alvo);
 }
+
+/**
+ * Recorte de colunas pedido pelo cliente, aplicado sobre a lista que a query
+ * já provou pertencer ao escritório.
+ *
+ * Levar os ids direto pro WHERE deixaria qualquer um exportar coluna alheia
+ * chutando número. Aqui, id de fora simplesmente não casa e some. Lista
+ * ausente ou vazia = sem recorte, que é o comportamento de antes do seletor.
+ */
+export function recortarColunas<T extends { id: number }>(
+  colunas: T[],
+  ids: number[] | undefined,
+): T[] {
+  if (!ids?.length) return colunas;
+  const alvo = new Set(ids);
+  return colunas.filter((c) => alvo.has(c.id));
+}
+
+/**
+ * Como o recorte aparece no cabeçalho do PDF. Sem essa linha, dois PDFs do
+ * mesmo funil com recortes diferentes ficam indistinguíveis depois de
+ * impressos — que é justamente o uso do recorte.
+ */
+export function rotuloColunas(
+  colunas: Array<{ nome: string }>,
+  escolhidas: Array<{ nome: string }>,
+): string {
+  if (escolhidas.length === 0) return "Nenhuma";
+  if (escolhidas.length === colunas.length) return "Todas";
+  return escolhidas.map((c) => c.nome).join(", ");
+}

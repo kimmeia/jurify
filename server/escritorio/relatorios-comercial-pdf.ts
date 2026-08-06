@@ -18,8 +18,9 @@ export type ComercialDashboardData = {
   kpis: {
     faturado: number;
     variacaoFaturado: number;
-    contratos: number;
-    variacaoContratos: number;
+    clientesPagantes: number;
+    variacaoClientesPagantes: number;
+    clientesFechados: number;
     contratosFechados: number;
     variacaoContratosFechados: number;
     valorTotalFechado: number;
@@ -252,8 +253,8 @@ export async function gerarComercialPdf(args: {
         const k = data.kpis;
         const pctRecebidoFechado = k.valorTotalFechado > 0
           ? (k.faturado / k.valorTotalFechado) * 100 : null;
-        const pctPagosFechados = k.contratosFechados > 0
-          ? (k.contratos / k.contratosFechados) * 100 : null;
+        const pctPagosFechados = k.clientesFechados > 0
+          ? (k.clientesPagantes / k.clientesFechados) * 100 : null;
         const ticketFechado = k.contratosFechados > 0
           ? k.valorTotalFechado / k.contratosFechados : 0;
 
@@ -319,16 +320,16 @@ export async function gerarComercialPdf(args: {
           delta: k.variacaoContratosFechados, foot: "leads ganhos no período",
         });
         kpi(2, {
-          label: "Contratos pagos", value: String(k.contratos), color: C.indigo, bd: C.indigoBd,
-          delta: k.variacaoContratos,
-          sub1: pctPagosFechados != null ? `${pct1(pctPagosFechados)} dos fechados` : "sem fechado no período",
-          sub2: pctPagosFechados != null ? `${k.contratos} de ${k.contratosFechados} contratos` : undefined,
+          label: "Clientes que pagaram", value: String(k.clientesPagantes), color: C.indigo, bd: C.indigoBd,
+          delta: k.variacaoClientesPagantes,
+          sub1: pctPagosFechados != null ? `${pct1(pctPagosFechados)} dos que fecharam` : "sem fechado no período",
+          sub2: pctPagosFechados != null ? `${k.clientesPagantes} de ${k.clientesFechados} clientes` : undefined,
           subBg: C.indigoBg, subBd: C.indigoBd, subFg: "#4338ca",
-          foot: "parcelas do mesmo contrato = 1",
+          foot: "quantas cobranças ele pagou não muda",
         });
         kpi(3, {
           label: "Ticket médio", value: formatBRL(ticketFechado), color: C.violet, bd: C.violetBd,
-          sub1: `${formatBRL(k.ticketMedio)} recebido`, sub2: "recebido ÷ contratos pagos",
+          sub1: `${formatBRL(k.ticketMedio)} recebido`, sub2: "recebido ÷ clientes que pagaram",
           subBg: C.violetBg, subBd: C.violetBd, subFg: "#6d28d9",
           foot: "fechado ÷ contratos fechados",
         });
@@ -639,8 +640,9 @@ export async function gerarComercialPdf(args: {
       doc.y += 6;
       doc.fillColor(C.faint).font("Helvetica-Oblique").fontSize(7).text(
         "Recebido: cobranças pagas comissionáveis no período de clientes fechados no mesmo período. " +
-          "Contratos fechados: leads movidos para a etapa Ganho. Contratos pagos: parcelas do mesmo " +
-          "contrato contam como 1. Ticket médio fechado = total fechado ÷ contratos fechados.",
+          "Contratos fechados: leads movidos para a etapa Ganho. Clientes que pagaram: clientes " +
+          "distintos com cobrança paga no período — quantas cobranças ou parcelas cada um pagou " +
+          "não altera a contagem. Ticket médio fechado = total fechado ÷ contratos fechados.",
         L, doc.y, { width: W, align: "left" },
       );
 

@@ -28,6 +28,8 @@ export type CardPdf = {
 export type KanbanCardsPdfData = {
   cards: CardPdf[];
   funilLabel: string;
+  /** "Todas" ou os nomes das colunas escolhidas, na ordem do quadro. */
+  colunasLabel: string;
   responsavelLabel: string;
   periodoLabel: string;
 };
@@ -186,7 +188,7 @@ export async function gerarKanbanCardsPdf(args: {
         : 0;
 
       const yMeta = doc.y + 7;
-      rrect(L, yMeta, W, 54, 5, "#f8fafc", C.line, 0.8);
+      rrect(L, yMeta, W, 77, 5, "#f8fafc", C.line, 0.8);
       const colW = W / 4;
       const meta = (label: string, val: string, i: number, linha: 0 | 1) => {
         const x = L + 11 + colW * i;
@@ -214,7 +216,16 @@ export async function gerarKanbanCardsPdf(args: {
         data.cards.length > 0 ? `${idadeCurta(maisAntigo)} de cadastro` : "—",
         3, 1,
       );
-      doc.y = yMeta + 64;
+
+      // Linha inteira: a lista de colunas escolhidas não cabe numa célula de
+      // um quarto da largura, e truncá-la anularia o motivo de ela existir.
+      {
+        const y = yMeta + 53;
+        doc.fillColor(C.faint).font("Helvetica").fontSize(6.8).text("COLUNAS", L + 11, y);
+        doc.fillColor(C.dark).font("Helvetica-Bold").fontSize(8.6)
+          .text(data.colunasLabel, L + 11, y + 8, { width: W - 22, lineBreak: false, ellipsis: true });
+      }
+      doc.y = yMeta + 87;
 
       doc.fillColor(C.muted).font("Helvetica").fontSize(7.6).text(
         "Do cadastro mais recente para o mais antigo.  Barra à esquerda = prioridade "

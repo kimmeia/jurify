@@ -8,7 +8,14 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { boundsPrazo, casaBusca, casaTag, condicoesCards } from "./kanban-filtros";
+import {
+  boundsPrazo,
+  casaBusca,
+  casaTag,
+  condicoesCards,
+  recortarColunas,
+  rotuloColunas,
+} from "./kanban-filtros";
 
 describe("casaBusca", () => {
   const card = {
@@ -115,5 +122,55 @@ describe("condicoesCards", () => {
   it("restringe às colunas do funil quando elas vêm", () => {
     const todos = condicoesCards(base).length;
     expect(condicoesCards({ ...base, colunasIds: [1, 2, 3] }).length).toBe(todos + 1);
+  });
+});
+
+describe("recortarColunas", () => {
+  const colunas = [
+    { id: 10, nome: "Triagem" },
+    { id: 11, nome: "Documentação" },
+    { id: 12, nome: "Encerrado" },
+  ];
+
+  it("sem lista, exporta o funil inteiro", () => {
+    // É o comportamento de antes do seletor: quem não escolhe, leva tudo.
+    expect(recortarColunas(colunas, undefined)).toHaveLength(3);
+    expect(recortarColunas(colunas, [])).toHaveLength(3);
+  });
+
+  it("fica só com o que foi escolhido, na ordem do quadro", () => {
+    expect(recortarColunas(colunas, [12, 10]).map((c) => c.nome)).toEqual([
+      "Triagem",
+      "Encerrado",
+    ]);
+  });
+
+  it("id de coluna de outro escritório não entra", () => {
+    // A lista de entrada já veio filtrada por escritorioId. Chutar um id
+    // qualquer não pode trazer nada — por isso o recorte é interseção, e não
+    // um WHERE IN com o que o cliente mandou.
+    expect(recortarColunas(colunas, [999])).toEqual([]);
+    expect(recortarColunas(colunas, [10, 999]).map((c) => c.id)).toEqual([10]);
+  });
+});
+
+describe("rotuloColunas", () => {
+  const colunas = [{ nome: "Triagem" }, { nome: "Documentação" }, { nome: "Encerrado" }];
+
+  it("tudo marcado vira 'Todas' em vez de listar o funil inteiro", () => {
+    expect(rotuloColunas(colunas, colunas)).toBe("Todas");
+  });
+
+  it("recorte lista os nomes, que é o que distingue dois PDFs impressos", () => {
+    expect(rotuloColunas(colunas, [{ nome: "Triagem" }, { nome: "Documentação" }])).toBe(
+      "Triagem, Documentação",
+    );
+  });
+
+  it("nada marcado não vira 'Todas' por acidente", () => {
+    // Com length 0 === length 0 num funil sem colunas, a comparação ingênua
+    // diria "Todas" pra um PDF vazio.
+    expect(rotuloColunas([], [])).toBe("Nenhuma");
+    expect(rotuloColunas(colunas, [])).toBe("Nenhuma");
   });
 });
