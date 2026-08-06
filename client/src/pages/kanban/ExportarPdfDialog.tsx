@@ -6,7 +6,7 @@
  * — imprimir o recorte em que se está trabalhando.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,17 +36,27 @@ export function ExportarPdfDialog({
   onExportar: (colunasIds: number[]) => void;
 }) {
   const [marcadas, setMarcadas] = useState<number[]>([]);
+  const aberto = useRef(false);
 
-  // Sempre reabre com tudo marcado: o recorte anterior guardado silenciosamente
-  // faria o próximo PDF sair menor do que o esperado sem ninguém notar.
+  // Só na ABERTURA, e é por isso que existe o ref. O quadro faz polling de 5s;
+  // com `colunas` na lista de dependências, cada refetch trocava a identidade
+  // do array, o efeito rodava de novo e remarcava tudo — a coluna que a pessoa
+  // acabou de desmarcar voltava sozinha segundos depois.
   useEffect(() => {
-    if (open) setMarcadas(colunas.map((c) => c.id));
+    if (!open) {
+      aberto.current = false;
+      return;
+    }
+    if (aberto.current) return;
+    aberto.current = true;
+    setMarcadas(colunas.map((c) => c.id));
   }, [open, colunas]);
 
-  const totalCards = useMemo(
-    () => colunas.filter((c) => marcadas.includes(c.id)).reduce((s, c) => s + c.total, 0),
+  const selecionadas = useMemo(
+    () => colunas.filter((c) => marcadas.includes(c.id)),
     [colunas, marcadas],
   );
+  const totalCards = selecionadas.reduce((s, c) => s + c.total, 0);
 
   const alternar = (id: number) =>
     setMarcadas((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id]));
@@ -133,8 +143,9 @@ export function ExportarPdfDialog({
           </div>
 
           <p className="text-[11px] text-muted-foreground leading-snug mt-2.5">
-            A contagem já considera os filtros e a busca do quadro. No PDF os cards saem do
-            cadastro mais recente para o mais antigo, com a etapa de cada um.
+            A contagem já considera os filtros e a busca do quadro. No PDF cada coluna vira
+            um bloco com seu subtotal, na ordem do quadro, e dentro dele os cards saem do
+            cadastro mais recente para o mais antigo.
           </p>
         </div>
 
@@ -146,7 +157,7 @@ export function ExportarPdfDialog({
             </p>
           ) : (
             <p className="text-[12px] flex-1">
-              <b className="tabular-nums">{marcadas.length}</b> de {colunas.length} colunas
+              <b className="tabular-nums">{selecionadas.length}</b> de {colunas.length} colunas
               <span className="text-muted-foreground"> · </span>
               <b className="tabular-nums text-violet-700 dark:text-violet-300">{totalCards}</b>{" "}
               cards
