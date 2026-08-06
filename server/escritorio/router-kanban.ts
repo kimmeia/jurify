@@ -1616,7 +1616,10 @@ export const kanbanRouter = router({
             ...(filtros.funilId ? [eq(kanbanFunis.id, filtros.funilId)] : []),
           ),
         )
-        .orderBy(kanbanColunas.ordem, kanbanColunas.id);
+        // Ordem do quadro — é ela que define a ordem dos blocos no PDF.
+        // Sem o nome do funil na frente, exportar todos os funis intercala
+        // as colunas de funis diferentes que tenham a mesma `ordem`.
+        .orderBy(kanbanFunis.nome, kanbanColunas.ordem, kanbanColunas.id);
 
       const escolhidas = recortarColunas(colunasRows, filtros.colunasIds);
 
@@ -1665,6 +1668,7 @@ export const kanbanRouter = router({
           clienteNome: ctt?.nome ?? null,
           titulo: card.titulo,
           funilNome: col?.funilNome ?? "—",
+          colunaId: card.colunaId,
           colunaNome: col?.nome ?? "—",
           responsavelNome: card.responsavelId ? mapResp.get(card.responsavelId) ?? null : null,
           criadoEm: card.createdAt.toISOString(),
@@ -1692,7 +1696,14 @@ export const kanbanRouter = router({
 
       const { gerarKanbanCardsPdf } = await import("./kanban-cards-pdf");
       const buffer = await gerarKanbanCardsPdf({
-        data: { cards: enriquecidos, funilLabel, colunasLabel, responsavelLabel, periodoLabel },
+        data: {
+          cards: enriquecidos,
+          grupos: escolhidas.map((c) => ({ id: c.id, nome: c.nome, funilNome: c.funilNome })),
+          funilLabel,
+          colunasLabel,
+          responsavelLabel,
+          periodoLabel,
+        },
         nomeEscritorio: esc.escritorio.nome,
       });
 

@@ -12,6 +12,7 @@ import { describe, it, expect } from "vitest";
 import fs from "fs";
 import {
   abreviarNome,
+  agruparPorColuna,
   diasDesde,
   gerarKanbanCardsPdf,
   idadeCurta,
@@ -25,6 +26,7 @@ function card(over: Partial<CardPdf> = {}): CardPdf {
     clienteNome: "Maria Eduarda Nogueira",
     titulo: "Revisional — contrato 4471",
     funilNome: "Cível — Revisional",
+    colunaId: 1,
     colunaNome: "Triagem",
     responsavelNome: "Milena Mello Mansur",
     criadoEm: "2026-08-04T09:00:00.000Z",
@@ -39,16 +41,21 @@ function card(over: Partial<CardPdf> = {}): CardPdf {
 const LISTA: CardPdf[] = [
   card(),
   card({ clienteNome: "Antônio Marcos Vieira", titulo: "Revisional — Caixa", criadoEm: "2026-08-03T09:00:00.000Z", prioridade: "media", valorEstimado: 11500 }),
-  card({ clienteNome: "Construtora Vale Verde Ltda", titulo: "Rescisão indireta — 3 empregados", funilNome: "Trabalhista", colunaNome: "Documentação", responsavelNome: "Pablo Sousa Silva", criadoEm: "2026-08-02T09:00:00.000Z", prazo: "2026-08-12T00:00:00.000Z", valorEstimado: 38000 }),
-  card({ clienteNome: "Ana Paula Rocha dos Santos", titulo: "Aposentadoria por tempo de contribuição", funilNome: "Previdenciário", colunaNome: "Aguardando decisão", criadoEm: "2026-07-19T09:00:00.000Z", prazo: null, prioridade: "media", valorEstimado: 18400 }),
-  card({ clienteNome: "Distribuidora Aliança Ltda", titulo: "Trabalhista — acordo em execução", funilNome: "Trabalhista", colunaNome: "Aguardando decisão", responsavelNome: "Pablo Sousa Silva", criadoEm: "2026-05-14T09:00:00.000Z", prazo: null, valorEstimado: 47600 }),
+  card({ clienteNome: "Construtora Vale Verde Ltda", titulo: "Rescisão indireta — 3 empregados", funilNome: "Trabalhista", colunaId: 2, colunaNome: "Documentação", responsavelNome: "Pablo Sousa Silva", criadoEm: "2026-08-02T09:00:00.000Z", prazo: "2026-08-12T00:00:00.000Z", valorEstimado: 38000 }),
+  card({ clienteNome: "Ana Paula Rocha dos Santos", titulo: "Aposentadoria por tempo de contribuição", funilNome: "Previdenciário", colunaId: 3, colunaNome: "Aguardando decisão", criadoEm: "2026-07-19T09:00:00.000Z", prazo: null, prioridade: "media", valorEstimado: 18400 }),
+  card({ clienteNome: "Distribuidora Aliança Ltda", titulo: "Trabalhista — acordo em execução", funilNome: "Trabalhista", colunaId: 3, colunaNome: "Aguardando decisão", responsavelNome: "Pablo Sousa Silva", criadoEm: "2026-05-14T09:00:00.000Z", prazo: null, valorEstimado: 47600 }),
 ];
 
 const BASE = {
   nomeEscritorio: "Rocha & Associados Advocacia",
   agora: AGORA,
 };
-const META = { funilLabel: "Todos", colunasLabel: "Todas", responsavelLabel: "Todos", periodoLabel: "Todo o período" };
+const GRUPOS = [
+  { id: 1, nome: "Triagem", funilNome: "Cível — Revisional" },
+  { id: 2, nome: "Documentação", funilNome: "Trabalhista" },
+  { id: 3, nome: "Aguardando decisão", funilNome: "Previdenciário" },
+];
+const META = { grupos: GRUPOS, funilLabel: "Todos", colunasLabel: "Todas", responsavelLabel: "Todos", periodoLabel: "Todo o período" };
 
 function ehPdfValido(buf: Buffer) {
   expect(Buffer.isBuffer(buf)).toBe(true);
@@ -149,6 +156,7 @@ describe("gerarKanbanCardsPdf", () => {
     const buf = await gerarKanbanCardsPdf({
       data: {
         cards: LISTA,
+        grupos: GRUPOS,
         funilLabel: "Cível — Revisional",
         colunasLabel: "Triagem, Documentação, Petição inicial",
         responsavelLabel: "Milena Mello Mansur",
@@ -157,5 +165,44 @@ describe("gerarKanbanCardsPdf", () => {
       ...BASE,
     });
     ehPdfValido(buf);
+  });
+});
+
+describe("agruparPorColuna", () => {
+  const c = (id: number, nome: string) => ({ colunaId: id, nome });
+  const grupos = [
+    { id: 1, nome: "Triagem" },
+    { id: 2, nome: "Documentação" },
+    { id: 3, nome: "Encerrado" },
+  ];
+
+  it("os blocos saem na ordem do quadro, não na ordem dos cards", () => {
+    const blocos = agruparPorColuna([c(3, "a"), c(1, "b"), c(2, "c")], grupos);
+    expect(blocos.map((b) => b.nome)).toEqual(["Triagem", "Documentação", "Encerrado"]);
+  });
+
+  it("dentro do bloco, a ordem que veio do servidor é preservada", () => {
+    // O servidor já entrega createdAt desc; reordenar aqui quebraria a
+    // promessa "do mais recente para o mais antigo".
+    const blocos = agruparPorColuna([c(1, "novo"), c(1, "medio"), c(1, "antigo")], grupos);
+    expect(blocos[0].cards.map((x) => x.nome)).toEqual(["novo", "medio", "antigo"]);
+  });
+
+  it("coluna sem card não vira bloco vazio", () => {
+    const blocos = agruparPorColuna([c(2, "a")], grupos);
+    expect(blocos).toHaveLength(1);
+    expect(blocos[0].nome).toBe("Documentação");
+  });
+
+  it("card de coluna fora da lista não some do papel", () => {
+    // O cabeçalho conta cards.length: descartar em silêncio faria o total do
+    // rodapé discordar do corpo num documento que vai ser conferido.
+    const blocos = agruparPorColuna([c(1, "a"), c(99, "orfao")], grupos);
+    expect(blocos.map((b) => b.nome)).toEqual(["Triagem", "Sem coluna"]);
+    expect(blocos.at(-1)!.cards.map((x) => x.nome)).toEqual(["orfao"]);
+  });
+
+  it("nenhum card não gera bloco nenhum", () => {
+    expect(agruparPorColuna([], grupos)).toEqual([]);
   });
 });
