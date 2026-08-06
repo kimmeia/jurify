@@ -48,7 +48,7 @@ const BASE = {
   nomeEscritorio: "Rocha & Associados Advocacia",
   agora: AGORA,
 };
-const META = { funilLabel: "Todos", responsavelLabel: "Todos", periodoLabel: "Todo o período" };
+const META = { funilLabel: "Todos", colunasLabel: "Todas", responsavelLabel: "Todos", periodoLabel: "Todo o período" };
 
 function ehPdfValido(buf: Buffer) {
   expect(Buffer.isBuffer(buf)).toBe(true);
@@ -150,6 +150,7 @@ describe("gerarKanbanCardsPdf", () => {
       data: {
         cards: LISTA,
         funilLabel: "Cível — Revisional",
+        colunasLabel: "Triagem, Documentação, Petição inicial",
         responsavelLabel: "Milena Mello Mansur",
         periodoLabel: "01/07/2026 a 31/07/2026",
       },

@@ -19,7 +19,7 @@ import {
   User, AlertTriangle, Clock, ChevronLeft, Edit, Scale,
   ExternalLink, ArrowRight, Tag, X, Settings, Upload, CheckCircle2,
   Archive, FileDown, Search, Briefcase, MessageSquare, Paperclip, AlertCircle,
-  Wallet,
+  Wallet, ChevronDown,
 } from "lucide-react";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
 import { useLocation } from "wouter";
@@ -31,6 +31,7 @@ import { FiltrosBar, type FiltrosKanban, FILTROS_VAZIOS } from "./kanban/filtros
 import { ImportarTrelloDialog } from "./kanban/ImportarTrelloDialog";
 import { baixarBlob, base64ToBlob } from "./financeiro/helpers";
 import { TimelineCard } from "./kanban/timeline-card";
+import { ExportarPdfDialog, type ColunaExport } from "./kanban/ExportarPdfDialog";
 
 const PRIORIDADE_COR: Record<string, string> = {
   alta: "border-l-red-500 bg-red-50/30",
@@ -57,6 +58,7 @@ export default function Kanban() {
   // (case-insensitive). Tudo já vem enriquecido em obterFunil, então é
   // instantâneo sem precisar mexer no backend.
   const [buscaTexto, setBuscaTexto] = useState("");
+  const [exportarAberto, setExportarAberto] = useState(false);
   // Default: cada coluna mostra 5 cards. Usuário expande pra ver todos.
   const CARDS_INICIAIS = 5;
   const [colunasExpandidas, setColunasExpandidas] = useState<Set<number>>(new Set());
@@ -121,6 +123,7 @@ export default function Kanban() {
   const exportarPdfMut = (trpc as any).kanban?.exportarCardsPdf?.useMutation?.({
     onSuccess: (r: { filename: string; base64: string; mimeType: string; total: number }) => {
       baixarBlob(base64ToBlob(r.base64, r.mimeType), r.filename, r.mimeType);
+      setExportarAberto(false);
       toast.success(
         r.total === 1 ? "PDF com 1 card baixado" : `PDF com ${r.total} cards baixado`,
       );
@@ -312,6 +315,12 @@ export default function Kanban() {
   const totalCardsFiltrados = colunas.reduce(
     (acc: number, col: any) => acc + (col.cards?.length || 0),
     0,
+  );
+  // A contagem do diálogo sai de `colunas` (já com busca aplicada) pra que o
+  // número ao lado de cada coluna seja o que de fato vai sair no papel.
+  const colunasParaExportar: ColunaExport[] = useMemo(
+    () => colunas.map((c: any) => ({ id: c.id, nome: c.nome, total: c.cards?.length || 0 })),
+    [colunas],
   );
 
   const reordenarColunasMut = (trpc as any).kanban.reordenarColunas.useMutation({
@@ -799,20 +808,13 @@ export default function Kanban() {
               {mostrarArquivados ? "Mostrando arquivados" : "Arquivados"}
             </button>
 
-            {/* Exporta a lista exatamente como está na tela — os mesmos
-                filtros, inclusive a busca textual. */}
+            {/* Abre a escolha de colunas. O PDF continua saindo com os
+                mesmos filtros da tela, inclusive a busca textual. */}
             <button
-              onClick={() =>
-                exportarPdfMut?.mutate?.({
-                  funilId: funilAtivo ?? undefined,
-                  ...filtros,
-                  busca: buscaTexto.trim() || undefined,
-                  mostrarArquivados,
-                })
-              }
+              onClick={() => setExportarAberto(true)}
               disabled={!funilAtivo || exportarPdfMut?.isPending}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-white border-slate-200 text-slate-600 hover:border-slate-300 transition-all disabled:opacity-50"
-              title="Baixa a lista de cards em PDF, com os filtros aplicados"
+              title="Escolhe as colunas e baixa a lista de cards em PDF"
             >
               {exportarPdfMut?.isPending ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -820,6 +822,7 @@ export default function Kanban() {
                 <FileDown className="h-3 w-3" />
               )}
               Exportar PDF
+              <ChevronDown className="h-3 w-3" />
             </button>
           </div>
 
@@ -1482,6 +1485,23 @@ export default function Kanban() {
         onOpenChange={(o) => { if (!o) setModalCobranca(null); }}
         ctx={modalCobranca}
         onConcluido={() => { setModalCobranca(null); refetchFunil(); }}
+      />
+
+      <ExportarPdfDialog
+        open={exportarAberto}
+        onClose={() => setExportarAberto(false)}
+        funilNome={listaFunis.find((f: any) => f.id === funilAtivo)?.nome ?? "—"}
+        colunas={colunasParaExportar}
+        gerando={!!exportarPdfMut?.isPending}
+        onExportar={(colunasIds) =>
+          exportarPdfMut?.mutate?.({
+            funilId: funilAtivo ?? undefined,
+            colunasIds,
+            ...filtros,
+            busca: buscaTexto.trim() || undefined,
+            mostrarArquivados,
+          })
+        }
       />
     </div>
   );

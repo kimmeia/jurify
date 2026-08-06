@@ -25,8 +25,9 @@ function dadosCompletos(): ComercialDashboardData {
     kpis: {
       faturado: 84350,
       variacaoFaturado: 12.4,
-      contratos: 12,
-      variacaoContratos: 20,
+      clientesPagantes: 9,
+      variacaoClientesPagantes: 20,
+      clientesFechados: 14,
       contratosFechados: 18,
       variacaoContratosFechados: 5.9,
       valorTotalFechado: 133500,
@@ -130,5 +131,34 @@ describe("gerarComercialPdf", () => {
     data.filtros = { setorId: 7, atendenteId: 2 };
     const buf = await gerarComercialPdf({ data, detalhes: detalhesCompletos(), nomeEscritorio: "Escritório Teste" });
     ehPdfValido(buf);
+  });
+});
+
+describe("KPI de clientes que pagaram", () => {
+  it("um cliente pagando várias cobranças não vira vários", async () => {
+    // O caso que originou a mudança: o escritório recebeu duas cobranças de
+    // R$ 1.250 do MESMO cliente e o card dizia "2 contratos pagos". A
+    // contagem passou a ser por cliente, então aqui o PDF precisa sair com
+    // 1 sobre 8 — e não estourar por causa da razão < 1.
+    const d = dadosCompletos();
+    d.kpis.faturado = 2500;
+    d.kpis.clientesPagantes = 1;
+    d.kpis.clientesFechados = 8;
+    d.kpis.contratosFechados = 8;
+    d.kpis.ticketMedio = 2500;
+
+    const pdf = await gerarComercialPdf({ data: d, detalhes: [], nomeEscritorio: "Escritório Teste" });
+    expect(pdf.length).toBeGreaterThan(3000);
+  });
+
+  it("sem ninguém fechando no período, a razão não divide por zero", async () => {
+    const d = dadosCompletos();
+    d.kpis.clientesPagantes = 0;
+    d.kpis.clientesFechados = 0;
+    d.kpis.contratosFechados = 0;
+    d.kpis.valorTotalFechado = 0;
+
+    const pdf = await gerarComercialPdf({ data: d, detalhes: [], nomeEscritorio: "Escritório Teste" });
+    expect(pdf.length).toBeGreaterThan(3000);
   });
 });

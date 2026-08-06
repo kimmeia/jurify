@@ -10,7 +10,7 @@ import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanCom
 import { eq, and, desc, asc, like, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "./check-permission";
-import { casaBusca, casaTag, condicoesCards } from "./kanban-filtros";
+import { casaBusca, casaTag, condicoesCards, recortarColunas, rotuloColunas } from "./kanban-filtros";
 
 /** Verifica se o colaborador pode mexer nesse card quando a permissão é
  *  "verProprios" only. Considera owner = responsavelId. */
@@ -1573,6 +1573,8 @@ export const kanbanRouter = router({
     .input(
       z.object({
         funilId: z.number().int().positive().optional(),
+        /** Recorte de colunas. Ausente ou vazio = o funil inteiro. */
+        colunasIds: z.array(z.number().int().positive()).max(200).optional(),
         responsavelId: z.number().int().positive().optional(),
         prioridade: z.enum(["baixa", "media", "alta"]).optional(),
         prazoFiltro: z.enum(["vencidos", "hoje", "7dias", "sem_prazo"]).optional(),
@@ -1613,17 +1615,20 @@ export const kanbanRouter = router({
             eq(kanbanFunis.escritorioId, esc.escritorio.id),
             ...(filtros.funilId ? [eq(kanbanFunis.id, filtros.funilId)] : []),
           ),
-        );
+        )
+        .orderBy(kanbanColunas.ordem, kanbanColunas.id);
+
+      const escolhidas = recortarColunas(colunasRows, filtros.colunasIds);
 
       const filtrarProprios = !perm.verTodos && perm.verProprios;
-      const cards = colunasRows.length === 0
+      const cards = escolhidas.length === 0
         ? []
         : await db
           .select()
           .from(kanbanCards)
           .where(and(...condicoesCards({
             escritorioId: esc.escritorio.id,
-            colunasIds: colunasRows.map((c) => c.id),
+            colunasIds: escolhidas.map((c) => c.id),
             filtros,
             travarNoColaborador: filtrarProprios ? perm.colaboradorId : null,
           })))
@@ -1674,6 +1679,7 @@ export const kanbanRouter = router({
       const funilLabel = filtros.funilId
         ? (colunasRows[0]?.funilNome ?? `#${filtros.funilId}`)
         : "Todos";
+      const colunasLabel = rotuloColunas(colunasRows, escolhidas);
       const responsavelLabel = filtrarProprios
         ? (esc.colaborador ? "Somente os meus" : "—")
         : filtros.responsavelId
@@ -1686,7 +1692,7 @@ export const kanbanRouter = router({
 
       const { gerarKanbanCardsPdf } = await import("./kanban-cards-pdf");
       const buffer = await gerarKanbanCardsPdf({
-        data: { cards: enriquecidos, funilLabel, responsavelLabel, periodoLabel },
+        data: { cards: enriquecidos, funilLabel, colunasLabel, responsavelLabel, periodoLabel },
         nomeEscritorio: esc.escritorio.nome,
       });
 
