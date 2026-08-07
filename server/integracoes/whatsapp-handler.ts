@@ -427,6 +427,15 @@ export async function processarEchoCelular(
 /** Envia o auto-reply fixo configurado no canal. Se vazio/null, não envia nada
  *  (silêncio deliberado — operador atende manualmente pela UI de Atendimento). */
 export async function enviarAutoReply(canalId: number, conversaId: number, chatIdExterno: string) {
+  // Bot pausado (conversa em_atendimento) NÃO auto-responde: o dispatcher
+  // devolve `executou: false` tanto pra "sem cenário ativo" quanto pra "bot
+  // pausado", e sem esta trava o atendente assumia a conversa e o auto-reply
+  // seguia respondendo por cima dele. Guard mora aqui pra valer pra todo caller.
+  const status = await pegarStatusConversa(conversaId);
+  if (status === "em_atendimento") {
+    log.info({ conversaId }, "[AutoReply] bot pausado — auto-reply do canal não enviado");
+    return;
+  }
   const texto = await obterAutoReplyCanal(canalId);
   if (!texto) return;
   await enviarResposta(canalId, conversaId, chatIdExterno, texto);
