@@ -3780,8 +3780,10 @@ export const jurisiaConversas = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     escritorioId: int("escritorioIdJurisConv").notNull(),
-    /** FK → motor_monitoramentos.id (o processo). */
-    monitoramentoId: int("monitoramentoIdJurisConv").notNull(),
+    /** FK → motor_monitoramentos.id. NULL = pesquisa jurisprudencial livre,
+     *  que não pertence a processo nenhum. O UNIQUE abaixo continua válido
+     *  porque NULL é distinto de NULL num índice único do MySQL. */
+    monitoramentoId: int("monitoramentoIdJurisConv"),
     titulo: varchar("tituloJurisConv", { length: 200 }),
     criadoPor: int("criadoPorJurisConv"),
     ultimaMensagemAt: timestamp("ultimaMensagemAtJurisConv"),

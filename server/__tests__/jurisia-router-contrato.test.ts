@@ -22,21 +22,28 @@ describe("router jurisia", () => {
   it("expõe exatamente as procedures que a tela consome", () => {
     const nomes = Object.keys(defs()).filter((k) => k.startsWith("jurisia."));
     expect(nomes.sort()).toEqual([
+      "jurisia.acervo",
       "jurisia.casosRecentes",
       "jurisia.conversa",
       "jurisia.estado",
       "jurisia.perguntar",
+      "jurisia.pesquisa",
+      "jurisia.pesquisar",
+      "jurisia.pesquisas",
     ]);
   });
 
-  it("perguntar é mutation; o resto é query", () => {
+  it("só perguntar e pesquisar são mutation; o resto é query", () => {
     // Trocar o tipo quebra a tela sem quebrar o tsc — o client usa
     // useMutation/useQuery e o erro só aparece em runtime.
     const p = defs();
-    expect(p["jurisia.perguntar"]._def.type).toBe("mutation");
-    expect(p["jurisia.estado"]._def.type).toBe("query");
-    expect(p["jurisia.conversa"]._def.type).toBe("query");
-    expect(p["jurisia.casosRecentes"]._def.type).toBe("query");
+    const mutations = ["jurisia.perguntar", "jurisia.pesquisar"];
+    for (const [nome, proc] of Object.entries(p)) {
+      if (!nome.startsWith("jurisia.")) continue;
+      expect((proc as any)._def.type, nome).toBe(
+        mutations.includes(nome) ? "mutation" : "query",
+      );
+    }
   });
 
   it("nenhuma procedura do JurisIA é pública", () => {

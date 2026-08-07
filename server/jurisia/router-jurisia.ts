@@ -1,14 +1,23 @@
 /**
- * JurisIA (beta) — perguntas sobre um processo do acervo do escritório.
+ * JurisIA (beta) — dois modos, duas bases, uma cota.
  *
- * O "caso com memória" não é criado por ninguém: ele nasce da primeira
- * pergunta, porque o processo já está no banco. É a diferença estrutural em
- * relação a um assistente que exige o advogado criar o caso e subir os autos.
+ * 1. CONVERSA DE PROCESSO (`conversa`/`perguntar`): responde sobre um caso do
+ *    escritório, a partir das movimentações dele. O "caso com memória" não é
+ *    criado por ninguém — nasce da primeira pergunta, porque o processo já
+ *    está no banco.
+ *
+ * 2. PESQUISA JURISPRUDENCIAL (`pesquisa`/`pesquisar`): responde sobre o
+ *    acervo público do DataJud, que é global e igual pra todos os escritórios.
+ *
+ * As duas bases NÃO se encontram, e é de propósito: o que o motor captura dos
+ * autos de um escritório é sigilo do cliente dele, e o acervo público é o
+ * produto vendido a todos. Na tabela, a separação é `monitoramentoId` NULL —
+ * e cada consulta prova de que lado está antes de gravar.
  */
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -23,7 +32,10 @@ import {
 import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { avaliarCota, competenciaDe, type EstadoCota } from "../../shared/jurisia-cota";
 import type { EventoContexto } from "../../shared/jurisia-contexto";
+import type { PesquisaGravada } from "../../shared/jurisia-recorte";
 import { perguntarSobreProcesso } from "./perguntar";
+import { pesquisarNoAcervo } from "./pesquisar";
+import { tribunaisDoAcervo } from "./buscar-acervo";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("jurisia");
@@ -94,6 +106,30 @@ async function processoDoEscritorio(
     ))
     .limit(1);
   return proc ?? null;
+}
+
+/**
+ * Pesquisa livre do escritório.
+ *
+ * O `IS NULL` não é detalhe: sem ele, mandar o id de uma conversa de processo
+ * pra cá gravaria resposta do acervo público dentro do histórico de um caso do
+ * escritório, misturando as duas coisas que o desenho separa.
+ */
+async function pesquisaDoEscritorio(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  escritorioId: number,
+  conversaId: number,
+) {
+  const [conv] = await db
+    .select({ id: jurisiaConversas.id, titulo: jurisiaConversas.titulo })
+    .from(jurisiaConversas)
+    .where(and(
+      eq(jurisiaConversas.id, conversaId),
+      eq(jurisiaConversas.escritorioId, escritorioId),
+      isNull(jurisiaConversas.monitoramentoId),
+    ))
+    .limit(1);
+  return conv ?? null;
 }
 
 function parseAnalise(raw: string | null): { pontos?: string[]; titulo?: string; ato?: string | null } | null {
@@ -182,6 +218,188 @@ export const jurisiaRouter = router({
         .orderBy(desc(jurisiaConversas.ultimaMensagemAt))
         .limit(input?.limite ?? 20);
       return rows;
+    }),
+
+  /** O que existe no acervo público — a tela precisa dizer o que já foi
+   *  coletado antes de o advogado perguntar sobre o que não foi. */
+  acervo: protectedProcedure.query(async ({ ctx }) => {
+    await contexto(ctx.user.id);
+    const tribunais = await tribunaisDoAcervo();
+    return {
+      tribunais,
+      processos: tribunais.reduce((s, t) => s + t.processos, 0),
+    };
+  }),
+
+  /** Pesquisas jurisprudenciais do escritório — as conversas sem processo. */
+  pesquisas: protectedProcedure
+    .input(z.object({ limite: z.number().int().min(1).max(50).default(30) }).optional())
+    .query(async ({ ctx, input }) => {
+      const { db, esc } = await contexto(ctx.user.id);
+      return db
+        .select({
+          id: jurisiaConversas.id,
+          titulo: jurisiaConversas.titulo,
+          ultimaMensagemAt: jurisiaConversas.ultimaMensagemAt,
+          createdAt: jurisiaConversas.createdAt,
+        })
+        .from(jurisiaConversas)
+        .where(and(
+          eq(jurisiaConversas.escritorioId, esc.escritorio.id),
+          isNull(jurisiaConversas.monitoramentoId),
+        ))
+        .orderBy(desc(jurisiaConversas.ultimaMensagemAt), desc(jurisiaConversas.id))
+        .limit(input?.limite ?? 30);
+    }),
+
+  /** Uma pesquisa. `conversaId` null = aba nova, ainda sem nada gravado. */
+  pesquisa: protectedProcedure
+    .input(z.object({ conversaId: z.number().int().positive().nullable() }))
+    .query(async ({ ctx, input }) => {
+      const { db, esc } = await contexto(ctx.user.id);
+      if (input.conversaId == null) return { titulo: null, mensagens: [] };
+
+      const conv = await pesquisaDoEscritorio(db, esc.escritorio.id, input.conversaId);
+      if (!conv) throw new TRPCError({ code: "NOT_FOUND", message: "Pesquisa não encontrada." });
+
+      const mensagens = await db
+        .select({
+          id: jurisiaMensagens.id,
+          papel: jurisiaMensagens.papel,
+          conteudo: jurisiaMensagens.conteudo,
+          respostaJson: jurisiaMensagens.respostaJson,
+          recusa: jurisiaMensagens.recusa,
+          createdAt: jurisiaMensagens.createdAt,
+        })
+        .from(jurisiaMensagens)
+        .where(eq(jurisiaMensagens.conversaId, conv.id))
+        .orderBy(asc(jurisiaMensagens.id));
+
+      return {
+        titulo: conv.titulo,
+        mensagens: mensagens.map((m) => ({
+          id: m.id,
+          papel: m.papel,
+          conteudo: m.conteudo,
+          resposta: m.respostaJson ? JSON.parse(m.respostaJson) : null,
+          recusa: m.recusa,
+          createdAt: m.createdAt,
+        })),
+      };
+    }),
+
+  /**
+   * Pergunta ao acervo público. Sem `conversaId`, a pesquisa nasce aqui —
+   * mesma ideia da conversa de processo: ninguém "cria" nada antes de ter o
+   * que perguntar.
+   */
+  pesquisar: protectedProcedure
+    .input(z.object({
+      conversaId: z.number().int().positive().nullish(),
+      pergunta: z.string().min(3).max(2000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, esc } = await contexto(ctx.user.id);
+      const fuso = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+
+      const planSlug = await planoDoUsuario(ctx.user.id);
+      const { cota, competencia } = await estadoCota(db, esc.escritorio.id, planSlug, fuso);
+      if (!cota.pode) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: cota.semPlano
+            ? "Seu plano não inclui o JurisIA."
+            : `Você usou as ${cota.limite} mensagens do mês.`,
+          cause: { motivo: cota.semPlano ? "sem_plano" : "cota_esgotada" },
+        });
+      }
+
+      let conversaId = input.conversaId ?? null;
+      if (conversaId != null) {
+        const existente = await pesquisaDoEscritorio(db, esc.escritorio.id, conversaId);
+        if (!existente) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Pesquisa não encontrada." });
+        }
+      } else {
+        const [inserida] = await db.insert(jurisiaConversas).values({
+          escritorioId: esc.escritorio.id,
+          monitoramentoId: null,
+          titulo: input.pergunta.slice(0, 200),
+          criadoPor: esc.colaborador?.id ?? null,
+          ultimaMensagemAt: new Date(),
+        });
+        conversaId = Number((inserida as { insertId: number }).insertId);
+      }
+
+      const anteriores = await db
+        .select({ papel: jurisiaMensagens.papel, conteudo: jurisiaMensagens.conteudo })
+        .from(jurisiaMensagens)
+        .where(eq(jurisiaMensagens.conversaId, conversaId))
+        .orderBy(desc(jurisiaMensagens.id))
+        .limit(HISTORICO_TURNOS);
+
+      const resultado = await pesquisarNoAcervo({
+        escritorioId: esc.escritorio.id,
+        pergunta: input.pergunta,
+        historico: anteriores.reverse().map((m) => ({ papel: m.papel, texto: m.conteudo })),
+      });
+
+      if (!resultado.ok) {
+        log.warn(
+          { escritorioId: esc.escritorio.id, conversaId, motivo: resultado.recusa },
+          "JurisIA recusou a resposta da pesquisa",
+        );
+      }
+
+      const gravada: PesquisaGravada | null = resultado.resposta
+        ? {
+          ...resultado.resposta,
+          fontesDetalhe: resultado.fontes,
+          estatistica: resultado.estatistica,
+          descricaoFiltro: resultado.descricaoFiltro,
+        }
+        : null;
+
+      await db.insert(jurisiaMensagens).values({
+        conversaId,
+        escritorioId: esc.escritorio.id,
+        papel: "usuario",
+        conteudo: input.pergunta,
+        autorId: esc.colaborador?.id ?? null,
+      });
+      await db.insert(jurisiaMensagens).values({
+        conversaId,
+        escritorioId: esc.escritorio.id,
+        papel: "assistente",
+        conteudo: resultado.resposta?.conclusao ?? "",
+        respostaJson: gravada ? JSON.stringify(gravada) : null,
+        recusa: resultado.recusa,
+      });
+
+      await db
+        .update(jurisiaConversas)
+        .set({ ultimaMensagemAt: new Date() })
+        .where(eq(jurisiaConversas.id, conversaId));
+
+      // Mesma regra da conversa de processo: a chamada ao provedor foi paga
+      // mesmo quando a trava recusou.
+      await db
+        .insert(jurisiaUso)
+        .values({ escritorioId: esc.escritorio.id, competencia, mensagens: 1 })
+        .onDuplicateKeyUpdate({ set: { mensagens: sql`${jurisiaUso.mensagens} + 1` } });
+
+      const { cota: cotaDepois } = await estadoCota(db, esc.escritorio.id, planSlug, fuso);
+
+      return {
+        ok: resultado.ok,
+        conversaId,
+        resposta: gravada,
+        recusa: resultado.recusa,
+        estatistica: resultado.estatistica,
+        descricaoFiltro: resultado.descricaoFiltro,
+        semBase: resultado.semBase,
+        cota: cotaDepois,
+      };
     }),
 
   perguntar: protectedProcedure

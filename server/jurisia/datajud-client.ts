@@ -6,9 +6,14 @@
  * desperdiçada; paginar percorre só o que existe, em ordens de magnitude menos
  * requisições.
  *
- * A chave vive em `admin_integracoes` (provedor "datajud"), como as outras
- * integrações — e o status ali é o que a tela de admin lê. Integração que
- * falha calada é o padrão que já custou caro nesta base.
+ * A chave da API Pública é publicada pelo próprio CNJ e é a mesma para todos
+ * os consumidores — não é credencial de ninguém. Por isso ela vem embutida:
+ * exigir cadastro de um segredo que não é segredo só transformava o módulo em
+ * tela de erro no primeiro uso.
+ *
+ * A ordem de precedência existe pra o dia em que o CNJ rotacionar a chave:
+ * `admin_integracoes` (provedor "datajud") vence, depois `DATAJUD_API_KEY`,
+ * depois a pública. Assim dá pra consertar sem esperar deploy.
  */
 
 import { createLogger } from "../_core/logger";
@@ -16,6 +21,10 @@ import { createLogger } from "../_core/logger";
 const log = createLogger("datajud");
 
 const BASE = "https://api-publica.datajud.cnj.jus.br";
+
+/** Chave pública documentada em datajud-wiki.cnj.jus.br/api-publica/acesso. */
+const CHAVE_PUBLICA_CNJ =
+  "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
 
 export interface PaginaDataJud {
   hits: unknown[];
@@ -60,7 +69,7 @@ export function proximaPagina(resposta: unknown, tamanhoPedido: number): PaginaD
   return { hits, proximoCursor: JSON.stringify(sort), total };
 }
 
-async function chaveDataJud(): Promise<string | null> {
+async function chaveCadastrada(): Promise<string | null> {
   const { getDb } = await import("../db");
   const db = await getDb();
   if (!db) return null;
@@ -76,9 +85,15 @@ async function chaveDataJud(): Promise<string | null> {
     const { decrypt } = await import("../escritorio/crypto-utils");
     return decrypt(reg.apiKeyEncrypted, reg.apiKeyIv, reg.apiKeyTag);
   } catch (e) {
-    log.warn({ e: String(e) }, "falha ao decriptar chave do DataJud");
+    // Chave cadastrada mas ilegível não pode derrubar o módulo em silêncio:
+    // cai pra pública e o warn conta o que houve.
+    log.warn({ e: String(e) }, "falha ao decriptar chave do DataJud — usando a pública");
     return null;
   }
+}
+
+export async function chaveDataJud(): Promise<string> {
+  return (await chaveCadastrada()) || process.env.DATAJUD_API_KEY?.trim() || CHAVE_PUBLICA_CNJ;
 }
 
 /**
@@ -94,11 +109,6 @@ export async function buscarPagina(args: {
   timeoutMs?: number;
 }): Promise<PaginaDataJud> {
   const chave = await chaveDataJud();
-  if (!chave) {
-    throw new Error(
-      "Chave do DataJud não configurada. Cadastre em Admin → Integrações (provedor 'datajud').",
-    );
-  }
 
   const tamanho = Math.min(Math.max(args.tamanho ?? 100, 1), 1000);
   const corpo: Record<string, unknown> = {

@@ -10,6 +10,7 @@ import { describe, it, expect } from "vitest";
 import { cnjNormalizado, normalizarHit } from "../../shared/datajud-normalizar";
 import { deduzirDesfecho } from "../../shared/datajud-desfecho";
 import { proximaPagina } from "../jurisia/datajud-client";
+import { resumirAmostra } from "../../shared/datajud-amostra";
 
 const hit = (over: Record<string, unknown> = {}) => ({
   _source: {
@@ -222,5 +223,94 @@ describe("proximaPagina", () => {
   it("resposta fora do formato não quebra a varredura", () => {
     expect(proximaPagina(null, 100)).toEqual({ hits: [], proximoCursor: null, total: null });
     expect(proximaPagina({ erro: "x" }, 100).hits).toEqual([]);
+  });
+});
+
+describe("resumirAmostra", () => {
+  const proc = (over: Record<string, unknown> = {}) => ({
+    _source: {
+      numeroProcesso: `3057803682025806${String(Math.random()).slice(2, 6)}`,
+      tribunal: "TJCE",
+      nivelSigilo: 0,
+      classe: { codigo: 1116, nome: "Procedimento Comum Cível" },
+      assuntos: [{ codigo: 7771, nome: "Contratos Bancários" }],
+      orgaoJulgador: { codigo: 1, nome: "3ª Vara Cível" },
+      movimentos: [{ codigo: 26, nome: "Distribuição", dataHora: "2025-01-01T00:00:00Z" }],
+      ...over,
+    },
+  });
+
+  const comMovs = (nomes: string[]) =>
+    proc({
+      movimentos: nomes.map((nome, i) => ({
+        codigo: i,
+        nome,
+        dataHora: `2025-0${i + 1}-01T00:00:00Z`,
+      })),
+    });
+
+  it("separa aceitos, sigilosos e inválidos", () => {
+    const r = resumirAmostra([
+      proc(),
+      proc({ nivelSigilo: 2 }),
+      proc({ numeroProcesso: "123" }),
+    ]);
+    expect(r).toMatchObject({ lidos: 3, aceitos: 1, sigilosos: 1, invalidos: 1 });
+  });
+
+  it("conta por resultado", () => {
+    const r = resumirAmostra([
+      comMovs(["Distribuição", "Procedência"]),
+      comMovs(["Distribuição", "Improcedência"]),
+      comMovs(["Distribuição", "Procedência em Parte"]),
+    ]);
+    expect(r.porResultado).toMatchObject({ procedente: 1, improcedente: 1, parcial: 1 });
+    expect(r.semResultado).toBe(0);
+  });
+
+  it("junta os nomes que NÃO classificaram — é o insumo pra calibrar", () => {
+    // Se a sentença do tribunal se chama algo que as regras não cobrem, o
+    // nome precisa aparecer aqui pra a gente corrigir olhando dado real.
+    const r = resumirAmostra([
+      comMovs(["Distribuição", "Julgamento com resolução do mérito"]),
+      comMovs(["Distribuição", "Julgamento com resolução do mérito"]),
+      comMovs(["Distribuição", "Conclusos para sentença"]),
+    ]);
+    expect(r.semResultado).toBe(3);
+    expect(r.naoClassificados[0]).toEqual({ nome: "Julgamento com resolução do mérito", vezes: 2 });
+  });
+
+  it("olha só o ÚLTIMO movimento — 'juntada de petição' afogaria o sinal", () => {
+    const r = resumirAmostra([
+      comMovs(["Juntada de petição", "Juntada de petição", "Ato ordinatório praticado"]),
+    ]);
+    expect(r.naoClassificados).toEqual([{ nome: "Ato ordinatório praticado", vezes: 1 }]);
+  });
+
+  it("processo classificado não entra nos não-classificados", () => {
+    const r = resumirAmostra([comMovs(["Distribuição", "Procedência"])]);
+    expect(r.naoClassificados).toEqual([]);
+  });
+
+  it("traz exemplos com o movimento que decidiu, pra conferir a olho", () => {
+    const r = resumirAmostra([comMovs(["Distribuição", "Procedência em Parte"])]);
+    expect(r.exemplos[0]).toMatchObject({
+      classe: "Procedimento Comum Cível",
+      resultado: "parcial",
+      movimentoDecisivo: "Procedência em Parte",
+      movimentos: 2,
+    });
+  });
+
+  it("limita os exemplos pra a resposta não virar dump", () => {
+    const r = resumirAmostra(Array.from({ length: 50 }, () => proc()), 3);
+    expect(r.exemplos).toHaveLength(3);
+    expect(r.aceitos).toBe(50);
+  });
+
+  it("página vazia devolve zeros em vez de quebrar", () => {
+    const r = resumirAmostra([]);
+    expect(r).toMatchObject({ lidos: 0, aceitos: 0, semResultado: 0 });
+    expect(r.naoClassificados).toEqual([]);
   });
 });
