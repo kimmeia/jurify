@@ -76,6 +76,39 @@ import {
 } from "../../drizzle/schema";
 
 export const adminRouter = router({
+  // ─── JurisIA · robô de ingestão do DataJud ────────────────────────────────
+
+  /** Estado da varredura por tribunal — alimenta o painel do robô. */
+  jurisiaVarreduras: adminProcedure.query(async () => {
+    const { estadoVarreduras } = await import("../jurisia/varredura-datajud");
+    return estadoVarreduras();
+  }),
+
+  /**
+   * Dispara uma execução da varredura. É manual de propósito nesta fase: a
+   * primeira coisa que se quer saber de um robô novo é o que ele traz na
+   * primeira página, não descobrir de madrugada que ele rodou sozinho.
+   */
+  jurisiaVarrer: adminProcedure
+    .input(z.object({
+      tribunal: z.string().min(2).max(16),
+      alias: z.string().min(2).max(32),
+      maxPaginas: z.number().int().min(1).max(200).default(5),
+    }))
+    .mutation(async ({ input }) => {
+      const { varrerTribunal } = await import("../jurisia/varredura-datajud");
+      return varrerTribunal(input);
+    }),
+
+  /** Zera o cursor de um tribunal — usado quando a paginação corrompe. */
+  jurisiaReiniciarTribunal: adminProcedure
+    .input(z.object({ tribunal: z.string().min(2).max(16) }))
+    .mutation(async ({ input }) => {
+      const { reiniciarTribunal } = await import("../jurisia/varredura-datajud");
+      await reiniciarTribunal(input.tribunal);
+      return { ok: true };
+    }),
+
   /** Get comprehensive admin dashboard stats */
   stats: adminProcedure.query(async () => getAdminStats()),
 

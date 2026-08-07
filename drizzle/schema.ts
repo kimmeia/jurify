@@ -3829,3 +3829,86 @@ export const jurisiaUso = mysqlTable(
     unico: uniqueIndex("jurisia_uso_unico").on(t.escritorioId, t.competencia),
   }),
 );
+
+/**
+ * Acervo público do DataJud.
+ *
+ * Sem `escritorioId` de propósito: é dado público do CNJ, igual para todos.
+ * Misturar com as tabelas de conversa (que são por escritório) é o erro que
+ * faria acervo de um escritório vazar como estatística nacional.
+ */
+export const jurisiaProcessos = mysqlTable(
+  "jurisia_processos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    /** Só dígitos — é como o CNJ é comparado entre fontes. */
+    cnj: varchar("cnjJurisProc", { length: 20 }).notNull(),
+    tribunal: varchar("tribunalJurisProc", { length: 16 }).notNull(),
+    grau: varchar("grauJurisProc", { length: 8 }),
+    classeCodigo: int("classeCodigoJurisProc"),
+    classeNome: varchar("classeNomeJurisProc", { length: 255 }),
+    assuntoCodigo: int("assuntoCodigoJurisProc"),
+    assuntoNome: varchar("assuntoNomeJurisProc", { length: 255 }),
+    orgaoCodigo: int("orgaoCodigoJurisProc"),
+    orgaoNome: varchar("orgaoNomeJurisProc", { length: 255 }),
+    ajuizamentoEm: timestamp("ajuizamentoEmJurisProc"),
+    atualizadoEm: timestamp("atualizadoEmJurisProc"),
+    /** Deduzido dos movimentos. NULL = ainda não terminou. */
+    resultado: mysqlEnum("resultadoJurisProc", [
+      "procedente",
+      "parcial",
+      "improcedente",
+      "acordo",
+      "extinto_sem_merito",
+    ]),
+    resultadoEm: timestamp("resultadoEmJurisProc"),
+    /** Nome do movimento que gerou a classificação — o que se confere quando
+     *  a estatística sai estranha. */
+    resultadoMovimento: varchar("resultadoMovimentoJurisProc", { length: 255 }),
+    sincronizadoEm: timestamp("sincronizadoEmJurisProc").defaultNow().notNull(),
+  },
+  (t) => ({
+    porCnj: uniqueIndex("jurisia_proc_cnj").on(t.cnj),
+    // Do jeito que a pergunta é feita: "essa classe/assunto nessa vara dá quanto".
+    recorte: index("idx_juris_proc_recorte").on(
+      t.tribunal,
+      t.classeCodigo,
+      t.assuntoCodigo,
+      t.resultado,
+    ),
+  }),
+);
+
+export const jurisiaMovimentos = mysqlTable(
+  "jurisia_movimentos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    processoId: int("processoIdJurisMov").notNull(),
+    codigo: int("codigoJurisMov"),
+    nome: varchar("nomeJurisMov", { length: 255 }).notNull(),
+    dataHora: timestamp("dataHoraJurisMov").notNull(),
+  },
+  (t) => ({
+    porProcesso: index("idx_juris_mov_proc").on(t.processoId, t.dataHora),
+  }),
+);
+
+/** Estado da varredura por tribunal — o cursor é o `search_after` do ES. */
+export const jurisiaVarredura = mysqlTable(
+  "jurisia_varredura",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tribunal: varchar("tribunalJurisVarr", { length: 16 }).notNull(),
+    cursor: text("cursorJurisVarr"),
+    status: mysqlEnum("statusJurisVarr", ["fila", "rodando", "completo", "erro"])
+      .default("fila")
+      .notNull(),
+    processos: int("processosJurisVarr").default(0).notNull(),
+    sigilosos: int("sigilososJurisVarr").default(0).notNull(),
+    ultimoErro: varchar("ultimoErroJurisVarr", { length: 500 }),
+    ultimaExecucao: timestamp("ultimaExecucaoJurisVarr"),
+  },
+  (t) => ({
+    porTribunal: uniqueIndex("jurisia_varr_tribunal").on(t.tribunal),
+  }),
+);
