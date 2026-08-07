@@ -29,6 +29,8 @@ export interface PlanoLimites {
   /** null = ilimitado */
   maxMonitoramentosProcessos: number | null;
   creditosCalculosMes: number;
+  /** Mensagens do JurisIA por mês. 0 = módulo desligado no plano. */
+  jurisiaMensagensMes: number;
 }
 
 export interface Plano {

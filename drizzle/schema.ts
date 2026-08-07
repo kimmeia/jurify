@@ -2161,6 +2161,8 @@ export const planos = mysqlTable("planos", {
   maxAgentesIa: int("max_agentes_ia").notNull().default(0),
   maxMonitoramentosProcessos: int("max_monitoramentos_processos"),
   creditosCalculosMes: int("creditos_calculos_mes").notNull().default(0),
+  /** Mensagens do JurisIA por mês. 0 = módulo desligado no plano. */
+  jurisiaMensagensMes: int("jurisia_mensagens_mes").notNull().default(0),
 
   /** JSON array de slugs de módulos liberados (ver shared/modulos-app.ts). */
   modulosLiberados: json("modulos_liberados").notNull(),
@@ -3765,3 +3767,65 @@ export const relatoriosProgramadosEnvios = mysqlTable(
 );
 
 export type RelatorioProgramadoEnvio = typeof relatoriosProgramadosEnvios.$inferSelect;
+
+/**
+ * JurisIA — memória por caso.
+ *
+ * Uma conversa por processo por escritório: o "caso com memória" nasce da
+ * primeira pergunta, sem o advogado criar nada nem subir documento. O UNIQUE
+ * é o que garante isso.
+ */
+export const jurisiaConversas = mysqlTable(
+  "jurisia_conversas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdJurisConv").notNull(),
+    /** FK → motor_monitoramentos.id (o processo). */
+    monitoramentoId: int("monitoramentoIdJurisConv").notNull(),
+    titulo: varchar("tituloJurisConv", { length: 200 }),
+    criadoPor: int("criadoPorJurisConv"),
+    ultimaMensagemAt: timestamp("ultimaMensagemAtJurisConv"),
+    createdAt: timestamp("createdAtJurisConv").defaultNow().notNull(),
+  },
+  (t) => ({
+    unica: uniqueIndex("jurisia_conv_unica").on(t.escritorioId, t.monitoramentoId),
+    porEscritorio: index("idx_juris_conv_esc").on(t.escritorioId, t.ultimaMensagemAt),
+  }),
+);
+
+export const jurisiaMensagens = mysqlTable(
+  "jurisia_mensagens",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    conversaId: int("conversaIdJurisMsg").notNull(),
+    escritorioId: int("escritorioIdJurisMsg").notNull(),
+    papel: mysqlEnum("papelJurisMsg", ["usuario", "assistente"]).notNull(),
+    conteudo: text("conteudoJurisMsg").notNull(),
+    /** `RespostaJurisIA` validada. NULL nas mensagens do usuário. */
+    respostaJson: text("respostaJsonJurisMsg"),
+    /** Por que a trava barrou a resposta do modelo. Recusa que some é recusa
+     *  que ninguém audita — por isso fica gravada. */
+    recusa: varchar("recusaJurisMsg", { length: 255 }),
+    autorId: int("autorIdJurisMsg"),
+    createdAt: timestamp("createdAtJurisMsg").defaultNow().notNull(),
+  },
+  (t) => ({
+    porConversa: index("idx_juris_msg_conversa").on(t.conversaId, t.id),
+  }),
+);
+
+/** Uso mensal por escritório — é o que o limite do plano consulta. */
+export const jurisiaUso = mysqlTable(
+  "jurisia_uso",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdJurisUso").notNull(),
+    /** 'YYYY-MM' no fuso do escritório. */
+    competencia: varchar("competenciaJurisUso", { length: 7 }).notNull(),
+    mensagens: int("mensagensJurisUso").notNull().default(0),
+    atualizadoEm: timestamp("atualizadoEmJurisUso").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    unico: uniqueIndex("jurisia_uso_unico").on(t.escritorioId, t.competencia),
+  }),
+);
