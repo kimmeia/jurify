@@ -9,9 +9,10 @@
  *   modelo poder apontar caso concreto em vez de falar em abstrato.
  */
 
-import { and, desc, eq, gte, like, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, like, sql, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
-import { jurisiaProcessos } from "../../drizzle/schema";
+import { jurisiaMovimentos, jurisiaProcessos } from "../../drizzle/schema";
+import { montarPerfil, type EntradaPerfil, type PerfilRecorte } from "../../shared/jurisia-perfil";
 import type { ResultadoProcesso } from "../../shared/datajud-desfecho";
 import {
   MAX_FONTES_RECORTE,
@@ -116,6 +117,62 @@ export async function buscarRecorte(
       ajuizamentoEm: r.ajuizamentoEm ? r.ajuizamentoEm.toISOString() : null,
     })),
   };
+}
+
+/**
+ * Teto da amostra do perfil.
+ *
+ * Duração sai de duas colunas, mas os marcadores exigem varrer os movimentos
+ * de cada processo — num recorte de dezenas de milhares isso é uma query que
+ * ninguém quer no caminho de uma pergunta. 500 decididos recentes descrevem a
+ * prática atual da vara melhor do que a base inteira, que mistura o que o
+ * tribunal fazia há dez anos.
+ *
+ * O número aparece na tela junto do resultado: corte silencioso vira "medimos
+ * tudo" na cabeça de quem lê.
+ */
+export const LIMITE_PERFIL = 500;
+
+export async function perfilDoRecorte(f: FiltroRecorte): Promise<PerfilRecorte> {
+  const db = await getDb();
+  if (!db) throw new Error("Base de dados indisponível.");
+
+  const cond = condicoesRecorte(f);
+  cond.push(isNotNull(jurisiaProcessos.resultado));
+
+  const decididos = await db
+    .select({
+      id: jurisiaProcessos.id,
+      ajuizamentoEm: jurisiaProcessos.ajuizamentoEm,
+      resultadoEm: jurisiaProcessos.resultadoEm,
+    })
+    .from(jurisiaProcessos)
+    .where(and(...cond))
+    .orderBy(desc(jurisiaProcessos.resultadoEm), desc(jurisiaProcessos.id))
+    .limit(LIMITE_PERFIL);
+
+  if (decididos.length === 0) return montarPerfil([], LIMITE_PERFIL);
+
+  const ids = decididos.map((d) => d.id);
+  const movimentos = await db
+    .select({ processoId: jurisiaMovimentos.processoId, nome: jurisiaMovimentos.nome })
+    .from(jurisiaMovimentos)
+    .where(inArray(jurisiaMovimentos.processoId, ids));
+
+  const porProcesso = new Map<number, string[]>();
+  for (const m of movimentos) {
+    const lista = porProcesso.get(m.processoId);
+    if (lista) lista.push(m.nome);
+    else porProcesso.set(m.processoId, [m.nome]);
+  }
+
+  const entradas: EntradaPerfil[] = decididos.map((d) => ({
+    ajuizamentoEm: d.ajuizamentoEm ? d.ajuizamentoEm.toISOString() : null,
+    resultadoEm: d.resultadoEm ? d.resultadoEm.toISOString() : null,
+    movimentos: porProcesso.get(d.id) ?? [],
+  }));
+
+  return montarPerfil(entradas, LIMITE_PERFIL);
 }
 
 /** Tribunais que já têm processo no acervo — a tela precisa mostrar o que

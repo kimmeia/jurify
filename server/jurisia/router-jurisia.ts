@@ -356,6 +356,7 @@ export const jurisiaRouter = router({
           ...resultado.resposta,
           fontesDetalhe: resultado.fontes,
           estatistica: resultado.estatistica,
+          perfil: resultado.perfil,
           descricaoFiltro: resultado.descricaoFiltro,
         }
         : null;
@@ -396,6 +397,7 @@ export const jurisiaRouter = router({
         resposta: gravada,
         recusa: resultado.recusa,
         estatistica: resultado.estatistica,
+        perfil: resultado.perfil,
         descricaoFiltro: resultado.descricaoFiltro,
         semBase: resultado.semBase,
         cota: cotaDepois,

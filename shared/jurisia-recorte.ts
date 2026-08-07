@@ -15,6 +15,7 @@
  */
 
 import type { ResultadoProcesso } from "./datajud-desfecho";
+import type { PerfilRecorte } from "./jurisia-perfil";
 
 export interface FiltroRecorte {
   tribunal: string | null;
@@ -281,6 +282,8 @@ export interface PesquisaGravada {
   fontesUsadas: number[];
   fontesDetalhe: FonteRecorte[];
   estatistica: EstatisticaRecorte;
+  /** null quando o recorte não tinha o que medir. */
+  perfil: PerfilRecorte | null;
   descricaoFiltro: string;
 }
 
