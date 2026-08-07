@@ -1,0 +1,422 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>Módulo JurisIA</title><link rel="stylesheet" href="app.css">
+<style>body{width:1520px}main{padding:24px 24px 32px}code{font-family:ui-monospace,monospace;font-size:.92em}</style>
+</head><body class="bg-background text-foreground"><main>
+  <div class="flex items-center gap-2.5">
+    <h1 class="text-2xl font-bold tracking-tight">Módulo JurisIA</h1>
+    <span class="rounded-full px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.06em] bg-amber-100 text-amber-800 border border-amber-300">beta</span>
+  </div>
+  <p class="text-sm text-muted-foreground mt-1 mb-6" style="max-width:1100px">
+    Assistente jurídico sobre dois acervos que nunca se misturam: <b class="text-foreground">o que o
+    escritório tem nos autos</b> e <b class="text-foreground">a base pública do CNJ</b>. Toda
+    afirmação nasce ancorada num documento — é a trava que separa isto de um chat genérico.
+  </p>
+
+  
+<div class="mb-3">
+  <p class="text-[11px] font-bold uppercase tracking-widest text-violet-600">Tela 1</p>
+  <p class="text-base font-bold mt-0.5">O assistente</p>
+  <p class="text-[12.5px] text-muted-foreground leading-snug mt-1" style="max-width:1040px">A coluna da esquerda é a vantagem estrutural: todo caso do escritório já tem memória, sem o advogado subir nada. A da direita é a trava: cada número na resposta abre o documento de onde a frase saiu.</p>
+</div>
+  
+<div style="width:1180px" class="rounded-xl border bg-card overflow-hidden flex" >
+  <!-- casos com memória -->
+  <div style="width:216px" class="shrink-0 border-r flex flex-col">
+    <div class="px-3 py-2.5 border-b flex items-center gap-2">
+      <p class="text-[9.5px] font-extrabold uppercase tracking-[0.07em] text-muted-foreground flex-1">Seus casos</p>
+      <span class="text-[9.5px] font-bold text-muted-foreground tabular-nums">1.284</span>
+    </div>
+    <div class="px-3 py-2">
+      <div class="h-8 rounded-md border bg-background flex items-center gap-2 px-2.5 text-[11.5px] text-muted-foreground">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Buscar caso…
+      </div>
+    </div>
+    <div class="divide-y border-t">
+<div style="height:46px" class="flex items-center gap-2.5 px-3 bg-violet-50">
+  <span class="h-1.5 w-1.5 rounded-full shrink-0 bg-violet-600"></span>
+  <span class="flex-1 min-w-0">
+    <span class="block text-[12px] font-bold truncate text-violet-900">Maria Aparecida Nunes</span>
+    <span class="block text-[10px] text-muted-foreground truncate">Revisional — Bradesco</span>
+  </span>
+</div>
+<div style="height:46px" class="flex items-center gap-2.5 px-3 ">
+  <span class="h-1.5 w-1.5 rounded-full shrink-0 bg-border"></span>
+  <span class="flex-1 min-w-0">
+    <span class="block text-[12px] font-bold truncate ">Construtora Vale Verde</span>
+    <span class="block text-[10px] text-muted-foreground truncate">Rescisão indireta</span>
+  </span>
+</div>
+<div style="height:46px" class="flex items-center gap-2.5 px-3 ">
+  <span class="h-1.5 w-1.5 rounded-full shrink-0 bg-border"></span>
+  <span class="flex-1 min-w-0">
+    <span class="block text-[12px] font-bold truncate ">Francisco Edilson Sousa</span>
+    <span class="block text-[10px] text-muted-foreground truncate">Energisa — cobrança</span>
+  </span>
+</div>
+<div style="height:46px" class="flex items-center gap-2.5 px-3 ">
+  <span class="h-1.5 w-1.5 rounded-full shrink-0 bg-border"></span>
+  <span class="flex-1 min-w-0">
+    <span class="block text-[12px] font-bold truncate ">Rita de Cássia Moreira</span>
+    <span class="block text-[10px] text-muted-foreground truncate">DPVAT — perícia</span>
+  </span>
+</div>
+<div style="height:46px" class="flex items-center gap-2.5 px-3 ">
+  <span class="h-1.5 w-1.5 rounded-full shrink-0 bg-border"></span>
+  <span class="flex-1 min-w-0">
+    <span class="block text-[12px] font-bold truncate ">Raimundo Nonato Silva</span>
+    <span class="block text-[10px] text-muted-foreground truncate">INSS — auxílio-doença</span>
+  </span>
+</div></div>
+    <div class="px-3 py-2 border-t mt-auto">
+      <p class="text-[10px] text-muted-foreground leading-snug">
+        Todo caso do escritório já tem memória. Nada de subir arquivo.
+      </p>
+    </div>
+  </div>
+
+  <!-- conversa -->
+  <div class="flex-1 min-w-0 flex flex-col">
+    <div class="px-4 py-2.5 border-b flex items-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-violet-600"><path d="M9.94 14.06a2.5 2.5 0 0 1 0-3.54l7.07-7.07a2.5 2.5 0 0 1 3.54 3.54l-7.07 7.07a2.5 2.5 0 0 1-3.54 0Z"/><path d="m5 19 3-3"/><path d="M3 21h.01"/><path d="M6 6h.01"/></svg>
+      <p class="text-[13.5px] font-bold">JurisIA</p>
+      <span class="rounded-full px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.06em] bg-amber-100 text-amber-800 border border-amber-300">beta</span>
+      <span class="ml-auto text-[10.5px] text-muted-foreground">Maria Aparecida Nunes · 3057803-68.2025.8.06.0001</span>
+    </div>
+
+    <div class="px-4 py-3.5 space-y-3.5">
+      <!-- pergunta -->
+      <div class="flex justify-end">
+        <p style="max-width:460px;border-bottom-right-radius:4px" class="rounded-xl bg-violet-600 text-white text-[12.5px] px-3.5 py-2.5 leading-snug">
+          Vale a pena entrar com revisional pra ela? CDC de veículo com o Bradesco, juros de 4,2% ao mês.
+        </p>
+      </div>
+
+      <!-- resposta -->
+      <div style="max-width:640px;border-bottom-left-radius:4px" class="rounded-xl border bg-muted/30 px-3.5 py-3">
+        <p class="text-[12.5px] leading-relaxed">
+          Vale, e o ponto forte é a taxa. Nos seus casos contra o Bradesco a média contratada
+          foi <b>2,9% a.m.</b>; 4,2% fica acima da média de mercado do Bacen para o período<sup class="ml-0.5 rounded px-1 py-px text-[8.5px] font-extrabold bg-violet-100 text-violet-700 border border-violet-200">4</sup>,
+          que é o que sustenta o pedido de revisão<sup class="ml-0.5 rounded px-1 py-px text-[8.5px] font-extrabold bg-violet-100 text-violet-700 border border-violet-200">3</sup>.
+        </p>
+        <p class="text-[12.5px] leading-relaxed mt-2">
+          Na 3ª Vara Cível esse pedido foi acolhido em parte<sup class="ml-0.5 rounded px-1 py-px text-[8.5px] font-extrabold bg-violet-100 text-violet-700 border border-violet-200">1</sup> — o juízo reduziu a taxa
+          mas negou dano moral. Em grau de recurso a 1ª Câmara manteve<sup class="ml-0.5 rounded px-1 py-px text-[8.5px] font-extrabold bg-violet-100 text-violet-700 border border-violet-200">2</sup>. Ou seja: monte
+          a inicial já sem o dano moral, porque ele cai e enfraquece o resto.
+        </p>
+
+        <div class="grid grid-cols-4 gap-2 mt-3">
+          
+<div class="rounded-lg border bg-card px-3 py-2">
+  <p class="text-[9px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">Casos seus</p>
+  <p style="font-size:17px" class="font-bold tabular-nums leading-none mt-1 ">38</p>
+  <p class="text-[9.5px] text-muted-foreground mt-0.5">revisional × Bradesco</p>
+</div>
+          
+<div class="rounded-lg border bg-card px-3 py-2">
+  <p class="text-[9px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">Procedência</p>
+  <p style="font-size:17px" class="font-bold tabular-nums leading-none mt-1 text-emerald-600">71%</p>
+  <p class="text-[9.5px] text-muted-foreground mt-0.5">total ou em parte</p>
+</div>
+          
+<div class="rounded-lg border bg-card px-3 py-2">
+  <p class="text-[9px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">Mediana</p>
+  <p style="font-size:17px" class="font-bold tabular-nums leading-none mt-1 ">R$ 14.200</p>
+  <p class="text-[9.5px] text-muted-foreground mt-0.5">valor recebido</p>
+</div>
+          
+<div class="rounded-lg border bg-card px-3 py-2">
+  <p class="text-[9px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">Até a sentença</p>
+  <p style="font-size:17px" class="font-bold tabular-nums leading-none mt-1 ">8 meses</p>
+  <p class="text-[9.5px] text-muted-foreground mt-0.5">mediana</p>
+</div>
+        </div>
+
+        <div class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-emerald-600 shrink-0"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+          <p class="text-[11.5px] text-emerald-900 flex-1">
+            <b>4 fontes conferidas, 0 não encontradas.</b> Toda afirmação acima está ancorada num
+            documento — clique no número pra abrir.
+          </p>
+        </div>
+      </div>
+
+      <!-- estado de recusa -->
+      <div style="max-width:640px;border-bottom-left-radius:4px" class="rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-3">
+        <p class="text-[11px] font-extrabold uppercase tracking-[0.06em] text-amber-700 mb-1 flex items-center gap-1.5">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Quando não acha, ela não inventa
+        </p>
+        <p class="text-[12.5px] text-amber-900 leading-relaxed">
+          “Não encontrei no seu acervo nenhum caso com esse assunto nessa vara. Posso responder
+          pela base nacional do DataJud, mas aí é estatística de terceiros — não o seu histórico.”
+        </p>
+      </div>
+    </div>
+
+    <div class="px-4 pb-3.5 mt-auto">
+      <div class="h-10 rounded-lg border bg-background flex items-center gap-2 px-3">
+        <span class="text-[12.5px] text-muted-foreground flex-1">Pergunte sobre este caso…</span>
+        <span class="h-7 w-7 rounded-md bg-primary text-primary-foreground flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></span>
+      </div>
+      <p class="text-[10px] text-muted-foreground mt-1.5">
+        Beta · confira as fontes antes de peticionar. 24 de 40 mensagens usadas neste mês.
+      </p>
+    </div>
+  </div>
+
+  <!-- fontes -->
+  <div style="width:268px" class="shrink-0 border-l flex flex-col">
+    <div class="px-3 py-2.5 border-b">
+      <p class="text-[9.5px] font-extrabold uppercase tracking-[0.07em] text-muted-foreground">Fontes desta resposta</p>
+    </div>
+    <div class="divide-y">
+<div class="px-3 py-2.5 flex gap-2.5">
+  <span class="shrink-0 h-[18px] w-[18px] rounded bg-violet-100 text-violet-700 text-[9.5px] font-extrabold flex items-center justify-center">1</span>
+  <div class="min-w-0 flex-1">
+    <span class="inline-block rounded px-1.5 py-px text-[8.5px] font-extrabold uppercase tracking-[0.06em] border bg-violet-50 text-violet-700 border-violet-200">Seu acervo</span>
+    <p class="text-[11.5px] font-bold leading-snug mt-1 truncate">Sentença — 0812445-19.2024.8.06.0167</p>
+    <p class="text-[10px] text-muted-foreground truncate">3ª Vara Cível de Fortaleza · 14/03/2026</p>
+  </div>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3 text-muted-foreground/50 shrink-0 mt-1"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+</div>
+<div class="px-3 py-2.5 flex gap-2.5">
+  <span class="shrink-0 h-[18px] w-[18px] rounded bg-violet-100 text-violet-700 text-[9.5px] font-extrabold flex items-center justify-center">2</span>
+  <div class="min-w-0 flex-1">
+    <span class="inline-block rounded px-1.5 py-px text-[8.5px] font-extrabold uppercase tracking-[0.06em] border bg-violet-50 text-violet-700 border-violet-200">Seu acervo</span>
+    <p class="text-[11.5px] font-bold leading-snug mt-1 truncate">Acórdão — 0154892-30.2025.8.06.0001</p>
+    <p class="text-[10px] text-muted-foreground truncate">1ª Câmara de Direito Privado · 22/05/2026</p>
+  </div>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3 text-muted-foreground/50 shrink-0 mt-1"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+</div>
+<div class="px-3 py-2.5 flex gap-2.5">
+  <span class="shrink-0 h-[18px] w-[18px] rounded bg-violet-100 text-violet-700 text-[9.5px] font-extrabold flex items-center justify-center">3</span>
+  <div class="min-w-0 flex-1">
+    <span class="inline-block rounded px-1.5 py-px text-[8.5px] font-extrabold uppercase tracking-[0.06em] border bg-sky-50 text-sky-700 border-sky-200">Legislação</span>
+    <p class="text-[11.5px] font-bold leading-snug mt-1 truncate">CDC, art. 51, IV</p>
+    <p class="text-[10px] text-muted-foreground truncate">Lei 8.078/1990</p>
+  </div>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3 text-muted-foreground/50 shrink-0 mt-1"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+</div>
+<div class="px-3 py-2.5 flex gap-2.5">
+  <span class="shrink-0 h-[18px] w-[18px] rounded bg-violet-100 text-violet-700 text-[9.5px] font-extrabold flex items-center justify-center">4</span>
+  <div class="min-w-0 flex-1">
+    <span class="inline-block rounded px-1.5 py-px text-[8.5px] font-extrabold uppercase tracking-[0.06em] border bg-emerald-50 text-emerald-700 border-emerald-200">DataJud</span>
+    <p class="text-[11.5px] font-bold leading-snug mt-1 truncate">12.480 processos — classe 22, assunto 7771</p>
+    <p class="text-[10px] text-muted-foreground truncate">TJCE · 2021–2026</p>
+  </div>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3 text-muted-foreground/50 shrink-0 mt-1"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+</div></div>
+    <div class="px-3 py-2.5 border-t bg-muted/40">
+      <p class="text-[10px] text-muted-foreground leading-snug">
+        <b class="text-foreground">Seu acervo</b> é o que o escritório já tem nos autos.
+        <b class="text-foreground">DataJud</b> é a base pública do CNJ. As duas nunca se misturam
+        na mesma frase sem dizer qual é qual.
+      </p>
+    </div>
+  </div>
+</div>
+
+  <div style="margin:30px 0" class="h-px bg-border"></div>
+
+  
+<div class="mb-3">
+  <p class="text-[11px] font-bold uppercase tracking-widest text-violet-600">Tela 2</p>
+  <p class="text-base font-bold mt-0.5">O robô que enche o banco</p>
+  <p class="text-[12.5px] text-muted-foreground leading-snug mt-1" style="max-width:1040px">Varredura por faixa de numeração CNJ contra o DataJud — a API pública do CNJ, feita pra isso. Não usa a credencial OAB do escritório, então o monitoramento de processos que já vendemos não entra em risco nenhum.</p>
+</div>
+  
+<div style="width:700px" class="rounded-xl border bg-card overflow-hidden">
+  <div class="px-4 py-3 border-b flex items-center gap-2">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-muted-foreground"><rect width="18" height="10" x="3" y="11" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><path d="M8 16h.01"/><path d="M16 16h.01"/></svg>
+    <p class="text-[13.5px] font-bold flex-1">Robô de ingestão</p>
+    <span class="rounded px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.06em] bg-emerald-50 text-emerald-700 border border-emerald-200">
+      fonte: DataJud — API pública do CNJ
+    </span>
+  </div>
+
+  <div class="grid grid-cols-4 gap-2.5 px-4 py-3">
+    
+<div class="rounded-lg border bg-card px-3 py-2">
+  <p class="text-[9px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">No banco</p>
+  <p style="font-size:17px" class="font-bold tabular-nums leading-none mt-1 ">36,4 mi</p>
+  <p class="text-[9.5px] text-muted-foreground mt-0.5">processos</p>
+</div>
+    
+<div class="rounded-lg border bg-card px-3 py-2">
+  <p class="text-[9px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">Ontem</p>
+  <p style="font-size:17px" class="font-bold tabular-nums leading-none mt-1 ">+412 mil</p>
+  <p class="text-[9.5px] text-muted-foreground mt-0.5">novos e atualizados</p>
+</div>
+    
+<div class="rounded-lg border bg-card px-3 py-2">
+  <p class="text-[9px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">Com desfecho</p>
+  <p style="font-size:17px" class="font-bold tabular-nums leading-none mt-1 text-emerald-600">8,9 mi</p>
+  <p class="text-[9.5px] text-muted-foreground mt-0.5">sentença mapeada</p>
+</div>
+    
+<div class="rounded-lg border bg-card px-3 py-2">
+  <p class="text-[9px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">Credencial OAB</p>
+  <p style="font-size:17px" class="font-bold tabular-nums leading-none mt-1 text-emerald-600">não usa</p>
+  <p class="text-[9.5px] text-muted-foreground mt-0.5">zero risco de ban</p>
+</div>
+  </div>
+
+  <div class="border-t divide-y">
+<div style="height:38px" class="flex items-center gap-3 px-3">
+  <span class="w-[52px] shrink-0 text-[12px] font-bold">TJCE</span>
+  <span class="flex-1 min-w-0 h-1.5 rounded-full bg-muted overflow-hidden">
+    <span class="block h-full rounded-full bg-emerald-500" style="width:100%"></span>
+  </span>
+  <span class="w-[38px] shrink-0 text-right text-[11px] font-bold tabular-nums text-muted-foreground">100%</span>
+  <span style="width:62px" class="shrink-0 text-right text-[11.5px] font-bold tabular-nums">4,2 mi</span>
+  <span class="w-[64px] shrink-0 text-center rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.04em] border bg-emerald-50 text-emerald-700 border-emerald-200">completo</span>
+</div>
+<div style="height:38px" class="flex items-center gap-3 px-3">
+  <span class="w-[52px] shrink-0 text-[12px] font-bold">TJSP</span>
+  <span class="flex-1 min-w-0 h-1.5 rounded-full bg-muted overflow-hidden">
+    <span class="block h-full rounded-full bg-violet-500" style="width:62%"></span>
+  </span>
+  <span class="w-[38px] shrink-0 text-right text-[11px] font-bold tabular-nums text-muted-foreground">62%</span>
+  <span style="width:62px" class="shrink-0 text-right text-[11.5px] font-bold tabular-nums">28,7 mi</span>
+  <span class="w-[64px] shrink-0 text-center rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.04em] border bg-violet-50 text-violet-700 border-violet-200">rodando</span>
+</div>
+<div style="height:38px" class="flex items-center gap-3 px-3">
+  <span class="w-[52px] shrink-0 text-[12px] font-bold">TRT-7</span>
+  <span class="flex-1 min-w-0 h-1.5 rounded-full bg-muted overflow-hidden">
+    <span class="block h-full rounded-full bg-emerald-500" style="width:100%"></span>
+  </span>
+  <span class="w-[38px] shrink-0 text-right text-[11px] font-bold tabular-nums text-muted-foreground">100%</span>
+  <span style="width:62px" class="shrink-0 text-right text-[11.5px] font-bold tabular-nums">1,1 mi</span>
+  <span class="w-[64px] shrink-0 text-center rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.04em] border bg-emerald-50 text-emerald-700 border-emerald-200">completo</span>
+</div>
+<div style="height:38px" class="flex items-center gap-3 px-3">
+  <span class="w-[52px] shrink-0 text-[12px] font-bold">TRF-5</span>
+  <span class="flex-1 min-w-0 h-1.5 rounded-full bg-muted overflow-hidden">
+    <span class="block h-full rounded-full bg-violet-500" style="width:38%"></span>
+  </span>
+  <span class="w-[38px] shrink-0 text-right text-[11px] font-bold tabular-nums text-muted-foreground">38%</span>
+  <span style="width:62px" class="shrink-0 text-right text-[11.5px] font-bold tabular-nums">2,4 mi</span>
+  <span class="w-[64px] shrink-0 text-center rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.04em] border bg-violet-50 text-violet-700 border-violet-200">rodando</span>
+</div>
+<div style="height:38px" class="flex items-center gap-3 px-3">
+  <span class="w-[52px] shrink-0 text-[12px] font-bold">TJPE</span>
+  <span class="flex-1 min-w-0 h-1.5 rounded-full bg-muted overflow-hidden">
+    <span class="block h-full rounded-full bg-violet-500" style="width:0%"></span>
+  </span>
+  <span class="w-[38px] shrink-0 text-right text-[11px] font-bold tabular-nums text-muted-foreground">0%</span>
+  <span style="width:62px" class="shrink-0 text-right text-[11.5px] font-bold tabular-nums">—</span>
+  <span class="w-[64px] shrink-0 text-center rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.04em] border bg-muted text-muted-foreground border-border">na fila</span>
+</div>
+<div style="height:38px" class="flex items-center gap-3 px-3">
+  <span class="w-[52px] shrink-0 text-[12px] font-bold">TJBA</span>
+  <span class="flex-1 min-w-0 h-1.5 rounded-full bg-muted overflow-hidden">
+    <span class="block h-full rounded-full bg-violet-500" style="width:0%"></span>
+  </span>
+  <span class="w-[38px] shrink-0 text-right text-[11px] font-bold tabular-nums text-muted-foreground">0%</span>
+  <span style="width:62px" class="shrink-0 text-right text-[11.5px] font-bold tabular-nums">—</span>
+  <span class="w-[64px] shrink-0 text-center rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.04em] border bg-muted text-muted-foreground border-border">na fila</span>
+</div></div>
+
+  <div class="px-4 py-2.5 border-t bg-muted/40 flex items-center gap-2.5">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground shrink-0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <p class="text-[11px] text-muted-foreground flex-1">
+      Varredura por faixa de numeração CNJ, respeitando o limite de requisições da API.
+      O dígito verificador do CNJ é calculado antes de consultar — só número válido vira requisição.
+    </p>
+  </div>
+</div>
+
+  <div style="margin:30px 0" class="h-px bg-border"></div>
+
+  
+<div class="mb-3">
+  <p class="text-[11px] font-bold uppercase tracking-widest text-violet-600">Tela 3</p>
+  <p class="text-base font-bold mt-0.5">Planos</p>
+  <p class="text-[12.5px] text-muted-foreground leading-snug mt-1" style="max-width:1040px">Mesma estrutura do Jus IA, com os limites 30% acima e o caso com memória liberado. O preço é o único campo que deixei em branco de propósito.</p>
+</div>
+  
+<div style="width:700px" class="rounded-xl border bg-card overflow-hidden">
+  <div class="px-4 py-3 border-b flex items-center gap-2">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-muted-foreground"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
+    <p class="text-[13.5px] font-bold flex-1">Planos — mesma estrutura, limite maior, preço menor</p>
+  </div>
+
+  <div class="flex items-center gap-3 px-4 py-2 bg-muted/50 border-b">
+    <span class="flex-1 text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">Limite mensal</span>
+    <span style="width:104px" class="shrink-0 text-right text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">Jus IA</span>
+    <span style="width:104px" class="shrink-0 text-right text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-violet-700">JurisIA</span>
+    <span style="width:72px" class="shrink-0 text-right text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">Ganho</span>
+  </div>
+
+  <div class="px-4 py-1.5 bg-card border-b">
+    <p class="text-[10px] font-extrabold uppercase tracking-[0.07em] text-muted-foreground">Essencial</p>
+  </div>
+  <div class="divide-y">
+    
+<div style="height:40px" class="flex items-center gap-3 px-4">
+  <span class="flex-1 text-[12px] font-semibold">Mensagens</span>
+  <span style="width:104px" class="shrink-0 text-right text-[12px] tabular-nums text-muted-foreground">30</span>
+  <span style="width:104px" class="shrink-0 text-right text-[12.5px] font-bold tabular-nums text-violet-700">40</span>
+  <span style="width:72px" class="shrink-0 text-right text-[10.5px] font-extrabold tabular-nums text-emerald-600">+33%</span>
+</div>
+    
+<div style="height:40px" class="flex items-center gap-3 px-4">
+  <span class="flex-1 text-[12px] font-semibold">Uploads de documento</span>
+  <span style="width:104px" class="shrink-0 text-right text-[12px] tabular-nums text-muted-foreground">10</span>
+  <span style="width:104px" class="shrink-0 text-right text-[12.5px] font-bold tabular-nums text-violet-700">15</span>
+  <span style="width:72px" class="shrink-0 text-right text-[10.5px] font-extrabold tabular-nums text-emerald-600">+50%</span>
+</div>
+    
+<div style="height:40px" class="flex items-center gap-3 px-4">
+  <span class="flex-1 text-[12px] font-semibold">Casos com memória</span>
+  <span style="width:104px" class="shrink-0 text-right text-[12px] tabular-nums text-muted-foreground">10</span>
+  <span style="width:104px" class="shrink-0 text-right text-[12.5px] font-bold tabular-nums text-violet-700">ilimitado</span>
+  <span style="width:72px" class="shrink-0 text-right text-[10.5px] font-extrabold tabular-nums text-emerald-600">∞</span>
+</div>
+  </div>
+
+  <div class="px-4 py-1.5 bg-card border-y">
+    <p class="text-[10px] font-extrabold uppercase tracking-[0.07em] text-muted-foreground">Profissional</p>
+  </div>
+  <div class="divide-y">
+    
+<div style="height:40px" class="flex items-center gap-3 px-4">
+  <span class="flex-1 text-[12px] font-semibold">Mensagens</span>
+  <span style="width:104px" class="shrink-0 text-right text-[12px] tabular-nums text-muted-foreground">150</span>
+  <span style="width:104px" class="shrink-0 text-right text-[12.5px] font-bold tabular-nums text-violet-700">200</span>
+  <span style="width:72px" class="shrink-0 text-right text-[10.5px] font-extrabold tabular-nums text-emerald-600">+33%</span>
+</div>
+    
+<div style="height:40px" class="flex items-center gap-3 px-4">
+  <span class="flex-1 text-[12px] font-semibold">Uploads de documento</span>
+  <span style="width:104px" class="shrink-0 text-right text-[12px] tabular-nums text-muted-foreground">50</span>
+  <span style="width:104px" class="shrink-0 text-right text-[12.5px] font-bold tabular-nums text-violet-700">65</span>
+  <span style="width:72px" class="shrink-0 text-right text-[10.5px] font-extrabold tabular-nums text-emerald-600">+30%</span>
+</div>
+    
+<div style="height:40px" class="flex items-center gap-3 px-4">
+  <span class="flex-1 text-[12px] font-semibold">Casos com memória</span>
+  <span style="width:104px" class="shrink-0 text-right text-[12px] tabular-nums text-muted-foreground">50</span>
+  <span style="width:104px" class="shrink-0 text-right text-[12.5px] font-bold tabular-nums text-violet-700">ilimitado</span>
+  <span style="width:72px" class="shrink-0 text-right text-[10.5px] font-extrabold tabular-nums text-emerald-600">∞</span>
+</div>
+  </div>
+
+  <div class="px-4 py-3 border-t bg-amber-50 flex items-start gap-2.5">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-amber-600 shrink-0 mt-px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+    <p class="text-[11px] text-amber-900 leading-snug">
+      <b>Preço fica de fora deste mockup de propósito.</b> Ele mora na tabela <code>planos</code> e
+      é decisão sua — número inventado aqui vaza pra produção como se fosse real. A referência de
+      mercado que levantei: o Jus IA sai em torno de R$ 149/mês pro advogado autônomo.
+    </p>
+  </div>
+
+  <div class="px-4 py-2.5 border-t flex items-start gap-2.5">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-violet-600 shrink-0 mt-px"><path d="M9.94 14.06a2.5 2.5 0 0 1 0-3.54l7.07-7.07a2.5 2.5 0 0 1 3.54 3.54l-7.07 7.07a2.5 2.5 0 0 1-3.54 0Z"/><path d="m5 19 3-3"/><path d="M3 21h.01"/><path d="M6 6h.01"/></svg>
+    <p class="text-[11px] text-muted-foreground leading-snug">
+      <b class="text-foreground">Caso com memória é ilimitado por construção.</b> Pro Jusbrasil ele
+      é caro porque o advogado precisa criar e subir documento; aqui o caso já está no banco. Racionar
+      seria copiar a fraqueza deles em vez da força.
+    </p>
+  </div>
+</div>
+</main></body></html>
