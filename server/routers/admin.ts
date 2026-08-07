@@ -1164,6 +1164,7 @@ export const adminRouter = router({
         maxAgentesIa: row.maxAgentesIa,
         maxMonitoramentosProcessos: row.maxMonitoramentosProcessos,
         creditosCalculosMes: row.creditosCalculosMes,
+        jurisiaMensagensMes: row.jurisiaMensagensMes,
         modulosLiberados: modulos.filter(ehModuloValido),
         features,
         popular: row.popular,
@@ -1191,6 +1192,7 @@ export const adminRouter = router({
       maxAgentesIa: z.number().int().min(0).default(0),
       maxMonitoramentosProcessos: z.number().int().min(0).nullable().optional(),
       creditosCalculosMes: z.number().int().min(0).default(0),
+      jurisiaMensagensMes: z.number().int().min(0).default(0),
       modulosLiberados: z.array(z.string()).default([]),
       features: z.array(z.string()).default([]),
       popular: z.boolean().default(false),
@@ -1228,6 +1230,7 @@ export const adminRouter = router({
         maxAgentesIa: input.maxAgentesIa,
         maxMonitoramentosProcessos: input.maxMonitoramentosProcessos ?? null,
         creditosCalculosMes: input.creditosCalculosMes,
+        jurisiaMensagensMes: input.jurisiaMensagensMes,
         modulosLiberados: modulosValidos,
         features: input.features,
         popular: input.popular,
@@ -1270,6 +1273,7 @@ export const adminRouter = router({
       maxAgentesIa: z.number().int().min(0).optional(),
       maxMonitoramentosProcessos: z.number().int().min(0).nullable().optional(),
       creditosCalculosMes: z.number().int().min(0).optional(),
+      jurisiaMensagensMes: z.number().int().min(0).optional(),
       modulosLiberados: z.array(z.string()).optional(),
       features: z.array(z.string()).optional(),
       popular: z.boolean().optional(),
@@ -1300,6 +1304,7 @@ export const adminRouter = router({
       if (input.maxAgentesIa !== undefined) dadosUpdate.maxAgentesIa = input.maxAgentesIa;
       if (input.maxMonitoramentosProcessos !== undefined) dadosUpdate.maxMonitoramentosProcessos = input.maxMonitoramentosProcessos;
       if (input.creditosCalculosMes !== undefined) dadosUpdate.creditosCalculosMes = input.creditosCalculosMes;
+      if (input.jurisiaMensagensMes !== undefined) dadosUpdate.jurisiaMensagensMes = input.jurisiaMensagensMes;
       if (input.modulosLiberados !== undefined) dadosUpdate.modulosLiberados = input.modulosLiberados.filter(ehModuloValido);
       if (input.features !== undefined) dadosUpdate.features = input.features;
       if (input.popular !== undefined) dadosUpdate.popular = input.popular;

@@ -64,6 +64,7 @@ function rowParaPlano(row: PlanoRow): Plano {
       maxAgentesIa: row.maxAgentesIa,
       maxMonitoramentosProcessos: row.maxMonitoramentosProcessos,
       creditosCalculosMes: row.creditosCalculosMes,
+      jurisiaMensagensMes: row.jurisiaMensagensMes,
     },
     modulosLiberados: modulos,
     features: featuresRaw.filter((f): f is string => typeof f === "string"),

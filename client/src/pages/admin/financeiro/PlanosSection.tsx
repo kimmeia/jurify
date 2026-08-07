@@ -45,6 +45,7 @@ interface PlanoEditavel {
   maxAgentesIa: number;
   maxMonitoramentosProcessos: number | null;
   creditosCalculosMes: number;
+  jurisiaMensagensMes: number;
   modulosLiberados: string[];
   features: string[];
   popular: boolean;
@@ -86,6 +87,7 @@ function EditarPlanoDialog({
   const [maxAgentesIa, setMaxAgentesIa] = useState("0");
   const [maxMonitoramentos, setMaxMonitoramentos] = useState<string>("");
   const [creditosCalculos, setCreditosCalculos] = useState("0");
+  const [jurisiaMensagens, setJurisiaMensagens] = useState("0");
   const [modulosLiberados, setModulosLiberados] = useState<string[]>([]);
   const [features, setFeatures] = useState<string[]>([]);
   const [novaFeature, setNovaFeature] = useState("");
@@ -110,6 +112,7 @@ function EditarPlanoDialog({
       setMaxAgentesIa(String(plano.maxAgentesIa));
       setMaxMonitoramentos(plano.maxMonitoramentosProcessos != null ? String(plano.maxMonitoramentosProcessos) : "");
       setCreditosCalculos(String(plano.creditosCalculosMes));
+      setJurisiaMensagens(String(plano.jurisiaMensagensMes ?? 0));
       setModulosLiberados([...plano.modulosLiberados]);
       setFeatures([...plano.features]);
       setPopular(plano.popular);
@@ -152,6 +155,7 @@ function EditarPlanoDialog({
       maxAgentesIa: parseInt(maxAgentesIa, 10) || 0,
       maxMonitoramentosProcessos: maxMonitoramentos.trim() ? parseInt(maxMonitoramentos, 10) : null,
       creditosCalculosMes: parseInt(creditosCalculos, 10) || 0,
+      jurisiaMensagensMes: parseInt(jurisiaMensagens, 10) || 0,
       modulosLiberados,
       features,
       popular,
@@ -273,6 +277,11 @@ function EditarPlanoDialog({
               <div className="space-y-1.5 col-span-2">
                 <Label>Créditos cálculos / mês</Label>
                 <Input value={creditosCalculos} onChange={(e) => setCreditosCalculos(e.target.value)} type="number" min={0} />
+              </div>
+              <div>
+                <Label>Mensagens JurisIA / mês</Label>
+                <Input value={jurisiaMensagens} onChange={(e) => setJurisiaMensagens(e.target.value)} type="number" min={0} />
+                <p className="text-[10px] text-muted-foreground mt-1">0 desliga o módulo neste plano.</p>
               </div>
             </div>
           </TabsContent>

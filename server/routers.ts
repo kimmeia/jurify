@@ -18,6 +18,7 @@ import { calculosDiversosRouter } from "./calculos/router-calculos-diversos";
 // Notificações in-app
 import { notificacoesRouter } from "./processos/router-notificacoes";
 import { movimentacoesRouter, resumoDiarioRouter } from "./processos/router-movimentacoes";
+import { jurisiaRouter } from "./jurisia/router-jurisia";
 
 import { cofreCredenciaisRouter } from "./escritorio/router-cofre-credenciais";
 
@@ -101,6 +102,9 @@ export const appRouter = router({
   // Central de movimentações — triagem do que o tribunal publicou
   movimentacoes: movimentacoesRouter,
   resumoDiario: resumoDiarioRouter,
+
+  // JurisIA (beta) — perguntas sobre um processo do acervo
+  jurisia: jurisiaRouter,
 
   // Web Push (PWA) — notificação com o app fechado
   push: pushRouter,
