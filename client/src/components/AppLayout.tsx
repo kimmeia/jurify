@@ -122,6 +122,7 @@ const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
   {
     titulo: "Ferramentas",
     itens: [
+      { id: "jurisia", rotulo: "JurisIA", rota: "/jurisia", icone: Gavel, ver: (c) => c("processos"), ocultaPor: "processos", tomBadge: "novidade" },
       { id: "calculos", rotulo: "Cálculos", rota: "/calculos", icone: Calculator, ver: (c) => c("calculos"), ocultaPor: "calculos" },
       { id: "modelos", rotulo: "Modelos", rota: "/modelos-contrato", icone: FileText, ver: (c) => c("modelos") },
       // Fusão de SmartFlow (Fluxos) + Agentes IA: aparece com qualquer um dos

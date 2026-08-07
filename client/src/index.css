@@ -80,6 +80,20 @@
   --chart-4: oklch(0.35 0.15 260);
   --chart-5: oklch(0.25 0.10 260);
   --radius: 0.625rem;
+
+  /* Paleta categórica do JurisIA — um slot fixo por resultado processual.
+     São CATEGÓRICAS, não de status: "procedente" não é verde nem "improcedente"
+     vermelho, porque o acervo é neutro de polo (quem ganha depende do lado que
+     o escritório defende, e o dado não sabe qual é).
+     A ordem dos slots é o que passa na checagem de daltonismo em pares
+     adjacentes — reordenar exige revalidar a paleta. */
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-5: #e87ba4;
+  --viz-trilho: oklch(0.93 0.004 260);
+
   --background: oklch(0.985 0.002 260);
   --foreground: oklch(0.18 0.02 260);
   --card: oklch(1 0 0);
@@ -145,6 +159,15 @@
   --primary-foreground: oklch(0.98 0 0);
   --sidebar-primary: oklch(0.55 0.18 260);
   --sidebar-primary-foreground: oklch(0.98 0 0);
+  /* Mesmas cinco matizes, re-escalonadas pra superfície escura — não é o
+     inverso automático das claras. */
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+  --viz-5: #d55181;
+  --viz-trilho: oklch(0.30 0.006 286);
+
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.85 0.005 65);
   --card: oklch(0.21 0.006 285.885);
