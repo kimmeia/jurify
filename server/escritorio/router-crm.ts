@@ -11,7 +11,8 @@ import { checkPermission, checkPermissionAdminOuMatriz } from "./check-permissio
 import {
   criarContato, criarOuReutilizarContato, listarContatos, atualizarContato, unificarContatos,
   buscarContatoPorTelefone,
-  criarConversa, listarConversas, contarConversasPorStatus, atualizarConversa, excluirConversa,
+  criarConversa, listarConversas, contarConversasPorStatus, contarAbertasPorAtendente,
+  atualizarConversa, excluirConversa,
   definirArquivada, resumoArquivadas as resumoArquivadasDB, arquivarConversasDeCanaisDesativados,
   enviarMensagem, listarMensagens,
   criarLead, listarLeads, atualizarLead, excluirLead,
@@ -913,25 +914,8 @@ export const crmRouter = router({
       .innerJoin(users, eq(colaboradores.userId, users.id))
       .where(and(eq(colaboradores.escritorioId, esc.escritorio.id), eq(colaboradores.ativo, true)));
 
-    // Carga de cada um. Vai em consulta separada em vez de subquery por linha
-    // porque o seletor de transferência precisa dela pra TODO mundo — e é o
-    // número que evita o erro clássico de despejar mais uma conversa em quem
-    // já está com doze.
-    const { sql, inArray } = await import("drizzle-orm");
-    const cargas = await db
-      .select({ atendenteId: conversas.atendenteId, abertas: sql<number>`COUNT(*)` })
-      .from(conversas)
-      .where(and(
-        eq(conversas.escritorioId, esc.escritorio.id),
-        inArray(conversas.status, ["aguardando", "em_atendimento"]),
-      ))
-      .groupBy(conversas.atendenteId);
-
-    const porAtendente = new Map<number, number>();
-    for (const c of cargas) {
-      if (c.atendenteId != null) porAtendente.set(Number(c.atendenteId), Number(c.abertas || 0));
-    }
-
+    // Mesma definição de "aberta" da inbox — ver `contarAbertasPorAtendente`.
+    const porAtendente = await contarAbertasPorAtendente(esc.escritorio.id);
     return rows.map((r) => ({ ...r, conversasAbertas: porAtendente.get(r.id) ?? 0 }));
   }),
 
