@@ -20,6 +20,7 @@ import AdminSettings from "./pages/admin/AdminSettings";
 import AdminAuditoria from "./pages/admin/AdminAuditoria";
 import AdminErros from "./pages/admin/AdminErros";
 import AdminTribunais from "./pages/admin/AdminTribunais";
+import AdminJurisIa from "./pages/admin/AdminJurisIa";
 import AdminEmailLog from "./pages/admin/AdminEmailLog";
 import AdminFinanceiro from "./pages/admin/AdminFinanceiro";
 import AdminAgentesIA from "./pages/admin/AdminAgentesIA";
@@ -168,6 +169,11 @@ function Router() {
       <Route path="/admin/tribunais">
         <AdminArea>
           <AdminTribunais />
+        </AdminArea>
+      </Route>
+      <Route path="/admin/jurisia">
+        <AdminArea>
+          <AdminJurisIa />
         </AdminArea>
       </Route>
       <Route path="/admin/email-log">

@@ -76,6 +76,61 @@ import {
 } from "../../drizzle/schema";
 
 export const adminRouter = router({
+  // ─── JurisIA · robô de ingestão do DataJud ────────────────────────────────
+
+  /** Estado da varredura por tribunal — alimenta o painel do robô. */
+  jurisiaVarreduras: adminProcedure.query(async () => {
+    const { estadoVarreduras } = await import("../jurisia/varredura-datajud");
+    const { TRIBUNAL_PROVIDERS } = await import("../processos/tribunal-providers");
+
+    // A lista de tribunais sai de `tribunal-providers`, que já é a fonte de
+    // verdade dos aliases da API — digitar alias à mão no painel seria uma
+    // segunda lista pra manter em sincronia.
+    const estado = new Map((await estadoVarreduras()).map((v) => [v.tribunal, v]));
+    return Object.values(TRIBUNAL_PROVIDERS)
+      .map((p) => {
+        const v = estado.get(p.sigla.toUpperCase());
+        return {
+          sigla: p.sigla,
+          alias: p.alias,
+          nome: p.nome,
+          justica: p.justica,
+          status: v?.status ?? ("fila" as const),
+          processos: v?.processos ?? 0,
+          sigilosos: v?.sigilosos ?? 0,
+          ultimoErro: v?.ultimoErro ?? null,
+          ultimaExecucao: v?.ultimaExecucao ?? null,
+          temCursor: !!v?.cursor,
+        };
+      })
+      .sort((a, b) => a.sigla.localeCompare(b.sigla));
+  }),
+
+  /**
+   * Dispara uma execução da varredura. É manual de propósito nesta fase: a
+   * primeira coisa que se quer saber de um robô novo é o que ele traz na
+   * primeira página, não descobrir de madrugada que ele rodou sozinho.
+   */
+  jurisiaVarrer: adminProcedure
+    .input(z.object({
+      tribunal: z.string().min(2).max(16),
+      alias: z.string().min(2).max(32),
+      maxPaginas: z.number().int().min(1).max(200).default(5),
+    }))
+    .mutation(async ({ input }) => {
+      const { varrerTribunal } = await import("../jurisia/varredura-datajud");
+      return varrerTribunal(input);
+    }),
+
+  /** Zera o cursor de um tribunal — usado quando a paginação corrompe. */
+  jurisiaReiniciarTribunal: adminProcedure
+    .input(z.object({ tribunal: z.string().min(2).max(16) }))
+    .mutation(async ({ input }) => {
+      const { reiniciarTribunal } = await import("../jurisia/varredura-datajud");
+      await reiniciarTribunal(input.tribunal);
+      return { ok: true };
+    }),
+
   /** Get comprehensive admin dashboard stats */
   stats: adminProcedure.query(async () => getAdminStats()),
 
