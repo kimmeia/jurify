@@ -100,3 +100,9 @@ export function validarResposta(bruto: unknown, fontesDisponiveis: number[]): Re
 
   return { ok: true, resposta: { achou: true, afirmacoes, conclusao, fontesUsadas: usadas } };
 }
+
+/** Como a resposta fica no banco: com o rótulo das fontes, pra a conversa
+ *  recarregada mostrar a legenda das âncoras sem reconsultar o processo. */
+export interface RespostaGravada extends RespostaJurisIA {
+  fontesDetalhe: Array<{ id: number; rotulo: string; data: string }>;
+}

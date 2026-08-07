@@ -39,6 +39,7 @@ import {
   checkKeywords,
 } from "./processos/search-history";
 import { ImportarAdvboxDialog } from "./processos/ImportarAdvboxDialog";
+import { JurisIaPainel } from "./processos/JurisIaPainel";
 import { Upload } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
@@ -1417,6 +1418,12 @@ function MonitoramentoCard({
                 )}
               </>
             )}
+
+            {/* Perguntar vem depois da timeline de propósito: a IA responde
+                sobre o que está acima, e a ordem deixa isso óbvio. */}
+            <div className="mt-4">
+              <JurisIaPainel monitoramentoId={mon.id} />
+            </div>
           </div>
         )}
       </div>
