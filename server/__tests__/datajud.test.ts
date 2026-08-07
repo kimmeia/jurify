@@ -9,7 +9,7 @@
 import { describe, it, expect } from "vitest";
 import { cnjNormalizado, normalizarHit } from "../../shared/datajud-normalizar";
 import { deduzirDesfecho } from "../../shared/datajud-desfecho";
-import { proximaPagina } from "../jurisia/datajud-client";
+import { ehErroDeOrdenacao, proximaPagina } from "../jurisia/datajud-client";
 import { resumirAmostra } from "../../shared/datajud-amostra";
 
 const hit = (over: Record<string, unknown> = {}) => ({
@@ -223,6 +223,36 @@ describe("proximaPagina", () => {
   it("resposta fora do formato não quebra a varredura", () => {
     expect(proximaPagina(null, 100)).toEqual({ hits: [], proximoCursor: null, total: null });
     expect(proximaPagina({ erro: "x" }, 100).hits).toEqual([]);
+  });
+});
+
+describe("ehErroDeOrdenacao", () => {
+  // O erro real que derrubou a primeira varredura em produção.
+  const FIELDDATA =
+    '{"error":{"root_cause":[{"type":"illegal_argument_exception","reason":"Fielddata access on the _id field is disallowed, you can re-enable it by updating the dynamic cluster setting: indices.id_field_data.enabled"}]},"status":400}';
+
+  it("reconhece a recusa de fielddata no _id", () => {
+    expect(ehErroDeOrdenacao(400, FIELDDATA)).toBe(true);
+  });
+
+  it("reconhece campo sem mapeamento pra ordenar", () => {
+    expect(
+      ehErroDeOrdenacao(400, '{"error":"No mapping found for [numeroProcesso] in order to sort on"}'),
+    ).toBe(true);
+  });
+
+  // Trocar o sort não conserta chave inválida nem rate limit — repetir só
+  // gastaria requisição no tribunal, que foi o que derrubou o motor antes.
+  it("não tenta de novo em erro que a ordenação não resolve", () => {
+    expect(ehErroDeOrdenacao(401, "unauthorized")).toBe(false);
+    expect(ehErroDeOrdenacao(403, "forbidden")).toBe(false);
+    expect(ehErroDeOrdenacao(429, "too many requests")).toBe(false);
+    expect(ehErroDeOrdenacao(500, "internal")).toBe(false);
+    expect(ehErroDeOrdenacao(404, "index_not_found_exception")).toBe(false);
+  });
+
+  it("400 que não é de ordenação também não repete", () => {
+    expect(ehErroDeOrdenacao(400, '{"error":"parsing_exception: unknown query [foo]"}')).toBe(false);
   });
 });
 
