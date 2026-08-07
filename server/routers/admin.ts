@@ -107,6 +107,31 @@ export const adminRouter = router({
   }),
 
   /**
+   * Uma página, SEM GRAVAR NADA.
+   *
+   * É o primeiro passo antes de comprometer o banco: mostra quantos sigilosos
+   * a barreira pegou e — o que mais importa — os nomes de movimento que a
+   * classificação de desfecho não cobriu neste tribunal. Escolhi classificar
+   * por nome em vez de código da TPU pra poder corrigir olhando dado real; é
+   * daqui que esse dado vem.
+   */
+  jurisiaAmostra: adminProcedure
+    .input(z.object({
+      alias: z.string().min(2).max(32),
+      tamanho: z.number().int().min(1).max(200).default(50),
+    }))
+    .mutation(async ({ input }) => {
+      const { buscarPagina } = await import("../jurisia/datajud-client");
+      const { resumirAmostra } = await import("../../shared/datajud-amostra");
+      const pagina = await buscarPagina({
+        alias: input.alias,
+        cursor: null,
+        tamanho: input.tamanho,
+      });
+      return { total: pagina.total, ...resumirAmostra(pagina.hits) };
+    }),
+
+  /**
    * Dispara uma execução da varredura. É manual de propósito nesta fase: a
    * primeira coisa que se quer saber de um robô novo é o que ele traz na
    * primeira página, não descobrir de madrugada que ele rodou sozinho.

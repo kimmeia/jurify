@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Bot, Play, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Bot, FlaskConical, Play, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -51,6 +51,10 @@ export default function AdminJurisIa() {
     },
     onError: (e) => toast.error("Varredura falhou", { description: e.message }),
     onSettled: () => setRodando(null),
+  });
+
+  const amostra = trpc.admin.jurisiaAmostra.useMutation({
+    onError: (e) => toast.error("Amostra falhou", { description: e.message }),
   });
 
   const reiniciar = trpc.admin.jurisiaReiniciarTribunal.useMutation({
@@ -119,6 +123,8 @@ export default function AdminJurisIa() {
           </CardContent>
         </Card>
       </div>
+
+      {amostra.data && <ResultadoAmostra dados={amostra.data} />}
 
       <Card>
         <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
@@ -206,6 +212,16 @@ export default function AdminJurisIa() {
                           )}
                           <Button
                             size="sm"
+                            variant="ghost"
+                            title="Ler uma página sem gravar nada"
+                            disabled={amostra.isPending}
+                            onClick={() => amostra.mutate({ alias: l.alias, tamanho: 50 })}
+                          >
+                            <FlaskConical className="mr-1 h-3.5 w-3.5" />
+                            Amostra
+                          </Button>
+                          <Button
+                            size="sm"
                             variant="outline"
                             disabled={varrer.isPending}
                             onClick={() => {
@@ -231,5 +247,98 @@ export default function AdminJurisIa() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/**
+ * O que a amostra devolveu.
+ *
+ * A lista de "não classificados" é o motivo deste bloco existir: são os nomes
+ * do último movimento dos processos que ficaram sem resultado. Se a sentença
+ * deste tribunal se chama algo que as regras não cobrem, ela aparece aqui — e
+ * é assim que a classificação é calibrada com dado real em vez de palpite.
+ */
+function ResultadoAmostra({ dados }: { dados: any }) {
+  const r = dados.porResultado ?? {};
+  const classificados = Object.values(r).reduce((s: number, n) => s + Number(n), 0) as number;
+
+  return (
+    <Card className="border-violet-200">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <FlaskConical className="h-4 w-4 text-violet-600" />
+          Amostra — nada foi gravado
+        </CardTitle>
+        <CardDescription>
+          {nf.format(dados.lidos)} lidos
+          {dados.total != null && <> de ~{nf.format(dados.total)} no índice</>} ·{" "}
+          {nf.format(dados.aceitos)} aceitos · {nf.format(dados.sigilosos)} sigilosos ·{" "}
+          {nf.format(dados.invalidos)} inválidos
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+            Desfecho ({nf.format(classificados)} de {nf.format(dados.aceitos)} classificados)
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {Object.entries(r).map(([k, v]) => (
+              <span key={k} className="rounded border bg-muted/50 px-2 py-1 text-xs">
+                {k.replace(/_/g, " ")}{" "}
+                <b className="tabular-nums">{nf.format(Number(v))}</b>
+              </span>
+            ))}
+            <span className="rounded border bg-muted/50 px-2 py-1 text-xs">
+              sem resultado <b className="tabular-nums">{nf.format(dados.semResultado)}</b>
+            </span>
+          </div>
+        </div>
+
+        {dados.naoClassificados?.length > 0 && (
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+              Último movimento dos não classificados
+            </p>
+            <p className="mb-1.5 text-[11px] text-muted-foreground">
+              Se a sentença deste tribunal aparece aqui, é sinal de que a regra precisa cobrir
+              esse nome.
+            </p>
+            <div className="space-y-0.5">
+              {dados.naoClassificados.map((n: any) => (
+                <div key={n.nome} className="flex gap-2 text-xs">
+                  <span className="w-8 shrink-0 text-right font-bold tabular-nums text-muted-foreground">
+                    {n.vezes}
+                  </span>
+                  <span className="min-w-0 flex-1">{n.nome}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {dados.exemplos?.length > 0 && (
+          <div>
+            <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+              Exemplos
+            </p>
+            <div className="space-y-1">
+              {dados.exemplos.map((e: any) => (
+                <div key={e.cnj} className="rounded border px-2 py-1.5 text-[11px]">
+                  <p className="font-mono text-[10px] text-muted-foreground">{e.cnj}</p>
+                  <p className="font-semibold">{e.classe ?? "— sem classe —"}</p>
+                  <p className="text-muted-foreground">
+                    {e.assunto ?? "— sem assunto —"} · {e.orgao ?? "— sem órgão —"} ·{" "}
+                    {e.movimentos} movimento(s)
+                    {e.resultado && (
+                      <> · <b className="text-emerald-600">{e.resultado.replace(/_/g, " ")}</b> ({e.movimentoDecisivo})</>
+                    )}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
