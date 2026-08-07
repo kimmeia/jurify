@@ -50,6 +50,7 @@ import { parseValorBR } from "@shared/valor-br";
 import { FUSO_HORARIO_PADRAO, dataHojeBR, rotuloDataConversa } from "@shared/escritorio-types";
 import { RespostaRapidaAutocomplete } from "@/components/atendimento/RespostaRapidaAutocomplete";
 import { ConversationDiff } from "./atendimento/conversation-diff";
+import { TransferirConversaDialog } from "./atendimento/TransferirConversaDialog";
 import { AIActionCards } from "./atendimento/ai-action-cards";
 import { ComplianceGuard, ComplianceGuardBadge } from "./atendimento/compliance-guard";
 import { LinhaTempoUnificada } from "./atendimento/linha-tempo-unificada";
@@ -1420,6 +1421,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
 
   // Atendentes pra transferência
   const { data: atendentes } = trpc.crm.listarAtendentes.useQuery();
+  const { data: setoresTransferir } = trpc.configuracoes.listarSetores.useQuery(undefined, {
+    enabled: showTransferir,
+  });
   const transferirMut = trpc.crm.transferirConversa.useMutation({
     onSuccess: () => { toast.success("Conversa transferida!"); setShowTransferir(false); (onTransferido ?? onUpdate)(); },
     onError: (e: any) => toast.error(e.message),
@@ -2261,23 +2265,19 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
 
     {/* Dialog transferir */}
     {showTransferir && (
-      <Dialog open={showTransferir} onOpenChange={setShowTransferir}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><ArrowRightLeft className="h-5 w-5 text-orange-600" /> Transferir conversa</DialogTitle></DialogHeader>
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">Selecione o atendente que receberá esta conversa:</p>
-            {(atendentes || []).map((a: any) => (
-              <button key={a.id} onClick={() => transferirMut.mutate({ conversaId: cid, novoAtendenteId: a.id })}
-                className="w-full flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 text-left transition-colors"
-                disabled={transferirMut.isPending}
-              >
-                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{(a.nome || "?")[0]}</div>
-                <div className="flex-1"><p className="text-sm font-medium">{a.nome || a.email}</p><p className="text-[10px] text-muted-foreground">{a.cargo}</p></div>
-              </button>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <TransferirConversaDialog
+        open={showTransferir}
+        onClose={() => setShowTransferir(false)}
+        clienteNome={(conv as any)?.contatoNome || "Cliente"}
+        atendentes={(atendentes || []) as any[]}
+        setores={((setoresTransferir || []) as any[]).map((s) => ({ id: s.id, nome: s.nome }))}
+        atendenteAtualId={(conv as any)?.atendenteId ?? null}
+        meuColaboradorId={
+          ((atendentes || []) as any[]).find((a) => a.userId === (usuarioLogado as any)?.id)?.id ?? null
+        }
+        transferindo={transferirMut.isPending}
+        onTransferir={(novoAtendenteId) => transferirMut.mutate({ conversaId: cid, novoAtendenteId })}
+      />
     )}
 
     {/* Dialog vincular a cliente */}

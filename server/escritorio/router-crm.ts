@@ -20,6 +20,7 @@ import {
 import { conversas, contatos, leads } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { excluirClienteEmCascata } from "./excluir-cliente";
+import { mensagemTransferencia, nomeCurto } from "./transferencia-conversa";
 import { createLogger } from "../_core/logger";
 import path from "path";
 import { promises as fsp } from "fs";
@@ -58,6 +59,23 @@ async function colaboradorDoEscritorio(
     .where(and(eq(colaboradores.id, colaboradorId), eq(colaboradores.escritorioId, escritorioId)))
     .limit(1);
   return !!c;
+}
+
+/** Nome de exibição de vários colaboradores numa consulta só. */
+async function nomesDeColaboradores(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  ids: Array<number | null | undefined>,
+): Promise<Map<number, string | null>> {
+  const { colaboradores, users } = await import("../../drizzle/schema");
+  const { inArray } = await import("drizzle-orm");
+  const alvo = [...new Set(ids.filter((i): i is number => typeof i === "number"))];
+  if (alvo.length === 0) return new Map();
+  const rows = await db
+    .select({ id: colaboradores.id, nome: users.name, email: users.email })
+    .from(colaboradores)
+    .innerJoin(users, eq(colaboradores.userId, users.id))
+    .where(inArray(colaboradores.id, alvo));
+  return new Map(rows.map((r) => [r.id, r.nome ?? r.email ?? null]));
 }
 
 /**
@@ -816,19 +834,47 @@ export const crmRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+
+      // `atualizarConversa` escopa a CONVERSA por escritório, mas não o
+      // destinatário: sem esta checagem dava pra jogar a conversa no colo de
+      // um colaborador de outro escritório mandando o id na mão.
+      if (!(await colaboradorDoEscritorio(db, esc.escritorio.id, input.novoAtendenteId))) {
+        throw new Error("Atendente não encontrado neste escritório.");
+      }
+
+      // Dono anterior precisa ser lido ANTES do update — é metade da frase
+      // que vai pro histórico.
+      const [conv] = await db
+        .select({ atendenteId: conversas.atendenteId })
+        .from(conversas)
+        .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!conv) throw new Error("Conversa não encontrada.");
+
+      const nomes = await nomesDeColaboradores(db, [
+        esc.colaborador.id,
+        input.novoAtendenteId,
+        conv.atendenteId,
+      ]);
 
       await atualizarConversa(input.conversaId, esc.escritorio.id, {
         atendenteId: input.novoAtendenteId,
         status: "em_atendimento",
       });
 
-      // Registra a transferência como mensagem de sistema
+      const paraNome = nomes.get(input.novoAtendenteId) ?? null;
       await enviarMensagem({
         conversaId: input.conversaId,
         remetenteId: esc.colaborador.id,
         direcao: "saida",
         tipo: "texto",
-        conteudo: `[Sistema] Conversa transferida para outro atendente.`,
+        conteudo: mensagemTransferencia({
+          autor: nomes.get(esc.colaborador.id) ?? null,
+          de: conv.atendenteId ? nomes.get(conv.atendenteId) ?? null : null,
+          para: paraNome,
+        }),
       });
 
       // Notifica via SSE
@@ -837,7 +883,7 @@ export const crmRouter = router({
         emitirParaEscritorio(esc.escritorio.id, {
           tipo: "conversa_atribuida",
           titulo: "Conversa transferida",
-          mensagem: `Conversa transferida para atendente #${input.novoAtendenteId}`,
+          mensagem: `Conversa transferida para ${nomeCurto(paraNome)}`,
           dados: { conversaId: input.conversaId, novoAtendenteId: input.novoAtendenteId },
         });
       } catch { /* SSE opcional */ }
@@ -867,7 +913,26 @@ export const crmRouter = router({
       .innerJoin(users, eq(colaboradores.userId, users.id))
       .where(and(eq(colaboradores.escritorioId, esc.escritorio.id), eq(colaboradores.ativo, true)));
 
-    return rows;
+    // Carga de cada um. Vai em consulta separada em vez de subquery por linha
+    // porque o seletor de transferência precisa dela pra TODO mundo — e é o
+    // número que evita o erro clássico de despejar mais uma conversa em quem
+    // já está com doze.
+    const { sql, inArray } = await import("drizzle-orm");
+    const cargas = await db
+      .select({ atendenteId: conversas.atendenteId, abertas: sql<number>`COUNT(*)` })
+      .from(conversas)
+      .where(and(
+        eq(conversas.escritorioId, esc.escritorio.id),
+        inArray(conversas.status, ["aguardando", "em_atendimento"]),
+      ))
+      .groupBy(conversas.atendenteId);
+
+    const porAtendente = new Map<number, number>();
+    for (const c of cargas) {
+      if (c.atendenteId != null) porAtendente.set(Number(c.atendenteId), Number(c.abertas || 0));
+    }
+
+    return rows.map((r) => ({ ...r, conversasAbertas: porAtendente.get(r.id) ?? 0 }));
   }),
 
   /**
