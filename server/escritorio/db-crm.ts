@@ -600,6 +600,38 @@ export async function contarConversasPorStatus(escritorioId: number, filtros?: {
   return out;
 }
 
+/**
+ * Quantas conversas ABERTAS cada atendente tem — a carga que o seletor de
+ * transferência mostra.
+ *
+ * Passa pelas mesmas condições e pelos mesmos INNER JOINs da listagem de
+ * propósito. Um COUNT direto em `conversas` inclui arquivadas e conversas de
+ * canal/contato removido, que a inbox nunca mostra: o seletor dizia "180" pra
+ * quem a tela do Atendimento mostrava zero.
+ */
+export async function contarAbertasPorAtendente(
+  escritorioId: number,
+): Promise<Map<number, number>> {
+  const db = await getDb();
+  if (!db) return new Map();
+  const base = await condicoesConversa(db, escritorioId);
+  if (!base) return new Map();
+
+  const rows = await db
+    .select({ atendenteId: conversas.atendenteId, n: sql<number>`COUNT(*)` })
+    .from(conversas)
+    .innerJoin(contatos, eq(conversas.contatoId, contatos.id))
+    .innerJoin(canaisIntegrados, eq(conversas.canalId, canaisIntegrados.id))
+    .where(and(...base, inArray(conversas.status, ["aguardando", "em_atendimento"])))
+    .groupBy(conversas.atendenteId);
+
+  const out = new Map<number, number>();
+  for (const r of rows) {
+    if (r.atendenteId != null) out.set(Number(r.atendenteId), Number(r.n || 0));
+  }
+  return out;
+}
+
 export async function listarConversas(escritorioId: number, filtros?: {
   status?: string;
   atendenteId?: number;

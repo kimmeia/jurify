@@ -51,6 +51,7 @@ import { FUSO_HORARIO_PADRAO, dataHojeBR, rotuloDataConversa } from "@shared/esc
 import { RespostaRapidaAutocomplete } from "@/components/atendimento/RespostaRapidaAutocomplete";
 import { ConversationDiff } from "./atendimento/conversation-diff";
 import { TransferirConversaDialog } from "./atendimento/TransferirConversaDialog";
+import { montarListaInbox } from "@shared/inbox-lista";
 import { AIActionCards } from "./atendimento/ai-action-cards";
 import { ComplianceGuard, ComplianceGuardBadge } from "./atendimento/compliance-guard";
 import { LinhaTempoUnificada } from "./atendimento/linha-tempo-unificada";
@@ -481,6 +482,8 @@ export default function Atendimento() {
   // Última versão conhecida da conversa aberta — com o filtro de status no
   // servidor, ela pode sair do array retornado ao mudar de status.
   const abertaCacheRef = useRef<any>(null);
+  /** Assinatura dos filtros de servidor — trocar de filtro invalida o cache. */
+  const chaveFiltrosRef = useRef<string>("");
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
   // Ligação de voz via WhatsApp (Calling API). Instância global (montada no
   // AppLayout) — a chamada toca em qualquer tela; aqui só usamos pra ligar.
@@ -573,25 +576,21 @@ export default function Atendimento() {
     setHoraFim("");
   };
   const convs = (() => {
-    const todas = convsAll || [];
-    // Status já vem filtrado do servidor; o filter local é só cinto de
-    // segurança pro intervalo entre trocar de aba e o refetch chegar.
-    let porStatus = filtro === "todos" || mostrarArquivadas ? todas : todas.filter((c: any) => c.status === filtro);
-    // Mantém a conversa ABERTA visível mesmo que mude de status e saia do filtro
-    // da aba (ex.: ao responder, aguardando → em_atendimento) — senão ela "some"
-    // da lista e o atendente precisa trocar de aba pra reencontrar. Com o filtro
-    // no servidor ela pode nem vir no array — o cache guarda a última versão.
-    if (selId != null) {
-      const aberta = todas.find((c: any) => c.id === selId);
-      if (aberta) abertaCacheRef.current = aberta;
-      else if (abertaCacheRef.current?.id !== selId) abertaCacheRef.current = null;
-    } else {
-      abertaCacheRef.current = null;
-    }
-    if (selId != null && !porStatus.some((c: any) => c.id === selId)) {
-      const aberta = todas.find((c: any) => c.id === selId) ?? (abertaCacheRef.current?.id === selId ? abertaCacheRef.current : null);
-      if (aberta) porStatus = [aberta, ...porStatus];
-    }
+    const chaveFiltros = JSON.stringify(filtrosBackend ?? null);
+    const filtrosMudaram = chaveFiltrosRef.current !== chaveFiltros;
+    chaveFiltrosRef.current = chaveFiltros;
+
+    const { lista, cache } = montarListaInbox<any>({
+      todas: convsAll || [],
+      selId,
+      aba: filtro,
+      mostrarArquivadas,
+      cache: abertaCacheRef.current,
+      filtrosMudaram,
+    });
+    abertaCacheRef.current = cache;
+    let porStatus = lista;
+
     const q = inboxBusca.trim().toLowerCase();
     if (!q) return porStatus;
     // O servidor já filtrou (nome, telefone principal/secundário/anterior,
