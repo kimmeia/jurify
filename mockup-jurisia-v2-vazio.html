@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href=".claude/skills/mockup-juridflow/assets/fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+    --alerta:#dc2626; --ok:#059669;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:690px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:20px 28px; height:100%; display:flex; flex-direction:column; gap:12px; }
+
+  .topo { display:flex; align-items:center; justify-content:space-between; gap:14px; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:25px; letter-spacing:-.01em;
+        display:flex; align-items:center; gap:9px; }
+  .beta { font-size:9.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase;
+          color:#92400e; background:#fef3c7; border:1px solid #fcd34d; border-radius:999px; padding:3px 8px; }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .cota { display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--mudo); }
+  .cota-barra { width:110px; height:7px; border-radius:4px; background:#e2e8f0; overflow:hidden; border:1px solid #dbe2ea; }
+  .cota-barra i { display:block; height:100%; background:var(--acento); border-radius:3px; }
+
+  .acervo { flex:0 0 auto; padding:11px 15px; display:flex; align-items:center; gap:12px; }
+  .acervo .lab b { display:block; font-size:12.5px; font-weight:700; margin-top:1px; }
+  .chips { display:flex; gap:7px; flex-wrap:wrap; flex:1; min-width:0; }
+  .chip { border:1px solid var(--borda); background:var(--surface); border-radius:999px;
+          padding:5px 11px; font-size:11.5px; color:var(--corpo); display:inline-flex; align-items:center; gap:6px; }
+  .chip b { font-weight:700; font-variant-numeric:tabular-nums; color:var(--tinta-2); }
+  .chip.mais { color:var(--mudo); border-style:dashed; }
+  .chip.sugerir { border-color:#ddd6fe; background:var(--acento-bg); color:var(--acento-forte); font-weight:600; }
+  .chip.sugerir b { color:var(--acento-forte); }
+
+  .corpo { flex:1 1 auto; display:grid; grid-template-columns:230px 1fr; gap:12px; min-height:0; }
+  .lateral { display:flex; flex-direction:column; gap:7px; }
+  .btn-nova { background:var(--acento); color:#fff; font-weight:600; font-size:13px;
+              border-radius:10px; padding:10px 14px; display:flex; align-items:center;
+              justify-content:center; gap:7px; box-shadow:0 8px 18px -8px #7c3aed88; }
+  .pesq { position:relative; border:1px solid var(--borda); background:var(--surface);
+          border-radius:10px; padding:8px 30px 8px 11px; }
+  .pesq.on { border-color:#ddd6fe; background:var(--acento-bg); }
+  .pesq .t { font-size:12px; font-weight:600; color:var(--tinta-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pesq .d { font-size:10.5px; color:var(--fraco); margin-top:2px; }
+  .pesq .kebab { position:absolute; right:8px; top:9px; }
+
+  .conversa { display:flex; flex-direction:column; overflow:hidden; }
+  .thread { flex:1 1 auto; padding:16px 18px; display:flex; flex-direction:column; gap:12px; overflow:hidden; }
+  .bolha { align-self:flex-end; max-width:70%; background:var(--acento); color:#fff;
+           border-radius:14px 14px 4px 14px; padding:10px 14px; font-size:13.5px; line-height:1.35; }
+
+  /* ── UM bloco só, e ele ensina em vez de acusar ── */
+  .vazio { border:1px solid #fcd34d; background:#fffbeb; border-radius:12px; padding:15px 17px; }
+  .vazio .cab { display:flex; align-items:center; gap:8px; }
+  .vazio .cab b { font-size:14px; font-weight:700; color:#78350f; }
+  .vazio .exp { margin-top:7px; font-size:13px; line-height:1.55; color:#78350f; }
+  .vazio .exp strong { font-weight:700; }
+
+  .termos { margin-top:12px; background:#fff; border:1px solid #fde68a; border-radius:10px; padding:11px 13px; }
+  .termos .lin { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  .tchip { border:1px solid var(--borda); background:var(--surface); border-radius:7px;
+           padding:4px 9px; font-size:11.5px; font-weight:600; color:var(--corpo);
+           display:inline-flex; align-items:center; gap:6px; }
+  .tchip.riscado { color:var(--fraco); text-decoration:line-through; border-style:dashed; }
+
+  .saidas { margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:11px; }
+  .saida { background:#fff; border:1px solid #fde68a; border-radius:10px; padding:12px 13px; }
+  .saida .tit { display:flex; align-items:center; gap:7px; font-size:12px; font-weight:700; color:#78350f; }
+  .saida p { margin-top:5px; font-size:11.5px; line-height:1.5; color:var(--corpo-2); }
+  .saida .acao { margin-top:9px; display:flex; gap:6px; flex-wrap:wrap; }
+
+  .gratis { margin-top:12px; display:flex; align-items:center; gap:8px;
+            border-top:1px solid #fde68a; padding-top:11px; }
+  .gratis span { font-size:12px; color:#78350f; }
+  .gratis b { font-weight:700; }
+
+  .entrada { flex:0 0 auto; border-top:1px solid var(--borda); padding:12px 18px; }
+  .campo { display:flex; align-items:center; gap:9px; }
+  .campo .inp { flex:1; height:40px; border:1px solid var(--borda); border-radius:10px;
+                padding:0 13px; display:flex; align-items:center; font-size:13.5px; color:var(--fraco); }
+  .campo .go { width:40px; height:40px; border-radius:10px; background:var(--acento);
+               display:flex; align-items:center; justify-content:center; box-shadow:0 8px 18px -8px #7c3aed88; }
+  .rodape-txt { margin-top:7px; font-size:10.5px; color:var(--fraco); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topo">
+      <div class="h1">Pesquisa jurisprudencial <span class="beta">beta</span></div>
+      <div class="cota">
+        <span>Você usou <strong style="color:var(--corpo);">2 de 900</strong> pesquisas de setembro</span>
+        <div class="cota-barra"><i style="width:6%; min-width:7px;"></i></div>
+      </div>
+    </div>
+
+    <div class="card acervo">
+      <div class="lab">
+        <div class="micro">Você pode pesquisar</div>
+        <b>1.284 processos do TJCE</b>
+      </div>
+      <div class="chips">
+        <span class="chip">Busca e Apreensão <b>121</b></span>
+        <span class="chip">Execução Fiscal <b>412</b></span>
+        <span class="chip">Procedimento Comum <b>486</b></span>
+        <span class="chip">Execução de Título Extrajudicial <b>88</b></span>
+        <span class="chip">Monitória <b>74</b></span>
+        <span class="chip">Despejo <b>52</b></span>
+        <span class="chip mais">+ 6 tipos</span>
+      </div>
+      <div style="flex:0 0 auto; font-size:10.5px; color:var(--fraco); text-align:right; line-height:1.4;">
+        Coletado do CNJ<br>até 09/09
+      </div>
+    </div>
+
+    <div class="corpo">
+      <div class="lateral">
+        <div class="btn-nova">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>
+          Nova pesquisa
+        </div>
+        <div class="pesq on">
+          <div class="t">Revisão contratual</div>
+          <div class="d">agora · 1 pergunta</div>
+          <svg class="kebab" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.6" fill="#cbd5e1"/><circle cx="12" cy="12" r="1.6" fill="#cbd5e1"/><circle cx="12" cy="19" r="1.6" fill="#cbd5e1"/></svg>
+        </div>
+        <div class="pesq">
+          <div class="t">Busca e apreensão — desfecho</div>
+          <div class="d">hoje, 14:32 · 3 perguntas</div>
+          <svg class="kebab" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.6" fill="#cbd5e1"/><circle cx="12" cy="12" r="1.6" fill="#cbd5e1"/><circle cx="12" cy="19" r="1.6" fill="#cbd5e1"/></svg>
+        </div>
+      </div>
+
+      <div class="card conversa">
+        <div class="thread">
+          <div class="bolha">revisão contratual</div>
+
+          <div class="vazio">
+            <div class="cab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#b45309" stroke-width="2"/><path d="M12 8v5M12 16h.01" stroke="#b45309" stroke-width="2.3" stroke-linecap="round"/></svg>
+              <b>Não há revisão de contrato no acervo do TJCE — ainda</b>
+            </div>
+            <p class="exp">
+              Procurei por processos cuja <strong>classe</strong> contivesse “revisão” <strong>e</strong> cujo
+              <strong>assunto</strong> contivesse “contratual”. Nenhum dos 1.284 processos coletados bate com
+              os dois ao mesmo tempo.
+            </p>
+
+            <div class="termos">
+              <div class="micro" style="margin-bottom:6px;">O que eu procurei — clique para tirar um termo</div>
+              <div class="lin">
+                <span class="tchip">classe contém <b>revisão</b>
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#64748b" stroke-width="3" stroke-linecap="round"/></svg>
+                </span>
+                <span style="font-size:11px; color:var(--fraco); font-weight:700;">E</span>
+                <span class="tchip riscado">assunto contém <b>contratual</b>
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/></svg>
+                </span>
+                <span style="font-size:11px; color:var(--mudo);">— tirando “contratual”, sobram <b style="color:var(--tinta);">0</b> processos</span>
+              </div>
+            </div>
+
+            <div class="saidas">
+              <div class="saida">
+                <div class="tit">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 20h16M6 16V9M12 16V5M18 16v-4" stroke="#78350f" stroke-width="2.3" stroke-linecap="round"/></svg>
+                  Pesquise o que já foi coletado
+                </div>
+                <p>Estes são os tipos com mais processos no TJCE hoje. Clique num deles para refazer sua pergunta em cima do que existe.</p>
+                <div class="acao">
+                  <span class="chip sugerir">Procedimento Comum <b>486</b></span>
+                  <span class="chip sugerir">Execução Fiscal <b>412</b></span>
+                  <span class="chip sugerir">Busca e Apreensão <b>121</b></span>
+                </div>
+              </div>
+              <div class="saida">
+                <div class="tit">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#78350f" stroke-width="2.4" stroke-linecap="round"/></svg>
+                  Peça a coleta desse tipo
+                </div>
+                <p>Se revisão de contrato bancário é o seu dia a dia, avisamos quando esse recorte entrar no acervo. Você não paga nada por isso.</p>
+                <div class="acao">
+                  <span class="chip sugerir">Quero ser avisado quando houver</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="gratis">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L19 7" stroke="#059669" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Esta pesquisa não consumiu nenhuma das suas 900 mensagens</b> — busca que volta vazia não é cobrada.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="entrada">
+          <div class="campo">
+            <div class="inp">Refaça a pergunta, ou escolha um tipo lá em cima…</div>
+            <div class="go">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#fff" stroke-width="2.3"/><path d="M16.5 16.5 21 21" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+          <p class="rodape-txt">Beta · Dados públicos dos tribunais, via CNJ. Confira as fontes antes de peticionar.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
