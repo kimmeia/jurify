@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href=".claude/skills/mockup-juridflow/assets/fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+    --viz-1:#2a78d6; --viz-2:#eb6834; --viz-3:#1baf7a; --viz-4:#eda100; --viz-5:#e87ba4;
+    --viz-trilho:#e8edf3;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:22px 30px; height:100%; display:flex; flex-direction:column; gap:13px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13px; color:var(--mudo); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:15.5px; }
+
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; flex:0 0 auto; }
+  .kpi { padding:13px 15px; }
+  .kpi .n { font-family:'Poppins'; font-size:25px; font-weight:700; line-height:1.05;
+            font-variant-numeric:tabular-nums; }
+  .kpi .t { font-size:12px; font-weight:600; color:var(--tinta-2); margin-top:3px; }
+  .kpi .d { font-size:10.5px; color:var(--mudo); margin-top:3px; line-height:1.4; }
+  .kpi .d b { color:var(--corpo); }
+
+  .meio { flex:1 1 auto; display:grid; grid-template-columns:1fr 470px; gap:13px; min-height:0; }
+  .painel { padding:15px 17px; display:flex; flex-direction:column; min-height:0; }
+
+  table { width:100%; border-collapse:collapse; table-layout:fixed; }
+  th { text-align:left; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+       color:var(--fraco); padding:0 0 8px; border-bottom:1px solid var(--borda); }
+  td { padding:8px 0; border-bottom:1px solid var(--hairline); vertical-align:middle; }
+  tr:last-child td { border-bottom:0; }
+  .tb-nome { font-size:12.5px; font-weight:600; color:var(--tinta-2); }
+  .tb-nome small { display:block; font-weight:500; font-size:10.5px; color:var(--fraco); margin-top:1px; }
+  .num { text-align:right; font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .num small { display:block; font-weight:500; font-size:10px; color:var(--fraco); }
+  .st { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:800;
+        letter-spacing:.04em; text-transform:uppercase; border-radius:999px; padding:4px 9px; }
+  .st.rod { background:var(--acento-bg); color:var(--acento-forte); border:1px solid #ddd6fe; }
+  .st.fila { background:var(--hairline); color:var(--corpo-2); border:1px solid var(--borda); }
+  .st.comp { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .btn { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--borda);
+         background:var(--surface); border-radius:8px; padding:6px 11px; font-size:11.5px;
+         font-weight:600; color:var(--corpo); }
+  .btn.pri { background:var(--acento); border-color:var(--acento); color:#fff;
+             box-shadow:0 8px 16px -8px #7c3aed88; }
+
+  .prog { height:6px; border-radius:3px; background:var(--viz-trilho); overflow:hidden; }
+  .prog i { display:block; height:100%; background:var(--viz-1); border-radius:3px; }
+
+  .duas { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .barra-linha { display:grid; grid-template-columns:minmax(0,1fr) 130px 74px; align-items:center; gap:9px; margin-top:7px; }
+  .barra-linha .lab { font-size:11.5px; color:var(--corpo); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .trilho { height:8px; border-radius:2px; background:var(--viz-trilho); overflow:hidden; }
+  .fill { height:100%; border-radius:0 4px 4px 0; }
+  .val { display:flex; font-size:11.5px; font-variant-numeric:tabular-nums; }
+  .val b { width:34px; text-align:right; font-weight:700; color:var(--corpo); }
+  .val i { width:40px; text-align:right; font-style:normal; color:var(--fraco); }
+
+  .alerta { display:flex; gap:9px; align-items:flex-start; background:#fffbeb;
+            border:1px solid #fcd34d; border-radius:10px; padding:10px 12px; margin-top:16px; }
+  .alerta p { font-size:11.5px; line-height:1.5; color:#78350f; }
+  .alerta b { font-weight:700; }
+
+  .rodape { flex:0 0 auto; font-size:10.5px; color:var(--fraco); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topo">
+      <div>
+        <div class="h1">JurisIA — acervo e coleta</div>
+        <div class="sub">Todos os números aqui saem da mesma contagem que o cliente vê na tela dele.</div>
+      </div>
+      <div style="display:flex; gap:9px;">
+        <div class="btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3v6M12 3L9.5 5.5M12 3l2.5 2.5" stroke="#334155" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="15" r="6" stroke="#334155" stroke-width="2"/></svg>
+          Amostra do TJCE
+        </div>
+        <div class="btn pri">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M7 5l12 7-12 7V5z" fill="#fff"/></svg>
+          Continuar varredura
+        </div>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="card kpi">
+        <div class="n">1.284</div>
+        <div class="t">Processos no acervo</div>
+        <div class="d">Linhas distintas na tabela. É <b>este</b> o número que o cliente vê.</div>
+      </div>
+      <div class="card kpi">
+        <div class="n">2.410</div>
+        <div class="t">Gravações feitas</div>
+        <div class="d">O robô releu <b>1.126</b> processos que já tinha. Reler é normal — atualiza movimento.</div>
+      </div>
+      <div class="card kpi">
+        <div class="n" style="color:var(--acento-forte);">1 de 60</div>
+        <div class="t">Tribunais com coleta</div>
+        <div class="d">Só o TJCE começou. Nenhum foi concluído.</div>
+      </div>
+      <div class="card kpi">
+        <div class="n" style="color:var(--ok);">0</div>
+        <div class="t">Sigilosos barrados</div>
+        <div class="d">Nenhum processo sigiloso entrou. A barreira roda antes de gravar.</div>
+      </div>
+    </div>
+
+    <div class="meio">
+      <!-- ── o que existe no acervo: a resposta pro "por que o cliente nao acha nada" ── -->
+      <div class="card painel">
+        <div class="h2">O que existe no acervo</div>
+        <div class="sub" style="font-size:12px; margin-bottom:11px;">
+          É isto que o cliente consegue pesquisar. Se o que ele procura não está aqui, a busca dele
+          volta vazia — e é aqui que você descobre por quê.
+        </div>
+
+        <div class="duas">
+        <div>
+        <div class="micro">Classe processual</div>
+        <div class="barra-linha">
+          <span class="lab">Procedimento Comum Cível</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-1); width:38%"></div></div>
+          <span class="val"><b>38%</b><i>486</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">Execução Fiscal</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-1); width:32%"></div></div>
+          <span class="val"><b>32%</b><i>412</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">Busca e Apreensão</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-1); width:9%"></div></div>
+          <span class="val"><b>9%</b><i>121</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">Execução de Título Extrajudicial</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-1); width:7%"></div></div>
+          <span class="val"><b>7%</b><i>88</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">Monitória</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-1); width:6%"></div></div>
+          <span class="val"><b>6%</b><i>74</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">Outras 8 classes</span>
+          <div class="trilho"><div class="fill" style="background:var(--fantasma); width:8%"></div></div>
+          <span class="val"><b>8%</b><i>103</i></span>
+        </div>
+        </div>
+
+        <div>
+        <div class="micro">Assunto</div>
+        <div class="barra-linha">
+          <span class="lab">Dívida Ativa</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-3); width:30%"></div></div>
+          <span class="val"><b>30%</b><i>389</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">Alienação Fiduciária</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-3); width:11%"></div></div>
+          <span class="val"><b>11%</b><i>144</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">Indenização por Dano Moral</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-3); width:10%"></div></div>
+          <span class="val"><b>10%</b><i>131</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">Inadimplemento</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-3); width:8%"></div></div>
+          <span class="val"><b>8%</b><i>102</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">Locação de Imóvel</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-3); width:4%"></div></div>
+          <span class="val"><b>4%</b><i>52</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">Outros 34 assuntos</span>
+          <div class="trilho"><div class="fill" style="background:var(--fantasma); width:37%"></div></div>
+          <span class="val"><b>37%</b><i>466</i></span>
+        </div>
+        </div>
+        </div>
+
+        <div class="micro" style="margin-top:18px;">Grau</div>
+        <div style="max-width:calc(50% - 10px);">
+        <div class="barra-linha">
+          <span class="lab">1º grau — sentença</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-2); width:100%"></div></div>
+          <span class="val"><b>100%</b><i>1.284</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">2º grau — acórdão</span>
+          <div class="trilho"></div>
+          <span class="val"><b style="color:var(--fantasma);">0%</b><i>0</i></span>
+        </div>
+        </div>
+
+        <div class="alerta">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex:0 0 16px; margin-top:1px;"><path d="M12 3l9.5 17h-19L12 3z" stroke="#b45309" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="#b45309" stroke-width="2.2" stroke-linecap="round"/></svg>
+          <p><b>Só há 1º grau no acervo.</b> Sentença não é jurisprudência — não vincula e é reformada.
+          Enquanto não houver acórdão de 2ª instância, o cliente consegue estatística de comportamento
+          de vara, mas não o entendimento do tribunal.</p>
+        </div>
+      </div>
+
+      <!-- ── coleta por tribunal ── -->
+      <div class="card painel">
+        <div class="h2">Coleta por tribunal</div>
+        <div class="sub" style="font-size:12px; margin-bottom:11px;">
+          Cada execução para no teto de páginas e grava onde parou.
+        </div>
+        <table>
+          <tr>
+            <th>Tribunal</th>
+            <th style="width:132px; text-align:right;">No acervo</th>
+            <th style="width:104px; text-align:right;">Status</th>
+          </tr>
+          <tr>
+            <td colspan="3" style="padding-bottom:4px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div class="tb-nome" style="flex:1; min-width:0;">TJCE<small>Tribunal de Justiça do Ceará</small></div>
+                <div class="num" style="flex:0 0 132px;">1.284<small>de 10.000+ no índice</small></div>
+                <div style="flex:0 0 104px; text-align:right;"><span class="st rod">Coletando</span></div>
+              </div>
+              <div class="prog" style="margin-top:7px;"><i style="width:13%"></i></div>
+              <div style="font-size:10px; color:var(--fraco); margin-top:4px;">13% percorrido · última execução hoje, 09:12</div>
+            </td>
+          </tr>
+          <tr>
+            <td class="tb-nome">STJ<small>Superior Tribunal de Justiça</small></td>
+            <td class="num" style="color:var(--fantasma);">0</td>
+            <td style="text-align:right;"><span class="st fila">Na fila</span></td>
+          </tr>
+          <tr>
+            <td class="tb-nome">TRF5<small>TRF da 5ª Região</small></td>
+            <td class="num" style="color:var(--fantasma);">0</td>
+            <td style="text-align:right;"><span class="st fila">Na fila</span></td>
+          </tr>
+          <tr>
+            <td class="tb-nome">TJSP<small>Tribunal de Justiça de São Paulo</small></td>
+            <td class="num" style="color:var(--fantasma);">0</td>
+            <td style="text-align:right;"><span class="st fila">Na fila</span></td>
+          </tr>
+        </table>
+
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--borda);">
+          <div class="micro">O que os clientes procuraram e não acharam</div>
+          <p style="font-size:11.5px; color:var(--mudo); margin-top:4px; line-height:1.5;">
+            Toda busca que volta vazia entra aqui. É a fila de coleta ordenada por demanda real,
+            em vez de por palpite.
+          </p>
+          <table style="margin-top:8px;">
+            <tr>
+              <td class="tb-nome" style="padding-top:6px;">revisão de contrato bancário<small>3 escritórios · 11 buscas</small></td>
+              <td class="num" style="padding-top:6px;"><span class="btn" style="padding:5px 9px;">Coletar</span></td>
+            </tr>
+            <tr>
+              <td class="tb-nome">dano moral — negativação indevida<small>2 escritórios · 6 buscas</small></td>
+              <td class="num"><span class="btn" style="padding:5px 9px;">Coletar</span></td>
+            </tr>
+            <tr>
+              <td class="tb-nome">acidente de trabalho<small>1 escritório · 2 buscas</small></td>
+              <td class="num"><span class="btn" style="padding:5px 9px;">Coletar</span></td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="rodape">Mockup — dados ilustrativos. “No acervo” e “Gravações feitas” são contagens diferentes de propósito: a primeira é o tamanho do acervo, a segunda é trabalho do robô.</div>
+  </div>
+</body>
+</html>

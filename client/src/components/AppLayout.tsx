@@ -96,6 +96,9 @@ type ItemMenu = {
   /** Ativo por prefixo (páginas com sub-rotas, como /automacoes/fluxos). */
   prefixo?: boolean;
   tomBadge?: "alerta" | "novidade";
+  /** Selo fixo de texto ("beta"). Some quando há contagem: número esperando é
+   *  informação viva e ganha do rótulo, e os dois não cabem em 34px. */
+  selo?: string;
 };
 
 const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
@@ -126,7 +129,7 @@ const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
       // contratou. Só some do menu quando o módulo não foi contratado — antes
       // aparecia pra qualquer um com Processos e entregava "não está no seu
       // plano" depois do clique.
-      { id: "jurisia", rotulo: "JurisIA", rota: "/jurisia", icone: Gavel, ver: (c) => c("processos"), ocultaPor: "jurisia", tomBadge: "novidade" },
+      { id: "jurisia", rotulo: "JurisIA", rota: "/jurisia", icone: Gavel, ver: (c) => c("processos"), ocultaPor: "jurisia", selo: "beta" },
       { id: "calculos", rotulo: "Cálculos", rota: "/calculos", icone: Calculator, ver: (c) => c("calculos"), ocultaPor: "calculos" },
       { id: "modelos", rotulo: "Modelos", rota: "/modelos-contrato", icone: FileText, ver: (c) => c("modelos") },
       // Fusão de SmartFlow (Fluxos) + Agentes IA: aparece com qualquer um dos
@@ -490,6 +493,11 @@ function AppSidebarContent({
                           >
                             <Icone className={`h-4 w-4 ${ativo ? "text-sidebar-primary" : ""}`} />
                             <span className="flex-1">{item.rotulo}</span>
+                            {item.selo && contagem === 0 && (
+                              <span className="ml-auto rounded-full border border-amber-400/40 bg-amber-400/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-amber-300 group-data-[collapsible=icon]:hidden">
+                                {item.selo}
+                              </span>
+                            )}
                             {contagem > 0 && (
                               <>
                                 <span
