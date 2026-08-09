@@ -129,7 +129,7 @@ export const adminRouter = router({
         cursor: null,
         tamanho: input.tamanho,
       });
-      return { total: pagina.total, ...resumirAmostra(pagina.hits) };
+      return { total: pagina.total, totalEhMinimo: pagina.totalEhMinimo, ...resumirAmostra(pagina.hits) };
     }),
 
   /**

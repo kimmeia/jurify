@@ -220,8 +220,35 @@ describe("proximaPagina", () => {
     expect(proximaPagina({ hits: { hits: [] } }, 100).total).toBeNull();
   });
 
+  // O ES para de contar em 10.000 e sinaliza com relation "gte". Sem ler esse
+  // campo, um tribunal de milhões aparece como "10.000" e a varredura parece
+  // quase pronta quando mal começou.
+  it("distingue contagem exata de contagem capada pelo Elasticsearch", () => {
+    const capado = proximaPagina(
+      { hits: { hits: [], total: { value: 10000, relation: "gte" } } },
+      100,
+    );
+    expect(capado.total).toBe(10000);
+    expect(capado.totalEhMinimo).toBe(true);
+
+    const exato = proximaPagina(
+      { hits: { hits: [], total: { value: 842, relation: "eq" } } },
+      100,
+    );
+    expect(exato.totalEhMinimo).toBe(false);
+
+    // Formato antigo (total numérico puro) nunca é capado.
+    expect(proximaPagina({ hits: { hits: [], total: 4200 } }, 100).totalEhMinimo).toBe(false);
+    expect(proximaPagina({ hits: { hits: [] } }, 100).totalEhMinimo).toBe(false);
+  });
+
   it("resposta fora do formato não quebra a varredura", () => {
-    expect(proximaPagina(null, 100)).toEqual({ hits: [], proximoCursor: null, total: null });
+    expect(proximaPagina(null, 100)).toEqual({
+      hits: [],
+      proximoCursor: null,
+      total: null,
+      totalEhMinimo: false,
+    });
     expect(proximaPagina({ erro: "x" }, 100).hits).toEqual([]);
   });
 });

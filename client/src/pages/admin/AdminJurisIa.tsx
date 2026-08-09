@@ -274,7 +274,15 @@ function ResultadoAmostra({ dados }: { dados: any }) {
         </CardTitle>
         <CardDescription>
           {nf.format(dados.lidos)} lidos
-          {dados.total != null && <> de ~{nf.format(dados.total)} no índice</>} ·{" "}
+          {dados.total != null && (
+            <>
+              {" "}de {nf.format(dados.total)}
+              {/* O ES para de contar em 10.000 e avisa em `relation`.
+                  Mostrar "~10.000" fazia um tribunal de milhões parecer
+                  quase varrido. */}
+              {dados.totalEhMinimo ? "+" : ""} no índice
+            </>
+          )} ·{" "}
           {nf.format(dados.aceitos)} aceitos · {nf.format(dados.sigilosos)} sigilosos ·{" "}
           {nf.format(dados.invalidos)} inválidos
         </CardDescription>
