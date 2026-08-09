@@ -6,6 +6,8 @@
  * nunca descobre que o acervo só tem execução fiscal.
  */
 
+import type { ComposicaoNatureza } from "./jurisia-grau";
+
 export interface FatiaAcervo {
   nome: string;
   quantidade: number;
@@ -19,6 +21,8 @@ export interface ComposicaoAcervo {
   /** Quantas ficaram fora do topo — a tela diz "+ N tipos". */
   classesRestantes: number;
   assuntosRestantes: number;
+  /** Quanto do acervo é acórdão e quanto é sentença de 1º grau. */
+  natureza: ComposicaoNatureza;
 }
 
 export const ACERVO_VAZIO: ComposicaoAcervo = {
@@ -28,4 +32,5 @@ export const ACERVO_VAZIO: ComposicaoAcervo = {
   assuntos: [],
   classesRestantes: 0,
   assuntosRestantes: 0,
+  natureza: { jurisprudencia: 0, estatistica: 0, indefinido: 0 },
 };

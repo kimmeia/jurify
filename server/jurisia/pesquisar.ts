@@ -27,6 +27,7 @@ import {
 } from "../../shared/jurisia-recorte";
 import type { PerfilRecorte } from "../../shared/jurisia-perfil";
 import { compararComAcervo, type Comparacao } from "../../shared/jurisia-estrategia";
+import { avisoDeNatureza, type ComposicaoNatureza } from "../../shared/jurisia-grau";
 import { buscarRecorte, perfilDoRecorte } from "./buscar-acervo";
 
 const SYSTEM_INTERPRETAR = `Você traduz a pergunta de um advogado em um RECORTE de busca sobre uma base de processos judiciais brasileiros.
@@ -60,6 +61,7 @@ Regras:
 - NÃO PRODUZA NÚMEROS SOBRE O CONJUNTO. Nada de percentual, nada de "X de Y processos", nada de contagem. A estatística já foi calculada e é exibida ao lado da sua resposta — se você escrever um número diferente, a resposta inteira é descartada. Descreva o padrão em palavras ("a maioria", "é raro", "praticamente sempre") e aponte processos concretos.
 - Pode citar número de CNJ, nome de vara, ano e artigo de lei que estejam nas fontes. O que não pode é medir o acervo.
 - Nunca cite súmula, tese ou acórdão que não esteja nas fontes.
+- RESPEITE A INSTÂNCIA de cada fonte. Só a decisão de órgão colegiado é jurisprudência — sentença de juiz singular mostra como aquela vara costuma decidir e nada além. Não escreva "o tribunal entende", "é entendimento consolidado" nem "a jurisprudência é" apoiado em sentença de 1º grau; nesse caso fale da vara ("nessa vara, o pedido costuma ser acolhido"). Quando o recorte não tiver nenhuma decisão colegiada, diga isso ao advogado.
 - Se os processos não respondem a pergunta, devolva "achou": false e diga o que faltou. É uma resposta boa.
 - "conclusao" é sua leitura prática pro advogado — o único trecho sem fonte, e também sem número.
 - Português do Brasil, direto, sem saudação. Fale como quem conversa com advogado.`;
@@ -80,6 +82,7 @@ Regras:
 - NÃO PRODUZA NÚMEROS. Os percentuais e as contagens já estão calculados e aparecem na tela ao lado; escrever um número diferente descarta a resposta inteira. Fale em palavras ("a maioria", "é raro", "quase o dobro").
 - A "conclusao" é o conselho, e é o que o advogado mais lê. Ela deve terminar em AÇÃO: o documento que falta, a pergunta a fazer ao cliente, o pedido a incluir. "Depende do caso" não é conselho.
 - Se o histórico do escritório for pequeno, trate-o como pista, não como prova — e diga isso.
+- RESPEITE A INSTÂNCIA de cada fonte. Sentença de juiz singular prevê a vara; só decisão de órgão colegiado sustenta "o tribunal entende". Se o conselho depende de como a 2ª instância decide e o recorte não tem acórdão, diga que essa parte está em aberto em vez de responder com sentença.
 - Não prometa resultado. Você descreve padrão; quem decide é o advogado.
 - Português do Brasil, direto, sem saudação.`;
 
@@ -103,6 +106,10 @@ export interface ResultadoPesquisa {
   semBase: boolean;
   /** Só no modo estratégia: o cruzamento com o histórico do escritório. */
   comparacao: Comparacao | null;
+  /** Quanto do recorte é acórdão e quanto é sentença de 1º grau. */
+  natureza: ComposicaoNatureza;
+  /** A ressalva que a tela mostra. null quando não há o que ressalvar. */
+  avisoNatureza: string | null;
 }
 
 const ESTATISTICA_VAZIA: EstatisticaRecorte = {
@@ -111,6 +118,12 @@ const ESTATISTICA_VAZIA: EstatisticaRecorte = {
   emAndamento: 0,
   fatias: [],
   amostraPequena: true,
+};
+
+const NATUREZA_VAZIA: ComposicaoNatureza = {
+  jurisprudencia: 0,
+  estatistica: 0,
+  indefinido: 0,
 };
 
 function semBase(
@@ -129,6 +142,8 @@ function semBase(
     perfil: null,
     semBase: true,
     comparacao: null,
+    natureza: NATUREZA_VAZIA,
+    avisoNatureza: null,
   };
 }
 
@@ -245,6 +260,8 @@ export async function pesquisarNoAcervo(args: {
     perfil,
     semBase: false,
     comparacao,
+    natureza: recorte.natureza,
+    avisoNatureza: avisoDeNatureza(recorte.natureza),
   };
 
   const v = validarResposta(bruto, ctx.fontes.map((f) => f.id));
