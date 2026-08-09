@@ -365,6 +365,7 @@ export const jurisiaRouter = router({
     .input(z.object({
       conversaId: z.number().int().positive().nullish(),
       pergunta: z.string().min(3).max(2000),
+      modo: z.enum(["pesquisar", "estrategia"]).default("pesquisar"),
     }))
     .mutation(async ({ ctx, input }) => {
       const { db, esc } = await contexto(ctx.user.id);
@@ -401,6 +402,7 @@ export const jurisiaRouter = router({
       const resultado = await pesquisarNoAcervo({
         escritorioId: esc.escritorio.id,
         pergunta: input.pergunta,
+        modo: input.modo,
         historico: anteriores.reverse().map((m) => ({ papel: m.papel, texto: m.conteudo })),
       });
 
@@ -417,6 +419,7 @@ export const jurisiaRouter = router({
           fontesDetalhe: resultado.fontes,
           estatistica: resultado.estatistica,
           perfil: resultado.perfil,
+          comparacao: resultado.comparacao,
           descricaoFiltro: resultado.descricaoFiltro,
         }
         : null;

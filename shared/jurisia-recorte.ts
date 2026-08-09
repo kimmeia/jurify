@@ -16,6 +16,7 @@
 
 import type { ResultadoProcesso } from "./datajud-desfecho";
 import type { PerfilRecorte } from "./jurisia-perfil";
+import type { Comparacao } from "./jurisia-estrategia";
 
 export interface FiltroRecorte {
   tribunal: string | null;
@@ -284,6 +285,8 @@ export interface PesquisaGravada {
   estatistica: EstatisticaRecorte;
   /** null quando o recorte não tinha o que medir. */
   perfil: PerfilRecorte | null;
+  /** Só no modo estratégia: o cruzamento com o histórico do escritório. */
+  comparacao?: Comparacao | null;
   descricaoFiltro: string;
 }
 
