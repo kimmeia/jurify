@@ -122,7 +122,11 @@ const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
   {
     titulo: "Ferramentas",
     itens: [
-      { id: "jurisia", rotulo: "JurisIA", rota: "/jurisia", icone: Gavel, ver: (c) => c("processos"), ocultaPor: "processos", tomBadge: "novidade" },
+      // `ver` é permissão do colaborador; `ocultaPor` é o que o escritório
+      // contratou. Só some do menu quando o módulo não foi contratado — antes
+      // aparecia pra qualquer um com Processos e entregava "não está no seu
+      // plano" depois do clique.
+      { id: "jurisia", rotulo: "JurisIA", rota: "/jurisia", icone: Gavel, ver: (c) => c("processos"), ocultaPor: "jurisia", tomBadge: "novidade" },
       { id: "calculos", rotulo: "Cálculos", rota: "/calculos", icone: Calculator, ver: (c) => c("calculos"), ocultaPor: "calculos" },
       { id: "modelos", rotulo: "Modelos", rota: "/modelos-contrato", icone: FileText, ver: (c) => c("modelos") },
       // Fusão de SmartFlow (Fluxos) + Agentes IA: aparece com qualquer um dos

@@ -31,6 +31,7 @@ import {
 } from "../../drizzle/schema";
 import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { avaliarCota, competenciaDe, type EstadoCota } from "../../shared/jurisia-cota";
+import type { AcessoJurisIA } from "../../shared/addon-jurisia";
 import type { EventoContexto } from "../../shared/jurisia-contexto";
 import type { PesquisaGravada } from "../../shared/jurisia-recorte";
 import { perguntarSobreProcesso } from "./perguntar";
@@ -55,19 +56,24 @@ async function contexto(userId: number) {
   return { db, esc, perm };
 }
 
+/**
+ * Cota do mês, já resolvida contra plano E add-on.
+ *
+ * O `acesso` volta junto porque a tela precisa dizer coisas diferentes pra
+ * quem nunca contratou, pra quem deixou vencer e pra quem gastou tudo —
+ * oferecer "renove" a quem nunca comprou soa como cobrança de dívida
+ * inexistente.
+ */
 async function estadoCota(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   escritorioId: number,
   planSlug: string | null,
   fuso: string,
-): Promise<{ cota: EstadoCota; competencia: string }> {
+): Promise<{ cota: EstadoCota; competencia: string; acesso: AcessoJurisIA }> {
   const competencia = competenciaDe(new Date(), fuso);
 
-  let limite = 0;
-  if (planSlug) {
-    const { getPlanoBySlug } = await import("../billing/planos-repo");
-    limite = (await getPlanoBySlug(planSlug))?.limites.jurisiaMensagensMes ?? 0;
-  }
+  const { acessoJurisIA } = await import("../billing/addons-repo");
+  const acesso = await acessoJurisIA({ escritorioId, planSlug });
 
   const [row] = await db
     .select({ mensagens: jurisiaUso.mensagens })
@@ -75,7 +81,39 @@ async function estadoCota(
     .where(and(eq(jurisiaUso.escritorioId, escritorioId), eq(jurisiaUso.competencia, competencia)))
     .limit(1);
 
-  return { cota: avaliarCota({ limite, usadas: Number(row?.mensagens ?? 0) }), competencia };
+  return {
+    cota: avaliarCota({ limite: acesso.limite, usadas: Number(row?.mensagens ?? 0) }),
+    competencia,
+    acesso,
+  };
+}
+
+/**
+ * O erro que a tela mostra quando não dá pra perguntar.
+ *
+ * Três situações que parecem uma só e não são: nunca contratou, contratou e
+ * venceu, contratou e gastou. Cada uma tem um caminho de saída diferente, e
+ * juntar as três em "seu plano não inclui" já mandou cliente pagante pro
+ * suporte achando que tinha perdido o acesso.
+ */
+function erroDeAcesso(cota: EstadoCota, acesso: AcessoJurisIA): TRPCError {
+  if (!acesso.liberado) {
+    const mensagem = acesso.motivo === "expirado"
+      ? "O contrato do JurisIA venceu. Renove pra voltar a pesquisar."
+      : acesso.motivo === "suspenso"
+        ? "O JurisIA do seu escritório está suspenso. Fale com o suporte."
+        : "O JurisIA é contratado à parte e ainda não está ativo no seu escritório.";
+    return new TRPCError({
+      code: "FORBIDDEN",
+      message: mensagem,
+      cause: { motivo: acesso.motivo ?? "nao_contratado" },
+    });
+  }
+  return new TRPCError({
+    code: "FORBIDDEN",
+    message: `Você usou as ${cota.limite} mensagens deste mês. A cota volta na virada.`,
+    cause: { motivo: "cota_esgotada" },
+  });
 }
 
 async function planoDoUsuario(userId: number): Promise<string | null> {
@@ -146,13 +184,13 @@ export const jurisiaRouter = router({
   estado: protectedProcedure.query(async ({ ctx }) => {
     const { db, esc } = await contexto(ctx.user.id);
     const planSlug = await planoDoUsuario(ctx.user.id);
-    const { cota } = await estadoCota(
+    const { cota, acesso } = await estadoCota(
       db,
       esc.escritorio.id,
       planSlug,
       esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO,
     );
-    return { cota };
+    return { cota, acesso };
   }),
 
   /** A conversa de um processo — cria vazia na primeira visita, sem gravar nada. */
@@ -303,16 +341,8 @@ export const jurisiaRouter = router({
       const fuso = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
 
       const planSlug = await planoDoUsuario(ctx.user.id);
-      const { cota, competencia } = await estadoCota(db, esc.escritorio.id, planSlug, fuso);
-      if (!cota.pode) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: cota.semPlano
-            ? "Seu plano não inclui o JurisIA."
-            : `Você usou as ${cota.limite} mensagens do mês.`,
-          cause: { motivo: cota.semPlano ? "sem_plano" : "cota_esgotada" },
-        });
-      }
+      const { cota, competencia, acesso } = await estadoCota(db, esc.escritorio.id, planSlug, fuso);
+      if (!cota.pode) throw erroDeAcesso(cota, acesso);
 
       let conversaId = input.conversaId ?? null;
       if (conversaId != null) {
@@ -417,16 +447,8 @@ export const jurisiaRouter = router({
       if (!proc) throw new TRPCError({ code: "NOT_FOUND", message: "Processo não encontrado." });
 
       const planSlug = await planoDoUsuario(ctx.user.id);
-      const { cota, competencia } = await estadoCota(db, esc.escritorio.id, planSlug, fuso);
-      if (!cota.pode) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: cota.semPlano
-            ? "Seu plano não inclui o JurisIA."
-            : `Você usou as ${cota.limite} mensagens do mês.`,
-          cause: { motivo: cota.semPlano ? "sem_plano" : "cota_esgotada" },
-        });
-      }
+      const { cota, competencia, acesso } = await estadoCota(db, esc.escritorio.id, planSlug, fuso);
+      if (!cota.pode) throw erroDeAcesso(cota, acesso);
 
       // Conversa nasce aqui, na primeira pergunta.
       let [conv] = await db

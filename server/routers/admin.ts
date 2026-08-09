@@ -60,6 +60,7 @@ import {
 import { PLANS } from "../billing/products";
 import { invalidarCachePlanos } from "../billing/planos-repo";
 import { MODULOS_APP, ehModuloValido } from "@shared/modulos-app";
+import { MODULO_JURISIA } from "@shared/addon-jurisia";
 import { PLANOS_PADRAO_SLUGS } from "@shared/planos-types";
 import { isAsaasBillingConfigured } from "../billing/asaas-billing-client";
 import {
@@ -1337,6 +1338,88 @@ export const adminRouter = router({
    * Edita plano por slug. Slug em si não pode mudar (é FK lógica em
    * subscriptions.planId). Todos os outros campos editáveis.
    */
+  /**
+   * Add-ons contratados à parte, por escritório.
+   *
+   * Existe porque a única forma de liberar o JurisIA era mexer na cota do
+   * plano — que atinge todos os clientes daquela faixa de uma vez, e por isso
+   * impedia cortesia, piloto e contrato avulso.
+   */
+  listarAddons: adminProcedure
+    .input(z.object({ produto: z.string().min(1).max(48).default(MODULO_JURISIA) }).optional())
+    .query(async ({ input }) => {
+      const { listarAddons } = await import("../billing/addons-repo");
+      return listarAddons(input?.produto ?? MODULO_JURISIA);
+    }),
+
+  /** Estado do add-on de um escritório, já resolvido contra o plano dele. */
+  addonDoEscritorio: adminProcedure
+    .input(z.object({
+      escritorioId: z.number().int().positive(),
+      produto: z.string().min(1).max(48).default(MODULO_JURISIA),
+    }))
+    .query(async ({ input }) => {
+      const { buscarAddon, acessoJurisIA } = await import("../billing/addons-repo");
+      const addon = await buscarAddon(input.escritorioId, input.produto);
+      // O acesso resolvido mostra ao operador o que o CLIENTE vê — inclusive
+      // quando o plano já libera e o add-on seria redundante.
+      const { getEscritorioPlanSlug } = await import("../billing/addons-repo");
+      const planSlug = await getEscritorioPlanSlug(input.escritorioId);
+      const acesso = await acessoJurisIA({ escritorioId: input.escritorioId, planSlug });
+      return { addon, acesso, planSlug };
+    }),
+
+  salvarAddon: adminProcedure
+    .input(z.object({
+      escritorioId: z.number().int().positive(),
+      produto: z.string().min(1).max(48).default(MODULO_JURISIA),
+      status: z.enum(["ativo", "suspenso", "cancelado"]),
+      limiteMensal: z.number().int().min(0).max(1_000_000),
+      /** ISO ou null. */
+      inicioEm: z.string().datetime().nullable().default(null),
+      expiraEm: z.string().datetime().nullable().default(null),
+      precoCentavos: z.number().int().min(0).default(0),
+      observacao: z.string().max(500).nullable().default(null),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const inicio = input.inicioEm ? new Date(input.inicioEm) : null;
+      const expira = input.expiraEm ? new Date(input.expiraEm) : null;
+      if (inicio && expira && expira <= inicio) {
+        throw new Error("A data de vencimento precisa ser depois do início.");
+      }
+
+      const { salvarAddon } = await import("../billing/addons-repo");
+      await salvarAddon({
+        escritorioId: input.escritorioId,
+        produto: input.produto,
+        status: input.status,
+        limiteMensal: input.limiteMensal,
+        inicioEm: inicio,
+        expiraEm: expira,
+        precoCentavos: input.precoCentavos,
+        observacao: input.observacao,
+        concedidoPor: ctx.user.id,
+      });
+
+      // Liberar módulo pago é decisão que precisa de rastro: quem liberou,
+      // pra quem, com que limite e até quando.
+      await registrarAuditoria({
+        ctx,
+        acao: "addon.salvar",
+        alvoTipo: "escritorio",
+        alvoId: input.escritorioId,
+        detalhes: {
+          escritorioId: input.escritorioId,
+          produto: input.produto,
+          status: input.status,
+          limiteMensal: input.limiteMensal,
+          expiraEm: input.expiraEm,
+        },
+      });
+
+      return { ok: true };
+    }),
+
   editarPlano: adminProcedure
     .input(z.object({
       slug: z.string().min(1),

@@ -3775,6 +3775,39 @@ export type RelatorioProgramadoEnvio = typeof relatoriosProgramadosEnvios.$infer
  * primeira pergunta, sem o advogado criar nada nem subir documento. O UNIQUE
  * é o que garante isso.
  */
+/**
+ * Add-ons contratados à parte, por escritório.
+ *
+ * `produto` é varchar e não enum: o segundo add-on não pode exigir ALTER TABLE
+ * numa tabela que já guarda contrato de cliente.
+ */
+export const escritorioAddons = mysqlTable(
+  "escritorio_addons",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdAddon").notNull(),
+    /** Slug do produto — hoje só "jurisia" (ver shared/addon-jurisia.ts). */
+    produto: varchar("produtoAddon", { length: 48 }).notNull(),
+    status: mysqlEnum("statusAddon", ["ativo", "suspenso", "cancelado"])
+      .default("ativo")
+      .notNull(),
+    limiteMensal: int("limiteMensalAddon").default(0).notNull(),
+    /** NULL = vale desde sempre. Data futura é contrato agendado. */
+    inicioEm: timestamp("inicioEmAddon"),
+    /** NULL = não vence. */
+    expiraEm: timestamp("expiraEmAddon"),
+    precoCentavos: int("precoCentavosAddon").default(0).notNull(),
+    observacao: varchar("observacaoAddon", { length: 500 }),
+    concedidoPor: int("concedidoPorAddon"),
+    criadoEm: timestamp("criadoEmAddon").defaultNow().notNull(),
+    atualizadoEm: timestamp("atualizadoEmAddon").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    unico: uniqueIndex("escritorio_addon_unico").on(t.escritorioId, t.produto),
+    porProduto: index("idx_addon_produto_status").on(t.produto, t.status),
+  }),
+);
+
 export const jurisiaConversas = mysqlTable(
   "jurisia_conversas",
   {

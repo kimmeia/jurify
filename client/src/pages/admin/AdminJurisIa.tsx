@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Bot, FlaskConical, Play, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
+import JurisIaAssinantes from "./JurisIaAssinantes";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   fila: { label: "na fila", cls: "text-slate-500 bg-slate-500/10 border-slate-500/20" },
@@ -83,6 +84,8 @@ export default function AdminJurisIa() {
           o monitoramento de processos não corre risco.
         </p>
       </div>
+
+      <JurisIaAssinantes />
 
       <div className="grid gap-3 sm:grid-cols-4">
         <Card>

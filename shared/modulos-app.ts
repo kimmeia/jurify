@@ -26,6 +26,9 @@ export const MODULOS_APP: readonly ModuloApp[] = [
   { id: "smartflow",     nome: "SmartFlow (automação)",        descricao: "Fluxos automáticos de atendimento e cobrança",  obrigatorio: false },
   { id: "agentes_ia",    nome: "Agentes IA personalizados",    descricao: "Chatbots/IAs treinados por escritório",         obrigatorio: false },
   { id: "calculos",      nome: "Cálculos Jurídicos",           descricao: "Trabalhista, imobiliário, financiamento, etc",  obrigatorio: false },
+  // Vendido à parte: além de marcar aqui, o plano precisa de
+  // `jurisiaMensagensMes > 0` — ou o escritório precisa de um add-on ativo.
+  { id: "jurisia",       nome: "JurisIA (pesquisa jurisprudencial)", descricao: "Acervo público do CNJ com resposta ancorada em processo", obrigatorio: false },
   { id: "financeiro",    nome: "Financeiro (Asaas)",           descricao: "Cobranças, recibos, conciliação",               obrigatorio: false },
   { id: "comissoes",     nome: "Comissões automáticas",        descricao: "Distribuição de comissão por colaborador",      obrigatorio: false },
   { id: "contratos",     nome: "Modelos de Contrato",          descricao: "Geração e assinatura digital",                  obrigatorio: false },
