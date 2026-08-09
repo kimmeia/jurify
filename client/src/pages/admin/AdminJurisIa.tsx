@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Bot, FlaskConical, Play, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
+import { naturezaDoGrau } from "@shared/jurisia-grau";
 import JurisIaAssinantes from "./JurisIaAssinantes";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -27,16 +28,106 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 
 const nf = new Intl.NumberFormat("pt-BR");
 
+/**
+ * A composição do acervo por instância.
+ *
+ * O contador de processos diz que o robô trabalhou; este painel diz se o que
+ * ele trouxe é vendável. Acervo grande e 100% de 1º grau é um produto que
+ * promete jurisprudência e entrega estatística de vara.
+ */
+function PainelNatureza({
+  dados,
+}: {
+  dados: {
+    natureza: { jurisprudencia: number; estatistica: number; indefinido: number };
+    graus: Array<{ grau: string | null; quantidade: number }>;
+  };
+}) {
+  const { jurisprudencia, estatistica, indefinido } = dados.natureza;
+  const total = jurisprudencia + estatistica + indefinido;
+  if (total === 0) return null;
+  const pct = (q: number) => Math.round((q * 100) / total);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Composição por instância</CardTitle>
+        <CardDescription>
+          Só decisão de órgão colegiado é jurisprudência. Sentença de 1º grau prevê a vara, mas não
+          fundamenta petição — e é isso que o cliente vê marcado na resposta.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex h-2 overflow-hidden rounded-full bg-muted">
+          {jurisprudencia > 0 && (
+            <div className="bg-violet-500" style={{ width: `${pct(jurisprudencia)}%` }} />
+          )}
+          {estatistica > 0 && (
+            <div className="bg-slate-400" style={{ width: `${pct(estatistica)}%` }} />
+          )}
+          {indefinido > 0 && (
+            <div className="bg-muted-foreground/30" style={{ width: `${pct(indefinido)}%` }} />
+          )}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <p className="text-xl font-bold tabular-nums text-violet-600">
+              {nf.format(jurisprudencia)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              acórdãos ({pct(jurisprudencia)}%) — jurisprudência
+            </p>
+          </div>
+          <div>
+            <p className="text-xl font-bold tabular-nums">{nf.format(estatistica)}</p>
+            <p className="text-[11px] text-muted-foreground">
+              sentenças de 1º grau ({pct(estatistica)}%)
+            </p>
+          </div>
+          <div>
+            <p className="text-xl font-bold tabular-nums text-muted-foreground">
+              {nf.format(indefinido)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">sem grau reconhecido ({pct(indefinido)}%)</p>
+          </div>
+        </div>
+
+        {jurisprudencia === 0 && (
+          <p className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+            <TriangleAlert className="mt-px h-4 w-4 shrink-0" />
+            O acervo não tem uma única decisão colegiada. Colete um alias de 2º grau antes de
+            liberar o módulo para novos clientes.
+          </p>
+        )}
+
+        {indefinido > 0 && (
+          <div className="text-[11px] text-muted-foreground">
+            <span className="font-semibold">Graus sem classificação:</span>{" "}
+            {dados.graus
+              .filter((g) => naturezaDoGrau(g.grau) === null)
+              .slice(0, 8)
+              .map((g) => `${g.grau ?? "(vazio)"} (${nf.format(g.quantidade)})`)
+              .join(" · ")}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AdminJurisIa() {
   const [paginas, setPaginas] = useState("5");
   const [rodando, setRodando] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.admin.jurisiaVarreduras.useQuery();
+  const { data: natureza } = trpc.admin.jurisiaNatureza.useQuery();
 
   const varrer = trpc.admin.jurisiaVarrer.useMutation({
     onSuccess: (r) => {
       utils.admin.jurisiaVarreduras.invalidate();
+      utils.admin.jurisiaNatureza.invalidate();
       if (r.erro) {
         toast.error(`${r.tribunal} parou`, { description: r.erro });
         return;
@@ -85,6 +176,8 @@ export default function AdminJurisIa() {
           o monitoramento de processos não corre risco.
         </p>
       </div>
+
+      {natureza && <PainelNatureza dados={natureza} />}
 
       <JurisIaAssinantes />
 

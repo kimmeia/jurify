@@ -16,6 +16,7 @@ import { jurisiaMovimentos, jurisiaProcessos } from "../../drizzle/schema";
 import { montarPerfil, type EntradaPerfil, type PerfilRecorte } from "../../shared/jurisia-perfil";
 import type { ResultadoProcesso } from "../../shared/datajud-desfecho";
 import { ACERVO_VAZIO, type ComposicaoAcervo } from "../../shared/jurisia-acervo";
+import { contarNatureza, type ComposicaoNatureza } from "../../shared/jurisia-grau";
 import {
   MAX_FONTES_RECORTE,
   montarEstatistica,
@@ -51,6 +52,8 @@ export function condicoesRecorte(f: FiltroRecorte): SQL[] {
 export interface Recorte {
   estatistica: EstatisticaRecorte;
   processos: ProcessoAcervo[];
+  /** Quanto deste recorte é acórdão e quanto é sentença de 1º grau. */
+  natureza: ComposicaoNatureza;
 }
 
 export async function buscarRecorte(
@@ -66,18 +69,21 @@ export async function buscarRecorte(
   const agrupado = await db
     .select({
       resultado: jurisiaProcessos.resultado,
+      grau: jurisiaProcessos.grau,
       quantidade: sql<number>`COUNT(*)`,
     })
     .from(jurisiaProcessos)
     .where(onde)
-    .groupBy(jurisiaProcessos.resultado);
+    .groupBy(jurisiaProcessos.resultado, jurisiaProcessos.grau);
 
   const porResultado = { ...ZERO };
+  const porGrau: Array<{ grau: string | null; quantidade: number }> = [];
   let total = 0;
   for (const linha of agrupado) {
     const n = Number(linha.quantidade ?? 0);
     total += n;
     if (linha.resultado) porResultado[linha.resultado as ResultadoProcesso] += n;
+    porGrau.push({ grau: linha.grau, quantidade: n });
   }
 
   const linhas = await db
@@ -85,6 +91,7 @@ export async function buscarRecorte(
       id: jurisiaProcessos.id,
       cnj: jurisiaProcessos.cnj,
       tribunal: jurisiaProcessos.tribunal,
+      grau: jurisiaProcessos.grau,
       classeNome: jurisiaProcessos.classeNome,
       assuntoNome: jurisiaProcessos.assuntoNome,
       orgaoNome: jurisiaProcessos.orgaoNome,
@@ -106,10 +113,12 @@ export async function buscarRecorte(
 
   return {
     estatistica: montarEstatistica(total, porResultado),
+    natureza: contarNatureza(porGrau),
     processos: linhas.map((r) => ({
       id: r.id,
       cnj: r.cnj,
       tribunal: r.tribunal,
+      grau: r.grau,
       classeNome: r.classeNome,
       assuntoNome: r.assuntoNome,
       orgaoNome: r.orgaoNome,
@@ -213,10 +222,11 @@ export async function composicaoDoAcervo(topo = 8): Promise<ComposicaoAcervo> {
       .filter((l) => l.nome.length > 0);
   };
 
-  const [tribunais, classes, assuntos] = await Promise.all([
+  const [tribunais, classes, assuntos, graus] = await Promise.all([
     tribunaisDoAcervo(),
     porNome(jurisiaProcessos.classeNome),
     porNome(jurisiaProcessos.assuntoNome),
+    grausDoAcervo(),
   ]);
 
   return {
@@ -226,7 +236,21 @@ export async function composicaoDoAcervo(topo = 8): Promise<ComposicaoAcervo> {
     assuntos: assuntos.slice(0, topo),
     classesRestantes: Math.max(0, classes.length - topo),
     assuntosRestantes: Math.max(0, assuntos.length - topo),
+    natureza: contarNatureza(graus),
   };
+}
+
+/** Contagem por grau, crua. Alimenta a classificação de natureza e a tabela do
+ *  admin, que é onde se descobre que a coleta trouxe só 1º grau. */
+export async function grausDoAcervo(): Promise<Array<{ grau: string | null; quantidade: number }>> {
+  const db = await getDb();
+  if (!db) return [];
+  const linhas = await db
+    .select({ grau: jurisiaProcessos.grau, quantidade: sql<number>`COUNT(*)` })
+    .from(jurisiaProcessos)
+    .groupBy(jurisiaProcessos.grau)
+    .orderBy(desc(sql`COUNT(*)`));
+  return linhas.map((l) => ({ grau: l.grau, quantidade: Number(l.quantidade ?? 0) }));
 }
 
 /** Quantos processos DISTINTOS cada tribunal tem no acervo.
