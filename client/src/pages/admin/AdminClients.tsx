@@ -25,6 +25,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import AddonJurisIaCard from "./AddonJurisIaCard";
 
 /**
  * Badge de tipo de usuário no painel admin.
@@ -557,6 +558,12 @@ function ClienteDetalheDialog({
                   </div>
                 )}
               </div>
+
+              {/* Módulo vendido à parte. Só faz sentido pra quem tem escritório:
+                  o add-on é do escritório, não do usuário solto. */}
+              {data.escritorioId != null && (
+                <AddonJurisIaCard escritorioId={data.escritorioId} />
+              )}
 
               {/* Histórico de cobranças (Asaas) */}
               <div className="border rounded-lg p-4 space-y-3">
