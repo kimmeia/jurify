@@ -26,6 +26,7 @@ import {
   type FonteRecorte,
 } from "../../shared/jurisia-recorte";
 import type { PerfilRecorte } from "../../shared/jurisia-perfil";
+import { compararComAcervo, type Comparacao } from "../../shared/jurisia-estrategia";
 import { buscarRecorte, perfilDoRecorte } from "./buscar-acervo";
 
 const SYSTEM_INTERPRETAR = `Você traduz a pergunta de um advogado em um RECORTE de busca sobre uma base de processos judiciais brasileiros.
@@ -63,6 +64,27 @@ Regras:
 - "conclusao" é sua leitura prática pro advogado — o único trecho sem fonte, e também sem número.
 - Português do Brasil, direto, sem saudação. Fale como quem conversa com advogado.`;
 
+const SYSTEM_ESTRATEGIA = `Você aconselha um advogado que está decidindo se PEGA um caso — ou como conduzi-lo.
+
+Recebe processos reais de um recorte do acervo público, marcados como [FONTE <id>], e, quando existe, o histórico do próprio escritório em casos do mesmo tipo.
+
+Devolva JSON:
+{
+  "achou": true|false,
+  "afirmacoes": [{ "texto": "...", "fontes": [<id>, ...] }],
+  "conclusao": "..." | null
+}
+
+Regras:
+- Cada afirmação PRECISA citar os ids dos processos que a sustentam. Só ids do contexto.
+- NÃO PRODUZA NÚMEROS. Os percentuais e as contagens já estão calculados e aparecem na tela ao lado; escrever um número diferente descarta a resposta inteira. Fale em palavras ("a maioria", "é raro", "quase o dobro").
+- A "conclusao" é o conselho, e é o que o advogado mais lê. Ela deve terminar em AÇÃO: o documento que falta, a pergunta a fazer ao cliente, o pedido a incluir. "Depende do caso" não é conselho.
+- Se o histórico do escritório for pequeno, trate-o como pista, não como prova — e diga isso.
+- Não prometa resultado. Você descreve padrão; quem decide é o advogado.
+- Português do Brasil, direto, sem saudação.`;
+
+export type ModoPesquisa = "pesquisar" | "estrategia";
+
 export interface ResultadoPesquisa {
   ok: boolean;
   resposta: RespostaJurisIA | null;
@@ -79,6 +101,8 @@ export interface ResultadoPesquisa {
   perfil: PerfilRecorte | null;
   /** true quando nem chegou a consultar o modelo de resposta. */
   semBase: boolean;
+  /** Só no modo estratégia: o cruzamento com o histórico do escritório. */
+  comparacao: Comparacao | null;
 }
 
 const ESTATISTICA_VAZIA: EstatisticaRecorte = {
@@ -104,14 +128,17 @@ function semBase(
     estatistica,
     perfil: null,
     semBase: true,
+    comparacao: null,
   };
 }
 
 export async function pesquisarNoAcervo(args: {
   escritorioId: number;
   pergunta: string;
+  modo?: ModoPesquisa;
   historico?: Array<{ papel: "usuario" | "assistente"; texto: string }>;
 }): Promise<ResultadoPesquisa> {
+  const modo: ModoPesquisa = args.modo ?? "pesquisar";
   const conversa = (args.historico ?? [])
     .slice(-6)
     .map((m) => `${m.papel === "usuario" ? "Advogado" : "Você"}: ${m.texto}`)
@@ -156,6 +183,17 @@ export async function pesquisarNoAcervo(args: {
   // gasta pra devolver nada.
   const perfil = recorte.estatistica.comResultado > 0 ? await perfilDoRecorte(filtro) : null;
 
+  // O histórico do escritório é reclassificado com o MESMO classificador do
+  // acervo — `eventos_processo.desfecho` é relativo ao polo e compará-lo com
+  // "procedente" seria erro de unidade.
+  const comparacao = modo === "estrategia"
+    ? await (async () => {
+      const { historicoDoEscritorio } = await import("./historico-escritorio");
+      const h = await historicoDoEscritorio(args.escritorioId, filtro);
+      return compararComAcervo(recorte.estatistica, h.estatistica);
+    })()
+    : null;
+
   const ctx = montarContextoRecorte(recorte.processos);
   if (ctx.fontes.length === 0) {
     return semBase(
@@ -165,11 +203,25 @@ export async function pesquisarNoAcervo(args: {
     );
   }
 
+  const blocoEscritorio = comparacao && comparacao.escritorioTotal > 0
+    ? [
+      "",
+      "HISTÓRICO DESTE ESCRITÓRIO EM CASOS DO MESMO TIPO:",
+      `${comparacao.escritorioTotal} caso(s), ${comparacao.escritorioDecididos} já decidido(s).`,
+      comparacao.destaque
+        ? `Diferença que se destaca: ${comparacao.destaque.resultado} — o escritório fica ${comparacao.destaque.diferencaPp > 0 ? "acima" : "abaixo"} do tribunal.`
+        : comparacao.amostraPequena
+          ? "Amostra pequena demais pra afirmar diferença em relação ao tribunal."
+          : "Sem diferença relevante em relação ao tribunal.",
+    ].join("\n")
+    : "";
+
   const user = [
     `RECORTE: ${descreverFiltro(filtro)}`,
     "",
     "PROCESSOS DO RECORTE:",
     ctx.texto,
+    blocoEscritorio,
     conversa ? `\nCONVERSA ATÉ AQUI:\n${conversa}` : "",
     `\nPERGUNTA DO ADVOGADO:\n${args.pergunta}`,
   ]
@@ -178,7 +230,7 @@ export async function pesquisarNoAcervo(args: {
 
   const bruto = await chamarIA({
     escritorioId: args.escritorioId,
-    system: SYSTEM_RESPONDER,
+    system: modo === "estrategia" ? SYSTEM_ESTRATEGIA : SYSTEM_RESPONDER,
     user,
     json: true,
     maxTokens: 1600,
@@ -192,6 +244,7 @@ export async function pesquisarNoAcervo(args: {
     estatistica: recorte.estatistica,
     perfil,
     semBase: false,
+    comparacao,
   };
 
   const v = validarResposta(bruto, ctx.fontes.map((f) => f.id));

@@ -52,6 +52,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { ComposicaoAcervo } from "@shared/jurisia-acervo";
+import type { Comparacao } from "@shared/jurisia-estrategia";
 import {
   rotuloCurtoResultado,
   rotuloResultado,
@@ -254,25 +255,33 @@ function PainelRecorte({
  * em vez de sumirem: o advogado precisa saber que existem — mas mostrar aba
  * viva que não faz nada foi exatamente o defeito que o módulo já teve no menu.
  */
+export type Modo = "pesquisar" | "estrategia" | "peca";
+
 const MODOS = [
   { id: "pesquisar", rotulo: "Pesquisar", icone: Search, pronto: true },
+  { id: "estrategia", rotulo: "Estratégia", icone: BarChart3, pronto: true },
   { id: "peca", rotulo: "Redigir peça", icone: Pencil, pronto: false },
-  { id: "estrategia", rotulo: "Estratégia", icone: BarChart3, pronto: false },
 ] as const;
 
-function SeletorModo() {
+function SeletorModo({ modo, onModo }: { modo: Modo; onModo: (m: Modo) => void }) {
   return (
     <div className="mb-2.5 inline-flex gap-0.5 rounded-lg bg-muted/60 p-0.5">
       {MODOS.map((m) => {
         const Icone = m.icone;
+        const ativo = m.id === modo;
         return (
-          <span
+          <button
             key={m.id}
-            title={m.pronto ? undefined : "Chegando — a pesquisa já funciona."}
+            type="button"
+            disabled={!m.pronto}
+            onClick={() => m.pronto && onModo(m.id as Modo)}
+            title={m.pronto ? undefined : "Chegando — pesquisa e estratégia já funcionam."}
             className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11.5px] font-semibold ${
-              m.pronto
-                ? "bg-card text-foreground shadow-sm"
-                : "cursor-not-allowed text-muted-foreground/60"
+              !m.pronto
+                ? "cursor-not-allowed text-muted-foreground/60"
+                : ativo
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <Icone className="h-3.5 w-3.5" />
@@ -282,9 +291,100 @@ function SeletorModo() {
                 em breve
               </span>
             )}
-          </span>
+          </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * O escritório contra o tribunal.
+ *
+ * As duas colunas só podem existir lado a lado porque o histórico do escritório
+ * é reclassificado com o MESMO classificador do acervo — o `desfecho` gravado
+ * nos eventos é relativo ao polo e não compara com "procedente".
+ */
+function PainelComparacao({ c }: { c: Comparacao }) {
+  if (c.escritorioTotal === 0) {
+    return (
+      <div className="rounded-xl border border-dashed bg-card px-3.5 py-3">
+        <p className="text-[11.5px] text-muted-foreground">
+          Seu escritório ainda não tem caso desse tipo cadastrado — então a comparação é só com o
+          tribunal. Conforme você monitorar processos assim, esta parte ganha corpo.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border bg-card px-3.5 py-3">
+      <div className="flex items-center gap-1.5">
+        <BarChart3 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <p className="text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
+          O tribunal e o seu escritório
+        </p>
+      </div>
+
+      <div className="mt-2.5 space-y-2">
+        {c.linhas
+          .filter((l) => l.acervoQtd > 0 || l.escritorioQtd > 0)
+          .map((l) => (
+            <div key={l.resultado} className="grid grid-cols-[128px_1fr] items-center gap-2">
+              <span className="truncate text-[11px] text-foreground/80">
+                {rotuloCurtoResultado(l.resultado)}
+              </span>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="h-2 flex-1 overflow-hidden rounded-[2px]"
+                    style={{ background: "var(--viz-trilho)" }}
+                  >
+                    <div
+                      className="h-full rounded-r-[4px]"
+                      style={{ background: "var(--viz-3)", width: `${l.acervoPct}%` }}
+                    />
+                  </div>
+                  <span className="w-20 text-right text-[10.5px] tabular-nums text-muted-foreground">
+                    tribunal <b className="text-foreground/80">{l.acervoPct}%</b>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="h-2 flex-1 overflow-hidden rounded-[2px]"
+                    style={{ background: "var(--viz-trilho)" }}
+                  >
+                    <div
+                      className="h-full rounded-r-[4px]"
+                      style={{ background: "var(--acento, #7c3aed)", width: `${l.escritorioPct}%` }}
+                    />
+                  </div>
+                  <span className="w-20 text-right text-[10.5px] tabular-nums text-muted-foreground">
+                    você <b className="text-violet-700 dark:text-violet-300">{l.escritorioPct}%</b>
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+      </div>
+
+      {c.amostraPequena ? (
+        <p className="mt-2.5 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
+          Você tem {c.escritorioDecididos} caso(s) decidido(s) desse tipo. É pouco para afirmar que
+          seu resultado difere do tribunal — o número está aqui como pista, não como prova.
+        </p>
+      ) : c.destaque ? (
+        <p className="mt-2.5 text-[11.5px] leading-relaxed text-foreground/90">
+          Em <b>{rotuloCurtoResultado(c.destaque.resultado).toLowerCase()}</b>, seu escritório fica{" "}
+          {c.destaque.diferencaPp > 0 ? "acima" : "abaixo"} do tribunal — sobre{" "}
+          {c.escritorioDecididos} caso(s) seus e {c.acervoDecididos} do acervo.
+        </p>
+      ) : (
+        <p className="mt-2.5 text-[11.5px] text-muted-foreground">
+          Seu resultado acompanha o do tribunal, sem diferença relevante.
+        </p>
+      )}
     </div>
   );
 }
@@ -567,6 +667,7 @@ function Resposta({
   return (
     <div className="space-y-2.5">
       <PainelRecorte e={r.estatistica} perfil={r.perfil ?? null} filtro={r.descricaoFiltro} />
+      {r.comparacao && <PainelComparacao c={r.comparacao} />}
 
       {!r.achou ? (
         <div className="rounded-xl rounded-bl-sm border border-amber-300 bg-amber-50 px-3.5 py-3 dark:border-amber-900 dark:bg-amber-950/30">
@@ -626,6 +727,7 @@ function Resposta({
 export default function JurisIa() {
   const [conversaId, setConversaId] = useState<number | null>(null);
   const [pergunta, setPergunta] = useState("");
+  const [modo, setModo] = useState<Modo>("pesquisar");
   const fimRef = useRef<HTMLDivElement | null>(null);
 
   const utils = trpc.useUtils();
@@ -691,7 +793,7 @@ export default function JurisIa() {
     const q = pergunta.trim();
     if (q.length < 3 || pesquisarMut.isPending) return;
     setPergunta("");
-    pesquisarMut.mutate({ conversaId, pergunta: q });
+    pesquisarMut.mutate({ conversaId, pergunta: q, modo: modo === "peca" ? "pesquisar" : modo });
   };
 
   // Três bloqueios que parecem um só e não são. "Renove" pra quem nunca
@@ -905,7 +1007,7 @@ export default function JurisIa() {
           </div>
 
           <div className="border-t px-4 py-3">
-            <SeletorModo />
+            <SeletorModo modo={modo} onModo={setModo} />
             <div className="flex items-center gap-2">
               <Input
                 value={pergunta}
@@ -916,7 +1018,11 @@ export default function JurisIa() {
                     enviar();
                   }
                 }}
-                placeholder="Ex.: como o TJCE decide revisão de contrato bancário?"
+                placeholder={
+                  modo === "estrategia"
+                    ? "Ex.: vale a pena pegar uma busca e apreensão no TJCE?"
+                    : "Ex.: como o TJCE decide revisão de contrato bancário?"
+                }
                 className="h-9"
                 disabled={!cota?.pode || pesquisarMut.isPending}
               />
