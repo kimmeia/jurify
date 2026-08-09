@@ -36,6 +36,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+  BarChart3,
   Clock,
   Database,
   Gavel,
@@ -243,6 +244,130 @@ function PainelRecorte({
 
       {perfil && perfil.amostra > 0 && <PainelPerfil p={perfil} />}
     </div>
+  );
+}
+
+/**
+ * Os três modos do assistente.
+ *
+ * Só Pesquisar responde hoje. Os outros dois aparecem marcados como "em breve"
+ * em vez de sumirem: o advogado precisa saber que existem — mas mostrar aba
+ * viva que não faz nada foi exatamente o defeito que o módulo já teve no menu.
+ */
+const MODOS = [
+  { id: "pesquisar", rotulo: "Pesquisar", icone: Search, pronto: true },
+  { id: "peca", rotulo: "Redigir peça", icone: Pencil, pronto: false },
+  { id: "estrategia", rotulo: "Estratégia", icone: BarChart3, pronto: false },
+] as const;
+
+function SeletorModo() {
+  return (
+    <div className="mb-2.5 inline-flex gap-0.5 rounded-lg bg-muted/60 p-0.5">
+      {MODOS.map((m) => {
+        const Icone = m.icone;
+        return (
+          <span
+            key={m.id}
+            title={m.pronto ? undefined : "Chegando — a pesquisa já funciona."}
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11.5px] font-semibold ${
+              m.pronto
+                ? "bg-card text-foreground shadow-sm"
+                : "cursor-not-allowed text-muted-foreground/60"
+            }`}
+          >
+            <Icone className="h-3.5 w-3.5" />
+            {m.rotulo}
+            {!m.pronto && (
+              <span className="rounded-full border px-1.5 text-[8.5px] font-extrabold uppercase tracking-[0.06em]">
+                em breve
+              </span>
+            )}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * De onde a resposta saiu.
+ *
+ * O painel mostra a MATÉRIA-PRIMA, não repete a estatística que já está na
+ * conversa: o que foi coletado, qual recorte a última pergunta usou, e quantos
+ * processos sustentam o texto. É o que separa "IA que chuta" de "IA que leu".
+ */
+function PainelContexto({
+  acervo,
+  ultima,
+}: {
+  acervo?: ComposicaoAcervo;
+  ultima: PesquisaGravada | null;
+}) {
+  return (
+    <aside className="hidden flex-col gap-2.5 rounded-xl border bg-card p-3.5 xl:flex">
+      <p className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
+        O que a IA está usando
+      </p>
+
+      <div className="rounded-lg border border-violet-200 bg-violet-50/40 px-3 py-2.5 dark:border-violet-900 dark:bg-violet-950/20">
+        <div className="flex items-center gap-1.5">
+          <Database className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+          <p className="flex-1 text-[11.5px] font-bold">Acervo público</p>
+          <span className="rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-px text-[9px] font-extrabold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400">
+            {(acervo?.total ?? 0).toLocaleString("pt-BR")}
+          </span>
+        </div>
+        <p className="mt-1 text-[10.5px] leading-relaxed text-muted-foreground">
+          {acervo && acervo.tribunais.length > 0
+            ? `${acervo.tribunais.map((t) => t.tribunal).join(", ")} · desfecho e tempo contados no banco.`
+            : "Nenhum tribunal coletado ainda."}
+        </p>
+      </div>
+
+      {ultima ? (
+        <>
+          <div className="rounded-lg border px-3 py-2.5">
+            <div className="flex items-center gap-1.5">
+              <Scale className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <p className="flex-1 text-[11.5px] font-bold">Recorte da última pergunta</p>
+            </div>
+            <p className="mt-1 text-[10.5px] leading-relaxed text-muted-foreground">
+              {ultima.descricaoFiltro || "sem recorte"} ·{" "}
+              <b className="text-foreground/80">
+                {ultima.estatistica.total.toLocaleString("pt-BR")}
+              </b>{" "}
+              processos.
+            </p>
+          </div>
+
+          {ultima.fontesDetalhe.length > 0 && (
+            <div className="rounded-lg border px-3 py-2.5">
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                <p className="flex-1 text-[11.5px] font-bold">Processos citados</p>
+                <span className="text-[11px] font-bold tabular-nums">
+                  {ultima.fontesDetalhe.length}
+                </span>
+              </div>
+              <p className="mt-1 text-[10.5px] leading-relaxed text-muted-foreground">
+                Cada frase da resposta aponta para um deles. Sem processo, a frase não passa.
+              </p>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="rounded-lg border border-dashed px-3 py-2.5">
+          <p className="text-[10.5px] leading-relaxed text-muted-foreground">
+            Faça uma pergunta e aqui aparece o recorte que ela usou e os processos que sustentam a
+            resposta.
+          </p>
+        </div>
+      )}
+
+      <p className="mt-auto border-t pt-2.5 text-[10px] leading-relaxed text-muted-foreground">
+        O acervo é público e igual para todos os escritórios. Nada dos seus processos entra nele.
+      </p>
+    </aside>
   );
 }
 
@@ -552,6 +677,16 @@ export default function JurisIa() {
   const cota = estado?.cota;
   const mensagens = data?.mensagens ?? [];
 
+  // A última resposta com conteúdo — é dela que o painel da direita fala.
+  // Percorre de trás pra frente porque a conversa cresce pra baixo.
+  const ultimaResposta = (() => {
+    for (let i = mensagens.length - 1; i >= 0; i--) {
+      const m = mensagens[i];
+      if (m.papel === "assistente" && m.resposta) return m.resposta as PesquisaGravada;
+    }
+    return null;
+  })();
+
   const enviar = () => {
     const q = pergunta.trim();
     if (q.length < 3 || pesquisarMut.isPending) return;
@@ -599,10 +734,12 @@ export default function JurisIa() {
     : [];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Gavel className="h-5 w-5 text-violet-600" />
-        <h1 className="text-lg font-extrabold">Pesquisa jurisprudencial</h1>
+        <h1 className="text-lg font-extrabold">
+          JurisIA <span className="font-medium text-muted-foreground">· assistente jurídico</span>
+        </h1>
         <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
           beta
         </span>
@@ -659,7 +796,7 @@ export default function JurisIa() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+      <div className="grid gap-3 lg:grid-cols-[210px_1fr] xl:grid-cols-[210px_1fr_300px]">
         <aside className="space-y-1.5">
           <Button
             size="sm"
@@ -668,7 +805,7 @@ export default function JurisIa() {
             onClick={() => setConversaId(null)}
           >
             <Plus className="h-3.5 w-3.5" />
-            Nova pesquisa
+            Novo trabalho
           </Button>
           {(pesquisas ?? []).map((p) => (
             <LinhaPesquisa
@@ -768,6 +905,7 @@ export default function JurisIa() {
           </div>
 
           <div className="border-t px-4 py-3">
+            <SeletorModo />
             <div className="flex items-center gap-2">
               <Input
                 value={pergunta}
@@ -802,6 +940,8 @@ export default function JurisIa() {
             </p>
           </div>
         </div>
+
+        <PainelContexto acervo={acervo} ultima={ultimaResposta} />
       </div>
     </div>
   );

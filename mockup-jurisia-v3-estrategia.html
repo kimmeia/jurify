@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href=".claude/skills/mockup-juridflow/assets/fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+    --viz-1:#2a78d6; --viz-2:#eb6834; --viz-3:#1baf7a; --viz-4:#eda100; --viz-5:#e87ba4;
+    --viz-trilho:#e8edf3;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:18px 26px; height:100%; display:flex; flex-direction:column; gap:11px; }
+
+  .topo { display:flex; align-items:center; justify-content:space-between; gap:14px; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:24px; letter-spacing:-.01em;
+        display:flex; align-items:center; gap:9px; }
+  .beta { font-size:9.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase;
+          color:#92400e; background:#fef3c7; border:1px solid #fcd34d; border-radius:999px; padding:3px 8px; }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .cota { display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--mudo); }
+  .cota-barra { width:100px; height:7px; border-radius:4px; background:#e2e8f0; overflow:hidden; border:1px solid #dbe2ea; }
+  .cota-barra i { display:block; height:100%; background:var(--acento); border-radius:3px; }
+
+  .corpo { flex:1 1 auto; display:grid; grid-template-columns:212px 1fr 320px; gap:11px; min-height:0; }
+  .lateral { display:flex; flex-direction:column; gap:6px; }
+  .btn-nova { background:var(--acento); color:#fff; font-weight:600; font-size:12.5px;
+              border-radius:10px; padding:9px 13px; display:flex; align-items:center;
+              justify-content:center; gap:7px; box-shadow:0 8px 18px -8px #7c3aed88; }
+  .caso { position:relative; border:1px solid var(--borda); background:var(--surface);
+          border-radius:10px; padding:8px 26px 8px 10px; }
+  .caso.on { border-color:#ddd6fe; background:var(--acento-bg); }
+  .caso .t { font-size:11.5px; font-weight:600; color:var(--tinta-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .caso .d { font-size:10px; color:var(--fraco); margin-top:2px; }
+  .caso .kebab { position:absolute; right:7px; top:9px; }
+
+  .conversa { display:flex; flex-direction:column; overflow:hidden; }
+  .thread { flex:1 1 auto; padding:14px 16px; display:flex; flex-direction:column; gap:11px; overflow:hidden; }
+  .bolha { align-self:flex-end; max-width:74%; background:var(--acento); color:#fff;
+           border-radius:14px 14px 4px 14px; padding:9px 13px; font-size:13px; line-height:1.4; }
+
+  /* ── o veredito ── */
+  .veredito { border:1px solid #c7d2fe; border-radius:12px; overflow:hidden; }
+  .ver-cab { display:flex; align-items:center; gap:11px; padding:12px 15px;
+             background:linear-gradient(180deg,#f5f3ff,#fff); border-bottom:1px solid #e9e5ff; }
+  .ver-cab .selo { flex:0 0 auto; display:inline-flex; align-items:center; gap:6px;
+                   border-radius:999px; padding:5px 12px; font-size:11px; font-weight:800;
+                   text-transform:uppercase; letter-spacing:.05em;
+                   background:#fffbeb; color:#92400e; border:1px solid #fcd34d; }
+  .ver-cab .txt b { display:block; font-family:'Poppins'; font-size:15px; font-weight:700; }
+  .ver-cab .txt span { font-size:11.5px; color:var(--mudo); }
+
+  .fatores { padding:12px 15px; display:grid; grid-template-columns:repeat(3,1fr); gap:11px; }
+  .fator { border:1px solid var(--borda); border-radius:10px; padding:10px 12px; background:#fcfcfe; }
+  .fator .lb { font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--fraco); }
+  .fator .nv { font-family:'Poppins'; font-size:20px; font-weight:700; line-height:1.1; margin-top:3px; }
+  .fator .sb { font-size:10.5px; color:var(--mudo); margin-top:3px; line-height:1.4; }
+
+  .comparativo { margin:0 15px 12px; border:1px solid var(--borda); border-radius:10px; padding:11px 13px; }
+  .comparativo .micro { margin-bottom:2px; }
+  .cmp-linha { display:grid; grid-template-columns:118px minmax(0,420px) 74px; align-items:center; gap:10px; margin-top:7px; }
+  .cmp-linha .lb { font-size:11.5px; color:var(--corpo); }
+  .cmp-linha .lb small { display:block; font-size:10px; color:var(--fraco); }
+  .trilho { height:9px; border-radius:2px; background:var(--viz-trilho); overflow:hidden; }
+  .fill { height:100%; border-radius:0 4px 4px 0; }
+  .cmp-linha .vl { text-align:right; font-size:13px; font-weight:800; font-variant-numeric:tabular-nums; }
+
+  .leitura { margin:0 15px 14px; border-left:3px solid #8b5cf6; padding-left:12px; }
+  .leitura p { font-size:12.5px; line-height:1.55; color:var(--tinta-2); }
+  .leitura p + p { margin-top:6px; }
+  .leitura .rot { font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+                  color:var(--acento-forte); margin-bottom:4px; }
+
+  .acoes { display:flex; gap:8px; padding:0 15px 14px; }
+  .btn { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--borda);
+         background:var(--surface); border-radius:9px; padding:8px 12px; font-size:11.5px;
+         font-weight:600; color:var(--corpo); }
+  .btn.pri { background:var(--acento); border-color:var(--acento); color:#fff;
+             box-shadow:0 8px 16px -8px #7c3aed88; }
+
+  .contexto { padding:13px 14px; display:flex; flex-direction:column; gap:10px; overflow:hidden; }
+  .ctx-bloco { border:1px solid var(--borda); border-radius:10px; padding:9px 11px; }
+  .ctx-bloco.usa { border-color:#c7d2fe; background:#f8faff; }
+  .ctx-topo { display:flex; align-items:center; gap:7px; }
+  .ctx-topo b { flex:1; font-size:11.5px; font-weight:700; color:var(--tinta-2); }
+  .pill { font-size:9.5px; font-weight:800; border-radius:999px; padding:2px 7px;
+          background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .pill.seu { background:var(--acento-bg); color:var(--acento-forte); border-color:#ddd6fe; }
+  .ctx-bloco p { font-size:10.5px; color:var(--mudo); line-height:1.45; margin-top:4px; }
+  .ctx-bloco p b { color:var(--corpo); font-weight:600; }
+
+  .entrada { flex:0 0 auto; border-top:1px solid var(--borda); padding:11px 16px; }
+  .modos { display:inline-flex; gap:3px; background:var(--hairline); padding:3px; border-radius:9px; margin-bottom:9px; }
+  .modos span { padding:6px 13px; font-size:11.5px; font-weight:600; color:var(--mudo); border-radius:7px;
+                display:inline-flex; align-items:center; gap:6px; }
+  .modos span.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+  .campo { display:flex; align-items:center; gap:9px; }
+  .campo .inp { flex:1; height:38px; border:1px solid var(--borda); border-radius:10px;
+                padding:0 12px; display:flex; align-items:center; font-size:12.5px; color:var(--fraco); }
+  .campo .go { width:38px; height:38px; border-radius:10px; background:var(--acento);
+               display:flex; align-items:center; justify-content:center; box-shadow:0 8px 18px -8px #7c3aed88; }
+  .rodape-txt { margin-top:6px; font-size:10px; color:var(--fraco); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topo">
+      <div class="h1">JurisIA <span style="font-family:'Inter'; font-weight:500; font-size:15px; color:var(--mudo);">· assistente jurídico</span> <span class="beta">beta</span></div>
+      <div class="cota">
+        <span>Você usou <strong style="color:var(--corpo);">38 de 900</strong> mensagens de setembro</span>
+        <div class="cota-barra"><i style="width:4%; min-width:6px;"></i></div>
+      </div>
+    </div>
+
+    <div class="corpo">
+      <div class="lateral">
+        <div class="btn-nova">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>
+          Novo trabalho
+        </div>
+        <div class="caso on">
+          <div class="t">Pego o caso da Cleide?</div>
+          <div class="d">Estratégia · agora</div>
+          <svg class="kebab" width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="#cbd5e1"/><circle cx="12" cy="12" r="1.5" fill="#cbd5e1"/><circle cx="12" cy="19" r="1.5" fill="#cbd5e1"/></svg>
+        </div>
+        <div class="caso">
+          <div class="t">Contestação — Marcos Vinícius</div>
+          <div class="d">Redigir peça · hoje</div>
+          <svg class="kebab" width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="#cbd5e1"/><circle cx="12" cy="12" r="1.5" fill="#cbd5e1"/><circle cx="12" cy="19" r="1.5" fill="#cbd5e1"/></svg>
+        </div>
+        <div class="caso">
+          <div class="t">Execução fiscal em Fortaleza</div>
+          <div class="d">Pesquisar · 3 set</div>
+          <svg class="kebab" width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="#cbd5e1"/><circle cx="12" cy="12" r="1.5" fill="#cbd5e1"/><circle cx="12" cy="19" r="1.5" fill="#cbd5e1"/></svg>
+        </div>
+      </div>
+
+      <div class="card conversa">
+        <div class="thread">
+          <div class="bolha">A Cleide quer entrar com busca e apreensão contra ela — o banco já apreendeu o carro. Vale a pena pegar?</div>
+
+          <div class="veredito">
+            <div class="ver-cab">
+              <span class="selo">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 3l9.5 17h-19L12 3z" stroke="#92400e" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="#92400e" stroke-width="2.2" stroke-linecap="round"/></svg>
+                Vale, com ressalva
+              </span>
+              <div class="txt">
+                <b>A defesa tem uma alavanca só — e ela precisa ser verificada hoje</b>
+                <span>Busca e Apreensão · TJCE · comparado com os seus casos</span>
+              </div>
+            </div>
+
+            <div class="fatores">
+              <div class="fator">
+                <div class="lb">Chance de reverter</div>
+                <div class="nv" style="color:var(--viz-2);">23%</div>
+                <div class="sb">É a fatia que termina extinta sem mérito — quase sempre por vício de notificação.</div>
+              </div>
+              <div class="fator">
+                <div class="lb">Tempo até a sentença</div>
+                <div class="nv">7 meses</div>
+                <div class="sb">Caso do meio. Metade leva de 4 meses a 1 ano e 2 meses.</div>
+              </div>
+              <div class="fator">
+                <div class="lb">Prazo que corre agora</div>
+                <div class="nv" style="color:var(--alerta);">5 dias</div>
+                <div class="sb">Purgação da mora, contados da execução da liminar. É o relógio do caso.</div>
+              </div>
+            </div>
+
+            <div class="comparativo">
+              <div class="micro">Como termina — o acervo público e o seu escritório</div>
+              <div class="cmp-linha">
+                <span class="lb">No TJCE<small>121 processos</small></span>
+                <div class="trilho"><div class="fill" style="background:var(--viz-5); width:23%"></div></div>
+                <span class="vl" style="color:var(--viz-5);">23%</span>
+              </div>
+              <div class="cmp-linha">
+                <span class="lb">No seu escritório<small>17 casos seus</small></span>
+                <div class="trilho"><div class="fill" style="background:var(--acento); width:41%"></div></div>
+                <span class="vl" style="color:var(--acento-forte);">41%</span>
+              </div>
+              <p style="font-size:10.5px; color:var(--mudo); margin-top:8px; line-height:1.45;">
+                Percentual de extinção sem mérito. Os dois números são contados no banco. Seus 17 casos
+                são amostra pequena — o número é seu histórico, não uma promessa.
+              </p>
+            </div>
+
+            <div class="leitura">
+              <div class="rot">Minha leitura</div>
+              <p>Seu escritório reverte esse tipo de caso com quase o dobro da frequência do tribunal, e o padrão nos seus casos é sempre o mesmo: notificação enviada a endereço que não é o do contrato.</p>
+              <p>Então a pergunta não é “vale a pena”, é <strong>“a notificação da Cleide tem vício?”</strong>. Se tiver, é um caso bom. Se não tiver, sobra discutir purgação — e aí o valor do honorário não paga o trabalho.</p>
+              <p>Peça o contrato e o AR da notificação antes de assinar procuração. São dois documentos e resolvem a dúvida em dez minutos.</p>
+            </div>
+
+            <div class="acoes">
+              <div class="btn pri">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+                Criar cliente e caso
+              </div>
+              <div class="btn">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10-10-4-4L4 16v4z" stroke="#334155" stroke-width="2" stroke-linejoin="round"/></svg>
+                Já redigir a contestação
+              </div>
+              <div class="btn">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 4v11M12 15l-4-4M12 15l4-4M5 19h14" stroke="#334155" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Baixar como parecer
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="entrada">
+          <div class="modos">
+            <span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#64748b" stroke-width="2.1"/><path d="M16 16l4.5 4.5" stroke="#64748b" stroke-width="2.1" stroke-linecap="round"/></svg>
+              Pesquisar
+            </span>
+            <span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10-10-4-4L4 16v4z" stroke="#64748b" stroke-width="2.1" stroke-linejoin="round"/></svg>
+              Redigir peça
+            </span>
+            <span class="on">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 20h16M6 16V9M12 16V5M18 16v-4" stroke="#0f172a" stroke-width="2.2" stroke-linecap="round"/></svg>
+              Estratégia
+            </span>
+          </div>
+          <div class="campo">
+            <div class="inp">Pergunte outra coisa sobre este caso…</div>
+            <div class="go">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+          <p class="rodape-txt">Beta · Os números são contados no banco; a leitura é interpretação e a decisão é sua.</p>
+        </div>
+      </div>
+
+      <div class="card contexto">
+        <div class="micro">O que a IA está usando</div>
+
+        <div class="ctx-bloco usa">
+          <div class="ctx-topo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 20h16M6 16V9M12 16V5M18 16v-4" stroke="#3730a3" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <b>Acervo público</b>
+            <span class="pill">121 casos</span>
+          </div>
+          <p>Busca e Apreensão · TJCE, com desfecho e tempo contados no banco.</p>
+        </div>
+
+        <div class="ctx-bloco usa">
+          <div class="ctx-topo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6V3z" stroke="#5b21b6" stroke-width="2" stroke-linejoin="round"/><path d="M9 12h7M9 16h5" stroke="#5b21b6" stroke-width="2" stroke-linecap="round"/></svg>
+            <b>Seu histórico</b>
+            <span class="pill seu">17 casos</span>
+          </div>
+          <p><b>É o que ninguém mais tem.</b> Busca e apreensão que o seu escritório já tocou, com o desfecho de cada uma.</p>
+        </div>
+
+        <div class="ctx-bloco">
+          <div class="ctx-topo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.6" stroke="#64748b" stroke-width="2"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" stroke="#64748b" stroke-width="2" stroke-linecap="round"/></svg>
+            <b>Cleide ainda não é cliente</b>
+          </div>
+          <p>Sem cadastro e sem documentos. Por isso a resposta fala do tipo de caso, não do caso dela — e termina pedindo os dois papéis que faltam.</p>
+        </div>
+
+        <div class="ctx-bloco">
+          <div class="ctx-topo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 4h14v16l-7-3.5L5 20V4z" stroke="#64748b" stroke-width="2" stroke-linejoin="round"/></svg>
+            <b>Precedentes</b>
+            <span class="pill" style="background:var(--hairline); color:var(--corpo-2); border-color:var(--borda);">4 fontes</span>
+          </div>
+          <p>Súmula 72 do STJ e 3 acórdãos sobre constituição em mora.</p>
+        </div>
+
+        <div style="margin-top:auto; border-top:1px solid var(--hairline); padding-top:9px;">
+          <p style="font-size:10px; color:var(--fraco); line-height:1.5;">
+            Seu histórico fica no seu escritório. Ele melhora as suas respostas e não entra no
+            acervo que os outros consultam.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
