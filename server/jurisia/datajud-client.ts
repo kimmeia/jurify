@@ -26,6 +26,53 @@ const BASE = "https://api-publica.datajud.cnj.jus.br";
 const CHAVE_PUBLICA_CNJ =
   "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
 
+/**
+ * Ordenações candidatas, da mais correta pra mais tolerante.
+ *
+ * `search_after` só é confiável com ordenação ESTÁVEL: sem um desempate único,
+ * dois processos com o mesmo instante podem se revezar entre páginas e um
+ * deles nunca aparecer. O desempate óbvio seria `_id`, mas o Elasticsearch
+ * proíbe ordenar por ele (fielddata no `_id` é desabilitado por padrão, e o
+ * cluster do CNJ não vai reabilitar) — foi assim que a primeira varredura
+ * morreu com 400.
+ *
+ * `numeroProcesso` é o desempate certo quando mapeado como keyword. Como o
+ * mapeamento varia entre os 90+ índices e daqui não dá pra provar, a lista é
+ * tentada em ordem e a que funcionar fica cacheada pro resto do processo.
+ */
+const ORDENACOES: Array<{ nome: string; spec: unknown[] }> = [
+  {
+    nome: "@timestamp+numeroProcesso",
+    spec: [{ "@timestamp": { order: "asc" } }, { numeroProcesso: { order: "asc" } }],
+  },
+  { nome: "@timestamp", spec: [{ "@timestamp": { order: "asc" } }] },
+  { nome: "numeroProcesso", spec: [{ numeroProcesso: { order: "asc" } }] },
+];
+
+/** Índice da ordenação que já deu certo — evita pagar a tentativa toda página. */
+let ordenacaoResolvida: number | null = null;
+
+/** Só pra teste: desfaz o cache entre casos. */
+export function esquecerOrdenacaoDataJud() {
+  ordenacaoResolvida = null;
+}
+
+/**
+ * Erro de ordenação é o único que vale tentar de novo com outra spec. Erro de
+ * chave, de índice inexistente ou de rate limit não melhora trocando o sort —
+ * repetir só gastaria requisição no tribunal.
+ */
+export function ehErroDeOrdenacao(status: number, corpo: string): boolean {
+  if (status !== 400) return false;
+  const t = corpo.toLowerCase();
+  return (
+    t.includes("fielddata") ||
+    t.includes("no mapping found") ||
+    t.includes("illegal_argument_exception") ||
+    t.includes("sort")
+  );
+}
+
 export interface PaginaDataJud {
   hits: unknown[];
   /** `search_after` da próxima página. null = acabou. */
@@ -111,36 +158,64 @@ export async function buscarPagina(args: {
   const chave = await chaveDataJud();
 
   const tamanho = Math.min(Math.max(args.tamanho ?? 100, 1), 1000);
-  const corpo: Record<string, unknown> = {
-    size: tamanho,
-    // Ordenação estável é o que torna o `search_after` confiável: sem um
-    // desempate único, dois processos com a mesma data podem se revezar entre
-    // páginas e um deles nunca aparecer.
-    sort: [{ "@timestamp": { order: "asc" } }, { _id: "asc" }],
-    query: { match_all: {} },
-  };
+
+  let cursorDecodificado: unknown[] | null = null;
   if (args.cursor) {
     try {
-      corpo.search_after = JSON.parse(args.cursor);
+      const c = JSON.parse(args.cursor);
+      if (!Array.isArray(c)) throw new Error("cursor não é array");
+      cursorDecodificado = c;
     } catch {
       throw new Error("Cursor da varredura corrompido — reinicie o tribunal.");
     }
   }
 
-  const res = await fetch(`${BASE}/api_publica_${args.alias}/_search`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `APIKey ${chave}`,
-    },
-    body: JSON.stringify(corpo),
-    signal: AbortSignal.timeout(args.timeoutMs ?? 30_000),
-  });
+  let ultimoErro = "";
+  for (let i = ordenacaoResolvida ?? 0; i < ORDENACOES.length; i++) {
+    const ordenacao = ORDENACOES[i];
 
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`DataJud ${res.status}: ${t.slice(0, 200)}`);
+    // Cursor gravado sob outra ordenação tem outro formato de `search_after`;
+    // seguir com ele pularia metade do tribunal em silêncio.
+    if (cursorDecodificado && cursorDecodificado.length !== ordenacao.spec.length) {
+      throw new Error(
+        "A ordenação da varredura mudou e o cursor gravado não serve mais — reinicie o tribunal.",
+      );
+    }
+
+    const corpo: Record<string, unknown> = {
+      size: tamanho,
+      sort: ordenacao.spec,
+      query: { match_all: {} },
+    };
+    if (cursorDecodificado) corpo.search_after = cursorDecodificado;
+
+    const res = await fetch(`${BASE}/api_publica_${args.alias}/_search`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `APIKey ${chave}`,
+      },
+      body: JSON.stringify(corpo),
+      signal: AbortSignal.timeout(args.timeoutMs ?? 30_000),
+    });
+
+    if (res.ok) {
+      if (ordenacaoResolvida !== i) {
+        ordenacaoResolvida = i;
+        log.info({ ordenacao: ordenacao.nome, alias: args.alias }, "ordenação do DataJud definida");
+      }
+      return proximaPagina(await res.json(), tamanho);
+    }
+
+    const texto = await res.text();
+    ultimoErro = `DataJud ${res.status}: ${texto.slice(0, 200)}`;
+    if (!ehErroDeOrdenacao(res.status, texto)) throw new Error(ultimoErro);
+
+    log.warn(
+      { ordenacao: ordenacao.nome, alias: args.alias, erro: texto.slice(0, 120) },
+      "ordenação recusada pelo índice — tentando a próxima",
+    );
   }
 
-  return proximaPagina(await res.json(), tamanho);
+  throw new Error(`Nenhuma ordenação aceita pelo índice. Último erro: ${ultimoErro}`);
 }

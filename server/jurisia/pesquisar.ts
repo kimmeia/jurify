@@ -25,7 +25,8 @@ import {
   type FiltroRecorte,
   type FonteRecorte,
 } from "../../shared/jurisia-recorte";
-import { buscarRecorte } from "./buscar-acervo";
+import type { PerfilRecorte } from "../../shared/jurisia-perfil";
+import { buscarRecorte, perfilDoRecorte } from "./buscar-acervo";
 
 const SYSTEM_INTERPRETAR = `Você traduz a pergunta de um advogado em um RECORTE de busca sobre uma base de processos judiciais brasileiros.
 
@@ -70,6 +71,12 @@ export interface ResultadoPesquisa {
   filtro: FiltroRecorte;
   descricaoFiltro: string;
   estatistica: EstatisticaRecorte;
+  /**
+   * Perfil temporal e procedimental. NÃO vai pro contexto do modelo de
+   * propósito: é número, e número é da tela. Mandar pra ele só criaria a
+   * tentação de reescrever a mediana com outras palavras.
+   */
+  perfil: PerfilRecorte | null;
   /** true quando nem chegou a consultar o modelo de resposta. */
   semBase: boolean;
 }
@@ -95,6 +102,7 @@ function semBase(
     filtro,
     descricaoFiltro: descreverFiltro(filtro),
     estatistica,
+    perfil: null,
     semBase: true,
   };
 }
@@ -144,6 +152,10 @@ export async function pesquisarNoAcervo(args: {
     );
   }
 
+  // Só depois de saber que o recorte existe: perfil de recorte vazio é query
+  // gasta pra devolver nada.
+  const perfil = recorte.estatistica.comResultado > 0 ? await perfilDoRecorte(filtro) : null;
+
   const ctx = montarContextoRecorte(recorte.processos);
   if (ctx.fontes.length === 0) {
     return semBase(
@@ -178,6 +190,7 @@ export async function pesquisarNoAcervo(args: {
     filtro,
     descricaoFiltro: descreverFiltro(filtro),
     estatistica: recorte.estatistica,
+    perfil,
     semBase: false,
   };
 

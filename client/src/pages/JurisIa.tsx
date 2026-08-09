@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Ancora } from "@/components/AncoraFonte";
 import { toast } from "sonner";
 import {
+  Clock,
   Database,
   Gavel,
   Loader2,
@@ -36,6 +37,7 @@ import {
   type FonteRecorte,
   type PesquisaGravada,
 } from "@shared/jurisia-recorte";
+import { formatarDuracao, type PerfilRecorte } from "@shared/jurisia-perfil";
 import type { ResultadoProcesso } from "@shared/datajud-desfecho";
 
 /** Slot de cor por resultado. Fixo: a cor segue o resultado, nunca o tamanho
@@ -96,7 +98,86 @@ function Barras({ e }: { e: EstatisticaRecorte }) {
   );
 }
 
-function PainelRecorte({ e, filtro }: { e: EstatisticaRecorte; filtro: string }) {
+/**
+ * Perfil: quanto demora e como corre.
+ *
+ * Os marcadores são proporções INDEPENDENTES (um processo pode ter liminar e
+ * recurso), não pedaços de um todo — por isso barras separadas numa cor só, e
+ * nunca empilhadas. Cinco matizes aqui sugeririam partição que não existe; o
+ * rótulo já carrega a identidade de cada linha.
+ */
+function PainelPerfil({ p }: { p: PerfilRecorte }) {
+  const temTempo = p.medianaDias !== null;
+  return (
+    <div className="mt-3 border-t pt-3">
+      <div className="flex items-center gap-1.5">
+        <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <p className="text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
+          Como esses processos correm
+        </p>
+      </div>
+
+      {temTempo ? (
+        <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="text-[15px] font-extrabold">{formatarDuracao(p.medianaDias)}</span>
+          {/* "de X a Y", não "entre X e Y": o Y já costuma ter um "e" dentro
+              ("2 anos e 8 meses") e a frase fica ambígua. E é metade dos
+              casos, não a maioria — p25–p75 é exatamente o miolo. */}
+          <span className="text-[11px] text-muted-foreground">
+            até a sentença (caso do meio) · metade dos casos leva de{" "}
+            {formatarDuracao(p.p25Dias)} a {formatarDuracao(p.p75Dias)}
+          </span>
+        </div>
+      ) : (
+        <p className="mt-2 text-[11.5px] text-muted-foreground">
+          Sem data de ajuizamento suficiente pra medir o tempo destes processos.
+        </p>
+      )}
+
+      <div className="mt-2.5 space-y-1.5">
+        {p.marcadores.map((m) => (
+          <div
+            key={m.chave}
+            className="grid grid-cols-[128px_1fr_auto] items-center gap-2"
+            title={`${m.rotulo}: ${m.quantidade} de ${p.amostra} processos da amostra`}
+          >
+            <span className="truncate text-[11px] text-foreground/80">{m.rotulo}</span>
+            <div
+              className="h-2 w-full overflow-hidden rounded-[2px]"
+              style={{ background: "var(--viz-trilho)" }}
+            >
+              {m.quantidade > 0 && (
+                <div
+                  className="h-full rounded-r-[4px]"
+                  style={{ background: "var(--viz-1)", width: `${m.percentual}%`, minWidth: "3px" }}
+                />
+              )}
+            </div>
+            <span className="flex text-[11px] tabular-nums text-foreground/80">
+              <span className="w-9 text-right font-bold">{m.percentual}%</span>
+              <span className="w-12 text-right text-muted-foreground">({m.quantidade})</span>
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-2 text-[10px] text-muted-foreground">
+        Sobre os {p.amostra.toLocaleString("pt-BR")} processos decididos mais recentes
+        {p.amostra >= p.limiteAmostra ? ` (teto de ${p.limiteAmostra.toLocaleString("pt-BR")})` : ""}.
+      </p>
+    </div>
+  );
+}
+
+function PainelRecorte({
+  e,
+  perfil,
+  filtro,
+}: {
+  e: EstatisticaRecorte;
+  perfil: PerfilRecorte | null;
+  filtro: string;
+}) {
   return (
     <div className="rounded-xl border bg-card px-3.5 py-3">
       <div className="flex items-center gap-1.5">
@@ -133,6 +214,8 @@ function PainelRecorte({ e, filtro }: { e: EstatisticaRecorte; filtro: string })
           tendência.
         </p>
       )}
+
+      {perfil && perfil.amostra > 0 && <PainelPerfil p={perfil} />}
     </div>
   );
 }
@@ -143,7 +226,7 @@ function Resposta({ r }: { r: PesquisaGravada }) {
 
   return (
     <div className="space-y-2.5">
-      <PainelRecorte e={r.estatistica} filtro={r.descricaoFiltro} />
+      <PainelRecorte e={r.estatistica} perfil={r.perfil ?? null} filtro={r.descricaoFiltro} />
 
       {!r.achou ? (
         <div className="rounded-xl rounded-bl-sm border border-amber-300 bg-amber-50 px-3.5 py-3 dark:border-amber-900 dark:bg-amber-950/30">
