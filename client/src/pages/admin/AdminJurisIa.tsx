@@ -68,6 +68,7 @@ export default function AdminJurisIa() {
 
   const linhas = data ?? [];
   const totalProcessos = linhas.reduce((s, l) => s + l.processos, 0);
+  const totalGravacoes = linhas.reduce((s, l) => s + l.gravacoes, 0);
   const totalSigilosos = linhas.reduce((s, l) => s + l.sigilosos, 0);
   const emAndamento = linhas.filter((l) => l.temCursor && l.status !== "completo").length;
   const completos = linhas.filter((l) => l.status === "completo").length;
@@ -91,10 +92,17 @@ export default function AdminJurisIa() {
         <Card>
           <CardContent className="pt-4">
             <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
-              No banco
+              No acervo
             </p>
             <p className="mt-1 text-2xl font-bold tabular-nums">{nf.format(totalProcessos)}</p>
-            <p className="text-[11px] text-muted-foreground">processos</p>
+            {/* Linhas distintas — é este o número que o cliente vê na tela dele.
+                O contador da varredura conta gravações, e upsert reconta. */}
+            <p className="text-[11px] text-muted-foreground">
+              processos distintos
+              {totalGravacoes > totalProcessos && (
+                <> · {nf.format(totalGravacoes)} gravações</>
+              )}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -159,7 +167,7 @@ export default function AdminJurisIa() {
                 <TableRow>
                   <TableHead>Tribunal</TableHead>
                   <TableHead>Justiça</TableHead>
-                  <TableHead className="text-right">Processos</TableHead>
+                  <TableHead className="text-right">No acervo</TableHead>
                   <TableHead className="text-right">Sigilosos</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ação</TableHead>

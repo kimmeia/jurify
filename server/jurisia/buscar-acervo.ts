@@ -10,10 +10,12 @@
  */
 
 import { and, desc, eq, gte, inArray, isNotNull, like, sql, type SQL } from "drizzle-orm";
+import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { getDb } from "../db";
 import { jurisiaMovimentos, jurisiaProcessos } from "../../drizzle/schema";
 import { montarPerfil, type EntradaPerfil, type PerfilRecorte } from "../../shared/jurisia-perfil";
 import type { ResultadoProcesso } from "../../shared/datajud-desfecho";
+import { ACERVO_VAZIO, type ComposicaoAcervo } from "../../shared/jurisia-acervo";
 import {
   MAX_FONTES_RECORTE,
   montarEstatistica,
@@ -186,4 +188,53 @@ export async function tribunaisDoAcervo(): Promise<Array<{ tribunal: string; pro
     .groupBy(jurisiaProcessos.tribunal)
     .orderBy(desc(sql`COUNT(*)`));
   return linhas.map((l) => ({ tribunal: l.tribunal, processos: Number(l.processos ?? 0) }));
+}
+
+/**
+ * O que existe no acervo, em vocabulário do advogado.
+ *
+ * Sem isto o módulo é adivinhação: o advogado digita, erra, e recebe "não
+ * encontrei" sem nunca descobrir que o acervo só tem execução fiscal. Mostrar
+ * as classes e assuntos que existem de fato transforma a busca em escolha.
+ */
+export async function composicaoDoAcervo(topo = 8): Promise<ComposicaoAcervo> {
+  const db = await getDb();
+  if (!db) return ACERVO_VAZIO;
+
+  const porNome = async (coluna: AnyMySqlColumn) => {
+    const linhas = await db
+      .select({ nome: coluna, quantidade: sql<number>`COUNT(*)` })
+      .from(jurisiaProcessos)
+      .where(isNotNull(coluna))
+      .groupBy(coluna)
+      .orderBy(desc(sql`COUNT(*)`));
+    return linhas
+      .map((l) => ({ nome: String(l.nome), quantidade: Number(l.quantidade ?? 0) }))
+      .filter((l) => l.nome.length > 0);
+  };
+
+  const [tribunais, classes, assuntos] = await Promise.all([
+    tribunaisDoAcervo(),
+    porNome(jurisiaProcessos.classeNome),
+    porNome(jurisiaProcessos.assuntoNome),
+  ]);
+
+  return {
+    total: tribunais.reduce((s, t) => s + t.processos, 0),
+    tribunais,
+    classes: classes.slice(0, topo),
+    assuntos: assuntos.slice(0, topo),
+    classesRestantes: Math.max(0, classes.length - topo),
+    assuntosRestantes: Math.max(0, assuntos.length - topo),
+  };
+}
+
+/** Quantos processos DISTINTOS cada tribunal tem no acervo.
+ *
+ *  O contador de `jurisia_varredura` conta GRAVAÇÕES, e `gravarProcesso` faz
+ *  upsert — reler um tribunal soma de novo. Era daí que vinha o admin dizer
+ *  1.000 com 500 no banco. */
+export async function contagemPorTribunal(): Promise<Map<string, number>> {
+  const linhas = await tribunaisDoAcervo();
+  return new Map(linhas.map((l) => [l.tribunal.toUpperCase(), l.processos]));
 }

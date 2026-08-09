@@ -87,7 +87,14 @@ export const adminRouter = router({
     // A lista de tribunais sai de `tribunal-providers`, que já é a fonte de
     // verdade dos aliases da API — digitar alias à mão no painel seria uma
     // segunda lista pra manter em sincronia.
+    const { contagemPorTribunal } = await import("../jurisia/buscar-acervo");
+
     const estado = new Map((await estadoVarreduras()).map((v) => [v.tribunal, v]));
+    // `noAcervo` conta linhas distintas; `gravacoes` conta o trabalho do robô,
+    // que relê processo conhecido pra atualizar movimento. Misturar os dois é
+    // o que fazia o painel dizer 1.000 com 500 no banco.
+    const noAcervo = await contagemPorTribunal();
+
     return Object.values(TRIBUNAL_PROVIDERS)
       .map((p) => {
         const v = estado.get(p.sigla.toUpperCase());
@@ -97,7 +104,8 @@ export const adminRouter = router({
           nome: p.nome,
           justica: p.justica,
           status: v?.status ?? ("fila" as const),
-          processos: v?.processos ?? 0,
+          processos: noAcervo.get(p.sigla.toUpperCase()) ?? 0,
+          gravacoes: v?.processos ?? 0,
           sigilosos: v?.sigilosos ?? 0,
           ultimoErro: v?.ultimoErro ?? null,
           ultimaExecucao: v?.ultimaExecucao ?? null,

@@ -26,18 +26,25 @@ describe("router jurisia", () => {
       "jurisia.casosRecentes",
       "jurisia.conversa",
       "jurisia.estado",
+      "jurisia.excluirPesquisa",
       "jurisia.perguntar",
       "jurisia.pesquisa",
       "jurisia.pesquisar",
       "jurisia.pesquisas",
+      "jurisia.renomearPesquisa",
     ]);
   });
 
-  it("só perguntar e pesquisar são mutation; o resto é query", () => {
+  it("as quatro mutations são mutation; o resto é query", () => {
     // Trocar o tipo quebra a tela sem quebrar o tsc — o client usa
     // useMutation/useQuery e o erro só aparece em runtime.
     const p = defs();
-    const mutations = ["jurisia.perguntar", "jurisia.pesquisar"];
+    const mutations = [
+      "jurisia.perguntar",
+      "jurisia.pesquisar",
+      "jurisia.renomearPesquisa",
+      "jurisia.excluirPesquisa",
+    ];
     for (const [nome, proc] of Object.entries(p)) {
       if (!nome.startsWith("jurisia.")) continue;
       expect((proc as any)._def.type, nome).toBe(

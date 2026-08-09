@@ -19,9 +19,29 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Ancora } from "@/components/AncoraFonte";
 import { toast } from "sonner";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Clock,
   Database,
   Gavel,
+  MoreVertical,
+  Pencil,
+  Trash2,
   Loader2,
   Plus,
   Scale,
@@ -30,6 +50,7 @@ import {
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
+import type { ComposicaoAcervo } from "@shared/jurisia-acervo";
 import {
   rotuloCurtoResultado,
   rotuloResultado,
@@ -202,8 +223,13 @@ function PainelRecorte({
           </p>
         </>
       ) : (
+        // "Nenhum chegou ao fim" só é verdade quando HÁ processos. Com o
+        // recorte vazio a frase mentia, e ainda aparecia junto do bloco "sem
+        // base no acervo" — duas mensagens contando histórias diferentes sobre
+        // o mesmo zero.
         <p className="mt-2.5 text-[11.5px] text-muted-foreground">
-          Nenhum processo deste recorte chegou ao fim ainda — não há desfecho a distribuir.
+          Nenhum destes {e.total.toLocaleString("pt-BR")} processos chegou ao fim ainda — não há
+          desfecho a distribuir.
         </p>
       )}
 
@@ -220,9 +246,198 @@ function PainelRecorte({
   );
 }
 
-function Resposta({ r }: { r: PesquisaGravada }) {
+/**
+ * Uma pesquisa na lista lateral, com renomear e excluir.
+ *
+ * O título nasce da primeira pergunta cortada, e duas perguntas parecidas
+ * viram dois itens quase iguais na lista. Sem renomear, a lista envelhece mal;
+ * sem excluir, toda busca que deu errado fica lá pra sempre.
+ */
+function LinhaPesquisa({
+  titulo,
+  ativa,
+  onAbrir,
+  onRenomear,
+  onExcluir,
+  excluindo,
+}: {
+  id: number;
+  titulo: string;
+  ativa: boolean;
+  onAbrir: () => void;
+  onRenomear: (titulo: string) => void;
+  onExcluir: () => void;
+  excluindo: boolean;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [rascunho, setRascunho] = useState(titulo);
+
+  if (editando) {
+    return (
+      <Input
+        autoFocus
+        value={rascunho}
+        onChange={(e) => setRascunho(e.target.value)}
+        onBlur={() => setEditando(false)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            const t = rascunho.trim();
+            if (t) onRenomear(t);
+            setEditando(false);
+          }
+          if (e.key === "Escape") {
+            setRascunho(titulo);
+            setEditando(false);
+          }
+        }}
+        className="h-8 text-[11.5px]"
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`group flex items-center gap-1 rounded-lg border px-2.5 py-1.5 ${
+        ativa ? "border-violet-300 bg-violet-50 dark:bg-violet-950/40" : "bg-card hover:bg-muted/50"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onAbrir}
+        className="min-w-0 flex-1 truncate text-left text-[11.5px]"
+      >
+        {titulo}
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="shrink-0 text-muted-foreground/50 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100"
+          >
+            <MoreVertical className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuItem
+            onSelect={() => {
+              setRascunho(titulo);
+              setEditando(true);
+            }}
+          >
+            <Pencil className="mr-2 h-3.5 w-3.5" />
+            Renomear
+          </DropdownMenuItem>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={(e) => e.preventDefault()}
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Excluir
+              </DropdownMenuItem>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir “{titulo}”?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  As perguntas e as respostas desta pesquisa somem. As mensagens já usadas do mês
+                  não voltam.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={excluindo}
+                  onClick={onExcluir}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Excluir
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+/**
+ * O recorte deu zero.
+ *
+ * Antes eram dois blocos contando histórias diferentes sobre o mesmo zero, e
+ * nenhum dizia o que fazer. Aqui é um só, e ele mostra o que EXISTE — que é a
+ * única informação capaz de transformar a busca falha em busca boa.
+ */
+function SemBase({
+  r,
+  acervo,
+  aoEscolherTipo,
+}: {
+  r: PesquisaGravada;
+  acervo?: ComposicaoAcervo;
+  aoEscolherTipo: (nome: string) => void;
+}) {
+  const topo = (acervo?.classes ?? []).slice(0, 4);
+  return (
+    <div className="rounded-xl rounded-bl-sm border border-amber-300 bg-amber-50 px-4 py-3.5 dark:border-amber-900 dark:bg-amber-950/30">
+      <p className="flex items-center gap-2 text-[13.5px] font-bold text-amber-900 dark:text-amber-200">
+        <TriangleAlert className="h-4 w-4 shrink-0" />
+        {r.descricaoFiltro
+          ? `Nada no acervo para ${r.descricaoFiltro}`
+          : "Não consegui montar um recorte com essa pergunta"}
+      </p>
+      <p className="mt-1.5 text-[12.5px] leading-relaxed text-amber-900/90 dark:text-amber-200/90">
+        {r.conclusao ?? "O acervo não tem processos que respondam isso."}
+      </p>
+
+      {topo.length > 0 && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-white/70 px-3 py-2.5 dark:border-amber-900 dark:bg-black/20">
+          <p className="text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-amber-700 dark:text-amber-400">
+            O que já está coletado
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {topo.map((c) => (
+              <button
+                key={c.nome}
+                type="button"
+                onClick={() => aoEscolherTipo(c.nome)}
+                className="rounded-full border bg-card px-2.5 py-1 text-[11.5px] text-foreground/80 hover:bg-muted/60"
+              >
+                {c.nome}{" "}
+                <span className="font-bold tabular-nums">{c.quantidade.toLocaleString("pt-BR")}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="mt-2.5 flex items-center gap-1.5 text-[11.5px] font-semibold text-emerald-700 dark:text-emerald-400">
+        <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+        Esta busca não consumiu nenhuma mensagem do seu mês.
+      </p>
+    </div>
+  );
+}
+
+function Resposta({
+  r,
+  acervo,
+  aoEscolherTipo,
+}: {
+  r: PesquisaGravada;
+  acervo?: ComposicaoAcervo;
+  aoEscolherTipo: (nome: string) => void;
+}) {
   const ordem = new Map<number, number>();
   r.fontesUsadas.forEach((id, i) => ordem.set(id, i + 1));
+
+  // Recorte vazio: um bloco só. O painel de zeros ao lado de "não achei" era
+  // ruído em cima de má notícia.
+  if (r.estatistica.total === 0) {
+    return <SemBase r={r} acervo={acervo} aoEscolherTipo={aoEscolherTipo} />;
+  }
 
   return (
     <div className="space-y-2.5">
@@ -232,10 +447,10 @@ function Resposta({ r }: { r: PesquisaGravada }) {
         <div className="rounded-xl rounded-bl-sm border border-amber-300 bg-amber-50 px-3.5 py-3 dark:border-amber-900 dark:bg-amber-950/30">
           <p className="mb-1 flex items-center gap-1.5 text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-amber-700 dark:text-amber-400">
             <TriangleAlert className="h-3.5 w-3.5" />
-            Sem base no acervo
+            Não respondi com o que há aqui
           </p>
           <p className="text-[12.5px] leading-relaxed text-amber-900 dark:text-amber-200">
-            {r.conclusao ?? "O acervo não tem processos que respondam isso."}
+            {r.conclusao ?? "Os processos deste recorte não respondem essa pergunta."}
           </p>
         </div>
       ) : (
@@ -294,13 +509,33 @@ export default function JurisIa() {
   const { data: pesquisas } = trpc.jurisia.pesquisas.useQuery();
   const { data, isLoading } = trpc.jurisia.pesquisa.useQuery({ conversaId });
 
+  const renomearMut = trpc.jurisia.renomearPesquisa.useMutation({
+    onSuccess: () => utils.jurisia.pesquisas.invalidate(),
+    onError: (e) => toast.error("Não deu pra renomear", { description: e.message }),
+  });
+
+  const excluirMut = trpc.jurisia.excluirPesquisa.useMutation({
+    onSuccess: (_r, vars) => {
+      utils.jurisia.pesquisas.invalidate();
+      // A conversa aberta deixou de existir; sem isto a tela consulta um id
+      // morto e mostra "não encontrada".
+      if (vars.conversaId === conversaId) setConversaId(null);
+      toast.success("Pesquisa excluída");
+    },
+    onError: (e) => toast.error("Não deu pra excluir", { description: e.message }),
+  });
+
   const pesquisarMut = trpc.jurisia.pesquisar.useMutation({
     onSuccess: (r) => {
       setConversaId(r.conversaId);
       utils.jurisia.pesquisa.invalidate();
       utils.jurisia.pesquisas.invalidate();
       utils.jurisia.estado.invalidate();
-      if (!r.ok) {
+      if (r.semBase) {
+        toast.info("Nada no acervo para essa busca", {
+          description: "Não consumiu mensagem — escolha um dos tipos que já foram coletados.",
+        });
+      } else if (!r.ok) {
         toast.warning("A resposta não passou na checagem", {
           description:
             "O modelo tentou afirmar algo sem processo que sustentasse, ou inventou estatística. Nada foi mostrado.",
@@ -353,15 +588,14 @@ export default function JurisIa() {
     );
   }
 
-  // Sugestão construída em cima do que foi COLETADO. Oferecer "TJSP" com o
-  // acervo só do Ceará seria ensinar o advogado a fazer a pergunta que falha.
+  // Sugestão feita a partir do que foi COLETADO, não de palpite. Oferecer
+  // "revisão de contrato bancário" num acervo só de execução fiscal é ensinar
+  // o advogado a fazer exatamente a pergunta que falha.
   const tribunalTopo = acervo?.tribunais[0]?.tribunal;
   const sugestoes = tribunalTopo
-    ? [
-      `Como o ${tribunalTopo} costuma decidir revisão de contrato bancário?`,
-      `Ação de indenização por dano moral no ${tribunalTopo} termina como?`,
-      `Execução de título extrajudicial no ${tribunalTopo}: qual o desfecho mais comum?`,
-    ]
+    ? (acervo?.classes ?? [])
+      .slice(0, 3)
+      .map((c) => `${c.nome} no ${tribunalTopo}: como costuma terminar?`)
     : [];
 
   return (
@@ -372,19 +606,58 @@ export default function JurisIa() {
         <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
           beta
         </span>
-        {acervo && (
+        {acervo && acervo.total > 0 && (
           <span className="flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-[10.5px] text-muted-foreground">
             <Database className="h-3 w-3" />
-            {acervo.processos.toLocaleString("pt-BR")} processos ·{" "}
-            {acervo.tribunais.length} tribunal(is)
+            {acervo.total.toLocaleString("pt-BR")} processos ·{" "}
+            {acervo.tribunais.length === 1
+              ? acervo.tribunais[0].tribunal
+              : `${acervo.tribunais.length} tribunais`}
           </span>
         )}
         {cota && (
           <span className="ml-auto text-[10.5px] tabular-nums text-muted-foreground">
-            {cota.usadas} de {cota.limite} mensagens no mês
+            Você usou {cota.usadas} de {cota.limite} mensagens do mês
           </span>
         )}
       </div>
+
+      {/* A correção central: o advogado vê o que existe ANTES de perguntar.
+          Sem esta barra o módulo é adivinhação — digita, erra, e nunca
+          descobre que o acervo só tem execução fiscal. */}
+      {acervo && acervo.classes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-card px-3.5 py-2.5">
+          <div className="shrink-0">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
+              Você pode pesquisar
+            </p>
+            <p className="text-[12.5px] font-bold">
+              {acervo.total.toLocaleString("pt-BR")} processos
+              {acervo.tribunais.length === 1 ? ` do ${acervo.tribunais[0].tribunal}` : ""}
+            </p>
+          </div>
+          <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+            {acervo.classes.map((c) => (
+              <button
+                key={c.nome}
+                type="button"
+                onClick={() =>
+                  setPergunta(`${c.nome} no ${tribunalTopo ?? ""}: como costuma terminar?`.trim())
+                }
+                className="rounded-full border bg-card px-2.5 py-1 text-[11.5px] text-foreground/80 hover:bg-muted/60"
+              >
+                {c.nome}{" "}
+                <span className="font-bold tabular-nums">{c.quantidade.toLocaleString("pt-BR")}</span>
+              </button>
+            ))}
+            {acervo.classesRestantes > 0 && (
+              <span className="rounded-full border border-dashed px-2.5 py-1 text-[11.5px] text-muted-foreground">
+                + {acervo.classesRestantes} tipos
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
         <aside className="space-y-1.5">
@@ -398,16 +671,16 @@ export default function JurisIa() {
             Nova pesquisa
           </Button>
           {(pesquisas ?? []).map((p) => (
-            <button
+            <LinhaPesquisa
               key={p.id}
-              type="button"
-              onClick={() => setConversaId(p.id)}
-              className={`block w-full truncate rounded-lg border px-2.5 py-1.5 text-left text-[11.5px] ${
-                p.id === conversaId ? "border-violet-300 bg-violet-50 dark:bg-violet-950/40" : "bg-card hover:bg-muted/50"
-              }`}
-            >
-              {p.titulo ?? "Pesquisa"}
-            </button>
+              id={p.id}
+              titulo={p.titulo ?? "Pesquisa"}
+              ativa={p.id === conversaId}
+              onAbrir={() => setConversaId(p.id)}
+              onRenomear={(titulo) => renomearMut.mutate({ conversaId: p.id, titulo })}
+              onExcluir={() => excluirMut.mutate({ conversaId: p.id })}
+              excluindo={excluirMut.isPending}
+            />
           ))}
         </aside>
 
@@ -418,7 +691,7 @@ export default function JurisIa() {
             ) : mensagens.length === 0 ? (
               <div className="py-6 text-center">
                 <Search className="mx-auto h-5 w-5 text-muted-foreground" />
-                {acervo && acervo.processos === 0 ? (
+                {acervo && acervo.total === 0 ? (
                   <p className="mx-auto mt-2 max-w-md text-[12.5px] text-muted-foreground">
                     O acervo ainda está vazio. Rode uma varredura em Admin → JurisIA para coletar
                     os processos de um tribunal — sem base coletada não há o que pesquisar.
@@ -472,7 +745,16 @@ export default function JurisIa() {
                     </div>
                   );
                 }
-                return <Resposta key={m.id} r={m.resposta as PesquisaGravada} />;
+                return (
+                  <Resposta
+                    key={m.id}
+                    r={m.resposta as PesquisaGravada}
+                    acervo={acervo}
+                    aoEscolherTipo={(nome) =>
+                      setPergunta(`${nome} no ${tribunalTopo ?? ""}: como costuma terminar?`.trim())
+                    }
+                  />
+                );
               })
             )}
 
