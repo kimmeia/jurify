@@ -151,6 +151,7 @@ describe("montarContextoRecorte", () => {
     id,
     cnj: "08001234520238060001",
     tribunal: "TJCE",
+    grau: "G1",
     classeNome: "Procedimento Comum Cível",
     assuntoNome: "Contratos Bancários",
     orgaoNome: "3ª Vara Cível",
@@ -191,6 +192,7 @@ describe("montarContextoRecorte", () => {
   it("aguenta processo com campos faltando", () => {
     const c = montarContextoRecorte([
       proc(3, {
+        grau: null,
         classeNome: null,
         assuntoNome: null,
         orgaoNome: null,
@@ -200,6 +202,15 @@ describe("montarContextoRecorte", () => {
     ]);
     expect(c.fontes[0].data).toBe("");
     expect(c.texto).toContain("[FONTE 3]");
+    expect(c.texto).not.toContain("instância:");
+    expect(c.fontes[0].natureza).toBeNull();
+  });
+
+  it("diz ao modelo qual fonte é acórdão e qual é sentença", () => {
+    const c = montarContextoRecorte([proc(1, { grau: "G1" }), proc(2, { grau: "G2" })]);
+    expect(c.texto).toContain("NÃO é jurisprudência");
+    expect(c.texto).toContain("pode ser citada como jurisprudência");
+    expect(c.fontes.map((f) => f.natureza)).toEqual(["estatistica", "jurisprudencia"]);
   });
 });
 

@@ -116,6 +116,21 @@ export const adminRouter = router({
   }),
 
   /**
+   * Quanto do acervo é acórdão.
+   *
+   * É a métrica que decide se o produto entrega o que promete: um acervo só de
+   * 1º grau responde "essa vara costuma acolher", não "o tribunal entende".
+   * Fica separado de `jurisiaVarreduras` porque é sobre o conteúdo coletado,
+   * não sobre o progresso do robô.
+   */
+  jurisiaNatureza: adminProcedure.query(async () => {
+    const { grausDoAcervo } = await import("../jurisia/buscar-acervo");
+    const { contarNatureza } = await import("../../shared/jurisia-grau");
+    const graus = await grausDoAcervo();
+    return { graus, natureza: contarNatureza(graus) };
+  }),
+
+  /**
    * Uma página, SEM GRAVAR NADA.
    *
    * É o primeiro passo antes de comprometer o banco: mostra quantos sigilosos

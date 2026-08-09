@@ -17,6 +17,7 @@
 import type { ResultadoProcesso } from "./datajud-desfecho";
 import type { PerfilRecorte } from "./jurisia-perfil";
 import type { Comparacao } from "./jurisia-estrategia";
+import { naturezaDoGrau, type ComposicaoNatureza, type NaturezaProcesso } from "./jurisia-grau";
 
 export interface FiltroRecorte {
   tribunal: string | null;
@@ -34,6 +35,8 @@ export interface ProcessoAcervo {
   id: number;
   cnj: string;
   tribunal: string;
+  /** Como veio do DataJud. Vira jurisprudência ou estatística em `jurisia-grau`. */
+  grau: string | null;
   classeNome: string | null;
   assuntoNome: string | null;
   orgaoNome: string | null;
@@ -226,12 +229,19 @@ export interface FonteRecorte {
   id: number;
   rotulo: string;
   data: string;
+  /** null quando o tribunal não informou o grau. */
+  natureza: NaturezaProcesso | null;
 }
 
 export interface ContextoRecorte {
   fontes: FonteRecorte[];
   texto: string;
 }
+
+const DESCRICAO_NATUREZA: Record<NaturezaProcesso, string> = {
+  jurisprudencia: "decisão de órgão colegiado (acórdão — pode ser citada como jurisprudência)",
+  estatistica: "sentença de juiz singular (NÃO é jurisprudência — não fundamenta petição)",
+};
 
 /**
  * Monta o bloco que vai pro modelo. Cada processo é uma [FONTE], e o que ele
@@ -256,9 +266,13 @@ export function montarContextoRecorte(
       .join(" · ");
 
     const data = dataCurta(p.resultadoEm) ?? dataCurta(p.ajuizamentoEm) ?? "";
-    fontes.push({ id: p.id, rotulo: `${formatarCnj(p.cnj)} — ${rotulo}`, data });
+    const natureza = naturezaDoGrau(p.grau);
+    fontes.push({ id: p.id, rotulo: `${formatarCnj(p.cnj)} — ${rotulo}`, data, natureza });
 
     const linhas = [`[FONTE ${p.id}] ${formatarCnj(p.cnj)} (${p.tribunal})`];
+    // Sem isto o modelo cita sentença de vara como se fosse entendimento do
+    // tribunal — que é exatamente a afirmação que o advogado leva pro processo.
+    if (natureza) linhas.push(`instância: ${DESCRICAO_NATUREZA[natureza]}`);
     if (p.classeNome) linhas.push(`classe: ${p.classeNome}`);
     if (p.assuntoNome) linhas.push(`assunto: ${p.assuntoNome}`);
     if (p.orgaoNome) linhas.push(`órgão: ${p.orgaoNome}`);
@@ -288,6 +302,9 @@ export interface PesquisaGravada {
   /** Só no modo estratégia: o cruzamento com o histórico do escritório. */
   comparacao?: Comparacao | null;
   descricaoFiltro: string;
+  /** Opcionais: pesquisas gravadas antes da separação por instância não têm. */
+  natureza?: ComposicaoNatureza;
+  avisoNatureza?: string | null;
 }
 
 /**

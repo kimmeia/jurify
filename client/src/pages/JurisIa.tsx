@@ -53,6 +53,7 @@ import {
 } from "lucide-react";
 import type { ComposicaoAcervo } from "@shared/jurisia-acervo";
 import type { Comparacao } from "@shared/jurisia-estrategia";
+import type { ComposicaoNatureza } from "@shared/jurisia-grau";
 import {
   rotuloCurtoResultado,
   rotuloResultado,
@@ -192,14 +193,82 @@ function PainelPerfil({ p }: { p: PerfilRecorte }) {
   );
 }
 
+/**
+ * Quanto do recorte é acórdão e quanto é sentença.
+ *
+ * Vem antes das barras de propósito: "isto é jurisprudência?" é uma pergunta
+ * anterior a "quanto deu procedente". Sem esta linha o painel apresenta
+ * sentença de vara com a mesma cara de entendimento de tribunal.
+ */
+function PainelNatureza({ n, aviso }: { n: ComposicaoNatureza; aviso: string | null }) {
+  const total = n.jurisprudencia + n.estatistica + n.indefinido;
+  if (total === 0) return null;
+  const fatia = (q: number) => `${Math.round((q * 100) / total)}%`;
+
+  return (
+    <div className="mt-2.5">
+      <div className="flex h-1.5 overflow-hidden rounded-full bg-muted">
+        {n.jurisprudencia > 0 && (
+          <div className="bg-violet-500" style={{ width: fatia(n.jurisprudencia) }} />
+        )}
+        {n.estatistica > 0 && (
+          <div className="bg-slate-400" style={{ width: fatia(n.estatistica) }} />
+        )}
+        {n.indefinido > 0 && (
+          <div className="bg-muted-foreground/30" style={{ width: fatia(n.indefinido) }} />
+        )}
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10.5px] text-muted-foreground">
+        {n.jurisprudencia > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+            <strong className="tabular-nums text-foreground">
+              {n.jurisprudencia.toLocaleString("pt-BR")}
+            </strong>{" "}
+            acórdão — jurisprudência
+          </span>
+        )}
+        {n.estatistica > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+            <strong className="tabular-nums text-foreground">
+              {n.estatistica.toLocaleString("pt-BR")}
+            </strong>{" "}
+            sentença de 1º grau
+          </span>
+        )}
+        {n.indefinido > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+            <strong className="tabular-nums text-foreground">
+              {n.indefinido.toLocaleString("pt-BR")}
+            </strong>{" "}
+            sem grau informado
+          </span>
+        )}
+      </div>
+      {aviso && (
+        <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
+          {aviso}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PainelRecorte({
   e,
   perfil,
   filtro,
+  natureza,
+  avisoNatureza,
 }: {
   e: EstatisticaRecorte;
   perfil: PerfilRecorte | null;
   filtro: string;
+  natureza?: ComposicaoNatureza;
+  avisoNatureza?: string | null;
 }) {
   return (
     <div className="rounded-xl border bg-card px-3.5 py-3">
@@ -216,6 +285,8 @@ function PainelRecorte({
         <Tile n={e.comResultado} rotulo="já decididos" />
         <Tile n={e.emAndamento} rotulo="em andamento" />
       </div>
+
+      {natureza && <PainelNatureza n={natureza} aviso={avisoNatureza ?? null} />}
 
       {e.comResultado > 0 ? (
         <>
@@ -666,7 +737,13 @@ function Resposta({
 
   return (
     <div className="space-y-2.5">
-      <PainelRecorte e={r.estatistica} perfil={r.perfil ?? null} filtro={r.descricaoFiltro} />
+      <PainelRecorte
+        e={r.estatistica}
+        perfil={r.perfil ?? null}
+        filtro={r.descricaoFiltro}
+        natureza={r.natureza}
+        avisoNatureza={r.avisoNatureza}
+      />
       {r.comparacao && <PainelComparacao c={r.comparacao} />}
 
       {!r.achou ? (
@@ -712,6 +789,17 @@ function Resposta({
                   >
                     <span className="shrink-0 font-extrabold">{ordem.get(f.id)}</span>
                     <span className="shrink-0 tabular-nums opacity-70">{f.data}</span>
+                    {f.natureza && (
+                      <span
+                        className={`shrink-0 rounded px-1 text-[9.5px] font-bold uppercase tracking-wide ${
+                          f.natureza === "jurisprudencia"
+                            ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
+                            : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                        }`}
+                      >
+                        {f.natureza === "jurisprudencia" ? "acórdão" : "1º grau"}
+                      </span>
+                    )}
                     <span className="min-w-0 truncate">{f.rotulo}</span>
                   </li>
                 ))}
