@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href=".claude/skills/mockup-juridflow/assets/fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+    --viz-1:#2a78d6; --viz-2:#eb6834; --viz-3:#1baf7a; --viz-4:#eda100; --viz-5:#e87ba4;
+    --viz-trilho:#e8edf3;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:24px 30px; height:100%; display:flex; flex-direction:column; gap:14px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .btn-primary { background:var(--acento); color:#fff; font-weight:600; font-size:13.5px;
+                 border-radius:10px; padding:11px 18px; display:flex; align-items:center; gap:8px;
+                 box-shadow:0 8px 18px -8px #7c3aed88; }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:16px; }
+
+  .kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; flex:0 0 auto; }
+  .kpi { padding:15px 17px; display:flex; gap:13px; align-items:flex-start; }
+  .kpi .ico { width:36px; height:36px; border-radius:10px; display:flex; align-items:center;
+              justify-content:center; flex:0 0 36px; }
+  .kpi .n { font-family:'Poppins'; font-size:26px; font-weight:700; line-height:1.05;
+            font-variant-numeric:tabular-nums; }
+  .kpi .t { font-size:12.5px; font-weight:600; color:var(--tinta-2); margin-top:2px; }
+  .kpi .d { font-size:11px; color:var(--mudo); margin-top:3px; line-height:1.4; }
+
+  .meio { flex:1 1 auto; display:grid; grid-template-columns:1fr 400px; gap:14px; min-height:0; }
+  .painel { padding:15px 17px; display:flex; flex-direction:column; min-height:0; }
+
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:10.5px; font-weight:700; letter-spacing:.06em;
+       text-transform:uppercase; color:var(--fraco); padding:0 0 8px; border-bottom:1px solid var(--borda); }
+  td { padding:9px 0; border-bottom:1px solid var(--hairline); vertical-align:middle; }
+  tr:last-child td { border-bottom:0; }
+  .grau { font-size:12.5px; font-weight:700; color:var(--tinta-2); }
+  .grau small { display:block; font-weight:500; font-size:10.5px; color:var(--fraco); margin-top:1px; }
+  .oque { font-size:12px; color:var(--corpo); }
+  .qt { text-align:right; font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--tinta-2); }
+  .destino { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:800;
+             letter-spacing:.04em; text-transform:uppercase; border-radius:999px; padding:4px 9px; }
+  .destino.jur { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .destino.est { background:var(--hairline); color:var(--corpo-2); border:1px solid var(--borda); }
+  .destino.fora { background:var(--alerta-bg); color:var(--alerta-forte); border:1px solid var(--alerta-borda); }
+
+  .barra-linha { display:grid; grid-template-columns:128px 1fr 74px; align-items:center; gap:9px; margin-top:8px; }
+  .barra-linha .lab { font-size:11.5px; color:var(--corpo); }
+  .trilho { height:8px; border-radius:2px; background:var(--viz-trilho); overflow:hidden; }
+  .fill { height:100%; border-radius:0 4px 4px 0; }
+  .val { display:flex; font-size:11.5px; font-variant-numeric:tabular-nums; }
+  .val b { width:36px; text-align:right; font-weight:700; color:var(--corpo); }
+  .val i { width:38px; text-align:right; font-style:normal; color:var(--fraco); }
+
+  .nota { background:var(--acento-bg); border:1px solid #ddd6fe; border-radius:10px;
+          padding:10px 12px; margin-top:auto; }
+  .nota p { font-size:11.5px; line-height:1.5; color:var(--corpo); }
+  .nota b { color:var(--acento-forte); }
+
+  .base { flex:0 0 250px; padding:15px 17px; display:flex; flex-direction:column; }
+  .trib { display:grid; grid-template-columns:1.6fr 78px 88px 78px 1fr 96px; align-items:center;
+          gap:10px; padding:8px 0; border-bottom:1px solid var(--hairline); }
+  .trib:last-child { border-bottom:0; }
+  .trib .nm { font-size:12.5px; font-weight:600; color:var(--tinta-2); }
+  .trib .nm small { display:block; font-weight:500; font-size:10.5px; color:var(--fraco); }
+  .trib .c { text-align:right; font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .mini { height:7px; border-radius:2px; background:var(--viz-trilho); overflow:hidden; display:flex; }
+  .mini i { height:100%; display:block; }
+  .st { justify-self:end; display:inline-flex; align-items:center; gap:5px; font-size:10px;
+        font-weight:800; letter-spacing:.04em; text-transform:uppercase; border-radius:999px; padding:4px 9px; }
+  .st.rod { background:var(--acento-bg); color:var(--acento-forte); border:1px solid #ddd6fe; }
+  .st.comp { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .st.fila { background:var(--hairline); color:var(--corpo-2); border:1px solid var(--borda); }
+  .rodape { flex:0 0 auto; font-size:10.5px; color:var(--fraco); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topo">
+      <div>
+        <div class="h1">Política do acervo · JurisIA</div>
+        <div class="sub">A regra que decide o que vira jurisprudência, o que vira só estatística e o que não entra.</div>
+      </div>
+      <div class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L19 7" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Reclassificar acervo
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="card kpi" style="border-color:#a7f3d0;">
+        <div class="ico" style="background:#ecfdf5;">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 20h16M6 16V9M12 16V5M18 16v-4" stroke="#065f46" stroke-width="2.3" stroke-linecap="round"/></svg>
+        </div>
+        <div>
+          <div class="n" style="color:#065f46;">1.318</div>
+          <div class="t">Jurisprudência</div>
+          <div class="d">Acórdão de órgão colegiado — 2ª instância, turma recursal e tribunal superior.</div>
+        </div>
+      </div>
+      <div class="card kpi">
+        <div class="ico" style="background:var(--hairline);">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="#475569" stroke-width="2.2"/><path d="M12 7v5l3.5 2" stroke="#475569" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </div>
+        <div>
+          <div class="n">3.104</div>
+          <div class="t">Só estatística</div>
+          <div class="d">Sentença de 1º grau. Prevê o comportamento da vara, mas não fundamenta petição.</div>
+        </div>
+      </div>
+      <div class="card kpi">
+        <div class="ico" style="background:var(--alerta-bg);">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="#b91c1c" stroke-width="2.2"/><path d="M6.5 6.5l11 11" stroke="#b91c1c" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </div>
+        <div>
+          <div class="n" style="color:var(--alerta-forte);">4.271</div>
+          <div class="t">Fora do acervo</div>
+          <div class="d">Lidos na varredura e descartados. Nenhum deles ocupa espaço no banco.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="meio">
+      <div class="card painel">
+        <div class="h2">Regra de admissão, por grau</div>
+        <div class="sub" style="font-size:12px; margin-bottom:11px;">O campo <b>grau</b> vem do próprio DataJud — a classificação é determinística, não é a IA que decide.</div>
+        <table>
+          <tr>
+            <th style="width:190px;">Grau</th>
+            <th>O que é</th>
+            <th style="width:96px; text-align:right;">Processos</th>
+            <th style="width:172px;"></th>
+          </tr>
+          <tr>
+            <td class="grau">2º grau<small>G2 — câmaras e turmas do TJ/TRF/TRT</small></td>
+            <td class="oque">Acórdão de órgão colegiado</td>
+            <td class="qt">1.284</td>
+            <td><span class="destino jur">Jurisprudência</span></td>
+          </tr>
+          <tr>
+            <td class="grau">Tribunal superior<small>SUP — STJ, STF, TST</small></td>
+            <td class="oque">Acórdão, súmula e tese firmada</td>
+            <td class="qt">34</td>
+            <td><span class="destino jur">Jurisprudência</span></td>
+          </tr>
+          <tr>
+            <td class="grau">Turma recursal<small>TR — 2ª instância dos juizados</small></td>
+            <td class="oque">Acórdão colegiado do JEC</td>
+            <td class="qt">0</td>
+            <td><span class="destino jur">Jurisprudência</span></td>
+          </tr>
+          <tr>
+            <td class="grau">1º grau<small>G1 — varas cíveis, fazendárias, de família</small></td>
+            <td class="oque">Sentença de juiz singular</td>
+            <td class="qt">3.104</td>
+            <td><span class="destino est">Só estatística</span></td>
+          </tr>
+          <tr>
+            <td class="grau">Juizado especial<small>JE — 1ª instância dos juizados</small></td>
+            <td class="oque">Sentença de juiz singular</td>
+            <td class="qt">0</td>
+            <td><span class="destino est">Só estatística</span></td>
+          </tr>
+          <tr>
+            <td class="grau">Sem julgamento<small>qualquer grau, ainda em andamento</small></td>
+            <td class="oque">Não há decisão a interpretar</td>
+            <td class="qt">3.459</td>
+            <td><span class="destino fora">Fora do acervo</span></td>
+          </tr>
+        </table>
+        <div class="nota">
+          <p><b>Por que separar.</b> Sentença de 1º grau não é precedente: não vincula ninguém, e a
+          própria 2ª instância mexe nela em 35% dos casos. Continua valiosa para responder “essa vara
+          costuma julgar assim”, mas responder “o tribunal entende assim” com sentença seria vender
+          gato por lebre — e é exatamente onde os concorrentes escorregam.</p>
+        </div>
+      </div>
+
+      <div class="card painel">
+        <div class="h2">Por que ficou de fora</div>
+        <div class="sub" style="font-size:12px; margin-bottom:6px;">4.271 processos lidos e descartados nesta varredura.</div>
+        <div class="barra-linha">
+          <span class="lab">Sem julgamento</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-1); width:81%"></div></div>
+          <span class="val"><b>81%</b><i>3.459</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">Sigiloso</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-2); width:11%"></div></div>
+          <span class="val"><b>11%</b><i>471</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">Sem órgão julgador</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-3); width:5%"></div></div>
+          <span class="val"><b>5%</b><i>213</i></span>
+        </div>
+        <div class="barra-linha">
+          <span class="lab">Grau não informado</span>
+          <div class="trilho"><div class="fill" style="background:var(--viz-4); width:3%"></div></div>
+          <span class="val"><b>3%</b><i>128</i></span>
+        </div>
+
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--borda);">
+          <div class="micro">Barreira que não é opcional</div>
+          <div style="display:flex; gap:10px; align-items:flex-start; margin-top:8px;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" style="flex:0 0 17px; margin-top:1px;"><path d="M12 3l7 3v6c0 4.4-3 8.2-7 9-4-.8-7-4.6-7-9V6l7-3z" stroke="#b91c1c" stroke-width="2.2" stroke-linejoin="round"/></svg>
+            <p style="font-size:11.5px; line-height:1.5; color:var(--corpo);">
+              Processo com <b>nivelSigilo &gt; 0</b> é barrado antes de qualquer outra checagem, e
+              campo ausente conta como sigiloso. Na dúvida, fica de fora — a barreira não depende
+              de alguém lembrar de filtrar na hora certa.
+            </p>
+          </div>
+        </div>
+
+        <div class="nota" style="background:var(--hairline); border-color:var(--borda);">
+          <p>Descarte acontece na leitura, antes de gravar. O que fica de fora <b style="color:var(--corpo-2);">não ocupa banco</b> —
+          e a contagem acima existe para você conferir a regra, não para auditar processo a processo.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card base">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:9px;">
+        <div class="h2">Coleta por tribunal</div>
+        <div class="sub" style="font-size:12px;">Prioridade: onde o escritório atua primeiro, depois os superiores.</div>
+      </div>
+      <div class="trib" style="border-bottom:1px solid var(--borda); padding-bottom:7px;">
+        <span class="micro">Tribunal</span>
+        <span class="micro" style="text-align:right;">Jurisp.</span>
+        <span class="micro" style="text-align:right;">Estatística</span>
+        <span class="micro" style="text-align:right;">Fora</span>
+        <span class="micro">Composição do acervo</span>
+        <span class="micro" style="justify-self:end;">Status</span>
+      </div>
+      <div class="trib">
+        <div class="nm">TJCE<small>Tribunal de Justiça do Ceará</small></div>
+        <div class="c" style="color:#065f46;">1.284</div>
+        <div class="c">3.104</div>
+        <div class="c" style="color:var(--fraco);">4.271</div>
+        <div class="mini"><i style="background:var(--ok); width:29%"></i><i style="background:var(--fraco); width:71%"></i></div>
+        <span class="st rod">Varrendo</span>
+      </div>
+      <div class="trib">
+        <div class="nm">STJ<small>Superior Tribunal de Justiça</small></div>
+        <div class="c" style="color:#065f46;">34</div>
+        <div class="c">0</div>
+        <div class="c" style="color:var(--fraco);">12</div>
+        <div class="mini"><i style="background:var(--ok); width:100%"></i></div>
+        <span class="st comp">Completo</span>
+      </div>
+      <div class="trib">
+        <div class="nm">TRF5<small>TRF da 5ª Região — jurisdição sobre o CE</small></div>
+        <div class="c" style="color:var(--fantasma);">0</div>
+        <div class="c" style="color:var(--fantasma);">0</div>
+        <div class="c" style="color:var(--fantasma);">0</div>
+        <div class="mini"></div>
+        <span class="st fila">Na fila</span>
+      </div>
+      <div class="trib">
+        <div class="nm">TJSP<small>Tribunal de Justiça de São Paulo</small></div>
+        <div class="c" style="color:var(--fantasma);">0</div>
+        <div class="c" style="color:var(--fantasma);">0</div>
+        <div class="c" style="color:var(--fantasma);">0</div>
+        <div class="mini"></div>
+        <span class="st fila">Na fila</span>
+      </div>
+    </div>
+
+    <div class="rodape">Mockup — dados ilustrativos. A classificação por grau é determinística e reversível: mudar a regra e reclassificar não exige varrer de novo.</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href=".claude/skills/mockup-juridflow/assets/fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+    /* paleta categórica do acervo — a mesma já em client/src/index.css */
+    --viz-1:#2a78d6; --viz-2:#eb6834; --viz-3:#1baf7a; --viz-4:#eda100; --viz-5:#e87ba4;
+    --viz-trilho:#e8edf3;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:22px 30px; height:100%; display:flex; flex-direction:column; gap:13px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em;
+        display:flex; align-items:center; gap:10px; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .beta { font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase;
+          color:#92400e; background:#fef3c7; border:1px solid #fcd34d; border-radius:999px; padding:3px 9px; }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  .pergunta { flex:0 0 auto; display:flex; align-items:center; gap:11px;
+              background:var(--surface); border:1px solid var(--borda); border-radius:12px; padding:12px 15px; }
+  .pergunta .q { font-size:14.5px; font-weight:600; color:var(--tinta); flex:1; }
+  .cota { font-size:11.5px; color:var(--mudo); font-variant-numeric:tabular-nums; }
+
+  /* ── faixa de instância ── */
+  .faixa { display:flex; overflow:hidden; }
+  .rail { width:186px; flex:0 0 186px; border-right:1px solid var(--borda);
+          padding:14px 15px; display:flex; flex-direction:column; gap:8px; }
+  .rail .inst { font-family:'Poppins'; font-weight:700; font-size:15.5px; line-height:1.15; }
+  .rail .org { font-size:11.5px; color:var(--mudo); }
+  .selo { display:inline-flex; align-items:center; gap:5px; align-self:flex-start;
+          font-size:10px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+          border-radius:999px; padding:4px 9px; }
+  .selo.vincula { background:#eef2ff; color:#3730a3; border:1px solid #c7d2fe; }
+  .selo.persuade { background:var(--acento-bg); color:var(--acento-forte); border:1px solid #ddd6fe; }
+  .selo.estat { background:var(--hairline); color:var(--corpo-2); border:1px solid var(--borda); }
+  .rail .n { margin-top:auto; font-size:11px; color:var(--fraco); }
+  .rail .n b { display:block; font-size:17px; font-weight:800; color:var(--tinta-2);
+               font-variant-numeric:tabular-nums; }
+  .corpo-faixa { flex:1; padding:14px 16px; min-width:0; display:flex; flex-direction:column; }
+
+  .tese { background:var(--acento-bg-2); border:1px solid #ddd6fe; border-radius:10px; padding:11px 13px; }
+  .tese .fonte { font-size:11px; font-weight:700; color:var(--acento-forte); margin-bottom:4px; }
+  .tese p { font-size:13px; line-height:1.5; color:var(--tinta-2); }
+
+  .cols { display:flex; gap:18px; min-width:0; }
+  .col { min-width:0; }
+
+  .barra-linha { display:grid; grid-template-columns:150px 1fr 84px; align-items:center; gap:9px; margin-top:6px; }
+  .barra-linha .lab { font-size:11.5px; color:var(--corpo); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .trilho { height:8px; border-radius:2px; background:var(--viz-trilho); overflow:hidden; }
+  .fill { height:100%; border-radius:0 4px 4px 0; }
+  .val { display:flex; font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--corpo); }
+  .val b { width:38px; text-align:right; font-weight:700; }
+  .val i { width:46px; text-align:right; font-style:normal; color:var(--fraco); }
+
+  .camara { display:grid; grid-template-columns:1fr 74px 62px; align-items:center; gap:9px;
+            padding:7px 0; border-bottom:1px solid var(--hairline); }
+  .camara:last-child { border-bottom:0; }
+  .camara .nome { font-size:12px; font-weight:600; color:var(--tinta-2); }
+  .camara .nome small { display:block; font-weight:500; font-size:10.5px; color:var(--fraco); }
+  .camara .pct { text-align:right; font-size:13.5px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .camara .qtd { text-align:right; font-size:11px; color:var(--fraco); font-variant-numeric:tabular-nums; }
+
+  .ac { border-top:1px solid var(--hairline); padding-top:9px; margin-top:9px; }
+  .ac-item { display:flex; gap:10px; padding:6px 0; }
+  .ac-num { flex:0 0 22px; height:22px; border-radius:6px; background:var(--hairline);
+            color:var(--corpo-2); font-size:10.5px; font-weight:800; display:flex;
+            align-items:center; justify-content:center; }
+  .ac-txt { min-width:0; }
+  .ac-txt .top { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .ac-txt .cnj { font-size:11.5px; font-weight:700; color:var(--tinta-2); font-variant-numeric:tabular-nums; }
+  .ac-txt .meta { font-size:10.5px; color:var(--fraco); }
+  .tag { font-size:9.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+         border-radius:5px; padding:2px 6px; }
+  .tag.manteve { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+  .tag.reformou { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
+  .ac-txt p { font-size:11.5px; line-height:1.45; color:var(--corpo); margin-top:2px; }
+
+  .aviso-1g { display:flex; align-items:center; gap:8px; background:var(--hairline);
+              border:1px solid var(--borda); border-radius:9px; padding:8px 11px; margin-top:9px; }
+  .aviso-1g span { font-size:11.5px; color:var(--corpo-2); }
+  .tempo { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; }
+  .tempo b { font-family:'Poppins'; font-size:19px; font-weight:700; }
+  .tempo span { font-size:11.5px; color:var(--mudo); }
+
+  .rodape { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between;
+            font-size:10.5px; color:var(--fraco); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topo">
+      <div>
+        <div class="h1">Pesquisa jurisprudencial <span class="beta">beta</span></div>
+        <div class="sub">O entendimento sobe de instância — e a resposta mostra até onde ele está firmado.</div>
+      </div>
+      <div class="cota">248 de 900 mensagens no mês</div>
+    </div>
+
+    <div class="pergunta">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#7c3aed" stroke-width="2.2"/><path d="M16.5 16.5 21 21" stroke="#7c3aed" stroke-width="2.2" stroke-linecap="round"/></svg>
+      <div class="q">Capitalização mensal de juros em contrato bancário — o TJCE aceita?</div>
+      <div class="chip" style="border:1px solid var(--borda); border-radius:999px; padding:5px 11px; font-size:11.5px; color:var(--corpo-2);">Contratos Bancários · TJCE</div>
+    </div>
+
+    <!-- ───────── INSTÂNCIA SUPERIOR ───────── -->
+    <div class="card faixa" style="flex:0 0 190px;">
+      <div class="rail">
+        <div>
+          <div class="inst">Instância<br>superior</div>
+          <div class="org">STJ · 2ª Seção</div>
+        </div>
+        <div class="selo vincula">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.4-3 8.2-7 9-4-.8-7-4.6-7-9V6l7-3z" stroke="#3730a3" stroke-width="2.2" stroke-linejoin="round"/></svg>
+          Vincula
+        </div>
+        <div class="n"><b>34</b>acórdãos no acervo</div>
+      </div>
+      <div class="corpo-faixa">
+        <div class="micro" style="margin-bottom:7px;">Entendimento firmado</div>
+        <div class="tese">
+          <div class="fonte">Súmula 539 do STJ</div>
+          <p>É permitida a capitalização de juros com periodicidade inferior à anual em contratos celebrados com instituições integrantes do Sistema Financeiro Nacional a partir de 31/3/2000, desde que expressamente pactuada.</p>
+        </div>
+        <div class="ac" style="border-top:0; padding-top:8px; margin-top:8px;">
+          <div class="ac-item" style="padding:0;">
+            <div class="ac-num">1</div>
+            <div class="ac-txt">
+              <div class="top">
+                <span class="cnj">REsp 1.826.463 / CE</span>
+                <span class="meta">2ª Seção · 14/08/2024</span>
+                <span class="tag manteve">Reafirmou a tese</span>
+              </div>
+              <p>A pactuação expressa se caracteriza quando a taxa anual contratada supera o duodécuplo da mensal — não exige cláusula com a palavra “capitalização”.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───────── 2ª INSTÂNCIA — o diferencial ───────── -->
+    <div class="card faixa" style="flex:0 0 420px; border-color:#ddd6fe; box-shadow:0 0 0 3px #7c3aed14;">
+      <div class="rail" style="border-right-color:#ede9fe; background:linear-gradient(180deg,#faf5ff,#fff);">
+        <div>
+          <div class="inst">2ª instância</div>
+          <div class="org">TJCE · Câmaras de Direito Privado</div>
+        </div>
+        <div class="selo persuade">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M4 19h16M7 15V9M12 15V5M17 15v-4" stroke="#5b21b6" stroke-width="2.3" stroke-linecap="round"/></svg>
+          Quem julga seu recurso
+        </div>
+        <div class="n"><b>1.284</b>acórdãos no acervo</div>
+      </div>
+      <div class="corpo-faixa">
+        <div class="cols" style="flex:0 0 auto;">
+          <div class="col" style="flex:1 1 52%;">
+            <div class="micro">O que a 2ª instância faz com a sentença</div>
+            <div class="barra-linha">
+              <span class="lab">Manteve a sentença</span>
+              <div class="trilho"><div class="fill" style="background:var(--viz-1); width:58%"></div></div>
+              <span class="val"><b>58%</b><i>(745)</i></span>
+            </div>
+            <div class="barra-linha">
+              <span class="lab">Reformou em parte</span>
+              <div class="trilho"><div class="fill" style="background:var(--viz-2); width:24%"></div></div>
+              <span class="val"><b>24%</b><i>(308)</i></span>
+            </div>
+            <div class="barra-linha">
+              <span class="lab">Reformou</span>
+              <div class="trilho"><div class="fill" style="background:var(--viz-3); width:11%"></div></div>
+              <span class="val"><b>11%</b><i>(141)</i></span>
+            </div>
+            <div class="barra-linha">
+              <span class="lab">Não conheceu</span>
+              <div class="trilho"><div class="fill" style="background:var(--viz-4); width:7%"></div></div>
+              <span class="val"><b>7%</b><i>(90)</i></span>
+            </div>
+            <div style="margin-top:8px; font-size:10.5px; color:var(--fraco); line-height:1.4;">
+              Neutro de polo: “reformou” não quer dizer que você ganha — quer dizer que a câmara
+              mexe na sentença. Quem recorreu é que define o lado.
+            </div>
+          </div>
+
+          <div class="col" style="flex:1 1 48%; border-left:1px solid var(--hairline); padding-left:18px;">
+            <div class="micro">Divergência entre câmaras — mantém a sentença <span style="color:var(--acento); letter-spacing:0; text-transform:none; font-weight:700;">· o que ninguém mostra</span></div>
+            <div style="margin-top:5px;">
+              <div class="camara">
+                <div class="nome">1ª Câmara de Direito Privado<small>Rel. mais frequente: Des. Paulo Airton Albuquerque</small></div>
+                <div class="pct">71%</div>
+                <div class="qtd">297 de<br>418</div>
+              </div>
+              <div class="camara">
+                <div class="nome">2ª Câmara de Direito Privado<small>Rel. mais frequente: Des. Teodoro Silva Santos</small></div>
+                <div class="pct">60%</div>
+                <div class="qtd">235 de<br>391</div>
+              </div>
+              <div class="camara">
+                <div class="nome">3ª Câmara de Direito Privado<small>Rel. mais frequente: Des. Maria Vilauba Fausto</small></div>
+                <div class="pct">45%</div>
+                <div class="qtd">213 de<br>475</div>
+              </div>
+            </div>
+            <div style="margin-top:7px; font-size:10.5px; color:var(--corpo-2); line-height:1.4; background:var(--acento-bg); border:1px solid #ddd6fe; border-radius:8px; padding:7px 9px;">
+              A 3ª Câmara reforma sentença deste tipo com quase o dobro da frequência da 1ª.
+              A distribuição é sorteada — mas saber disso muda a estratégia do recurso.
+            </div>
+          </div>
+        </div>
+
+        <div class="ac">
+          <div class="micro" style="margin-bottom:3px;">Acórdãos que sustentam</div>
+          <div class="ac-item">
+            <div class="ac-num">2</div>
+            <div class="ac-txt">
+              <div class="top">
+                <span class="cnj">0187432-55.2022.8.06.0001</span>
+                <span class="meta">3ª Câmara de Direito Privado · 11/03/2025</span>
+                <span class="tag reformou">Reformou em parte</span>
+              </div>
+              <p>Afastada a capitalização mensal por ausência de pactuação expressa no contrato de adesão; mantidos os juros remuneratórios na taxa média de mercado.</p>
+            </div>
+          </div>
+          <div class="ac-item">
+            <div class="ac-num">3</div>
+            <div class="ac-txt">
+              <div class="top">
+                <span class="cnj">0304118-72.2023.8.06.0001</span>
+                <span class="meta">1ª Câmara de Direito Privado · 27/01/2025</span>
+                <span class="tag manteve">Manteve a sentença</span>
+              </div>
+              <p>Contrato que informa taxa mensal e anual em desacordo com o duodécuplo caracteriza pactuação expressa, na linha da Súmula 539 do STJ.</p>
+            </div>
+          </div>
+          <div class="ac-item">
+            <div class="ac-num">4</div>
+            <div class="ac-txt">
+              <div class="top">
+                <span class="cnj">0221096-38.2021.8.06.0001</span>
+                <span class="meta">2ª Câmara de Direito Privado · 05/11/2024</span>
+                <span class="tag manteve">Manteve a sentença</span>
+              </div>
+              <p>Cláusula que prevê capitalização em periodicidade mensal de forma clara dispensa perícia contábil para reconhecimento da pactuação.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───────── 1º GRAU — estatística, não jurisprudência ───────── -->
+    <div class="card faixa" style="flex:0 0 196px;">
+      <div class="rail">
+        <div>
+          <div class="inst">1º grau</div>
+          <div class="org">Varas cíveis · Comarca de Fortaleza</div>
+        </div>
+        <div class="selo estat">Não é jurisprudência</div>
+        <div class="n"><b>3.104</b>processos no acervo</div>
+      </div>
+      <div class="corpo-faixa">
+        <div class="cols">
+          <div class="col" style="flex:1 1 52%;">
+            <div class="micro">Como as varas vêm sentenciando</div>
+            <div class="barra-linha">
+              <span class="lab">Procedente</span>
+              <div class="trilho"><div class="fill" style="background:var(--viz-1); width:41%"></div></div>
+              <span class="val"><b>41%</b><i>(512)</i></span>
+            </div>
+            <div class="barra-linha">
+              <span class="lab">Procedente em parte</span>
+              <div class="trilho"><div class="fill" style="background:var(--viz-2); width:23%"></div></div>
+              <span class="val"><b>23%</b><i>(287)</i></span>
+            </div>
+            <div class="barra-linha">
+              <span class="lab">Improcedente</span>
+              <div class="trilho"><div class="fill" style="background:var(--viz-3); width:28%"></div></div>
+              <span class="val"><b>28%</b><i>(349)</i></span>
+            </div>
+            <div class="barra-linha">
+              <span class="lab">Extinto sem mérito</span>
+              <div class="trilho"><div class="fill" style="background:var(--viz-5); width:8%"></div></div>
+              <span class="val"><b>8%</b><i>(99)</i></span>
+            </div>
+          </div>
+          <div class="col" style="flex:1 1 48%; border-left:1px solid var(--hairline); padding-left:18px;">
+            <div class="micro">Tempo até a sentença</div>
+            <div class="tempo" style="margin-top:6px;">
+              <b>1 ano e 7 meses</b>
+              <span>caso do meio · metade leva de 11 meses a 2 anos e 8 meses</span>
+            </div>
+            <div class="aviso-1g">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#64748b" stroke-width="2"/><path d="M12 11v5M12 8h.01" stroke="#64748b" stroke-width="2.2" stroke-linecap="round"/></svg>
+              <span>Sentença não é precedente e é mexida pela câmara em 35% dos casos aqui. Serve para prever a vara — não para fundamentar a petição.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rodape">
+      <span>Mockup — dados ilustrativos. As súmulas citadas são reais; os números e acórdãos são exemplo.</span>
+      <span>Contagem do banco, nunca da IA · beta</span>
+    </div>
+  </div>
+</body>
+</html>
