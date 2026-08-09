@@ -324,15 +324,31 @@ export default function JurisIa() {
     pesquisarMut.mutate({ conversaId, pergunta: q });
   };
 
-  if (cota?.semPlano) {
+  // Três bloqueios que parecem um só e não são. "Renove" pra quem nunca
+  // comprou soa como cobrança de dívida inexistente; "contrate" pra quem
+  // deixou vencer apaga o histórico do cliente.
+  const acesso = estado?.acesso;
+  if (acesso && !acesso.liberado) {
+    const texto = acesso.motivo === "expirado"
+      ? {
+        titulo: "O contrato do JurisIA venceu",
+        corpo: "Suas pesquisas continuam salvas. Renovando, você volta de onde parou.",
+      }
+      : acesso.motivo === "suspenso"
+        ? {
+          titulo: "JurisIA suspenso",
+          corpo: "O módulo está suspenso para o seu escritório. Fale com o suporte para reativar.",
+        }
+        : {
+          titulo: "JurisIA é contratado à parte",
+          corpo:
+            "Pesquisa jurisprudencial sobre o acervo público: como um tipo de ação costuma terminar num tribunal, com os processos que sustentam a resposta.",
+        };
     return (
       <div className="mx-auto max-w-md rounded-xl border bg-card px-4 py-10 text-center">
         <Sparkles className="mx-auto h-6 w-6 text-violet-500" />
-        <p className="mt-2 text-sm font-bold">JurisIA não está no seu plano</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Pesquisa jurisprudencial sobre o acervo público: como um tipo de ação costuma terminar
-          num tribunal, com os processos que sustentam a resposta.
-        </p>
+        <p className="mt-2 text-sm font-bold">{texto.titulo}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{texto.corpo}</p>
       </div>
     );
   }
