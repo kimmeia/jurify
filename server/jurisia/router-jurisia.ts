@@ -36,7 +36,7 @@ import type { EventoContexto } from "../../shared/jurisia-contexto";
 import type { PesquisaGravada } from "../../shared/jurisia-recorte";
 import { perguntarSobreProcesso } from "./perguntar";
 import { pesquisarNoAcervo } from "./pesquisar";
-import { tribunaisDoAcervo } from "./buscar-acervo";
+import { composicaoDoAcervo } from "./buscar-acervo";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("jurisia");
@@ -258,16 +258,46 @@ export const jurisiaRouter = router({
       return rows;
     }),
 
-  /** O que existe no acervo público — a tela precisa dizer o que já foi
-   *  coletado antes de o advogado perguntar sobre o que não foi. */
+  /**
+   * O que existe no acervo público, em vocabulário do advogado.
+   *
+   * Devolve as classes e assuntos que existem de fato — sem isso o módulo é
+   * adivinhação: digita, erra, e nunca descobre que o acervo só tem execução
+   * fiscal.
+   */
   acervo: protectedProcedure.query(async ({ ctx }) => {
     await contexto(ctx.user.id);
-    const tribunais = await tribunaisDoAcervo();
-    return {
-      tribunais,
-      processos: tribunais.reduce((s, t) => s + t.processos, 0),
-    };
+    return composicaoDoAcervo();
   }),
+
+  renomearPesquisa: protectedProcedure
+    .input(z.object({
+      conversaId: z.number().int().positive(),
+      titulo: z.string().trim().min(1).max(120),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, esc } = await contexto(ctx.user.id);
+      const conv = await pesquisaDoEscritorio(db, esc.escritorio.id, input.conversaId);
+      if (!conv) throw new TRPCError({ code: "NOT_FOUND", message: "Pesquisa não encontrada." });
+      await db
+        .update(jurisiaConversas)
+        .set({ titulo: input.titulo })
+        .where(eq(jurisiaConversas.id, conv.id));
+      return { ok: true };
+    }),
+
+  excluirPesquisa: protectedProcedure
+    .input(z.object({ conversaId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, esc } = await contexto(ctx.user.id);
+      const conv = await pesquisaDoEscritorio(db, esc.escritorio.id, input.conversaId);
+      if (!conv) throw new TRPCError({ code: "NOT_FOUND", message: "Pesquisa não encontrada." });
+      // Mensagens primeiro: apagar a conversa antes deixaria as mensagens
+      // órfãs, e elas guardam a estatística gravada.
+      await db.delete(jurisiaMensagens).where(eq(jurisiaMensagens.conversaId, conv.id));
+      await db.delete(jurisiaConversas).where(eq(jurisiaConversas.id, conv.id));
+      return { ok: true };
+    }),
 
   /** Pesquisas jurisprudenciais do escritório — as conversas sem processo. */
   pesquisas: protectedProcedure
@@ -412,12 +442,17 @@ export const jurisiaRouter = router({
         .set({ ultimaMensagemAt: new Date() })
         .where(eq(jurisiaConversas.id, conversaId));
 
-      // Mesma regra da conversa de processo: a chamada ao provedor foi paga
-      // mesmo quando a trava recusou.
-      await db
-        .insert(jurisiaUso)
-        .values({ escritorioId: esc.escritorio.id, competencia, mensagens: 1 })
-        .onDuplicateKeyUpdate({ set: { mensagens: sql`${jurisiaUso.mensagens} + 1` } });
+      // Busca que volta vazia não é cobrada. O caminho `semBase` nem chega ao
+      // modelo de resposta — só ao interpretador, que é barato — e cobrar uma
+      // mensagem cheia por uma pergunta que não teve resposta é o tipo de
+      // conta que o cliente confere e não perdoa.
+      const cobrou = !resultado.semBase;
+      if (cobrou) {
+        await db
+          .insert(jurisiaUso)
+          .values({ escritorioId: esc.escritorio.id, competencia, mensagens: 1 })
+          .onDuplicateKeyUpdate({ set: { mensagens: sql`${jurisiaUso.mensagens} + 1` } });
+      }
 
       const { cota: cotaDepois } = await estadoCota(db, esc.escritorio.id, planSlug, fuso);
 
@@ -430,6 +465,7 @@ export const jurisiaRouter = router({
         perfil: resultado.perfil,
         descricaoFiltro: resultado.descricaoFiltro,
         semBase: resultado.semBase,
+        cobrou,
         cota: cotaDepois,
       };
     }),

@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href=".claude/skills/mockup-juridflow/assets/fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+    --viz-1:#2a78d6; --viz-2:#eb6834; --viz-3:#1baf7a; --viz-4:#eda100; --viz-5:#e87ba4;
+    --viz-trilho:#e8edf3;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:18px 26px; height:100%; display:flex; flex-direction:column; gap:11px; }
+
+  .topo { display:flex; align-items:center; justify-content:space-between; gap:14px; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:24px; letter-spacing:-.01em;
+        display:flex; align-items:center; gap:9px; }
+  .beta { font-size:9.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase;
+          color:#92400e; background:#fef3c7; border:1px solid #fcd34d; border-radius:999px; padding:3px 8px; }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .cota { display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--mudo); }
+  .cota-barra { width:100px; height:7px; border-radius:4px; background:#e2e8f0; overflow:hidden; border:1px solid #dbe2ea; }
+  .cota-barra i { display:block; height:100%; background:var(--acento); border-radius:3px; }
+
+  .corpo { flex:1 1 auto; display:grid; grid-template-columns:212px 1fr 320px; gap:11px; min-height:0; }
+
+  /* ── casos ── */
+  .lateral { display:flex; flex-direction:column; gap:6px; min-height:0; }
+  .btn-nova { background:var(--acento); color:#fff; font-weight:600; font-size:12.5px;
+              border-radius:10px; padding:9px 13px; display:flex; align-items:center;
+              justify-content:center; gap:7px; box-shadow:0 8px 18px -8px #7c3aed88; }
+  .caso { position:relative; border:1px solid var(--borda); background:var(--surface);
+          border-radius:10px; padding:8px 26px 8px 10px; }
+  .caso.on { border-color:#ddd6fe; background:var(--acento-bg); }
+  .caso .t { font-size:11.5px; font-weight:600; color:var(--tinta-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .caso .d { font-size:10px; color:var(--fraco); margin-top:2px; }
+  .caso .kebab { position:absolute; right:7px; top:9px; }
+
+  /* ── conversa ── */
+  .conversa { display:flex; flex-direction:column; overflow:hidden; }
+  .thread { flex:1 1 auto; padding:14px 16px; display:flex; flex-direction:column; gap:11px; overflow:hidden; }
+  .bolha { align-self:flex-end; max-width:74%; background:var(--acento); color:#fff;
+           border-radius:14px 14px 4px 14px; padding:9px 13px; font-size:13px; line-height:1.4; }
+  .ia { align-self:stretch; }
+  .ia > p { font-size:12.5px; line-height:1.55; color:var(--tinta-2); }
+  .ia > p + p { margin-top:6px; }
+  sup.anc { margin-left:2px; border:1px solid #ddd6fe; background:var(--acento-bg);
+            color:var(--acento-forte); border-radius:4px; padding:1px 4px;
+            font-size:8px; font-weight:800; vertical-align:super; }
+
+  /* ── artefato: a peça ── */
+  .peca { margin-top:9px; border:1px solid var(--borda); border-radius:12px; overflow:hidden; }
+  .peca-cab { display:flex; align-items:center; gap:10px; padding:10px 13px;
+              background:linear-gradient(180deg,#faf5ff,#fff); border-bottom:1px solid var(--borda); }
+  .peca-cab .ic { width:30px; height:30px; border-radius:8px; background:#fff;
+                  border:1px solid #ddd6fe; display:flex; align-items:center; justify-content:center; }
+  .peca-cab .tt { flex:1; min-width:0; }
+  .peca-cab .tt b { display:block; font-size:12.5px; font-weight:700; }
+  .peca-cab .tt span { font-size:10.5px; color:var(--mudo); }
+  .btn { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--borda);
+         background:var(--surface); border-radius:8px; padding:6px 10px; font-size:11px;
+         font-weight:600; color:var(--corpo); }
+  .btn.pri { background:var(--acento); border-color:var(--acento); color:#fff; }
+  .peca-corpo { padding:11px 13px; background:#fcfcfe; }
+  .sec { display:flex; gap:9px; padding:5px 0; }
+  .sec .n { flex:0 0 15px; font-size:10px; font-weight:800; color:var(--fraco); padding-top:1px; }
+  .sec .c { min-width:0; }
+  .sec .c b { display:block; font-size:11.5px; font-weight:700; color:var(--tinta-2); }
+  .sec .c span { display:block; font-size:11px; color:var(--corpo-2); line-height:1.45; margin-top:1px; }
+  .checagem { display:flex; align-items:center; gap:8px; margin-top:9px; padding:8px 11px;
+              border:1px solid #a7f3d0; background:#ecfdf5; border-radius:9px; }
+  .checagem span { font-size:11px; color:#065f46; }
+  .checagem b { font-weight:700; }
+  .cenarios { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:8px; }
+  .cen { border:1px solid var(--borda); border-radius:10px; padding:10px 12px; background:#fcfcfe; }
+  .cen .tp { display:flex; align-items:center; gap:6px; }
+  .cen .tp b { font-size:11.5px; font-weight:700; color:var(--tinta-2); }
+  .cen .pc { margin-left:auto; font-size:13px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .cen p { font-size:11px; line-height:1.45; color:var(--corpo-2); margin-top:5px; }
+
+  /* ── painel de contexto: o que a IA está usando ── */
+  .contexto { padding:13px 14px; display:flex; flex-direction:column; gap:11px; overflow:hidden; }
+  .ctx-bloco { border:1px solid var(--borda); border-radius:10px; padding:9px 11px; }
+  .ctx-bloco.usa { border-color:#c7d2fe; background:#f8faff; }
+  .ctx-topo { display:flex; align-items:center; gap:7px; }
+  .ctx-topo b { flex:1; font-size:11.5px; font-weight:700; color:var(--tinta-2); }
+  .pill { font-size:9.5px; font-weight:800; border-radius:999px; padding:2px 7px;
+          background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .ctx-bloco p { font-size:10.5px; color:var(--mudo); line-height:1.45; margin-top:4px; }
+  .ctx-bloco p b { color:var(--corpo); font-weight:600; }
+  .mini { display:grid; grid-template-columns:1fr auto; gap:6px; align-items:center; margin-top:6px; }
+  .mini .lb { font-size:10.5px; color:var(--corpo); }
+  .mini .vl { font-size:10.5px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--tinta-2); }
+  .trilho { height:6px; border-radius:2px; background:var(--viz-trilho); overflow:hidden; margin-top:3px; }
+  .fill { height:100%; border-radius:0 3px 3px 0; }
+
+  /* ── entrada com modos ── */
+  .entrada { flex:0 0 auto; border-top:1px solid var(--borda); padding:11px 16px; }
+  .modos { display:inline-flex; gap:3px; background:var(--hairline); padding:3px; border-radius:9px; margin-bottom:9px; }
+  .modos span { padding:6px 13px; font-size:11.5px; font-weight:600; color:var(--mudo); border-radius:7px;
+                display:inline-flex; align-items:center; gap:6px; }
+  .modos span.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+  .campo { display:flex; align-items:center; gap:9px; }
+  .campo .inp { flex:1; height:38px; border:1px solid var(--borda); border-radius:10px;
+                padding:0 12px; display:flex; align-items:center; font-size:12.5px; color:var(--fraco); }
+  .campo .go { width:38px; height:38px; border-radius:10px; background:var(--acento);
+               display:flex; align-items:center; justify-content:center; box-shadow:0 8px 18px -8px #7c3aed88; }
+  .rodape-txt { margin-top:6px; font-size:10px; color:var(--fraco); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topo">
+      <div class="h1">JurisIA <span style="font-family:'Inter'; font-weight:500; font-size:15px; color:var(--mudo);">· assistente jurídico</span> <span class="beta">beta</span></div>
+      <div class="cota">
+        <span>Você usou <strong style="color:var(--corpo);">37 de 900</strong> mensagens de setembro</span>
+        <div class="cota-barra"><i style="width:4%; min-width:6px;"></i></div>
+      </div>
+    </div>
+
+    <div class="corpo">
+      <!-- ── casos ── -->
+      <div class="lateral">
+        <div class="btn-nova">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>
+          Novo trabalho
+        </div>
+        <div class="caso on">
+          <div class="t">Contestação — Marcos Vinícius</div>
+          <div class="d">Busca e apreensão · hoje</div>
+          <svg class="kebab" width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="#cbd5e1"/><circle cx="12" cy="12" r="1.5" fill="#cbd5e1"/><circle cx="12" cy="19" r="1.5" fill="#cbd5e1"/></svg>
+        </div>
+        <div class="caso">
+          <div class="t">Vale a pena a revisional?</div>
+          <div class="d">Estratégia · ontem</div>
+          <svg class="kebab" width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="#cbd5e1"/><circle cx="12" cy="12" r="1.5" fill="#cbd5e1"/><circle cx="12" cy="19" r="1.5" fill="#cbd5e1"/></svg>
+        </div>
+        <div class="caso">
+          <div class="t">Execução fiscal em Fortaleza</div>
+          <div class="d">Pesquisa · 3 set</div>
+          <svg class="kebab" width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="#cbd5e1"/><circle cx="12" cy="12" r="1.5" fill="#cbd5e1"/><circle cx="12" cy="19" r="1.5" fill="#cbd5e1"/></svg>
+        </div>
+      </div>
+
+      <!-- ── conversa ── -->
+      <div class="card conversa">
+        <div class="thread">
+          <div class="bolha">Redige a contestação do Marcos. O banco pediu busca e apreensão mas a notificação foi pro endereço antigo.</div>
+
+          <div class="ia">
+            <p>Li o contrato, a notificação extrajudicial e a certidão do oficial<sup class="anc">D</sup>. A notificação foi enviada para a Rua Pedro Pereira, 340 — e o contrato traz o endereço da Av. Bezerra de Menezes<sup class="anc">D</sup>. É vício de constituição em mora, e no TJCE ele é decisivo: nos casos deste recorte em que a mora não foi validamente constituída, a ação foi extinta sem mérito<sup class="anc">A</sup>.</p>
+            <p>Montei a peça em cima disso. O pedido principal é a extinção; o subsidiário, a purgação.</p>
+
+            <div class="peca">
+              <div class="peca-cab">
+                <div class="ic">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M7 3h7l5 5v13H7V3z" stroke="#5b21b6" stroke-width="2" stroke-linejoin="round"/><path d="M14 3v5h5" stroke="#5b21b6" stroke-width="2" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="tt">
+                  <b>Contestação — Busca e Apreensão (DL 911/69)</b>
+                  <span>Rascunho · 4 seções · gerada agora</span>
+                </div>
+                <div class="btn">Abrir e editar</div>
+                <div class="btn pri">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 4v11M12 15l-4-4M12 15l4-4M5 19h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  .docx
+                </div>
+              </div>
+              <div class="peca-corpo">
+                <div class="sec">
+                  <span class="n">I</span>
+                  <div class="c"><b>Da tempestividade</b><span>Citação em 02/09; prazo de 15 dias do art. 3º, §3º do DL 911/69.</span></div>
+                </div>
+                <div class="sec">
+                  <span class="n">II</span>
+                  <div class="c"><b>Preliminar — ausência de constituição em mora</b><span>Notificação dirigida a endereço diverso do contratual, sem comprovação de recebimento. Requisito do art. 2º, §2º, e Súmula 72 do STJ.</span></div>
+                </div>
+                <div class="sec">
+                  <span class="n">III</span>
+                  <div class="c"><b>No mérito — purgação subsidiária</b><span>Depósito do valor em aberto, com planilha discriminada das parcelas 14 a 17.</span></div>
+                </div>
+                <div class="sec">
+                  <span class="n">IV</span>
+                  <div class="c"><b>Dos pedidos</b><span>Extinção sem resolução do mérito; subsidiariamente, purgação e restituição do veículo.</span></div>
+                </div>
+                <div class="checagem">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.4-3 8.2-7 9-4-.8-7-4.6-7-9V6l7-3z" stroke="#065f46" stroke-width="2.2" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="#065f46" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span><b>Checagem de citações: nenhuma invenção.</b> As 2 súmulas e os 3 dispositivos citados existem nas fontes usadas. Confira antes de protocolar.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bolha">E se o juiz não acolher a preliminar? Vale insistir ou já negocio?</div>
+
+          <div class="ia">
+            <p>Nos processos deste recorte em que a preliminar de mora foi afastada, o pedido do banco foi acolhido na quase totalidade das vezes<sup class="anc">A</sup> — e o prazo entre a contestação e a sentença encurta bastante quando não há perícia.</p>
+            <div class="cenarios">
+              <div class="cen">
+                <div class="tp">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L19 7" stroke="#2a78d6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <b>Preliminar acolhida</b>
+                  <span class="pc" style="color:var(--viz-1);">23%</span>
+                </div>
+                <p>Extinção sem mérito e devolução do veículo. O banco pode notificar de novo e reajuizar — a vitória é de tempo, não definitiva.</p>
+              </div>
+              <div class="cen">
+                <div class="tp">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#eb6834" stroke-width="2.4" stroke-linecap="round"/></svg>
+                  <b>Preliminar afastada</b>
+                  <span class="pc" style="color:var(--viz-2);">64%</span>
+                </div>
+                <p>Procedência e consolidação da propriedade. Aqui a purgação subsidiária é o que ainda segura o carro — por isso ela está na peça.</p>
+              </div>
+            </div>
+            <p style="margin-top:8px; border-left:3px solid #8b5cf6; padding-left:11px;">Eu protocolaria a contestação com os dois pedidos e abriria negociação em paralelo. Os outros 13% se dividem entre procedência parcial e improcedência. O que a estatística mostra é que a preliminar é a única alavanca real — sem ela, a discussão vira só prazo de purgação.</p>
+          </div>
+        </div>
+
+        <div class="entrada">
+          <div class="modos">
+            <span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#64748b" stroke-width="2.1"/><path d="M16 16l4.5 4.5" stroke="#64748b" stroke-width="2.1" stroke-linecap="round"/></svg>
+              Pesquisar
+            </span>
+            <span class="on">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10-10-4-4L4 16v4z" stroke="#0f172a" stroke-width="2.1" stroke-linejoin="round"/></svg>
+              Redigir peça
+            </span>
+            <span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 20h16M6 16V9M12 16V5M18 16v-4" stroke="#64748b" stroke-width="2.2" stroke-linecap="round"/></svg>
+              Estratégia
+            </span>
+          </div>
+          <div class="campo">
+            <div class="inp">Peça um ajuste na peça, ou mande redigir outra…</div>
+            <div class="go">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+          <p class="rodape-txt">Beta · Rascunho gerado por IA sobre os documentos do seu cliente. A revisão e o protocolo são seus.</p>
+        </div>
+      </div>
+
+      <!-- ── o que a IA está usando ── -->
+      <div class="card contexto">
+        <div class="micro">O que a IA está usando</div>
+
+        <div class="ctx-bloco usa">
+          <div class="ctx-topo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.6" stroke="#3730a3" stroke-width="2"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" stroke="#3730a3" stroke-width="2" stroke-linecap="round"/></svg>
+            <b>Seu cliente</b>
+            <span class="pill">completo</span>
+          </div>
+          <p><b>Marcos Vinícius de Sousa Lima</b> · CPF, RG, estado civil e endereço preenchidos — a peça sai qualificada.</p>
+        </div>
+
+        <div class="ctx-bloco usa">
+          <div class="ctx-topo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6V3z" stroke="#3730a3" stroke-width="2" stroke-linejoin="round"/><path d="M9 12h7M9 16h5" stroke="#3730a3" stroke-width="2" stroke-linecap="round"/></svg>
+            <b>O processo dele</b>
+            <span class="pill">23 andamentos</span>
+          </div>
+          <p><b>0812744-31.2024.8.06.0001</b> · 2ª Vara Cível de Fortaleza. Última movimentação: citação em 02/09.</p>
+        </div>
+
+        <div class="ctx-bloco usa">
+          <div class="ctx-topo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M7 3h7l5 5v13H7V3z" stroke="#3730a3" stroke-width="2" stroke-linejoin="round"/></svg>
+            <b>Documentos lidos</b>
+            <span class="pill">3 de 3</span>
+          </div>
+          <p>Contrato de financiamento, notificação extrajudicial e certidão do oficial — lidos por inteiro, não só listados.</p>
+        </div>
+
+        <div class="ctx-bloco usa">
+          <div class="ctx-topo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 20h16M6 16V9M12 16V5M18 16v-4" stroke="#3730a3" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <b>Acervo público</b>
+            <span class="pill">121 casos</span>
+          </div>
+          <p>Busca e Apreensão · TJCE. Como esses processos terminaram:</p>
+          <div class="mini"><span class="lb">Procedente</span><span class="vl">64%</span></div>
+          <div class="trilho"><div class="fill" style="background:var(--viz-1); width:64%"></div></div>
+          <div class="mini"><span class="lb">Extinto sem mérito</span><span class="vl">23%</span></div>
+          <div class="trilho"><div class="fill" style="background:var(--viz-5); width:23%"></div></div>
+          <p style="margin-top:6px;">Contado no banco. A IA cita o número, não o inventa.</p>
+        </div>
+
+        <div class="ctx-bloco">
+          <div class="ctx-topo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 4h14v16l-7-3.5L5 20V4z" stroke="#64748b" stroke-width="2" stroke-linejoin="round"/></svg>
+            <b>Precedentes</b>
+            <span class="pill" style="background:var(--hairline); color:var(--corpo-2); border-color:var(--borda);">6 fontes</span>
+          </div>
+          <p>Súmula 72 do STJ, Súmula 245 do STJ e 4 acórdãos da base do escritório.</p>
+        </div>
+
+        <div style="margin-top:auto; border-top:1px solid var(--hairline); padding-top:9px;">
+          <p style="font-size:10px; color:var(--fraco); line-height:1.5;">
+            Nada do seu cliente vai para o acervo público. A troca é de mão única: o acervo alimenta a
+            sua peça, seus autos não alimentam o acervo de ninguém.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

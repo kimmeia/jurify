@@ -77,8 +77,17 @@ export interface PaginaDataJud {
   hits: unknown[];
   /** `search_after` da próxima página. null = acabou. */
   proximoCursor: string | null;
-  /** Total estimado no índice, quando o ES devolve. */
+  /** Total no índice, quando o ES devolve. */
   total: number | null;
+  /**
+   * true quando o ES parou de contar e o índice tem MAIS que `total`.
+   *
+   * O Elasticsearch capa a contagem em 10.000 por padrão e avisa disso em
+   * `hits.total.relation = "gte"`. Ignorar esse campo faz um tribunal com
+   * milhões de processos aparecer como "10.000" no painel — e a varredura
+   * parecer quase pronta quando mal começou.
+   */
+  totalEhMinimo: boolean;
 }
 
 /**
@@ -98,11 +107,12 @@ export function proximaPagina(resposta: unknown, tamanhoPedido: number): PaginaD
     : typeof totalCru?.value === "number"
       ? totalCru.value
       : null;
+  const totalEhMinimo = totalCru?.relation === "gte";
 
   // Página incompleta significa fim do índice — pedir a próxima só gastaria
   // requisição pra receber vazio.
   if (hits.length === 0 || hits.length < tamanhoPedido) {
-    return { hits, proximoCursor: null, total };
+    return { hits, proximoCursor: null, total, totalEhMinimo };
   }
 
   const ultimo: any = hits[hits.length - 1];
@@ -110,10 +120,10 @@ export function proximaPagina(resposta: unknown, tamanhoPedido: number): PaginaD
   if (!Array.isArray(sort) || sort.length === 0) {
     // Sem `sort` não dá pra continuar com segurança: seguir sem cursor
     // relê a primeira página em loop.
-    return { hits, proximoCursor: null, total };
+    return { hits, proximoCursor: null, total, totalEhMinimo };
   }
 
-  return { hits, proximoCursor: JSON.stringify(sort), total };
+  return { hits, proximoCursor: JSON.stringify(sort), total, totalEhMinimo };
 }
 
 async function chaveCadastrada(): Promise<string | null> {
