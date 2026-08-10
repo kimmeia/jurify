@@ -129,6 +129,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   whatsapp_aguardar_resposta: Pause,
   whatsapp_pergunta_opcoes: MessageCircleQuestion,
   transferir: PhoneCall,
+  encerrar_conversa: CheckCircle2,
   distribuir_atendimento: Users,
   condicional: GitBranch,
   randomizar: Shuffle,
@@ -241,6 +242,7 @@ const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
   whatsapp_aguardar_resposta: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
   whatsapp_pergunta_opcoes: { grad: "from-cyan-500 to-teal-500", border: "border-cyan-300 dark:border-cyan-800" },
   transferir: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
+  encerrar_conversa: { grad: "from-slate-500 to-slate-700", border: "border-slate-300 dark:border-slate-700" },
   distribuir_atendimento: { grad: "from-teal-500 to-emerald-600", border: "border-teal-300 dark:border-teal-800" },
   condicional: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
   randomizar: { grad: "from-fuchsia-500 to-pink-500", border: "border-fuchsia-300 dark:border-fuchsia-800" },
@@ -3957,6 +3959,105 @@ function ConfigDistribuirAtendimentoFields({
   );
 }
 
+function ConfigEncerrarConversaFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const definido = typeof cfg.mensagem === "string";
+  const status = cfg.status === "fechado" ? "fechado" : "resolvido";
+  const insertNoCfg = (path: string) => {
+    const atual = String(cfg.mensagem || "");
+    onChange({ mensagem: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+  return (
+    <div className="space-y-2">
+      <div className="rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-800 dark:bg-slate-900/40">
+        <p className="text-[11px] text-slate-700 dark:text-slate-300">
+          Fecha o atendimento: manda a despedida e marca a conversa como{" "}
+          <strong>{status === "fechado" ? "fechada" : "resolvida"}</strong>.
+          Diferente de <strong>Transferir</strong> — aqui ninguém assume.
+          Se o cliente escrever de novo, o bot atende normalmente.
+        </p>
+      </div>
+
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <Label className="text-xs">Mensagem de despedida (opcional)</Label>
+          <VariableTrigger
+            inputId="cfg-encerrar-mensagem"
+            variaveis={variaveis}
+            onInsert={insertNoCfg}
+          />
+        </div>
+        <VariableInput
+          id="cfg-encerrar-mensagem"
+          as="textarea"
+          rows={3}
+          highlight
+          preview
+          value={String(cfg.mensagem ?? "")}
+          onChange={(v) => onChange({ mensagem: v })}
+          variaveis={variaveis}
+          placeholder="Atendimento encerrado. Se precisar de mais alguma coisa, é só chamar!"
+        />
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          {definido
+            ? "Deixe em branco para encerrar sem enviar nenhuma mensagem."
+            : "Sem preencher, envia o texto do exemplo acima."}
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Como marcar a conversa</Label>
+        <Select value={status} onValueChange={(v) => onChange({ status: v })}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="resolvido">Resolvida — atendimento concluído</SelectItem>
+            <SelectItem value="fechado">Fechada — sem desfecho (sumiu, engano, spam)</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Só <strong>Resolvida</strong> entra no contador de "resolvidas hoje" do painel de Atendimento.
+        </p>
+      </div>
+
+      <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={cfg.arquivar === true}
+          onChange={(e) => onChange({ arquivar: e.target.checked })}
+        />
+        <span className="text-[11px] leading-snug">
+          <strong>Arquivar também</strong>
+          <span className="block text-muted-foreground">
+            Some das listas do inbox. Mensagem nova do cliente desarquiva sozinha.
+          </span>
+        </span>
+      </label>
+
+      <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={cfg.liberarAtendente === true}
+          onChange={(e) => onChange({ liberarAtendente: e.target.checked })}
+        />
+        <span className="text-[11px] leading-snug">
+          <strong>Soltar o atendente</strong>
+          <span className="block text-muted-foreground">
+            Tira o dono da conversa. Útil quando o fluxo atribuiu alguém e o assunto se resolveu sozinho.
+          </span>
+        </span>
+      </label>
+    </div>
+  );
+}
+
 function ConfigTransferirFields({
   cfg,
   onChange,
@@ -5741,6 +5842,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigWhatsappEnviarFields cfg={cfg} onChange={onChange} />;
     case "transferir":
       return <ConfigTransferirFields cfg={cfg} onChange={onChange} />;
+    case "encerrar_conversa":
+      return <ConfigEncerrarConversaFields cfg={cfg} onChange={onChange} />;
     case "distribuir_atendimento":
       return <ConfigDistribuirAtendimentoFields cfg={cfg} onChange={onChange} />;
     case "condicional":

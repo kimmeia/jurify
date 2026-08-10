@@ -2160,6 +2160,123 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  /**
+   * Par do transferir, e a distinção é o ponto do bloco: transferir entrega a
+   * conversa a um humano e cala o bot pra sempre; encerrar fecha o assunto sem
+   * dono, e mensagem nova do cliente reabre o atendimento.
+   */
+  describe("encerrar_conversa", () => {
+    it("marca o encerramento e para o fluxo", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "encerrar_conversa", config: {} },
+        { id: 2, ordem: 2, tipo: "ia_responder", config: {} }, // não deve executar
+      ];
+
+      const r = await executarCenario(passos, {}, exec);
+
+      expect(r.sucesso).toBe(true);
+      expect(r.passosExecutados).toBe(1);
+      expect(r.contexto.encerrarConversa).toEqual({
+        status: "resolvido",
+        arquivar: false,
+        liberarAtendente: false,
+      });
+    });
+
+    it("NÃO marca transferir — quem encerra não entrega a conversa a ninguém", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario(
+        [{ id: 1, ordem: 1, tipo: "encerrar_conversa", config: {} }],
+        {},
+        exec,
+      );
+      // Marcar transferir aqui deixaria o bot mudo pra sempre naquela conversa,
+      // que é o oposto do que "encerrar" significa.
+      expect(r.contexto.transferir).toBeUndefined();
+    });
+
+    it("despedida padrão quando a mensagem não foi configurada", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario(
+        [{ id: 1, ordem: 1, tipo: "encerrar_conversa", config: {} }],
+        {},
+        exec,
+      );
+      expect(r.respostas[0]).toContain("encerrado");
+    });
+
+    it("mensagem customizada interpola variáveis", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario(
+        [{ id: 1, ordem: 1, tipo: "encerrar_conversa", config: { mensagem: "Valeu, {{nomeCliente}}!" } }],
+        { nomeCliente: "Ana" },
+        exec,
+      );
+      expect(r.respostas[0]).toBe("Valeu, Ana!");
+    });
+
+    it("mensagem vazia encerra em silêncio", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario(
+        [{ id: 1, ordem: 1, tipo: "encerrar_conversa", config: { mensagem: "   " } }],
+        {},
+        exec,
+      );
+      expect(r.respostas).toHaveLength(0);
+      expect(r.contexto.encerrarConversa).toBeDefined();
+    });
+
+    it("repassa status, arquivar e liberarAtendente escolhidos", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario(
+        [{
+          id: 1, ordem: 1, tipo: "encerrar_conversa",
+          config: { status: "fechado", arquivar: true, liberarAtendente: true },
+        }],
+        {},
+        exec,
+      );
+      expect(r.contexto.encerrarConversa).toEqual({
+        status: "fechado",
+        arquivar: true,
+        liberarAtendente: true,
+      });
+    });
+
+    it("status inválido cai em resolvido em vez de gravar lixo no enum", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario(
+        [{ id: 1, ordem: 1, tipo: "encerrar_conversa", config: { status: "qualquer_coisa" } }],
+        {},
+        exec,
+      );
+      expect(r.contexto.encerrarConversa?.status).toBe("resolvido");
+    });
+
+    /**
+     * O Atendente IA pausa marcando a execução como "esperando o cliente". Se
+     * essa marca sobrevivesse ao encerramento, a próxima mensagem retomaria
+     * ESTE fluxo já terminado em vez de começar um atendimento novo.
+     */
+    it("limpa a marca de espera herdada do Atendente IA", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario(
+        [{ id: 1, ordem: 1, tipo: "encerrar_conversa", config: {} }],
+        {
+          aguardandoMensagem: true,
+          aguardandoContatoId: 42,
+          aguardandoTimeoutMinutos: 1440,
+          aguardandoNodeClienteId: "n1",
+        } as any,
+        exec,
+      );
+      expect(r.contexto.aguardandoMensagem).toBeUndefined();
+      expect((r.contexto as any).aguardandoContatoId).toBeUndefined();
+      expect((r.contexto as any).aguardandoNodeClienteId).toBeUndefined();
+    });
+  });
+
   describe("transferir", () => {
     it("marca transferir e para o fluxo", async () => {
       const exec = criarMockExecutores();

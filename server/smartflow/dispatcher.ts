@@ -298,6 +298,69 @@ async function finalizarExecucao(
       aguardandoMensagemContatoId: aguardandoContato,
     })
     .where(eq(smartflowExecucoes.id, execId));
+
+  // Execução pausada não terminou — o efeito na conversa só vale no fim.
+  if (!pausada) await aplicarEfeitosNaConversa(execId, resultado.contexto);
+}
+
+/**
+ * Escreve na conversa o que o fluxo decidiu: transferência pra humano ou
+ * encerramento. Mora AQUI, e não em quem chama, porque `finalizarExecucao` é
+ * o único ponto por onde toda execução passa.
+ *
+ * Antes o `transferir` era tratado só em `executarCenarioCarregado`, o caminho
+ * da PRIMEIRA execução. Mas o Atendente IA pausa esperando o cliente, e é numa
+ * RETOMADA que ele decide transferir — caminho que não tinha o gancho. Na
+ * prática: o cliente pedia pra falar com uma pessoa, o bloco Transferir rodava,
+ * e o bot continuava respondendo, porque ninguém marcava `em_atendimento`.
+ *
+ * Silencioso de propósito: falha aqui não pode derrubar a execução que já
+ * terminou bem.
+ */
+async function aplicarEfeitosNaConversa(
+  execId: number,
+  contexto: SmartflowContexto | undefined,
+): Promise<void> {
+  const encerrar = contexto?.encerrarConversa;
+  if (contexto?.transferir !== true && !encerrar) return;
+
+  const db = await getDb();
+  if (!db) return;
+
+  try {
+    const [exec] = await db
+      .select({
+        escritorioId: smartflowExecucoes.escritorioId,
+        conversaId: smartflowExecucoes.conversaId,
+      })
+      .from(smartflowExecucoes)
+      .where(eq(smartflowExecucoes.id, execId))
+      .limit(1);
+    if (!exec?.conversaId) return;
+
+    // Transferir vence: se o fluxo pediu humano, a conversa é dele.
+    if (contexto?.transferir === true) {
+      await marcarConversaEmAtendimento(exec.conversaId, exec.escritorioId);
+      return;
+    }
+
+    if (encerrar) {
+      const { conversas } = await import("../../drizzle/schema");
+      const valores: Record<string, unknown> = { status: encerrar.status };
+      if (encerrar.arquivar) valores.arquivadaEm = new Date();
+      if (encerrar.liberarAtendente) valores.atendenteId = null;
+      await db
+        .update(conversas)
+        .set(valores)
+        .where(and(eq(conversas.id, exec.conversaId), eq(conversas.escritorioId, exec.escritorioId)));
+      log.info(
+        { conversaId: exec.conversaId, status: encerrar.status, arquivada: encerrar.arquivar },
+        "SmartFlow: conversa encerrada pelo fluxo",
+      );
+    }
+  } catch (err: any) {
+    log.warn({ err: err?.message, execId }, "SmartFlow: falha ao aplicar efeito na conversa");
+  }
 }
 
 async function executarCenarioPorGatilho(
@@ -403,15 +466,6 @@ async function executarCenarioCarregado(
   const resultado = await executarCenario(cenario.passos, contexto, executores);
 
   await finalizarExecucao(execId, resultado);
-
-  // Se o fluxo terminou pedindo transferência pra humano (bloco "Transferir"),
-  // marca a conversa como `em_atendimento`. Isso faz o bot PARAR de responder
-  // essa conversa — o dispatcher de mensagem ignora conversas em_atendimento.
-  // Sem isso, cada mensagem nova re-dispararia o cenário e a IA responderia
-  // de novo, infinitamente ("preso no bloco").
-  if (resultado.contexto?.transferir === true && refs?.conversaId) {
-    await marcarConversaEmAtendimento(refs.conversaId, escritorioId);
-  }
 
   log.info(
     { cenarioId: cenario.cenarioId, execId, gatilho: cenario.gatilho, passos: resultado.passosExecutados, sucesso: resultado.sucesso },
