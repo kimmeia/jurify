@@ -423,6 +423,7 @@ export const jurisiaRouter = router({
           descricaoFiltro: resultado.descricaoFiltro,
           natureza: resultado.natureza,
           avisoNatureza: resultado.avisoNatureza,
+          tendencia: resultado.tendencia,
         }
         : null;
 
@@ -471,6 +472,7 @@ export const jurisiaRouter = router({
         descricaoFiltro: resultado.descricaoFiltro,
         natureza: resultado.natureza,
         avisoNatureza: resultado.avisoNatureza,
+        tendencia: resultado.tendencia,
         semBase: resultado.semBase,
         cobrou,
         cota: cotaDepois,

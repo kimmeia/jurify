@@ -156,6 +156,7 @@ async function gravarProcesso(
     classeNome: processo.classeNome,
     assuntoCodigo: processo.assuntoCodigo,
     assuntoNome: processo.assuntoNome,
+    assuntosTodos: processo.assuntosTodos,
     orgaoCodigo: processo.orgaoCodigo,
     orgaoNome: processo.orgaoNome,
     ajuizamentoEm: processo.ajuizamentoEm ? new Date(processo.ajuizamentoEm) : null,

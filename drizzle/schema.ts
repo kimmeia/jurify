@@ -3884,6 +3884,9 @@ export const jurisiaProcessos = mysqlTable(
     classeNome: varchar("classeNomeJurisProc", { length: 255 }),
     assuntoCodigo: int("assuntoCodigoJurisProc"),
     assuntoNome: varchar("assuntoNomeJurisProc", { length: 255 }),
+    /** Todos os assuntos da TPU juntos, separados por " · ". A classe diz o
+     *  veículo (agravo); é aqui que está o conteúdo da briga. */
+    assuntosTodos: text("assuntosTodosJurisProc"),
     orgaoCodigo: int("orgaoCodigoJurisProc"),
     orgaoNome: varchar("orgaoNomeJurisProc", { length: 255 }),
     ajuizamentoEm: timestamp("ajuizamentoEmJurisProc"),
