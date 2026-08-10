@@ -118,6 +118,28 @@ export const adminRouter = router({
       .sort((a, b) => a.sigla.localeCompare(b.sigla));
   }),
 
+  /** O que seria apagado. A tela mostra isto antes de confirmar. */
+  jurisiaContagemIngestao: adminProcedure.query(async () => {
+    const { contarIngestao } = await import("../jurisia/zerar-ingestao");
+    return contarIngestao();
+  }),
+
+  /**
+   * Apaga o acervo e os cursores pra recomeçar a ingestão do zero.
+   *
+   * Não toca em conversa de cliente nem em consumo de cota: apagar aquilo não
+   * faz a ingestão recomeçar, só destrói histórico de pesquisa e o número que
+   * sustenta a cobrança do mês.
+   */
+  jurisiaZerarIngestao: adminProcedure
+    // Exigir a palavra digitada não é teatro: o AlertDialog protege do clique
+    // errado, isto protege do clique confiante em cima do botão errado.
+    .input(z.object({ confirmacao: z.literal("ZERAR") }))
+    .mutation(async () => {
+      const { zerarIngestao } = await import("../jurisia/zerar-ingestao");
+      return zerarIngestao();
+    }),
+
   /**
    * Quanto do acervo é acórdão.
    *

@@ -16,6 +16,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Bot, FlaskConical, Play, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { naturezaDoGrau } from "@shared/jurisia-grau";
 import JurisIaAssinantes from "./JurisIaAssinantes";
 
@@ -35,6 +46,129 @@ const VEREDITO: Record<string, { rotulo: string; cls: string }> = {
   vazio: { rotulo: "vazio", cls: "text-slate-500 bg-slate-500/10 border-slate-500/20" },
   erro: { rotulo: "erro", cls: "text-red-600 bg-red-500/10 border-red-500/20" },
 };
+
+/**
+ * Recomeçar a ingestão do zero.
+ *
+ * Fica no fim da página de propósito — é a última coisa que se procura, e
+ * ninguém topa com ela por acidente ao rolar atrás de outra coisa.
+ *
+ * A contagem aparece ANTES de confirmar porque "apagar o acervo" é abstrato e
+ * "apagar 4.000 processos e 61.000 movimentos" é concreto. E a palavra digitada
+ * não é teatro: o diálogo protege do clique errado, o texto protege do clique
+ * confiante em cima do botão errado.
+ */
+function ZerarIngestao() {
+  const [palavra, setPalavra] = useState("");
+  const utils = trpc.useUtils();
+  const { data: c } = trpc.admin.jurisiaContagemIngestao.useQuery();
+
+  const zerar = trpc.admin.jurisiaZerarIngestao.useMutation({
+    onSuccess: (r) => {
+      setPalavra("");
+      utils.admin.jurisiaVarreduras.invalidate();
+      utils.admin.jurisiaNatureza.invalidate();
+      utils.admin.jurisiaContagemIngestao.invalidate();
+      toast.success("Acervo zerado", {
+        description: `${nf.format(r.processos)} processo(s) e ${nf.format(r.movimentos)} movimento(s) apagados. A varredura recomeça do início.`,
+      });
+    },
+    onError: (e) => toast.error("Não deu pra zerar", { description: e.message }),
+  });
+
+  const vazio = !c || c.processos + c.movimentos + c.tribunaisComEstado === 0;
+
+  return (
+    <Card className="border-red-500/30">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base text-red-600">
+          <TriangleAlert className="h-4 w-4" />
+          Recomeçar a ingestão do zero
+        </CardTitle>
+        <CardDescription>
+          Apaga o acervo, os movimentos e os cursores dos tribunais. As pesquisas dos clientes e o
+          consumo de cota <b>não são tocados</b> — apagar aquilo não faz a ingestão recomeçar, só
+          destrói histórico e o número que sustenta a cobrança.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {c && (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <p className="text-xl font-bold tabular-nums">{nf.format(c.processos)}</p>
+              <p className="text-[11px] text-muted-foreground">processos</p>
+            </div>
+            <div>
+              <p className="text-xl font-bold tabular-nums">{nf.format(c.movimentos)}</p>
+              <p className="text-[11px] text-muted-foreground">movimentos</p>
+            </div>
+            <div>
+              <p className="text-xl font-bold tabular-nums">{nf.format(c.tribunaisComEstado)}</p>
+              <p className="text-[11px] text-muted-foreground">tribunais com cursor</p>
+            </div>
+          </div>
+        )}
+
+        <p className="text-xs text-muted-foreground">
+          Na maioria dos casos zerar é desnecessário: o acervo tem índice único no CNJ e a
+          gravação é upsert, então re-varrer já reescreve cada linha com os classificadores
+          atuais. Zerar serve pra garantia de base limpa — processo que saiu do índice do CNJ
+          nunca seria reescrito e ficaria para sempre.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={palavra}
+            onChange={(e) => setPalavra(e.target.value.toUpperCase())}
+            placeholder="digite ZERAR"
+            className="h-9 w-40"
+            disabled={vazio}
+          />
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={palavra !== "ZERAR" || zerar.isPending || vazio}
+              >
+                {zerar.isPending ? "Apagando…" : "Zerar acervo"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Apagar o acervo inteiro?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {c && (
+                    <>
+                      Vão embora {nf.format(c.processos)} processo(s) e{" "}
+                      {nf.format(c.movimentos)} movimento(s), e os {nf.format(c.tribunaisComEstado)}{" "}
+                      cursores voltam ao início.{" "}
+                    </>
+                  )}
+                  Isso não tem desfazer — a base é reconstruída varrendo o DataJud de novo. As
+                  pesquisas dos clientes e o consumo de cota continuam intactos.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => zerar.mutate({ confirmacao: "ZERAR" })}
+                  className="bg-red-600 text-white hover:bg-red-700"
+                >
+                  Apagar e recomeçar
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {vazio && (
+            <span className="text-xs text-muted-foreground">O acervo já está vazio.</span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 /**
  * Sondagem das fontes públicas.
@@ -667,6 +801,8 @@ export default function AdminJurisIa() {
           )}
         </CardContent>
       </Card>
+
+      <ZerarIngestao />
     </div>
   );
 }
