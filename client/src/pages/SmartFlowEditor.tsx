@@ -1629,6 +1629,35 @@ function SmartFlowEditorInner() {
     if (primeira) trocarGatilho(primeira);
   };
 
+  // Refs porque o listener é registrado UMA vez: sem elas o handler
+  // congelaria o `selectedId` do primeiro render e o Ctrl+D duplicaria sempre
+  // o mesmo bloco (ou nenhum).
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
+  const duplicarPassoRef = useRef<(nodeId: string) => void>(() => {});
+
+  /**
+   * Ctrl/Cmd+D duplica o bloco selecionado. Ignora quando o foco está num
+   * campo — dentro de um textarea o atalho pertence ao texto, não ao canvas.
+   *
+   * Fica AQUI, entre os outros hooks, e não lá embaixo perto do return: o
+   * componente tem um `return` antecipado pro estado de carregando, e um hook
+   * depois dele é chamado num render e não no outro. React #310.
+   */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.key === "d" || e.key === "D") || !(e.ctrlKey || e.metaKey)) return;
+      const alvo = e.target as HTMLElement | null;
+      const tag = alvo?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || alvo?.isContentEditable) return;
+      if (!selectedIdRef.current || selectedIdRef.current === GATILHO_NODE_ID) return;
+      e.preventDefault();
+      duplicarPassoRef.current(selectedIdRef.current);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   /**
    * Duplica um bloco. A cópia nasce ao lado, já selecionada, com config
    * própria — e SEM as setas de saída (`arestasDaCopia` explica por quê).
@@ -1646,6 +1675,7 @@ function SmartFlowEditorInner() {
     marcarDirty();
     toast.success("Bloco duplicado — a cópia entrou ao lado, sem as ligações de saída.");
   };
+  duplicarPassoRef.current = duplicarPasso;
 
   const removerNode = (nodeId: string) => {
     if (nodeId === GATILHO_NODE_ID) {
@@ -1907,22 +1937,6 @@ function SmartFlowEditorInner() {
       </div>
     );
   }
-
-  // Ctrl/Cmd+D duplica o bloco selecionado. Ignora quando o foco está num
-  // campo — dentro de um textarea o atalho pertence ao texto, não ao canvas.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (!(e.key === "d" || e.key === "D") || !(e.ctrlKey || e.metaKey)) return;
-      const alvo = e.target as HTMLElement | null;
-      const tag = alvo?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || alvo?.isContentEditable) return;
-      if (!selectedId || selectedId === GATILHO_NODE_ID) return;
-      e.preventDefault();
-      duplicarPasso(selectedId);
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  });
 
   const salvando = criarMut.isPending || atualizarMut.isPending;
   // Largura do inspetor quando aberto — toolbar e minimapa se afastam pra não
