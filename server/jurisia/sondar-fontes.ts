@@ -14,6 +14,7 @@
  */
 
 import { chaveDataJud } from "./datajud-client";
+import { repararMojibake } from "../../shared/texto-mojibake";
 
 const PAUSA_PADRAO_MS = 1_500;
 const TIMEOUT_MS = 25_000;
@@ -117,6 +118,8 @@ export interface ResultadoSonda {
   retryNavegador: "passou" | "persistiu" | null;
   /** Só pros índices do DataJud. */
   datajud: AmostraDataJud | null;
+  /** Vocabulário devolvido por agregação: nome do movimento e quantas vezes. */
+  vocabulario: Array<{ nome: string; quantidade: number }> | null;
 }
 
 export async function candidatosPadrao(termo: string): Promise<CandidatoSonda[]> {
@@ -138,6 +141,25 @@ export async function candidatosPadrao(termo: string): Promise<CandidatoSonda[]>
       pergunta: "índice existe? traz grau e movimentos? existe campo de ementa?",
     });
   }
+
+  // O vocabulário real, não o que eu lembro da TPU.
+  //
+  // `deduzirDesfecho` fala 1ª instância ("procedência", "extinção sem
+  // resolução do mérito") e no STJ isso não aparece — lá é "negado
+  // provimento", "não conhecido". Pra ensinar sem chutar, pergunto ao índice
+  // quais movimentos existem de fato e com que frequência.
+  lista.push({
+    fonte: "DataJud",
+    nome: "vocabulário de movimentos do STJ",
+    url: "https://api-publica.datajud.cnj.jus.br/api_publica_stj/_search",
+    metodo: "POST",
+    headers: { Authorization: `APIKey ${chave}`, "Content-Type": "application/json" },
+    corpo: {
+      size: 0,
+      aggs: { movimentos: { terms: { field: "movimentos.nome.keyword", size: 80 } } },
+    },
+    pergunta: "quais movimentos o STJ usa? é o que calibra o desfecho de recurso",
+  });
 
   lista.push(
     {
@@ -239,6 +261,14 @@ function formaDoHtml(html: string): string {
     .join(" · ");
 }
 
+function vocabularioDe(json: unknown): Array<{ nome: string; quantidade: number }> | null {
+  const buckets = (json as any)?.aggregations?.movimentos?.buckets;
+  if (!Array.isArray(buckets) || buckets.length === 0) return null;
+  return buckets
+    .filter((b: any) => typeof b?.key === "string")
+    .map((b: any) => ({ nome: repararMojibake(b.key), quantidade: Number(b.doc_count ?? 0) }));
+}
+
 function amostraDataJud(json: unknown): AmostraDataJud | null {
   const fonte = (json as any)?.hits?.hits?.[0]?._source;
   if (!fonte || typeof fonte !== "object") return null;
@@ -274,6 +304,7 @@ export async function sondarUm(c: CandidatoSonda): Promise<ResultadoSonda> {
     causa: null,
     retryNavegador: null,
     datajud: null,
+    vocabulario: null,
   };
 
   const ctrl = new AbortController();
@@ -309,6 +340,7 @@ export async function sondarUm(c: CandidatoSonda): Promise<ResultadoSonda> {
       r.forma = forma;
       r.temEmenta = temEmenta;
       r.datajud = amostraDataJud(json);
+      r.vocabulario = vocabularioDe(json);
     } catch {
       r.veredito = "responde-html";
       r.forma = formaDoHtml(texto);

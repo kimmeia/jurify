@@ -51,6 +51,14 @@ export interface TribunalProvider {
   frescorDatajud: NivelFrescor;
   /** Descrição legível do nível de atualização */
   descricaoFrescor: string;
+  /**
+   * Se existe índice `api_publica_<alias>` no DataJud.
+   *
+   * Ausente = existe. Só o STF marca `false`: o índice devolve 404, porque o
+   * STF não alimenta a base do CNJ (confirmado na sondagem de 10/08). Sem esta
+   * marca ele aparece na varredura como um botão que sempre falha.
+   */
+  temIndiceDataJud?: boolean;
 }
 
 // ─── Mapeamento ─────────────────────────────────────────────────────────────
@@ -107,7 +115,7 @@ export const TRIBUNAL_PROVIDERS: Record<string, TribunalProvider> = {
   })),
 
   // ── Tribunais Superiores ──
-  stf: { alias: "stf", nome: "Supremo Tribunal Federal", sigla: "STF", justica: "Superior", fontePrimaria: "DATAJUD", consultaPublicaUrl: "https://portal.stf.jus.br/processos/", temTempoReal: false, frescorDatajud: "QUASE_REAL", descricaoFrescor: "STF — dados rápidos via DataJud." },
+  stf: { alias: "stf", nome: "Supremo Tribunal Federal", sigla: "STF", justica: "Superior", fontePrimaria: "DATAJUD", consultaPublicaUrl: "https://portal.stf.jus.br/processos/", temTempoReal: false, frescorDatajud: "ATRASO_LONGO", descricaoFrescor: "STF — sem índice no DataJud; consulta só pelo portal.", temIndiceDataJud: false },
   stj: { alias: "stj", nome: "Superior Tribunal de Justiça", sigla: "STJ", justica: "Superior", fontePrimaria: "DATAJUD", consultaPublicaUrl: "https://processo.stj.jus.br/processo/pesquisa/", temTempoReal: false, frescorDatajud: "QUASE_REAL", descricaoFrescor: "STJ — dados rápidos via DataJud." },
   tst: { alias: "tst", nome: "Tribunal Superior do Trabalho", sigla: "TST", justica: "Superior", fontePrimaria: "DATAJUD", consultaPublicaUrl: "https://pje.tst.jus.br/consultaprocessual/", temTempoReal: true, frescorDatajud: "QUASE_REAL", descricaoFrescor: "TST — PJe consulta pública disponível." },
 

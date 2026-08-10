@@ -96,6 +96,9 @@ export const adminRouter = router({
     const noAcervo = await contagemPorTribunal();
 
     return Object.values(TRIBUNAL_PROVIDERS)
+      // Tribunal sem índice no DataJud não entra na lista da varredura do
+      // DataJud — a linha só existiria pra oferecer um botão que dá 404.
+      .filter((p) => p.temIndiceDataJud !== false)
       .map((p) => {
         const v = estado.get(p.sigla.toUpperCase());
         return {
