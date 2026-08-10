@@ -53,22 +53,6 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
     { path: "movimentacoesQuantidade", label: "Quantidade de eventos retornados", tipo: "número" },
     { path: "movimentacaoMaisRecente", label: "Primeiro evento (mais recente) ou null", tipo: "objeto" },
   ],
-  calcom_horarios: [
-    { path: "horariosDisponiveis", label: "Lista de horários disponíveis", tipo: "lista" },
-  ],
-  calcom_agendar: [
-    { path: "agendamentoId", label: "ID do agendamento criado", tipo: "texto" },
-  ],
-  calcom_listar: [
-    { path: "bookings", label: "Lista de agendamentos do Cal.com", tipo: "lista" },
-    { path: "bookingsQuantidade", label: "Quantidade de agendamentos", tipo: "número" },
-  ],
-  calcom_cancelar: [
-    { path: "bookingCancelado", label: "ID do agendamento cancelado", tipo: "texto" },
-  ],
-  calcom_remarcar: [
-    { path: "horarioEscolhido", label: "Novo horário (sobrescreve o anterior)", tipo: "texto" },
-  ],
   agenda_criar: [
     { path: "agendamentoInternoId", label: "ID do compromisso criado na Agenda do escritório", tipo: "número" },
     { path: "agendaDisponivel", label: "false se o horário pedido estava ocupado (não criou)", tipo: "booleano" },

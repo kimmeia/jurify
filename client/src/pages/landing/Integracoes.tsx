@@ -9,7 +9,6 @@ const integracoes = [
   { nome: "Instagram", cor: "bg-[#e1306c]" },
   { nome: "PJe · TJCE", cor: "bg-blue-500" },
   { nome: "BACEN", cor: "bg-amber-500" },
-  { nome: "Cal.com", cor: "bg-violet-600" },
 ];
 
 export function Integracoes() {

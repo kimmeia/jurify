@@ -1,5 +1,5 @@
 /**
- * Tipos compartilhados do SmartFlow — automações com IA + WhatsApp + Cal.com.
+ * Tipos compartilhados do SmartFlow — automações com IA + WhatsApp.
  *
  * Config discriminada por `tipo` de passo. Usada no frontend (editor ReactFlow)
  * e no backend (validação Zod, engine). Mantém compatibilidade binária com
@@ -19,10 +19,6 @@ export type GatilhoSmartflow =
   | "whatsapp_mensagem"
   | "mensagem_canal"
   | "novo_lead"
-  | "agendamento_criado"
-  | "agendamento_cancelado"
-  | "agendamento_remarcado"
-  | "agendamento_lembrete"
   | "pagamento_recebido"
   | "pagamento_vencido"
   | "pagamento_proximo_vencimento"
@@ -42,7 +38,7 @@ export type TipoCanalMensagem =
  * da paleta do editor usa isso pra renderizar seções. O modelo de dados
  * permanece flat.
  */
-export type GrupoSmartflow = "mensagem" | "asaas" | "calcom" | "crm" | "ia" | "acoes" | "fluxo";
+export type GrupoSmartflow = "mensagem" | "asaas" | "crm" | "ia" | "acoes" | "fluxo";
 
 export interface GrupoMeta {
   id: GrupoSmartflow;
@@ -54,7 +50,6 @@ export interface GrupoMeta {
 export const GRUPO_META: ReadonlyArray<GrupoMeta> = [
   { id: "mensagem", label: "Mensagem", ordem: 1 },
   { id: "asaas", label: "Asaas (financeiro)", ordem: 2 },
-  { id: "calcom", label: "Cal.com (agenda)", ordem: 3 },
   { id: "crm", label: "CRM", ordem: 4 },
   { id: "ia", label: "Inteligência artificial", ordem: 5 },
   { id: "acoes", label: "Ações", ordem: 6 },
@@ -74,11 +69,6 @@ export type TipoPasso =
   | "crm_buscar_contato"
   | "crm_listar_acoes_cliente"
   | "processo_buscar_movimentacoes"
-  | "calcom_horarios"
-  | "calcom_agendar"
-  | "calcom_listar"
-  | "calcom_cancelar"
-  | "calcom_remarcar"
   | "agenda_criar"
   | "whatsapp_enviar"
   | "whatsapp_aguardar_resposta"
@@ -179,7 +169,8 @@ export type OperadorCondicional =
   | "entre"
   | "tem_tag"
   | "nao_tem_tag"
-  // Baseados no momento atual (fuso de Brasília) — ignoram o campo:
+  // Baseados no momento atual (fuso do escritório) — ignoram o campo:
+  | "janela_horario"  // valor="HH:MM-HH:MM" faixa, valor2="seg,ter,..." dias (vazio = todo dia)
   | "horario_entre"   // valor="HH:MM" início, valor2="HH:MM" fim (ex: expediente)
   | "dia_semana";     // valor="seg,ter,qua,qui,sex" (dom..sab) — dias permitidos
 
@@ -372,35 +363,6 @@ export interface ConfigProcessoBuscarMovimentacoes {
   diasJanela?: number;
   /** Limite de eventos retornados. Default: 10. */
   limite?: number;
-}
-export interface ConfigCalcomHorarios {
-  duracao?: number;
-}
-export interface ConfigCalcomAgendar {
-  /** reservado para futuras configs (eventTypeId, email padrão, etc.) */
-}
-export interface ConfigCalcomListar {
-  /** Filtro de status — default: upcoming. */
-  status?: "upcoming" | "past" | "cancelled" | "unconfirmed";
-}
-export interface ConfigCalcomCancelar {
-  /**
-   * ID do booking a cancelar. Se vazio, usa `ctx.agendamentoId` (default
-   * quando o cenário foi disparado por gatilho de agendamento).
-   */
-  bookingId?: string;
-  /** Motivo do cancelamento (opcional, enviado ao Cal.com). */
-  motivo?: string;
-}
-export interface ConfigCalcomRemarcar {
-  /** ID do booking. Se vazio, usa `ctx.agendamentoId`. */
-  bookingId?: string;
-  /**
-   * Novo horário. Se vazio, usa `ctx.horarioEscolhido` (preenchido por um
-   * passo `calcom_horarios` anterior ou pelo contexto do gatilho).
-   */
-  novoHorario?: string;
-  motivo?: string;
 }
 export interface ConfigWhatsappEnviar {
   /** "texto" (padrão) = mensagem livre; "template" = template aprovado (HSM) da Meta. */
@@ -771,11 +733,6 @@ export type PassoConfigByTipo =
   | { tipo: "crm_buscar_contato"; config: ConfigCrmBuscarContato }
   | { tipo: "crm_listar_acoes_cliente"; config: ConfigCrmListarAcoesCliente }
   | { tipo: "processo_buscar_movimentacoes"; config: ConfigProcessoBuscarMovimentacoes }
-  | { tipo: "calcom_horarios"; config: ConfigCalcomHorarios }
-  | { tipo: "calcom_agendar"; config: ConfigCalcomAgendar }
-  | { tipo: "calcom_listar"; config: ConfigCalcomListar }
-  | { tipo: "calcom_cancelar"; config: ConfigCalcomCancelar }
-  | { tipo: "calcom_remarcar"; config: ConfigCalcomRemarcar }
   | { tipo: "whatsapp_enviar"; config: ConfigWhatsappEnviar }
   | { tipo: "whatsapp_aguardar_resposta"; config: ConfigWhatsappAguardarResposta }
   | { tipo: "whatsapp_pergunta_opcoes"; config: ConfigWhatsappPerguntaOpcoes }
@@ -917,24 +874,11 @@ export interface ConfigGatilhoPagamentoProximoVencimento extends JanelaDisparo {
   diasAntes?: number;
 }
 
-/**
- * Lembrete de agendamento do Cal.com — o scheduler dispara quando faltam
- * `diasAntes` dias pro booking no `horario` configurado. Ex: `diasAntes=1`
- * + `horario="18:00"` dispara às 18:00 da véspera.
- */
-export interface ConfigGatilhoAgendamentoLembrete {
-  /** Quantos dias antes do agendamento disparar. Default: 1 */
-  diasAntes?: number;
-  /** Horário de disparo "HH:MM". Default: "18:00" */
-  horario?: string;
-}
-
 export type ConfigGatilhoByTipo =
   | { gatilho: "mensagem_canal"; config: ConfigGatilhoMensagemCanal }
   | { gatilho: "pagamento_vencido"; config: ConfigGatilhoPagamentoVencido }
   | { gatilho: "pagamento_proximo_vencimento"; config: ConfigGatilhoPagamentoProximoVencimento }
-  | { gatilho: "agendamento_lembrete"; config: ConfigGatilhoAgendamentoLembrete }
-  | { gatilho: Exclude<GatilhoSmartflow, "mensagem_canal" | "pagamento_vencido" | "pagamento_proximo_vencimento" | "agendamento_lembrete">; config: Record<string, unknown> };
+  | { gatilho: Exclude<GatilhoSmartflow, "mensagem_canal" | "pagamento_vencido" | "pagamento_proximo_vencimento">; config: Record<string, unknown> };
 
 export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "ia_classificar", label: "Classificar intenção (IA)", descricao: "Usa IA para categorizar a mensagem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "ia" },
@@ -976,10 +920,6 @@ export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [
   { id: "pagamento_vencido", label: "Pagamento vencido (Asaas)", descricao: "Dispara quando a cobrança está atrasada há N dias.", grupo: "asaas" },
   { id: "pagamento_proximo_vencimento", label: "Vencimento próximo (Asaas)", descricao: "Dispara N dias antes da cobrança vencer.", grupo: "asaas" },
   { id: "novo_lead", label: "Novo lead no CRM", descricao: "Dispara quando um contato novo é criado.", grupo: "crm" },
-  { id: "agendamento_criado", label: "Agendamento criado", descricao: "Dispara quando booking Cal.com é confirmado.", grupo: "calcom" },
-  { id: "agendamento_cancelado", label: "Agendamento cancelado", descricao: "Dispara quando booking Cal.com é cancelado.", grupo: "calcom" },
-  { id: "agendamento_remarcado", label: "Agendamento remarcado", descricao: "Dispara quando booking Cal.com é reagendado.", grupo: "calcom" },
-  { id: "agendamento_lembrete", label: "Lembrete de agendamento", descricao: "Dispara N dias antes do agendamento no horário configurado.", grupo: "calcom" },
   { id: "manual", label: "Acionado manualmente", descricao: "Executado pelo botão 'Executar agora'.", grupo: "fluxo" },
 ];
 
@@ -1040,7 +980,6 @@ export const CAMPOS_CONDICIONAL = [
   "percentualPago",
   "diasAtraso",
   "diasAteVencer",
-  "bookingsQuantidade",
   "transferir",
 ] as const;
 

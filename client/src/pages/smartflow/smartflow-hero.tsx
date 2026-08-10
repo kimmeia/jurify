@@ -36,7 +36,7 @@ export function SmartFlowHero({
           <h1 className="text-2xl font-bold tracking-tight">SmartFlow</h1>
           <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
             <Sparkles className="h-3 w-3 text-violet-500" />
-            <span>Automações inteligentes · WhatsApp · Asaas · Cal.com</span>
+            <span>Automações inteligentes · WhatsApp · Asaas · Agenda</span>
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">

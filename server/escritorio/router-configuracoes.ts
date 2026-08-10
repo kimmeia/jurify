@@ -74,15 +74,15 @@ async function exigirPermissao(
  * UI e falha silenciosamente ao enviar mensagens.
  *
  * Para tipos cuja conexão é feita por outro fluxo (QR code presencial,
- * Meta Embedded Signup, Cal.com direto), a config pode vir vazia aqui.
+ * Meta Embedded Signup), a config pode vir vazia aqui.
  */
 export function validarConfigCanalPorTipo(
   tipo: string,
   config: Record<string, string> | undefined,
 ): void {
   // Tipos sem requisitos diretos no criarCanal — a conexão real
-  // acontece via outro fluxo (QR code, Embedded Signup, OAuth Cal.com).
-  const tiposOpcionais = new Set(["whatsapp_api", "instagram", "facebook", "calcom"]);
+  // acontece via outro fluxo (QR code, Embedded Signup).
+  const tiposOpcionais = new Set(["whatsapp_api", "instagram", "facebook"]);
   if (tiposOpcionais.has(tipo)) return;
 
   const obrigatorios: Record<string, string[]> = {
@@ -650,7 +650,6 @@ export const configuracoesRouter = router({
         "instagram",
         "facebook",
         "telefone_voip",
-        "calcom",
         "chatgpt",
         "claude",
       ]),

@@ -15,7 +15,8 @@
 
 // Helpers PUROS de data/fuso (sem I/O, só Intl) — usados pelos operadores de
 // condição por horário/dia. dispatcher-helpers só importa tipos, sem ciclo.
-import { avaliarHorarioEntre, avaliarDiaSemana } from "./dispatcher-helpers";
+import { avaliarHorarioEntre, avaliarDiaSemana, avaliarJanelaHorario } from "./dispatcher-helpers";
+import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 
@@ -24,14 +25,12 @@ export interface SmartflowContexto {
   mensagem?: string;
   /** Intenção detectada pela IA */
   intencao?: string;
+  /** Fuso IANA do escritório — usado pelas condições de dia/horário. */
+  fusoHorario?: string;
   /** Resposta gerada pela IA */
   respostaIA?: string;
-  /** Horários disponíveis do Cal.com */
-  horariosDisponiveis?: string[];
   /** Horário escolhido pelo cliente */
   horarioEscolhido?: string;
-  /** ID do agendamento criado (Cal.com) */
-  agendamentoId?: string;
   /** ID do compromisso criado na Agenda interna (passo agenda_criar) */
   agendamentoInternoId?: number;
   /** Horário ISO escolhido pelo cliente no Atendente IA (ação agendar) — o bloco
@@ -120,7 +119,7 @@ export interface PassoConfig {
   delayMinutos?: number;
   /** Para whatsapp_enviar: template da mensagem */
   template?: string;
-  /** Para calcom_horarios: duração em minutos */
+  /** Para agenda_criar: duração em minutos */
   duracao?: number;
   /** Para webhook: URL */
   url?: string;
@@ -317,13 +316,9 @@ export interface SmartflowExecutores {
     conversaId?: number;
     atendenteResponsavelId?: number | null;
   }) => Promise<number | null>;
-  /** Busca horários disponíveis no Cal.com */
-  buscarHorarios: (duracao: number) => Promise<string[]>;
-  /** Cria agendamento no Cal.com */
-  criarAgendamento: (horario: string, nome: string, email: string) => Promise<string>;
   /**
    * Cria um compromisso na Agenda NATIVA do escritório (tabela `agendamentos`),
-   * sem depender do Cal.com. Usado pelo passo `agenda_criar`. Retorna o id.
+   * Usado pelo passo `agenda_criar`. Retorna o id.
    */
   criarAgendamentoInterno: (params: {
     responsavelId: number;
@@ -370,31 +365,6 @@ export interface SmartflowExecutores {
     descricao?: string;
     status?: string;
   }) => Promise<void>;
-  /**
-   * Lista bookings do Cal.com (usado pelo passo `calcom_listar`). O resultado
-   * vai para `ctx.bookings` sem formatação específica.
-   */
-  listarBookings: (params: {
-    status?: "upcoming" | "past" | "cancelled" | "unconfirmed";
-  }) => Promise<
-    Array<{
-      id: number | string;
-      titulo?: string;
-      startTime?: string;
-      endTime?: string;
-      status?: string;
-      attendeeNome?: string;
-      attendeeEmail?: string;
-    }>
-  >;
-  /** Cancela um booking por ID. Retorna true se sucesso. */
-  cancelarBooking: (bookingId: number | string, motivo?: string) => Promise<boolean>;
-  /** Reagenda um booking para um novo horário. Retorna true se sucesso. */
-  reagendarBooking: (
-    bookingId: number | string,
-    novoHorario: string,
-    motivo?: string,
-  ) => Promise<boolean>;
   /** Envia mensagem WhatsApp */
   enviarWhatsApp: (
     telefone: string,
@@ -1204,147 +1174,6 @@ async function handleIaAtendente(
   }
 }
 
-async function handleCalcomHorarios(
-  passo: Passo,
-  ctx: SmartflowContexto,
-  exec: SmartflowExecutores,
-): Promise<PassoResultado> {
-  const duracao = passo.config.duracao || 30;
-  try {
-    const horarios = await exec.buscarHorarios(duracao);
-    if (horarios.length === 0) {
-      return {
-        sucesso: true,
-        contexto: { ...ctx, horariosDisponiveis: [] },
-        resposta: "No momento não temos horários disponíveis. Entraremos em contato em breve.",
-        parar: true,
-      };
-    }
-
-    // Formata horários pra mensagem
-    const lista = horarios.slice(0, 5).map((h, i) => `${i + 1}. ${h}`).join("\n");
-    return {
-      sucesso: true,
-      contexto: { ...ctx, horariosDisponiveis: horarios },
-      resposta: `Temos os seguintes horários disponíveis:\n\n${lista}\n\nQual prefere? Responda com o número.`,
-    };
-  } catch (err: any) {
-    return { sucesso: false, contexto: ctx, mensagemErro: `Cal.com: ${err.message}` };
-  }
-}
-
-async function handleCalcomAgendar(
-  passo: Passo,
-  ctx: SmartflowContexto,
-  exec: SmartflowExecutores,
-): Promise<PassoResultado> {
-  const horario = ctx.horarioEscolhido;
-  if (!horario) {
-    return { sucesso: false, contexto: ctx, mensagemErro: "Nenhum horário escolhido" };
-  }
-
-  try {
-    const agendamentoId = await exec.criarAgendamento(
-      horario,
-      (ctx.nomeCliente as string) || "Cliente",
-      (ctx.emailCliente as string) || "",
-    );
-    return {
-      sucesso: true,
-      contexto: { ...ctx, agendamentoId },
-      resposta: `Reunião agendada com sucesso para ${horario}! Você receberá uma confirmação por email.`,
-    };
-  } catch (err: any) {
-    return { sucesso: false, contexto: ctx, mensagemErro: `Agendamento: ${err.message}` };
-  }
-}
-
-async function handleCalcomListar(
-  passo: Passo,
-  ctx: SmartflowContexto,
-  exec: SmartflowExecutores,
-): Promise<PassoResultado> {
-  const status = ((passo.config as any).status as
-    | "upcoming"
-    | "past"
-    | "cancelled"
-    | "unconfirmed"
-    | undefined) || "upcoming";
-
-  try {
-    const bookings = await exec.listarBookings({ status });
-    return {
-      sucesso: true,
-      contexto: { ...ctx, bookings, bookingsQuantidade: bookings.length },
-    };
-  } catch (err: any) {
-    return { sucesso: false, contexto: ctx, mensagemErro: `Cal.com listar: ${err.message}` };
-  }
-}
-
-async function handleCalcomCancelar(
-  passo: Passo,
-  ctx: SmartflowContexto,
-  exec: SmartflowExecutores,
-): Promise<PassoResultado> {
-  const bookingId =
-    ((passo.config as any).bookingId as string | undefined) ||
-    (ctx.agendamentoId as string | undefined);
-  if (!bookingId) {
-    return { sucesso: false, contexto: ctx, mensagemErro: "Sem bookingId para cancelar" };
-  }
-  const motivo = ((passo.config as any).motivo as string | undefined) || undefined;
-
-  try {
-    const ok = await exec.cancelarBooking(bookingId, motivo);
-    if (!ok) {
-      return { sucesso: false, contexto: ctx, mensagemErro: "Cal.com recusou o cancelamento" };
-    }
-    return {
-      sucesso: true,
-      contexto: { ...ctx, bookingCancelado: bookingId },
-      resposta: "Agendamento cancelado com sucesso.",
-    };
-  } catch (err: any) {
-    return { sucesso: false, contexto: ctx, mensagemErro: `Cal.com cancelar: ${err.message}` };
-  }
-}
-
-async function handleCalcomRemarcar(
-  passo: Passo,
-  ctx: SmartflowContexto,
-  exec: SmartflowExecutores,
-): Promise<PassoResultado> {
-  const bookingId =
-    ((passo.config as any).bookingId as string | undefined) ||
-    (ctx.agendamentoId as string | undefined);
-  const novoHorario =
-    ((passo.config as any).novoHorario as string | undefined) ||
-    (ctx.horarioEscolhido as string | undefined);
-
-  if (!bookingId) {
-    return { sucesso: false, contexto: ctx, mensagemErro: "Sem bookingId para remarcar" };
-  }
-  if (!novoHorario) {
-    return { sucesso: false, contexto: ctx, mensagemErro: "Sem novo horário para remarcar" };
-  }
-  const motivo = ((passo.config as any).motivo as string | undefined) || undefined;
-
-  try {
-    const ok = await exec.reagendarBooking(bookingId, novoHorario, motivo);
-    if (!ok) {
-      return { sucesso: false, contexto: ctx, mensagemErro: "Cal.com recusou o reagendamento" };
-    }
-    return {
-      sucesso: true,
-      contexto: { ...ctx, horarioEscolhido: novoHorario },
-      resposta: `Agendamento remarcado para ${novoHorario}.`,
-    };
-  } catch (err: any) {
-    return { sucesso: false, contexto: ctx, mensagemErro: `Cal.com remarcar: ${err.message}` };
-  }
-}
-
 /**
  * Monta o array `components` que a Cloud API espera, interpolando as
  * variáveis do fluxo nos valores configurados. Só inclui as PARTES VARIÁVEIS
@@ -2035,6 +1864,15 @@ function normalizarTelefoneBR(valor: string): string | null {
   return d;
 }
 
+/**
+ * Fuso usado pelos operadores de dia/horário. O dispatcher injeta o fuso do
+ * escritório no contexto; sem ele (execução de teste, cenário legado) cai em
+ * Brasília, que era o comportamento anterior.
+ */
+function fusoDoContexto(ctx: SmartflowContexto): string {
+  return ctx.fusoHorario || FUSO_HORARIO_PADRAO;
+}
+
 /** Campos que guardam telefone — recebem comparação tolerante em `igual`/`diferente`. */
 function campoEhTelefone(campo: string): boolean {
   return /telefone|whatsapp|celular|phone/i.test(campo);
@@ -2132,12 +1970,15 @@ function avaliarCondicao(
       const tem = alvo.length > 0 && arr.some((t) => String(t).trim().toLowerCase() === alvo);
       return operador === "tem_tag" ? tem : !tem;
     }
+    case "janela_horario":
+      // Ignora `campo` — usa o momento ATUAL. valor="HH:MM-HH:MM", valor2=dias.
+      return avaliarJanelaHorario(new Date(), valor, valor2 ?? "", fusoDoContexto(ctx));
     case "horario_entre":
-      // Ignora `campo` — usa o horário ATUAL (Brasília). valor=início, valor2=fim.
-      return avaliarHorarioEntre(new Date(), valor, valor2 ?? "", "America/Sao_Paulo");
+      // Ignora `campo` — usa o horário ATUAL. valor=início, valor2=fim.
+      return avaliarHorarioEntre(new Date(), valor, valor2 ?? "", fusoDoContexto(ctx));
     case "dia_semana":
-      // Ignora `campo` — usa o dia ATUAL (Brasília). valor="seg,ter,qua,qui,sex".
-      return avaliarDiaSemana(new Date(), valor, "America/Sao_Paulo");
+      // Ignora `campo` — usa o dia ATUAL. valor="seg,ter,qua,qui,sex".
+      return avaliarDiaSemana(new Date(), valor, fusoDoContexto(ctx));
     default:
       // Operador desconhecido — fallback `igual` para não quebrar cenários
       // legados que salvaram strings estranhas no campo.
@@ -2856,7 +2697,7 @@ export function formatarHorariosLivres(livres: SlotLivre[]): string {
 
 /**
  * Handler do passo `agenda_criar`. Cria um compromisso na Agenda NATIVA do
- * escritório (não no Cal.com), atribuído a um responsável e vinculado ao
+ * escritório, atribuído a um responsável e vinculado ao
  * cliente. Pensado pro "agendar consulta sem custo" do SDR: o lead cai na
  * agenda do escritório como "reunião comercial pendente" pra equipe confirmar.
  *
@@ -3106,11 +2947,6 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   crm_buscar_contato: handleCrmBuscarContato,
   crm_listar_acoes_cliente: handleCrmListarAcoesCliente,
   processo_buscar_movimentacoes: handleProcessoBuscarMovimentacoes,
-  calcom_horarios: handleCalcomHorarios,
-  calcom_agendar: handleCalcomAgendar,
-  calcom_listar: handleCalcomListar,
-  calcom_cancelar: handleCalcomCancelar,
-  calcom_remarcar: handleCalcomRemarcar,
   agenda_criar: handleAgendaCriar,
   whatsapp_enviar: handleWhatsAppEnviar,
   whatsapp_aguardar_resposta: handleWhatsappAguardarResposta,

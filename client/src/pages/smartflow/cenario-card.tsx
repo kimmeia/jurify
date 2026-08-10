@@ -25,7 +25,6 @@ import {
  * Mantém alinhamento com o "padrão de categoria" usado no SmartFlowHero:
  *   - mensagem  → azul
  *   - asaas     → verde/âmbar (varia por evento: recebido=verde, vencido=âmbar)
- *   - cal.com   → laranja
  *   - crm       → violeta
  *   - manual    → cinza
  */
@@ -71,34 +70,6 @@ function visualPorGatilho(gatilho: GatilhoSmartflow): {
         avatarGradient: "from-violet-500 to-pink-500",
         Icon: Users,
         badgeCor: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
-      };
-    case "agendamento_criado":
-      return {
-        borderClass: "border-l-orange-500",
-        avatarGradient: "from-emerald-500 to-green-600",
-        Icon: CalendarCheck,
-        badgeCor: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
-      };
-    case "agendamento_cancelado":
-      return {
-        borderClass: "border-l-orange-500",
-        avatarGradient: "from-rose-500 to-pink-600",
-        Icon: CalendarX,
-        badgeCor: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
-      };
-    case "agendamento_remarcado":
-      return {
-        borderClass: "border-l-orange-500",
-        avatarGradient: "from-cyan-500 to-blue-500",
-        Icon: CalendarClock,
-        badgeCor: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
-      };
-    case "agendamento_lembrete":
-      return {
-        borderClass: "border-l-orange-500",
-        avatarGradient: "from-orange-500 to-amber-500",
-        Icon: Clock,
-        badgeCor: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
       };
     case "manual":
       return {
@@ -286,17 +257,15 @@ export function legendaCoresGatilho(): Array<{ cor: string; label: string }> {
   return [
     { cor: "bg-blue-500", label: "Mensagem (WhatsApp · Instagram · Facebook)" },
     { cor: "bg-emerald-500", label: "Asaas (recebido · vencido · próximo)" },
-    { cor: "bg-orange-500", label: "Cal.com (agendamento)" },
     { cor: "bg-violet-500", label: "CRM (novo lead)" },
     { cor: "bg-slate-500", label: "Manual" },
   ];
 }
 
 /** Categoria normalizada por gatilho — usada pelo filtro de categoria na lista. */
-export function categoriaDoGatilho(gatilho: GatilhoSmartflow): "mensagem" | "asaas" | "calcom" | "crm" | "manual" {
+export function categoriaDoGatilho(gatilho: GatilhoSmartflow): "mensagem" | "asaas" | "crm" | "manual" {
   if (gatilho === "whatsapp_mensagem" || gatilho === "mensagem_canal") return "mensagem";
   if (gatilho === "pagamento_recebido" || gatilho === "pagamento_vencido" || gatilho === "pagamento_proximo_vencimento") return "asaas";
-  if (gatilho.startsWith("agendamento_")) return "calcom";
   if (gatilho === "novo_lead") return "crm";
   return "manual";
 }

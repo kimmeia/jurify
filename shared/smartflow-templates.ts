@@ -224,27 +224,6 @@ export const TEMPLATES_SMARTFLOW: ReadonlyArray<TemplateSmartflow> = [
     ],
   },
   {
-    id: "lembrete_reuniao",
-    nome: "Lembrete antes da reunião",
-    descricao:
-      "Um dia antes do agendamento no Cal.com, envia um WhatsApp lembrando o cliente da reunião.",
-    icone: "calendar-clock",
-    gradiente: "from-orange-500 to-amber-500",
-    gatilho: "agendamento_lembrete",
-    configGatilho: { diasAntes: 1, horario: "18:00" },
-    dica: "Ajuste quantos dias antes e o horário do lembrete no gatilho.",
-    passos: [
-      {
-        clienteId: "tpl-lr-1",
-        tipo: "whatsapp_enviar",
-        config: {
-          template:
-            "Olá {{nomeCliente}}! Passando pra lembrar da nossa reunião marcada para {{horarioEscolhido}}. Até lá! 📅",
-        },
-      },
-    ],
-  },
-  {
     id: "boas_vindas_lead",
     nome: "Boas-vindas a novo lead",
     descricao:

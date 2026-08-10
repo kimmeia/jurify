@@ -7,8 +7,8 @@
  * recebidas, criar conversas falsas no CRM, disparar SmartFlow do
  * escritório (respostas automáticas, transfers, leads fake).
  *
- * Diferenças vs Cal.com:
- *  - Header com prefixo `sha256=` (Meta) vs hex puro (Cal.com).
+ * Particularidades da Meta:
+ *  - Header com prefixo `sha256=`.
  *  - Secret global em `admin_integracoes.config.appSecret` (não por canal).
  */
 

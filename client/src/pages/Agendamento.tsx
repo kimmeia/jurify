@@ -1,6 +1,5 @@
 /**
- * Página Agendamento — Compromissos, Prazos e Cal.com
- * Etapa 2 + 4: Calendário com integrações
+ * Página Agendamento — compromissos e prazos do escritório.
  */
 
 import { useState, useMemo } from "react";

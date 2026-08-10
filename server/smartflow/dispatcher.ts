@@ -5,7 +5,6 @@
  *   - tentarSmartFlow           ← WhatsApp Handler
  *   - dispararPagamentoRecebido ← Asaas Webhook
  *   - dispararNovoLead          ← WhatsApp Handler (quando cria contato novo)
- *   - dispararAgendamentoCriado ← Cal.com Webhook
  *   - executarManual            ← Router (botão "Executar agora")
  *
  * Todos convergem em `executarCenarioPorGatilho`, que busca o cenário
@@ -17,7 +16,7 @@
  */
 
 import { getDb } from "../db";
-import { smartflowCenarios, smartflowPassos, smartflowExecucoes } from "../../drizzle/schema";
+import { smartflowCenarios, smartflowPassos, smartflowExecucoes, escritorios } from "../../drizzle/schema";
 import { eq, and, inArray, gte, isNotNull, lte } from "drizzle-orm";
 import { executarCenario, Passo, SmartflowContexto, ExecutarCenarioResultado } from "./engine";
 import { criarExecutoresReais } from "./executores";
@@ -44,8 +43,8 @@ import type {
   ConfigGatilhoMensagemCanal,
   ConfigGatilhoPagamentoVencido,
   ConfigGatilhoPagamentoProximoVencimento,
-  ConfigGatilhoAgendamentoLembrete,
 } from "../../shared/smartflow-types";
+import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 
 const log = createLogger("smartflow-dispatcher");
 
@@ -350,6 +349,34 @@ async function atingiuLimitePorContato(
   return !!existe;
 }
 
+/**
+ * Fuso do escritório, com cache de processo. As condições de dia/horário
+ * consultam isso a cada execução de cenário; o valor muda por configuração
+ * manual, raríssima, então um TTL curto já evita a query em todo disparo.
+ */
+const cacheFuso = new Map<number, { tz: string; expira: number }>();
+const FUSO_CACHE_MS = 5 * 60 * 1000;
+
+async function obterFusoEscritorio(escritorioId: number): Promise<string> {
+  const agora = Date.now();
+  const hit = cacheFuso.get(escritorioId);
+  if (hit && hit.expira > agora) return hit.tz;
+  try {
+    const db = await getDb();
+    if (!db) return FUSO_HORARIO_PADRAO;
+    const [row] = await db
+      .select({ fusoHorario: escritorios.fusoHorario })
+      .from(escritorios)
+      .where(eq(escritorios.id, escritorioId))
+      .limit(1);
+    const tz = row?.fusoHorario || FUSO_HORARIO_PADRAO;
+    cacheFuso.set(escritorioId, { tz, expira: agora + FUSO_CACHE_MS });
+    return tz;
+  } catch {
+    return FUSO_HORARIO_PADRAO;
+  }
+}
+
 async function executarCenarioCarregado(
   escritorioId: number,
   cenario: CenarioCarregado,
@@ -369,6 +396,8 @@ async function executarCenarioCarregado(
 
   const execId = await criarExecucao(escritorioId, cenario.cenarioId, contexto, refs);
   if (!execId) return { executou: false, respostas: [] };
+
+  contexto.fusoHorario = await obterFusoEscritorio(escritorioId);
 
   const executores = criarExecutoresReais(escritorioId, imagem);
   const resultado = await executarCenario(cenario.passos, contexto, executores);
@@ -1195,69 +1224,6 @@ export async function dispararProximoVencimento(
   }
 }
 
-/**
- * Dispara cenários com gatilho `agendamento_lembrete`. Chamado pelo
- * calcom-lembretes-scheduler quando a janela de lembrete de um booking
- * cai no ciclo atual. Dedupe por (cenário, booking) na janela de 48h —
- * cada booking só recebe 1 lembrete.
- */
-export async function dispararAgendamentoLembrete(
-  escritorioId: number,
-  params: {
-    bookingId: string | number;
-    titulo?: string;
-    startTime?: string;
-    endTime?: string;
-    participanteNome?: string;
-    participanteEmail?: string;
-    organizadorEmail?: string;
-  },
-): Promise<{ executou: boolean }> {
-  try {
-    const cenarios = await carregarCenariosAtivos(escritorioId, ["agendamento_lembrete"]);
-    if (cenarios.length === 0) return { executou: false };
-
-    const bookingKey = String(params.bookingId);
-    // Dedupe: reusa `jaDisparouPagamento` tratando o bookingId como pagamentoId —
-    // o match por substring `"pagamentoId":"<ID>"` funciona pra qualquer ID no
-    // contexto. Vamos passar bookingKey no pagamentoId do contexto.
-    // Mais simples: checar contexto manualmente aqui.
-
-    const db = await getDb();
-    if (!db) return { executou: false };
-    const desde = new Date(Date.now() - 48 * 60 * 60 * 1000);
-    const execs = await db
-      .select({ contexto: smartflowExecucoes.contexto, cenarioId: smartflowExecucoes.cenarioId })
-      .from(smartflowExecucoes)
-      .where(gte(smartflowExecucoes.createdAt, desde));
-
-    let executou = false;
-    for (const c of cenarios) {
-      const duplicado = execs.some(
-        (r) =>
-          r.cenarioId === c.cenarioId &&
-          (r.contexto || "").includes(`"agendamentoId":"${bookingKey}"`),
-      );
-      if (duplicado) continue;
-
-      const contexto: SmartflowContexto = {
-        mensagem: `Lembrete de agendamento: ${params.titulo || ""}`.trim(),
-        agendamentoId: bookingKey,
-        horarioEscolhido: params.startTime,
-        agendamentoFim: params.endTime,
-        nomeCliente: params.participanteNome,
-        emailCliente: params.participanteEmail,
-        organizadorEmail: params.organizadorEmail,
-      };
-      await executarCenarioCarregado(escritorioId, c, contexto);
-      executou = true;
-    }
-    return { executou };
-  } catch (err: any) {
-    log.error({ err: err.message }, "SmartFlow: erro em agendamento_lembrete");
-    return { executou: false };
-  }
-}
 
 /**
  * Dispara cenários quando chega uma mensagem em qualquer canal (WhatsApp
@@ -1473,112 +1439,6 @@ export async function dispararNovoLead(
 }
 
 /**
- * Dispara cenários com gatilho "agendamento_criado".
- * Chamado pelo webhook do Cal.com em BOOKING_CREATED.
- */
-export async function dispararAgendamentoCriado(
-  escritorioId: number,
-  params: {
-    bookingId: string | number;
-    titulo?: string;
-    startTime?: string;
-    endTime?: string;
-    participanteNome?: string;
-    participanteEmail?: string;
-    organizadorEmail?: string;
-  },
-): Promise<{ executou: boolean }> {
-  try {
-    const contexto: SmartflowContexto = {
-      mensagem: `Agendamento criado: ${params.titulo || ""}`.trim(),
-      agendamentoId: String(params.bookingId),
-      horarioEscolhido: params.startTime,
-      agendamentoFim: params.endTime,
-      nomeCliente: params.participanteNome,
-      emailCliente: params.participanteEmail,
-      organizadorEmail: params.organizadorEmail,
-    };
-    const r = await executarCenarioPorGatilho(escritorioId, "agendamento_criado", contexto);
-    return { executou: r.executou };
-  } catch (err: any) {
-    log.error({ err: err.message }, "SmartFlow: erro em agendamento_criado");
-    return { executou: false };
-  }
-}
-
-/**
- * Dispara cenários com gatilho `agendamento_cancelado`.
- * Chamado pelo webhook do Cal.com em BOOKING_CANCELLED.
- */
-export async function dispararAgendamentoCancelado(
-  escritorioId: number,
-  params: {
-    bookingId: string | number;
-    titulo?: string;
-    startTime?: string;
-    endTime?: string;
-    participanteNome?: string;
-    participanteEmail?: string;
-    organizadorEmail?: string;
-    motivo?: string;
-  },
-): Promise<{ executou: boolean }> {
-  try {
-    const contexto: SmartflowContexto = {
-      mensagem: `Agendamento cancelado: ${params.titulo || ""}`.trim(),
-      agendamentoId: String(params.bookingId),
-      horarioEscolhido: params.startTime,
-      agendamentoFim: params.endTime,
-      nomeCliente: params.participanteNome,
-      emailCliente: params.participanteEmail,
-      organizadorEmail: params.organizadorEmail,
-      motivoCancelamento: params.motivo,
-    };
-    const r = await executarCenarioPorGatilho(escritorioId, "agendamento_cancelado", contexto);
-    return { executou: r.executou };
-  } catch (err: any) {
-    log.error({ err: err.message }, "SmartFlow: erro em agendamento_cancelado");
-    return { executou: false };
-  }
-}
-
-/**
- * Dispara cenários com gatilho `agendamento_remarcado`.
- * Chamado pelo webhook do Cal.com em BOOKING_RESCHEDULED.
- */
-export async function dispararAgendamentoRemarcado(
-  escritorioId: number,
-  params: {
-    bookingId: string | number;
-    titulo?: string;
-    startTimeNovo?: string;
-    startTimeAntigo?: string;
-    endTimeNovo?: string;
-    participanteNome?: string;
-    participanteEmail?: string;
-    organizadorEmail?: string;
-  },
-): Promise<{ executou: boolean }> {
-  try {
-    const contexto: SmartflowContexto = {
-      mensagem: `Agendamento remarcado: ${params.titulo || ""}`.trim(),
-      agendamentoId: String(params.bookingId),
-      horarioEscolhido: params.startTimeNovo,
-      horarioAnterior: params.startTimeAntigo,
-      agendamentoFim: params.endTimeNovo,
-      nomeCliente: params.participanteNome,
-      emailCliente: params.participanteEmail,
-      organizadorEmail: params.organizadorEmail,
-    };
-    const r = await executarCenarioPorGatilho(escritorioId, "agendamento_remarcado", contexto);
-    return { executou: r.executou };
-  } catch (err: any) {
-    log.error({ err: err.message }, "SmartFlow: erro em agendamento_remarcado");
-    return { executou: false };
-  }
-}
-
-/**
  * Execução manual — chamada pelo botão "Executar agora" no frontend.
  * Diferente dos outros: precisa de cenarioId (não descobre por gatilho)
  * e aceita contexto arbitrário do usuário.
@@ -1596,6 +1456,8 @@ export async function executarManual(
 
     const execId = await criarExecucao(escritorioId, cenario.cenarioId, contextoInicial);
     if (!execId) return { executou: false, erro: "Falha ao registrar execução", respostas: [] };
+
+    contextoInicial.fusoHorario = await obterFusoEscritorio(escritorioId);
 
     const executores = criarExecutoresReais(escritorioId);
     const resultado = await executarCenario(cenario.passos, contextoInicial, executores);
@@ -1677,6 +1539,7 @@ export async function retomarExecucao(execId: number): Promise<{ retomada: boole
     // devolvido como `resposta` pra um whatsapp-handler que não existe aqui.
     (contextoBase as any).__retomadaPorTimeout = true;
 
+    contextoBase.fusoHorario = await obterFusoEscritorio(exec.escritorioId);
     const executores = criarExecutoresReais(exec.escritorioId);
 
     // TIMEOUT de um nó de espera: reentra NELE e segue o ramo "timeout" (cliente
@@ -1878,6 +1741,7 @@ async function retomarComResposta(
   if (deveReentrarNoWaitNode(cenario.passos, waitNodeId)) {
     delete (contextoBase as any).aguardandoNodeClienteId;
     (contextoBase as any).__resumindoWaitClienteId = waitNodeId;
+    contextoBase.fusoHorario = await obterFusoEscritorio(exec.escritorioId);
     const executores = criarExecutoresReais(exec.escritorioId, imagem);
     const resultado = await executarCenario(cenario.passos, contextoBase, executores);
     await finalizarExecucao(execId, resultado);
@@ -1898,6 +1762,7 @@ async function retomarComResposta(
     return [];
   }
 
+  contextoBase.fusoHorario = await obterFusoEscritorio(exec.escritorioId);
   const executores = criarExecutoresReais(exec.escritorioId, imagem);
   const resultado = await executarCenario(passosRestantes, contextoBase, executores);
 

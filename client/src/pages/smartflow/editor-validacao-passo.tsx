@@ -28,10 +28,6 @@ const VARS_DO_GATILHO: Record<GatilhoSmartflow, string[]> = {
   pagamento_recebido: ["pagamentoId", "contatoId", "nomeCliente", "telefoneCliente", "emailCliente", "pagamentoValor", "primeiraCobrancaDoCliente"],
   pagamento_vencido: ["pagamentoId", "contatoId", "nomeCliente", "telefoneCliente", "pagamentoValor", "vencimento", "diasAtraso"],
   pagamento_proximo_vencimento: ["pagamentoId", "contatoId", "nomeCliente", "telefoneCliente", "pagamentoValor", "vencimento", "diasAteVencer"],
-  agendamento_criado: ["agendamentoId", "horarioEscolhido", "nomeCliente", "emailCliente"],
-  agendamento_cancelado: ["agendamentoId", "horarioEscolhido", "nomeCliente", "motivoCancelamento"],
-  agendamento_remarcado: ["agendamentoId", "horarioEscolhido", "horarioAnterior", "nomeCliente"],
-  agendamento_lembrete: ["agendamentoId", "horarioEscolhido", "nomeCliente", "emailCliente"],
   // Gatilho manual: usuário injeta o que quiser via "Testar" — não dá pra
   // garantir nada. Validador trata "manual" como permissivo (não mostra erro
   // de variável faltando).
@@ -183,18 +179,6 @@ export function validarPasso(
         itens.push({
           severidade: "aviso",
           mensagem: "Sem funil/coluna específicos — vai usar o primeiro funil do escritório.",
-        });
-      }
-      break;
-    }
-
-    case "calcom_remarcar":
-    case "calcom_cancelar": {
-      const bookingId = String((config as any).bookingId || "").trim();
-      if (!bookingId && !varsGatilho.has("agendamentoId")) {
-        itens.push({
-          severidade: "erro",
-          mensagem: "Sem `bookingId` na config nem `agendamentoId` no contexto — não dá pra saber qual booking mexer.",
         });
       }
       break;

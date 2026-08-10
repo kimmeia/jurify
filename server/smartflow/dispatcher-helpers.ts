@@ -8,7 +8,6 @@ import type {
   ConfigGatilhoMensagemCanal,
   ConfigGatilhoPagamentoVencido,
   ConfigGatilhoPagamentoProximoVencimento,
-  ConfigGatilhoAgendamentoLembrete,
   JanelaDisparo,
   TipoCanalMensagem,
 } from "../../shared/smartflow-types";
@@ -206,6 +205,27 @@ export function avaliarDiaSemana(agora: Date, diasCsv: string, tz: string): bool
   return false;
 }
 
+/**
+ * Condição "dia e horário": `true` quando o momento atual (no fuso `tz`) cai
+ * dentro da faixa "HH:MM-HH:MM" E num dos dias marcados.
+ *
+ * `diasCsv` vazio significa "todo dia" — diferente de `avaliarDiaSemana`, que
+ * trata lista vazia como nenhum dia. A UI permite salvar sem marcar dia algum,
+ * e o que o usuário espera nesse caso é a faixa valendo a semana inteira.
+ */
+export function avaliarJanelaHorario(
+  agora: Date,
+  faixa: string,
+  diasCsv: string,
+  tz: string,
+): boolean {
+  const partes = String(faixa ?? "").split("-");
+  if (partes.length !== 2) return false;
+  if (!avaliarHorarioEntre(agora, partes[0].trim(), partes[1].trim(), tz)) return false;
+  const dias = String(diasCsv ?? "").trim();
+  return dias.length === 0 || avaliarDiaSemana(agora, dias, tz);
+}
+
 // ─── Janela de disparo (slots de horário) ───────────────────────────────────
 
 /**
@@ -363,56 +383,6 @@ export function chaveDiaLocal(dt: Date): string {
   const m = String(dt.getMonth() + 1).padStart(2, "0");
   const d = String(dt.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
-}
-
-// ─── Lembrete de agendamento Cal.com ────────────────────────────────────────
-
-/**
- * Calcula o momento exato em que o lembrete deve disparar. A partir do
- * `startTime` do booking, subtrai `diasAntes` dias e posiciona no `horario`
- * configurado (HH:MM).
- *
- * Ex: booking começa em `2026-04-22 14:00`, `diasAntes=1`, `horario="18:00"`
- *     → lembrete às `2026-04-21 18:00`.
- *
- * Quando `tz` é passado, o `horario` é interpretado no timezone IANA do
- * escritório (ex: "America/Sao_Paulo"). Sem `tz`, preserva o comportamento
- * legado (TZ do processo Node).
- */
-export function calcularMomentoLembrete(
-  startTime: Date,
-  cfg: ConfigGatilhoAgendamentoLembrete | undefined | null,
-  tz?: string,
-): Date | null {
-  const diasAntes = Math.max(0, Math.floor(Number(cfg?.diasAntes ?? 1)));
-  const hora = parseHoraHHMM(cfg?.horario || "18:00") ?? { h: 18, m: 0 };
-  if (tz) {
-    const base = new Date(startTime.getTime() - diasAntes * 24 * 60 * 60 * 1000);
-    const { y, m, d } = ymdNoFuso(base, tz);
-    return dateNoFuso(y, m, d, hora.h, hora.m, tz);
-  }
-  const momento = new Date(startTime);
-  momento.setDate(momento.getDate() - diasAntes);
-  momento.setHours(hora.h, hora.m, 0, 0);
-  return momento;
-}
-
-/**
- * Retorna `true` se o lembrete do booking deve disparar no ciclo atual do
- * scheduler. Usa a mesma janela de tolerância do `acharSlotAtivo`.
- */
-export function deveDispararLembrete(
-  startTime: Date,
-  cfg: ConfigGatilhoAgendamentoLembrete | undefined | null,
-  agora: Date,
-  toleranciaMin: number,
-  tz?: string,
-): boolean {
-  const momento = calcularMomentoLembrete(startTime, cfg, tz);
-  if (!momento) return false;
-  // Janela: entre (agora - tolerância) e agora — igual ao slot Asaas.
-  const inicioJanela = new Date(agora.getTime() - toleranciaMin * 60 * 1000);
-  return momento >= inicioJanela && momento <= agora;
 }
 
 /**
