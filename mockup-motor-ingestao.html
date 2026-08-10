@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:26px 30px; height:100%; display:flex; flex-direction:column; gap:14px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .btn-primary { background:var(--acento); color:#fff; font-weight:600; font-size:13.5px;
+                 border-radius:10px; padding:11px 18px; display:flex; align-items:center; gap:8px;
+                 box-shadow:0 8px 18px -8px #7c3aed88; }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:16px; }
+
+  /* ── esteira ───────────────────────────────────────────── */
+  .esteira { flex:0 0 auto; display:flex; align-items:stretch; gap:0; }
+  .etapa { flex:1; padding:13px 16px; }
+  .etapa.card { display:flex; flex-direction:column; }
+  .seta { flex:0 0 34px; display:flex; align-items:center; justify-content:center; color:var(--fantasma); }
+  .num { font-size:25px; font-weight:800; letter-spacing:-.02em; line-height:1.1; margin-top:7px; }
+  .num small { font-size:12px; font-weight:600; color:var(--mudo); margin-left:5px; letter-spacing:0; }
+  .etapa .nota { font-size:11px; color:var(--mudo); margin-top:6px; line-height:1.45; }
+  .fonte-tag { display:inline-flex; align-self:flex-start; align-items:center; gap:5px; margin-top:8px;
+               font-size:10.5px; font-weight:600; color:var(--corpo-2); background:var(--hairline);
+               border-radius:999px; padding:3px 9px; }
+
+  .buckets { margin-top:9px; display:flex; flex-direction:column; gap:5px; }
+  .bucket { display:flex; align-items:center; gap:8px; font-size:11.5px; }
+  .bucket .pt { width:7px; height:7px; border-radius:2px; flex:0 0 auto; }
+  .bucket .lb { color:var(--corpo); font-weight:500; }
+  .bucket .vl { margin-left:auto; font-weight:700; font-variant-numeric:tabular-nums; }
+  .bucket.off .lb, .bucket.off .vl { color:var(--fraco); }
+
+  .split { margin-top:9px; display:flex; gap:7px; }
+  .split div { flex:1; background:var(--hairline); border-radius:8px; padding:7px 9px; }
+  .split .k { font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--fraco); }
+  .split .v { font-size:14.5px; font-weight:800; font-variant-numeric:tabular-nums; margin-top:2px; }
+
+  /* ── colunas ───────────────────────────────────────────── */
+  .grid { flex:1; display:grid; grid-template-columns:1fr 468px; gap:14px; min-height:0; }
+  .col { display:flex; flex-direction:column; gap:14px; min-height:0; }
+  .chd { padding:14px 18px 11px; border-bottom:1px solid var(--hairline); }
+  .chd .cap { font-size:11.5px; color:var(--mudo); margin-top:3px; }
+
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+       color:var(--fraco); padding:9px 18px; border-bottom:1px solid var(--hairline); }
+  td { padding:0 18px; border-bottom:1px solid var(--hairline-2); height:64px; vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+  .coletor { font-size:13px; font-weight:700; color:var(--tinta); }
+  .tribs { font-size:11px; color:var(--mudo); margin-top:2px; }
+  .fonte { font-size:11.5px; color:var(--corpo); font-weight:500; }
+  .nums { font-size:13px; font-weight:700; font-variant-numeric:tabular-nums; text-align:right; }
+  .nums.zero { color:var(--fantasma); }
+  .fila { font-size:11.5px; color:var(--mudo); font-variant-numeric:tabular-nums; text-align:right; }
+  .st { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:4px 10px;
+        font-size:11px; font-weight:600; border:1px solid transparent; }
+  .st .d { width:6px; height:6px; border-radius:50%; }
+  .st.run { color:var(--ok); background:var(--ok-bg); border-color:var(--ok-borda); }
+  .st.run .d { background:var(--ok); }
+  .st.build { color:var(--corpo-2); background:var(--hairline); border-color:var(--borda); }
+  .st.build .d { background:var(--fraco); }
+  .st.wait { color:var(--fraco); background:var(--hairline-2); border-color:var(--borda); }
+  .st.wait .d { background:var(--fantasma); }
+  .tfoot { padding:12px 18px; border-top:1px solid var(--hairline); display:flex;
+           align-items:center; justify-content:space-between; font-size:11.5px; color:var(--mudo); }
+  .tfoot b { color:var(--tinta); font-variant-numeric:tabular-nums; }
+
+  /* ── credenciais ───────────────────────────────────────── */
+  .creds { flex:1 1 auto; display:flex; flex-direction:column; justify-content:space-evenly; }
+  .cred { padding:9px 18px; display:flex; align-items:center; gap:12px; }
+  .cred .uf { width:56px; font-size:12.5px; font-weight:700; }
+  .cred .qtd { width:96px; font-size:11px; color:var(--mudo); }
+  /* span é inline: sem display:block a barra não ganha altura e some do PNG. */
+  .cred .trilho { display:block; flex:1; height:7px; background:var(--hairline);
+                  border-radius:999px; overflow:hidden; }
+  .cred .fill { display:block; height:7px; background:var(--acento-claro); border-radius:999px; }
+  .cred .val { width:82px; text-align:right; font-size:11.5px; font-weight:600;
+               font-variant-numeric:tabular-nums; color:var(--corpo); }
+
+  /* ── política ──────────────────────────────────────────── */
+  .pol { display:grid; grid-template-columns:1fr 1fr; gap:0; }
+  .pol > div { padding:12px 18px 14px; }
+  .pol > div:first-child { border-right:1px solid var(--hairline); }
+  .pol ul { list-style:none; margin-top:8px; display:flex; flex-direction:column; gap:6px; }
+  .pol li { font-size:11.5px; color:var(--corpo); display:flex; align-items:flex-start; gap:7px; line-height:1.35; }
+  .pol li i { flex:0 0 auto; margin-top:3px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">Motor de ingestão</div>
+        <div class="sub">Como o acervo da JurisIA é descoberto, triado e coletado — e onde a credencial entra.</div>
+      </div>
+      <div class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 5.5v13l11-6.5-11-6.5z" fill="#fff"/></svg>
+        Rodar ciclo agora
+      </div>
+    </div>
+
+    <!-- ── esteira ───────────────────────────────────────── -->
+    <div class="esteira">
+      <div class="etapa card">
+        <div class="micro">1 · Descoberta</div>
+        <div class="num">2.418.760</div>
+        <div class="nota">CNJs conhecidos. Paginamos o índice do tribunal — nada de adivinhar número.</div>
+        <div class="fonte-tag">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#475569" stroke-width="2"/><path d="M3 12h18M12 3a15 15 0 010 18M12 3a15 15 0 000 18" stroke="#475569" stroke-width="1.6"/></svg>
+          DataJud (CNJ) · sem credencial
+        </div>
+      </div>
+
+      <div class="seta">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div class="etapa card">
+        <div class="micro">2 · Triagem</div>
+        <div class="buckets">
+          <div class="bucket"><span class="pt" style="background:#059669"></span><span class="lb">Julgado — tem decisão</span><span class="vl">641.208</span></div>
+          <div class="bucket off"><span class="pt" style="background:#cbd5e1"></span><span class="lb">Em andamento — nada a citar</span><span class="vl">1.742.395</span></div>
+          <div class="bucket"><span class="pt" style="background:#dc2626"></span><span class="lb">Sigiloso — barrado</span><span class="vl" style="color:#b91c1c">35.157</span></div>
+        </div>
+        <div class="nota">Em andamento não é descartado: volta à fila no dia em que for julgado.</div>
+      </div>
+
+      <div class="seta">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div class="etapa card">
+        <div class="micro">3 · Coleta da decisão</div>
+        <div class="num">184.320<small>de 641.208</small></div>
+        <div class="nota">Ementa e acórdão vêm do que o tribunal publica: DJEN, jurisprudência e dados abertos.</div>
+        <div class="fonte-tag">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M5 4h9l5 5v11H5z" stroke="#475569" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 4v5h5" stroke="#475569" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          456.888 na fila
+        </div>
+      </div>
+
+      <div class="seta">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div class="etapa card">
+        <div class="micro">4 · Base da JurisIA</div>
+        <div class="num">184.320<small>com teor</small></div>
+        <div class="split">
+          <div><div class="k">Acórdão</div><div class="v" style="color:#5b21b6">71.906</div></div>
+          <div><div class="k">1º grau</div><div class="v">112.414</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── colunas ───────────────────────────────────────── -->
+    <div class="grid">
+
+      <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
+        <div class="chd">
+          <div class="h2">Coletores por sistema</div>
+          <div class="cap">Um coletor por sistema processual, não por tribunal — o e-SAJ do TJSP e o do TJBA são a mesma tela. Nenhum deles usa credencial: decisão é publicada pelo próprio tribunal.</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Coletor</th>
+              <th>Fonte da decisão</th>
+              <th style="text-align:right">Hoje</th>
+              <th style="text-align:right">Na fila</th>
+              <th style="width:132px">Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="coletor">Tribunais superiores</div><div class="tribs">STJ · STF · TST</div></td>
+              <td><span class="fonte">Dados abertos + DataJud</span></td>
+              <td class="nums">1.204</td><td class="fila">8.760</td>
+              <td><span class="st run"><span class="d"></span>rodando</span></td>
+            </tr>
+            <tr>
+              <td><div class="coletor">PJe / PDPJ — Nordeste</div><div class="tribs">TJCE · TJPE · TJPB · TJRN · TJMA</div></td>
+              <td><span class="fonte">DJEN + jurisprudência</span></td>
+              <td class="nums">3.918</td><td class="fila">96.412</td>
+              <td><span class="st run"><span class="d"></span>rodando</span></td>
+            </tr>
+            <tr>
+              <td><div class="coletor">PJe / PDPJ — Sudeste e CO</div><div class="tribs">TJRJ · TJMG · TJDF · TJMT</div></td>
+              <td><span class="fonte">DJEN + jurisprudência</span></td>
+              <td class="nums">2.640</td><td class="fila">78.330</td>
+              <td><span class="st run"><span class="d"></span>rodando</span></td>
+            </tr>
+            <tr>
+              <td><div class="coletor">e-SAJ</div><div class="tribs">TJSP · TJBA · TJAL · TJSC</div></td>
+              <td><span class="fonte">DJEN + jurisprudência</span></td>
+              <td class="nums zero">0</td><td class="fila">184.220</td>
+              <td><span class="st build"><span class="d"></span>a construir</span></td>
+            </tr>
+            <tr>
+              <td><div class="coletor">eproc</div><div class="tribs">TRF4 · TJRS</div></td>
+              <td><span class="fonte">DJEN</span></td>
+              <td class="nums zero">0</td><td class="fila">42.108</td>
+              <td><span class="st build"><span class="d"></span>a construir</span></td>
+            </tr>
+            <tr>
+              <td><div class="coletor">Projudi</div><div class="tribs">TJPR · TJAM · TJGO</div></td>
+              <td><span class="fonte">DJEN</span></td>
+              <td class="nums zero">0</td><td class="fila">31.058</td>
+              <td><span class="st build"><span class="d"></span>a construir</span></td>
+            </tr>
+            <tr>
+              <td><div class="coletor">Justiça Federal</div><div class="tribs">TRF1 · TRF2 · TRF3 · TRF5 · TRF6</div></td>
+              <td><span class="fonte">DJEN + jurisprudência</span></td>
+              <td class="nums zero">0</td><td class="fila">9.240</td>
+              <td><span class="st wait"><span class="d"></span>na fila</span></td>
+            </tr>
+            <tr>
+              <td><div class="coletor">Justiça do Trabalho</div><div class="tribs">TRT1 a TRT24</div></td>
+              <td><span class="fonte">DJEN + PJe consulta pública</span></td>
+              <td class="nums zero">0</td><td class="fila">6.760</td>
+              <td><span class="st wait"><span class="d"></span>na fila</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="tfoot">
+          <span>8 coletores · 3 rodando</span>
+          <span><b>7.762</b> decisões hoje · <b>456.888</b> na fila</span>
+        </div>
+      </div>
+
+      <div class="col">
+
+        <div class="card" style="display:flex; flex-direction:column; overflow:hidden; flex:1 1 auto;">
+          <div class="chd">
+            <div class="h2">Motor do escritório — ritmo por credencial</div>
+            <div class="cap">Credencial do cliente, processos do cliente. Teto diário por credencial, com pausa e sorteio de intervalo — o robô nunca pode ser o motivo de um bloqueio.</div>
+          </div>
+          <div class="creds">
+            <div class="cred"><span class="uf">TJCE</span><span class="qtd">14 credenciais</span>
+              <span class="trilho"><span class="fill" style="width:49%"></span></span><span class="val">412 / 840</span></div>
+            <div class="cred"><span class="uf">TJRJ</span><span class="qtd">6 credenciais</span>
+              <span class="trilho"><span class="fill" style="width:58%"></span></span><span class="val">208 / 360</span></div>
+            <div class="cred"><span class="uf">TJMG</span><span class="qtd">5 credenciais</span>
+              <span class="trilho"><span class="fill" style="width:58%"></span></span><span class="val">173 / 300</span></div>
+            <div class="cred"><span class="uf">TJPE</span><span class="qtd">3 credenciais</span>
+              <span class="trilho"><span class="fill" style="width:53%"></span></span><span class="val">96 / 180</span></div>
+            <div class="cred"><span class="uf">TJDF</span><span class="qtd">2 credenciais</span>
+              <span class="trilho"><span class="fill" style="width:34%"></span></span><span class="val">41 / 120</span></div>
+            <div class="cred"><span class="uf">TJPB</span><span class="qtd">1 credencial</span>
+              <span class="trilho"><span class="fill" style="width:20%"></span></span><span class="val">12 / 60</span></div>
+            <div class="cred"><span class="uf">TJRN</span><span class="qtd">1 credencial</span>
+              <span class="trilho"><span class="fill" style="width:30%"></span></span><span class="val">18 / 60</span></div>
+          </div>
+          <div class="tfoot">
+            <span><b>32</b> credenciais · teto de <b>60</b>/dia em cada</span>
+            <span><b>960</b> de <b>1.920</b> hoje</span>
+          </div>
+        </div>
+
+        <div class="card" style="flex:0 0 auto;">
+          <div class="chd"><div class="h2">Política de ingestão</div></div>
+          <div class="pol">
+            <div>
+              <div class="micro" style="color:#059669">Entra na base</div>
+              <ul>
+                <li><i><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#059669" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i>Acórdão e ementa</li>
+                <li><i><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#059669" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i>Sentença publicada</li>
+                <li><i><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#059669" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i>Movimento e classe do CNJ</li>
+                <li><i><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#059669" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i>Tese e súmula publicadas</li>
+              </ul>
+            </div>
+            <div>
+              <div class="micro" style="color:#b91c1c">Não entra</div>
+              <ul>
+                <li><i><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#dc2626" stroke-width="2.6" stroke-linecap="round"/></svg></i>Petição e documento de parte</li>
+                <li><i><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#dc2626" stroke-width="2.6" stroke-linecap="round"/></svg></i>Processo em segredo de justiça</li>
+                <li><i><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#dc2626" stroke-width="2.6" stroke-linecap="round"/></svg></i>Autos de quem não é cliente</li>
+                <li><i><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#dc2626" stroke-width="2.6" stroke-linecap="round"/></svg></i>Dado pessoal fora da decisão</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -124,3 +124,6 @@ playwright-report/
 
 # LP mockups — PNGs gerados (reproduzíveis via render.mjs)
 docs/lp-mockups/out-*.png
+
+# Sondagem de fontes públicas (respostas brutas dos tribunais)
+scripts/.sondagem/

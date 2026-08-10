@@ -123,6 +123,20 @@ export const adminRouter = router({
    * Fica separado de `jurisiaVarreduras` porque é sobre o conteúdo coletado,
    * não sobre o progresso do robô.
    */
+  /**
+   * Bate uma vez em cada fonte pública e conta o que voltou.
+   *
+   * Roda no servidor porque a pergunta é se a NOSSA rede alcança o tribunal —
+   * sondar do notebook do dono responde sobre a rede dele, que não é a que o
+   * coletor vai usar.
+   */
+  sondarFontesJuris: adminProcedure
+    .input(z.object({ termo: z.string().max(120).optional() }).optional())
+    .mutation(async ({ input }) => {
+      const { sondarFontes } = await import("../jurisia/sondar-fontes");
+      return sondarFontes({ termo: input?.termo });
+    }),
+
   jurisiaNatureza: adminProcedure.query(async () => {
     const { grausDoAcervo } = await import("../jurisia/buscar-acervo");
     const { contarNatureza } = await import("../../shared/jurisia-grau");
