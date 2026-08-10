@@ -63,13 +63,16 @@ import { useLocation } from "wouter";
  */
 function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string }) {
   const clean = cpfCnpj.replace(/\D/g, "");
-  // Early return ANTES de qualquer hook (rules of hooks). CPF (11) ou
-  // CNPJ (14) — fora disso = cadastro malformado, backend rejeitaria com
-  // erro genérico depois do user pagar 35 créditos.
-  if (clean.length !== 11 && clean.length !== 14) {
-    return null;
-  }
+  // CPF (11) ou CNPJ (14) — fora disso é cadastro malformado, e o backend
+  // rejeitaria com erro genérico depois do usuário pagar 35 créditos.
+  const documentoValido = clean.length === 11 || clean.length === 14;
   const tipo: "cpf" | "cnpj" = clean.length === 14 ? "cnpj" : "cpf";
+
+  // Os hooks vêm ANTES de qualquer saída. Sair mais cedo economizaria as
+  // queries, mas mudaria a CONTAGEM de hooks entre renders da mesma
+  // instância — o documento passa de válido a inválido enquanto o usuário
+  // digita — e aí o React derruba a tela com #310. A query fica desligada
+  // por `enabled`, que dá a mesma economia sem o risco.
   const [, setLocation] = useLocation();
   const [confirmCriarOpen, setConfirmCriarOpen] = useState(false);
   const [confirmPararOpen, setConfirmPararOpen] = useState(false);
@@ -78,7 +81,7 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
   const { data: monsData, refetch: refetchMons } =
     (trpc.processos.meusMonitoramentos.useQuery as any)(
       { busca: clean, tipoMonitoramento: "novas_acoes" },
-      { retry: false },
+      { retry: false, enabled: documentoValido },
     );
   const monAtivo = (monsData || []).find(
     (m: any) =>
@@ -118,6 +121,8 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
     },
     onError: (e: any) => toast.error("Erro ao remover", { description: e.message }),
   });
+
+  if (!documentoValido) return null;
 
   if (monAtivo) {
     return (
