@@ -14,7 +14,7 @@ import {
   Brain,
   CalendarCheck,
   CheckCircle2,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronLeft, ChevronRight,
   CircleDollarSign,
   Clock,
   DollarSign,
@@ -130,6 +130,14 @@ const GATILHO_GRADIENT: Record<GatilhoSmartflow, { from: string; to: string; bg:
 };
 
 interface PaletaProps {
+  /**
+   * Recolhida, a paleta é um trilho de 60px e o painel completo flutua SOBRE
+   * o canvas. Aberta em coluna fixa, ela e o inspetor comiam metade da tela
+   * e sobrava menos da metade pra construir o fluxo — que é o trabalho.
+   */
+  recolhida: boolean;
+  onRecolher: () => void;
+  onExpandir: () => void;
   gatilhoAtual: GatilhoSmartflow;
   /** Chamado quando o usuário escolhe um novo tipo de gatilho. */
   onTrocarGatilho: (g: GatilhoSmartflow) => void;
@@ -146,6 +154,9 @@ interface PaletaProps {
  * grupos com match).
  */
 export function EditorPaleta({
+  recolhida,
+  onRecolher,
+  onExpandir,
   gatilhoAtual,
   onTrocarGatilho,
   onFocarGatilho,
@@ -156,6 +167,14 @@ export function EditorPaleta({
   const [expandidos, setExpandidos] = useState<Set<string>>(
     () => new Set(["acoes", "mensagem", "fluxo"]),
   );
+  // Grupo escolhido no trilho recolhido: abre a paleta já nele, em vez de
+  // abrir tudo e obrigar a procurar de novo.
+  const [foco, setFocoEstado] = useState<GrupoSmartflow | null>(null);
+  const setFoco = (g: GrupoSmartflow) => {
+    setFocoEstado(g);
+    setBusca("");
+    setExpandidos(new Set([g]));
+  };
 
   const buscaNorm = busca.trim().toLowerCase();
   const filtrarPasso = (t: TipoPassoMeta) =>
@@ -187,13 +206,69 @@ export function EditorPaleta({
     if (buscaNorm) return true;
     return expandidos.has(g);
   };
+  const toggleGrupoComFoco = (g: GrupoSmartflow) => {
+    if (foco === g) setFocoEstado(null);
+    toggleGrupo(g);
+  };
 
   const metaGatilho = getGatilhoMeta(gatilhoAtual);
   const GatIcon = GATILHO_ICON[gatilhoAtual] ?? Zap;
   const grad = GATILHO_GRADIENT[gatilhoAtual];
 
+  if (recolhida) {
+    return (
+      <aside className="w-[60px] shrink-0 border-r bg-slate-50/60 dark:bg-slate-900/30 flex flex-col items-center gap-1.5 py-3">
+        <button
+          onClick={onExpandir}
+          title="Abrir paleta de passos"
+          className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-sm hover:from-violet-700 hover:to-indigo-700 transition-colors"
+        >
+          <Plus className="h-4.5 w-4.5" />
+        </button>
+
+        <button
+          onClick={onFocarGatilho}
+          title={`Gatilho: ${metaGatilho.label}`}
+          className={`w-9 h-9 rounded-lg bg-gradient-to-br ${grad.from} ${grad.to} flex items-center justify-center shadow-sm hover:opacity-90 transition-opacity`}
+        >
+          <GatIcon className="h-4 w-4 text-white" />
+        </button>
+
+        <div className="w-6 h-px bg-border my-1" />
+
+        {/* Um ícone por grupo: abre a paleta já com aquele grupo em foco, que
+            é mais curto que abrir e procurar. */}
+        {GRUPO_META.map((g) => {
+          const Icon = GRUPO_ICON[g.id] ?? Sparkles;
+          return (
+            <button
+              key={g.id}
+              onClick={() => { setFoco(g.id); onExpandir(); }}
+              title={g.label}
+              className="w-9 h-9 rounded-lg border bg-card flex items-center justify-center hover:bg-accent transition-colors"
+            >
+              <Icon className={`h-4 w-4 ${GRUPO_COR_ICONE[g.id] ?? "text-slate-500"}`} />
+            </button>
+          );
+        })}
+
+        <span className="mt-auto text-[10px] font-bold uppercase tracking-wider text-muted-foreground [writing-mode:vertical-rl]">
+          passos
+        </span>
+      </aside>
+    );
+  }
+
   return (
-    <aside className="w-72 border-r bg-slate-50/60 dark:bg-slate-900/30 overflow-y-auto flex-shrink-0">
+    <aside className="absolute left-0 top-0 bottom-0 z-20 w-72 border-r bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur overflow-y-auto shadow-xl">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-slate-50/95 px-3 py-1.5 backdrop-blur dark:bg-slate-900/95">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          Paleta
+        </span>
+        <Button variant="ghost" size="sm" className="h-6 px-1.5" onClick={onRecolher} title="Recolher paleta">
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </Button>
+      </div>
       {/* ─── GATILHO em destaque ─── */}
       <div className="p-3">
         <div className="flex items-center gap-1.5 mb-2">
@@ -283,7 +358,7 @@ export function EditorPaleta({
           return (
             <div key={g.grupo} className="border border-slate-200 dark:border-slate-800 rounded-lg bg-card overflow-hidden">
               <button
-                onClick={() => toggleGrupo(g.grupo)}
+                onClick={() => toggleGrupoComFoco(g.grupo)}
                 className="w-full flex items-center justify-between px-2.5 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
               >
                 <div className="flex items-center gap-1.5">
