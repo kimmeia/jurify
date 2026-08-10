@@ -676,6 +676,7 @@ export const dashboardRouter = router({
         cobrancasPendentes: 0,
         cobrancasVencidas: 0,
         clientesVencidos: 0,
+        pagamentosRecebidos: 0,
       };
 
       const db = await getDb();
@@ -742,6 +743,7 @@ export const dashboardRouter = router({
         let totalVencido = 0;
         let cobrancasPendentes = 0;
         let cobrancasVencidas = 0;
+        let pagamentosRecebidos = 0;
         // Contado aqui, no MESMO recorte do valor. O número de inadimplentes
         // que o painel mostrava vinha de outra procedure, sem recorte de
         // período — ficava "R$ 15 mil vencidos" ao lado de "579 clientes",
@@ -760,6 +762,7 @@ export const dashboardRouter = router({
             // do gráfico). Total já está coberto pelo filtro WHERE — só
             // entram cobranças com dataPagamento (ou venc) >= inicioStr.
             totalRecebido += valor;
+            pagamentosRecebidos += 1;
             const dia = (c.dataPagamento || c.vencimento || "").slice(0, 10);
             if (porDia.has(dia)) porDia.get(dia)!.recebido += valor;
           } else if (venceu) {
@@ -794,6 +797,7 @@ export const dashboardRouter = router({
           cobrancasPendentes,
           cobrancasVencidas,
           clientesVencidos: clientesVencidos.size,
+          pagamentosRecebidos,
         };
       } catch (err) {
         log.warn({ err: String(err) }, "Falha ao calcular cash flow");
@@ -1300,6 +1304,10 @@ export const dashboardRouter = router({
           nome: contatos.nome,
           valor: sql<string>`COALESCE(SUM(${valorDec}), 0)`,
           cobrancasVencidas: sql<number>`COUNT(*)`,
+          // Quanto tempo a dívida está de pé separa "esqueceu de pagar" de
+          // "não vai pagar" — duas conversas de cobrança diferentes, e o valor
+          // sozinho não distingue as duas.
+          vencimentoMaisAntigo: sql<string | null>`MIN(${asaasCobrancas.vencimento})`,
         })
         .from(asaasCobrancas)
         .innerJoin(contatos, eq(asaasCobrancas.contatoId, contatos.id))
@@ -1326,6 +1334,9 @@ export const dashboardRouter = router({
           nome: r.nome,
           valor: Number(r.valor ?? 0),
           cobrancasVencidas: Number(r.cobrancasVencidas ?? 0),
+          vencimentoMaisAntigo: r.vencimentoMaisAntigo
+            ? String(r.vencimentoMaisAntigo).slice(0, 10)
+            : null,
         })),
       };
     }),

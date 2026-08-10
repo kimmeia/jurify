@@ -22,6 +22,7 @@ import {
   calcularRangeCashFlow,
   resolverRangeCashFlow,
 } from "../routers/dashboard-setor-helpers";
+import { percentualDecorrido } from "../../client/src/pages/dashboards/common";
 import { metaProporcionalPeriodo } from "../escritorio/router-relatorios";
 import { dataHojeBR, resolverPeriodoNoFuso } from "../../shared/escritorio-types";
 
@@ -619,5 +620,51 @@ describe("fimDoMes", () => {
       expect(fimDoMes(dia) >= inicio).toBe(true);
       expect(fimDoMes(dia).slice(0, 7)).toBe(dia.slice(0, 7));
     }
+  });
+});
+
+/**
+ * O marcador de ritmo das barras de meta.
+ *
+ * Comparar o atingido com o esperado A ESTA ALTURA do período é a única leitura
+ * honesta antes de o mês fechar: 60% da meta no dia 5 e 60% no dia 28 são
+ * situações opostas, e o anel de progresso antigo desenhava a mesma figura nas
+ * duas.
+ */
+describe("percentualDecorrido", () => {
+  const INICIO = "2026-08-01";
+  const FIM = "2026-08-31";
+
+  it("antes do início, nada decorreu", () => {
+    expect(percentualDecorrido(INICIO, FIM, new Date("2026-07-20T12:00:00"))).toBe(0);
+  });
+
+  it("depois do fim, decorreu tudo", () => {
+    expect(percentualDecorrido(INICIO, FIM, new Date("2026-09-05T12:00:00"))).toBe(100);
+  });
+
+  it("no meio do período fica entre 0 e 100", () => {
+    const v = percentualDecorrido(INICIO, FIM, new Date("2026-08-16T12:00:00"));
+    expect(v).not.toBeNull();
+    expect(v!).toBeGreaterThan(45);
+    expect(v!).toBeLessThan(55);
+  });
+
+  it("cresce ao longo do período", () => {
+    const cedo = percentualDecorrido(INICIO, FIM, new Date("2026-08-05T12:00:00"))!;
+    const tarde = percentualDecorrido(INICIO, FIM, new Date("2026-08-25T12:00:00"))!;
+    expect(tarde).toBeGreaterThan(cedo);
+  });
+
+  it("período vazio não vira divisão por zero", () => {
+    expect(percentualDecorrido("", "", new Date())).toBeNull();
+  });
+
+  it("fim antes do início devolve null em vez de percentual negativo", () => {
+    expect(percentualDecorrido("2026-08-31", "2026-08-01", new Date())).toBeNull();
+  });
+
+  it("data inválida não derruba o painel", () => {
+    expect(percentualDecorrido("nao-e-data", "tambem-nao", new Date())).toBeNull();
   });
 });
