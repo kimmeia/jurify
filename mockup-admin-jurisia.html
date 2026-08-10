@@ -5,346 +5,265 @@
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   :root {
-    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
-    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --bg:#f8fafc; --surface:#fff; --borda:#e6eaf0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --corpo:#334155; --corpo-2:#475569;
     --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
     --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
-    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff; --acento-borda:#ede9fe;
-    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
-    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --alerta:#dc2626; --alerta-forte:#b91c1c;
+    --ok:#059669;
+    --nav:#111827; --nav-2:#1b2333; --nav-txt:#9aa5b8;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:1600px; height:1050px; overflow:hidden; }
-  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
-  .wrap { padding:28px 34px; height:100%; display:flex; flex-direction:column; gap:18px; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); display:flex; }
 
-  /* ── topo ── */
+  /* ═══ barra lateral do app — a moldura que meus mockups ignoravam ═══ */
+  .nav { flex:0 0 244px; background:var(--nav); color:var(--nav-txt);
+         display:flex; flex-direction:column; padding:18px 12px; }
+  .marca { display:flex; align-items:center; gap:9px; padding:6px 10px 16px; }
+  .marca b { color:#fff; font-family:'Poppins'; font-weight:700; font-size:15px; }
+  .marca em { font-style:normal; font-size:9.5px; font-weight:700; letter-spacing:.06em;
+              text-transform:uppercase; color:#c4b5fd; background:#7c3aed33;
+              border-radius:6px; padding:3px 7px; }
+  .nav a { display:flex; align-items:center; gap:11px; padding:8px 11px; border-radius:9px;
+           font-size:12.5px; font-weight:500; color:var(--nav-txt); }
+  .nav a.on { background:var(--nav-2); color:#fff; font-weight:600; }
+  .nav a.on i { background:var(--acento-claro); }
+  .nav i { width:5px; height:5px; border-radius:50%; background:#394356; flex:0 0 auto; }
+  .grupo { padding:14px 11px 5px; font-size:9.5px; font-weight:700; letter-spacing:.09em;
+           text-transform:uppercase; color:#5b6678; }
+  .pe-nav { margin-top:auto; display:flex; align-items:center; gap:9px; padding:12px 11px 4px;
+            border-top:1px solid #212a3a; }
+  .pe-nav span { width:28px; height:28px; border-radius:50%; background:#2c3547; color:#fff;
+                 font-size:11px; font-weight:700; display:flex; align-items:center;
+                 justify-content:center; }
+  .pe-nav b { color:#cbd5e1; font-size:12px; font-weight:600; }
+  .pe-nav small { display:block; font-size:10px; color:#5b6678; font-weight:400; }
+
+  /* ═══ conteúdo ═══ */
+  .area { flex:1; min-width:0; display:flex; justify-content:center; padding:34px 40px; }
+  .col { width:100%; max-width:1120px; display:flex; flex-direction:column; gap:20px; }
+
   .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
-  .h1 { font-family:'Poppins'; font-weight:700; font-size:28px; letter-spacing:-.02em; }
-  .sub { margin-top:4px; font-size:13.5px; color:var(--mudo); }
-  .acoes-topo { display:flex; align-items:center; gap:10px; }
-  .link { display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:600;
-          color:var(--corpo); border:1px solid var(--borda); background:var(--surface);
-          border-radius:11px; padding:11px 16px; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.02em; }
+  .sub { margin-top:4px; font-size:13px; color:var(--mudo); }
+  .sub a { color:var(--acento-forte); font-weight:600; text-decoration:underline;
+           text-underline-offset:3px; }
   .btn { background:var(--acento); color:#fff; font-weight:600; font-size:13.5px;
-         border-radius:12px; padding:12px 20px; display:inline-flex; align-items:center; gap:8px;
-         box-shadow:0 10px 24px -10px #7c3aedaa; }
+         border-radius:11px; padding:12px 20px; display:inline-flex; align-items:center; gap:8px;
+         box-shadow:0 10px 22px -12px #7c3aed; }
 
-  /* ── herói: o único bloco com cor ── */
-  .heroi { flex:0 0 auto; border-radius:20px; padding:22px 26px;
-           background:linear-gradient(135deg,#faf5ff 0%,#ffffff 62%);
-           border:1px solid var(--acento-borda);
-           box-shadow:0 24px 48px -34px #7c3aed66;
-           display:flex; align-items:center; gap:34px; }
-  .heroi .esq { flex:1; min-width:0; }
-  .estado { display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:700;
-            letter-spacing:.05em; text-transform:uppercase; color:var(--acento-forte); }
-  .estado i { width:7px; height:7px; border-radius:50%; background:var(--acento);
-              box-shadow:0 0 0 4px #7c3aed22; }
-  .estado b { color:var(--tinta); font-weight:700; letter-spacing:0; text-transform:none;
-              font-size:13.5px; margin-left:4px; }
-  .placar { margin-top:12px; display:flex; align-items:baseline; gap:10px; }
-  .placar .n { font-size:42px; font-weight:800; letter-spacing:-.035em; line-height:1;
-               font-variant-numeric:tabular-nums; }
-  .placar .de { font-size:14px; color:var(--mudo); }
-  .placar .pc { margin-left:auto; font-size:15px; font-weight:700; color:var(--acento-forte);
-                font-variant-numeric:tabular-nums; }
-  .linha { margin-top:14px; height:5px; border-radius:999px; background:#ede9fe; overflow:hidden; }
-  .linha i { display:block; height:5px; border-radius:999px;
-             background:linear-gradient(90deg,#8b5cf6,#7c3aed); }
-  .rodape-heroi { margin-top:12px; font-size:12px; color:var(--mudo); }
-  .rodape-heroi b { color:var(--corpo); font-variant-numeric:tabular-nums; font-weight:600; }
-  .heroi .dir { flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
-  .ciclo { font-size:12px; color:var(--mudo); }
-  .ciclo b { color:var(--acento-forte); font-variant-numeric:tabular-nums; }
-  .btn-fraco { border:1px solid var(--borda); background:var(--surface); color:var(--corpo);
-               font-weight:600; font-size:12.5px; border-radius:10px; padding:9px 16px; }
+  /* ── a tarefa ── */
+  .tarefa { flex:0 0 auto; background:var(--surface); border:1px solid var(--borda);
+            border-radius:16px; padding:22px 26px; display:flex; align-items:center; gap:40px; }
+  .esq { flex:1; min-width:0; }
+  .est { display:inline-flex; align-items:center; gap:8px; font-size:11px; font-weight:700;
+         letter-spacing:.07em; text-transform:uppercase; color:var(--acento-forte); }
+  .est i { width:7px; height:7px; border-radius:50%; background:var(--acento);
+           box-shadow:0 0 0 4px #7c3aed1f; }
+  .est em { font-style:normal; color:var(--mudo); font-weight:600; letter-spacing:.03em; }
+  .placar { margin-top:13px; display:flex; align-items:baseline; gap:11px; }
+  .placar b { font-size:40px; font-weight:800; letter-spacing:-.035em; line-height:1;
+              font-variant-numeric:tabular-nums; }
+  .placar span { font-size:14px; color:var(--mudo); }
+  .tr { margin-top:15px; height:6px; border-radius:999px; background:var(--hairline); overflow:hidden; }
+  .tr i { display:block; height:6px; border-radius:999px; background:var(--acento); }
+  .pe-tarefa { margin-top:11px; font-size:12px; color:var(--mudo); }
+  .pe-tarefa b { color:var(--corpo); font-weight:600; font-variant-numeric:tabular-nums; }
+  .dir { flex:0 0 auto; text-align:right; }
+  .dir .eta { font-size:22px; font-weight:800; letter-spacing:-.02em;
+              font-variant-numeric:tabular-nums; }
+  .dir .eta-l { margin-top:3px; font-size:11px; color:var(--mudo); }
+  .cancelar { margin-top:14px; border:1px solid var(--borda); border-radius:10px;
+              padding:9px 16px; font-size:12.5px; font-weight:600; color:var(--corpo);
+              display:inline-block; }
 
-  /* ── ritmo ──────────────────────────────────────────────
-     A cor do dado é o --viz-1 do app (azul), NÃO o violeta.
-     Violeta é cor de ação; usá-la aqui faria a barra competir
-     com o botão primário pelo mesmo significado. */
-  .ritmo { flex:0 0 auto; background:var(--surface); border:1px solid var(--borda);
-           border-radius:18px; display:flex; align-items:stretch; }
-  .ritmo-esq { flex:0 0 226px; padding:18px 22px; border-right:1px solid var(--hairline);
-               display:flex; flex-direction:column; justify-content:center; }
-  .ritmo-esq .l { font-size:11px; font-weight:600; letter-spacing:.05em;
-                  text-transform:uppercase; color:var(--fraco); }
-  .ritmo-esq .v { margin-top:5px; font-size:30px; font-weight:800; letter-spacing:-.03em;
-                  font-variant-numeric:tabular-nums; line-height:1; }
-  .ritmo-esq .delta { margin-top:9px; display:flex; align-items:center; gap:5px;
-                      font-size:12px; color:var(--mudo); }
-  .ritmo-esq .delta b { color:#2a78d6; font-variant-numeric:tabular-nums; }
-
-  .ritmo-dir { flex:1; min-width:0; padding:14px 22px 12px; }
-  .ritmo-topo { display:flex; align-items:baseline; justify-content:space-between; }
-  .ritmo-topo .t { font-size:13px; font-weight:700; }
-  .ritmo-topo .med { font-size:11.5px; color:var(--mudo); }
-  .ritmo-topo .med b { color:var(--corpo); font-variant-numeric:tabular-nums; }
-
-  .plot { position:relative; margin-top:10px; height:84px; }
-  /* Grade recessiva: uma linha só, tracejada, sem número no eixo. */
-  .media { position:absolute; left:0; right:0; height:0;
-           border-top:1px dashed var(--fantasma); }
-  .barras { position:absolute; inset:0; display:flex; align-items:flex-end; gap:2px; }
-  /* Extremidade arredondada só no topo — o dado nasce na linha de base. */
-  .barras span { flex:1; background:#2a78d6; border-radius:4px 4px 0 0; min-height:0; }
-  .barras span.pico { background:#1d5fae; }
-  /* Hora sem ingestão: marca de falha na linha de base, com legenda ao lado.
-     Status nunca viaja só na cor. */
-  .barras span.falha { background:transparent; border-bottom:3px solid var(--alerta);
-                       border-radius:0; }
-
-  .eixo { margin-top:7px; display:flex; justify-content:space-between;
-          font-size:10.5px; color:var(--fraco); }
-  .legenda-falha { margin-top:9px; display:flex; align-items:center; gap:6px;
-                   font-size:11px; color:var(--alerta-forte); }
-
-  .tip { position:absolute; right:150px; top:-18px; z-index:2;
-         background:var(--surface); border:1px solid var(--borda); border-radius:10px;
-         padding:8px 11px; box-shadow:0 14px 30px -14px #0f172a55; }
-  .tip-h { font-size:10.5px; font-weight:700; letter-spacing:.05em;
-           text-transform:uppercase; color:var(--fraco); }
-  .tip-v { margin-top:4px; display:flex; align-items:center; gap:7px;
-           font-size:12.5px; font-weight:600; white-space:nowrap; }
-  .tip-v i { width:8px; height:8px; border-radius:2px; background:#2a78d6; }
-
-  /* ── lista de tribunais: linhas, não caixas ── */
+  /* ── tribunais ── */
   .painel { flex:1; background:var(--surface); border:1px solid var(--borda);
-            border-radius:18px; display:flex; flex-direction:column; overflow:hidden; }
-  .painel-topo { display:flex; align-items:center; gap:12px; padding:16px 22px;
-                 border-bottom:1px solid var(--hairline); }
-  .h2 { font-family:'Poppins'; font-weight:700; font-size:17px; }
-  .cont { font-size:11.5px; color:var(--mudo); }
-  .cont b { color:var(--corpo); font-variant-numeric:tabular-nums; }
+            border-radius:16px; display:flex; flex-direction:column; overflow:hidden; }
+  .ph { display:flex; align-items:center; gap:12px; padding:17px 24px;
+        border-bottom:1px solid var(--hairline); }
+  .ph h2 { font-family:'Poppins'; font-weight:700; font-size:16px; }
+  .ph .cont { font-size:12px; color:var(--mudo); }
   .busca { margin-left:auto; display:flex; align-items:center; gap:8px; height:36px;
            border:1px solid var(--borda); border-radius:10px; padding:0 13px;
-           font-size:13px; color:var(--fraco); min-width:230px; }
-  .filtro { display:flex; align-items:center; gap:7px; height:36px; border:1px solid var(--borda);
-            border-radius:10px; padding:0 13px; font-size:13px; font-weight:600; color:var(--corpo); }
+           font-size:12.5px; color:var(--fraco); width:230px; }
 
-  .linhas { flex:1; overflow:hidden; }
-  .row { display:flex; align-items:center; gap:18px; padding:0 22px; height:58px;
+  .row { display:flex; align-items:center; gap:16px; padding:0 24px; height:60px;
          border-bottom:1px solid var(--hairline-2); }
   .row:last-child { border-bottom:none; }
-  .sig { flex:0 0 168px; display:flex; align-items:center; gap:11px; }
-  .sis { font-size:12px; color:var(--mudo); }
-  .lad { flex:0 0 auto; width:46px; height:30px; border-radius:9px; background:var(--hairline);
-         display:flex; align-items:center; justify-content:center;
-         font-size:11px; font-weight:800; letter-spacing:-.01em; color:var(--corpo); }
-  .lad.sup { background:#eef4fd; color:#1d5fae; }
-  .lad.err { background:var(--alerta-bg); color:var(--alerta-forte); }
-  .sig .nm b { display:block; font-size:13.5px; font-weight:700; letter-spacing:-.01em; }
-  .sig .nm span { font-size:10.5px; color:var(--fraco); }
-  .qtd { flex:0 0 96px; text-align:right; font-size:13.5px; font-weight:600;
-         font-variant-numeric:tabular-nums; }
-  .qtd.zero { color:var(--fantasma); }
-  .prog { flex:0 0 200px; display:flex; align-items:center; gap:10px; }
-  .prog .b { flex:1; height:4px; border-radius:999px; background:var(--hairline); overflow:hidden; }
-  .prog .b i { display:block; height:4px; border-radius:999px; background:var(--acento-claro); }
-  .prog .p { width:34px; text-align:right; font-size:11.5px; font-weight:700; color:var(--mudo);
-             font-variant-numeric:tabular-nums; }
-  .est { flex:1; min-width:0; display:flex; align-items:center; gap:8px; font-size:12px; }
-  .est i { width:6px; height:6px; border-radius:50%; flex:0 0 auto; }
-  .est.fila { color:var(--mudo); } .est.fila i { background:var(--fantasma); }
-  .est.run { color:var(--acento-forte); font-weight:600; } .est.run i { background:var(--acento); }
-  .est.ok { color:var(--ok); font-weight:600; } .est.ok i { background:var(--ok); }
-  .est.err { color:var(--alerta-forte); } .est.err i { background:var(--alerta); }
-  .est .quando { color:var(--fraco); }
-  .acao { flex:0 0 auto; display:flex; gap:7px; }
-  .acao span { font-size:12px; font-weight:600; color:var(--corpo-2);
-               border:1px solid var(--borda); border-radius:9px; padding:7px 13px; }
-  .acao span.forte { background:var(--tinta); color:#fff; border-color:var(--tinta); }
+  .sg { flex:0 0 118px; }
+  .sg b { font-size:13.5px; font-weight:700; letter-spacing:-.01em; }
+  .sg span { margin-left:7px; font-size:11px; color:var(--fraco); }
+  .qt { flex:0 0 88px; text-align:right; font-size:13.5px; font-weight:700;
+        font-variant-numeric:tabular-nums; }
+  .qt.z { color:var(--fantasma); }
+  .bar { flex:0 0 176px; height:5px; border-radius:999px; background:var(--hairline);
+         overflow:hidden; }
+  .bar i { display:block; height:5px; border-radius:999px; background:var(--acento-claro); }
+  .pc { flex:0 0 36px; font-size:11.5px; font-weight:700; color:var(--mudo);
+        font-variant-numeric:tabular-nums; }
+  .st { flex:1; min-width:0; display:flex; align-items:center; gap:8px; font-size:12px; }
+  .st i { width:6px; height:6px; border-radius:50%; flex:0 0 auto; }
+  .st.f { color:var(--mudo); } .st.f i { background:var(--fantasma); }
+  .st.r { color:var(--acento-forte); font-weight:600; } .st.r i { background:var(--acento); }
+  .st.o { color:var(--ok); font-weight:600; } .st.o i { background:var(--ok); }
+  .st.e { color:var(--alerta-forte); } .st.e i { background:var(--alerta); }
+  .ac { flex:0 0 auto; display:flex; gap:7px; }
+  .ac span { font-size:12px; font-weight:600; color:var(--corpo-2);
+             border:1px solid var(--borda); border-radius:9px; padding:7px 13px; }
+  .ac span.p { background:var(--tinta); color:#fff; border-color:var(--tinta); }
 
-  .painel-rodape { padding:14px 22px; border-top:1px solid var(--hairline);
-                   display:flex; align-items:center; justify-content:space-between;
-                   font-size:12.5px; color:var(--mudo); }
-  .painel-rodape b { color:var(--tinta); font-variant-numeric:tabular-nums; }
-
-  /* ── perigo: uma linha discreta, não um card ── */
-  .perigo { flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:0 6px;
-            font-size:12px; color:var(--fraco); }
-  .perigo a { color:var(--alerta-forte); font-weight:600; text-decoration:underline;
-              text-underline-offset:3px; }
+  .pf { padding:14px 24px; border-top:1px solid var(--hairline); display:flex;
+        align-items:center; justify-content:space-between; font-size:12px; color:var(--mudo); }
+  .pf b { color:var(--tinta); font-variant-numeric:tabular-nums; }
+  .pf a { color:var(--alerta-forte); font-weight:600; text-decoration:underline;
+          text-underline-offset:3px; }
 </style>
 </head>
 <body>
-  <div class="wrap">
 
-    <div class="topo">
-      <div>
-        <div class="h1">Ingestão</div>
-        <div class="sub">O robô e os tribunais. Os números do acervo vivem em Análise.</div>
-      </div>
-      <div class="acoes-topo">
-        <span class="link">
-          Análise do acervo
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#334155" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </span>
+  <div class="nav">
+    <div class="marca"><b>Admin</b><em>painel</em></div>
+    <a><i></i>Visão Geral</a>
+    <a><i></i>Clientes</a>
+    <a><i></i>Financeiro</a>
+    <div class="grupo">Automação</div>
+    <a><i></i>Agentes IA</a>
+    <a><i></i>SmartFlow</a>
+    <div class="grupo">Dados</div>
+    <a><i></i>Relatórios</a>
+    <a><i></i>Auditoria</a>
+    <a><i></i>Tribunais</a>
+    <a class="on"><i></i>JurisIA</a>
+    <div class="grupo">Sistema</div>
+    <a><i></i>Erros</a>
+    <a><i></i>Log de E-mails</a>
+    <a><i></i>Configurações</a>
+    <div class="pe-nav">
+      <span>RR</span>
+      <div><b>Rafael Rocha</b><small>dono</small></div>
+    </div>
+  </div>
+
+  <div class="area">
+    <div class="col">
+
+      <div class="topo">
+        <div>
+          <div class="h1">Ingestão</div>
+          <div class="sub">O robô e os tribunais. Os números do acervo estão em <a>Análise</a>.</div>
+        </div>
         <span class="btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
           Nova tarefa
         </span>
       </div>
-    </div>
 
-    <!-- ── herói ─────────────────────────────────────────── -->
-    <div class="heroi">
-      <div class="esq">
-        <div class="estado"><i></i>rodando<b>Todos os tribunais</b></div>
-        <div class="placar">
-          <span class="n">3.240</span>
-          <span class="de">de 5.000 processos novos</span>
-          <!-- A pergunta que a tela não respondia: quando acaba. -->
-          <span class="pc">65% · faltam ~2 h neste ritmo</span>
-        </div>
-        <div class="linha"><i style="width:65%"></i></div>
-        <div class="rodape-heroi">
-          agora no <b>TJAC</b> · <b>32</b> páginas lidas · <b>4.180</b> gravações — o robô relê
-          processo conhecido pra atualizar movimento
-        </div>
-      </div>
-      <div class="dir">
-        <span class="ciclo">próximo ciclo em <b>40 s</b></span>
-        <span class="btn-fraco">Cancelar tarefa</span>
-      </div>
-    </div>
-
-    <!-- ── ritmo: a tela precisava de um eixo de tempo ────── -->
-    <div class="ritmo">
-      <div class="ritmo-esq">
-        <div class="l">No acervo</div>
-        <div class="v">412.680</div>
-        <div class="delta">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="#2a78d6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <b>9.650</b> nas últimas 24 h
-        </div>
-      </div>
-
-      <div class="ritmo-dir">
-        <div class="ritmo-topo">
-          <span class="t">Ingestão por hora</span>
-          <span class="med">média <b>402</b>/h</span>
-        </div>
-
-        <div class="plot">
-          <!-- linha da média: referência recessiva, tracejada, sem rótulo no eixo -->
-          <div class="media" style="bottom:39.4%"></div>
-
-          <!-- tooltip aberto de propósito: o mockup é retrato, e a camada de
-               hover precisa ser vista pra ser aprovada -->
-          <div class="tip">
-            <div class="tip-h">19 h</div>
-            <div class="tip-v"><i></i>1.020 processos novos</div>
-          </div>
-
-          <div class="barras">
-            <span style="height:0%"></span><span style="height:0%"></span>
-            <span style="height:0%"></span><span style="height:0%"></span>
-            <span style="height:0%"></span><span style="height:0%"></span>
-            <span style="height:0%"></span><span style="height:0%"></span>
-            <span style="height:11.8%"></span><span style="height:47.1%"></span>
-            <span style="height:60.8%"></span><span style="height:69.6%"></span>
-            <span style="height:66.7%"></span>
-            <span class="falha" style="height:0%"></span><span class="falha" style="height:0%"></span>
-            <span style="height:52.9%"></span><span style="height:74.5%"></span>
-            <span style="height:86.3%"></span><span style="height:92.2%"></span>
-            <span class="pico" style="height:100%"></span><span style="height:96.1%"></span>
-            <span style="height:84.3%"></span><span style="height:62.7%"></span>
-            <span style="height:41.2%"></span>
+      <div class="tarefa">
+        <div class="esq">
+          <div class="est"><i></i>rodando <em>· todos os tribunais</em></div>
+          <div class="placar"><b>3.240</b><span>de 5.000 processos novos</span></div>
+          <div class="tr"><i style="width:65%"></i></div>
+          <div class="pe-tarefa">
+            agora no <b>TJAC</b> · <b>32</b> páginas · próximo ciclo em <b>40 s</b>
           </div>
         </div>
-
-        <div class="eixo">
-          <span>00 h</span><span>06 h</span><span>12 h</span><span>18 h</span><span>23 h</span>
-        </div>
-
-        <div class="legenda-falha">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="#b91c1c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          13 h–14 h sem ingestão — TJAC fora do ar
+        <div class="dir">
+          <div class="eta">~2 h</div>
+          <div class="eta-l">para terminar, neste ritmo</div>
+          <span class="cancelar">Cancelar</span>
         </div>
       </div>
+
+      <div class="painel">
+        <div class="ph">
+          <h2>Tribunais</h2>
+          <span class="cont">59 · 8 completos · 1 em erro</span>
+          <span class="busca">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#94a3b8" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
+            Buscar tribunal
+          </span>
+        </div>
+
+        <div class="row">
+          <span class="sg"><b>TJSP</b><span>e-SAJ</span></span>
+          <span class="qt">96.412</span>
+          <span class="bar"><i style="width:34%"></i></span><span class="pc">34%</span>
+          <span class="st f"><i></i>na fila · retoma do cursor</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJRJ</b><span>PJe</span></span>
+          <span class="qt">58.330</span>
+          <span class="bar"><i style="width:61%"></i></span><span class="pc">61%</span>
+          <span class="st f"><i></i>na fila · retoma do cursor</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJMG</b><span>PJe</span></span>
+          <span class="qt">47.204</span>
+          <span class="bar"><i style="width:52%"></i></span><span class="pc">52%</span>
+          <span class="st f"><i></i>na fila · retoma do cursor</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>STJ</b><span>superior</span></span>
+          <span class="qt">31.980</span>
+          <span class="bar"><i style="width:12%"></i></span><span class="pc">12%</span>
+          <span class="st r"><i></i>rodando agora · página 34</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJCE</b><span>PJe</span></span>
+          <span class="qt">28.640</span>
+          <span class="bar"><i style="width:100%"></i></span><span class="pc">100%</span>
+          <span class="st o"><i></i>completo · 412 sigilosos barrados</span>
+          <span class="ac"><span>Amostra</span><span>Recomeçar</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TST</b><span>superior</span></span>
+          <span class="qt">19.115</span>
+          <span class="bar"><i style="width:24%"></i></span><span class="pc">24%</span>
+          <span class="st f"><i></i>na fila</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJBA</b><span>e-SAJ</span></span>
+          <span class="qt">14.208</span>
+          <span class="bar"><i style="width:19%"></i></span><span class="pc">19%</span>
+          <span class="st f"><i></i>na fila</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJPE</b><span>PJe</span></span>
+          <span class="qt">11.902</span>
+          <span class="bar"><i style="width:28%"></i></span><span class="pc">28%</span>
+          <span class="st f"><i></i>na fila</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJRS</b><span>eproc</span></span>
+          <span class="qt">9.740</span>
+          <span class="bar"><i style="width:15%"></i></span><span class="pc">15%</span>
+          <span class="st f"><i></i>na fila</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJAC</b><span>PJe</span></span>
+          <span class="qt z">0</span>
+          <span class="bar"></span><span class="pc">—</span>
+          <span class="st e"><i></i>08/08: DataJud devolveu 500 — índice indisponível</span>
+          <span class="ac"><span>Amostra</span><span class="p">Tentar de novo</span></span>
+        </div>
+
+        <div class="pf">
+          <span>+ 49 tribunais · <b>95.149</b> processos</span>
+          <span>Ordenados pelo mais atrasado · <a>zerar acervo</a></span>
+        </div>
+      </div>
+
     </div>
-
-    <!-- ── tribunais ─────────────────────────────────────── -->
-    <div class="painel">
-      <div class="painel-topo">
-        <span class="h2">Tribunais</span><span class="cont">59 · <b>8</b> completos · <b>1</b> em erro · <b>1.412</b> sigilosos barrados</span>
-        <span class="busca">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#94a3b8" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
-          Buscar tribunal
-        </span>
-        <span class="filtro">
-          Todos
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#334155" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </span>
-      </div>
-
-      <div class="linhas">
-        <div class="row">
-          <span class="sig"><span class="lad">TJSP</span><span class="sis">e-SAJ</span></span>
-          <span class="qtd">96.412</span>
-          <span class="prog"><span class="b"><i style="width:34%"></i></span><span class="p">34%</span></span>
-          <span class="est fila"><i></i>na fila <span class="quando">· retoma do cursor</span></span>
-          <span class="acao"><span>Amostra</span><span class="forte">Varrer</span></span>
-        </div>
-
-        <div class="row">
-          <span class="sig"><span class="lad">TJRJ</span><span class="sis">PJe</span></span>
-          <span class="qtd">58.330</span>
-          <span class="prog"><span class="b"><i style="width:61%"></i></span><span class="p">61%</span></span>
-          <span class="est fila"><i></i>na fila <span class="quando">· retoma do cursor</span></span>
-          <span class="acao"><span>Amostra</span><span class="forte">Varrer</span></span>
-        </div>
-
-        <div class="row">
-          <span class="sig"><span class="lad">TJMG</span><span class="sis">PJe</span></span>
-          <span class="qtd">47.204</span>
-          <span class="prog"><span class="b"><i style="width:52%"></i></span><span class="p">52%</span></span>
-          <span class="est fila"><i></i>na fila <span class="quando">· retoma do cursor</span></span>
-          <span class="acao"><span>Amostra</span><span class="forte">Varrer</span></span>
-        </div>
-
-        <div class="row">
-          <span class="sig"><span class="lad sup">STJ</span><span class="sis">superior</span></span>
-          <span class="qtd">31.980</span>
-          <span class="prog"><span class="b"><i style="width:12%"></i></span><span class="p">12%</span></span>
-          <span class="est run"><i></i>rodando agora <span class="quando">· página 34</span></span>
-          <span class="acao"><span>Amostra</span><span class="forte">Varrer</span></span>
-        </div>
-
-        <div class="row">
-          <span class="sig"><span class="lad">TJCE</span><span class="sis">PJe</span></span>
-          <span class="qtd">28.640</span>
-          <span class="prog"><span class="b"><i style="width:100%"></i></span><span class="p">100%</span></span>
-          <span class="est ok"><i></i>completo <span class="quando">· 412 sigilosos barrados</span></span>
-          <span class="acao"><span>Amostra</span><span>Recomeçar</span></span>
-        </div>
-
-
-
-
-        <div class="row">
-          <span class="sig"><span class="lad err">TJAC</span><span class="sis">PJe</span></span>
-          <span class="qtd zero">0</span>
-          <span class="prog"><span class="b"></span><span class="p">—</span></span>
-          <span class="est err"><i></i>08/08: DataJud devolveu 500 — índice indisponível</span>
-          <span class="acao"><span>Amostra</span><span class="forte">Tentar de novo</span></span>
-        </div>
-      </div>
-
-      <div class="painel-rodape">
-        <span>+ 53 tribunais na lista · <b>150.114</b> processos</span>
-        <span>Ordenados pelo que está mais atrasado</span>
-      </div>
-    </div>
-
-    <div class="perigo">
-      Precisa começar do zero?
-      <a>Apagar acervo, movimentos e cursores</a>
-      — pesquisa de cliente e consumo de cota não são tocados.
-    </div>
-
   </div>
 </body>
 </html>
