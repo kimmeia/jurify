@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Painel Operacional</title>
+<link rel="stylesheet" href="app.css">
+<style>body{margin:0} .palco{padding:20px;background:var(--background)}</style>
+</head>
+<body><div class="palco"><div class="space-y-3.5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
+      <h1 class="text-[22px] font-bold tracking-tight leading-tight">Painel Operacional</h1>
+      <p class="mt-0.5 text-[12.5px] text-muted-foreground"><span class="tabular-nums">Visão gestor · 01 de ago. a 10 de ago.</span></p>
+    </div>
+    <button class="inline-flex h-8 items-center gap-1 rounded-md border px-3 text-[12px] font-medium">
+      Ver relatórios <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="shrink-0"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+  <div class="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+      <button class="flex items-center gap-3 rounded-md border border-rose-200 bg-rose-50 px-3.5 py-3 text-left transition-colors dark:border-rose-900 dark:bg-rose-950/30">
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" class=""><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="min-w-0">
+          <span class="block text-[19px] font-bold leading-none tabular-nums text-rose-700 dark:text-rose-300">14</span>
+          <span class="mt-1 block text-[11.5px] leading-tight text-rose-800/80 dark:text-rose-200/80">tarefas atrasadas</span>
+        </span>
+        <span class="ml-auto shrink-0 text-rose-500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="shrink-0"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </button>
+      <button class="flex items-center gap-3 rounded-md border bg-card px-3.5 py-3 text-left transition-colors">
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" class=""><path d="M8 2v4M16 2v4M3 9h18M5 5h14v16H5z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="min-w-0">
+          <span class="block text-[19px] font-bold leading-none tabular-nums">6</span>
+          <span class="mt-1 block text-[11.5px] leading-tight text-muted-foreground">compromissos atrasados</span>
+        </span>
+        <span class="ml-auto shrink-0 text-muted-foreground/50"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="shrink-0"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </button>
+      <button class="flex items-center gap-3 rounded-md border bg-card px-3.5 py-3 text-left transition-colors">
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" class=""><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9.5 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="min-w-0">
+          <span class="block text-[19px] font-bold leading-none tabular-nums">3</span>
+          <span class="mt-1 block text-[11.5px] leading-tight text-muted-foreground">pessoas com 3+ atrasos</span>
+        </span>
+        <span class="ml-auto shrink-0 text-muted-foreground/50"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="shrink-0"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </button>
+  </div>
+  <div class="grid gap-3.5 lg:grid-cols-3">
+    <div class="lg:col-span-2">
+    <div class="overflow-hidden rounded-md border bg-card">
+      <div class="flex flex-wrap items-end justify-between gap-3 px-4 pt-4">
+        <div>
+          <p class="text-[10.5px] font-bold uppercase tracking-[0.06em] text-muted-foreground">Entregue no prazo — setor operacional</p>
+          <p class="mt-1.5 text-[34px] font-bold leading-none tracking-tight tabular-nums">86,2<span class="text-[22px]">%</span></p>
+        </div>
+        <span class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-bold border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">14 em atraso agora</span>
+      </div>
+      <div class="px-4 pb-4 pt-4">
+        <div class="relative h-2.5 w-full overflow-hidden rounded-full bg-muted">
+          <div class="h-full rounded-full" style="width:86.2%;background:var(--viz-1)"></div>
+          <span class="absolute inset-y-0 w-px bg-foreground/60" style="left:90%"></span>
+        </div>
+        <div class="mt-2.5 flex items-center justify-between text-[11px] text-muted-foreground">
+          <span class="flex items-center gap-1.5"><span class="inline-block h-3 w-px bg-foreground/60"></span>piso aceitável do setor: 90%</span>
+          <span><b class="text-foreground">86,2%</b> entregue no prazo</span>
+        </div>
+      </div>
+      <div class="grid divide-y border-t sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+      <div class="px-4 py-3">
+        <p class="flex items-center gap-1.5 text-[11px] text-muted-foreground">Em aberto</p>
+        <p class="mt-1 text-[19px] font-bold tracking-tight tabular-nums">42</p>
+        <p class="mt-0.5 text-[10.5px] text-muted-foreground/80">28 no prazo · 14 atrasadas</p>
+      </div>
+      <div class="px-4 py-3">
+        <p class="flex items-center gap-1.5 text-[11px] text-muted-foreground">Entregues no prazo</p>
+        <p class="mt-1 text-[19px] font-bold tracking-tight tabular-nums">118</p>
+        <p class="mt-0.5 text-[10.5px] text-muted-foreground/80">no período</p>
+      </div>
+      <div class="px-4 py-3">
+        <p class="flex items-center gap-1.5 text-[11px] text-muted-foreground">Entregues fora do prazo</p>
+        <p class="mt-1 text-[19px] font-bold tracking-tight tabular-nums text-rose-700 dark:text-rose-400">19</p>
+        <p class="mt-0.5 text-[10.5px] text-muted-foreground/80">13,9% das entregas</p>
+      </div>
+      </div>
+    </div>
+    </div>
+    <div class="relative min-h-0">
+      <div class="lg:absolute lg:inset-0">
+    <div class="flex min-h-0 flex-col overflow-hidden rounded-md border bg-card h-full">
+      <div class="flex items-start justify-between gap-2 px-4 pt-3.5">
+        <div class="min-w-0">
+          <p class="text-sm font-bold leading-tight">Meu mês</p>
+          <p class="mt-0.5 text-[11px] text-muted-foreground">Você, dentro do setor</p>
+        </div>
+        
+      </div>
+      <div class="flex flex-col px-2 pb-2 pt-1 min-h-0 flex-1 overflow-y-auto">
+        <div class="flex items-baseline justify-between gap-2 rounded-lg px-2 py-2">
+          <span class="min-w-0">
+            <span class="block text-[12px]">Minha taxa no prazo</span>
+            <span class="mt-0.5 block text-[10.5px] text-muted-foreground">setor está em 86,2%</span>
+          </span>
+          <span class="shrink-0 text-[18px] font-bold tabular-nums">91,3%</span>
+        </div>
+        <div class="flex items-baseline justify-between gap-2 rounded-lg px-2 py-2">
+          <span class="min-w-0">
+            <span class="block text-[12px]">Minhas tarefas em aberto</span>
+            <span class="mt-0.5 block text-[10.5px] text-muted-foreground">2 vencem hoje</span>
+          </span>
+          <span class="shrink-0 text-[18px] font-bold tabular-nums">7</span>
+        </div>
+        <div class="flex items-baseline justify-between gap-2 rounded-lg px-2 py-2">
+          <span class="min-w-0">
+            <span class="block text-[12px]">Minhas atrasadas</span>
+            <span class="mt-0.5 block text-[10.5px] text-muted-foreground">há 3 dias</span>
+          </span>
+          <span class="shrink-0 text-[18px] font-bold tabular-nums text-rose-700 dark:text-rose-400">1</span>
+        </div>
+      </div>
+      <div class="mt-auto flex items-center justify-between border-t px-4 py-2.5 text-[11px] text-muted-foreground"><span>Compromissos hoje: 4</span><span>1 atrasado</span></div>
+    </div>
+      </div>
+    </div>
+    <div class="lg:col-span-3">
+    <div class="flex min-h-0 flex-col overflow-hidden rounded-md border bg-card">
+      <div class="flex items-start justify-between gap-2 px-4 pt-3.5">
+        <div class="min-w-0">
+          <p class="text-sm font-bold leading-tight">Ranking de produção</p>
+          <p class="mt-0.5 text-[11px] text-muted-foreground">Quem tem atraso aparece primeiro — é o que precisa de ação</p>
+        </div>
+        <button class="flex shrink-0 items-center gap-1 pt-0.5 text-[11.5px] font-semibold text-violet-600 dark:text-violet-400">Ver equipe <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="shrink-0"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div class="flex flex-col px-2 pb-2 pt-1">
+        <button class="flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent">
+          
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white" style="background:#7c3aed">AB</span>
+          <span class="w-[260px] shrink-0">
+            <span class="flex items-center gap-1.5"><span class="truncate text-[12.5px] font-semibold">Ana Beatriz Ramos</span><span class="shrink-0 rounded border px-1 text-[9px] font-bold uppercase border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">5 atrasos</span></span>
+            <span class="mt-0.5 block truncate text-[10.5px] text-muted-foreground">5 atrasadas · 9 no prazo · 21 entregues</span>
+          </span>
+          <span class="min-w-0 flex-1"><span class="block h-1.5 w-full overflow-hidden rounded-full bg-muted"><span class="block h-full rounded-full" style="width:61.8%;background:var(--viz-2)"></span></span></span>
+          <span class="w-[52px] shrink-0 text-right text-[12px] font-bold tabular-nums text-rose-600 dark:text-rose-400">61,8%</span>
+        </button>
+        <button class="flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent">
+          
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white" style="background:#0891b2">TF</span>
+          <span class="w-[260px] shrink-0">
+            <span class="flex items-center gap-1.5"><span class="truncate text-[12.5px] font-semibold">Tiago Fernandes</span><span class="shrink-0 rounded border px-1 text-[9px] font-bold uppercase border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">4 atrasos</span></span>
+            <span class="mt-0.5 block truncate text-[10.5px] text-muted-foreground">4 atrasadas · 6 no prazo · 17 entregues</span>
+          </span>
+          <span class="min-w-0 flex-1"><span class="block h-1.5 w-full overflow-hidden rounded-full bg-muted"><span class="block h-full rounded-full" style="width:68.0%;background:var(--viz-2)"></span></span></span>
+          <span class="w-[52px] shrink-0 text-right text-[12px] font-bold tabular-nums text-rose-600 dark:text-rose-400">68,0%</span>
+        </button>
+        <button class="flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent">
+          
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white" style="background:#eda100">JC</span>
+          <span class="w-[260px] shrink-0">
+            <span class="flex items-center gap-1.5"><span class="truncate text-[12.5px] font-semibold">Juliana Castro</span><span class="shrink-0 rounded border px-1 text-[9px] font-bold uppercase border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">3 atrasos</span></span>
+            <span class="mt-0.5 block truncate text-[10.5px] text-muted-foreground">3 atrasadas · 5 no prazo · 24 entregues</span>
+          </span>
+          <span class="min-w-0 flex-1"><span class="block h-1.5 w-full overflow-hidden rounded-full bg-muted"><span class="block h-full rounded-full" style="width:79.4%;background:var(--viz-2)"></span></span></span>
+          <span class="w-[52px] shrink-0 text-right text-[12px] font-bold tabular-nums text-rose-600 dark:text-rose-400">79,4%</span>
+        </button>
+        <button class="flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent">
+          
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white" style="background:#1baf7a">BS</span>
+          <span class="w-[260px] shrink-0">
+            <span class="flex items-center gap-1.5"><span class="truncate text-[12.5px] font-semibold">Bruno Sales</span></span>
+            <span class="mt-0.5 block truncate text-[10.5px] text-muted-foreground">1 atrasada · 4 no prazo · 26 entregues</span>
+          </span>
+          <span class="min-w-0 flex-1"><span class="block h-1.5 w-full overflow-hidden rounded-full bg-muted"><span class="block h-full rounded-full" style="width:92.1%;background:var(--viz-1)"></span></span></span>
+          <span class="w-[52px] shrink-0 text-right text-[12px] font-bold tabular-nums ">92,1%</span>
+        </button>
+        <button class="flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent">
+          
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white" style="background:#e87ba4">HV</span>
+          <span class="w-[260px] shrink-0">
+            <span class="flex items-center gap-1.5"><span class="truncate text-[12.5px] font-semibold">Helena Vasques</span><span class="shrink-0 rounded border px-1 text-[9px] font-bold uppercase border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">top</span></span>
+            <span class="mt-0.5 block truncate text-[10.5px] text-muted-foreground">0 atrasada · 4 no prazo · 30 entregues</span>
+          </span>
+          <span class="min-w-0 flex-1"><span class="block h-1.5 w-full overflow-hidden rounded-full bg-muted"><span class="block h-full rounded-full" style="width:100.0%;background:var(--viz-1)"></span></span></span>
+          <span class="w-[52px] shrink-0 text-right text-[12px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">100,0%</span>
+        </button>
+      </div>
+      <div class="mt-auto flex items-center justify-between border-t px-4 py-2.5 text-[11px] text-muted-foreground"><span>5 colaboradores · 137 entregas no período</span><span class='font-semibold text-rose-600 dark:text-rose-400'>14 atrasadas</span></div>
+    </div>
+    </div>
+  </div>
+</div></div></body>
+</html>
