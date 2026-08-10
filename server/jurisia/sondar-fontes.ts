@@ -216,6 +216,56 @@ export async function candidatosPadrao(termo: string): Promise<CandidatoSonda[]>
       url: "https://dadosabertos.cnj.jus.br/",
       pergunta: "existe dataset do CNJ pra baixar em lote?",
     },
+  );
+
+  // Diário e jurisprudência POR TRIBUNAL.
+  //
+  // Concluí demais na primeira sondagem: testei o diário unificado do CNJ,
+  // levei 403, e tratei como se todo diário estivesse fechado. São hosts
+  // diferentes, com WAF diferente — e o motor próprio já loga em
+  // pje.tjce.jus.br a partir deste mesmo servidor, o que prova que tribunal
+  // não bloqueia a gente por princípio.
+  //
+  // Se estes responderem, o caminho pro texto da decisão existe sem depender
+  // do CNJ liberar nada. Os endereços são candidatos: 404 e DNS aqui são
+  // resposta útil, dizem que errei o caminho e não que a porta está fechada.
+  lista.push(
+    {
+      fonte: "TJSP",
+      nome: "e-SAJ — julgados de 2º grau",
+      url: "https://esaj.tjsp.jus.br/cjsg/consultaCompleta.do",
+      pergunta: "a consulta de jurisprudência do maior tribunal do país abre daqui?",
+    },
+    {
+      fonte: "TJSP",
+      nome: "Diário da Justiça Eletrônico",
+      url: "https://dje.tjsp.jus.br/cdje/index.do",
+      pergunta: "o diário do tribunal responde? é onde a decisão é publicada",
+    },
+    {
+      fonte: "TJMG",
+      nome: "consulta de jurisprudência",
+      url: "https://www5.tjmg.jus.br/jurisprudencia/",
+      pergunta: "outro TJ, outro sistema — o padrão se repete?",
+    },
+    {
+      fonte: "TJRJ",
+      nome: "consulta de jurisprudência",
+      url: "https://www3.tjrj.jus.br/ejuris/consultajurisprudencia.aspx",
+      pergunta: "outro TJ, outro sistema — o padrão se repete?",
+    },
+    {
+      fonte: "TRF4",
+      nome: "jurisprudência",
+      url: "https://jurisprudencia.trf4.jus.br/",
+      pergunta: "justiça federal publica ementa em endereço aberto?",
+    },
+    {
+      fonte: "TJCE",
+      nome: "PJe (controle)",
+      url: "https://pje.tjce.jus.br/",
+      pergunta: "controle: o motor próprio loga aqui todo dia, então tem que responder",
+    },
     {
       fonte: "LexML",
       nome: "SRU explain",

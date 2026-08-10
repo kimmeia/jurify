@@ -47,6 +47,183 @@ const VEREDITO: Record<string, { rotulo: string; cls: string }> = {
   erro: { rotulo: "erro", cls: "text-red-600 bg-red-500/10 border-red-500/20" },
 };
 
+const STATUS_TAREFA: Record<string, { label: string; cls: string }> = {
+  fila: { label: "na fila", cls: "text-slate-500 bg-slate-500/10 border-slate-500/20" },
+  rodando: { label: "rodando", cls: "text-violet-600 bg-violet-500/10 border-violet-500/20" },
+  concluida: { label: "concluída", cls: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" },
+  cancelada: { label: "cancelada", cls: "text-slate-500 bg-slate-500/10 border-slate-500/20" },
+  erro: { label: "erro", cls: "text-red-600 bg-red-500/10 border-red-500/20" },
+};
+
+/**
+ * "Quero N processos hoje" — e o robô persegue.
+ *
+ * Substitui o clique repetido em Varrer. O worker avança um pedaço a cada dois
+ * minutos e grava; reiniciar o servidor custa um ciclo, não a meta inteira.
+ */
+function FilaIngestao({ tribunais }: { tribunais: Array<{ sigla: string; nome: string }> }) {
+  const [meta, setMeta] = useState("5000");
+  const [tribunal, setTribunal] = useState("");
+  const utils = trpc.useUtils();
+
+  // Enquanto há tarefa viva a tela se atualiza sozinha: um progresso que só
+  // anda com F5 faz o operador achar que travou e criar outra tarefa.
+  const { data: tarefas } = trpc.admin.jurisiaTarefas.useQuery(undefined, {
+    refetchInterval: (q) =>
+      (q.state.data ?? []).some((t: any) => t.status === "fila" || t.status === "rodando")
+        ? 15_000
+        : false,
+  });
+
+  const criar = trpc.admin.jurisiaCriarTarefa.useMutation({
+    onSuccess: () => {
+      utils.admin.jurisiaTarefas.invalidate();
+      toast.success("Tarefa criada", {
+        description: "O robô começa no próximo ciclo, em até 2 minutos.",
+      });
+    },
+    onError: (e) => toast.error("Não deu pra criar", { description: e.message }),
+  });
+
+  const cancelar = trpc.admin.jurisiaCancelarTarefa.useMutation({
+    onSuccess: () => {
+      utils.admin.jurisiaTarefas.invalidate();
+      toast.success("Tarefa cancelada");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const lista = tarefas ?? [];
+  const viva = lista.find((t: any) => t.status === "fila" || t.status === "rodando");
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Fila de ingestão</CardTitle>
+        <CardDescription>
+          Diga quantos processos quer e saia da tela. O robô avança de pouco em pouco, a cada 2
+          minutos, e continua de onde parou se o servidor reiniciar. Sem tribunal escolhido, ele
+          ataca sempre o mais atrasado.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">
+              Quantos processos
+            </label>
+            <Input
+              value={meta}
+              onChange={(e) => setMeta(e.target.value)}
+              type="number"
+              min={100}
+              max={200000}
+              step={100}
+              className="h-9 w-32"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">
+              Tribunal
+            </label>
+            <select
+              value={tribunal}
+              onChange={(e) => setTribunal(e.target.value)}
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+            >
+              <option value="">Todos — o mais atrasado primeiro</option>
+              {tribunais.map((t) => (
+                <option key={t.sigla} value={t.sigla}>
+                  {t.sigla} — {t.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button
+            size="sm"
+            className="h-9"
+            disabled={criar.isPending || !!viva}
+            onClick={() =>
+              criar.mutate({
+                tribunal: tribunal || null,
+                metaProcessos: Math.max(100, Number(meta) || 0),
+              })
+            }
+          >
+            <Play className="mr-1.5 h-3.5 w-3.5" />
+            Criar tarefa
+          </Button>
+          {viva && (
+            <span className="text-xs text-muted-foreground">
+              Já existe uma tarefa em andamento — cancele antes de criar outra.
+            </span>
+          )}
+        </div>
+
+        {lista.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhuma tarefa ainda.</p>
+        ) : (
+          <div className="space-y-2">
+            {lista.slice(0, 6).map((t: any) => {
+              const st = STATUS_TAREFA[t.status] ?? STATUS_TAREFA.fila;
+              const pct = Math.min(
+                100,
+                Math.round((t.processos * 100) / Math.max(1, t.metaProcessos)),
+              );
+              return (
+                <div key={t.id} className="rounded-lg border px-3 py-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${st.cls}`}
+                    >
+                      {st.label}
+                    </span>
+                    <span className="text-[13px] font-semibold">
+                      {t.tribunal ?? "Todos os tribunais"}
+                    </span>
+                    {/* Novos e gravações são números diferentes: o robô relê
+                        processo conhecido pra atualizar movimento, e é o de
+                        novos que a meta persegue. */}
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {nf.format(t.processos)} de {nf.format(t.metaProcessos)} novos ·{" "}
+                      {t.paginas} página(s)
+                      {t.gravacoes > t.processos && (
+                        <> · {nf.format(t.gravacoes)} gravações</>
+                      )}
+                    </span>
+                    {(t.status === "fila" || t.status === "rodando") && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="ml-auto h-7 text-xs"
+                        disabled={cancelar.isPending}
+                        onClick={() => cancelar.mutate({ id: t.id })}
+                      >
+                        Cancelar
+                      </Button>
+                    )}
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-1.5 rounded-full bg-violet-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  {/* O erro não mata a tarefa: um tribunal fora do ar é motivo
+                      pra tentar outro no próximo ciclo, não pra desistir. */}
+                  {t.ultimoErro && (
+                    <p className="mt-1.5 text-[11px] text-red-600">{t.ultimoErro}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 /**
  * Recomeçar a ingestão do zero.
  *
@@ -667,6 +844,8 @@ export default function AdminJurisIa() {
           </CardContent>
         </Card>
       </div>
+
+      <FilaIngestao tribunais={linhas.map((l) => ({ sigla: l.sigla, nome: l.nome }))} />
 
       {amostra.data && <ResultadoAmostra dados={amostra.data} />}
 
