@@ -75,6 +75,10 @@ async function main() {
       console.log(`   ${d.movimentos} movimento(s): ${d.primeirosMovimentos.join(" · ")}`);
       console.log(`   campos: ${d.campos.join(", ")}`);
     }
+    if (r.vocabulario) {
+      console.log(`   ${r.vocabulario.length} movimentos distintos:`);
+      for (const m of r.vocabulario) console.log(`     ${m.quantidade}\t${m.nome}`);
+    }
     if (r.temEmenta !== null) {
       console.log(`   ementa/teor no payload: ${r.temEmenta ? "SIM (aparente)" : "não encontrei"}`);
     }
