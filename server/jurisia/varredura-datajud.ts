@@ -16,6 +16,7 @@ import {
   type ProcessoDataJud,
 } from "../../shared/datajud-normalizar";
 import { deduzirDesfecho } from "../../shared/datajud-desfecho";
+import { deduzirDesfechoRecurso } from "../../shared/datajud-recurso";
 import { buscarPagina } from "./datajud-client";
 import { createLogger } from "../_core/logger";
 
@@ -140,6 +141,11 @@ async function gravarProcesso(
   movimentos: MovimentoDataJud[],
 ) {
   const desfecho = deduzirDesfecho(movimentos);
+  // Os dois eixos rodam sempre, e cada processo costuma preencher só um: o de
+  // 1º grau fala "procedência", o de instância superior fala "provimento".
+  // Rodar os dois é mais barato que decidir qual vale pelo `grau`, que nem
+  // todo tribunal preenche.
+  const recurso = deduzirDesfechoRecurso(movimentos);
   const valores = {
     cnj: processo.cnj,
     tribunal: processo.tribunal,
@@ -155,6 +161,9 @@ async function gravarProcesso(
     resultado: desfecho?.resultado ?? null,
     resultadoEm: desfecho ? new Date(desfecho.em) : null,
     resultadoMovimento: desfecho?.movimento ?? null,
+    resultadoRecurso: recurso?.resultado ?? null,
+    resultadoRecursoEm: recurso ? new Date(recurso.em) : null,
+    resultadoRecursoMovimento: recurso?.movimento ?? null,
     sincronizadoEm: new Date(),
   };
 
