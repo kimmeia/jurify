@@ -181,9 +181,15 @@ function FilaIngestao({ tribunais }: { tribunais: Array<{ sigla: string; nome: s
                     <span className="text-[13px] font-semibold">
                       {t.tribunal ?? "Todos os tribunais"}
                     </span>
+                    {/* Novos e gravações são números diferentes: o robô relê
+                        processo conhecido pra atualizar movimento, e é o de
+                        novos que a meta persegue. */}
                     <span className="text-xs tabular-nums text-muted-foreground">
-                      {nf.format(t.processos)} de {nf.format(t.metaProcessos)} · {t.paginas}{" "}
-                      página(s)
+                      {nf.format(t.processos)} de {nf.format(t.metaProcessos)} novos ·{" "}
+                      {t.paginas} página(s)
+                      {t.gravacoes > t.processos && (
+                        <> · {nf.format(t.gravacoes)} gravações</>
+                      )}
                     </span>
                     {(t.status === "fila" || t.status === "rodando") && (
                       <Button

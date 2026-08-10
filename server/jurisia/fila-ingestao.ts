@@ -13,7 +13,7 @@
 
 import { and, asc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { jurisiaTarefas, jurisiaVarredura } from "../../drizzle/schema";
+import { jurisiaProcessos, jurisiaTarefas, jurisiaVarredura } from "../../drizzle/schema";
 import { varrerTribunal } from "./varredura-datajud";
 import { createLogger } from "../_core/logger";
 
@@ -28,7 +28,20 @@ const log = createLogger("jurisia-fila");
  */
 const PAGINAS_POR_CICLO = 3;
 
-/** Trava em-processo. Duas instâncias no Railway dobrariam o tráfego. */
+/**
+ * Quanto tempo o ciclo fica reservado.
+ *
+ * Generoso em relação ao ciclo (que leva menos de um minuto) porque o risco de
+ * expirar cedo é pior que o de expirar tarde: cedo, duas instâncias trabalham
+ * o mesmo pedaço; tarde, a fila só espera alguns minutos depois de um deploy.
+ */
+const RESERVA_MINUTOS = 5;
+
+/**
+ * Trava em-processo — primeira barreira, contra tick sobreposto na MESMA
+ * instância. A segunda barreira é a reserva no banco, que é a que vale quando
+ * o Railway sobe duas.
+ */
 let rodando = false;
 
 interface Alvo {
@@ -36,11 +49,26 @@ interface Alvo {
   alias: string;
 }
 
+/** Linhas distintas deste tribunal. É o número que não mente. */
+async function contarDoTribunal(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  tribunal: string,
+): Promise<number> {
+  const [r] = await db
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(jurisiaProcessos)
+    .where(eq(jurisiaProcessos.tribunal, tribunal.toUpperCase()));
+  return Number(r?.n ?? 0);
+}
+
 export interface TarefaIngestao {
   id: number;
   tribunal: string | null;
   metaProcessos: number;
+  /** Processos novos — o que a meta persegue. */
   processos: number;
+  /** Gravações, incluindo reler processo conhecido. */
+  gravacoes: number;
   paginas: number;
   status: "fila" | "rodando" | "concluida" | "cancelada" | "erro";
   ultimoErro: string | null;
@@ -116,8 +144,8 @@ async function proximoTribunal(): Promise<Alvo | null> {
 
   const porTribunal = new Map(estados.map((e) => [e.tribunal.toUpperCase(), e]));
 
-  const candidatos = elegiveis
-    .map((p) => {
+  return escolherProximo(
+    elegiveis.map((p) => {
       const e = porTribunal.get(p.sigla.toUpperCase());
       return {
         tribunal: p.sigla.toUpperCase(),
@@ -125,11 +153,32 @@ async function proximoTribunal(): Promise<Alvo | null> {
         status: e?.status ?? "fila",
         processos: e?.processos ?? 0,
       };
-    })
+    }),
+  );
+}
+
+export interface CandidatoTribunal {
+  tribunal: string;
+  alias: string;
+  status: string;
+  processos: number;
+}
+
+/**
+ * A política de rodízio, isolada porque errar aqui esfomeia um tribunal pra
+ * sempre e nada na tela denuncia.
+ *
+ * Menos processos primeiro. Empate desempata pela sigla — não por acaso: sem
+ * desempate estável, dois tribunais zerados se revezariam conforme a ordem que
+ * o banco devolvesse, e nenhum dos dois avançaria de forma previsível.
+ */
+export function escolherProximo(candidatos: CandidatoTribunal[]): Alvo | null {
+  const vivos = candidatos
     .filter((c) => c.status !== "completo" && c.status !== "erro")
     .sort((a, b) => a.processos - b.processos || a.tribunal.localeCompare(b.tribunal));
 
-  return candidatos[0] ?? null;
+  const escolhido = vivos[0];
+  return escolhido ? { tribunal: escolhido.tribunal, alias: escolhido.alias } : null;
 }
 
 /**
@@ -202,12 +251,32 @@ export async function rodarCicloFila(): Promise<void> {
       return;
     }
 
-    if (tarefa.status === "fila") {
-      await db
-        .update(jurisiaTarefas)
-        .set({ status: "rodando", iniciadoEm: new Date() })
-        .where(eq(jurisiaTarefas.id, tarefa.id));
+    // Reserva atômica do ciclo. `affectedRows === 0` significa que outra
+    // instância pegou este pedaço primeiro — sair é o comportamento certo.
+    const reserva = await db
+      .update(jurisiaTarefas)
+      .set({
+        status: "rodando",
+        lockAte: sql`DATE_ADD(NOW(), INTERVAL ${RESERVA_MINUTOS} MINUTE)`,
+        iniciadoEm: sql`COALESCE(${jurisiaTarefas.iniciadoEm}, NOW())`,
+      })
+      .where(
+        and(
+          eq(jurisiaTarefas.id, tarefa.id),
+          inArray(jurisiaTarefas.status, ["fila", "rodando"]),
+          or(sql`${jurisiaTarefas.lockAte} IS NULL`, sql`${jurisiaTarefas.lockAte} < NOW()`),
+        ),
+      );
+
+    if ((reserva as unknown as { affectedRows?: number }).affectedRows === 0) {
+      log.info({ tarefa: tarefa.id }, "ciclo já reservado por outra instância");
+      return;
     }
+
+    // Diferença de linhas distintas ANTES e DEPOIS. É a única forma honesta de
+    // saber quantos processos NOVOS entraram: `r.processos` conta gravações, e
+    // upsert reconta o mesmo CNJ quando a página é relida.
+    const antes = await contarDoTribunal(db, alvo.tribunal);
 
     const r = await varrerTribunal({
       tribunal: alvo.tribunal,
@@ -215,19 +284,30 @@ export async function rodarCicloFila(): Promise<void> {
       maxPaginas: PAGINAS_POR_CICLO,
     });
 
+    const depois = await contarDoTribunal(db, alvo.tribunal);
+    const novos = Math.max(0, depois - antes);
+
     // O erro fica na tarefa mas NÃO a mata: um tribunal fora do ar é motivo
     // pra tentar outro no próximo ciclo, não pra desistir da meta.
     await db
       .update(jurisiaTarefas)
       .set({
-        processos: sql`${jurisiaTarefas.processos} + ${r.processos}`,
+        processos: sql`${jurisiaTarefas.processos} + ${novos}`,
+        gravacoes: sql`${jurisiaTarefas.gravacoes} + ${r.processos}`,
         paginas: sql`${jurisiaTarefas.paginas} + ${r.paginas}`,
         ultimoErro: r.erro ? `${alvo.tribunal}: ${r.erro}`.slice(0, 500) : null,
+        lockAte: null,
       })
       .where(eq(jurisiaTarefas.id, tarefa.id));
 
     log.info(
-      { tarefa: tarefa.id, tribunal: alvo.tribunal, processos: r.processos, erro: r.erro },
+      {
+        tarefa: tarefa.id,
+        tribunal: alvo.tribunal,
+        novos,
+        gravacoes: r.processos,
+        erro: r.erro,
+      },
       "ciclo concluído",
     );
   } catch (err) {

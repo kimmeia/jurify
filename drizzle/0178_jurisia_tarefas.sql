@@ -9,8 +9,16 @@ CREATE TABLE IF NOT EXISTS jurisia_tarefas (
   -- NULL = todos os tribunais, atacando sempre o mais atrasado.
   tribunalJurisTar VARCHAR(16) DEFAULT NULL,
   metaProcessosJurisTar INT NOT NULL,
+  -- Processos NOVOS, medidos por diferença de linhas distintas. O contador da
+  -- varredura conta gravações, e upsert reconta o mesmo CNJ — foi assim que o
+  -- painel já mostrou 1.000 com 500 no banco.
   processosJurisTar INT NOT NULL DEFAULT 0,
+  gravacoesJurisTar INT NOT NULL DEFAULT 0,
   paginasJurisTar INT NOT NULL DEFAULT 0,
+  -- Reserva do ciclo. Trava em memória não serve: duas instâncias no Railway
+  -- rodariam o mesmo pedaço em paralelo, dobrando o tráfego contra uma API
+  -- pública. Expira sozinha pra um deploy no meio do ciclo não travar a fila.
+  lockAteJurisTar TIMESTAMP NULL DEFAULT NULL,
   statusJurisTar ENUM('fila','rodando','concluida','cancelada','erro')
     NOT NULL DEFAULT 'fila',
   ultimoErroJurisTar VARCHAR(500) DEFAULT NULL,

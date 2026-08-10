@@ -3966,8 +3966,18 @@ export const jurisiaTarefas = mysqlTable(
     /** null = todos os tribunais, atacando sempre o mais atrasado. */
     tribunal: varchar("tribunalJurisTar", { length: 16 }),
     metaProcessos: int("metaProcessosJurisTar").notNull(),
+    /**
+     * Processos NOVOS, medidos por diferença de linhas distintas.
+     *
+     * O contador da varredura conta gravações, e upsert reconta o mesmo CNJ.
+     * Somar aquilo faria a meta ser "atingida" sem os processos terem entrado.
+     */
     processos: int("processosJurisTar").default(0).notNull(),
+    /** O trabalho do robô: inclui reler processo conhecido. */
+    gravacoes: int("gravacoesJurisTar").default(0).notNull(),
     paginas: int("paginasJurisTar").default(0).notNull(),
+    /** Reserva do ciclo — trava distribuída, expira sozinha. */
+    lockAte: timestamp("lockAteJurisTar"),
     status: mysqlEnum("statusJurisTar", [
       "fila",
       "rodando",
