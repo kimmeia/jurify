@@ -40,21 +40,89 @@ const CHAVE_PUBLICA_CNJ =
  * mapeamento varia entre os 90+ índices e daqui não dá pra provar, a lista é
  * tentada em ordem e a que funcionar fica cacheada pro resto do processo.
  */
-const ORDENACOES: Array<{ nome: string; spec: unknown[] }> = [
+type FormaValor = "numero" | "texto";
+
+const ORDENACOES: Array<{ nome: string; spec: unknown[]; forma: FormaValor[] }> = [
   {
     nome: "@timestamp+numeroProcesso",
     spec: [{ "@timestamp": { order: "asc" } }, { numeroProcesso: { order: "asc" } }],
+    forma: ["numero", "texto"],
   },
-  { nome: "@timestamp", spec: [{ "@timestamp": { order: "asc" } }] },
-  { nome: "numeroProcesso", spec: [{ numeroProcesso: { order: "asc" } }] },
+  { nome: "@timestamp", spec: [{ "@timestamp": { order: "asc" } }], forma: ["numero"] },
+  { nome: "numeroProcesso", spec: [{ numeroProcesso: { order: "asc" } }], forma: ["texto"] },
 ];
 
-/** Índice da ordenação que já deu certo — evita pagar a tentativa toda página. */
-let ordenacaoResolvida: number | null = null;
+/**
+ * O cursor guarda QUAL ordenação o produziu.
+ *
+ * Antes ele era só o array de `search_after`, e a ordenação em uso vivia numa
+ * variável de processo. Bastava um redeploy: a variável zerava, a varredura
+ * recomeçava pela primeira ordenação da lista e o cursor gravado sob outra não
+ * batia mais — a fila do STJ travou assim, repetindo "reinicie o tribunal" a
+ * cada ciclo sem nunca avançar. Cursor que se descreve não depende de memória
+ * de processo nenhuma.
+ */
+interface CursorVarredura {
+  ordenacao: string;
+  valores: unknown[];
+}
+
+function serializarCursor(c: CursorVarredura): string {
+  return JSON.stringify({ o: c.ordenacao, v: c.valores });
+}
+
+const formaDe = (v: unknown): FormaValor | null =>
+  typeof v === "number" ? "numero" : typeof v === "string" ? "texto" : null;
+
+/**
+ * Deduz a ordenação de um cursor no formato antigo (array puro).
+ *
+ * O formato dos valores basta: `@timestamp` ordena por epoch (número) e
+ * `numeroProcesso` por string. Não é adivinhação — é a assinatura do próprio
+ * `search_after`. Sem casar nenhuma, devolve null e quem chama decide.
+ */
+export function ordenacaoDoCursorLegado(valores: unknown[]): string | null {
+  const forma = valores.map(formaDe);
+  if (forma.some((f) => f === null)) return null;
+  const alvo = ORDENACOES.find(
+    (o) => o.forma.length === forma.length && o.forma.every((f, i) => f === forma[i]),
+  );
+  return alvo?.nome ?? null;
+}
+
+/** Aceita os dois formatos. Cursor ilegível vira erro; cursor de ordenação
+ *  desconhecida vira null, que o chamador trata recomeçando o tribunal. */
+export function lerCursor(bruto: string): CursorVarredura | null {
+  let c: any;
+  try {
+    c = JSON.parse(bruto);
+  } catch {
+    throw new Error("Cursor da varredura corrompido — reinicie o tribunal.");
+  }
+
+  if (Array.isArray(c)) {
+    if (c.length === 0) throw new Error("Cursor da varredura corrompido — reinicie o tribunal.");
+    const ordenacao = ordenacaoDoCursorLegado(c);
+    return ordenacao ? { ordenacao, valores: c } : null;
+  }
+
+  if (c && typeof c === "object" && typeof c.o === "string" && Array.isArray(c.v)) {
+    return ORDENACOES.some((o) => o.nome === c.o) ? { ordenacao: c.o, valores: c.v } : null;
+  }
+
+  throw new Error("Cursor da varredura corrompido — reinicie o tribunal.");
+}
+
+/**
+ * Ordenação que já deu certo, POR TRIBUNAL — evita pagar a tentativa toda
+ * página. Um cache só pra todos fazia o resultado de um índice decidir por
+ * qual ordenação outro começava, e o mapeamento varia entre os 90+ índices.
+ */
+const ordenacaoResolvida = new Map<string, number>();
 
 /** Só pra teste: desfaz o cache entre casos. */
 export function esquecerOrdenacaoDataJud() {
-  ordenacaoResolvida = null;
+  ordenacaoResolvida.clear();
 }
 
 /**
@@ -97,7 +165,11 @@ export interface PaginaDataJud {
  * varredura repetir a mesma página pra sempre ou pular metade do tribunal, e
  * nenhum dos dois dá erro visível.
  */
-export function proximaPagina(resposta: unknown, tamanhoPedido: number): PaginaDataJud {
+export function proximaPagina(
+  resposta: unknown,
+  tamanhoPedido: number,
+  ordenacao: string,
+): PaginaDataJud {
   const r: any = resposta;
   const hits: unknown[] = Array.isArray(r?.hits?.hits) ? r.hits.hits : [];
 
@@ -123,7 +195,12 @@ export function proximaPagina(resposta: unknown, tamanhoPedido: number): PaginaD
     return { hits, proximoCursor: null, total, totalEhMinimo };
   }
 
-  return { hits, proximoCursor: JSON.stringify(sort), total, totalEhMinimo };
+  return {
+    hits,
+    proximoCursor: serializarCursor({ ordenacao, valores: sort }),
+    total,
+    totalEhMinimo,
+  };
 }
 
 async function chaveCadastrada(): Promise<string | null> {
@@ -169,35 +246,34 @@ export async function buscarPagina(args: {
 
   const tamanho = Math.min(Math.max(args.tamanho ?? 100, 1), 1000);
 
-  let cursorDecodificado: unknown[] | null = null;
-  if (args.cursor) {
-    try {
-      const c = JSON.parse(args.cursor);
-      if (!Array.isArray(c)) throw new Error("cursor não é array");
-      cursorDecodificado = c;
-    } catch {
-      throw new Error("Cursor da varredura corrompido — reinicie o tribunal.");
-    }
+  const cursor = args.cursor ? lerCursor(args.cursor) : null;
+
+  // Cursor de ordenação que não existe mais: recomeçar do zero é seguro
+  // (a gravação é upsert, nada duplica) e é infinitamente melhor que travar a
+  // fila pedindo intervenção manual que ninguém vê.
+  if (args.cursor && !cursor) {
+    log.warn(
+      { alias: args.alias },
+      "cursor de ordenação desconhecida — recomeçando o tribunal do início",
+    );
   }
 
-  let ultimoErro = "";
-  for (let i = ordenacaoResolvida ?? 0; i < ORDENACOES.length; i++) {
-    const ordenacao = ORDENACOES[i];
+  // Com cursor, a ordenação é a dele: começar por outra pularia metade do
+  // tribunal em silêncio.
+  const inicio = cursor
+    ? ORDENACOES.findIndex((o) => o.nome === cursor.ordenacao)
+    : (ordenacaoResolvida.get(args.alias) ?? 0);
 
-    // Cursor gravado sob outra ordenação tem outro formato de `search_after`;
-    // seguir com ele pularia metade do tribunal em silêncio.
-    if (cursorDecodificado && cursorDecodificado.length !== ordenacao.spec.length) {
-      throw new Error(
-        "A ordenação da varredura mudou e o cursor gravado não serve mais — reinicie o tribunal.",
-      );
-    }
+  let ultimoErro = "";
+  for (let i = Math.max(0, inicio); i < ORDENACOES.length; i++) {
+    const ordenacao = ORDENACOES[i];
 
     const corpo: Record<string, unknown> = {
       size: tamanho,
       sort: ordenacao.spec,
       query: { match_all: {} },
     };
-    if (cursorDecodificado) corpo.search_after = cursorDecodificado;
+    if (cursor) corpo.search_after = cursor.valores;
 
     const res = await fetch(`${BASE}/api_publica_${args.alias}/_search`, {
       method: "POST",
@@ -210,16 +286,26 @@ export async function buscarPagina(args: {
     });
 
     if (res.ok) {
-      if (ordenacaoResolvida !== i) {
-        ordenacaoResolvida = i;
+      if (ordenacaoResolvida.get(args.alias) !== i) {
+        ordenacaoResolvida.set(args.alias, i);
         log.info({ ordenacao: ordenacao.nome, alias: args.alias }, "ordenação do DataJud definida");
       }
-      return proximaPagina(await res.json(), tamanho);
+      return proximaPagina(await res.json(), tamanho, ordenacao.nome);
     }
 
     const texto = await res.text();
     ultimoErro = `DataJud ${res.status}: ${texto.slice(0, 200)}`;
     if (!ehErroDeOrdenacao(res.status, texto)) throw new Error(ultimoErro);
+
+    // Degradar pra próxima ordenação com um cursor em mãos trocaria o eixo do
+    // `search_after` no meio da varredura — daí em diante o tribunal seria
+    // percorrido por outro critério e os processos entre os dois pontos
+    // sumiriam sem erro nenhum.
+    if (cursor) {
+      throw new Error(
+        `O índice recusou a ordenação "${ordenacao.nome}", que produziu o cursor gravado — reinicie o tribunal. ${ultimoErro}`,
+      );
+    }
 
     log.warn(
       { ordenacao: ordenacao.nome, alias: args.alias, erro: texto.slice(0, 120) },

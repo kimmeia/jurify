@@ -171,11 +171,24 @@ export interface CandidatoTribunal {
  * Menos processos primeiro. Empate desempata pela sigla — não por acaso: sem
  * desempate estável, dois tribunais zerados se revezariam conforme a ordem que
  * o banco devolvesse, e nenhum dos dois avançaria de forma previsível.
+ *
+ * Tribunal em erro vai pro FIM da fila, não pra fora dela. Excluir de vez
+ * parecia certo — insistir num tribunal quebrado queima o ciclo que outro
+ * usaria — mas a maioria dos erros aqui é transitória (API fora do ar, timeout,
+ * cursor que precisava de um deploy pra voltar a servir), e exclusão definitiva
+ * transformava um minuto de instabilidade em aposentadoria silenciosa. Ele só é
+ * escolhido quando nenhum tribunal saudável precisa do ciclo, então não rouba
+ * vez de ninguém.
  */
 export function escolherProximo(candidatos: CandidatoTribunal[]): Alvo | null {
   const vivos = candidatos
-    .filter((c) => c.status !== "completo" && c.status !== "erro")
-    .sort((a, b) => a.processos - b.processos || a.tribunal.localeCompare(b.tribunal));
+    .filter((c) => c.status !== "completo")
+    .sort(
+      (a, b) =>
+        Number(a.status === "erro") - Number(b.status === "erro") ||
+        a.processos - b.processos ||
+        a.tribunal.localeCompare(b.tribunal),
+    );
 
   const escolhido = vivos[0];
   return escolhido ? { tribunal: escolhido.tribunal, alias: escolhido.alias } : null;
