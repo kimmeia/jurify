@@ -51,6 +51,31 @@ describe("duplicarNo — identidade", () => {
   });
 });
 
+/**
+ * O bug que o dono viu: duplicar e arrastar movia os DOIS cards juntos.
+ * O ReactFlow move todo nó com `selected: true`, e o clone nascia herdando
+ * a flag do original por espalhamento.
+ */
+describe("duplicarNo — estado de interação não é herdado", () => {
+  it("a cópia nasce sem a seleção do original", () => {
+    const origem = no({ selected: true });
+    const { no: copia } = duplicarNo(origem, "n2", "c2");
+    expect(copia.selected).toBe(false);
+  });
+
+  it("a cópia nasce sem a flag de arrasto", () => {
+    const origem = no({ selected: true, dragging: true });
+    const { no: copia } = duplicarNo(origem, "n2", "c2");
+    expect(copia.dragging).toBe(false);
+  });
+
+  it("duplicar não mexe na seleção do original — quem migra é o editor", () => {
+    const origem = no({ selected: true });
+    duplicarNo(origem, "n2", "c2");
+    expect(origem.selected).toBe(true);
+  });
+});
+
 describe("duplicarNo — posição", () => {
   it("nasce deslocada, não em cima do original", () => {
     const { no: copia } = duplicarNo(no(), "n2", "c2");

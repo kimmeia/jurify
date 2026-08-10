@@ -13,6 +13,14 @@ export interface NoDuplicavel {
   id: string;
   type?: string;
   position: { x: number; y: number };
+  /**
+   * Estado de interação do ReactFlow. Declarado aqui de propósito: são
+   * campos que o espalhamento carregaria em silêncio, e `selected` herdado
+   * é justamente o que fazia arrastar a cópia arrastar o original junto —
+   * o ReactFlow move TODOS os nós marcados como selecionados.
+   */
+  selected?: boolean;
+  dragging?: boolean;
   data: {
     tipo: string;
     config: Record<string, unknown>;
@@ -63,6 +71,11 @@ export function duplicarNo(
         x: origem.position.x + DESLOCAMENTO_COPIA.x,
         y: origem.position.y + DESLOCAMENTO_COPIA.y,
       },
+      // Zera o estado de interação. Herdar `selected` fazia o ReactFlow
+      // considerar os dois nós selecionados, e arrastar um levava o outro
+      // junto. `dragging` herdado no meio de um arrasto é da mesma família.
+      selected: false,
+      dragging: false,
       data: {
         ...origem.data,
         config: clonarConfig(origem.data.config),

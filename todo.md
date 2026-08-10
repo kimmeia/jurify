@@ -332,3 +332,19 @@
 - [x] Frontend: WhatsappQR.tsx — componente QR com polling, status, conectar/desconectar
 - [x] Testes vitest: 26 testes (jid/phone, formatação, status, labels, tipos, session manager)
 - [x] Total: 37 novos testes (395 total no projeto, 358 passando + 4 pré-existentes falhando)
+
+## Represado — aguardando decisão do dono
+
+Registrado em 10/08/2026. Detalhe e gatilho de lembrete em `CLAUDE.md`,
+seção "Pendências represadas".
+
+- [ ] **ESLint + eslint-plugin-react-hooks no `pnpm check`.** Hoje `check` é
+      só `tsc`, que não vê ordem de hooks — foi assim que o React #310 subiu
+      pra produção no editor do SmartFlow. Em pé como remendo:
+      `server/__tests__/react-hooks-apos-return.test.ts`, varredura de texto
+      que cobre só esse caso. Adiado porque plugar ESLint agora acusa muita
+      coisa acumulada de uma vez.
+- [ ] **Nome próprio por bloco no SmartFlow.** O canvas mostra o rótulo do
+      tipo, não um nome do bloco; `data.label` do nó não é persistido. Sem
+      isso o sufixo "(cópia)" do duplicar não tem onde viver, e três blocos
+      "Enviar mensagem" ficam indistinguíveis.
