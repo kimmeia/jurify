@@ -1669,7 +1669,12 @@ function SmartFlowEditorInner() {
       return;
     }
     const { no } = duplicarNo(origem as any, novoNodeId(), novoClienteId());
-    setNodes((nds) => [...nds, no as any]);
+    // A seleção MIGRA pra cópia: deixar o original selecionado junto faria o
+    // ReactFlow arrastar os dois de uma vez, porque ele move todo nó marcado.
+    setNodes((nds) => [
+      ...nds.map((n) => (n.selected ? { ...n, selected: false } : n)),
+      { ...(no as any), selected: true },
+    ]);
     setEdges((eds) => [...eds, ...arestasDaCopia()]);
     setSelectedId(no.id);
     marcarDirty();
