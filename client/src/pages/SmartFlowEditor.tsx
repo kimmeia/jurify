@@ -47,7 +47,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Banknote, BookOpen, Brain, Bot, Calendar, CheckCircle2, ChevronDown, Circle,
   CircleDollarSign, Clock, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle, MessageCircleQuestion, Shuffle,
-  Move, Pause, PhoneCall, Play, Plus, Repeat, Save, Search, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, Zap,
+  Move, Pause, PhoneCall, Play, Plus, Repeat, Save, Search, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, X, Zap,
   CalendarCheck, Trash2, XCircle,
   Variable as VariableIcon,
 } from "lucide-react";
@@ -1066,6 +1066,7 @@ function SmartFlowEditorInner() {
 
   // Dialogs do editor
   const [testarOpen, setTestarOpen] = useState(false);
+  const [paletaRecolhida, setPaletaRecolhida] = useState(true);
   const [excluirOpen, setExcluirOpen] = useState(false);
 
   // Canvas começa com um nó de gatilho default (mensagem_canal).
@@ -1447,6 +1448,9 @@ function SmartFlowEditorInner() {
     setNodes([...nodes, novoNode]);
     setEdges(novasEdges);
     setSelectedId(novoNode.id);
+    // Recolhe a paleta: aberta, ela tapa justamente o canto onde o nó novo
+    // costuma nascer, e o inspetor dele já abriu do outro lado.
+    setPaletaRecolhida(true);
     marcarDirty();
     setTimeout(() => rfInstance?.fitView?.({ padding: 0.15, duration: 300 }), 50);
   };
@@ -1737,6 +1741,9 @@ function SmartFlowEditorInner() {
   }
 
   const salvando = criarMut.isPending || atualizarMut.isPending;
+  // Largura do inspetor quando aberto — toolbar e minimapa se afastam pra não
+  // ficarem embaixo dele.
+  const recuoInspetor = selectedNode ? 360 : 0;
 
   return (
     // Anula o padding p-6 do <main> do AppLayout e ocupa toda a viewport
@@ -1766,18 +1773,18 @@ function SmartFlowEditorInner() {
         onExcluir={() => setExcluirOpen(true)}
       />
 
-      {/* Descrição + limite por contato (sub-bar) */}
-      <div className="px-4 py-2 border-b bg-muted/30 flex items-center gap-3">
+      {/* Descrição + limite por contato — uma linha rasa, não uma faixa. */}
+      <div className="flex items-center gap-3 border-b bg-muted/30 px-4 py-1">
         <Input
           value={descricao}
           onChange={(e) => { setDescricao(e.target.value); marcarDirty(); }}
           placeholder="Descrição (opcional) — explique o que o cenário faz"
-          className="bg-transparent border-none shadow-none text-sm flex-1"
+          className="h-7 flex-1 border-none bg-transparent px-0 text-xs shadow-none"
         />
-        <div className="flex items-center gap-1.5 shrink-0">
-          <Label className="text-[10px] text-muted-foreground whitespace-nowrap">Roda por contato:</Label>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Label className="whitespace-nowrap text-[10px] text-muted-foreground">Roda por contato:</Label>
           <Select value={limitePorContato} onValueChange={(v) => { setLimitePorContato(v as any); marcarDirty(); }}>
-            <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-6 w-[140px] text-[11px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="sempre">Sempre (sem limite)</SelectItem>
               <SelectItem value="dia">1x por dia</SelectItem>
@@ -1789,9 +1796,17 @@ function SmartFlowEditorInner() {
         </div>
       </div>
 
-      {/* Workspace */}
-      <div className="flex flex-1 min-h-0">
+      {/*
+        Workspace. `relative` porque a paleta aberta e o inspetor são
+        ABSOLUTOS sobre o canvas: em coluna fixa os dois comiam 672px, e num
+        notebook de 1366 sobrava menos da metade da tela pro fluxo — que é a
+        única parte da tela onde se trabalha.
+      */}
+      <div className="relative flex flex-1 min-h-0">
         <EditorPaleta
+          recolhida={paletaRecolhida}
+          onRecolher={() => setPaletaRecolhida(true)}
+          onExpandir={() => setPaletaRecolhida(false)}
           gatilhoAtual={gatilhoNode?.data.gatilho ?? "mensagem_canal"}
           onTrocarGatilho={trocarGatilho}
           onFocarGatilho={() => setSelectedId(GATILHO_NODE_ID)}
@@ -1825,10 +1840,18 @@ function SmartFlowEditorInner() {
             proOptions={{ hideAttribution: true }}
           >
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-            <MiniMap pannable zoomable className="!bg-background !border" />
+            {/* Segue o mesmo recuo da toolbar: parado no canto, o inspetor
+                aberto o cobria por inteiro. */}
+            <MiniMap
+              pannable
+              zoomable
+              className="!bg-background !border"
+              style={{ right: 16 + recuoInspetor }}
+            />
           </ReactFlow>
 
           <EditorCanvasToolbar
+            recuoDireita={recuoInspetor}
             onZoomIn={() => rfInstance?.zoomIn?.()}
             onZoomOut={() => rfInstance?.zoomOut?.()}
             onFit={() => rfInstance?.fitView?.({ padding: 0.15, duration: 300 })}
@@ -1846,10 +1869,13 @@ function SmartFlowEditorInner() {
                 <Sparkles className="h-3.5 w-3.5" />
                 Inserir conversa pronta
               </button>
-              <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border bg-background/80 backdrop-blur px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
-                <Zap className="h-3 w-3 text-muted-foreground/60" />
-                …ou monte do zero pela paleta à esquerda.
-              </div>
+              <button
+                onClick={() => setPaletaRecolhida(false)}
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full border bg-background/80 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm backdrop-blur hover:bg-accent"
+              >
+                <Plus className="h-3 w-3 text-muted-foreground/60" />
+                …ou monte do zero: abra a paleta de passos.
+              </button>
             </div>
           )}
 
@@ -1890,19 +1916,35 @@ function SmartFlowEditorInner() {
           )}
         </div>
 
-        {/* Painel direito — config do nó selecionado (com abas) */}
-        <div className="w-96 border-l bg-background overflow-y-auto flex flex-col">
-          {selectedNode ? (
-            <Tabs defaultValue="config" className="flex flex-col flex-1">
-              <TabsList className="grid grid-cols-2 mx-2 mt-2 h-8 shrink-0">
-                <TabsTrigger value="config" className="text-[11px] gap-1">
-                  ⚙ Configurar
-                </TabsTrigger>
-                <TabsTrigger value="info" className="text-[11px] gap-1">
-                  📚 Informações
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="config" className="flex-1 mt-0 overflow-y-auto">
+        {/*
+          Inspetor — só existe quando há nó selecionado, e flutua sobre o
+          canvas em vez de empurrá-lo. Uma coluna permanente de 384px que na
+          maior parte do tempo dizia "nenhum passo selecionado" era o pior
+          negócio da tela: espaço fixo pra informação nenhuma.
+        */}
+        {selectedNode && (
+          <div className="absolute right-0 top-0 bottom-0 z-20 flex w-[360px] flex-col border-l bg-background/95 shadow-xl backdrop-blur">
+            <Tabs defaultValue="config" className="flex flex-1 flex-col min-h-0">
+              <div className="flex items-center gap-1 px-2 pt-2">
+                <TabsList className="grid h-8 flex-1 grid-cols-2">
+                  <TabsTrigger value="config" className="gap-1 text-[11px]">
+                    ⚙ Configurar
+                  </TabsTrigger>
+                  <TabsTrigger value="info" className="gap-1 text-[11px]">
+                    📚 Informações
+                  </TabsTrigger>
+                </TabsList>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 shrink-0 p-0"
+                  onClick={() => setSelectedId(null)}
+                  title="Fechar painel"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <TabsContent value="config" className="mt-0 flex-1 overflow-y-auto">
                 <PainelConfig
                   node={selectedNode}
                   onChange={atualizarConfigSelecionado}
@@ -1910,17 +1952,12 @@ function SmartFlowEditorInner() {
                   onChangeGatilho={trocarGatilho}
                 />
               </TabsContent>
-              <TabsContent value="info" className="flex-1 mt-0 overflow-y-auto p-0 data-[state=active]:flex data-[state=active]:flex-col">
+              <TabsContent value="info" className="mt-0 flex-1 overflow-y-auto p-0 data-[state=active]:flex data-[state=active]:flex-col">
                 <PainelVariaveis variaveis={variaveisCompletas} />
               </TabsContent>
             </Tabs>
-          ) : (
-            <div className="p-4 text-sm text-muted-foreground">
-              <p className="font-medium mb-1">Nenhum passo selecionado</p>
-              <p className="text-xs">Clique em um nó do canvas para configurá-lo.</p>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Dialog de teste — só faz sentido em cenário já salvo. */}

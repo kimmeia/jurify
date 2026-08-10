@@ -24,15 +24,21 @@ export function EditorCanvasToolbar({
   onFit,
   onAutoArranjar,
   onValidar,
+  recuoDireita = 0,
 }: {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFit: () => void;
   onAutoArranjar: () => void;
   onValidar: () => void;
+  /** Px a afastar da borda direita — o inspetor flutua ali por cima. */
+  recuoDireita?: number;
 }) {
   return (
-    <div className="absolute bottom-4 right-4 z-10 bg-card rounded-lg border border-slate-200 dark:border-slate-800 shadow-lg p-1 flex items-center gap-0.5">
+    <div
+      className="absolute bottom-4 z-10 bg-card rounded-lg border border-slate-200 dark:border-slate-800 shadow-lg p-1 flex items-center gap-0.5 transition-[right]"
+      style={{ right: 16 + recuoDireita }}
+    >
       <Button
         variant="ghost"
         size="sm"
