@@ -141,10 +141,13 @@ export const adminRouter = router({
     }),
 
   jurisiaNatureza: adminProcedure.query(async () => {
-    const { grausDoAcervo } = await import("../jurisia/buscar-acervo");
+    const { grausDoAcervo, classificacaoDoAcervo } = await import("../jurisia/buscar-acervo");
     const { contarNatureza } = await import("../../shared/jurisia-grau");
-    const graus = await grausDoAcervo();
-    return { graus, natureza: contarNatureza(graus) };
+    const [graus, classificacao] = await Promise.all([
+      grausDoAcervo(),
+      classificacaoDoAcervo(),
+    ]);
+    return { graus, natureza: contarNatureza(graus), classificacao };
   }),
 
   /**

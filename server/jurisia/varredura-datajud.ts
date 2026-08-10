@@ -17,6 +17,7 @@ import {
 } from "../../shared/datajud-normalizar";
 import { deduzirDesfecho } from "../../shared/datajud-desfecho";
 import { deduzirDesfechoRecurso } from "../../shared/datajud-recurso";
+import { detectarTransito } from "../../shared/datajud-transito";
 import { buscarPagina } from "./datajud-client";
 import { createLogger } from "../_core/logger";
 
@@ -146,6 +147,7 @@ async function gravarProcesso(
   // Rodar os dois é mais barato que decidir qual vale pelo `grau`, que nem
   // todo tribunal preenche.
   const recurso = deduzirDesfechoRecurso(movimentos);
+  const transito = detectarTransito(movimentos);
   const valores = {
     cnj: processo.cnj,
     tribunal: processo.tribunal,
@@ -164,6 +166,7 @@ async function gravarProcesso(
     resultadoRecurso: recurso?.resultado ?? null,
     resultadoRecursoEm: recurso ? new Date(recurso.em) : null,
     resultadoRecursoMovimento: recurso?.movimento ?? null,
+    transitadoEm: transito ? new Date(transito) : null,
     sincronizadoEm: new Date(),
   };
 
