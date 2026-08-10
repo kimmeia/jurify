@@ -8,7 +8,6 @@ import { registerAsaasBillingWebhook } from "../billing/asaas-billing-webhook";
 import { registerPDFExportRoute } from "../calculos/export-pdf-route";
 import { registerAgenteChatPDFRoute } from "../integracoes/agente-chat-pdf-route";
 import { registerAssinaturaPdfRoute } from "../escritorio/assinatura-pdf-route";
-import { registerCalcomWebhook } from "../integracoes/calcom-webhook";
 import { registerAsaasWebhook } from "../integracoes/asaas-webhook";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -129,7 +128,7 @@ async function startServer() {
   // do Node (OOM). Limite operacional na prática é o que a infra do servidor
   // aguenta, não esse número.
   // O `verify` callback captura o body RAW como Buffer em `req.rawBody`
-  // apenas pra paths de webhook que precisam validar HMAC (ex: Cal.com,
+  // apenas pra paths de webhook que precisam validar HMAC (ex:
   // futuramente WhatsApp Cloud). Para o resto, `req.body` continua sendo o
   // objeto já parsed — sem custo de memória adicional em requests
   // normais do tRPC.
@@ -211,8 +210,6 @@ async function startServer() {
   registerAgenteChatPDFRoute(app);
   // PDF preview/serve pra fluxo de assinatura (com auth + logs)
   registerAssinaturaPdfRoute(app);
-  // Cal.com webhook
-  registerCalcomWebhook(app);
   // Asaas webhook (escritório → seus clientes)
   registerAsaasWebhook(app);
   // Asaas webhook (JuridFlow → mensalidades dos escritórios)

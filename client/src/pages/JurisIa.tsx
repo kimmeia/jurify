@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   BarChart3,
+  ChevronDown,
   Clock,
   Database,
   Gavel,
@@ -58,9 +59,12 @@ import {
   rotuloCurtoResultado,
   rotuloResultado,
   type EstatisticaRecorte,
+  type EstatisticaRecursal,
   type FonteRecorte,
   type PesquisaGravada,
 } from "@shared/jurisia-recorte";
+import { rotuloRecurso } from "@shared/datajud-recurso";
+import { frasearTendencia, type Tendencia } from "@shared/jurisia-tendencia";
 import { formatarDuracao, type PerfilRecorte } from "@shared/jurisia-perfil";
 import type { ResultadoProcesso } from "@shared/datajud-desfecho";
 
@@ -287,19 +291,137 @@ function PainelNatureza({ n, aviso }: { n: ComposicaoNatureza; aviso: string | n
   );
 }
 
+/**
+ * O segundo eixo: como o RECURSO terminou.
+ *
+ * Uma matiz só, ao contrário das barras de mérito. Não é economia: as cinco
+ * cores de lá são slots validados para daltonismo em pares adjacentes, e o
+ * eixo recursal tem seis saídas — inventar a sexta invalidaria a checagem.
+ * Como as linhas são separadas e rotuladas, quem carrega a identidade é o
+ * rótulo, e a cor única ainda marca à primeira vista que este painel fala
+ * outra língua.
+ */
+function BarrasRecurso({ r }: { r: EstatisticaRecursal }) {
+  return (
+    <div className="mt-3 border-t pt-3">
+      <div className="flex items-center gap-1.5">
+        <Gavel className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <p className="text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
+          Como o recurso terminou
+        </p>
+      </div>
+      <div className="mt-2 space-y-1.5">
+        {r.fatias.map((f) => (
+          <div
+            key={f.resultado}
+            className="grid grid-cols-[128px_1fr_auto] items-center gap-2"
+            title={`${rotuloRecurso(f.resultado)}: ${f.quantidade} de ${r.comResultado} recursos julgados`}
+          >
+            <span
+              className={`truncate text-[11px] ${f.quantidade === 0 ? "text-muted-foreground/60" : "text-foreground/80"}`}
+            >
+              {rotuloRecurso(f.resultado)}
+            </span>
+            <div
+              className="h-2 w-full overflow-hidden rounded-[2px]"
+              style={{ background: "var(--viz-trilho)" }}
+            >
+              {f.quantidade > 0 && (
+                <div
+                  className="h-full rounded-r-[4px]"
+                  style={{ background: "var(--viz-2)", width: `${f.percentual}%`, minWidth: "3px" }}
+                />
+              )}
+            </div>
+            <span
+              className={`flex text-[11px] tabular-nums ${f.quantidade === 0 ? "text-muted-foreground/60" : "text-foreground/80"}`}
+            >
+              <span className="w-9 text-right font-bold">{f.percentual}%</span>
+              <span className="w-12 text-right text-muted-foreground">({f.quantidade})</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[10px] text-muted-foreground">
+        Percentuais sobre os {r.comResultado.toLocaleString("pt-BR")} recursos já julgados.
+        “Provido” é o recurso acolhido — não é o mesmo que o pedido ser procedente.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * O que o recorte decide HOJE.
+ *
+ * A estatística de cima soma o acervo inteiro, e num tribunal isso mistura o
+ * que ele fazia há dez anos com o que faz agora. Quando o entendimento vira, a
+ * média histórica aponta para o lado que perdeu — por isso a janela recente
+ * ganha destaque próprio, e a virada ganha cor.
+ */
+function PainelTendencia({ t }: { t: Tendencia }) {
+  const frase = frasearTendencia(t);
+  if (!frase || !t.dominanteRecente) return null;
+
+  const destaque = t.virou
+    ? "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
+    : "border-transparent bg-muted/40";
+
+  return (
+    <div className={`mt-3 rounded-lg border px-2.5 py-2 ${destaque}`}>
+      <div className="flex items-center gap-1.5">
+        {t.virou ? (
+          <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+        ) : (
+          <Sparkles className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        )}
+        <p className="text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
+          Entendimento dos últimos {t.meses} meses
+        </p>
+      </div>
+
+      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
+        <span className="text-[14px] font-extrabold">{t.dominanteRecente.rotulo}</span>
+        <span className="text-[11px] tabular-nums text-muted-foreground">
+          {t.dominanteRecente.percentual}% de {t.recentes.toLocaleString("pt-BR")} decididos na
+          janela
+        </span>
+        {t.massivo && (
+          <span className="rounded bg-violet-100 px-1.5 py-px text-[9.5px] font-bold uppercase tracking-wide text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+            massivo
+          </span>
+        )}
+      </div>
+
+      <p className="mt-1 text-[11.5px] leading-relaxed text-foreground/85">{frase}</p>
+
+      {t.dominanteAnterior && t.deltaPp !== null && (
+        <p className="mt-1 text-[10.5px] text-muted-foreground">
+          Antes da janela: <strong>{t.dominanteAnterior.rotulo}</strong> dominava (
+          {t.anteriores.toLocaleString("pt-BR")} decididos) · “{t.dominanteRecente.rotulo}”{" "}
+          {t.deltaPp >= 0 ? "ganhou" : "perdeu"} {Math.abs(t.deltaPp)} pontos.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PainelRecorte({
   e,
   perfil,
   filtro,
   natureza,
   avisoNatureza,
+  tendencia,
 }: {
   e: EstatisticaRecorte;
   perfil: PerfilRecorte | null;
   filtro: string;
   natureza?: ComposicaoNatureza;
   avisoNatureza?: string | null;
+  tendencia?: Tendencia | null;
 }) {
+  const recursal = e.recursal;
+  const decididos = e.decididos ?? e.comResultado;
   return (
     <div className="rounded-xl border bg-card px-3.5 py-3">
       <div className="flex items-center gap-1.5">
@@ -312,13 +434,13 @@ function PainelRecorte({
 
       <div className="mt-2.5 grid grid-cols-3 gap-2">
         <Tile n={e.total} rotulo="no recorte" />
-        <Tile n={e.comResultado} rotulo="já decididos" />
+        <Tile n={decididos} rotulo="já decididos" />
         <Tile n={e.emAndamento} rotulo="em andamento" />
       </div>
 
       {natureza && <PainelNatureza n={natureza} aviso={avisoNatureza ?? null} />}
 
-      {e.comResultado > 0 ? (
+      {e.comResultado > 0 && (
         <>
           <Barras e={e} />
           <p className="mt-2 text-[10px] text-muted-foreground">
@@ -326,7 +448,11 @@ function PainelRecorte({
           </p>
           <Transito e={e} />
         </>
-      ) : (
+      )}
+
+      {recursal && recursal.comResultado > 0 && <BarrasRecurso r={recursal} />}
+
+      {decididos === 0 && (
         // "Nenhum chegou ao fim" só é verdade quando HÁ processos. Com o
         // recorte vazio a frase mentia, e ainda aparecia junto do bloco "sem
         // base no acervo" — duas mensagens contando histórias diferentes sobre
@@ -337,7 +463,9 @@ function PainelRecorte({
         </p>
       )}
 
-      {e.comResultado > 0 && e.amostraPequena && (
+      {tendencia && <PainelTendencia t={tendencia} />}
+
+      {decididos > 0 && e.amostraPequena && (recursal?.amostraPequena ?? true) && (
         <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
           <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
           Amostra pequena — com esse número de casos decididos o percentual ainda é anedota, não
@@ -774,6 +902,7 @@ function Resposta({
         filtro={r.descricaoFiltro}
         natureza={r.natureza}
         avisoNatureza={r.avisoNatureza}
+        tendencia={r.tendencia ?? null}
       />
       {r.comparacao && <PainelComparacao c={r.comparacao} />}
 
@@ -805,13 +934,19 @@ function Resposta({
           )}
 
           {r.fontesDetalhe.length > 0 && (
-            <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/30">
-              <p className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-900 dark:text-emerald-300">
+            <details className="group mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/30">
+              {/* Fechada por padrão: quarenta linhas de CNJ abertas empurram a
+                  resposta pra fora da tela, e quem quer conferir a fonte clica
+                  na âncora do parágrafo. O selo continua visível — é ele que
+                  diz que a resposta tem lastro. */}
+              <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-bold text-emerald-900 dark:text-emerald-300">
                 <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
                 {r.fontesDetalhe.length === 1
                   ? "1 processo sustenta esta resposta"
                   : `${r.fontesDetalhe.length} processos sustentam esta resposta`}
-              </p>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" />
+                <span className="font-medium opacity-70 group-open:hidden">ver</span>
+              </summary>
               <ul className="mt-1.5 space-y-1">
                 {r.fontesDetalhe.map((f: FonteRecorte) => (
                   <li
@@ -835,7 +970,7 @@ function Resposta({
                   </li>
                 ))}
               </ul>
-            </div>
+            </details>
           )}
         </div>
       )}

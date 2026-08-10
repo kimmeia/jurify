@@ -12,7 +12,7 @@ import {
   BookOpen,
   Bot,
   Brain,
-  Calendar, CalendarCheck, CalendarClock, CalendarSearch, CalendarX,
+  CalendarCheck,
   CheckCircle2,
   ChevronDown, ChevronRight,
   CircleDollarSign,
@@ -67,11 +67,6 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   crm_buscar_contato: Search,
   crm_listar_acoes_cliente: BookOpen,
   processo_buscar_movimentacoes: BookOpen,
-  calcom_horarios: Calendar,
-  calcom_agendar: CheckCircle2,
-  calcom_listar: CalendarSearch,
-  calcom_cancelar: CalendarX,
-  calcom_remarcar: CalendarClock,
   agenda_criar: CalendarCheck,
   whatsapp_enviar: MessageCircle,
   whatsapp_aguardar_resposta: Pause,
@@ -99,7 +94,6 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
 const GRUPO_ICON: Record<GrupoSmartflow, LucideIcon> = {
   mensagem: MessageCircle,
   asaas: DollarSign,
-  calcom: Calendar,
   crm: Users,
   ia: Bot,
   acoes: Layers,
@@ -109,7 +103,6 @@ const GRUPO_ICON: Record<GrupoSmartflow, LucideIcon> = {
 const GRUPO_COR_ICONE: Record<GrupoSmartflow, string> = {
   mensagem: "text-blue-600",
   asaas: "text-emerald-600",
-  calcom: "text-orange-600",
   crm: "text-violet-600",
   ia: "text-violet-600",
   acoes: "text-indigo-600",
@@ -123,10 +116,6 @@ const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
   pagamento_vencido: AlertTriangle,
   pagamento_proximo_vencimento: Clock,
   novo_lead: Users,
-  agendamento_criado: CalendarCheck,
-  agendamento_cancelado: CalendarX,
-  agendamento_remarcado: CalendarClock,
-  agendamento_lembrete: Clock,
   manual: Play,
 };
 
@@ -137,10 +126,6 @@ const GATILHO_GRADIENT: Record<GatilhoSmartflow, { from: string; to: string; bg:
   pagamento_vencido: { from: "from-amber-500", to: "to-red-500", bg: "from-amber-50 to-red-50 dark:from-amber-950/40 dark:to-red-950/40", border: "border-amber-200 dark:border-amber-900" },
   pagamento_proximo_vencimento: { from: "from-amber-400", to: "to-orange-500", bg: "from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40", border: "border-amber-200 dark:border-amber-900" },
   novo_lead: { from: "from-violet-500", to: "to-pink-500", bg: "from-violet-50 to-pink-50 dark:from-violet-950/40 dark:to-pink-950/40", border: "border-violet-200 dark:border-violet-900" },
-  agendamento_criado: { from: "from-emerald-500", to: "to-green-600", bg: "from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/40", border: "border-orange-200 dark:border-orange-900" },
-  agendamento_cancelado: { from: "from-rose-500", to: "to-pink-600", bg: "from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/40", border: "border-orange-200 dark:border-orange-900" },
-  agendamento_remarcado: { from: "from-cyan-500", to: "to-blue-500", bg: "from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/40", border: "border-orange-200 dark:border-orange-900" },
-  agendamento_lembrete: { from: "from-orange-500", to: "to-amber-500", bg: "from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/40", border: "border-orange-200 dark:border-orange-900" },
   manual: { from: "from-slate-600", to: "to-slate-800", bg: "from-slate-100 to-slate-200 dark:from-slate-900/60 dark:to-slate-800", border: "border-slate-300 dark:border-slate-700" },
 };
 
@@ -288,7 +273,7 @@ export function EditorPaleta({
           const GrupoIcon = GRUPO_ICON[g.grupo] ?? Sparkles;
           const corIcone = GRUPO_COR_ICONE[g.grupo] ?? "text-slate-500";
           const aberto = estaExpandido(g.grupo);
-          // Categorias do grupo (popovers tipo "Kanban", "Asaas", "Cal.com")
+          // Categorias do grupo (popovers tipo "Kanban", "Asaas")
           const categorias = CATEGORIAS_PASSO.filter((c) => c.grupo === g.grupo);
           // Itens diretos do grupo (sem categoria popover)
           const diretos = g.itens.filter((t) => !getCategoriaDoTipo(t.id));

@@ -16,14 +16,13 @@ import {
   acharSlotAtivo,
   avaliarDiaSemana,
   avaliarHorarioEntre,
-  calcularMomentoLembrete,
+  avaliarJanelaHorario,
   calcularSlotsDoDia,
   chaveDiaLocal,
   clampConfigDisparo,
   contextoContemPagamento,
   contextoContemSlot,
   dateNoFuso,
-  deveDispararLembrete,
   deveDispararProximo,
   deveDispararVencido,
   deveReentrarNoWaitNode,
@@ -58,6 +57,41 @@ describe("avaliarHorarioEntre (condição por horário)", () => {
   });
   it("formato inválido → false", () => {
     expect(avaliarHorarioEntre(new Date("2026-05-27T17:00:00Z"), "9h", "18h", TZ)).toBe(false);
+  });
+});
+
+describe("avaliarJanelaHorario (condição combinada dia + horário)", () => {
+  // 27/05/2026 é uma quarta-feira.
+  const quartaAs14 = new Date("2026-05-27T17:00:00Z");
+  const quartaAs21 = new Date("2026-05-28T00:00:00Z");
+  const sabadoAs14 = new Date("2026-05-30T17:00:00Z");
+
+  it("dentro da faixa e num dia marcado", () => {
+    expect(avaliarJanelaHorario(quartaAs14, "09:00-18:00", "seg,ter,qua,qui,sex", TZ)).toBe(true);
+  });
+  it("dia marcado mas fora da faixa", () => {
+    expect(avaliarJanelaHorario(quartaAs21, "09:00-18:00", "seg,ter,qua,qui,sex", TZ)).toBe(false);
+  });
+  it("dentro da faixa mas em dia não marcado", () => {
+    expect(avaliarJanelaHorario(sabadoAs14, "09:00-18:00", "seg,ter,qua,qui,sex", TZ)).toBe(false);
+  });
+  it("sem dias marcados vale a semana inteira", () => {
+    expect(avaliarJanelaHorario(sabadoAs14, "09:00-18:00", "", TZ)).toBe(true);
+    expect(avaliarJanelaHorario(quartaAs21, "09:00-18:00", "", TZ)).toBe(false);
+  });
+  it("faixa que cruza a meia-noite", () => {
+    expect(avaliarJanelaHorario(quartaAs21, "20:00-06:00", "", TZ)).toBe(true);
+  });
+  it("faixa malformada reprova", () => {
+    expect(avaliarJanelaHorario(quartaAs14, "09:00", "", TZ)).toBe(false);
+    expect(avaliarJanelaHorario(quartaAs14, "", "", TZ)).toBe(false);
+    expect(avaliarJanelaHorario(quartaAs14, "9h-18h", "", TZ)).toBe(false);
+  });
+  it("respeita o fuso do escritório (Manaus atrasa 1h)", () => {
+    // 21:30 UTC = 18:30 em SP (fora, fim exclusivo) e 17:30 em Manaus (dentro).
+    const t = new Date("2026-05-27T21:30:00Z");
+    expect(avaliarJanelaHorario(t, "09:00-18:00", "", TZ)).toBe(false);
+    expect(avaliarJanelaHorario(t, "09:00-18:00", "", "America/Manaus")).toBe(true);
   });
 });
 
@@ -343,37 +377,6 @@ describe("chaveDiaLocal", () => {
   });
 });
 
-describe("calcularMomentoLembrete / deveDispararLembrete", () => {
-  it("1 dia antes às 18:00 (default)", () => {
-    const startTime = new Date("2026-04-22T14:00:00");
-    const momento = calcularMomentoLembrete(startTime, {})!;
-    expect(momento.getFullYear()).toBe(2026);
-    expect(momento.getMonth()).toBe(3); // abril
-    expect(momento.getDate()).toBe(21);
-    expect(momento.getHours()).toBe(18);
-    expect(momento.getMinutes()).toBe(0);
-  });
-
-  it("2 dias antes às 09:30 via config", () => {
-    const startTime = new Date("2026-04-22T14:00:00");
-    const momento = calcularMomentoLembrete(startTime, { diasAntes: 2, horario: "09:30" })!;
-    expect(momento.getDate()).toBe(20);
-    expect(momento.getHours()).toBe(9);
-    expect(momento.getMinutes()).toBe(30);
-  });
-
-  it("deveDispararLembrete respeita a janela", () => {
-    // Booking às 14:00 de 22/04; lembrete às 18:00 do dia 21.
-    const startTime = new Date("2026-04-22T14:00:00");
-    // Agora está 18:10 → dentro de janela de 15min
-    expect(deveDispararLembrete(startTime, {}, new Date("2026-04-21T18:10:00"), 15)).toBe(true);
-    // Agora está 17:40 → ainda não alcançou o momento
-    expect(deveDispararLembrete(startTime, {}, new Date("2026-04-21T17:40:00"), 15)).toBe(false);
-    // Agora está 19:00 → fora da janela (passou há 60min)
-    expect(deveDispararLembrete(startTime, {}, new Date("2026-04-21T19:00:00"), 15)).toBe(false);
-  });
-});
-
 describe("dateNoFuso / ymdNoFuso — timezone IANA", () => {
   it("dateNoFuso: '09:00 em America/Sao_Paulo' → 12:00 UTC", () => {
     // 21 abr 2026, 09:00 em Brasília (UTC-3) == 12:00 UTC
@@ -498,30 +501,6 @@ describe("deveReentrarNoWaitNode (retomada de execução pausada)", () => {
   it("não reentra quando o waitNodeId não bate com nenhum nó", () => {
     const passos = [{ clienteId: "a" }, { clienteId: "b" }];
     expect(deveReentrarNoWaitNode(passos, "inexistente")).toBe(false);
-  });
-});
-
-describe("calcularMomentoLembrete com fuso horário", () => {
-  it("'18:00 em Brasília' no dia anterior ao booking (UTC)", () => {
-    const booking = new Date("2026-04-22T14:00:00.000Z");
-    const momento = calcularMomentoLembrete(
-      booking,
-      { diasAntes: 1, horario: "18:00" },
-      "America/Sao_Paulo",
-    );
-    // 21 abr 18:00 SP == 21:00 UTC
-    expect(momento?.toISOString()).toBe("2026-04-21T21:00:00.000Z");
-  });
-
-  it("mesmo booking em Manaus dispara 1h depois (UTC-4)", () => {
-    const booking = new Date("2026-04-22T14:00:00.000Z");
-    const momento = calcularMomentoLembrete(
-      booking,
-      { diasAntes: 1, horario: "18:00" },
-      "America/Manaus",
-    );
-    // 21 abr 18:00 Manaus == 22:00 UTC
-    expect(momento?.toISOString()).toBe("2026-04-21T22:00:00.000Z");
   });
 });
 

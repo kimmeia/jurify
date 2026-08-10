@@ -22,6 +22,8 @@ export interface ProcessoDataJud {
   classeNome: string | null;
   assuntoCodigo: number | null;
   assuntoNome: string | null;
+  /** Todos os assuntos, na ordem em que vieram, separados por " · ". */
+  assuntosTodos: string | null;
   orgaoCodigo: number | null;
   orgaoNome: string | null;
   /** ISO ou null. */
@@ -90,10 +92,19 @@ export function normalizarHit(hit: unknown): ResultadoNormalizacao {
   const tribunal = texto(src.tribunal);
   if (!tribunal) return { ok: false, motivo: "sem_tribunal" };
 
-  // Um processo pode ter vários assuntos; guardamos o primeiro, que é o
-  // principal na convenção da TPU. Os demais não mudam a estatística que a
-  // gente quer ("revisional contra banco costuma dar quanto").
-  const assunto = Array.isArray(src.assuntos) ? src.assuntos[0] : null;
+  // Um processo pode ter vários assuntos. O primeiro é o principal na
+  // convenção da TPU e continua sendo o que a tela mostra em destaque — mas
+  // guardamos TODOS, porque é neles que mora o conteúdo da causa. Num agravo,
+  // o principal costuma ser a matéria processual genérica e a específica
+  // (busca e apreensão, alimentos) vem depois: procurar só no primeiro fazia
+  // o recorte por conteúdo devolver o balaio inteiro de agravos.
+  const listaAssuntos = Array.isArray(src.assuntos) ? src.assuntos : [];
+  const assunto = listaAssuntos[0] ?? null;
+  const nomesAssuntos: string[] = [];
+  for (const a of listaAssuntos) {
+    const nome = texto(a?.nome);
+    if (nome && !nomesAssuntos.includes(nome)) nomesAssuntos.push(nome);
+  }
 
   const movimentos: MovimentoDataJud[] = (Array.isArray(src.movimentos) ? src.movimentos : [])
     .map((m: any) => {
@@ -115,6 +126,7 @@ export function normalizarHit(hit: unknown): ResultadoNormalizacao {
       classeNome: texto(src.classe?.nome),
       assuntoCodigo: inteiro(assunto?.codigo),
       assuntoNome: texto(assunto?.nome),
+      assuntosTodos: nomesAssuntos.length > 0 ? nomesAssuntos.join(" · ") : null,
       orgaoCodigo: inteiro(src.orgaoJulgador?.codigo),
       orgaoNome: texto(src.orgaoJulgador?.nome),
       ajuizamentoEm: iso(src.dataAjuizamento),

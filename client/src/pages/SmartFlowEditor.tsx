@@ -48,7 +48,7 @@ import {
   AlertTriangle, ArrowLeft, Banknote, BookOpen, Brain, Bot, Calendar, CheckCircle2, ChevronDown, Circle,
   CircleDollarSign, Clock, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle, MessageCircleQuestion, Shuffle,
   Move, Pause, PhoneCall, Play, Plus, Repeat, Save, Search, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, Zap,
-  CalendarCheck, CalendarX, CalendarClock, CalendarSearch, Trash2, XCircle,
+  CalendarCheck, Trash2, XCircle,
   Variable as VariableIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -124,11 +124,6 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   crm_buscar_contato: Users,
   crm_listar_acoes_cliente: BookOpen,
   processo_buscar_movimentacoes: BookOpen,
-  calcom_horarios: Calendar,
-  calcom_agendar: CheckCircle2,
-  calcom_listar: CalendarSearch,
-  calcom_cancelar: CalendarX,
-  calcom_remarcar: CalendarClock,
   agenda_criar: CalendarCheck,
   whatsapp_enviar: MessageCircle,
   whatsapp_aguardar_resposta: Pause,
@@ -168,10 +163,6 @@ const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
   pagamento_vencido: AlertTriangle,
   pagamento_proximo_vencimento: Clock,
   novo_lead: Users,
-  agendamento_criado: CalendarCheck,
-  agendamento_cancelado: CalendarX,
-  agendamento_remarcado: CalendarClock,
-  agendamento_lembrete: Clock,
   manual: Play,
 };
 
@@ -182,7 +173,6 @@ const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
 const GRUPO_ICON: Record<GrupoSmartflow, LucideIcon> = {
   mensagem: MessageCircle,
   asaas: DollarSign,
-  calcom: Calendar,
   crm: Users,
   ia: Bot,
   acoes: Zap,
@@ -246,11 +236,6 @@ const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
   crm_buscar_contato: { grad: "from-violet-500 to-pink-500", border: "border-violet-300 dark:border-violet-800" },
   crm_listar_acoes_cliente: { grad: "from-violet-500 to-pink-500", border: "border-violet-300 dark:border-violet-800" },
   processo_buscar_movimentacoes: { grad: "from-indigo-500 to-blue-500", border: "border-indigo-300 dark:border-indigo-800" },
-  calcom_horarios: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
-  calcom_agendar: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
-  calcom_listar: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
-  calcom_cancelar: { grad: "from-rose-500 to-pink-500", border: "border-rose-300 dark:border-rose-800" },
-  calcom_remarcar: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
   agenda_criar: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
   whatsapp_enviar: { grad: "from-teal-500 to-cyan-600", border: "border-teal-300 dark:border-teal-800" },
   whatsapp_aguardar_resposta: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
@@ -863,13 +848,6 @@ function resumirConfigGatilho(g: GatilhoSmartflow, cfg: Record<string, unknown>)
     const dias = Number(cfg.repetirPorDias ?? 1);
     return `${base} · ${disparos}×/dia das ${horario}${dias > 1 ? ` por ${dias}d` : ""}`;
   }
-  if (g === "agendamento_lembrete") {
-    const dias = Number(cfg.diasAntes ?? 1);
-    const horario = typeof cfg.horario === "string" ? cfg.horario : "18:00";
-    if (dias === 0) return `No dia às ${horario}`;
-    if (dias === 1) return `Véspera às ${horario}`;
-    return `${dias} dias antes às ${horario}`;
-  }
   return "";
 }
 
@@ -891,16 +869,6 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
       const fers = Array.isArray(config.ferramentas) ? (config.ferramentas as string[]).length : 0;
       return `${ags} · ${fers} ação(ões)`;
     }
-    case "calcom_horarios":
-      return config.duracao ? `${config.duracao} min` : "";
-    case "calcom_listar":
-      return config.status ? String(config.status) : "upcoming";
-    case "calcom_cancelar":
-      return typeof config.bookingId === "string" && config.bookingId ? `#${config.bookingId}` : "usa {agendamentoId}";
-    case "calcom_remarcar":
-      return typeof config.novoHorario === "string" && config.novoHorario
-        ? truncar(String(config.novoHorario), 30)
-        : "usa {horarioEscolhido}";
     case "whatsapp_enviar":
       if (config.modo === "template") {
         const nome = String(config.templateNome || "").trim();
@@ -2318,37 +2286,6 @@ function ConfigGatilhoFields({
     );
   }
 
-  if (node.data.gatilho === "agendamento_lembrete") {
-    return (
-      <div className="space-y-3">
-        <div>
-          <Label className="text-xs">Dias antes do agendamento</Label>
-          <Input
-            type="number"
-            min={0}
-            max={30}
-            value={Number(cfg.diasAntes ?? 1)}
-            onChange={(e) => onChange({ diasAntes: Math.max(0, Number(e.target.value) || 0) })}
-          />
-          <p className="text-[10px] text-muted-foreground mt-1">
-            <strong>0</strong> = no mesmo dia. <strong>1</strong> = véspera.
-          </p>
-        </div>
-        <div>
-          <Label className="text-xs">Horário</Label>
-          <Input
-            type="time"
-            value={String(cfg.horario || "18:00")}
-            onChange={(e) => onChange({ horario: e.target.value })}
-          />
-          <p className="text-[10px] text-muted-foreground mt-1">
-            Momento do dia em que o lembrete é enviado (timezone America/Sao_Paulo).
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   if (node.data.gatilho === "whatsapp_mensagem") {
     return (
       <p className="text-xs text-muted-foreground">
@@ -3266,7 +3203,6 @@ function categorizarVariavelCondicao(path: string): string {
   if (path.startsWith("cliente.")) return "Cliente";
   if (path.startsWith("pagamento") || path.startsWith("cobrancas") || path === "valorTotalAberto" || path === "valorTotalVencido" || path === "cobrancasAbertasQtd") return "Pagamento (Asaas)";
   if (path.startsWith("kanban") || path === "kanbanCardId") return "Kanban";
-  if (path.startsWith("calcom") || path === "horarioEscolhido" || path === "agendamentoId" || path === "bookingsQuantidade") return "Agendamento (Cal.com)";
   if (["mensagem", "intencao", "respostaIA", "transferir"].includes(path)) return "Mensagem/IA";
   return "Outros";
 }
@@ -3402,9 +3338,9 @@ function ConfigCondicionalFields({
   // Catálogo dinâmico — mesmo do autocomplete `{{...}}`. Inclui campos
   // personalizados do escritório (`cliente.campos.<chave>`).
   const variaveis = useSmartFlowVariaveis();
-  // Mantém os 11 paths legados pra cenários antigos que salvaram
-  // exatamente esses valores (a maioria já vem no catálogo, mas
-  // `transferir`, `bookingsQuantidade` e similares não estão lá).
+  // Mantém os paths legados pra cenários antigos que salvaram exatamente
+  // esses valores (a maioria já vem no catálogo, mas `transferir` e
+  // similares não estão lá).
   const sugestoesAgrupadas = useMemo(() => {
     const map = new Map<string, { path: string; label: string }>();
     for (const v of variaveis) {
@@ -3422,7 +3358,7 @@ function ConfigCondicionalFields({
     }
     const ORDEM_GRUPOS = [
       "Cliente", "Personalizados", "Pagamento (Asaas)",
-      "Agendamento (Cal.com)", "Kanban", "Mensagem/IA", "Outros",
+      "Kanban", "Mensagem/IA", "Outros",
     ];
     return ORDEM_GRUPOS
       .filter((g) => grupos.has(g))
@@ -3524,7 +3460,7 @@ function ConfigCondicionalFields({
                         {ri > 0 && <div className="text-[9px] font-bold text-violet-500 text-center">{logica}</div>}
                         <div className="flex items-start gap-1">
                           <div className="flex-1 space-y-1.5">
-                            {r.operador !== "horario_entre" && r.operador !== "dia_semana" && (
+                            {r.operador !== "janela_horario" && r.operador !== "horario_entre" && r.operador !== "dia_semana" && (
                               <CampoCondicaoCombobox
                                 value={String(r.campo || "")}
                                 onChange={(v) => atualizarReq(ri, { campo: v })}
@@ -3538,6 +3474,8 @@ function ConfigCondicionalFields({
                                   ri,
                                   v === "tem_tag" || v === "nao_tem_tag"
                                     ? { operador: v, campo: "cliente.tags" }
+                                    : v === "janela_horario"
+                                    ? { operador: v, campo: "", valor: r.valor || "09:00-18:00", valor2: r.valor2 ?? "seg,ter,qua,qui,sex" }
                                     : v === "horario_entre"
                                     ? { operador: v, campo: "", valor: r.valor || "09:00", valor2: r.valor2 || "18:00" }
                                     : v === "dia_semana"
@@ -3559,11 +3497,57 @@ function ConfigCondicionalFields({
                                 <SelectItem value="entre">entre (range numérico)</SelectItem>
                                 <SelectItem value="tem_tag">tem a tag (contato)</SelectItem>
                                 <SelectItem value="nao_tem_tag">não tem a tag (contato)</SelectItem>
-                                <SelectItem value="horario_entre">está no horário (faixa)</SelectItem>
-                                <SelectItem value="dia_semana">é dia da semana</SelectItem>
+                                <SelectItem value="janela_horario">está no dia e horário</SelectItem>
+                                {r.operador === "janela_horario" && (() => {
+                              const [ini, fim] = String(r.valor || "-").split("-");
+                              const dias = String(r.valor2 || "").split(",").map((d) => d.trim()).filter(Boolean);
+                              const setFaixa = (novoIni: string, novoFim: string) =>
+                                atualizarReq(ri, { valor: `${novoIni}-${novoFim}` });
+                              return (
+                                <div className="space-y-1.5 rounded border bg-card/60 p-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] text-muted-foreground w-6">das</span>
+                                    <Input type="time" value={ini || ""} onChange={(e) => setFaixa(e.target.value, fim || "")} className="h-7 text-xs" />
+                                    <span className="text-[10px] text-muted-foreground">às</span>
+                                    <Input type="time" value={fim || ""} onChange={(e) => setFaixa(ini || "", e.target.value)} className="h-7 text-xs" />
+                                  </div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {(([["seg", "Seg"], ["ter", "Ter"], ["qua", "Qua"], ["qui", "Qui"], ["sex", "Sex"], ["sab", "Sáb"], ["dom", "Dom"]]) as Array<[string, string]>).map(([id, lbl]) => {
+                                      const sel = dias.includes(id);
+                                      return (
+                                        <button
+                                          key={id}
+                                          type="button"
+                                          onClick={() => {
+                                            const set = new Set(dias);
+                                            if (sel) set.delete(id); else set.add(id);
+                                            atualizarReq(ri, { valor2: [...set].join(",") });
+                                          }}
+                                          className={`px-2 py-0.5 rounded text-[10px] border ${sel ? "bg-violet-600 text-white border-violet-600" : "bg-card text-muted-foreground hover:bg-accent"}`}
+                                        >
+                                          {lbl}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    {dias.length === 0
+                                      ? "Nenhum dia marcado — vale todos os dias da semana."
+                                      : "Vale só nos dias marcados."}{" "}
+                                    Fim exclusivo (18:00 já está fora). Fuso do escritório.
+                                  </p>
+                                </div>
+                              );
+                            })()}
+                            {r.operador === "horario_entre" && (
+                                  <SelectItem value="horario_entre">está no horário (faixa)</SelectItem>
+                                )}
+                                {r.operador === "dia_semana" && (
+                                  <SelectItem value="dia_semana">é dia da semana</SelectItem>
+                                )}
                               </SelectContent>
                             </Select>
-                            {r.operador !== "existe" && r.operador !== "nao_existe" && r.operador !== "verdadeiro" && r.operador !== "horario_entre" && r.operador !== "dia_semana" && (
+                            {r.operador !== "existe" && r.operador !== "nao_existe" && r.operador !== "verdadeiro" && r.operador !== "janela_horario" && r.operador !== "horario_entre" && r.operador !== "dia_semana" && (
                               <Input
                                 value={String(r.valor || "")}
                                 onChange={(e) => atualizarReq(ri, { valor: e.target.value })}
@@ -5714,101 +5698,6 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigCrmListarAcoesClienteFields cfg={cfg} onChange={onChange} />;
     case "processo_buscar_movimentacoes":
       return <ConfigProcessoBuscarMovimentacoesFields cfg={cfg} onChange={onChange} />;
-    case "calcom_horarios":
-      return (
-        <div>
-          <Label className="text-xs">Duração da reunião (min)</Label>
-          <Input
-            type="number"
-            value={Number(cfg.duracao || 30)}
-            min={5}
-            max={240}
-            onChange={(e) => onChange({ duracao: Number(e.target.value) || 30 })}
-          />
-        </div>
-      );
-    case "calcom_agendar":
-      return (
-        <p className="text-xs text-muted-foreground">
-          Confirma o horário escolhido no Cal.com. Requer que exista um passo <strong>Buscar horários</strong> antes.
-        </p>
-      );
-    case "calcom_listar":
-      return (
-        <div className="space-y-2">
-          <div>
-            <Label className="text-xs">Status</Label>
-            <Select
-              value={String(cfg.status || "upcoming")}
-              onValueChange={(v) => onChange({ status: v })}
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="upcoming">Próximos</SelectItem>
-                <SelectItem value="past">Passados</SelectItem>
-                <SelectItem value="cancelled">Cancelados</SelectItem>
-                <SelectItem value="unconfirmed">Não confirmados</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              A lista de agendamentos vai pro contexto como <code>bookings</code> (quantidade em <code>bookingsQuantidade</code>).
-            </p>
-          </div>
-        </div>
-      );
-    case "calcom_cancelar":
-      return (
-        <div className="space-y-2">
-          <div>
-            <Label className="text-xs">ID do agendamento (opcional)</Label>
-            <Input
-              value={String(cfg.bookingId || "")}
-              onChange={(e) => onChange({ bookingId: e.target.value })}
-              placeholder="Deixe vazio para usar {agendamentoId} do contexto"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Motivo (opcional)</Label>
-            <Input
-              value={String(cfg.motivo || "")}
-              onChange={(e) => onChange({ motivo: e.target.value })}
-              placeholder="Ex: Cliente solicitou cancelamento"
-            />
-          </div>
-        </div>
-      );
-    case "calcom_remarcar":
-      return (
-        <div className="space-y-2">
-          <div>
-            <Label className="text-xs">ID do agendamento (opcional)</Label>
-            <Input
-              value={String(cfg.bookingId || "")}
-              onChange={(e) => onChange({ bookingId: e.target.value })}
-              placeholder="Deixe vazio para usar {agendamentoId} do contexto"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Novo horário (opcional)</Label>
-            <Input
-              value={String(cfg.novoHorario || "")}
-              onChange={(e) => onChange({ novoHorario: e.target.value })}
-              placeholder="ISO 8601. Vazio usa {horarioEscolhido} do contexto"
-            />
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Use um passo <strong>Buscar horários</strong> antes para popular <code>horarioEscolhido</code>.
-            </p>
-          </div>
-          <div>
-            <Label className="text-xs">Motivo (opcional)</Label>
-            <Input
-              value={String(cfg.motivo || "")}
-              onChange={(e) => onChange({ motivo: e.target.value })}
-              placeholder="Ex: Cliente pediu para remarcar"
-            />
-          </div>
-        </div>
-      );
     case "agenda_criar":
       return <ConfigAgendaCriarFields cfg={cfg} onChange={onChange} />;
     case "whatsapp_enviar":

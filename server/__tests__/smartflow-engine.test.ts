@@ -5,13 +5,12 @@
  * Cada teste verifica um fluxo específico:
  *   - Classificação de intenção
  *   - Resposta IA
- *   - Busca + agendamento Cal.com
  *   - Fluxo completo atendimento + agendamento
  *   - Condicionais
  *   - Tratamento de erros
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   executarCenario,
   interpretarSaidaAtendente,
@@ -44,16 +43,11 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     conversarComAgente: vi.fn().mockResolvedValue({ resposta: "ok", acao: null }),
     resolverResponsavelAgenda: vi.fn().mockResolvedValue(null),
     distribuirAtendimentoPorSetor: vi.fn().mockResolvedValue({ id: 9, nome: "Atendente Teste" }),
-    buscarHorarios: vi.fn().mockResolvedValue(["2026-04-15 10:00", "2026-04-15 14:00", "2026-04-16 09:00"]),
-    criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
     criarAgendamentoInterno: vi.fn().mockResolvedValue(555),
     verificarDisponibilidadeAgenda: vi.fn().mockResolvedValue({ disponivel: true, conflitos: 0 }),
     listarAgendaResponsavel: vi.fn().mockResolvedValue([]),
     atualizarTagsContato: vi.fn().mockResolvedValue([]),
     editarAgendamentoInterno: vi.fn().mockResolvedValue(undefined),
-    listarBookings: vi.fn().mockResolvedValue([]),
-    cancelarBooking: vi.fn().mockResolvedValue(true),
-    reagendarBooking: vi.fn().mockResolvedValue(true),
     enviarWhatsApp: vi.fn().mockResolvedValue(true),
     enviarWhatsAppInteractive: vi.fn().mockResolvedValue(true),
     chamarWebhook: vi.fn().mockResolvedValue({ ok: true }),
@@ -1207,6 +1201,56 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  describe("condição de dia e horário (janela_horario)", () => {
+    const rota = (valor: string, valor2: string): Passo[] => [
+      {
+        id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+        proximoSe: { cond_jh: "sim", fallback: "nao" },
+        config: { condicoes: [{ id: "jh", campo: "", operador: "janela_horario", valor, valor2 }] },
+      },
+      { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "sim", config: { template: "DENTRO" } },
+      { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "nao", config: { template: "FORA" } },
+    ];
+    // 27/05/2026 é quarta-feira. 17:00Z = 14:00 em Brasília.
+    const ctxBase = { canalId: 1, telefoneCliente: "5585" };
+
+    afterEach(() => vi.useRealTimers());
+
+    it("roteia pelo ramo de dentro no expediente", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-05-27T17:00:00Z"));
+      const r = await executarCenario(rota("09:00-18:00", "seg,ter,qua,qui,sex"), { ...ctxBase }, criarMockExecutores());
+      expect(r.respostas).toContain("DENTRO");
+    });
+
+    it("roteia pelo fallback fora do horário", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-05-28T00:00:00Z")); // 21:00 Brasília
+      const r = await executarCenario(rota("09:00-18:00", "seg,ter,qua,qui,sex"), { ...ctxBase }, criarMockExecutores());
+      expect(r.respostas).toContain("FORA");
+    });
+
+    it("roteia pelo fallback no fim de semana", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-05-30T17:00:00Z")); // sábado 14:00
+      const r = await executarCenario(rota("09:00-18:00", "seg,ter,qua,qui,sex"), { ...ctxBase }, criarMockExecutores());
+      expect(r.respostas).toContain("FORA");
+    });
+
+    it("usa o fuso do escritório quando o contexto traz fusoHorario", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-05-27T21:30:00Z")); // 18:30 SP · 17:30 Manaus
+      const sp = await executarCenario(rota("09:00-18:00", ""), { ...ctxBase }, criarMockExecutores());
+      expect(sp.respostas).toContain("FORA");
+      const manaus = await executarCenario(
+        rota("09:00-18:00", ""),
+        { ...ctxBase, fusoHorario: "America/Manaus" },
+        criarMockExecutores(),
+      );
+      expect(manaus.respostas).toContain("DENTRO");
+    });
+  });
+
   describe("tags do contato (condição + ação)", () => {
     const rota = (operador: string, valor: string): Passo[] => [
       {
@@ -2147,203 +2191,6 @@ describe("SmartFlow Engine", () => {
     });
   });
 
-  describe("calcom_horarios", () => {
-    it("retorna horários formatados", async () => {
-      const exec = criarMockExecutores();
-      const passos: Passo[] = [
-        { id: 1, ordem: 1, tipo: "calcom_horarios", config: { duracao: 30 } },
-      ];
-
-      const resultado = await executarCenario(passos, {}, exec);
-
-      expect(resultado.sucesso).toBe(true);
-      expect(resultado.contexto.horariosDisponiveis).toHaveLength(3);
-      expect(resultado.respostas[0]).toContain("horários disponíveis");
-    });
-
-    it("para o fluxo quando não tem horários", async () => {
-      const exec = criarMockExecutores({ buscarHorarios: vi.fn().mockResolvedValue([]) });
-      const passos: Passo[] = [
-        { id: 1, ordem: 1, tipo: "calcom_horarios", config: {} },
-        { id: 2, ordem: 2, tipo: "ia_responder", config: {} }, // não deve executar
-      ];
-
-      const resultado = await executarCenario(passos, {}, exec);
-
-      expect(resultado.sucesso).toBe(true);
-      expect(resultado.passosExecutados).toBe(1); // parou no 1
-      expect(resultado.respostas[0]).toContain("não temos horários");
-    });
-  });
-
-  describe("calcom_agendar", () => {
-    it("cria agendamento com sucesso", async () => {
-      const exec = criarMockExecutores();
-      const passos: Passo[] = [
-        { id: 1, ordem: 1, tipo: "calcom_agendar", config: {} },
-      ];
-
-      const resultado = await executarCenario(
-        passos,
-        { horarioEscolhido: "2026-04-15 10:00", nomeCliente: "João", emailCliente: "joao@email.com" },
-        exec,
-      );
-
-      expect(resultado.sucesso).toBe(true);
-      expect(resultado.contexto.agendamentoId).toBe("booking_123");
-      expect(resultado.respostas[0]).toContain("agendada com sucesso");
-    });
-
-    it("falha sem horário escolhido", async () => {
-      const exec = criarMockExecutores();
-      const passos: Passo[] = [
-        { id: 1, ordem: 1, tipo: "calcom_agendar", config: {} },
-      ];
-
-      const resultado = await executarCenario(passos, {}, exec);
-
-      expect(resultado.sucesso).toBe(false);
-      expect(resultado.erro).toContain("horário");
-    });
-  });
-
-  describe("calcom_listar", () => {
-    it("chama listarBookings com status do config e grava no contexto", async () => {
-      const bookings = [
-        { id: 1, titulo: "Reunião", startTime: "2026-05-01T10:00:00Z" },
-        { id: 2, titulo: "Consulta", startTime: "2026-05-02T14:00:00Z" },
-      ];
-      const listarBookings = vi.fn().mockResolvedValue(bookings);
-      const exec = criarMockExecutores({ listarBookings });
-      const passos: Passo[] = [
-        { id: 1, ordem: 1, tipo: "calcom_listar", config: { status: "upcoming" } },
-      ];
-
-      const resultado = await executarCenario(passos, {}, exec);
-
-      expect(resultado.sucesso).toBe(true);
-      expect(listarBookings).toHaveBeenCalledWith({ status: "upcoming" });
-      expect(resultado.contexto.bookings).toEqual(bookings);
-      expect(resultado.contexto.bookingsQuantidade).toBe(2);
-    });
-
-    it("usa 'upcoming' como status padrão quando config está vazia", async () => {
-      const listarBookings = vi.fn().mockResolvedValue([]);
-      const exec = criarMockExecutores({ listarBookings });
-      const passos: Passo[] = [
-        { id: 1, ordem: 1, tipo: "calcom_listar", config: {} },
-      ];
-
-      await executarCenario(passos, {}, exec);
-
-      expect(listarBookings).toHaveBeenCalledWith({ status: "upcoming" });
-    });
-  });
-
-  describe("calcom_cancelar", () => {
-    it("usa bookingId do config quando presente", async () => {
-      const cancelarBooking = vi.fn().mockResolvedValue(true);
-      const exec = criarMockExecutores({ cancelarBooking });
-      const passos: Passo[] = [
-        { id: 1, ordem: 1, tipo: "calcom_cancelar", config: { bookingId: "999", motivo: "teste" } },
-      ];
-
-      const resultado = await executarCenario(passos, { agendamentoId: "ignorar_esse" }, exec);
-
-      expect(resultado.sucesso).toBe(true);
-      expect(cancelarBooking).toHaveBeenCalledWith("999", "teste");
-      expect(resultado.contexto.bookingCancelado).toBe("999");
-    });
-
-    it("cai no ctx.agendamentoId quando bookingId não está no config", async () => {
-      const cancelarBooking = vi.fn().mockResolvedValue(true);
-      const exec = criarMockExecutores({ cancelarBooking });
-      const passos: Passo[] = [
-        { id: 1, ordem: 1, tipo: "calcom_cancelar", config: {} },
-      ];
-
-      await executarCenario(passos, { agendamentoId: "456" }, exec);
-
-      expect(cancelarBooking).toHaveBeenCalledWith("456", undefined);
-    });
-
-    it("falha quando não tem bookingId em lugar nenhum", async () => {
-      const cancelarBooking = vi.fn();
-      const exec = criarMockExecutores({ cancelarBooking });
-      const passos: Passo[] = [
-        { id: 1, ordem: 1, tipo: "calcom_cancelar", config: {} },
-      ];
-
-      const resultado = await executarCenario(passos, {}, exec);
-
-      expect(resultado.sucesso).toBe(false);
-      expect(cancelarBooking).not.toHaveBeenCalled();
-    });
-
-    it("falha quando o Cal.com retorna false", async () => {
-      const cancelarBooking = vi.fn().mockResolvedValue(false);
-      const exec = criarMockExecutores({ cancelarBooking });
-      const passos: Passo[] = [
-        { id: 1, ordem: 1, tipo: "calcom_cancelar", config: { bookingId: "1" } },
-      ];
-
-      const resultado = await executarCenario(passos, {}, exec);
-
-      expect(resultado.sucesso).toBe(false);
-      expect(resultado.erro).toContain("recusou");
-    });
-  });
-
-  describe("calcom_remarcar", () => {
-    it("usa bookingId e novoHorario do config", async () => {
-      const reagendarBooking = vi.fn().mockResolvedValue(true);
-      const exec = criarMockExecutores({ reagendarBooking });
-      const passos: Passo[] = [
-        {
-          id: 1,
-          ordem: 1,
-          tipo: "calcom_remarcar",
-          config: { bookingId: "42", novoHorario: "2026-06-01T10:00:00Z" },
-        },
-      ];
-
-      const resultado = await executarCenario(passos, {}, exec);
-
-      expect(resultado.sucesso).toBe(true);
-      expect(reagendarBooking).toHaveBeenCalledWith("42", "2026-06-01T10:00:00Z", undefined);
-      expect(resultado.contexto.horarioEscolhido).toBe("2026-06-01T10:00:00Z");
-    });
-
-    it("fallback pro contexto quando config está vazia", async () => {
-      const reagendarBooking = vi.fn().mockResolvedValue(true);
-      const exec = criarMockExecutores({ reagendarBooking });
-      const passos: Passo[] = [
-        { id: 1, ordem: 1, tipo: "calcom_remarcar", config: {} },
-      ];
-
-      await executarCenario(
-        passos,
-        { agendamentoId: "777", horarioEscolhido: "2026-07-01T14:00:00Z" },
-        exec,
-      );
-
-      expect(reagendarBooking).toHaveBeenCalledWith("777", "2026-07-01T14:00:00Z", undefined);
-    });
-
-    it("falha sem novo horário", async () => {
-      const reagendarBooking = vi.fn();
-      const exec = criarMockExecutores({ reagendarBooking });
-      const passos: Passo[] = [
-        { id: 1, ordem: 1, tipo: "calcom_remarcar", config: { bookingId: "42" } },
-      ];
-
-      const resultado = await executarCenario(passos, {}, exec);
-
-      expect(resultado.sucesso).toBe(false);
-      expect(reagendarBooking).not.toHaveBeenCalled();
-    });
-  });
-
   describe("transferir", () => {
     it("marca transferir e para o fluxo", async () => {
       const exec = criarMockExecutores();
@@ -2928,13 +2775,13 @@ describe("SmartFlow Engine", () => {
       const exec = criarMockExecutores();
       const passos: Passo[] = [
         { id: 1, ordem: 1, tipo: "condicional", config: { campo: "intencao", valor: "agendar" } },
-        { id: 2, ordem: 2, tipo: "calcom_horarios", config: {} },
+        { id: 2, ordem: 2, tipo: "ia_responder", config: { prompt: "responde" } },
       ];
 
       const resultado = await executarCenario(passos, { intencao: "agendar" }, exec);
 
       expect(resultado.passosExecutados).toBe(2);
-      expect(resultado.contexto.horariosDisponiveis).toBeDefined();
+      expect(resultado.contexto.respostaIA).toBeDefined();
     });
   });
 
@@ -3296,8 +3143,8 @@ describe("SmartFlow Engine", () => {
     });
   });
 
-  describe("fluxo completo: atendimento + agendamento", () => {
-    it("classifica → oferece horários → agenda", async () => {
+  describe("fluxo completo: atendimento", () => {
+    it("classifica → responde", async () => {
       const exec = criarMockExecutores({
         chamarIA: vi.fn()
           .mockResolvedValueOnce("agendar") // classificação
@@ -3307,7 +3154,6 @@ describe("SmartFlow Engine", () => {
       const passos: Passo[] = [
         { id: 1, ordem: 1, tipo: "ia_classificar", config: { categorias: ["agendar", "duvida", "emergencia"] } },
         { id: 2, ordem: 2, tipo: "ia_responder", config: { prompt: "O cliente quer agendar" } },
-        { id: 3, ordem: 3, tipo: "calcom_horarios", config: { duracao: 30 } },
       ];
 
       const resultado = await executarCenario(
@@ -3317,11 +3163,10 @@ describe("SmartFlow Engine", () => {
       );
 
       expect(resultado.sucesso).toBe(true);
-      expect(resultado.passosExecutados).toBe(3);
+      expect(resultado.passosExecutados).toBe(2);
       expect(resultado.contexto.intencao).toBe("agendar");
       expect(resultado.contexto.respostaIA).toContain("horários");
-      expect(resultado.contexto.horariosDisponiveis).toHaveLength(3);
-      expect(resultado.respostas).toHaveLength(2); // resposta IA + horários
+      expect(resultado.respostas).toHaveLength(1);
     });
   });
 

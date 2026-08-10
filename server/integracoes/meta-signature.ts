@@ -6,8 +6,8 @@
  * `X-Hub-Signature-256` contém `sha256=<hex>` — o hash SHA-256 HMAC do
  * body raw da request.
  *
- * Diferenças vs Cal.com (`./calcom-signature.ts`):
- *  - Header com prefixo `sha256=` (Meta) vs hex puro (Cal.com).
+ * Particularidades da Meta:
+ *  - Header com prefixo `sha256=`.
  *  - Secret é GLOBAL no JuridFlow: vem da config admin
  *    (`admin_integracoes.config.appSecret`), não por canal — Meta App
  *    é único pro tenant e atende todos os escritórios.
