@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:#e9edf3; color:#0f172a; }
+  .wrap { padding:24px 26px; height:100%; display:flex; flex-direction:column; gap:16px; }
+
+  .topo .h1 { font-family:'Poppins'; font-weight:700; font-size:24px; letter-spacing:-.02em; }
+  .topo .sub { margin-top:4px; font-size:13px; color:#64748b; }
+
+  .tres { flex:1; display:grid; grid-template-columns:repeat(3,1fr); gap:16px; min-height:0; }
+  .painel { border-radius:20px; overflow:hidden; display:flex; flex-direction:column; }
+  .rot { padding:13px 18px; font-size:12px; font-weight:700; letter-spacing:.06em;
+         text-transform:uppercase; display:flex; align-items:center; gap:9px; }
+  .rot em { font-style:normal; font-weight:500; letter-spacing:0; text-transform:none;
+            font-size:11.5px; opacity:.75; }
+  .tela { flex:1; padding:20px 20px 22px; display:flex; flex-direction:column; gap:16px; }
+
+  .lab { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+  .num { font-variant-numeric:tabular-nums; }
+
+  /* ═══ A · console escuro ═══ */
+  .A { background:#0b1220; }
+  .A .rot { background:#111c30; color:#8b5cf6; }
+  .A .tela { color:#e2e8f0; }
+  .A .bloco { background:#111c30; border:1px solid #1e2c45; border-radius:16px; padding:17px 18px; }
+  .A .est { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+            color:#a78bfa; display:flex; align-items:center; gap:7px; }
+  .A .est i { width:6px; height:6px; border-radius:50%; background:#8b5cf6;
+              box-shadow:0 0 0 4px #8b5cf633; }
+  .A .n { margin-top:11px; font-size:38px; font-weight:800; letter-spacing:-.035em; line-height:1; }
+  .A .n small { font-size:13px; font-weight:500; color:#7e8ba3; margin-left:8px; letter-spacing:0; }
+  .A .tr { margin-top:13px; height:4px; border-radius:999px; background:#1e2c45; overflow:hidden; }
+  .A .tr i { display:block; height:4px; background:#8b5cf6; border-radius:999px; }
+  .A .pe { margin-top:10px; font-size:11px; color:#7e8ba3; }
+  .A .row { display:flex; align-items:center; gap:12px; padding:11px 0;
+            border-bottom:1px solid #1a2740; font-size:12.5px; }
+  .A .row:last-child { border-bottom:none; }
+  .A .row b { flex:0 0 54px; font-weight:700; }
+  .A .row .v { flex:1; color:#7e8ba3; }
+  .A .row .q { font-weight:700; }
+
+  /* ═══ B · editorial claro ═══ */
+  .B { background:#fff; }
+  .B .rot { background:#f6f7f9; color:#0f172a; }
+  .B .tela { gap:22px; }
+  .B .est { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+            color:#64748b; }
+  .B .n { margin-top:10px; font-family:'Poppins'; font-size:52px; font-weight:800;
+          letter-spacing:-.045em; line-height:.95; }
+  .B .de { margin-top:8px; font-size:13px; color:#64748b; }
+  .B .tr { margin-top:16px; height:2px; background:#e6e9ee; position:relative; }
+  .B .tr i { position:absolute; left:0; top:0; height:2px; background:#0f172a; }
+  .B .hr { border-top:1px solid #eef0f4; }
+  .B .row { display:flex; align-items:baseline; gap:12px; padding:12px 0;
+            border-bottom:1px solid #f2f4f7; font-size:13px; }
+  .B .row:last-child { border-bottom:none; }
+  .B .row b { flex:0 0 54px; font-weight:700; }
+  .B .row .v { flex:1; color:#94a3b8; font-size:12px; }
+  .B .row .q { font-weight:700; }
+
+  /* ═══ C · vivo, superfícies tingidas ═══ */
+  .C { background:#f4f6fb; }
+  .C .rot { background:#eaeefa; color:#4338ca; }
+  .C .tela { gap:14px; }
+  .C .bloco { border-radius:22px; padding:19px 20px;
+              background:linear-gradient(150deg,#6d5cf5 0%,#8b5cf6 55%,#a78bfa 100%);
+              color:#fff; box-shadow:0 22px 44px -24px #6d5cf5cc; }
+  .C .est { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+            display:flex; align-items:center; gap:7px; opacity:.9; }
+  .C .est i { width:6px; height:6px; border-radius:50%; background:#fff; }
+  .C .n { margin-top:11px; font-size:40px; font-weight:800; letter-spacing:-.035em; line-height:1; }
+  .C .n small { font-size:13px; font-weight:500; opacity:.8; margin-left:8px; letter-spacing:0; }
+  .C .tr { margin-top:13px; height:6px; border-radius:999px; background:#ffffff40; overflow:hidden; }
+  .C .tr i { display:block; height:6px; background:#fff; border-radius:999px; }
+  .C .pe { margin-top:10px; font-size:11px; opacity:.85; }
+  .C .lista { background:#fff; border-radius:22px; padding:8px 18px; }
+  .C .row { display:flex; align-items:center; gap:12px; padding:12px 0;
+            border-bottom:1px solid #f1f4f9; font-size:12.5px; }
+  .C .row:last-child { border-bottom:none; }
+  .C .row .lad { flex:0 0 auto; width:42px; height:27px; border-radius:9px; background:#eef1fb;
+                 color:#4338ca; font-size:10.5px; font-weight:800;
+                 display:flex; align-items:center; justify-content:center; }
+  .C .row .v { flex:1; color:#94a3b8; }
+  .C .row .q { font-weight:700; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topo">
+      <div class="h1">Três direções para a mesma tela</div>
+      <div class="sub">Mesmo conteúdo, três idiomas visuais. Aponte um e eu detalho só ele.</div>
+    </div>
+
+    <div class="tres">
+
+      <!-- ═══ A ═══ -->
+      <div class="painel A">
+        <div class="rot">A · Console <em>escuro, técnico, alto contraste</em></div>
+        <div class="tela">
+          <div class="bloco">
+            <div class="est"><i></i>rodando · todos os tribunais</div>
+            <div class="n num">3.240<small>de 5.000</small></div>
+            <div class="tr"><i style="width:65%"></i></div>
+            <div class="pe num">65% · faltam ~2 h · agora no TJAC</div>
+          </div>
+          <div class="bloco" style="flex:1">
+            <div class="lab" style="color:#5c6b85">Tribunais</div>
+            <div style="margin-top:6px">
+              <div class="row"><b>TJSP</b><span class="v">e-SAJ · na fila</span><span class="q num">96.412</span></div>
+              <div class="row"><b>STJ</b><span class="v">superior · rodando</span><span class="q num">31.980</span></div>
+              <div class="row"><b>TJCE</b><span class="v">PJe · completo</span><span class="q num">28.640</span></div>
+              <div class="row"><b style="color:#f87171">TJAC</b><span class="v" style="color:#f87171">PJe · erro 08/08</span><span class="q num">0</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ B ═══ -->
+      <div class="painel B">
+        <div class="rot">B · Editorial <em>claro, tipografia grande, sem caixa</em></div>
+        <div class="tela">
+          <div>
+            <div class="est">Rodando · todos os tribunais</div>
+            <div class="n num">3.240</div>
+            <div class="de">de 5.000 processos novos · faltam ~2 h neste ritmo</div>
+            <div class="tr"><i style="width:65%"></i></div>
+          </div>
+          <div class="hr"></div>
+          <div style="flex:1">
+            <div class="lab" style="color:#94a3b8">Tribunais</div>
+            <div style="margin-top:8px">
+              <div class="row"><b>TJSP</b><span class="v">e-SAJ · na fila</span><span class="q num">96.412</span></div>
+              <div class="row"><b>STJ</b><span class="v">superior · rodando</span><span class="q num">31.980</span></div>
+              <div class="row"><b>TJCE</b><span class="v">PJe · completo</span><span class="q num">28.640</span></div>
+              <div class="row"><b>TJAC</b><span class="v" style="color:#b91c1c">PJe · erro 08/08</span><span class="q num">0</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ C ═══ -->
+      <div class="painel C">
+        <div class="rot">C · Vivo <em>superfície com cor, raio grande</em></div>
+        <div class="tela">
+          <div class="bloco">
+            <div class="est"><i></i>rodando · todos os tribunais</div>
+            <div class="n num">3.240<small>de 5.000</small></div>
+            <div class="tr"><i style="width:65%"></i></div>
+            <div class="pe num">65% · faltam ~2 h · agora no TJAC</div>
+          </div>
+          <div class="lista" style="flex:1">
+            <div class="row"><span class="lad">TJSP</span><span class="v">e-SAJ · na fila</span><span class="q num">96.412</span></div>
+            <div class="row"><span class="lad">STJ</span><span class="v">superior · rodando</span><span class="q num">31.980</span></div>
+            <div class="row"><span class="lad">TJCE</span><span class="v">PJe · completo</span><span class="q num">28.640</span></div>
+            <div class="row"><span class="lad" style="background:#fdecec; color:#b91c1c">TJAC</span><span class="v" style="color:#b91c1c">PJe · erro 08/08</span><span class="q num">0</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

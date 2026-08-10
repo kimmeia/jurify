@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --aviso:#b45309; --aviso-bg:#fffbeb; --aviso-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:430px; height:975px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:16px 14px; height:100%; display:flex; flex-direction:column; gap:12px; }
+
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:21px; letter-spacing:-.01em; }
+  .sub { margin-top:2px; font-size:12px; color:var(--mudo); }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:14.5px; }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  /* ── o convite: sem tarefa, a tela diz por onde começar ── */
+  .vazio { padding:15px 16px; border:1px solid #ddd6fe; background:var(--acento-bg); }
+  .vazio .t { font-family:'Poppins'; font-weight:700; font-size:15px; color:var(--acento-forte); }
+  .vazio .d { margin-top:4px; font-size:12px; color:var(--corpo); line-height:1.45; }
+  .form { margin-top:12px; display:flex; gap:8px; }
+  .inp { flex:0 0 96px; height:42px; border:1px solid var(--borda); background:var(--surface);
+         border-radius:10px; padding:0 12px; display:flex; align-items:center;
+         font-size:15px; font-weight:700; color:var(--tinta); }
+  .sel { flex:1; height:42px; border:1px solid var(--borda); background:var(--surface);
+         border-radius:10px; padding:0 12px; display:flex; align-items:center;
+         justify-content:space-between; font-size:13px; color:var(--corpo); font-weight:500; }
+  .btn { margin-top:9px; height:44px; background:var(--acento); color:#fff; font-weight:700;
+         font-size:14px; border-radius:11px; display:flex; align-items:center;
+         justify-content:center; gap:8px; box-shadow:0 8px 18px -8px #7c3aed88; }
+  .rot { margin-top:8px; font-size:11px; color:var(--mudo); text-align:center; }
+
+  /* ── abas rolando de lado ── */
+  .abas { flex:0 0 auto; display:flex; gap:3px; background:var(--hairline); padding:3px;
+          border-radius:10px; overflow:hidden; }
+  .abas span { flex:0 0 auto; padding:8px 13px; font-size:12.5px; font-weight:600;
+               color:var(--mudo); border-radius:8px; white-space:nowrap; }
+  .abas span.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+  .abas span em { font-style:normal; margin-left:5px; font-size:10.5px; color:var(--fraco); }
+
+  .lista { flex:1; display:flex; flex-direction:column; gap:10px; overflow:hidden; }
+
+  /* ── tribunal como CARD, não linha de tabela ── */
+  .trib { padding:13px 14px; }
+  .trib .l1 { display:flex; align-items:baseline; gap:8px; }
+  .trib .sig { font-size:15px; font-weight:800; letter-spacing:-.01em; }
+  .trib .sis { font-size:11px; color:var(--mudo); }
+  .trib .st { margin-left:auto; font-size:10px; font-weight:700; border-radius:999px;
+              padding:3px 9px; border:1px solid transparent; }
+  .st.fila { color:var(--mudo); background:var(--hairline); border-color:var(--borda); }
+  .st.run { color:var(--acento-forte); background:var(--acento-bg); border-color:#ddd6fe; }
+  .st.ok { color:var(--ok); background:var(--ok-bg); border-color:var(--ok-borda); }
+  .st.err { color:var(--alerta-forte); background:var(--alerta-bg); border-color:var(--alerta-borda); }
+
+  .trib .nums { margin-top:7px; font-size:12px; color:var(--corpo); }
+  .trib .nums b { font-variant-numeric:tabular-nums; font-weight:700; color:var(--tinta); }
+  .trilho { margin-top:8px; height:6px; border-radius:999px; background:var(--hairline); overflow:hidden; }
+  .trilho i { display:block; height:6px; border-radius:999px; background:var(--acento-claro); }
+
+  .erro { margin-top:8px; display:flex; align-items:flex-start; gap:7px; border-radius:9px;
+          border:1px solid var(--alerta-borda); background:var(--alerta-bg);
+          padding:8px 10px; font-size:11px; color:var(--alerta-forte); line-height:1.4; }
+  .erro b { font-weight:700; }
+
+  .acoes { margin-top:11px; display:flex; gap:8px; }
+  .acoes span { flex:1; height:38px; border:1px solid var(--borda); border-radius:10px;
+                display:flex; align-items:center; justify-content:center; gap:6px;
+                font-size:12.5px; font-weight:600; color:var(--corpo); }
+  .acoes span.forte { background:var(--tinta); color:#fff; border-color:var(--tinta); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div>
+      <div class="h1">JurisIA · ingestão</div>
+      <div class="sub">Acervo público do CNJ</div>
+    </div>
+
+    <!-- ── nenhuma tarefa: a tela diz o que fazer ─────────── -->
+    <div class="card vazio">
+      <div class="t">Nenhuma tarefa rodando</div>
+      <div class="d">
+        Diga quantos processos quer hoje e feche a tela. O robô avança sozinho, de pouco em
+        pouco, e continua de onde parou se o servidor reiniciar.
+      </div>
+      <div class="form">
+        <span class="inp">5.000</span>
+        <span class="sel">
+          Todos — o mais atrasado
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </div>
+      <div class="btn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M8 5.5v13l11-6.5-11-6.5z" fill="#fff"/></svg>
+        Criar tarefa
+      </div>
+      <div class="rot">começa em até 2 minutos</div>
+    </div>
+
+    <div class="abas">
+      <span>Acervo</span>
+      <span class="on">Tribunais <em>59</em></span>
+      <span>Fontes <em>1/5</em></span>
+      <span>Assin…</span>
+    </div>
+
+    <div class="lista">
+
+      <div class="card trib">
+        <div class="l1">
+          <span class="sig">TJSP</span>
+          <span class="sis">e-SAJ</span>
+          <span class="st fila">na fila</span>
+        </div>
+        <div class="nums"><b>96.412</b> no acervo · <b>0</b> sigilosos</div>
+        <div class="trilho"><i style="width:34%"></i></div>
+        <div class="acoes">
+          <span>Amostra</span>
+          <span class="forte">Varrer</span>
+        </div>
+      </div>
+
+      <div class="card trib">
+        <div class="l1">
+          <span class="sig">STJ</span>
+          <span class="sis">superior</span>
+          <span class="st run">rodando</span>
+        </div>
+        <div class="nums"><b>31.980</b> no acervo · <b>0</b> sigilosos</div>
+        <div class="trilho"><i style="width:12%"></i></div>
+        <div class="acoes">
+          <span>Amostra</span>
+          <span class="forte">Varrer</span>
+        </div>
+      </div>
+
+      <div class="card trib">
+        <div class="l1">
+          <span class="sig">TJAC</span>
+          <span class="sis">PJe</span>
+          <span class="st err">erro</span>
+        </div>
+        <div class="nums"><b>0</b> no acervo · <b>0</b> sigilosos</div>
+        <!-- Erro com data e com a sigla visível: sem isso, no celular a linha
+             virava "Estadual · 0 · 0 · ERRO" sem dizer de quem. -->
+        <div class="erro">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto; margin-top:1px"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="#b91c1c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span><b>08/08:</b> DataJud devolveu 500 — índice indisponível</span>
+        </div>
+        <div class="acoes">
+          <span>Amostra</span>
+          <span class="forte">Tentar de novo</span>
+        </div>
+      </div>
+
+      <div class="card trib">
+        <div class="l1">
+          <span class="sig">TJCE</span>
+          <span class="sis">PJe</span>
+          <span class="st ok">completo</span>
+        </div>
+        <div class="nums"><b>28.640</b> no acervo · <b>412</b> sigilosos barrados</div>
+        <div class="trilho"><i style="width:100%"></i></div>
+        <div class="acoes">
+          <span>Amostra</span>
+          <span>Recomeçar do início</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

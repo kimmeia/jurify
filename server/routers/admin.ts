@@ -1442,20 +1442,6 @@ export const adminRouter = router({
    * Edita plano por slug. Slug em si não pode mudar (é FK lógica em
    * subscriptions.planId). Todos os outros campos editáveis.
    */
-  /**
-   * Add-ons contratados à parte, por escritório.
-   *
-   * Existe porque a única forma de liberar o JurisIA era mexer na cota do
-   * plano — que atinge todos os clientes daquela faixa de uma vez, e por isso
-   * impedia cortesia, piloto e contrato avulso.
-   */
-  listarAddons: adminProcedure
-    .input(z.object({ produto: z.string().min(1).max(48).default(MODULO_JURISIA) }).optional())
-    .query(async ({ input }) => {
-      const { listarAddons } = await import("../billing/addons-repo");
-      return listarAddons(input?.produto ?? MODULO_JURISIA);
-    }),
-
   /** Estado do add-on de um escritório, já resolvido contra o plano dele. */
   addonDoEscritorio: adminProcedure
     .input(z.object({

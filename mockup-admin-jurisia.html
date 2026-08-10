@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e6eaf0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --alerta:#dc2626; --alerta-forte:#b91c1c;
+    --ok:#059669;
+    --nav:#111827; --nav-2:#1b2333; --nav-txt:#9aa5b8;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); display:flex; }
+
+  /* ═══ barra lateral do app — a moldura que meus mockups ignoravam ═══ */
+  .nav { flex:0 0 244px; background:var(--nav); color:var(--nav-txt);
+         display:flex; flex-direction:column; padding:18px 12px; }
+  .marca { display:flex; align-items:center; gap:9px; padding:6px 10px 16px; }
+  .marca b { color:#fff; font-family:'Poppins'; font-weight:700; font-size:15px; }
+  .marca em { font-style:normal; font-size:9.5px; font-weight:700; letter-spacing:.06em;
+              text-transform:uppercase; color:#c4b5fd; background:#7c3aed33;
+              border-radius:6px; padding:3px 7px; }
+  .nav a { display:flex; align-items:center; gap:11px; padding:8px 11px; border-radius:9px;
+           font-size:12.5px; font-weight:500; color:var(--nav-txt); }
+  .nav a.on { background:var(--nav-2); color:#fff; font-weight:600; }
+  .nav a.on i { background:var(--acento-claro); }
+  .nav i { width:5px; height:5px; border-radius:50%; background:#394356; flex:0 0 auto; }
+  .grupo { padding:14px 11px 5px; font-size:9.5px; font-weight:700; letter-spacing:.09em;
+           text-transform:uppercase; color:#5b6678; }
+  .pe-nav { margin-top:auto; display:flex; align-items:center; gap:9px; padding:12px 11px 4px;
+            border-top:1px solid #212a3a; }
+  .pe-nav span { width:28px; height:28px; border-radius:50%; background:#2c3547; color:#fff;
+                 font-size:11px; font-weight:700; display:flex; align-items:center;
+                 justify-content:center; }
+  .pe-nav b { color:#cbd5e1; font-size:12px; font-weight:600; }
+  .pe-nav small { display:block; font-size:10px; color:#5b6678; font-weight:400; }
+
+  /* ═══ conteúdo ═══ */
+  .area { flex:1; min-width:0; display:flex; justify-content:center; padding:34px 40px; }
+  .col { width:100%; max-width:1120px; display:flex; flex-direction:column; gap:20px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.02em; }
+  .sub { margin-top:4px; font-size:13px; color:var(--mudo); }
+  .sub a { color:var(--acento-forte); font-weight:600; text-decoration:underline;
+           text-underline-offset:3px; }
+  .btn { background:var(--acento); color:#fff; font-weight:600; font-size:13.5px;
+         border-radius:11px; padding:12px 20px; display:inline-flex; align-items:center; gap:8px;
+         box-shadow:0 10px 22px -12px #7c3aed; }
+
+  /* ── a tarefa ── */
+  .tarefa { flex:0 0 auto; background:var(--surface); border:1px solid var(--borda);
+            border-radius:16px; padding:22px 26px; display:flex; align-items:center; gap:40px; }
+  .esq { flex:1; min-width:0; }
+  .est { display:inline-flex; align-items:center; gap:8px; font-size:11px; font-weight:700;
+         letter-spacing:.07em; text-transform:uppercase; color:var(--acento-forte); }
+  .est i { width:7px; height:7px; border-radius:50%; background:var(--acento);
+           box-shadow:0 0 0 4px #7c3aed1f; }
+  .est em { font-style:normal; color:var(--mudo); font-weight:600; letter-spacing:.03em; }
+  .placar { margin-top:13px; display:flex; align-items:baseline; gap:11px; }
+  .placar b { font-size:40px; font-weight:800; letter-spacing:-.035em; line-height:1;
+              font-variant-numeric:tabular-nums; }
+  .placar span { font-size:14px; color:var(--mudo); }
+  .tr { margin-top:15px; height:6px; border-radius:999px; background:var(--hairline); overflow:hidden; }
+  .tr i { display:block; height:6px; border-radius:999px; background:var(--acento); }
+  .pe-tarefa { margin-top:11px; font-size:12px; color:var(--mudo); }
+  .pe-tarefa b { color:var(--corpo); font-weight:600; font-variant-numeric:tabular-nums; }
+  .dir { flex:0 0 auto; text-align:right; }
+  .dir .eta { font-size:22px; font-weight:800; letter-spacing:-.02em;
+              font-variant-numeric:tabular-nums; }
+  .dir .eta-l { margin-top:3px; font-size:11px; color:var(--mudo); }
+  .cancelar { margin-top:14px; border:1px solid var(--borda); border-radius:10px;
+              padding:9px 16px; font-size:12.5px; font-weight:600; color:var(--corpo);
+              display:inline-block; }
+
+  /* ── tribunais ── */
+  .painel { flex:1; background:var(--surface); border:1px solid var(--borda);
+            border-radius:16px; display:flex; flex-direction:column; overflow:hidden; }
+  .ph { display:flex; align-items:center; gap:12px; padding:17px 24px;
+        border-bottom:1px solid var(--hairline); }
+  .ph h2 { font-family:'Poppins'; font-weight:700; font-size:16px; }
+  .ph .cont { font-size:12px; color:var(--mudo); }
+  .busca { margin-left:auto; display:flex; align-items:center; gap:8px; height:36px;
+           border:1px solid var(--borda); border-radius:10px; padding:0 13px;
+           font-size:12.5px; color:var(--fraco); width:230px; }
+
+  .row { display:flex; align-items:center; gap:16px; padding:0 24px; height:60px;
+         border-bottom:1px solid var(--hairline-2); }
+  .row:last-child { border-bottom:none; }
+  .sg { flex:0 0 118px; }
+  .sg b { font-size:13.5px; font-weight:700; letter-spacing:-.01em; }
+  .sg span { margin-left:7px; font-size:11px; color:var(--fraco); }
+  .qt { flex:0 0 88px; text-align:right; font-size:13.5px; font-weight:700;
+        font-variant-numeric:tabular-nums; }
+  .qt.z { color:var(--fantasma); }
+  .bar { flex:0 0 176px; height:5px; border-radius:999px; background:var(--hairline);
+         overflow:hidden; }
+  .bar i { display:block; height:5px; border-radius:999px; background:var(--acento-claro); }
+  .pc { flex:0 0 36px; font-size:11.5px; font-weight:700; color:var(--mudo);
+        font-variant-numeric:tabular-nums; }
+  .st { flex:1; min-width:0; display:flex; align-items:center; gap:8px; font-size:12px; }
+  .st i { width:6px; height:6px; border-radius:50%; flex:0 0 auto; }
+  .st.f { color:var(--mudo); } .st.f i { background:var(--fantasma); }
+  .st.r { color:var(--acento-forte); font-weight:600; } .st.r i { background:var(--acento); }
+  .st.o { color:var(--ok); font-weight:600; } .st.o i { background:var(--ok); }
+  .st.e { color:var(--alerta-forte); } .st.e i { background:var(--alerta); }
+  .ac { flex:0 0 auto; display:flex; gap:7px; }
+  .ac span { font-size:12px; font-weight:600; color:var(--corpo-2);
+             border:1px solid var(--borda); border-radius:9px; padding:7px 13px; }
+  .ac span.p { background:var(--tinta); color:#fff; border-color:var(--tinta); }
+
+  .pf { padding:14px 24px; border-top:1px solid var(--hairline); display:flex;
+        align-items:center; justify-content:space-between; font-size:12px; color:var(--mudo); }
+  .pf b { color:var(--tinta); font-variant-numeric:tabular-nums; }
+  .pf a { color:var(--alerta-forte); font-weight:600; text-decoration:underline;
+          text-underline-offset:3px; }
+</style>
+</head>
+<body>
+
+  <div class="nav">
+    <div class="marca"><b>Admin</b><em>painel</em></div>
+    <a><i></i>Visão Geral</a>
+    <a><i></i>Clientes</a>
+    <a><i></i>Financeiro</a>
+    <div class="grupo">Automação</div>
+    <a><i></i>Agentes IA</a>
+    <a><i></i>SmartFlow</a>
+    <div class="grupo">Dados</div>
+    <a><i></i>Relatórios</a>
+    <a><i></i>Auditoria</a>
+    <a><i></i>Tribunais</a>
+    <a class="on"><i></i>JurisIA</a>
+    <div class="grupo">Sistema</div>
+    <a><i></i>Erros</a>
+    <a><i></i>Log de E-mails</a>
+    <a><i></i>Configurações</a>
+    <div class="pe-nav">
+      <span>RR</span>
+      <div><b>Rafael Rocha</b><small>dono</small></div>
+    </div>
+  </div>
+
+  <div class="area">
+    <div class="col">
+
+      <div class="topo">
+        <div>
+          <div class="h1">Ingestão</div>
+          <div class="sub">O robô e os tribunais. Os números do acervo estão em <a>Análise</a>.</div>
+        </div>
+        <span class="btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+          Nova tarefa
+        </span>
+      </div>
+
+      <div class="tarefa">
+        <div class="esq">
+          <div class="est"><i></i>rodando <em>· todos os tribunais</em></div>
+          <div class="placar"><b>3.240</b><span>de 5.000 processos novos</span></div>
+          <div class="tr"><i style="width:65%"></i></div>
+          <div class="pe-tarefa">
+            agora no <b>TJAC</b> · <b>32</b> páginas · próximo ciclo em <b>40 s</b>
+          </div>
+        </div>
+        <div class="dir">
+          <div class="eta">~2 h</div>
+          <div class="eta-l">para terminar, neste ritmo</div>
+          <span class="cancelar">Cancelar</span>
+        </div>
+      </div>
+
+      <div class="painel">
+        <div class="ph">
+          <h2>Tribunais</h2>
+          <span class="cont">59 · 8 completos · 1 em erro</span>
+          <span class="busca">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#94a3b8" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
+            Buscar tribunal
+          </span>
+        </div>
+
+        <div class="row">
+          <span class="sg"><b>TJSP</b><span>e-SAJ</span></span>
+          <span class="qt">96.412</span>
+          <span class="bar"><i style="width:34%"></i></span><span class="pc">34%</span>
+          <span class="st f"><i></i>na fila · retoma do cursor</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJRJ</b><span>PJe</span></span>
+          <span class="qt">58.330</span>
+          <span class="bar"><i style="width:61%"></i></span><span class="pc">61%</span>
+          <span class="st f"><i></i>na fila · retoma do cursor</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJMG</b><span>PJe</span></span>
+          <span class="qt">47.204</span>
+          <span class="bar"><i style="width:52%"></i></span><span class="pc">52%</span>
+          <span class="st f"><i></i>na fila · retoma do cursor</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>STJ</b><span>superior</span></span>
+          <span class="qt">31.980</span>
+          <span class="bar"><i style="width:12%"></i></span><span class="pc">12%</span>
+          <span class="st r"><i></i>rodando agora · página 34</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJCE</b><span>PJe</span></span>
+          <span class="qt">28.640</span>
+          <span class="bar"><i style="width:100%"></i></span><span class="pc">100%</span>
+          <span class="st o"><i></i>completo · 412 sigilosos barrados</span>
+          <span class="ac"><span>Amostra</span><span>Recomeçar</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TST</b><span>superior</span></span>
+          <span class="qt">19.115</span>
+          <span class="bar"><i style="width:24%"></i></span><span class="pc">24%</span>
+          <span class="st f"><i></i>na fila</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJBA</b><span>e-SAJ</span></span>
+          <span class="qt">14.208</span>
+          <span class="bar"><i style="width:19%"></i></span><span class="pc">19%</span>
+          <span class="st f"><i></i>na fila</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJPE</b><span>PJe</span></span>
+          <span class="qt">11.902</span>
+          <span class="bar"><i style="width:28%"></i></span><span class="pc">28%</span>
+          <span class="st f"><i></i>na fila</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJRS</b><span>eproc</span></span>
+          <span class="qt">9.740</span>
+          <span class="bar"><i style="width:15%"></i></span><span class="pc">15%</span>
+          <span class="st f"><i></i>na fila</span>
+          <span class="ac"><span>Amostra</span><span class="p">Varrer</span></span>
+        </div>
+        <div class="row">
+          <span class="sg"><b>TJAC</b><span>PJe</span></span>
+          <span class="qt z">0</span>
+          <span class="bar"></span><span class="pc">—</span>
+          <span class="st e"><i></i>08/08: DataJud devolveu 500 — índice indisponível</span>
+          <span class="ac"><span>Amostra</span><span class="p">Tentar de novo</span></span>
+        </div>
+
+        <div class="pf">
+          <span>+ 49 tribunais · <b>95.149</b> processos</span>
+          <span>Ordenados pelo mais atrasado · <a>zerar acervo</a></span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

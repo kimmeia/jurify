@@ -150,25 +150,3 @@ export async function salvarAddon(args: SalvarAddonArgs): Promise<void> {
     });
 }
 
-/** Todos os escritórios com add-on de um produto — a lista do painel admin. */
-export async function listarAddons(produto: string) {
-  const db = await getDb();
-  if (!db) return [];
-  const { escritorios } = await import("../../drizzle/schema");
-  return db
-    .select({
-      escritorioId: escritorioAddons.escritorioId,
-      escritorioNome: escritorios.nome,
-      status: escritorioAddons.status,
-      limiteMensal: escritorioAddons.limiteMensal,
-      inicioEm: escritorioAddons.inicioEm,
-      expiraEm: escritorioAddons.expiraEm,
-      precoCentavos: escritorioAddons.precoCentavos,
-      observacao: escritorioAddons.observacao,
-      atualizadoEm: escritorioAddons.atualizadoEm,
-    })
-    .from(escritorioAddons)
-    .innerJoin(escritorios, eq(escritorios.id, escritorioAddons.escritorioId))
-    .where(eq(escritorioAddons.produto, produto))
-    .orderBy(escritorioAddons.status, escritorios.nome);
-}
