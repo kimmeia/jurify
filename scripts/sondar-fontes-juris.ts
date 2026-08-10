@@ -62,8 +62,19 @@ async function main() {
     console.log(
       `   status ${r.status ?? "—"} · ${r.tipo || "sem content-type"} · ${r.bytes.toLocaleString("pt-BR")} bytes · ${r.ms}ms`,
     );
-    if (r.erro) console.log(`   erro: ${r.erro}`);
+    if (r.erro) console.log(`   erro (${r.causa}): ${r.erro}`);
     if (r.forma) console.log(`   forma: ${r.forma}`);
+    if (r.retryNavegador) {
+      console.log(
+        `   403 com UA de navegador: ${r.retryNavegador === "passou" ? "PASSOU — é filtro de cabeçalho" : "PERSISTIU — é bloqueio de IP"}`,
+      );
+    }
+    if (r.datajud) {
+      const d = r.datajud;
+      console.log(`   grau: ${d.grau ?? "(não veio)"} · classe: ${d.classe ?? "—"}`);
+      console.log(`   ${d.movimentos} movimento(s): ${d.primeirosMovimentos.join(" · ")}`);
+      console.log(`   campos: ${d.campos.join(", ")}`);
+    }
     if (r.temEmenta !== null) {
       console.log(`   ementa/teor no payload: ${r.temEmenta ? "SIM (aparente)" : "não encontrei"}`);
     }

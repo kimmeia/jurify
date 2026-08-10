@@ -22,6 +22,38 @@ const AMOSTRA_MAX = 2_500;
 
 const UA = "JuridFlow/1.0 (sondagem de viabilidade de fonte publica; 1 requisicao por endpoint)";
 
+/**
+ * UA de navegador, usado só na REPETIÇÃO de um 403.
+ *
+ * Não é disfarce — é diagnóstico. 403 que passa trocando o UA é filtro de
+ * cabeçalho, e conserta-se numa linha. 403 que persiste é bloqueio de faixa
+ * de IP, e aí a decisão é outra: rodar o coletor em outro lugar. Sem essa
+ * distinção, os dois casos se parecem e a gente escolhe errado.
+ */
+const UA_NAVEGADOR =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+
+/** Separa "não existe" de "não me deixaram entrar" — não são o mesmo problema. */
+function diagnosticarFalha(err: unknown): { causa: CausaFalha; detalhe: string } {
+  const e = err as { name?: string; message?: string; cause?: { code?: string; message?: string } };
+  const code = e?.cause?.code ?? "";
+  const msg = e?.cause?.message ?? e?.message ?? String(err);
+
+  if (e?.name === "AbortError") return { causa: "timeout", detalhe: "estourou o tempo limite" };
+  if (code === "ENOTFOUND" || code === "EAI_AGAIN") {
+    return { causa: "dns", detalhe: "domínio não resolve — o endereço provavelmente não existe" };
+  }
+  if (code === "ECONNREFUSED") return { causa: "tcp", detalhe: "conexão recusada na porta" };
+  if (code === "ECONNRESET") return { causa: "tcp", detalhe: "conexão derrubada no meio" };
+  if (code === "UND_ERR_CONNECT_TIMEOUT") {
+    return { causa: "tcp", detalhe: "não completou a conexão — cheira a firewall silencioso" };
+  }
+  if (code.startsWith("CERT_") || /certificate|self.signed|TLS/i.test(msg)) {
+    return { causa: "tls", detalhe: "handshake TLS falhou" };
+  }
+  return { causa: "outra", detalhe: msg.slice(0, 180) };
+}
+
 export interface CandidatoSonda {
   fonte: string;
   nome: string;
@@ -40,6 +72,24 @@ export type VereditoSonda =
   | "vazio"
   | "erro";
 
+export type CausaFalha = "dns" | "tcp" | "tls" | "timeout" | "outra";
+
+/**
+ * O que o DataJud devolveu de fato no primeiro processo.
+ *
+ * `grau` é o campo que decide se o registro entra na base como jurisprudência
+ * — se o STJ não mandar "SUP", o classificador devolve null e o acórdão vira
+ * "indefinido". Melhor descobrir aqui do que depois de ingerir 100 mil.
+ */
+export interface AmostraDataJud {
+  grau: string | null;
+  classe: string | null;
+  orgao: string | null;
+  movimentos: number;
+  primeirosMovimentos: string[];
+  campos: string[];
+}
+
 export interface ResultadoSonda {
   fonte: string;
   nome: string;
@@ -57,6 +107,16 @@ export interface ResultadoSonda {
   erro: string | null;
   /** Começo do corpo cru. É daqui que sai o formato real dos campos. */
   amostra: string;
+  /** Por que falhou, quando falhou sem responder. */
+  causa: CausaFalha | null;
+  /**
+   * Repetimos o 403 com UA de navegador?
+   * "passou" → filtro de cabeçalho, conserta fácil.
+   * "persistiu" → bloqueio de IP, muda onde o coletor roda.
+   */
+  retryNavegador: "passou" | "persistiu" | null;
+  /** Só pros índices do DataJud. */
+  datajud: AmostraDataJud | null;
 }
 
 export async function candidatosPadrao(termo: string): Promise<CandidatoSonda[]> {
@@ -64,8 +124,10 @@ export async function candidatosPadrao(termo: string): Promise<CandidatoSonda[]>
 
   // A chave passa pelo mesmo resolvedor da varredura: sondar com uma chave
   // diferente da que a produção usa responderia a pergunta errada.
+  // `stf` saiu da lista: o índice devolveu 404 na sondagem de 10/08 — o STF
+  // não alimenta a base do CNJ. Não readicionar sem evidência nova.
   const chave = await chaveDataJud();
-  for (const alias of ["stj", "stf", "tst"]) {
+  for (const alias of ["stj", "tst", "tse", "stm"]) {
     lista.push({
       fonte: "DataJud",
       nome: `índice api_publica_${alias}`,
@@ -87,7 +149,9 @@ export async function candidatosPadrao(termo: string): Promise<CandidatoSonda[]>
     {
       fonte: "STF",
       nome: "portal de dados abertos",
-      url: "https://dadosabertos.web.stf.jus.br/",
+      // `dadosabertos.web.stf.jus.br` não resolve (sondagem de 10/08). Este é
+      // o candidato sem o "web".
+      url: "https://dadosabertos.stf.jus.br/",
       pergunta: "existe portal com dataset pra baixar em lote?",
     },
     {
@@ -100,25 +164,31 @@ export async function candidatosPadrao(termo: string): Promise<CandidatoSonda[]>
       fonte: "STJ",
       nome: "SCON — pesquisa de jurisprudência",
       url: `https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=${encodeURIComponent(termo)}`,
-      pergunta: "responde HTML parseável ou exige sessão/captcha?",
-    },
-    {
-      fonte: "STJ",
-      nome: "portal de dados abertos",
-      url: "https://dadosabertos.stj.jus.br/",
-      pergunta: "existe portal com dataset pra baixar em lote?",
+      pergunta: "o 403 é do cabeçalho ou do IP? (repete com UA de navegador)",
     },
     {
       fonte: "STJ",
       nome: "portal institucional",
       url: "https://www.stj.jus.br/",
-      pergunta: "o domínio responde? (controle)",
+      pergunta: "controle do domínio — mesmo 403 do SCON?",
     },
     {
       fonte: "DJEN",
-      nome: "Comunica API (CNJ)",
+      nome: "Comunica API — com filtro",
       url: "https://comunicaapi.pje.jus.br/api/v1/comunicacao?numeroOab=1&ufOab=CE&pagina=1",
-      pergunta: "a API de publicações está aberta? qual o shape da comunicação?",
+      pergunta: "o 403 é do cabeçalho ou do IP? (repete com UA de navegador)",
+    },
+    {
+      fonte: "DJEN",
+      nome: "Comunica API — raiz, sem filtro",
+      url: "https://comunicaapi.pje.jus.br/api/v1/comunicacao",
+      pergunta: "o 403 vem do endpoint ou dos parâmetros que eu inventei?",
+    },
+    {
+      fonte: "CNJ",
+      nome: "portal de dados abertos",
+      url: "https://dadosabertos.cnj.jus.br/",
+      pergunta: "existe dataset do CNJ pra baixar em lote?",
     },
     {
       fonte: "LexML",
@@ -169,6 +239,23 @@ function formaDoHtml(html: string): string {
     .join(" · ");
 }
 
+function amostraDataJud(json: unknown): AmostraDataJud | null {
+  const fonte = (json as any)?.hits?.hits?.[0]?._source;
+  if (!fonte || typeof fonte !== "object") return null;
+
+  const movs = Array.isArray(fonte.movimentos) ? fonte.movimentos : [];
+  return {
+    grau: typeof fonte.grau === "string" ? fonte.grau : null,
+    classe: fonte.classe?.nome ?? null,
+    orgao: fonte.orgaoJulgador?.nome ?? null,
+    movimentos: movs.length,
+    primeirosMovimentos: movs
+      .slice(0, 4)
+      .map((m: any) => (typeof m?.nome === "string" ? m.nome : "(sem nome)")),
+    campos: Object.keys(fonte).slice(0, 20),
+  };
+}
+
 export async function sondarUm(c: CandidatoSonda): Promise<ResultadoSonda> {
   const r: ResultadoSonda = {
     fonte: c.fonte,
@@ -184,6 +271,9 @@ export async function sondarUm(c: CandidatoSonda): Promise<ResultadoSonda> {
     temEmenta: null,
     erro: null,
     amostra: "",
+    causa: null,
+    retryNavegador: null,
+    datajud: null,
   };
 
   const ctrl = new AbortController();
@@ -218,19 +308,50 @@ export async function sondarUm(c: CandidatoSonda): Promise<ResultadoSonda> {
       r.veredito = "responde-json";
       r.forma = forma;
       r.temEmenta = temEmenta;
+      r.datajud = amostraDataJud(json);
     } catch {
       r.veredito = "responde-html";
       r.forma = formaDoHtml(texto);
       r.temEmenta = CAMPOS_EMENTA.test(texto.slice(0, 40_000));
     }
 
-    if (res.status >= 400) r.veredito = "bloqueado";
+    if (res.status >= 400) {
+      r.veredito = "bloqueado";
+      if (res.status === 403) r.retryNavegador = await repetirComoNavegador(c);
+    }
     return r;
   } catch (err) {
     r.ms = Date.now() - inicio;
-    r.erro = err instanceof Error ? err.message : String(err);
+    const d = diagnosticarFalha(err);
+    r.causa = d.causa;
+    r.erro = d.detalhe;
     r.veredito = "erro";
     return r;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/** Uma segunda batida, só pra saber se o 403 era do cabeçalho ou do IP. */
+async function repetirComoNavegador(c: CandidatoSonda): Promise<"passou" | "persistiu"> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(c.url, {
+      method: c.metodo ?? "GET",
+      headers: {
+        "User-Agent": UA_NAVEGADOR,
+        Accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9",
+        ...c.headers,
+      },
+      body: c.corpo ? JSON.stringify(c.corpo) : undefined,
+      signal: ctrl.signal,
+      redirect: "follow",
+    });
+    return res.status === 403 ? "persistiu" : "passou";
+  } catch {
+    return "persistiu";
   } finally {
     clearTimeout(t);
   }
