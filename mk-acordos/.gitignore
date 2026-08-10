@@ -1,0 +1,5 @@
+# Artefatos de render — reproduzíveis a partir de `gerar.py` + `shot.mjs`.
+# O CSS é uma cópia do build do app (446 KB) e os PNGs somam ~1,4 MB; versionar
+# os dois enche o histórico com binário que muda a cada ajuste de pixel.
+app.css
+*.png
