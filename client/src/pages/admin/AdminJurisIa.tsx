@@ -120,6 +120,7 @@ function PainelSondagem() {
                   <TableHead className="text-right">Tempo</TableHead>
                   <TableHead>Resposta</TableHead>
                   <TableHead>Ementa</TableHead>
+                  <TableHead>Diagnóstico</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -159,10 +160,26 @@ function PainelSondagem() {
                             <span className="text-xs text-muted-foreground">não</span>
                           )}
                         </TableCell>
+                        <TableCell>
+                          {r.retryNavegador === "passou" && (
+                            <span className="text-xs font-semibold text-amber-600">
+                              é o cabeçalho
+                            </span>
+                          )}
+                          {r.retryNavegador === "persistiu" && (
+                            <span className="text-xs font-semibold text-red-600">é o IP</span>
+                          )}
+                          {r.causa && (
+                            <span className="text-xs font-semibold text-red-600">{r.causa}</span>
+                          )}
+                          {!r.retryNavegador && !r.causa && (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                       </TableRow>
                       {aberto === i && (
                         <TableRow>
-                          <TableCell colSpan={5} className="bg-muted/40">
+                          <TableCell colSpan={6} className="bg-muted/40">
                             {r.erro && (
                               <p className="mb-2 text-xs text-red-600">erro: {r.erro}</p>
                             )}
@@ -170,6 +187,34 @@ function PainelSondagem() {
                               <p className="mb-2 text-xs">
                                 <span className="font-semibold">forma:</span> {r.forma}
                               </p>
+                            )}
+                            {r.datajud && (
+                              <div className="mb-2 rounded-lg border bg-background p-3 text-xs">
+                                <p className="mb-1.5 font-semibold">Primeiro processo do índice</p>
+                                <p>
+                                  grau:{" "}
+                                  <span
+                                    className={
+                                      r.datajud.grau
+                                        ? "font-bold text-violet-600"
+                                        : "text-muted-foreground"
+                                    }
+                                  >
+                                    {r.datajud.grau ?? "(não veio)"}
+                                  </span>{" "}
+                                  · classe: {r.datajud.classe ?? "—"} · órgão:{" "}
+                                  {r.datajud.orgao ?? "—"}
+                                </p>
+                                <p className="mt-1">
+                                  {r.datajud.movimentos} movimento(s)
+                                  {r.datajud.primeirosMovimentos.length > 0 && (
+                                    <> — {r.datajud.primeirosMovimentos.join(" · ")}</>
+                                  )}
+                                </p>
+                                <p className="mt-1 text-muted-foreground">
+                                  campos: {r.datajud.campos.join(", ")}
+                                </p>
+                              </div>
                             )}
                             <pre className="max-h-72 overflow-auto rounded-lg border bg-background p-3 text-[11px] leading-relaxed">
                               {r.amostra || "(corpo vazio)"}
