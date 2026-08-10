@@ -240,6 +240,55 @@ export async function composicaoDoAcervo(topo = 8): Promise<ComposicaoAcervo> {
   };
 }
 
+/**
+ * Quantos processos do acervo têm desfecho, e por qual eixo.
+ *
+ * É a conferência que faltava: a varredura pode gravar 500 linhas com
+ * `resultadoRecurso` nulo em todas e o painel de progresso continuaria dizendo
+ * "500 no acervo", satisfeito. Sem este número, calibragem quebrada só
+ * apareceria quando um cliente pesquisasse e recebesse um gráfico vazio.
+ */
+export async function classificacaoDoAcervo(): Promise<{
+  total: number;
+  comDesfecho: number;
+  comRecurso: number;
+  semNada: number;
+  porRecurso: Array<{ resultado: string; quantidade: number }>;
+}> {
+  const db = await getDb();
+  if (!db) return { total: 0, comDesfecho: 0, comRecurso: 0, semNada: 0, porRecurso: [] };
+
+  const [linha] = await db
+    .select({
+      total: sql<number>`COUNT(*)`,
+      comDesfecho: sql<number>`SUM(CASE WHEN ${jurisiaProcessos.resultado} IS NOT NULL THEN 1 ELSE 0 END)`,
+      comRecurso: sql<number>`SUM(CASE WHEN ${jurisiaProcessos.resultadoRecurso} IS NOT NULL THEN 1 ELSE 0 END)`,
+      semNada: sql<number>`SUM(CASE WHEN ${jurisiaProcessos.resultado} IS NULL AND ${jurisiaProcessos.resultadoRecurso} IS NULL THEN 1 ELSE 0 END)`,
+    })
+    .from(jurisiaProcessos);
+
+  const fatias = await db
+    .select({
+      resultado: jurisiaProcessos.resultadoRecurso,
+      quantidade: sql<number>`COUNT(*)`,
+    })
+    .from(jurisiaProcessos)
+    .where(isNotNull(jurisiaProcessos.resultadoRecurso))
+    .groupBy(jurisiaProcessos.resultadoRecurso)
+    .orderBy(desc(sql`COUNT(*)`));
+
+  return {
+    total: Number(linha?.total ?? 0),
+    comDesfecho: Number(linha?.comDesfecho ?? 0),
+    comRecurso: Number(linha?.comRecurso ?? 0),
+    semNada: Number(linha?.semNada ?? 0),
+    porRecurso: fatias.map((f) => ({
+      resultado: String(f.resultado),
+      quantidade: Number(f.quantidade ?? 0),
+    })),
+  };
+}
+
 /** Contagem por grau, crua. Alimenta a classificação de natureza e a tabela do
  *  admin, que é onde se descobre que a coleta trouxe só 1º grau. */
 export async function grausDoAcervo(): Promise<Array<{ grau: string | null; quantidade: number }>> {

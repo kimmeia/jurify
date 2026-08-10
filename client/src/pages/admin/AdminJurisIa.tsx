@@ -272,12 +272,21 @@ function PainelNatureza({
   dados: {
     natureza: { jurisprudencia: number; estatistica: number; indefinido: number };
     graus: Array<{ grau: string | null; quantidade: number }>;
+    classificacao?: {
+      total: number;
+      comDesfecho: number;
+      comRecurso: number;
+      semNada: number;
+      porRecurso: Array<{ resultado: string; quantidade: number }>;
+    };
   };
 }) {
   const { jurisprudencia, estatistica, indefinido } = dados.natureza;
   const total = jurisprudencia + estatistica + indefinido;
   if (total === 0) return null;
   const pct = (q: number) => Math.round((q * 100) / total);
+  const c = dados.classificacao;
+  const pctDe = (q: number, base: number) => (base > 0 ? Math.round((q * 100) / base) : 0);
 
   return (
     <Card>
@@ -340,6 +349,70 @@ function PainelNatureza({
               .slice(0, 8)
               .map((g) => `${g.grau ?? "(vazio)"} (${nf.format(g.quantidade)})`)
               .join(" · ")}
+          </div>
+        )}
+
+        {/* A varredura pode gravar mil linhas com desfecho nulo em todas, e o
+            contador de progresso continuaria dizendo "mil no acervo",
+            satisfeito. Este bloco é o que denuncia isso — sem ele, calibragem
+            quebrada só apareceria quando um cliente pesquisasse e recebesse
+            um gráfico vazio. */}
+        {c && c.total > 0 && (
+          <div className="border-t pt-3">
+            <p className="mb-2 text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+              Quanto do acervo tem desfecho
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <p className="text-lg font-bold tabular-nums">{nf.format(c.comDesfecho)}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  desfecho de 1º grau ({pctDe(c.comDesfecho, c.total)}%)
+                </p>
+              </div>
+              <div>
+                <p className="text-lg font-bold tabular-nums text-violet-600">
+                  {nf.format(c.comRecurso)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  desfecho de recurso ({pctDe(c.comRecurso, c.total)}%)
+                </p>
+              </div>
+              <div>
+                <p
+                  className={`text-lg font-bold tabular-nums ${
+                    c.semNada > c.total / 2 ? "text-amber-600" : "text-muted-foreground"
+                  }`}
+                >
+                  {nf.format(c.semNada)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  sem nenhum dos dois ({pctDe(c.semNada, c.total)}%)
+                </p>
+              </div>
+            </div>
+
+            {c.porRecurso.length > 0 && (
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {c.porRecurso.map((f) => (
+                  <span
+                    key={f.resultado}
+                    className="rounded border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] text-violet-900 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-200"
+                  >
+                    {f.resultado.replace(/_/g, " ")}{" "}
+                    <b className="tabular-nums">{nf.format(f.quantidade)}</b>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {c.semNada > c.total / 2 && (
+              <p className="mt-2 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                <TriangleAlert className="mt-px h-4 w-4 shrink-0" />
+                Mais da metade do acervo entrou sem desfecho. Rode a Amostra no tribunal que mais
+                pesa e veja em "último movimento dos não classificados" qual nome a regra não
+                cobre.
+              </p>
+            )}
           </div>
         )}
       </CardContent>
@@ -508,11 +581,22 @@ export default function AdminJurisIa() {
                       <TableCell>
                         <p className="text-sm font-bold">{l.sigla}</p>
                         <p className="text-[11px] text-muted-foreground">{l.nome}</p>
+                        {/* A data ao lado não é enfeite: erro sem data se lê
+                            como problema de agora. Um 400 de semanas atrás,
+                            de código que já foi corrigido, me fez concluir
+                            que o bug tinha voltado. */}
                         {l.ultimoErro && (
-                          <p className="mt-0.5 flex items-start gap-1 text-[11px] text-red-600">
+                          <div className="mt-0.5 flex items-start gap-1 text-[11px] text-red-600">
                             <TriangleAlert className="mt-px h-3 w-3 shrink-0" />
-                            {l.ultimoErro}
-                          </p>
+                            <p className="min-w-0">
+                              {l.ultimaExecucao && (
+                                <span className="mr-1 font-semibold">
+                                  {new Date(l.ultimaExecucao).toLocaleDateString("pt-BR")}:
+                                </span>
+                              )}
+                              {l.ultimoErro}
+                            </p>
+                          </div>
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{l.justica}</TableCell>
