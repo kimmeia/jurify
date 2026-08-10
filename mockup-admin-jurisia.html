@@ -60,14 +60,54 @@
   .btn-fraco { border:1px solid var(--borda); background:var(--surface); color:var(--corpo);
                font-weight:600; font-size:12.5px; border-radius:10px; padding:9px 16px; }
 
-  /* ── faixa de números, sem caixa ── */
-  .faixa { flex:0 0 auto; display:flex; align-items:center; gap:0; padding:0 4px; }
-  .faixa > div { padding-right:38px; margin-right:38px; border-right:1px solid var(--borda); }
-  .faixa > div:last-child { border-right:none; }
-  .faixa .v { font-size:22px; font-weight:800; letter-spacing:-.02em;
-              font-variant-numeric:tabular-nums; line-height:1.1; }
-  .faixa .l { margin-top:3px; font-size:11px; font-weight:600; letter-spacing:.05em;
-              text-transform:uppercase; color:var(--fraco); }
+  /* ── ritmo ──────────────────────────────────────────────
+     A cor do dado é o --viz-1 do app (azul), NÃO o violeta.
+     Violeta é cor de ação; usá-la aqui faria a barra competir
+     com o botão primário pelo mesmo significado. */
+  .ritmo { flex:0 0 auto; background:var(--surface); border:1px solid var(--borda);
+           border-radius:18px; display:flex; align-items:stretch; }
+  .ritmo-esq { flex:0 0 226px; padding:18px 22px; border-right:1px solid var(--hairline);
+               display:flex; flex-direction:column; justify-content:center; }
+  .ritmo-esq .l { font-size:11px; font-weight:600; letter-spacing:.05em;
+                  text-transform:uppercase; color:var(--fraco); }
+  .ritmo-esq .v { margin-top:5px; font-size:30px; font-weight:800; letter-spacing:-.03em;
+                  font-variant-numeric:tabular-nums; line-height:1; }
+  .ritmo-esq .delta { margin-top:9px; display:flex; align-items:center; gap:5px;
+                      font-size:12px; color:var(--mudo); }
+  .ritmo-esq .delta b { color:#2a78d6; font-variant-numeric:tabular-nums; }
+
+  .ritmo-dir { flex:1; min-width:0; padding:14px 22px 12px; }
+  .ritmo-topo { display:flex; align-items:baseline; justify-content:space-between; }
+  .ritmo-topo .t { font-size:13px; font-weight:700; }
+  .ritmo-topo .med { font-size:11.5px; color:var(--mudo); }
+  .ritmo-topo .med b { color:var(--corpo); font-variant-numeric:tabular-nums; }
+
+  .plot { position:relative; margin-top:10px; height:84px; }
+  /* Grade recessiva: uma linha só, tracejada, sem número no eixo. */
+  .media { position:absolute; left:0; right:0; height:0;
+           border-top:1px dashed var(--fantasma); }
+  .barras { position:absolute; inset:0; display:flex; align-items:flex-end; gap:2px; }
+  /* Extremidade arredondada só no topo — o dado nasce na linha de base. */
+  .barras span { flex:1; background:#2a78d6; border-radius:4px 4px 0 0; min-height:0; }
+  .barras span.pico { background:#1d5fae; }
+  /* Hora sem ingestão: marca de falha na linha de base, com legenda ao lado.
+     Status nunca viaja só na cor. */
+  .barras span.falha { background:transparent; border-bottom:3px solid var(--alerta);
+                       border-radius:0; }
+
+  .eixo { margin-top:7px; display:flex; justify-content:space-between;
+          font-size:10.5px; color:var(--fraco); }
+  .legenda-falha { margin-top:9px; display:flex; align-items:center; gap:6px;
+                   font-size:11px; color:var(--alerta-forte); }
+
+  .tip { position:absolute; right:150px; top:-18px; z-index:2;
+         background:var(--surface); border:1px solid var(--borda); border-radius:10px;
+         padding:8px 11px; box-shadow:0 14px 30px -14px #0f172a55; }
+  .tip-h { font-size:10.5px; font-weight:700; letter-spacing:.05em;
+           text-transform:uppercase; color:var(--fraco); }
+  .tip-v { margin-top:4px; display:flex; align-items:center; gap:7px;
+           font-size:12.5px; font-weight:600; white-space:nowrap; }
+  .tip-v i { width:8px; height:8px; border-radius:2px; background:#2a78d6; }
 
   /* ── lista de tribunais: linhas, não caixas ── */
   .painel { flex:1; background:var(--surface); border:1px solid var(--borda);
@@ -75,6 +115,8 @@
   .painel-topo { display:flex; align-items:center; gap:12px; padding:16px 22px;
                  border-bottom:1px solid var(--hairline); }
   .h2 { font-family:'Poppins'; font-weight:700; font-size:17px; }
+  .cont { font-size:11.5px; color:var(--mudo); }
+  .cont b { color:var(--corpo); font-variant-numeric:tabular-nums; }
   .busca { margin-left:auto; display:flex; align-items:center; gap:8px; height:36px;
            border:1px solid var(--borda); border-radius:10px; padding:0 13px;
            font-size:13px; color:var(--fraco); min-width:230px; }
@@ -85,9 +127,15 @@
   .row { display:flex; align-items:center; gap:18px; padding:0 22px; height:58px;
          border-bottom:1px solid var(--hairline-2); }
   .row:last-child { border-bottom:none; }
-  .sig { flex:0 0 150px; display:flex; align-items:baseline; gap:8px; }
-  .sig b { font-size:14px; font-weight:700; letter-spacing:-.01em; }
-  .sig span { font-size:11px; color:var(--fraco); }
+  .sig { flex:0 0 168px; display:flex; align-items:center; gap:11px; }
+  .sis { font-size:12px; color:var(--mudo); }
+  .lad { flex:0 0 auto; width:46px; height:30px; border-radius:9px; background:var(--hairline);
+         display:flex; align-items:center; justify-content:center;
+         font-size:11px; font-weight:800; letter-spacing:-.01em; color:var(--corpo); }
+  .lad.sup { background:#eef4fd; color:#1d5fae; }
+  .lad.err { background:var(--alerta-bg); color:var(--alerta-forte); }
+  .sig .nm b { display:block; font-size:13.5px; font-weight:700; letter-spacing:-.01em; }
+  .sig .nm span { font-size:10.5px; color:var(--fraco); }
   .qtd { flex:0 0 96px; text-align:right; font-size:13.5px; font-weight:600;
          font-variant-numeric:tabular-nums; }
   .qtd.zero { color:var(--fantasma); }
@@ -147,7 +195,8 @@
         <div class="placar">
           <span class="n">3.240</span>
           <span class="de">de 5.000 processos novos</span>
-          <span class="pc">65%</span>
+          <!-- A pergunta que a tela não respondia: quando acaba. -->
+          <span class="pc">65% · faltam ~2 h neste ritmo</span>
         </div>
         <div class="linha"><i style="width:65%"></i></div>
         <div class="rodape-heroi">
@@ -161,19 +210,66 @@
       </div>
     </div>
 
-    <!-- ── faixa de números ──────────────────────────────── -->
-    <div class="faixa">
-      <div><div class="v">412.680</div><div class="l">no acervo</div></div>
-      <div><div class="v">59</div><div class="l">tribunais</div></div>
-      <div><div class="v">8</div><div class="l">completos</div></div>
-      <div><div class="v">1</div><div class="l">em erro</div></div>
-      <div><div class="v">1.412</div><div class="l">sigilosos barrados</div></div>
+    <!-- ── ritmo: a tela precisava de um eixo de tempo ────── -->
+    <div class="ritmo">
+      <div class="ritmo-esq">
+        <div class="l">No acervo</div>
+        <div class="v">412.680</div>
+        <div class="delta">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="#2a78d6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <b>9.650</b> nas últimas 24 h
+        </div>
+      </div>
+
+      <div class="ritmo-dir">
+        <div class="ritmo-topo">
+          <span class="t">Ingestão por hora</span>
+          <span class="med">média <b>402</b>/h</span>
+        </div>
+
+        <div class="plot">
+          <!-- linha da média: referência recessiva, tracejada, sem rótulo no eixo -->
+          <div class="media" style="bottom:39.4%"></div>
+
+          <!-- tooltip aberto de propósito: o mockup é retrato, e a camada de
+               hover precisa ser vista pra ser aprovada -->
+          <div class="tip">
+            <div class="tip-h">19 h</div>
+            <div class="tip-v"><i></i>1.020 processos novos</div>
+          </div>
+
+          <div class="barras">
+            <span style="height:0%"></span><span style="height:0%"></span>
+            <span style="height:0%"></span><span style="height:0%"></span>
+            <span style="height:0%"></span><span style="height:0%"></span>
+            <span style="height:0%"></span><span style="height:0%"></span>
+            <span style="height:11.8%"></span><span style="height:47.1%"></span>
+            <span style="height:60.8%"></span><span style="height:69.6%"></span>
+            <span style="height:66.7%"></span>
+            <span class="falha" style="height:0%"></span><span class="falha" style="height:0%"></span>
+            <span style="height:52.9%"></span><span style="height:74.5%"></span>
+            <span style="height:86.3%"></span><span style="height:92.2%"></span>
+            <span class="pico" style="height:100%"></span><span style="height:96.1%"></span>
+            <span style="height:84.3%"></span><span style="height:62.7%"></span>
+            <span style="height:41.2%"></span>
+          </div>
+        </div>
+
+        <div class="eixo">
+          <span>00 h</span><span>06 h</span><span>12 h</span><span>18 h</span><span>23 h</span>
+        </div>
+
+        <div class="legenda-falha">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="#b91c1c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          13 h–14 h sem ingestão — TJAC fora do ar
+        </div>
+      </div>
     </div>
 
     <!-- ── tribunais ─────────────────────────────────────── -->
     <div class="painel">
       <div class="painel-topo">
-        <span class="h2">Tribunais</span>
+        <span class="h2">Tribunais</span><span class="cont">59 · <b>8</b> completos · <b>1</b> em erro · <b>1.412</b> sigilosos barrados</span>
         <span class="busca">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#94a3b8" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
           Buscar tribunal
@@ -186,7 +282,7 @@
 
       <div class="linhas">
         <div class="row">
-          <span class="sig"><b>TJSP</b><span>e-SAJ</span></span>
+          <span class="sig"><span class="lad">TJSP</span><span class="sis">e-SAJ</span></span>
           <span class="qtd">96.412</span>
           <span class="prog"><span class="b"><i style="width:34%"></i></span><span class="p">34%</span></span>
           <span class="est fila"><i></i>na fila <span class="quando">· retoma do cursor</span></span>
@@ -194,7 +290,7 @@
         </div>
 
         <div class="row">
-          <span class="sig"><b>TJRJ</b><span>PJe</span></span>
+          <span class="sig"><span class="lad">TJRJ</span><span class="sis">PJe</span></span>
           <span class="qtd">58.330</span>
           <span class="prog"><span class="b"><i style="width:61%"></i></span><span class="p">61%</span></span>
           <span class="est fila"><i></i>na fila <span class="quando">· retoma do cursor</span></span>
@@ -202,7 +298,7 @@
         </div>
 
         <div class="row">
-          <span class="sig"><b>TJMG</b><span>PJe</span></span>
+          <span class="sig"><span class="lad">TJMG</span><span class="sis">PJe</span></span>
           <span class="qtd">47.204</span>
           <span class="prog"><span class="b"><i style="width:52%"></i></span><span class="p">52%</span></span>
           <span class="est fila"><i></i>na fila <span class="quando">· retoma do cursor</span></span>
@@ -210,7 +306,7 @@
         </div>
 
         <div class="row">
-          <span class="sig"><b>STJ</b><span>superior</span></span>
+          <span class="sig"><span class="lad sup">STJ</span><span class="sis">superior</span></span>
           <span class="qtd">31.980</span>
           <span class="prog"><span class="b"><i style="width:12%"></i></span><span class="p">12%</span></span>
           <span class="est run"><i></i>rodando agora <span class="quando">· página 34</span></span>
@@ -218,39 +314,18 @@
         </div>
 
         <div class="row">
-          <span class="sig"><b>TJCE</b><span>PJe</span></span>
+          <span class="sig"><span class="lad">TJCE</span><span class="sis">PJe</span></span>
           <span class="qtd">28.640</span>
           <span class="prog"><span class="b"><i style="width:100%"></i></span><span class="p">100%</span></span>
           <span class="est ok"><i></i>completo <span class="quando">· 412 sigilosos barrados</span></span>
           <span class="acao"><span>Amostra</span><span>Recomeçar</span></span>
         </div>
 
-        <div class="row">
-          <span class="sig"><b>TST</b><span>superior</span></span>
-          <span class="qtd">19.115</span>
-          <span class="prog"><span class="b"><i style="width:24%"></i></span><span class="p">24%</span></span>
-          <span class="est fila"><i></i>na fila</span>
-          <span class="acao"><span>Amostra</span><span class="forte">Varrer</span></span>
-        </div>
+
+
 
         <div class="row">
-          <span class="sig"><b>TJBA</b><span>e-SAJ</span></span>
-          <span class="qtd">14.208</span>
-          <span class="prog"><span class="b"><i style="width:19%"></i></span><span class="p">19%</span></span>
-          <span class="est fila"><i></i>na fila</span>
-          <span class="acao"><span>Amostra</span><span class="forte">Varrer</span></span>
-        </div>
-
-        <div class="row">
-          <span class="sig"><b>TJPE</b><span>PJe</span></span>
-          <span class="qtd">11.902</span>
-          <span class="prog"><span class="b"><i style="width:28%"></i></span><span class="p">28%</span></span>
-          <span class="est fila"><i></i>na fila</span>
-          <span class="acao"><span>Amostra</span><span class="forte">Varrer</span></span>
-        </div>
-
-        <div class="row">
-          <span class="sig"><b>TJAC</b><span>PJe</span></span>
+          <span class="sig"><span class="lad err">TJAC</span><span class="sis">PJe</span></span>
           <span class="qtd zero">0</span>
           <span class="prog"><span class="b"></span><span class="p">—</span></span>
           <span class="est err"><i></i>08/08: DataJud devolveu 500 — índice indisponível</span>
@@ -259,7 +334,7 @@
       </div>
 
       <div class="painel-rodape">
-        <span>+ 50 tribunais na lista · <b>104.889</b> processos</span>
+        <span>+ 53 tribunais na lista · <b>150.114</b> processos</span>
         <span>Ordenados pelo que está mais atrasado</span>
       </div>
     </div>
