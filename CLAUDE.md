@@ -98,6 +98,39 @@ Caso clássico: validação inicial passou → integração quebrou depois → p
 - `/uploads` é servido com auth de sessão + checagem de escritório
   (exceção pública: `/uploads/pareceres/` — capability-URL por design).
 
+## Pendências represadas (decisão do dono)
+
+Coisas conscientemente adiadas. **Não reabrir sozinho** — só trazer de volta
+quando o gatilho descrito acontecer, e aí lembrar o dono em vez de executar.
+
+### ESLint + eslint-plugin-react-hooks
+
+`pnpm check` é só `tsc --noEmit`, e TypeScript não enxerga ordem de hooks.
+O projeto não tem ESLint nenhum. Foi assim que um `useEffect` colocado depois
+de um `return` antecipado subiu pra produção e quebrou o editor do SmartFlow
+com React #310 — com 3495 testes verdes e build limpo.
+
+Remendo em pé hoje: `server/__tests__/react-hooks-apos-return.test.ts`, uma
+varredura de texto sobre os `.tsx` do client. Cobre esse caso específico e
+mais nada — não vê hook dentro de `if`/loop, nem dependência faltando, nem
+componente em arrow function com formatação fora do padrão da casa.
+
+**Lembrar o dono quando:** (a) aparecer outro erro de React em produção que
+o remendo não pegou; (b) alguém encostar em hooks de um jeito que a
+heurística não cobre; (c) entrar mais gente mexendo no client. O custo de
+adiar não é o bug de hoje, é o próximo — e o motivo do adiamento é que
+plugar ESLint agora acusa uma montanha de coisa acumulada de uma vez.
+
+### Nome próprio por bloco no SmartFlow
+
+Blocos não têm nome — o cabeçalho no canvas mostra sempre o rótulo do TIPO,
+e `data.label` do nó nem chega a ser gravado (o save manda só
+`tipo/config/clienteId/proximoSe`). Por isso o "(cópia)" aprovado no mockup
+do duplicar ficou de fora: apareceria e sumiria no primeiro reload.
+
+**Lembrar o dono quando:** ele reclamar de três "ENVIAR MENSAGEM" iguais no
+canvas sem saber qual é qual, ou pedir de novo o sufixo da cópia.
+
 ## Anti-patterns conhecidos
 
 - ❌ `authenticator.options = X` (modifica singleton)
@@ -106,3 +139,7 @@ Caso clássico: validação inicial passou → integração quebrou depois → p
 - ❌ Hardcode `cargo === "dono"` (use checkPermission)
 - ❌ confirm() nativo do browser pra ações destrutivas (use AlertDialog)
 - ❌ Gate admin em procedure usada por dropdown user-level
+- ❌ Hook (`useEffect`/`useState`/…) DEPOIS de `return` antecipado no
+  componente — a contagem muda entre renders e o React derruba a tela
+  (#310). Saída antecipada vai embaixo de todos os hooks; pra economizar
+  query use `enabled`, não `return` mais cedo
