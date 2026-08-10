@@ -3900,6 +3900,23 @@ export const jurisiaProcessos = mysqlTable(
     /** Nome do movimento que gerou a classificação — o que se confere quando
      *  a estatística sai estranha. */
     resultadoMovimento: varchar("resultadoMovimentoJurisProc", { length: 255 }),
+    /**
+     * Desfecho do RECURSO — eixo próprio, não reaproveita `resultado`.
+     *
+     * "Provimento" não é "procedente": réu que recorre e vence teve o recurso
+     * provido e o pedido do autor rejeitado. Instância superior preenche
+     * estas colunas e deixa `resultado` nulo.
+     */
+    resultadoRecurso: mysqlEnum("resultadoRecursoJurisProc", [
+      "provido",
+      "parcialmente_provido",
+      "nao_provido",
+      "nao_conhecido",
+      "prejudicado",
+      "desistencia",
+    ]),
+    resultadoRecursoEm: timestamp("resultadoRecursoEmJurisProc"),
+    resultadoRecursoMovimento: varchar("resultadoRecursoMovimentoJurisProc", { length: 255 }),
     sincronizadoEm: timestamp("sincronizadoEmJurisProc").defaultNow().notNull(),
   },
   (t) => ({
