@@ -216,6 +216,26 @@ function PainelSondagem() {
                                 </p>
                               </div>
                             )}
+                            {r.vocabulario && (
+                              <div className="mb-2 rounded-lg border bg-background p-3">
+                                <p className="mb-2 text-xs font-semibold">
+                                  Movimentos que existem de fato ({r.vocabulario.length})
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {r.vocabulario.map((m) => (
+                                    <span
+                                      key={m.nome}
+                                      className="rounded-full border bg-muted/60 px-2 py-0.5 text-[11px]"
+                                    >
+                                      {m.nome}{" "}
+                                      <span className="tabular-nums text-muted-foreground">
+                                        {nf.format(m.quantidade)}
+                                      </span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             <pre className="max-h-72 overflow-auto rounded-lg border bg-background p-3 text-[11px] leading-relaxed">
                               {r.amostra || "(corpo vazio)"}
                             </pre>

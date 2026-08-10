@@ -12,6 +12,8 @@
  *    depender de ninguém lembrar de filtrar na hora certa.
  */
 
+import { repararMojibake } from "./texto-mojibake";
+
 export interface ProcessoDataJud {
   cnj: string;
   tribunal: string;
@@ -38,9 +40,17 @@ export type ResultadoNormalizacao =
   | { ok: true; processo: ProcessoDataJud; movimentos: MovimentoDataJud[] }
   | { ok: false; motivo: "sigiloso" | "sem_cnj" | "sem_tribunal" };
 
+/**
+ * Todo texto do DataJud passa por aqui — e é aqui que o mojibake morre.
+ *
+ * O CNJ entrega o defeito misturado no mesmo registro: `formato.nome` vem
+ * "Eletrônico" e o nome do órgão vem com o acento destruído. Reparar no funil
+ * garante que nada entre torto no acervo, em vez de depender de alguém lembrar
+ * de tratar campo por campo.
+ */
 const texto = (v: unknown): string | null => {
   if (typeof v !== "string") return null;
-  const t = v.trim();
+  const t = repararMojibake(v).trim();
   return t.length > 0 ? t : null;
 };
 
