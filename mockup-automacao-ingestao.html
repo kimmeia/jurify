@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --aviso:#b45309; --aviso-bg:#fffbeb; --aviso-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:26px 30px; height:100%; display:flex; flex-direction:column; gap:14px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:16px; }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  .switch { display:flex; align-items:center; gap:10px; background:var(--surface);
+            border:1px solid var(--borda); border-radius:12px; padding:9px 14px; }
+  .switch .lb { font-size:12.5px; font-weight:600; color:var(--corpo); }
+  .knob { width:38px; height:21px; border-radius:999px; background:var(--acento); position:relative;
+          box-shadow:inset 0 0 0 1px #00000010; }
+  .knob i { position:absolute; top:2.5px; right:2.5px; width:16px; height:16px; border-radius:50%;
+            background:#fff; box-shadow:0 1px 3px #0f172a33; }
+  .pulso { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600;
+           color:var(--ok); background:var(--ok-bg); border:1px solid var(--ok-borda);
+           border-radius:999px; padding:4px 10px; }
+  .pulso i { width:6px; height:6px; border-radius:50%; background:var(--ok); }
+
+  /* ── tiles ── */
+  .tiles { flex:0 0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .tile { padding:13px 16px; }
+  .tile .n { font-size:25px; font-weight:800; letter-spacing:-.02em; margin-top:6px; line-height:1.1; }
+  .tile .n small { font-size:12px; font-weight:600; color:var(--mudo); margin-left:5px; letter-spacing:0; }
+  .tile .p { margin-top:5px; font-size:11px; color:var(--mudo); }
+  .trilho { margin-top:9px; height:6px; border-radius:999px; background:var(--hairline); overflow:hidden; }
+  .trilho i { display:block; height:6px; border-radius:999px; background:var(--acento-claro); }
+
+  /* ── grid ── */
+  .grid { flex:1; display:grid; grid-template-columns:1fr 512px; gap:14px; min-height:0; }
+  .col { display:flex; flex-direction:column; gap:14px; min-height:0; }
+  .chd { padding:14px 18px 11px; border-bottom:1px solid var(--hairline); }
+  .chd .cap { font-size:11.5px; color:var(--mudo); margin-top:3px; }
+
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+       color:var(--fraco); padding:9px 18px; border-bottom:1px solid var(--hairline); }
+  td { padding:0 18px; border-bottom:1px solid var(--hairline-2); height:52px; vertical-align:middle; }
+  .trib { font-size:13px; font-weight:700; }
+  .trib span { font-weight:500; color:var(--mudo); font-size:11px; margin-left:6px; }
+  .num { font-size:12.5px; font-weight:600; font-variant-numeric:tabular-nums; text-align:right; }
+  .quando { font-size:11.5px; color:var(--mudo); text-align:right; font-variant-numeric:tabular-nums; }
+  .prog { display:flex; align-items:center; gap:8px; }
+  .prog .b { flex:1; height:6px; border-radius:999px; background:var(--hairline); overflow:hidden; }
+  .prog .b i { display:block; height:6px; border-radius:999px; background:var(--acento-claro); }
+  .prog .v { width:34px; text-align:right; font-size:11px; font-weight:700;
+             font-variant-numeric:tabular-nums; color:var(--corpo); }
+  .agora { display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700;
+           color:var(--acento-forte); background:var(--acento-bg); border:1px solid #ddd6fe;
+           border-radius:999px; padding:3px 8px; }
+  .agora i { width:5px; height:5px; border-radius:50%; background:var(--acento); }
+  .tfoot { padding:12px 18px; border-top:1px solid var(--hairline); display:flex;
+           align-items:center; justify-content:space-between; font-size:11.5px; color:var(--mudo); }
+  .tfoot b { color:var(--tinta); font-variant-numeric:tabular-nums; }
+
+  /* ── fontes ── */
+  .fonte { padding:12px 18px; border-bottom:1px solid var(--hairline-2); }
+  .fonte:last-child { border-bottom:none; }
+  .fonte .l1 { display:flex; align-items:center; gap:9px; }
+  .fonte .nm { font-size:12.5px; font-weight:700; }
+  .selo { font-size:10px; font-weight:700; border-radius:999px; padding:3px 9px; border:1px solid transparent; }
+  .selo.ok { color:var(--ok); background:var(--ok-bg); border-color:var(--ok-borda); }
+  .selo.bad { color:var(--alerta-forte); background:var(--alerta-bg); border-color:var(--alerta-borda); }
+  .selo.warn { color:var(--aviso); background:var(--aviso-bg); border-color:var(--aviso-borda); }
+  .fonte .quando2 { margin-left:auto; font-size:10.5px; color:var(--fraco); }
+  /* Bloco, não flex: com display:flex o <b> vira item da linha e sai do texto
+     corrido, encostado à direita. */
+  .acao { margin-top:6px; font-size:11.5px; color:var(--corpo); line-height:1.45; }
+  .acao b { color:var(--tinta); }
+  .passo { display:inline-flex; align-items:center; gap:5px; margin-top:6px; font-size:10.5px;
+           font-weight:600; color:var(--acento-forte); background:var(--acento-bg);
+           border:1px solid #ddd6fe; border-radius:999px; padding:3px 9px; }
+
+  .alertas { flex:1 1 auto; padding:14px 18px 4px; border-top:1px solid var(--hairline); }
+  .alerta { margin-top:9px; display:flex; align-items:center; justify-content:space-between; gap:14px;
+            border:1px solid var(--aviso-borda); background:var(--aviso-bg);
+            border-radius:11px; padding:10px 13px; }
+  .al-t { font-size:12.5px; font-weight:700; margin-right:9px; }
+  .al-e { font-size:11.5px; color:var(--corpo); }
+  .al-a { flex:0 0 auto; font-size:11px; font-weight:600; color:var(--aviso);
+          border:1px solid var(--aviso-borda); background:var(--surface);
+          border-radius:999px; padding:4px 11px; }
+  .al-a.auto { color:var(--ok); border-color:var(--ok-borda); }
+
+  .politica { padding:12px 18px 14px; }
+  .politica p { font-size:11.5px; color:var(--corpo); line-height:1.5; }
+  .politica p + p { margin-top:7px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">Automação da ingestão</div>
+        <div class="sub">O robô roda sozinho. Aqui se define o ritmo, se vê o que travou e o que fazer a respeito.</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="pulso"><i></i>ciclo ativo</span>
+        <div class="switch">
+          <span class="lb">Ingestão automática</span>
+          <span class="knob"><i></i></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── tiles ─────────────────────────────────────────── -->
+    <div class="tiles">
+      <div class="card tile">
+        <div class="micro">No acervo</div>
+        <div class="n">412.680</div>
+        <div class="p">+18.400 hoje · 22 de 59 tribunais completos</div>
+      </div>
+
+      <div class="card tile">
+        <div class="micro">Próximo ciclo</div>
+        <div class="n">4<small>min</small></div>
+        <div class="p">a cada 30 min · 5 páginas por tribunal</div>
+      </div>
+
+      <div class="card tile">
+        <div class="micro">Ritmo</div>
+        <div class="n">1.240<small>/ 3.000 por hora</small></div>
+        <div class="trilho"><i style="width:41%"></i></div>
+      </div>
+
+      <div class="card tile">
+        <div class="micro">Fontes</div>
+        <div class="n">1<small>de 5 respondendo</small></div>
+        <div class="p">3 bloqueadas · 1 a avaliar</div>
+      </div>
+    </div>
+
+    <!-- ── grid ──────────────────────────────────────────── -->
+    <div class="grid">
+
+      <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
+        <div class="chd">
+          <div class="h2">Fila de tribunais</div>
+          <div class="cap">Ordenada pelo que está mais atrasado, não pelo alfabeto. Cada ciclo pega os próximos da fila, grava o cursor e sai — quem parou no meio retoma de onde estava.</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Tribunal</th>
+              <th style="text-align:right">No acervo</th>
+              <th style="width:190px">Progresso do índice</th>
+              <th style="text-align:right">Última</th>
+              <th style="text-align:right">Próxima</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="trib">TJSP<span>e-SAJ</span></span></td>
+              <td class="num">96.412</td>
+              <td><div class="prog"><span class="b"><i style="width:34%"></i></span><span class="v">34%</span></div></td>
+              <td class="quando">há 8 min</td><td class="quando">em 22 min</td>
+            </tr>
+            <tr>
+              <td><span class="trib">TJRJ<span>PJe</span></span></td>
+              <td class="num">58.330</td>
+              <td><div class="prog"><span class="b"><i style="width:61%"></i></span><span class="v">61%</span></div></td>
+              <td class="quando">há 12 min</td><td class="quando">em 18 min</td>
+            </tr>
+            <tr>
+              <td><span class="trib">TJMG<span>PJe</span></span></td>
+              <td class="num">47.204</td>
+              <td><div class="prog"><span class="b"><i style="width:52%"></i></span><span class="v">52%</span></div></td>
+              <td class="quando">há 18 min</td><td class="quando">em 12 min</td>
+            </tr>
+            <tr>
+              <td><span class="trib">STJ<span>superior</span></span></td>
+              <td class="num">31.980</td>
+              <td><div class="prog"><span class="b"><i style="width:12%"></i></span><span class="v">12%</span></div></td>
+              <td class="quando">há 3 min</td><td class="quando">em 27 min</td>
+            </tr>
+            <tr>
+              <td><span class="trib">TJCE<span>PJe</span></span></td>
+              <td class="num">28.640</td>
+              <td><div class="prog"><span class="b"><i style="width:88%"></i></span><span class="v">88%</span></div></td>
+              <td class="quando">há 25 min</td><td class="quando">em 5 min</td>
+            </tr>
+            <tr>
+              <td><span class="trib">TST<span>superior</span></span></td>
+              <td class="num">19.115</td>
+              <td><div class="prog"><span class="b"><i style="width:24%"></i></span><span class="v">24%</span></div></td>
+              <td class="quando">há 31 min</td><td><span class="agora"><i></i>rodando</span></td>
+            </tr>
+            <tr>
+              <td><span class="trib">TJBA<span>e-SAJ</span></span></td>
+              <td class="num">14.208</td>
+              <td><div class="prog"><span class="b"><i style="width:19%"></i></span><span class="v">19%</span></div></td>
+              <td class="quando">há 44 min</td><td class="quando">em 4 min</td>
+            </tr>
+            <tr>
+              <td><span class="trib" style="color:var(--mudo)">+ 50 outros tribunais</span></td>
+              <td class="num" style="color:var(--mudo)">116.791</td>
+              <td><div class="prog"><span class="b"><i style="width:29%; background:var(--fantasma)"></i></span><span class="v" style="color:var(--mudo)">29%</span></div></td>
+              <td class="quando">—</td><td class="quando">na fila</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="alertas">
+          <div class="micro" style="color:var(--aviso)">Fora da fila — falharam 3 ciclos seguidos</div>
+          <p style="margin-top:4px; font-size:11.5px; color:var(--mudo);">
+            Sair da fila é de propósito: tribunal quebrado que continua sendo tentado queima ritmo
+            que outro tribunal usaria, e o erro se repete no log até ninguém mais ler.
+          </p>
+
+          <div class="alerta">
+            <div>
+              <span class="al-t">TJAC</span>
+              <span class="al-e">DataJud devolveu 500 — índice indisponível</span>
+            </div>
+            <span class="al-a auto">volta sozinho quando a sonda achar o índice de pé</span>
+          </div>
+
+          <div class="alerta">
+            <div>
+              <span class="al-t">TJSE</span>
+              <span class="al-e">tempo esgotado na página 12, três vezes</span>
+            </div>
+            <span class="al-a">precisa de você: reduzir páginas por ciclo</span>
+          </div>
+        </div>
+
+        <div class="tfoot">
+          <span>57 na fila · 2 fora</span>
+          <span><b>412.680</b> no total</span>
+        </div>
+      </div>
+
+      <div class="col">
+
+        <div class="card" style="display:flex; flex-direction:column; overflow:hidden; flex:1 1 auto;">
+          <div class="chd">
+            <div class="h2">Fontes e o que trava cada uma</div>
+            <div class="cap">A sonda roda sozinha toda madrugada. Fonte que voltar a responder entra na fila no mesmo dia, sem ninguém reparar nela.</div>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden;">
+            <div class="fonte">
+              <div class="l1">
+                <span class="nm">DataJud — API Pública do CNJ</span>
+                <span class="selo ok">respondendo</span>
+                <span class="quando2">sondada há 6 h</span>
+              </div>
+              <div class="acao">É a fonte que sustenta o acervo hoje: metadado, movimento e desfecho de 59 tribunais, incluindo STJ, TST, TSE e STM. Sem ementa.</div>
+            </div>
+
+            <div class="fonte">
+              <div class="l1">
+                <span class="nm">DJEN — Comunica API</span>
+                <span class="selo bad">bloqueado por IP</span>
+                <span class="quando2">sondada há 6 h</span>
+              </div>
+              <div class="acao">
+                O 403 persiste trocando o cabeçalho, então é a faixa de IP do servidor.
+                <b>Saída: credenciamento no CNJ.</b>
+              </div>
+              <span class="passo">pedido a protocolar</span>
+            </div>
+
+            <div class="fonte">
+              <div class="l1">
+                <span class="nm">STJ — busca de jurisprudência</span>
+                <span class="selo bad">bloqueado por IP</span>
+                <span class="quando2">sondada há 6 h</span>
+              </div>
+              <div class="acao">
+                Mesmo caso. O acórdão do STJ já entra pelo DataJud com desfecho de recurso — o que falta aqui é só a ementa.
+              </div>
+            </div>
+
+            <div class="fonte">
+              <div class="l1">
+                <span class="nm">STF — portal e jurisprudência</span>
+                <span class="selo warn">falha de TLS</span>
+                <span class="quando2">sondada há 6 h</span>
+              </div>
+              <div class="acao">
+                Não é bloqueio: o handshake nem completa. Pode ser cadeia de certificado incompleta ou raiz que o servidor não conhece — <b>possivelmente conserto nosso.</b>
+              </div>
+              <span class="passo">ler o código do erro na sonda</span>
+            </div>
+
+            <div class="fonte">
+              <div class="l1">
+                <span class="nm">LexML — legislação</span>
+                <span class="selo warn">responde, formato a avaliar</span>
+                <span class="quando2">sondada há 6 h</span>
+              </div>
+              <div class="acao">Devolveu 200 em XML. Serviria pra ligar a lei citada na resposta ao texto oficial.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="flex:0 0 auto;">
+          <div class="chd"><div class="h2">Política de acesso</div></div>
+          <div class="politica">
+            <p><b>Bloqueio de IP não se contorna.</b> Trocar de endereço pra fazer exatamente o que a fonte recusou é evasão de controle de acesso — e o bloqueio volta na semana seguinte, agora com atenção em cima.</p>
+            <p><b>O caminho é credenciamento.</b> É mais lento e é permanente: acesso autorizado, com limite combinado, que não some quando alguém revisa a lista de bloqueios.</p>
+            <p><b>Enquanto isso, o produto não fica parado.</b> O DataJud entrega estatística de tribunal superior, que é o diferencial — ementa é melhoria, não pré-requisito.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</body>
+</html>
