@@ -37,7 +37,7 @@ export const CUSTO_COLABORADOR_EXTRA = 9.90;
 /**
  * Fusos horários oficiais brasileiros (IANA). O `fusoHorario` do escritório
  * é usado nos cálculos de agendamento do SmartFlow (slots de horário dos
- * gatilhos Asaas, lembretes Cal.com). Se o SaaS for aberto a outros países
+ * gatilhos Asaas, lembretes da agenda). Se o SaaS for aberto a outros países
  * no futuro, basta acrescentar entradas aqui.
  *
  * Mantemos 4 zonas oficiais do Brasil — 1 `timeZone` por UTC offset:

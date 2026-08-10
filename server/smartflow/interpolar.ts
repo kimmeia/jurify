@@ -191,13 +191,6 @@ const VARS_ACAO: CatalogoVariavel[] = [
   { path: "acaoValorCausa", label: "Valor da causa", exemplo: "50000", categoria: "acao" },
 ];
 
-const VARS_AGENDAMENTO: CatalogoVariavel[] = [
-  { path: "horarioEscolhido", label: "Horário do agendamento", exemplo: "10/05 às 14h", categoria: "agendamento" },
-  { path: "agendamentoFim", label: "Fim do agendamento", exemplo: "10/05 às 15h", categoria: "agendamento" },
-  { path: "emailCliente", label: "Email do participante", exemplo: "joao@example.com", categoria: "agendamento" },
-  { path: "nomeCliente", label: "Nome do participante", exemplo: "João Silva", categoria: "cliente" },
-];
-
 export const CATALOGO_VARIAVEIS: CatalogoGatilho[] = [
   {
     gatilho: "mensagem_canal",
@@ -231,32 +224,6 @@ export const CATALOGO_VARIAVEIS: CatalogoGatilho[] = [
     gatilho: "pagamento_proximo_vencimento",
     label: "Vencimento próximo (Asaas)",
     variaveis: [...VARS_CLIENTE, ...VARS_PAGAMENTO_PROXIMO],
-  },
-  {
-    gatilho: "agendamento_criado",
-    label: "Agendamento criado (Cal.com)",
-    variaveis: VARS_AGENDAMENTO,
-  },
-  {
-    gatilho: "agendamento_cancelado",
-    label: "Agendamento cancelado (Cal.com)",
-    variaveis: [
-      ...VARS_AGENDAMENTO,
-      { path: "motivoCancelamento", label: "Motivo do cancelamento", exemplo: "Cliente pediu", categoria: "agendamento" },
-    ],
-  },
-  {
-    gatilho: "agendamento_remarcado",
-    label: "Agendamento remarcado (Cal.com)",
-    variaveis: [
-      ...VARS_AGENDAMENTO,
-      { path: "horarioAnterior", label: "Horário antigo (antes de remarcar)", exemplo: "08/05 às 10h", categoria: "agendamento" },
-    ],
-  },
-  {
-    gatilho: "agendamento_lembrete",
-    label: "Lembrete de agendamento (Cal.com)",
-    variaveis: VARS_AGENDAMENTO,
   },
   {
     gatilho: "manual",

@@ -47,7 +47,6 @@ import { despesasRouter } from "./escritorio/router-despesas";
 import { backupRouter } from "./escritorio/router-backup";
 
 // Integrações
-import { calcomRouter } from "./integracoes/router-calcom";
 import { twilioRouter } from "./integracoes/router-twilio";
 import { agentesIaRouter } from "./integracoes/router-agentes-ia";
 import { agenteChatRouter } from "./integracoes/router-agente-chat";
@@ -118,7 +117,6 @@ export const appRouter = router({
   agendamento: agendamentoRouter,
   crm: crmRouter,
   atendimentoIa: atendimentoIaRouter,
-  calcom: calcomRouter,
   twilio: twilioRouter,
   agentesIa: agentesIaRouter,
   agenteChat: agenteChatRouter,

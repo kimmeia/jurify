@@ -6,7 +6,6 @@ import { Switch } from "@/components/ui/switch";
 import {
   AlertTriangle,
   ArrowLeft,
-  CalendarCheck, CalendarClock, CalendarX,
   Clock,
   DollarSign,
   Loader2,
@@ -27,10 +26,6 @@ const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
   pagamento_vencido: AlertTriangle,
   pagamento_proximo_vencimento: Clock,
   novo_lead: Users,
-  agendamento_criado: CalendarCheck,
-  agendamento_cancelado: CalendarX,
-  agendamento_remarcado: CalendarClock,
-  agendamento_lembrete: Clock,
   manual: Play,
 };
 
@@ -41,10 +36,6 @@ const COR_ICONE_GATILHO: Record<GatilhoSmartflow, string> = {
   pagamento_vencido: "text-amber-500",
   pagamento_proximo_vencimento: "text-amber-500",
   novo_lead: "text-violet-500",
-  agendamento_criado: "text-orange-500",
-  agendamento_cancelado: "text-orange-500",
-  agendamento_remarcado: "text-orange-500",
-  agendamento_lembrete: "text-orange-500",
   manual: "text-slate-500",
 };
 

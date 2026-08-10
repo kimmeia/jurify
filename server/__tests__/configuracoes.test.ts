@@ -201,11 +201,10 @@ describe("validarConfigCanalPorTipo — campos obrigatórios por tipo", () => {
     expect(() => validarConfigCanalPorTipo("whatsapp_api", {})).not.toThrow();
   });
 
-  it("aceita whatsapp_api/instagram/facebook/calcom sem config (conectam via OAuth/QR)", () => {
+  it("aceita whatsapp_api/instagram/facebook sem config (conectam via OAuth/QR)", () => {
     expect(() => validarConfigCanalPorTipo("whatsapp_api", undefined)).not.toThrow();
     expect(() => validarConfigCanalPorTipo("instagram", undefined)).not.toThrow();
     expect(() => validarConfigCanalPorTipo("facebook", undefined)).not.toThrow();
-    expect(() => validarConfigCanalPorTipo("calcom", undefined)).not.toThrow();
   });
 
   it("rejeita telefone_voip sem twilioSid/twilioAuthToken/twilioPhoneNumber", () => {

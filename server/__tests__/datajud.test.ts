@@ -35,6 +35,56 @@ const okDe = (r: ReturnType<typeof normalizarHit>) => {
   return r;
 };
 
+describe("normalizarHit — assuntos", () => {
+  it("guarda TODOS os assuntos, não só o principal", () => {
+    // Num agravo, o assunto principal é a matéria processual genérica e o que
+    // o advogado procura vem depois. Guardar só o primeiro fazia o recorte por
+    // conteúdo devolver o balaio inteiro de agravos.
+    const r = okDe(
+      normalizarHit(
+        hit({
+          assuntos: [
+            { codigo: 899, nome: "DIREITO CIVIL" },
+            { codigo: 10441, nome: "Busca e Apreensão" },
+            { codigo: 7771, nome: "Alienação Fiduciária" },
+          ],
+        }),
+      ),
+    );
+    expect(r.processo.assuntoNome).toBe("DIREITO CIVIL");
+    expect(r.processo.assuntosTodos).toBe("DIREITO CIVIL · Busca e Apreensão · Alienação Fiduciária");
+  });
+
+  it("não repete assunto duplicado", () => {
+    const r = okDe(
+      normalizarHit(
+        hit({
+          assuntos: [
+            { codigo: 899, nome: "Alimentos" },
+            { codigo: 900, nome: "Alimentos" },
+          ],
+        }),
+      ),
+    );
+    expect(r.processo.assuntosTodos).toBe("Alimentos");
+  });
+
+  it("processo sem assunto não vira string vazia", () => {
+    const r = okDe(normalizarHit(hit({ assuntos: [] })));
+    expect(r.processo.assuntoNome).toBeNull();
+    expect(r.processo.assuntosTodos).toBeNull();
+  });
+
+  it("assunto sem nome é descartado sem derrubar os outros", () => {
+    const r = okDe(
+      normalizarHit(
+        hit({ assuntos: [{ codigo: 1 }, { codigo: 2, nome: "Prisão civil" }] }),
+      ),
+    );
+    expect(r.processo.assuntosTodos).toBe("Prisão civil");
+  });
+});
+
 describe("normalizarHit — sigilo", () => {
   it("processo sigiloso não entra no acervo", () => {
     const r = normalizarHit(hit({ nivelSigilo: 1 }));

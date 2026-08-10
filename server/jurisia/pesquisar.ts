@@ -28,6 +28,7 @@ import {
 import type { PerfilRecorte } from "../../shared/jurisia-perfil";
 import { compararComAcervo, type Comparacao } from "../../shared/jurisia-estrategia";
 import { avisoDeNatureza, type ComposicaoNatureza } from "../../shared/jurisia-grau";
+import { frasearTendencia, type Tendencia } from "../../shared/jurisia-tendencia";
 import { buscarRecorte, perfilDoRecorte } from "./buscar-acervo";
 
 const SYSTEM_INTERPRETAR = `Você traduz a pergunta de um advogado em um RECORTE de busca sobre uma base de processos judiciais brasileiros.
@@ -43,6 +44,9 @@ Devolva JSON:
 
 Regras:
 - Os termos são casados como SUBSTRING do nome oficial (classe processual, assunto da TPU, nome do órgão julgador). Por isso prefira UMA palavra discriminante ou expressão curta, sem artigo e sem plural desnecessário. "revisão" casa melhor que "ação revisional de contrato bancário".
+- CLASSE é o VEÍCULO processual: "Agravo em Recurso Especial", "Apelação", "Execução Fiscal", "Busca e Apreensão em Alienação Fiduciária", "Mandado de Segurança". ASSUNTO é a MATÉRIA discutida: "alimentos", "revisão contratual", "prisão", "adicional de insalubridade", "alienação fiduciária".
+- Quando a pergunta juntar os dois — "agravo de busca e apreensão", "apelação em ação de alimentos", "recurso especial sobre revisional" — SEPARE: o recurso/ação vai em classeTermo e a matéria vai em assuntoTermo. Pôr tudo em classeTermo devolve todos os agravos do tribunal, de qualquer assunto, e a estatística responde outra pergunta.
+- Se a pergunta trouxer SÓ a matéria ("como o TJCE decide alimentos"), deixe classeTermo null. Se trouxer só o veículo ("quantos agravos"), deixe assuntoTermo null — mas isso é um recorte largo, e é melhor largo do que errado.
 - "tribunal" é a sigla (TJCE, TJSP, TRF5, STJ). Só preencha se a pergunta disser o tribunal ou o estado. Nunca deduza.
 - "orgaoTermo" só quando a pergunta citar vara, câmara ou comarca.
 - Campo que a pergunta não determina vai null. Chutar recorte é pior que devolver null — recorte errado responde com estatística de outra coisa.`;
@@ -62,6 +66,9 @@ Regras:
 - Pode citar número de CNJ, nome de vara, ano e artigo de lei que estejam nas fontes. O que não pode é medir o acervo.
 - Nunca cite súmula, tese ou acórdão que não esteja nas fontes.
 - RESPEITE A INSTÂNCIA de cada fonte. Só a decisão de órgão colegiado é jurisprudência — sentença de juiz singular mostra como aquela vara costuma decidir e nada além. Não escreva "o tribunal entende", "é entendimento consolidado" nem "a jurisprudência é" apoiado em sentença de 1º grau; nesse caso fale da vara ("nessa vara, o pedido costuma ser acolhido"). Quando o recorte não tiver nenhuma decisão colegiada, diga isso ao advogado.
+- DOIS EIXOS DE DESFECHO, e eles não se misturam. "Procedente/improcedente" é o mérito do pedido, julgado na origem. "Provido/não provido/não conhecido" é o desfecho do RECURSO. Réu que recorre e ganha teve o recurso PROVIDO e o pedido do autor rejeitado — chamar isso de "procedente" inverte o caso. Use a palavra do eixo que a fonte traz.
+- "Não conhecido" não é derrota no mérito: o recurso nem foi examinado por faltar requisito de admissibilidade. Se é isso que domina o recorte, diga exatamente isso — é a informação mais útil que o advogado pode receber antes de recorrer.
+- Quando o contexto trouxer "O QUE ESTE RECORTE DECIDE HOJE", trate como o dado mais importante: entendimento que virou torna o histórico enganoso, e é sobre o de hoje que o advogado vai litigar.
 - Se os processos não respondem a pergunta, devolva "achou": false e diga o que faltou. É uma resposta boa.
 - "conclusao" é sua leitura prática pro advogado — o único trecho sem fonte, e também sem número.
 - Português do Brasil, direto, sem saudação. Fale como quem conversa com advogado.`;
@@ -81,6 +88,9 @@ Regras:
 - Cada afirmação PRECISA citar os ids dos processos que a sustentam. Só ids do contexto.
 - NÃO PRODUZA NÚMEROS. Os percentuais e as contagens já estão calculados e aparecem na tela ao lado; escrever um número diferente descarta a resposta inteira. Fale em palavras ("a maioria", "é raro", "quase o dobro").
 - A "conclusao" é o conselho, e é o que o advogado mais lê. Ela deve terminar em AÇÃO: o documento que falta, a pergunta a fazer ao cliente, o pedido a incluir. "Depende do caso" não é conselho.
+- DOIS EIXOS DE DESFECHO, e eles não se misturam. "Procedente/improcedente" é o mérito do pedido. "Provido/não provido/não conhecido" é o desfecho do RECURSO — réu que recorre e ganha teve o recurso provido e o pedido do autor rejeitado. Use a palavra do eixo que a fonte traz.
+- "Não conhecido" é barreira de admissibilidade, não derrota no mérito. Num recorte de recurso onde isso domina, o conselho prático é sobre requisito de admissibilidade — prequestionamento, súmula 7, tempestividade — e não sobre a tese de fundo.
+- Quando o contexto trouxer "O QUE ESTE RECORTE DECIDE HOJE", ele manda mais que o histórico: se o entendimento virou, aconselhar pela média antiga é aconselhar pelo lado que perdeu.
 - Se o histórico do escritório for pequeno, trate-o como pista, não como prova — e diga isso.
 - RESPEITE A INSTÂNCIA de cada fonte. Sentença de juiz singular prevê a vara; só decisão de órgão colegiado sustenta "o tribunal entende". Se o conselho depende de como a 2ª instância decide e o recorte não tem acórdão, diga que essa parte está em aberto em vez de responder com sentença.
 - Não prometa resultado. Você descreve padrão; quem decide é o advogado.
@@ -110,6 +120,8 @@ export interface ResultadoPesquisa {
   natureza: ComposicaoNatureza;
   /** A ressalva que a tela mostra. null quando não há o que ressalvar. */
   avisoNatureza: string | null;
+  /** O que o recorte decide HOJE, e se isso mudou. */
+  tendencia: Tendencia | null;
 }
 
 const ESTATISTICA_VAZIA: EstatisticaRecorte = {
@@ -144,6 +156,7 @@ function semBase(
     comparacao: null,
     natureza: NATUREZA_VAZIA,
     avisoNatureza: null,
+    tendencia: null,
   };
 }
 
@@ -231,11 +244,19 @@ export async function pesquisarNoAcervo(args: {
     ].join("\n")
     : "";
 
+  // A frase de tendência é qualitativa de propósito: o modelo é recusado se
+  // escrever número, então o que ele recebe já vem em palavras.
+  const fraseTendencia = recorte.tendencia ? frasearTendencia(recorte.tendencia) : null;
+  const blocoTendencia = fraseTendencia
+    ? `\nO QUE ESTE RECORTE DECIDE HOJE:\n${fraseTendencia}`
+    : "";
+
   const user = [
     `RECORTE: ${descreverFiltro(filtro)}`,
     "",
     "PROCESSOS DO RECORTE:",
     ctx.texto,
+    blocoTendencia,
     blocoEscritorio,
     conversa ? `\nCONVERSA ATÉ AQUI:\n${conversa}` : "",
     `\nPERGUNTA DO ADVOGADO:\n${args.pergunta}`,
@@ -262,6 +283,7 @@ export async function pesquisarNoAcervo(args: {
     comparacao,
     natureza: recorte.natureza,
     avisoNatureza: avisoDeNatureza(recorte.natureza),
+    tendencia: recorte.tendencia,
   };
 
   const v = validarResposta(bruto, ctx.fontes.map((f) => f.id));

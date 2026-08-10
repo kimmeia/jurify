@@ -2,7 +2,7 @@
  * Testes do `checkPermissionAdminOuMatriz`.
  *
  * Histórico do helper:
- * - Fix do bug #9: ANTES, procedures críticos (Cal.com/WhatsApp/agentes-IA,
+ * - Fix do bug #9: ANTES, procedures críticos (WhatsApp/agentes-IA,
  *   modelos de contrato, atribuir cargos, excluir/unificar clientes) tinham
  *   hardcode `cargo === "dono" || cargo === "gestor"`. Cargos personalizados
  *   criados via UI ficavam BLOQUEADOS mesmo com toda a matriz marcada.

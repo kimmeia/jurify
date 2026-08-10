@@ -26,11 +26,9 @@ import { CARGO_LABELS, CARGO_DESCRICAO, CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS,
 import type { CargoColaborador } from "@shared/escritorio-types";
 import { TIPO_CANAL_LABELS, TIPO_CANAL_DESCRICAO, STATUS_CANAL_LABELS, STATUS_CANAL_CORES } from "@shared/canal-types";
 import type { TipoCanal, StatusCanal } from "@shared/canal-types";
-import CalcomConfig from "@/components/integracoes/CalcomConfig";
 import {
   AsaasDialog,
   TwilioDialog,
-  CalcomDialog,
   ChatGPTDialog,
   ClaudeDialog,
 } from "./configuracoes/dialogs";
@@ -565,7 +563,7 @@ export default function Configuracoes() {
                         {FUSOS_HORARIOS.map((f) => (<SelectItem key={f.valor} value={f.valor}><span className="font-medium">{f.utc}</span><span className="text-muted-foreground"> — {f.label}</span></SelectItem>))}
                       </SelectContent>
                     </Select>
-                    <p className="text-[10.5px] text-slate-500">Usado nos gatilhos com horário (SmartFlow Asaas, lembretes Cal.com).</p>
+                    <p className="text-[10.5px] text-slate-500">Usado nos gatilhos e condições com horário (SmartFlow).</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5"><Label className="text-[11px]">Abertura</Label><Input type="time" value={formPerfil.horarioAbertura} onChange={(e) => setFormPerfil({ ...formPerfil, horarioAbertura: e.target.value })} /></div>
@@ -2026,7 +2024,6 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
   const twilioCanal = canais.find((c: any) => c.tipo === "telefone_voip");
   const chatgptCanal = canais.find((c: any) => c.tipo === "chatgpt" || (c.tipo === "whatsapp_api" && (c.nome || "").includes("ChatGPT")));
   const claudeCanal = canais.find((c: any) => c.tipo === "claude" || (c.nome || "").includes("Claude"));
-  const calcomCanal = canais.find((c: any) => c.tipo === "calcom" || (c.nome || "").includes("Cal.com"));
 
   const integracoes = [
     {
@@ -2037,15 +2034,6 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
       logo: "💰",
       bgIcon: "bg-cyan-50 border-cyan-200",
       conectado: asaasStatus?.conectado || false,
-    },
-    {
-      id: "calcom",
-      nome: "Cal.com",
-      descricao: "Agendamento online integrado ao CRM",
-      categoria: "Calendário",
-      logo: "📅",
-      bgIcon: "bg-blue-50 border-blue-200",
-      conectado: calcomCanal?.status === "conectado",
     },
     {
       id: "chatgpt",
@@ -2140,7 +2128,6 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
       {/* Dialogs das Integrações */}
       <AsaasDialog open={openDialog === "asaas"} onClose={() => setOpenDialog(null)} canEdit={canEdit} asaasStatus={asaasStatus} onRefresh={refetchAsaas} />
       <TwilioDialog open={openDialog === "twilio"} onClose={() => setOpenDialog(null)} canEdit={canEdit} />
-      <CalcomDialog open={openDialog === "calcom"} onClose={() => setOpenDialog(null)} canEdit={canEdit} />
       <ChatGPTDialog open={openDialog === "chatgpt"} onClose={() => setOpenDialog(null)} canEdit={canEdit} />
       <ClaudeDialog open={openDialog === "claude"} onClose={() => setOpenDialog(null)} canEdit={canEdit} />
 

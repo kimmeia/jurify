@@ -67,38 +67,20 @@ describe("smartflow/cobrancas-scheduler.ts — reportarErroInesperado", () => {
   });
 });
 
-describe("smartflow/calcom-lembretes-scheduler.ts — reportarErroInesperado", () => {
-  it("chama captureError com kind='smartflow-calcom-lembretes-scheduler'", async () => {
-    const { reportarErroInesperado } = await import(
-      "../smartflow/calcom-lembretes-scheduler"
-    );
-    const err = new Error("falha simulada lembretes");
-
-    reportarErroInesperado(err);
-
-    expect(captureError).toHaveBeenCalledTimes(1);
-    expect(captureError).toHaveBeenCalledWith(err, {
-      kind: "smartflow-calcom-lembretes-scheduler",
-    });
-  });
-});
-
-describe("os 3 schedulers usam kinds distintos (pra filtrar no Sentry)", () => {
+describe("os schedulers usam kinds distintos (pra filtrar no Sentry)", () => {
   it("kinds não colidem entre schedulers", async () => {
     const m1 = await import("../smartflow/scheduler");
     const m2 = await import("../smartflow/cobrancas-scheduler");
-    const m3 = await import("../smartflow/calcom-lembretes-scheduler");
 
     const err = new Error("x");
     m1.reportarErroInesperado(err);
     m2.reportarErroInesperado(err);
-    m3.reportarErroInesperado(err);
 
-    expect(captureError).toHaveBeenCalledTimes(3);
+    expect(captureError).toHaveBeenCalledTimes(2);
     const kinds = (captureError as any).mock.calls.map(
       (c: [unknown, { kind: string }]) => c[1].kind,
     );
     const distintos = new Set(kinds);
-    expect(distintos.size).toBe(3);
+    expect(distintos.size).toBe(2);
   });
 });

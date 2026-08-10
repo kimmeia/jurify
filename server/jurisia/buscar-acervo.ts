@@ -9,21 +9,40 @@
  *   modelo poder apontar caso concreto em vez de falar em abstrato.
  */
 
-import { and, desc, eq, gte, inArray, isNotNull, like, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, like, or, sql, type SQL } from "drizzle-orm";
 import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { getDb } from "../db";
 import { jurisiaMovimentos, jurisiaProcessos } from "../../drizzle/schema";
 import { montarPerfil, type EntradaPerfil, type PerfilRecorte } from "../../shared/jurisia-perfil";
 import type { ResultadoProcesso } from "../../shared/datajud-desfecho";
+import { ORDEM_RECURSO, rotuloRecurso, type ResultadoRecurso } from "../../shared/datajud-recurso";
+import {
+  corteDaJanela,
+  montarTendencia,
+  type EntradaTendencia,
+  type Tendencia,
+} from "../../shared/jurisia-tendencia";
 import { ACERVO_VAZIO, type ComposicaoAcervo } from "../../shared/jurisia-acervo";
 import { contarNatureza, type ComposicaoNatureza } from "../../shared/jurisia-grau";
 import {
   MAX_FONTES_RECORTE,
   montarEstatistica,
+  montarEstatisticaRecursal,
+  rotuloResultado,
   type EstatisticaRecorte,
   type FiltroRecorte,
   type ProcessoAcervo,
 } from "../../shared/jurisia-recorte";
+
+/** Ordem canônica do eixo de mérito — local pra não reimportar o array e
+ *  arriscar divergência de ordem com a paleta. */
+const ORDEM_RESULTADO_LOCAL: ResultadoProcesso[] = [
+  "procedente",
+  "parcial",
+  "improcedente",
+  "acordo",
+  "extinto_sem_merito",
+];
 
 const ZERO: Record<ResultadoProcesso, number> = {
   procedente: 0,
@@ -43,7 +62,18 @@ export function condicoesRecorte(f: FiltroRecorte): SQL[] {
   const cond: SQL[] = [];
   if (f.tribunal) cond.push(eq(jurisiaProcessos.tribunal, f.tribunal));
   if (f.classeTermo) cond.push(like(jurisiaProcessos.classeNome, `%${escaparLike(f.classeTermo)}%`));
-  if (f.assuntoTermo) cond.push(like(jurisiaProcessos.assuntoNome, `%${escaparLike(f.assuntoTermo)}%`));
+  if (f.assuntoTermo) {
+    // Casa contra a lista COMPLETA de assuntos, não só o principal: num agravo
+    // o assunto principal costuma ser a matéria processual genérica e o que o
+    // advogado procura ("busca e apreensão", "alimentos") vem depois dela.
+    const alvo = `%${escaparLike(f.assuntoTermo)}%`;
+    cond.push(
+      or(
+        like(jurisiaProcessos.assuntoNome, alvo),
+        like(jurisiaProcessos.assuntosTodos, alvo),
+      )!,
+    );
+  }
   if (f.orgaoTermo) cond.push(like(jurisiaProcessos.orgaoNome, `%${escaparLike(f.orgaoTermo)}%`));
   if (f.desdeAno) cond.push(gte(jurisiaProcessos.ajuizamentoEm, new Date(Date.UTC(f.desdeAno, 0, 1))));
   return cond;
@@ -54,7 +84,18 @@ export interface Recorte {
   processos: ProcessoAcervo[];
   /** Quanto deste recorte é acórdão e quanto é sentença de 1º grau. */
   natureza: ComposicaoNatureza;
+  /** O que o recorte decide HOJE, e se mudou. Null quando nada foi decidido. */
+  tendencia: Tendencia | null;
 }
+
+/**
+ * A data que conta pra "quando isto foi decidido".
+ *
+ * Instância superior carimba `resultadoRecursoEm` e deixa o mérito vazio; a
+ * origem faz o contrário. Ler só uma das duas jogaria metade do acervo pro
+ * período errado da janela.
+ */
+const DECIDIDO_EM = sql`COALESCE(${jurisiaProcessos.resultadoRecursoEm}, ${jurisiaProcessos.resultadoEm})`;
 
 export async function buscarRecorte(
   f: FiltroRecorte,
@@ -66,10 +107,14 @@ export async function buscarRecorte(
   const cond = condicoesRecorte(f);
   const onde = cond.length > 0 ? and(...cond) : undefined;
 
+  const desde = corteDaJanela(new Date());
+
   const agrupado = await db
     .select({
       resultado: jurisiaProcessos.resultado,
+      resultadoRecurso: jurisiaProcessos.resultadoRecurso,
       grau: jurisiaProcessos.grau,
+      recente: sql<number>`CASE WHEN ${DECIDIDO_EM} >= ${desde} THEN 1 ELSE 0 END`,
       quantidade: sql<number>`COUNT(*)`,
       // Só entre os decididos: transitado sem desfecho classificado não diz
       // nada sobre "quanto costuma dar", e somá-lo inflaria a fração.
@@ -77,19 +122,74 @@ export async function buscarRecorte(
     })
     .from(jurisiaProcessos)
     .where(onde)
-    .groupBy(jurisiaProcessos.resultado, jurisiaProcessos.grau);
+    .groupBy(
+      jurisiaProcessos.resultado,
+      jurisiaProcessos.resultadoRecurso,
+      jurisiaProcessos.grau,
+      sql`CASE WHEN ${DECIDIDO_EM} >= ${desde} THEN 1 ELSE 0 END`,
+    );
 
   const porResultado = { ...ZERO };
+  const porRecurso: Partial<Record<ResultadoRecurso, number>> = {};
   const porGrau: Array<{ grau: string | null; quantidade: number }> = [];
+  // Os dois eixos coexistem no mesmo recorte, então a tendência é medida sobre
+  // aquele que tem mais decisões — num recorte de agravo é o recursal, numa
+  // vara de 1º grau é o de mérito.
+  const janela = {
+    merito: { recente: { ...ZERO }, anterior: { ...ZERO } },
+    recurso: {
+      recente: {} as Partial<Record<ResultadoRecurso, number>>,
+      anterior: {} as Partial<Record<ResultadoRecurso, number>>,
+    },
+  };
   let total = 0;
   let transitados = 0;
+  let decididos = 0;
   for (const linha of agrupado) {
     const n = Number(linha.quantidade ?? 0);
     total += n;
     transitados += Number(linha.transitados ?? 0);
-    if (linha.resultado) porResultado[linha.resultado as ResultadoProcesso] += n;
+    if (linha.resultado || linha.resultadoRecurso) decididos += n;
+    const quando = Number(linha.recente ?? 0) === 1 ? "recente" : "anterior";
+    if (linha.resultado) {
+      const r = linha.resultado as ResultadoProcesso;
+      porResultado[r] += n;
+      janela.merito[quando][r] += n;
+    }
+    if (linha.resultadoRecurso) {
+      const r = linha.resultadoRecurso as ResultadoRecurso;
+      porRecurso[r] = (porRecurso[r] ?? 0) + n;
+      janela.recurso[quando][r] = (janela.recurso[quando][r] ?? 0) + n;
+    }
     porGrau.push({ grau: linha.grau, quantidade: n });
   }
+
+  const recursal = montarEstatisticaRecursal(porRecurso);
+  const merito = montarEstatistica(total, porResultado);
+
+  const eixoRecursal = recursal.comResultado > merito.comResultado;
+  const entradas = (
+    fonte: Record<ResultadoProcesso, number> | Partial<Record<ResultadoRecurso, number>>,
+  ): EntradaTendencia[] =>
+    eixoRecursal
+      ? ORDEM_RECURSO.map((r) => ({
+        rotulo: rotuloRecurso(r),
+        quantidade: (fonte as Partial<Record<ResultadoRecurso, number>>)[r] ?? 0,
+      }))
+      : ORDEM_RESULTADO_LOCAL.map((r) => ({
+        rotulo: rotuloResultado(r),
+        quantidade: (fonte as Record<ResultadoProcesso, number>)[r] ?? 0,
+      }));
+
+  const lado = eixoRecursal ? janela.recurso : janela.merito;
+  const tendencia =
+    recursal.comResultado + merito.comResultado > 0
+      ? montarTendencia({
+        desde,
+        recente: entradas(lado.recente as any),
+        anterior: entradas(lado.anterior as any),
+      })
+      : null;
 
   const linhas = await db
     .select({
@@ -99,26 +199,42 @@ export async function buscarRecorte(
       grau: jurisiaProcessos.grau,
       classeNome: jurisiaProcessos.classeNome,
       assuntoNome: jurisiaProcessos.assuntoNome,
+      assuntosTodos: jurisiaProcessos.assuntosTodos,
       orgaoNome: jurisiaProcessos.orgaoNome,
       resultado: jurisiaProcessos.resultado,
       resultadoEm: jurisiaProcessos.resultadoEm,
       resultadoMovimento: jurisiaProcessos.resultadoMovimento,
+      resultadoRecurso: jurisiaProcessos.resultadoRecurso,
+      resultadoRecursoEm: jurisiaProcessos.resultadoRecursoEm,
+      resultadoRecursoMovimento: jurisiaProcessos.resultadoRecursoMovimento,
       ajuizamentoEm: jurisiaProcessos.ajuizamentoEm,
     })
     .from(jurisiaProcessos)
     .where(onde)
-    // Processo decidido primeiro: é o que sustenta afirmação sobre como
-    // "costuma terminar". Em andamento só entra pra completar a amostra.
+    // Processo decidido primeiro — em QUALQUER um dos dois eixos: é o que
+    // sustenta afirmação sobre como "costuma terminar". Em andamento só entra
+    // pra completar a amostra. Entre os decididos, o mais recente primeiro,
+    // porque é o entendimento de hoje que o advogado vai usar.
     .orderBy(
-      sql`${jurisiaProcessos.resultado} IS NULL`,
-      desc(jurisiaProcessos.resultadoEm),
+      sql`${DECIDIDO_EM} IS NULL`,
+      desc(DECIDIDO_EM),
       desc(jurisiaProcessos.id),
     )
     .limit(opts?.maxFontes ?? MAX_FONTES_RECORTE);
 
   return {
-    estatistica: { ...montarEstatistica(total, porResultado), transitados },
+    estatistica: {
+      ...merito,
+      // Sobrescreve o `emAndamento` de `montarEstatistica`, que só conhece o
+      // eixo de mérito: num recorte de recurso ele chamaria de "em andamento"
+      // tudo que a instância superior já julgou.
+      emAndamento: Math.max(0, total - decididos),
+      transitados,
+      recursal,
+      decididos,
+    },
     natureza: contarNatureza(porGrau),
+    tendencia,
     processos: linhas.map((r) => ({
       id: r.id,
       cnj: r.cnj,
@@ -126,10 +242,14 @@ export async function buscarRecorte(
       grau: r.grau,
       classeNome: r.classeNome,
       assuntoNome: r.assuntoNome,
+      assuntosTodos: r.assuntosTodos,
       orgaoNome: r.orgaoNome,
       resultado: (r.resultado as ResultadoProcesso | null) ?? null,
       resultadoEm: r.resultadoEm ? r.resultadoEm.toISOString() : null,
       resultadoMovimento: r.resultadoMovimento,
+      resultadoRecurso: (r.resultadoRecurso as ResultadoRecurso | null) ?? null,
+      resultadoRecursoEm: r.resultadoRecursoEm ? r.resultadoRecursoEm.toISOString() : null,
+      resultadoRecursoMovimento: r.resultadoRecursoMovimento,
       ajuizamentoEm: r.ajuizamentoEm ? r.ajuizamentoEm.toISOString() : null,
     })),
   };

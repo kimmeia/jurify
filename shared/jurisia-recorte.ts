@@ -15,8 +15,10 @@
  */
 
 import type { ResultadoProcesso } from "./datajud-desfecho";
+import { ORDEM_RECURSO, rotuloRecurso, type ResultadoRecurso } from "./datajud-recurso";
 import type { PerfilRecorte } from "./jurisia-perfil";
 import type { Comparacao } from "./jurisia-estrategia";
+import type { Tendencia } from "./jurisia-tendencia";
 import { naturezaDoGrau, type ComposicaoNatureza, type NaturezaProcesso } from "./jurisia-grau";
 
 export interface FiltroRecorte {
@@ -39,11 +41,18 @@ export interface ProcessoAcervo {
   grau: string | null;
   classeNome: string | null;
   assuntoNome: string | null;
+  /** Todos os assuntos da TPU, separados por " · ". Null nos processos
+   *  gravados antes da coluna existir. */
+  assuntosTodos: string | null;
   orgaoNome: string | null;
   resultado: ResultadoProcesso | null;
   /** ISO ou null. */
   resultadoEm: string | null;
   resultadoMovimento: string | null;
+  resultadoRecurso: ResultadoRecurso | null;
+  /** ISO ou null. */
+  resultadoRecursoEm: string | null;
+  resultadoRecursoMovimento: string | null;
   ajuizamentoEm: string | null;
 }
 
@@ -52,6 +61,26 @@ export interface FatiaResultado {
   quantidade: number;
   /** Sobre os que já terminaram. Soma exatamente 100 entre as fatias. */
   percentual: number;
+}
+
+export interface FatiaRecurso {
+  resultado: ResultadoRecurso;
+  quantidade: number;
+  percentual: number;
+}
+
+/**
+ * O segundo eixo do recorte: como o RECURSO terminou.
+ *
+ * Existe separado porque "provido" e "procedente" apontam para lados
+ * diferentes (`datajud-recurso.ts` explica). Um recorte de AREsp no STJ
+ * preenche este eixo e deixa o de mérito vazio — antes disso a tela mostrava
+ * o acervo inteiro como "em andamento", que era falso.
+ */
+export interface EstatisticaRecursal {
+  comResultado: number;
+  fatias: FatiaRecurso[];
+  amostraPequena: boolean;
 }
 
 export interface EstatisticaRecorte {
@@ -70,6 +99,19 @@ export interface EstatisticaRecorte {
    * calar.
    */
   transitados?: number;
+  /**
+   * Opcional porque pesquisa gravada antes do eixo recursal não tem — e
+   * `undefined` é "não medi", nunca "nenhum recurso julgado".
+   */
+  recursal?: EstatisticaRecursal;
+  /**
+   * Decididos em QUALQUER um dos dois eixos, sem dupla contagem.
+   *
+   * `comResultado` é o denominador das fatias de mérito e precisa continuar
+   * sendo só isso. Somar os dois eixos daria número maior que o total nos
+   * processos que preenchem os dois.
+   */
+  decididos?: number;
 }
 
 /** Abaixo disso o percentual engana mais do que informa. */
@@ -181,42 +223,62 @@ export const ORDEM_RESULTADO: ResultadoProcesso[] = [
  * que existe pra ser levado a sério isso queima a credibilidade do número
  * certo do lado.
  */
+function percentuaisPorMaiorResto(quantidades: number[]): number[] {
+  const soma = quantidades.reduce((s, n) => s + n, 0);
+  if (soma === 0) return quantidades.map(() => 0);
+
+  const pcts = quantidades.map((q) => Math.floor((q * 100) / soma));
+  let sobra = 100 - pcts.reduce((s, p) => s + p, 0);
+  const porResto = quantidades
+    .map((q, i) => ({ i, resto: (q * 100) / soma - pcts[i], vazia: q === 0 }))
+    // Fatia zerada nunca recebe sobra: 0 processos não podem virar 1%.
+    .filter((e) => !e.vazia)
+    .sort((a, b) => b.resto - a.resto || a.i - b.i);
+  for (const { i } of porResto) {
+    if (sobra <= 0) break;
+    pcts[i]++;
+    sobra--;
+  }
+  return pcts;
+}
+
 export function montarEstatistica(
   total: number,
   porResultado: Record<ResultadoProcesso, number>,
 ): EstatisticaRecorte {
   const quantidades = ORDEM_RESULTADO.map((r) => Math.max(0, porResultado[r] ?? 0));
   const comResultado = quantidades.reduce((s, n) => s + n, 0);
+  const pcts = percentuaisPorMaiorResto(quantidades);
 
   const fatias: FatiaResultado[] = ORDEM_RESULTADO.map((resultado, i) => ({
     resultado,
     quantidade: quantidades[i],
-    percentual: comResultado > 0 ? Math.floor((quantidades[i] * 100) / comResultado) : 0,
+    percentual: pcts[i],
   }));
-
-  if (comResultado > 0) {
-    let sobra = 100 - fatias.reduce((s, f) => s + f.percentual, 0);
-    const porResto = fatias
-      .map((f, i) => ({
-        i,
-        resto: (f.quantidade * 100) / comResultado - f.percentual,
-        vazia: f.quantidade === 0,
-      }))
-      // Fatia zerada nunca recebe sobra: 0 processos não podem virar 1%.
-      .filter((e) => !e.vazia)
-      .sort((a, b) => b.resto - a.resto || a.i - b.i);
-    for (const { i } of porResto) {
-      if (sobra <= 0) break;
-      fatias[i].percentual++;
-      sobra--;
-    }
-  }
 
   return {
     total,
     comResultado,
     emAndamento: Math.max(0, total - comResultado),
     fatias,
+    amostraPequena: comResultado < MIN_AMOSTRA,
+  };
+}
+
+export function montarEstatisticaRecursal(
+  porResultado: Partial<Record<ResultadoRecurso, number>>,
+): EstatisticaRecursal {
+  const quantidades = ORDEM_RECURSO.map((r) => Math.max(0, porResultado[r] ?? 0));
+  const comResultado = quantidades.reduce((s, n) => s + n, 0);
+  const pcts = percentuaisPorMaiorResto(quantidades);
+
+  return {
+    comResultado,
+    fatias: ORDEM_RECURSO.map((resultado, i) => ({
+      resultado,
+      quantidade: quantidades[i],
+      percentual: pcts[i],
+    })),
     amostraPequena: comResultado < MIN_AMOSTRA,
   };
 }
@@ -253,6 +315,38 @@ const DESCRICAO_NATUREZA: Record<NaturezaProcesso, string> = {
 };
 
 /**
+ * Como o processo terminou, em uma frase — lendo os DOIS eixos.
+ *
+ * Ler só `resultado` era o defeito que fazia um recorte inteiro de agravo no
+ * STJ aparecer como "em andamento": instância superior grava `resultadoRecurso`
+ * e deixa o mérito vazio, porque quem julga o pedido é a origem.
+ */
+export function desfechoDoProcesso(p: {
+  resultado: ResultadoProcesso | null;
+  resultadoRecurso: ResultadoRecurso | null;
+}): string {
+  if (p.resultadoRecurso) return `Recurso ${rotuloRecurso(p.resultadoRecurso).toLowerCase()}`;
+  if (p.resultado) return ROTULO[p.resultado];
+  return "Em andamento";
+}
+
+/**
+ * O que o processo é SOBRE, separado do veículo pelo qual chegou.
+ *
+ * "Agravo em Recurso Especial" é classe — o instrumento. Ele não diz se a
+ * briga é de busca e apreensão, alimentos ou revisional, e sem o assunto ao
+ * lado o advogado lê uma lista de quarenta linhas iguais.
+ */
+export function assuntoDoProcesso(p: {
+  assuntoNome: string | null;
+  assuntosTodos?: string | null;
+}): string | null {
+  const todos = typeof p.assuntosTodos === "string" ? p.assuntosTodos.trim() : "";
+  if (todos.length > 0) return todos;
+  return p.assuntoNome && p.assuntoNome.trim().length > 0 ? p.assuntoNome.trim() : null;
+}
+
+/**
  * Monta o bloco que vai pro modelo. Cada processo é uma [FONTE], e o que ele
  * carrega é o desfecho e o movimento que o gerou — é sobre isso que o modelo
  * pode afirmar alguma coisa, e nada além.
@@ -266,15 +360,17 @@ export function montarContextoRecorte(
   const blocos: string[] = [];
 
   for (const p of escolhidos) {
-    const rotulo = [
-      p.resultado ? ROTULO[p.resultado] : "Em andamento",
-      p.classeNome,
-      p.orgaoNome,
-    ]
+    const assunto = assuntoDoProcesso(p);
+    // O assunto vem antes da classe: é o que distingue uma linha da outra.
+    const rotulo = [desfechoDoProcesso(p), assunto, p.classeNome, p.orgaoNome]
       .filter(Boolean)
       .join(" · ");
 
-    const data = dataCurta(p.resultadoEm) ?? dataCurta(p.ajuizamentoEm) ?? "";
+    const data =
+      dataCurta(p.resultadoRecursoEm) ??
+      dataCurta(p.resultadoEm) ??
+      dataCurta(p.ajuizamentoEm) ??
+      "";
     const natureza = naturezaDoGrau(p.grau);
     fontes.push({ id: p.id, rotulo: `${formatarCnj(p.cnj)} — ${rotulo}`, data, natureza });
 
@@ -282,11 +378,16 @@ export function montarContextoRecorte(
     // Sem isto o modelo cita sentença de vara como se fosse entendimento do
     // tribunal — que é exatamente a afirmação que o advogado leva pro processo.
     if (natureza) linhas.push(`instância: ${DESCRICAO_NATUREZA[natureza]}`);
-    if (p.classeNome) linhas.push(`classe: ${p.classeNome}`);
-    if (p.assuntoNome) linhas.push(`assunto: ${p.assuntoNome}`);
+    if (p.classeNome) linhas.push(`classe (veículo processual): ${p.classeNome}`);
+    if (assunto) linhas.push(`assunto (matéria discutida): ${assunto}`);
     if (p.orgaoNome) linhas.push(`órgão: ${p.orgaoNome}`);
-    linhas.push(`resultado: ${p.resultado ? ROTULO[p.resultado] : "ainda sem desfecho"}`);
-    if (p.resultadoMovimento) linhas.push(`movimento decisivo: ${p.resultadoMovimento}`);
+    if (p.resultado) linhas.push(`mérito do pedido: ${ROTULO[p.resultado]}`);
+    if (p.resultadoRecurso) {
+      linhas.push(`desfecho do recurso: ${rotuloRecurso(p.resultadoRecurso)}`);
+    }
+    if (!p.resultado && !p.resultadoRecurso) linhas.push("resultado: ainda sem desfecho");
+    const movimento = p.resultadoRecursoMovimento ?? p.resultadoMovimento;
+    if (movimento) linhas.push(`movimento decisivo: ${movimento}`);
     if (data) linhas.push(`data: ${data}`);
     blocos.push(linhas.join("\n"));
   }
@@ -314,6 +415,8 @@ export interface PesquisaGravada {
   /** Opcionais: pesquisas gravadas antes da separação por instância não têm. */
   natureza?: ComposicaoNatureza;
   avisoNatureza?: string | null;
+  /** O que o recorte decide hoje. Ausente nas pesquisas gravadas antes disso. */
+  tendencia?: Tendencia | null;
 }
 
 /**

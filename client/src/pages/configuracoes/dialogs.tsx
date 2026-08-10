@@ -1028,67 +1028,6 @@ export function TwilioDialog({ open, onClose, canEdit }: { open: boolean; onClos
   );
 }
 
-// ─── Cal.com Dialog ─────────────────────────────────────────────────────────
-
-export function CalcomDialog({ open, onClose, canEdit }: { open: boolean; onClose: () => void; canEdit: boolean }) {
-  const [apiKey, setApiKey] = useState("");
-  const [baseUrl, setBaseUrl] = useState("https://cal.com");
-  const [testResult, setTestResult] = useState<{ ok: boolean; user?: string; error?: string } | null>(null);
-
-  const testarMut = trpc.calcom.testarConexaoDireta.useMutation({
-    onSuccess: (res: any) => { setTestResult(res); if (res.ok) toast.success(`Conectado como ${res.user}`); else toast.error(res.error); },
-    onError: (e: any) => { setTestResult({ ok: false, error: e.message }); toast.error(e.message); },
-  });
-
-  const salvarMut = trpc.calcom.salvarConfigDireta.useMutation({
-    onSuccess: (res: any) => { toast.success(`Cal.com salvo! Conectado como ${res.user}`); onClose(); },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-sky-600 flex items-center justify-center text-xl shadow">📅</div>
-            Cal.com — Agendamento Online
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">API Key do Cal.com *</Label>
-            <Input type="password" placeholder="cal_live_xxxxxxxxxxxxxxx" value={apiKey} onChange={(e) => setApiKey(e.target.value)} disabled={!canEdit} />
-            <p className="text-[10px] text-muted-foreground">Gere em Cal.com → Settings → Security → API Keys</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Base URL</Label>
-            <Input placeholder="https://cal.com" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} disabled={!canEdit} />
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <Button size="sm" variant="outline" onClick={() => { setTestResult(null); testarMut.mutate({ apiKey, baseUrl }); }} disabled={!apiKey || testarMut.isPending || !canEdit}>
-              {testarMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-1" />}
-              Testar Conexão
-            </Button>
-            {testResult && (
-              <span className={`text-xs flex items-center gap-1 ${testResult.ok ? "text-emerald-600" : "text-red-600"}`}>
-                {testResult.ok ? <><CheckCircle className="h-3 w-3" /> {testResult.user}</> : <><X className="h-3 w-3" /> {testResult.error}</>}
-              </span>
-            )}
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => salvarMut.mutate({ apiKey, baseUrl })} disabled={!apiKey || salvarMut.isPending || !canEdit}>
-            {salvarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-            Salvar e Conectar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ─── ChatGPT Dialog ─────────────────────────────────────────────────────────
 //
 // Armazena APENAS a API Key compartilhada da OpenAI para o escritório.

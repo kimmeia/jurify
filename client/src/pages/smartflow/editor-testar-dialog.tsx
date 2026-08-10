@@ -347,30 +347,6 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
       // `cliente.telefone` / `cliente.nome`, não só o `telefoneCliente` solto.
       cliente: { nome: "João Silva", telefone: "5511999990000", campos: {} },
     },
-    agendamento_criado: {
-      agendamentoId: "booking_TESTE_123",
-      horarioEscolhido: "2026-06-01T14:00:00",
-      nomeCliente: "Maria Souza",
-      emailCliente: "maria@example.com",
-    },
-    agendamento_cancelado: {
-      agendamentoId: "booking_TESTE_123",
-      horarioEscolhido: "2026-06-01T14:00:00",
-      nomeCliente: "Maria Souza",
-      motivoCancelamento: "Conflito de agenda",
-    },
-    agendamento_remarcado: {
-      agendamentoId: "booking_TESTE_123",
-      horarioEscolhido: "2026-06-08T14:00:00",
-      horarioAnterior: "2026-06-01T14:00:00",
-      nomeCliente: "Maria Souza",
-    },
-    agendamento_lembrete: {
-      agendamentoId: "booking_TESTE_123",
-      horarioEscolhido: "2026-06-01T14:00:00",
-      nomeCliente: "Maria Souza",
-      emailCliente: "maria@example.com",
-    },
     manual: {},
   };
   return JSON.stringify(exemplos[gatilho] ?? {}, null, 2);

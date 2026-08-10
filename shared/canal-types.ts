@@ -3,14 +3,14 @@
  * Fase 2: WhatsApp, Instagram, Facebook, VoIP
  */
 
-export type TipoCanal = "whatsapp_api" | "instagram" | "facebook" | "telefone_voip" | "calcom" | "chatgpt" | "claude";
+export type TipoCanal = "whatsapp_api" | "instagram" | "facebook" | "telefone_voip" | "chatgpt" | "claude";
 export type StatusCanal = "conectado" | "desconectado" | "pendente" | "erro" | "banido";
 
 /**
  * Tipos de canal que representam um canal de COMUNICAÇÃO direta com o
  * cliente (recebe/envia mensagens). Filtros de "Canal" em Inbox, Pipeline,
  * Relatórios usam essa lista pra excluir integrações de IA/agendamento
- * (chatgpt, claude, calcom) que não fazem sentido como filtro de mensagem.
+ * (chatgpt, claude) que não fazem sentido como filtro de mensagem.
  */
 export const TIPOS_CANAL_COMUNICACAO: TipoCanal[] = [
   "whatsapp_api", "instagram", "facebook", "telefone_voip",
@@ -21,7 +21,6 @@ export const TIPO_CANAL_LABELS: Record<TipoCanal, string> = {
   instagram: "Instagram",
   facebook: "Facebook Messenger",
   telefone_voip: "Telefone (VoIP)",
-  calcom: "Cal.com (Agendamento)",
   chatgpt: "OpenAI / ChatGPT",
   claude: "Claude (Anthropic)",
 };
@@ -31,7 +30,6 @@ export const TIPO_CANAL_DESCRICAO: Record<TipoCanal, string> = {
   instagram: "Mensagens diretas do Instagram via Meta Graph API.",
   facebook: "Messenger da página do Facebook via Meta Graph API.",
   telefone_voip: "Ligações telefônicas via Twilio — gravação e transcrição disponíveis.",
-  calcom: "Agendamento online integrado ao CRM.",
   chatgpt: "API Key OpenAI para agentes de IA.",
   claude: "API Key Anthropic para agentes de IA.",
 };
@@ -41,7 +39,6 @@ export const TIPO_CANAL_ICONE: Record<TipoCanal, string> = {
   instagram: "Instagram",
   facebook: "Facebook",
   telefone_voip: "Phone",
-  calcom: "Calendar",
   chatgpt: "Bot",
   claude: "Bot",
 };

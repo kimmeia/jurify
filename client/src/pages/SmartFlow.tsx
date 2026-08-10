@@ -89,7 +89,7 @@ const STATUS_EXEC: Record<StatusExecucao, { label: string; cor: string; icon: Lu
   cancelado: { label: "Cancelado", cor: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300", icon: AlertTriangle },
 };
 
-type FiltroCategoria = "todas" | "mensagem" | "asaas" | "calcom" | "crm" | "manual";
+type FiltroCategoria = "todas" | "mensagem" | "asaas" | "crm" | "manual";
 
 export default function SmartFlow() {
   const [tab, setTab] = useState("cenarios");
@@ -238,7 +238,6 @@ export default function SmartFlow() {
                   <SelectItem value="todas">Todas as categorias</SelectItem>
                   <SelectItem value="mensagem">💬 Mensagem</SelectItem>
                   <SelectItem value="asaas">💰 Asaas (financeiro)</SelectItem>
-                  <SelectItem value="calcom">📅 Cal.com (agenda)</SelectItem>
                   <SelectItem value="crm">👥 CRM</SelectItem>
                   <SelectItem value="manual">▶ Manual</SelectItem>
                 </SelectContent>

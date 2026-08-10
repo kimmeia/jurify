@@ -5,12 +5,16 @@ import {
   descreverFiltro,
   filtroVazio,
   formatarCnj,
+  assuntoDoProcesso,
+  desfechoDoProcesso,
   montarContextoRecorte,
   montarEstatistica,
+  montarEstatisticaRecursal,
   normalizarFiltro,
   numeroInventadoNaResposta,
   type ProcessoAcervo,
 } from "../../shared/jurisia-recorte";
+import { ORDEM_RECURSO } from "../../shared/datajud-recurso";
 import type { ResultadoProcesso } from "../../shared/datajud-desfecho";
 
 const contagem = (p: Partial<Record<ResultadoProcesso, number>>) => ({
@@ -154,12 +158,63 @@ describe("montarContextoRecorte", () => {
     grau: "G1",
     classeNome: "Procedimento Comum Cível",
     assuntoNome: "Contratos Bancários",
+    assuntosTodos: null,
     orgaoNome: "3ª Vara Cível",
     resultado: "procedente",
     resultadoEm: "2024-03-15T00:00:00.000Z",
     resultadoMovimento: "Julgado procedente o pedido",
+    resultadoRecurso: null,
+    resultadoRecursoEm: null,
+    resultadoRecursoMovimento: null,
     ajuizamentoEm: "2023-01-10T00:00:00.000Z",
     ...over,
+  });
+
+  it("o rótulo separa o que a causa É do veículo que a trouxe", () => {
+    // "Agravo em Recurso Especial" é a classe. Sem o assunto ao lado, quarenta
+    // linhas do STJ ficam idênticas e o advogado não sabe do que se trata.
+    const c = montarContextoRecorte([
+      proc(1, {
+        classeNome: "Agravo em Recurso Especial",
+        assuntoNome: "DIREITO CIVIL",
+        assuntosTodos: "DIREITO CIVIL · Busca e Apreensão",
+        resultado: null,
+        resultadoEm: null,
+        resultadoMovimento: null,
+        resultadoRecurso: "nao_conhecido",
+        resultadoRecursoEm: "2025-04-02T00:00:00.000Z",
+        resultadoRecursoMovimento: "Não-Conhecimento",
+      }),
+    ]);
+    const rotulo = c.fontes[0].rotulo;
+    expect(rotulo).toContain("Recurso não conhecido");
+    expect(rotulo).toContain("Busca e Apreensão");
+    expect(rotulo).toContain("Agravo em Recurso Especial");
+    expect(c.fontes[0].data).toBe("02/04/2025");
+  });
+
+  it("o contexto do modelo rotula classe e assunto pelo que cada um significa", () => {
+    const c = montarContextoRecorte([
+      proc(1, { classeNome: "Agravo de Instrumento", assuntosTodos: "Alimentos" }),
+    ]);
+    expect(c.texto).toContain("classe (veículo processual): Agravo de Instrumento");
+    expect(c.texto).toContain("assunto (matéria discutida): Alimentos");
+  });
+
+  it("o desfecho recursal chega ao modelo com a palavra do eixo certo", () => {
+    const c = montarContextoRecorte([
+      proc(1, {
+        resultado: null,
+        resultadoEm: null,
+        resultadoMovimento: null,
+        resultadoRecurso: "provido",
+        resultadoRecursoEm: "2025-01-20T00:00:00.000Z",
+        resultadoRecursoMovimento: "Provimento",
+      }),
+    ]);
+    expect(c.texto).toContain("desfecho do recurso: Provido");
+    expect(c.texto).not.toContain("mérito do pedido");
+    expect(c.texto).toContain("movimento decisivo: Provimento");
   });
 
   it("marca cada processo como FONTE com o id do acervo", () => {
@@ -211,6 +266,80 @@ describe("montarContextoRecorte", () => {
     expect(c.texto).toContain("NÃO é jurisprudência");
     expect(c.texto).toContain("pode ser citada como jurisprudência");
     expect(c.fontes.map((f) => f.natureza)).toEqual(["estatistica", "jurisprudencia"]);
+  });
+});
+
+
+/**
+ * O defeito que fazia um recorte inteiro de agravo no STJ aparecer como "em
+ * andamento": a tela lia só o eixo de mérito, e instância superior não
+ * preenche esse eixo — quem julga o pedido é a origem.
+ */
+describe("desfechoDoProcesso — os dois eixos", () => {
+  it("processo de origem fala a língua do mérito", () => {
+    expect(desfechoDoProcesso({ resultado: "procedente", resultadoRecurso: null })).toBe(
+      "Procedente",
+    );
+  });
+
+  it("processo de instância superior fala a língua do recurso", () => {
+    expect(desfechoDoProcesso({ resultado: null, resultadoRecurso: "nao_conhecido" })).toBe(
+      "Recurso não conhecido",
+    );
+  });
+
+  it("com os dois preenchidos, o recurso manda — é a palavra final", () => {
+    expect(desfechoDoProcesso({ resultado: "procedente", resultadoRecurso: "nao_provido" })).toBe(
+      "Recurso não provido",
+    );
+  });
+
+  it("sem nenhum dos dois continua em andamento", () => {
+    expect(desfechoDoProcesso({ resultado: null, resultadoRecurso: null })).toBe("Em andamento");
+  });
+});
+
+describe("assuntoDoProcesso", () => {
+  it("prefere a lista completa ao assunto principal", () => {
+    expect(
+      assuntoDoProcesso({
+        assuntoNome: "DIREITO PROCESSUAL CIVIL",
+        assuntosTodos: "DIREITO PROCESSUAL CIVIL · Busca e Apreensão",
+      }),
+    ).toBe("DIREITO PROCESSUAL CIVIL · Busca e Apreensão");
+  });
+
+  it("cai no principal quando a lista não existe (linha antiga)", () => {
+    expect(assuntoDoProcesso({ assuntoNome: "Alimentos", assuntosTodos: null })).toBe("Alimentos");
+  });
+
+  it("processo sem assunto nenhum devolve null, não string vazia", () => {
+    expect(assuntoDoProcesso({ assuntoNome: null, assuntosTodos: "   " })).toBeNull();
+  });
+});
+
+describe("montarEstatisticaRecursal", () => {
+  it("mantém as seis fatias na ordem canônica, mesmo zeradas", () => {
+    const r = montarEstatisticaRecursal({ nao_conhecido: 4 });
+    expect(r.fatias.map((f) => f.resultado)).toEqual(ORDEM_RECURSO);
+    expect(r.comResultado).toBe(4);
+  });
+
+  it("percentuais somam exatamente 100", () => {
+    const r = montarEstatisticaRecursal({ provido: 1, nao_provido: 1, nao_conhecido: 1 });
+    expect(r.fatias.reduce((s, f) => s + f.percentual, 0)).toBe(100);
+  });
+
+  it("fatia zerada nunca ganha ponto de sobra", () => {
+    const r = montarEstatisticaRecursal({ provido: 1, nao_provido: 1, nao_conhecido: 1 });
+    for (const f of r.fatias) if (f.quantidade === 0) expect(f.percentual).toBe(0);
+  });
+
+  it("eixo vazio não inventa fatia", () => {
+    const r = montarEstatisticaRecursal({});
+    expect(r.comResultado).toBe(0);
+    expect(r.fatias.every((f) => f.percentual === 0)).toBe(true);
+    expect(r.amostraPequena).toBe(true);
   });
 });
 
