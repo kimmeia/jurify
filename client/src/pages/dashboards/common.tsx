@@ -9,7 +9,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import type { LucideIcon } from "lucide-react";
-import { TrendingUp, TrendingDown, Info } from "lucide-react";
+import { ArrowRight, TrendingUp, TrendingDown, Info } from "lucide-react";
 import type { ReactNode } from "react";
 
 // ─── Formatadores ────────────────────────────────────────────────────────────
@@ -478,5 +478,252 @@ export function PainelSection({
     <div className={`rounded-2xl ${TEMA[tema].bg} p-6 space-y-6`}>
       {children}
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Linguagem nova dos painéis
+//
+// O painel antigo repetia o mesmo número três e quatro vezes: conversas
+// aguardando no chip colorido E no card de contexto, vencido no chip E no
+// KPI, recebido no hero E no KPI logo abaixo. Repetido em cinco cores de
+// mesmo peso, nada lê como importante — e a tela fica do dobro do tamanho
+// que precisa.
+//
+// Os primitivos abaixo assumem o oposto: cada número aparece UMA vez, no
+// lugar onde se age sobre ele; cor só onde ela significa alguma coisa; e o
+// violeta reservado pra ação, nunca pra dado.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Cor da série de dados. Vem dos tokens de visualização do app, que passam
+ *  na checagem de daltonismo — não trocar por uma cor "que combina". */
+export const COR_SERIE = "var(--viz-1)";
+
+export function PainelTopo({
+  titulo,
+  subtitulo,
+  acao,
+}: {
+  titulo: ReactNode;
+  subtitulo?: ReactNode;
+  acao?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="text-[22px] font-bold tracking-tight leading-tight">{titulo}</h1>
+        {subtitulo && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{subtitulo}</p>}
+      </div>
+      {acao}
+    </div>
+  );
+}
+
+/**
+ * Uma coisa que precisa da atenção de alguém.
+ *
+ * `critico` é o único que ganha cor. Quando os quatro gritam em quatro cores
+ * diferentes — que é como estava — o olho não tem por onde começar, e a
+ * urgência real se perde no meio.
+ */
+export function AcaoCard({
+  icone: Icone,
+  valor,
+  label,
+  critico,
+  onClick,
+}: {
+  icone: LucideIcon;
+  valor: ReactNode;
+  label: string;
+  critico?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors ${
+        critico
+          ? "border-rose-200 bg-rose-50 hover:bg-rose-100/70 dark:border-rose-900 dark:bg-rose-950/30 dark:hover:bg-rose-950/50"
+          : "bg-card hover:bg-accent"
+      }`}
+    >
+      <span
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+          critico ? "bg-rose-100 dark:bg-rose-900/50" : "bg-muted"
+        }`}
+      >
+        <Icone className={`h-4 w-4 ${critico ? "text-rose-700 dark:text-rose-300" : "text-muted-foreground"}`} />
+      </span>
+      <span className="min-w-0">
+        <span
+          className={`block text-[19px] font-bold leading-none tabular-nums ${
+            critico ? "text-rose-700 dark:text-rose-300" : ""
+          }`}
+        >
+          {valor}
+        </span>
+        <span
+          className={`mt-1 block text-[11.5px] leading-tight ${
+            critico ? "text-rose-800/80 dark:text-rose-200/80" : "text-muted-foreground"
+          }`}
+        >
+          {label}
+        </span>
+      </span>
+      <ArrowRight
+        className={`ml-auto h-3.5 w-3.5 shrink-0 ${critico ? "text-rose-500" : "text-muted-foreground/50"}`}
+      />
+    </button>
+  );
+}
+
+export function FaixaAcoes({ children }: { children: ReactNode }) {
+  return <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">{children}</div>;
+}
+
+/** Um número do rodapé do bloco principal — o contexto que o número grande
+ *  sozinho não dá ("R$ 240 mil" vs "R$ 240 mil em 62 parcelas a vencer"). */
+export function SubNumero({
+  label,
+  valor,
+  hint,
+  tag,
+  ruim,
+}: {
+  label: string;
+  valor: ReactNode;
+  hint?: ReactNode;
+  tag?: ReactNode;
+  ruim?: boolean;
+}) {
+  return (
+    <div className="px-4 py-3">
+      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        {label}
+        {tag}
+      </p>
+      <p
+        className={`mt-1 text-[19px] font-bold tracking-tight tabular-nums ${
+          ruim ? "text-rose-700 dark:text-rose-400" : ""
+        }`}
+      >
+        {valor}
+      </p>
+      {hint && <p className="mt-0.5 text-[10.5px] text-muted-foreground/80">{hint}</p>}
+    </div>
+  );
+}
+
+export function SubNumeros({ children }: { children: ReactNode }) {
+  return (
+    <div className="grid divide-y border-t sm:grid-cols-3 sm:divide-x sm:divide-y-0">{children}</div>
+  );
+}
+
+/**
+ * O bloco do número principal. Card branco com borda de 1px — o gradiente
+ * roxo que vivia aqui dava impacto na primeira olhada e datava a tela em
+ * todas as seguintes, além de comer um terço do painel pra mostrar um número
+ * que se repetia logo abaixo.
+ */
+export function BlocoPrincipal({
+  rotulo,
+  valor,
+  badge,
+  grafico,
+  children,
+}: {
+  rotulo: string;
+  valor: ReactNode;
+  badge?: ReactNode;
+  grafico?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="flex flex-wrap items-end justify-between gap-3 px-4 pt-4">
+        <div>
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-muted-foreground">
+            {rotulo}
+          </p>
+          <p className="mt-1.5 text-[34px] font-bold leading-none tracking-tight tabular-nums">
+            {valor}
+          </p>
+        </div>
+        {badge}
+      </div>
+      {grafico && <div className="px-2 pt-3">{grafico}</div>}
+      {children}
+    </div>
+  );
+}
+
+export function ListaCard({
+  titulo,
+  acaoLabel,
+  onAcao,
+  rodape,
+  children,
+  esticar,
+}: {
+  titulo: string;
+  acaoLabel?: string;
+  onAcao?: () => void;
+  rodape?: ReactNode;
+  children: ReactNode;
+  /** Ocupa a sobra da coluna. Sem isso a lista flutua e sobra um vão branco
+   *  embaixo dela, que lê como card quebrado. */
+  esticar?: boolean;
+}) {
+  return (
+    <div className={`flex min-h-0 flex-col overflow-hidden rounded-xl border bg-card ${esticar ? "flex-1" : ""}`}>
+      <div className="flex items-center justify-between px-4 pt-3.5">
+        <p className="text-sm font-bold">{titulo}</p>
+        {acaoLabel && (
+          <button
+            onClick={onAcao}
+            className="flex items-center gap-1 text-[11.5px] font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400"
+          >
+            {acaoLabel}
+            <ArrowRight className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      <div className="flex flex-col px-2 pb-2 pt-1">{children}</div>
+      {rodape && (
+        <div className="mt-auto flex items-center justify-between border-t px-4 py-2.5 text-[11px] text-muted-foreground">
+          {rodape}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function LinhaLista({
+  cor,
+  quando,
+  texto,
+  meta,
+  onClick,
+}: {
+  cor: string;
+  quando: ReactNode;
+  texto: ReactNode;
+  meta?: ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2.5 rounded-lg px-2 py-[7px] text-left hover:bg-accent"
+    >
+      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cor }} />
+      <span className="w-[42px] shrink-0 text-[11.5px] font-semibold tabular-nums text-muted-foreground">
+        {quando}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground/90">{texto}</span>
+      {meta && <span className="shrink-0 text-[10.5px] text-muted-foreground/70">{meta}</span>}
+    </button>
   );
 }
