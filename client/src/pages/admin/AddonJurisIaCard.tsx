@@ -76,7 +76,6 @@ export default function AddonJurisIaCard({ escritorioId }: { escritorioId: numbe
   const salvar = trpc.admin.salvarAddon.useMutation({
     onSuccess: () => {
       utils.admin.addonDoEscritorio.invalidate({ escritorioId, produto: "jurisia" });
-      utils.admin.listarAddons.invalidate();
       setEditando(false);
       toast.success("JurisIA atualizado para este cliente");
     },

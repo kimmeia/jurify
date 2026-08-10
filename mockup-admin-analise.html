@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6;
+    --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --aviso:#b45309; --aviso-bg:#fffbeb; --aviso-borda:#fde68a;
+    /* Um matiz de dado pra página inteira — o --viz-1 do app.
+       Cinco cores competindo é o que faz "muita informação". */
+    --dado:#2a78d6; --dado-fraco:#cfe0f6;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:28px 34px; height:100%; display:flex; flex-direction:column; gap:18px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:28px; letter-spacing:-.02em; }
+  .sub { margin-top:4px; font-size:13.5px; color:var(--mudo); }
+  .sub b { color:var(--corpo); font-variant-numeric:tabular-nums; }
+  .link { display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:600;
+          color:var(--corpo); border:1px solid var(--borda); background:var(--surface);
+          border-radius:11px; padding:11px 16px; }
+
+  /* ── veredito: a conclusão antes da prova ── */
+  .veredito { flex:0 0 auto; background:var(--surface); border:1px solid var(--borda);
+              border-radius:18px; padding:24px 28px; display:flex; align-items:center; gap:30px; }
+  .veredito .pct { flex:0 0 auto; font-size:56px; font-weight:800; letter-spacing:-.04em;
+                   line-height:1; color:var(--dado); font-variant-numeric:tabular-nums; }
+  .veredito .txt { flex:1; }
+  .veredito .t1 { font-family:'Poppins'; font-weight:700; font-size:19px; letter-spacing:-.01em; }
+  .veredito .t2 { margin-top:6px; font-size:13.5px; color:var(--mudo); line-height:1.55; }
+
+  .grid { flex:1; display:grid; grid-template-columns:1fr 1fr; gap:18px; min-height:0; }
+  .col { display:flex; flex-direction:column; gap:18px; min-height:0; }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:18px;
+          padding:20px 24px; display:flex; flex-direction:column; }
+  .q { font-family:'Poppins'; font-weight:700; font-size:16px; }
+  .qd { margin-top:5px; font-size:12px; color:var(--mudo); line-height:1.5; }
+
+  /* ── barra de composição: um matiz + neutros ── */
+  .faixa { margin-top:18px; display:flex; height:14px; border-radius:999px; overflow:hidden;
+           background:var(--hairline); gap:2px; }
+  .faixa span { display:block; }
+  .leg { margin-top:14px; display:flex; flex-direction:column; gap:9px; }
+  .leg > div { display:flex; align-items:center; gap:10px; font-size:12.5px; }
+  .leg i { width:9px; height:9px; border-radius:3px; flex:0 0 auto; }
+  .leg .nm { flex:1; color:var(--corpo); }
+  .leg .vl { font-weight:700; font-variant-numeric:tabular-nums; }
+  .leg .pc { width:42px; text-align:right; color:var(--mudo); font-variant-numeric:tabular-nums; }
+
+  .nota { margin-top:auto; padding-top:16px; display:flex; align-items:flex-start; gap:8px;
+          font-size:11.5px; line-height:1.5; color:var(--aviso); }
+
+  /* ── ranking: uma série, barras horizontais ── */
+  .rank { margin-top:14px; display:flex; flex-direction:column; gap:11px; }
+  .rank > div { display:flex; align-items:center; gap:12px; }
+  .rank .nm { flex:0 0 214px; font-size:12.5px; color:var(--corpo);
+              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rank .b { flex:1; height:9px; background:var(--hairline); border-radius:999px; overflow:hidden; }
+  .rank .b i { display:block; height:9px; border-radius:999px; background:var(--dado); }
+  .rank .vl { flex:0 0 62px; text-align:right; font-size:12.5px; font-weight:700;
+              font-variant-numeric:tabular-nums; }
+  .rank .resto .nm, .rank .resto .vl { color:var(--mudo); font-weight:600; }
+  .rank .resto .b i { background:var(--fantasma); }
+  .busca-org { margin-top:13px; display:flex; align-items:center; gap:8px; height:38px;
+               border:1px solid var(--borda); border-radius:10px; padding:0 13px;
+               font-size:13px; color:var(--fraco); }
+  .sep { margin:18px 0 0; border-top:1px solid var(--hairline); padding-top:16px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">Análise do acervo</div>
+        <div class="sub"><b>412.680</b> processos · atualizado há 4 min</div>
+      </div>
+      <span class="link">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 18l-6-6 6-6" stroke="#334155" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Voltar à ingestão
+      </span>
+    </div>
+
+    <!-- ── a conclusão vem antes da prova ── -->
+    <div class="veredito">
+      <span class="pct">30%</span>
+      <div class="txt">
+        <div class="t1">do acervo é citável como jurisprudência</div>
+        <div class="t2">
+          O resto prevê como a vara costuma decidir — o que também vale, e é outra coisa.
+          A resposta ao cliente marca cada processo com o que ele é, em vez de misturar os dois
+          num número só.
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+
+      <div class="col">
+        <div class="card" style="flex:0 0 auto;">
+          <div class="q">É jurisprudência?</div>
+          <div class="qd">Só decisão de órgão colegiado fundamenta petição.</div>
+
+          <div class="faixa">
+            <span style="width:30%; background:var(--dado)"></span>
+            <span style="width:69%; background:var(--fantasma)"></span>
+            <span style="width:1%; background:var(--hairline)"></span>
+          </div>
+          <div class="leg">
+            <div>
+              <i style="background:var(--dado)"></i>
+              <span class="nm">Acórdãos — servem pra citar</span>
+              <span class="vl">123.804</span><span class="pc">30%</span>
+            </div>
+            <div>
+              <i style="background:var(--fantasma)"></i>
+              <span class="nm">Sentenças de 1º grau — servem pra prever</span>
+              <span class="vl">284.756</span><span class="pc">69%</span>
+            </div>
+            <div>
+              <i style="background:var(--hairline)"></i>
+              <span class="nm">Sem grau informado pelo tribunal</span>
+              <span class="vl">4.120</span><span class="pc">1%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="flex:1 1 auto;">
+          <div class="q">Está classificado?</div>
+          <div class="qd">
+            Processo sem desfecho não entra em estatística nenhuma — vira peso morto no acervo.
+          </div>
+
+          <div class="faixa">
+            <span style="width:23%; background:var(--dado)"></span>
+            <span style="width:13%; background:var(--dado-fraco)"></span>
+            <span style="width:64%; background:var(--hairline)"></span>
+          </div>
+          <div class="leg">
+            <div>
+              <i style="background:var(--dado)"></i>
+              <span class="nm">Desfecho de 1º grau</span>
+              <span class="vl">94.916</span><span class="pc">23%</span>
+            </div>
+            <div>
+              <i style="background:var(--dado-fraco)"></i>
+              <span class="nm">Desfecho de recurso</span>
+              <span class="vl">53.648</span><span class="pc">13%</span>
+            </div>
+            <div>
+              <i style="background:var(--hairline)"></i>
+              <span class="nm">Sem nenhum dos dois</span>
+              <span class="vl">264.116</span><span class="pc">64%</span>
+            </div>
+          </div>
+
+          <div class="nota">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto; margin-top:1px"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="#b45309" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>
+              Boa parte desses 64% é processo que ainda corre — sem desfecho porque ainda não
+              houve. Separar isso do que acabou e não classificou é a próxima medida a existir.
+            </span>
+          </div>
+        </div>
+
+        <div class="card" style="flex:1 1 auto;">
+          <div class="q">Onde estão os processos</div>
+          <div class="qd">Concentração por tribunal — o que já foi varrido de verdade.</div>
+          <div class="rank">
+            <div><span class="nm">TJSP</span><span class="b"><i style="width:100%"></i></span><span class="vl">96.412</span></div>
+            <div><span class="nm">TJRJ</span><span class="b"><i style="width:61%"></i></span><span class="vl">58.330</span></div>
+            <div><span class="nm">TJMG</span><span class="b"><i style="width:49%"></i></span><span class="vl">47.204</span></div>
+            <div><span class="nm">STJ</span><span class="b"><i style="width:33%"></i></span><span class="vl">31.980</span></div>
+            <div><span class="nm">TJCE</span><span class="b"><i style="width:30%"></i></span><span class="vl">28.640</span></div>
+            <div class="resto"><span class="nm">+ 54 outros tribunais</span><span class="b"><i style="width:100%"></i></span><span class="vl">150.114</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card" style="flex:1 1 auto;">
+          <div class="q">Cobre o que o cliente pesquisa?</div>
+          <div class="qd">
+            O acervo pode ser grande e não ter a matéria que o escritório trabalha. É este
+            número que diz se a venda se sustenta.
+          </div>
+          <div class="busca-org">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#94a3b8" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
+            Buscar classe, assunto ou vara
+          </div>
+
+          <div class="rank">
+            <div><span class="nm" style="font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco)">Classes</span><span class="b" style="background:transparent"></span><span class="vl"></span></div>
+            <div><span class="nm">Procedimento Comum Cível</span><span class="b"><i style="width:100%"></i></span><span class="vl">84.210</span></div>
+            <div><span class="nm">Execução Fiscal</span><span class="b"><i style="width:73%"></i></span><span class="vl">61.408</span></div>
+            <div><span class="nm">Recurso Especial</span><span class="b"><i style="width:46%"></i></span><span class="vl">38.904</span></div>
+            <div><span class="nm">Cumprimento de Sentença</span><span class="b"><i style="width:39%"></i></span><span class="vl">33.120</span></div>
+            <div><span class="nm">Ação Penal</span><span class="b"><i style="width:26%"></i></span><span class="vl">21.660</span></div>
+            <div class="resto"><span class="nm">+ 214 outras classes</span><span class="b"><i style="width:100%"></i></span><span class="vl">173.378</span></div>
+          </div>
+
+          <div class="sep"></div>
+
+          <div class="rank" style="margin-top:0">
+            <div><span class="nm" style="font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco)">Assuntos</span><span class="b" style="background:transparent"></span><span class="vl"></span></div>
+            <div><span class="nm">Contratos Bancários</span><span class="b"><i style="width:100%"></i></span><span class="vl">52.140</span></div>
+            <div><span class="nm">Direito Tributário</span><span class="b"><i style="width:86%"></i></span><span class="vl">44.902</span></div>
+            <div><span class="nm">Indenização por Dano Moral</span><span class="b"><i style="width:76%"></i></span><span class="vl">39.518</span></div>
+            <div><span class="nm">Rescisão do Contrato de Trabalho</span><span class="b"><i style="width:54%"></i></span><span class="vl">28.044</span></div>
+            <div><span class="nm">Aposentadoria por Invalidez</span><span class="b"><i style="width:37%"></i></span><span class="vl">19.330</span></div>
+            <div class="resto"><span class="nm">+ 1.842 outros assuntos</span><span class="b"><i style="width:100%"></i></span><span class="vl">228.746</span></div>
+          </div>
+
+          <div class="sep"></div>
+
+          <div class="rank" style="margin-top:0">
+            <div><span class="nm" style="font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco)">Varas e câmaras</span><span class="b" style="background:transparent"></span><span class="vl"></span></div>
+            <div><span class="nm">3ª Vara Cível de Fortaleza</span><span class="b"><i style="width:100%"></i></span><span class="vl">8.412</span></div>
+            <div><span class="nm">1ª Vara de Execuções Fiscais — SP</span><span class="b"><i style="width:94%"></i></span><span class="vl">7.930</span></div>
+            <div><span class="nm">2ª Câmara de Direito Privado — TJSP</span><span class="b"><i style="width:74%"></i></span><span class="vl">6.204</span></div>
+            <div><span class="nm">Vara Única de Sobral</span><span class="b"><i style="width:61%"></i></span><span class="vl">5.118</span></div>
+            <div><span class="nm">12ª Vara do Trabalho de Recife</span><span class="b"><i style="width:55%"></i></span><span class="vl">4.602</span></div>
+            <div class="resto"><span class="nm">+ 18.204 outros órgãos</span><span class="b"><i style="width:100%"></i></span><span class="vl">380.414</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>
