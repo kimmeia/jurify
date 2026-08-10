@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --aviso:#b45309; --aviso-bg:#fffbeb; --aviso-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:26px 30px; height:100%; display:flex; flex-direction:column; gap:14px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:16px; }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .btn { background:var(--acento); color:#fff; font-weight:600; font-size:13.5px;
+         border-radius:10px; padding:11px 18px; display:inline-flex; align-items:center; gap:8px;
+         box-shadow:0 8px 18px -8px #7c3aed88; }
+  .btn-fraco { border:1px solid var(--borda); background:var(--surface); color:var(--corpo);
+               font-weight:600; font-size:12.5px; border-radius:9px; padding:8px 14px;
+               display:inline-flex; align-items:center; gap:7px; }
+
+  /* ── herói: a tarefa de agora ── */
+  .heroi { flex:0 0 auto; padding:16px 20px; display:flex; align-items:center; gap:26px;
+           border-left:3px solid var(--acento); }
+  .heroi .esq { flex:1; min-width:0; }
+  .linha1 { display:flex; align-items:center; gap:10px; }
+  .pulso { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700;
+           color:var(--acento-forte); background:var(--acento-bg); border:1px solid #ddd6fe;
+           border-radius:999px; padding:4px 10px; }
+  .pulso i { width:6px; height:6px; border-radius:50%; background:var(--acento); }
+  .alvo { font-size:15px; font-weight:700; }
+  .grande { margin-top:9px; display:flex; align-items:baseline; gap:9px; }
+  .grande b { font-size:32px; font-weight:800; letter-spacing:-.02em; line-height:1; }
+  .grande span { font-size:13px; color:var(--mudo); }
+  .barra { margin-top:10px; height:8px; border-radius:999px; background:var(--hairline); overflow:hidden; }
+  .barra i { display:block; height:8px; border-radius:999px; background:var(--acento); }
+  .detalhe { margin-top:8px; font-size:11.5px; color:var(--mudo); }
+  .detalhe b { color:var(--corpo); font-variant-numeric:tabular-nums; }
+
+  /* ── abas ── */
+  .abas { flex:0 0 auto; display:flex; gap:3px; background:var(--hairline); padding:4px;
+          border-radius:11px; align-self:flex-start; }
+  .abas span { padding:8px 16px; font-size:13px; font-weight:600; color:var(--mudo); border-radius:8px; }
+  .abas span.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+  .abas span em { font-style:normal; margin-left:6px; font-size:11px; color:var(--fraco);
+                  font-variant-numeric:tabular-nums; }
+
+  /* ── conteúdo da aba ── */
+  .conteudo { flex:1; display:grid; grid-template-columns:1fr 1fr; gap:14px; min-height:0; }
+  .col { display:flex; flex-direction:column; gap:14px; min-height:0; }
+  .chd { padding:14px 18px 11px; border-bottom:1px solid var(--hairline); }
+  .chd .cap { font-size:11.5px; color:var(--mudo); margin-top:3px; line-height:1.45; }
+  .corpo { padding:14px 18px; }
+
+  .tres { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .tres > div { padding:13px 16px; }
+  .tres .n { font-size:26px; font-weight:800; letter-spacing:-.02em; margin-top:5px; line-height:1.1; }
+  .tres .p { margin-top:4px; font-size:11px; color:var(--mudo); }
+
+  .faixa { display:flex; height:9px; border-radius:999px; overflow:hidden; background:var(--hairline); }
+  .leg { margin-top:10px; display:flex; flex-wrap:wrap; gap:16px; }
+  .leg div { display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--mudo); }
+  .leg i { width:8px; height:8px; border-radius:2px; }
+  .leg b { color:var(--tinta); font-variant-numeric:tabular-nums; font-size:12.5px; }
+
+  .qual { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .qual .v { font-size:21px; font-weight:800; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .qual .l { margin-top:3px; font-size:11px; color:var(--mudo); line-height:1.35; }
+
+  .chips { margin-top:12px; display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { border:1px solid #ddd6fe; background:var(--acento-bg); color:var(--acento-forte);
+          border-radius:999px; padding:4px 10px; font-size:11px; font-weight:600; }
+  .chip b { font-variant-numeric:tabular-nums; }
+
+  .nota { margin-top:12px; display:flex; align-items:flex-start; gap:8px; border-radius:10px;
+          border:1px solid var(--aviso-borda); background:var(--aviso-bg);
+          padding:10px 12px; font-size:11.5px; color:var(--aviso); line-height:1.45; }
+
+  .lista { margin-top:9px; display:flex; flex-direction:column; }
+  .lista > div { display:flex; align-items:center; gap:10px; padding:7px 0;
+                 border-bottom:1px solid var(--hairline-2); font-size:12px; }
+  .lista > div:last-child { border-bottom:none; }
+  .lista span { flex:1; min-width:0; color:var(--corpo); overflow:hidden;
+                text-overflow:ellipsis; white-space:nowrap; }
+  .lista b { flex:0 0 auto; font-variant-numeric:tabular-nums; font-weight:700; }
+  .lista .resto span, .lista .resto b { color:var(--mudo); font-weight:600; }
+
+  .tarefa { display:flex; align-items:center; gap:10px; padding:9px 0;
+            border-bottom:1px solid var(--hairline-2); }
+  .tarefa:last-child { border-bottom:none; }
+  .selo { flex:0 0 auto; font-size:10px; font-weight:700; border-radius:999px;
+          padding:3px 9px; border:1px solid transparent; }
+  .selo.ok { color:var(--ok); background:var(--ok-bg); border-color:var(--ok-borda); }
+  .selo.neutro { color:var(--mudo); background:var(--hairline); border-color:var(--borda); }
+  .tt { flex:0 0 auto; font-size:12.5px; font-weight:700; }
+  .tn { flex:1; font-size:11.5px; color:var(--mudo); font-variant-numeric:tabular-nums; }
+  .tq { flex:0 0 auto; font-size:11px; color:var(--fraco); }
+
+  .perigo { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between;
+            gap:16px; padding:12px 18px; border:1px dashed var(--alerta-borda);
+            background:var(--alerta-bg); border-radius:12px; }
+  .perigo .t { font-size:12.5px; font-weight:700; color:var(--alerta-forte); }
+  .perigo .d { font-size:11.5px; color:var(--corpo-2); margin-top:2px; }
+  .btn-perigo { border:1px solid var(--alerta-borda); background:var(--surface); color:var(--alerta-forte);
+                font-weight:600; font-size:12px; border-radius:9px; padding:8px 14px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">JurisIA · ingestão</div>
+        <div class="sub">Acervo público do CNJ. Não usa credencial de escritório nenhum.</div>
+      </div>
+      <div class="btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+        Nova tarefa
+      </div>
+    </div>
+
+    <!-- ── herói ─────────────────────────────────────────── -->
+    <div class="card heroi">
+      <div class="esq">
+        <div class="linha1">
+          <span class="pulso"><i></i>rodando</span>
+          <span class="alvo">Todos os tribunais</span>
+        </div>
+        <div class="grande">
+          <b>3.240</b><span>de 5.000 processos novos</span>
+        </div>
+        <div class="barra"><i style="width:65%"></i></div>
+        <div class="detalhe">
+          agora no <b>TJAC</b> · <b>32</b> páginas lidas · <b>4.180</b> gravações
+          (o robô relê processo conhecido pra atualizar movimento)
+        </div>
+      </div>
+      <div style="flex:0 0 auto; display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+        <span style="font-size:11.5px; color:var(--mudo)">próximo ciclo em 40 s</span>
+        <span class="btn-fraco">Cancelar tarefa</span>
+      </div>
+    </div>
+
+    <!-- ── abas ──────────────────────────────────────────── -->
+    <div class="abas">
+      <span class="on">Acervo</span>
+      <span>Tribunais <em>59</em></span>
+      <span>Fontes <em>1 de 5</em></span>
+      <span>Assinantes <em>1</em></span>
+    </div>
+
+    <!-- ── conteúdo ──────────────────────────────────────── -->
+    <div class="conteudo">
+
+      <div class="col">
+        <div class="tres">
+          <div class="card">
+            <div class="micro">No acervo</div>
+            <div class="n">412.680</div>
+            <div class="p">processos distintos</div>
+          </div>
+          <div class="card">
+            <div class="micro">Acórdãos</div>
+            <div class="n" style="color:var(--acento-forte)">123.804</div>
+            <div class="p">servem pra citar</div>
+          </div>
+          <div class="card">
+            <div class="micro">Sentenças</div>
+            <div class="n">284.756</div>
+            <div class="p">servem pra prever</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="chd">
+            <div class="h2">Composição por instância</div>
+            <div class="cap">
+              Só decisão de órgão colegiado é jurisprudência. Sentença de 1º grau prevê a vara,
+              mas não fundamenta petição — e o cliente vê isso marcado na resposta.
+            </div>
+          </div>
+          <div class="corpo">
+            <div class="faixa">
+              <span style="width:30%; background:#7c3aed"></span>
+              <span style="width:69%; background:#94a3b8"></span>
+              <span style="width:1%; background:#cbd5e1"></span>
+            </div>
+            <div class="leg">
+              <div><i style="background:#7c3aed"></i><b>123.804</b> acórdãos · 30%</div>
+              <div><i style="background:#94a3b8"></i><b>284.756</b> sentenças de 1º grau · 69%</div>
+              <div><i style="background:#cbd5e1"></i><b>4.120</b> sem grau · 1%</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="flex:1 1 auto; display:flex; flex-direction:column;">
+          <div class="chd">
+            <div class="h2">O que tem dentro</div>
+            <div class="cap">
+              O acervo já sabe disto e nunca mostrou. É o que responde se a base cobre a matéria
+              que o cliente pesquisa.
+            </div>
+          </div>
+          <div class="corpo" style="flex:1; display:grid; grid-template-columns:1fr 1fr; gap:22px;">
+            <div>
+              <div class="micro">Classes</div>
+              <div class="lista">
+                <div><span>Procedimento Comum Cível</span><b>84.210</b></div>
+                <div><span>Execução Fiscal</span><b>61.408</b></div>
+                <div><span>Recurso Especial</span><b>38.904</b></div>
+                <div><span>Cumprimento de Sentença</span><b>33.120</b></div>
+                <div><span>Ação Penal</span><b>21.660</b></div>
+                <div class="resto"><span>+ 214 outras classes</span><b>173.378</b></div>
+              </div>
+            </div>
+            <div>
+              <div class="micro">Assuntos</div>
+              <div class="lista">
+                <div><span>Contratos Bancários</span><b>52.140</b></div>
+                <div><span>Direito Tributário</span><b>44.902</b></div>
+                <div><span>Indenização por Dano Moral</span><b>39.518</b></div>
+                <div><span>Rescisão do Contrato de Trabalho</span><b>28.044</b></div>
+                <div><span>Aposentadoria por Invalidez</span><b>19.330</b></div>
+                <div class="resto"><span>+ 1.842 outros assuntos</span><b>228.746</b></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card">
+          <div class="chd">
+            <div class="h2">Quanto do acervo tem desfecho</div>
+            <div class="cap">
+              É o número que denuncia calibragem quebrada. Sem ele, mil linhas com resultado nulo
+              apareceriam como "mil no acervo", satisfeitas.
+            </div>
+          </div>
+          <div class="corpo">
+            <div class="qual">
+              <div>
+                <div class="v">94.916</div>
+                <div class="l">desfecho de 1º grau · 23%</div>
+              </div>
+              <div>
+                <div class="v" style="color:var(--acento-forte)">53.648</div>
+                <div class="l">desfecho de recurso · 13%</div>
+              </div>
+              <div>
+                <div class="v" style="color:var(--aviso)">264.116</div>
+                <div class="l">sem nenhum dos dois · 64%</div>
+              </div>
+            </div>
+
+            <div class="chips">
+              <span class="chip">não conhecido <b>28.104</b></span>
+              <span class="chip">não provido <b>13.290</b></span>
+              <span class="chip">provido <b>6.418</b></span>
+              <span class="chip">parcialmente provido <b>3.220</b></span>
+              <span class="chip">desistência <b>1.844</b></span>
+              <span class="chip">prejudicado <b>772</b></span>
+            </div>
+
+            <div class="nota">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto; margin-top:1px"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="#b45309" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>
+                Boa parte desses 64% pode ser processo que ainda corre — e não erro de regra.
+                A separação por trânsito em julgado responde isso, e vale antes de sair calibrando.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="flex:1 1 auto; display:flex; flex-direction:column;">
+          <div class="chd">
+            <div class="h2">Últimas tarefas</div>
+            <div class="cap">
+              Quanto foi pedido e quanto entrou de fato. Meta batida com poucas gravações
+              significa acervo novo; muitas gravações e poucos novos significa releitura.
+            </div>
+          </div>
+          <div class="corpo" style="flex:1;">
+            <div class="tarefa">
+              <span class="selo ok">concluída</span>
+              <span class="tt">Todos os tribunais</span>
+              <span class="tn">5.000 de 5.000 novos</span>
+              <span class="tq">há 2 h</span>
+            </div>
+            <div class="tarefa">
+              <span class="selo ok">concluída</span>
+              <span class="tt">STJ</span>
+              <span class="tn">5.000 de 5.000 novos</span>
+              <span class="tq">ontem</span>
+            </div>
+            <div class="tarefa">
+              <span class="selo neutro">cancelada</span>
+              <span class="tt">TJSP</span>
+              <span class="tn">1.240 de 20.000 novos</span>
+              <span class="tq">ontem</span>
+            </div>
+            <div class="tarefa">
+              <span class="selo ok">concluída</span>
+              <span class="tt">TST</span>
+              <span class="tn">2.000 de 2.000 novos</span>
+              <span class="tq">anteontem</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── zona de perigo, longe da leitura ──────────────── -->
+    <div class="perigo">
+      <div>
+        <div class="t">Recomeçar a ingestão do zero</div>
+        <div class="d">
+          Apaga acervo, movimentos e cursores. Pesquisa de cliente e consumo de cota ficam
+          intactos. Quase nunca é necessário: re-varrer já reescreve cada linha.
+        </div>
+      </div>
+      <span class="btn-perigo">Zerar acervo</span>
+    </div>
+
+  </div>
+</body>
+</html>
