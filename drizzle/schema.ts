@@ -3917,6 +3917,13 @@ export const jurisiaProcessos = mysqlTable(
     ]),
     resultadoRecursoEm: timestamp("resultadoRecursoEmJurisProc"),
     resultadoRecursoMovimento: varchar("resultadoRecursoMovimentoJurisProc", { length: 255 }),
+    /**
+     * Trânsito em julgado. NULL = o desfecho ainda pode mudar.
+     *
+     * Qualifica a estatística, não filtra o acervo: acórdão é citável quando
+     * publicado, e exigir trânsito descartaria o precedente recente.
+     */
+    transitadoEm: timestamp("transitadoEmJurisProc"),
     sincronizadoEm: timestamp("sincronizadoEmJurisProc").defaultNow().notNull(),
   },
   (t) => ({

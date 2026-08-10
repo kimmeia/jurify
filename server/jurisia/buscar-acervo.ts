@@ -71,6 +71,9 @@ export async function buscarRecorte(
       resultado: jurisiaProcessos.resultado,
       grau: jurisiaProcessos.grau,
       quantidade: sql<number>`COUNT(*)`,
+      // Só entre os decididos: transitado sem desfecho classificado não diz
+      // nada sobre "quanto costuma dar", e somá-lo inflaria a fração.
+      transitados: sql<number>`SUM(CASE WHEN ${jurisiaProcessos.transitadoEm} IS NOT NULL AND ${jurisiaProcessos.resultado} IS NOT NULL THEN 1 ELSE 0 END)`,
     })
     .from(jurisiaProcessos)
     .where(onde)
@@ -79,9 +82,11 @@ export async function buscarRecorte(
   const porResultado = { ...ZERO };
   const porGrau: Array<{ grau: string | null; quantidade: number }> = [];
   let total = 0;
+  let transitados = 0;
   for (const linha of agrupado) {
     const n = Number(linha.quantidade ?? 0);
     total += n;
+    transitados += Number(linha.transitados ?? 0);
     if (linha.resultado) porResultado[linha.resultado as ResultadoProcesso] += n;
     porGrau.push({ grau: linha.grau, quantidade: n });
   }
@@ -112,7 +117,7 @@ export async function buscarRecorte(
     .limit(opts?.maxFontes ?? MAX_FONTES_RECORTE);
 
   return {
-    estatistica: montarEstatistica(total, porResultado),
+    estatistica: { ...montarEstatistica(total, porResultado), transitados },
     natureza: contarNatureza(porGrau),
     processos: linhas.map((r) => ({
       id: r.id,
