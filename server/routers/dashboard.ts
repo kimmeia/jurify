@@ -33,7 +33,13 @@ import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
 import { parseValorBR } from "../../shared/valor-br";
-import { dataHojeBR, FUSO_HORARIO_PADRAO, resolverPeriodoNoFuso } from "../../shared/escritorio-types";
+import {
+  dataHojeBR,
+  FUSO_HORARIO_PADRAO,
+  inicioDoDiaNoFuso,
+  resolverPeriodoNoFuso,
+} from "../../shared/escritorio-types";
+import { contarConversasPorStatus } from "../escritorio/db-crm";
 import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
 import { buildFiltroComissaoSQL } from "../escritorio/router-financeiro";
 import { inArray } from "drizzle-orm";
@@ -44,6 +50,7 @@ import {
   percentInadimplenciaPorCliente,
   taxaConclusaoNoPrazo,
   resolverRangeCashFlow,
+  fimDoMes,
 } from "./dashboard-setor-helpers";
 
 const log = createLogger("dashboard-router");
@@ -108,8 +115,15 @@ export const dashboardRouter = router({
     if (!esc) return null;
 
     const escritorioId = esc.escritorio.id;
-    const now = new Date();
-    const hojeInicio = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // "Hoje" no fuso do ESCRITÓRIO, não no relógio do servidor.
+    //
+    // O server roda em UTC: `new Date(now.getFullYear(), now.getMonth(),
+    // now.getDate())` começa o dia às 21h BRT do dia anterior. O painel contava
+    // uma janela deslocada em 3 horas enquanto a tela da Agenda — que já fazia
+    // isso certo — contava outra, e os dois números do mesmo dia divergiam.
+    const fusoEscritorio = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+    const hojeStr = dataHojeBR(fusoEscritorio);
+    const hojeInicio = inicioDoDiaNoFuso(hojeStr, fusoEscritorio);
     const hojeFim = new Date(hojeInicio.getTime() + 86400000);
 
     // Decide escopo baseado em permissão "dashboard"
@@ -227,20 +241,30 @@ export const dashboardRouter = router({
       const totalHojeCount = compromissosHojeCount + tarefasHojeCount;
 
       // ─── Semana civil (domingo→sábado) pra faixa de calendário ──────
-      // Só a contagem por dia: o painel marca quais dias têm algo, e o
-      // clique leva pra /agenda. Trazer os itens dos sete dias seria
-      // carregar sete listas pra mostrar sete bolinhas.
-      const semanaInicio = new Date(hojeInicio.getTime() - hojeInicio.getDay() * 86400000);
-      const semanaFim = new Date(semanaInicio.getTime() + 7 * 86400000);
-      const chaveDia = (d: Date) =>
-        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      // Só a contagem por dia: o painel marca quais dias têm algo, e o clique
+      // abre o dia na própria lista. Trazer os itens dos sete dias seria
+      // carregar sete listas pra desenhar sete bolinhas.
+      //
+      // Os dias saem de aritmética sobre o dia CIVIL do escritório ancorada ao
+      // meio-dia UTC — longe da borda do dia em qualquer fuso ±11h, então o
+      // offset do server não desloca a semana.
+      const [anoH, mesH, diaH] = hojeStr.split("-").map(Number);
+      const meioDiaHoje = new Date(Date.UTC(anoH!, mesH! - 1, diaH!, 12, 0, 0));
+      const chaveComDeslocamento = (dias: number) =>
+        new Date(meioDiaHoje.getTime() + dias * 86400000).toISOString().slice(0, 10);
+      const diasAteDomingo = meioDiaHoje.getUTCDay();
+      const chavesSemana = Array.from({ length: 7 }, (_, i) => chaveComDeslocamento(i - diasAteDomingo));
+      const semanaInicio = inicioDoDiaNoFuso(chavesSemana[0]!, fusoEscritorio);
+      const semanaFim = new Date(
+        inicioDoDiaNoFuso(chavesSemana[6]!, fusoEscritorio).getTime() + 86400000,
+      );
 
+      // Agrupamento em JS, não no SQL: `DATE_FORMAT` recorta pelo dia do
+      // TIMESTAMP armazenado, e um compromisso das 22h no fuso do escritório
+      // cai no dia seguinte em UTC — a bolinha apareceria no dia errado.
       const [compSemana, tarefasSemana] = await Promise.all([
         db
-          .select({
-            dia: sql<string>`DATE_FORMAT(${agendamentos.dataInicio}, '%Y-%m-%d')`,
-            total: sql<number>`COUNT(*)`,
-          })
+          .select({ quando: agendamentos.dataInicio })
           .from(agendamentos)
           .where(
             and(
@@ -252,13 +276,9 @@ export const dashboardRouter = router({
                 ? [or(eq(agendamentos.responsavelId, colabId), eq(agendamentos.criadoPorId, colabId))!]
                 : []),
             ),
-          )
-          .groupBy(sql`DATE_FORMAT(${agendamentos.dataInicio}, '%Y-%m-%d')`),
+          ),
         db
-          .select({
-            dia: sql<string>`DATE_FORMAT(${tarefas.dataVencimento}, '%Y-%m-%d')`,
-            total: sql<number>`COUNT(*)`,
-          })
+          .select({ quando: tarefas.dataVencimento })
           .from(tarefas)
           .where(
             and(
@@ -270,40 +290,32 @@ export const dashboardRouter = router({
                 ? [or(eq(tarefas.responsavelId, colabId), eq(tarefas.criadoPor, colabId))!]
                 : []),
             ),
-          )
-          .groupBy(sql`DATE_FORMAT(${tarefas.dataVencimento}, '%Y-%m-%d')`),
+          ),
       ]);
 
       const totaisPorDia = new Map<string, number>();
       for (const linha of [...compSemana, ...tarefasSemana]) {
-        if (!linha.dia) continue;
-        totaisPorDia.set(linha.dia, (totaisPorDia.get(linha.dia) ?? 0) + Number(linha.total ?? 0));
+        if (!linha.quando) continue;
+        const key = dataHojeBR(fusoEscritorio, linha.quando as Date);
+        totaisPorDia.set(key, (totaisPorDia.get(key) ?? 0) + 1);
       }
-      const hojeKey = chaveDia(hojeInicio);
-      const semana = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(semanaInicio.getTime() + i * 86400000);
-        const key = chaveDia(d);
-        return { data: key, total: totaisPorDia.get(key) ?? 0, hoje: key === hojeKey };
-      });
+      const semana = chavesSemana.map((key) => ({
+        data: key,
+        total: totaisPorDia.get(key) ?? 0,
+        hoje: key === hojeStr,
+      }));
 
       // ─── CRM / Conversas ────────────────────────────────────
-      const conversasAguardando = await db
-        .select({ id: conversas.id })
-        .from(conversas)
-        .where(and(
-          eq(conversas.escritorioId, escritorioId),
-          eq(conversas.status, "aguardando"),
-          ...(soProprios ? [eq(conversas.atendenteId, colabId)] : []),
-        ));
-
-      const conversasAbertas = await db
-        .select({ id: conversas.id })
-        .from(conversas)
-        .where(and(
-          eq(conversas.escritorioId, escritorioId),
-          eq(conversas.status, "em_atendimento"),
-          ...(soProprios ? [eq(conversas.atendenteId, colabId)] : []),
-        ));
+      // Mesma função que alimenta o badge do menu e os pills do Inbox.
+      //
+      // Contar direto em `conversas` parece equivalente e não é: a listagem
+      // exclui arquivadas e faz INNER JOIN com contato e canal, então conversa
+      // órfã (canal removido) ou arquivada não aparece em lugar nenhum da tela
+      // — mas entrava neste COUNT. O painel dizia 47 aguardando enquanto o menu
+      // e o Atendimento diziam 8.
+      const contagemConversas = await contarConversasPorStatus(escritorioId, {
+        ...(soProprios ? { atendenteId: colabId } : {}),
+      });
 
       const totalContatos = await db
         .select({ id: contatos.id })
@@ -426,8 +438,8 @@ export const dashboardRouter = router({
           semana,
         },
         crm: {
-          conversasAguardando: conversasAguardando.length,
-          conversasAbertas: conversasAbertas.length,
+          conversasAguardando: contagemConversas.aguardando,
+          conversasAbertas: contagemConversas.em_atendimento,
           totalContatos: totalContatos.length,
         },
         pipeline: {
@@ -450,6 +462,194 @@ export const dashboardRouter = router({
     } catch (err) {
       log.error({ err: String(err) }, "Erro ao montar resumo do escritório");
       return null;
+    }
+  }),
+
+  /**
+   * Compromissos e tarefas de UM dia.
+   *
+   * Existe pro calendário do painel abrir o dia clicado ali mesmo. Mandar pra
+   * /agenda funcionava, mas custava uma troca de tela inteira pra responder
+   * "o que tem na quarta?" — pergunta que o card já estava mostrando pra hoje.
+   */
+  agendaDoDia: protectedProcedure
+    .input(z.object({ data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
+    .query(async ({ ctx, input }) => {
+      const vazio = { compromissos: [], tarefas: [], totalCompromissos: 0, totalTarefas: 0 };
+      const db = await getDb();
+      if (!db) return vazio;
+
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return vazio;
+
+      const perm = await checkPermission(ctx.user.id, "dashboard", "ver");
+      if (!perm.allowed) return vazio;
+      const soProprios = !perm.verTodos && perm.verProprios;
+      const escritorioId = esc.escritorio.id;
+      const colabId = esc.colaborador.id;
+
+      const fuso = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+      const inicio = inicioDoDiaNoFuso(input.data, fuso);
+      const fim = new Date(inicio.getTime() + 86400000);
+
+      try {
+        const [compromissos, listaTarefas] = await Promise.all([
+          db
+            .select({
+              id: agendamentos.id,
+              titulo: agendamentos.titulo,
+              dataInicio: agendamentos.dataInicio,
+              tipo: agendamentos.tipo,
+              corHex: agendamentos.corHex,
+            })
+            .from(agendamentos)
+            .where(
+              and(
+                eq(agendamentos.escritorioId, escritorioId),
+                gte(agendamentos.dataInicio, inicio),
+                lt(agendamentos.dataInicio, fim),
+                or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento")),
+                ...(soProprios
+                  ? [or(eq(agendamentos.responsavelId, colabId), eq(agendamentos.criadoPorId, colabId))!]
+                  : []),
+              ),
+            )
+            .orderBy(asc(agendamentos.dataInicio)),
+          db
+            .select({
+              id: tarefas.id,
+              titulo: tarefas.titulo,
+              prioridade: tarefas.prioridade,
+            })
+            .from(tarefas)
+            .where(
+              and(
+                eq(tarefas.escritorioId, escritorioId),
+                gte(tarefas.dataVencimento, inicio),
+                lt(tarefas.dataVencimento, fim),
+                or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+                ...(soProprios
+                  ? [or(eq(tarefas.responsavelId, colabId), eq(tarefas.criadoPor, colabId))!]
+                  : []),
+              ),
+            ),
+        ]);
+
+        // Os totais saem do tamanho REAL da consulta, e só depois a lista é
+        // cortada. Contar o que sobrou depois do corte foi exatamente o que
+        // fazia o rodapé do card contradizer o número do topo.
+        return {
+          compromissos: compromissos.slice(0, 8).map((c) => ({
+            id: c.id,
+            titulo: c.titulo,
+            hora: (c.dataInicio as Date).toLocaleTimeString("pt-BR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            tipo: c.tipo,
+            cor: c.corHex,
+          })),
+          tarefas: listaTarefas.slice(0, 8).map((t) => ({
+            id: t.id,
+            titulo: t.titulo,
+            prioridade: t.prioridade,
+          })),
+          totalCompromissos: compromissos.length,
+          totalTarefas: listaTarefas.length,
+        };
+      } catch (err) {
+        log.warn({ err: String(err) }, "Falha ao carregar agenda do dia");
+        return vazio;
+      }
+    }),
+
+  /**
+   * De onde vêm os fechamentos: ranking das origens de lead que mais fecham.
+   *
+   * Recorte pelo `fechadoEm` (o instante em que virou ganho), não pelo
+   * `updatedAt` — este último muda em qualquer edição do lead e faria um
+   * negócio fechado em janeiro reaparecer no mês em que alguém corrigiu um
+   * telefone.
+   */
+  desempenhoComercial: protectedProcedure.query(async ({ ctx }) => {
+    const vazio = {
+      campanhas: [] as Array<{ origem: string; fechamentos: number; valor: number }>,
+      ganhos: 0,
+      perdidos: 0,
+      taxaGanho: null as number | null,
+      valorGanho: 0,
+    };
+
+    const db = await getDb();
+    if (!db) return vazio;
+
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return vazio;
+
+    const perm = await checkPermission(ctx.user.id, "dashboard", "ver");
+    if (!perm.allowed) return vazio;
+    const soProprios = !perm.verTodos && perm.verProprios;
+
+    const fuso = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+    const periodo = resolverPeriodoNoFuso(new Date(), fuso);
+
+    try {
+      const fechados = await db
+        .select({
+          etapa: leads.etapaFunil,
+          origem: leads.origemLead,
+          valor: leads.valorEstimado,
+        })
+        .from(leads)
+        .where(
+          and(
+            eq(leads.escritorioId, esc.escritorio.id),
+            gte(leads.fechadoEm, periodo.dataInicio),
+            lte(leads.fechadoEm, periodo.dataFim),
+            or(eq(leads.etapaFunil, "fechado_ganho"), eq(leads.etapaFunil, "fechado_perdido")),
+            ...(soProprios ? [eq(leads.responsavelId, esc.colaborador.id)] : []),
+          ),
+        );
+
+      const porOrigem = new Map<string, { fechamentos: number; valor: number }>();
+      let ganhos = 0;
+      let perdidos = 0;
+      let valorGanho = 0;
+
+      for (const l of fechados) {
+        if (l.etapa === "fechado_perdido") {
+          perdidos += 1;
+          continue;
+        }
+        ganhos += 1;
+        const valor = parseValorBR(l.valor as string | null);
+        valorGanho += valor;
+        // Lead sem origem preenchida vira um balde próprio em vez de sumir do
+        // ranking: "não informado" grande é em si um achado — significa que o
+        // time não está marcando de onde vem o cliente.
+        const chave = (l.origem ?? "").trim() || "Não informado";
+        const atual = porOrigem.get(chave) ?? { fechamentos: 0, valor: 0 };
+        atual.fechamentos += 1;
+        atual.valor += valor;
+        porOrigem.set(chave, atual);
+      }
+
+      const campanhas = Array.from(porOrigem.entries())
+        .map(([origem, v]) => ({ origem, ...v }))
+        .sort((a, b) => b.fechamentos - a.fechamentos || b.valor - a.valor)
+        .slice(0, 3);
+
+      const decididos = ganhos + perdidos;
+      return {
+        campanhas,
+        ganhos,
+        perdidos,
+        taxaGanho: decididos > 0 ? +((ganhos / decididos) * 100).toFixed(1) : null,
+        valorGanho,
+      };
+    } catch (err) {
+      log.warn({ err: String(err) }, "Falha ao montar desempenho comercial");
+      return vazio;
     }
   }),
 
@@ -497,6 +697,10 @@ export const dashboardRouter = router({
       const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
       const { inicioStr, pontosKeys } = resolverRangeCashFlow(new Date(), tz, input?.days);
       const hoje = dataHojeBR(tz);
+      // Teto do período. Sem ele o filtro só tinha piso e "a receber, em dia"
+      // somava toda parcela futura do escritório — parcela que vence no ano que
+      // vem não é receita deste mês, mas entrava no card mesmo assim.
+      const fimStr = pontosKeys.length > 0 ? fimDoMes(pontosKeys[0]!) : fimDoMes(hoje);
 
       try {
         // Critério "recebido": filtra por `dataPagamento` (quando foi
@@ -520,9 +724,9 @@ export const dashboardRouter = router({
               eq(asaasCobrancas.escritorioId, esc.escritorio.id),
               or(
                 sql`${asaasCobrancas.status} IN ('RECEIVED','CONFIRMED','RECEIVED_IN_CASH')
-                    AND COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento}) >= ${inicioStr}`,
+                    AND COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento}) BETWEEN ${inicioStr} AND ${fimStr}`,
                 sql`${asaasCobrancas.status} IN ('PENDING','OVERDUE')
-                    AND ${asaasCobrancas.vencimento} >= ${inicioStr}`,
+                    AND ${asaasCobrancas.vencimento} BETWEEN ${inicioStr} AND ${fimStr}`,
               ),
             ),
           );

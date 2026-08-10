@@ -750,40 +750,54 @@ const INICIAIS_SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"];
  */
 export function FaixaSemana({
   dias,
+  diaAberto,
   onDia,
 }: {
   dias: Array<{ data: string; total: number; hoje: boolean }>;
+  /** Dia sendo exibido na lista. Sem isso o destaque fica preso em "hoje" e
+   *  clicar em outro dia troca o conteúdo sem mover a marcação — a pessoa
+   *  perde de vista qual dia está lendo. */
+  diaAberto?: string;
   onDia?: (data: string) => void;
 }) {
   return (
     <div className="grid grid-cols-7 gap-1 border-b px-2.5 pb-2.5 pt-2">
-      {dias.map((d, i) => (
-        <button
-          key={d.data}
-          onClick={() => onDia?.(d.data)}
-          title={d.total > 0 ? `${d.total} na agenda` : "Nada marcado"}
-          className={`flex flex-col items-center gap-1 rounded-md py-1.5 transition-colors ${
-            d.hoje ? "bg-violet-600 text-white" : "hover:bg-accent"
-          }`}
-        >
-          <span
-            className={`text-[9px] font-bold uppercase leading-none tracking-[0.06em] ${
-              d.hoje ? "text-white/70" : "text-muted-foreground/70"
+      {dias.map((d, i) => {
+        const aberto = diaAberto ? d.data === diaAberto : d.hoje;
+        return (
+          <button
+            key={d.data}
+            onClick={() => onDia?.(d.data)}
+            title={d.total > 0 ? `${d.total} na agenda` : "Nada marcado"}
+            className={`flex flex-col items-center gap-1 rounded-md py-1.5 transition-colors ${
+              aberto ? "bg-violet-600 text-white" : "hover:bg-accent"
             }`}
           >
-            {INICIAIS_SEMANA[i]}
-          </span>
-          <span className="text-[12.5px] font-semibold leading-none tabular-nums">
-            {Number(d.data.slice(8, 10))}
-          </span>
-          <span
-            className="h-1 w-1 rounded-full"
-            style={{
-              background: d.total > 0 ? (d.hoje ? "#fff" : COR_SERIE) : "transparent",
-            }}
-          />
-        </button>
-      ))}
+            <span
+              className={`text-[9px] font-bold uppercase leading-none tracking-[0.06em] ${
+                aberto ? "text-white/70" : "text-muted-foreground/70"
+              }`}
+            >
+              {INICIAIS_SEMANA[i]}
+            </span>
+            <span
+              className={`text-[12.5px] font-semibold leading-none tabular-nums ${
+                // Hoje segue reconhecível mesmo quando outro dia está aberto —
+                // senão o calendário perde a âncora de "onde estamos".
+                !aberto && d.hoje ? "underline decoration-2 underline-offset-2" : ""
+              }`}
+            >
+              {Number(d.data.slice(8, 10))}
+            </span>
+            <span
+              className="h-1 w-1 rounded-full"
+              style={{
+                background: d.total > 0 ? (aberto ? "#fff" : COR_SERIE) : "transparent",
+              }}
+            />
+          </button>
+        );
+      })}
     </div>
   );
 }

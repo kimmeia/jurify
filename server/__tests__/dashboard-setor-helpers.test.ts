@@ -18,6 +18,7 @@ import {
   percentInadimplenciaPorCliente,
   taxaConclusaoNoPrazo,
   classificarTarefaPrazo,
+  fimDoMes,
   calcularRangeCashFlow,
   resolverRangeCashFlow,
 } from "../routers/dashboard-setor-helpers";
@@ -577,5 +578,46 @@ describe("resolverPeriodoNoFuso — range dos painéis Comercial/Operacional/Fin
     const antes = agora.getTime();
     resolverPeriodoNoFuso(agora, SP);
     expect(agora.getTime()).toBe(antes);
+  });
+});
+
+/**
+ * O teto do período do cash flow.
+ *
+ * O filtro só tinha piso, e "a receber, em dia" somava toda parcela futura do
+ * escritório: no painel do dono deu "1268 cobranças a vencer" embaixo de um
+ * rótulo que dizia "no período".
+ */
+describe("fimDoMes", () => {
+  it("mês de 31 dias", () => {
+    expect(fimDoMes("2026-08-10")).toBe("2026-08-31");
+  });
+
+  it("mês de 30 dias", () => {
+    expect(fimDoMes("2026-04-01")).toBe("2026-04-30");
+  });
+
+  it("fevereiro comum", () => {
+    expect(fimDoMes("2026-02-15")).toBe("2026-02-28");
+  });
+
+  it("fevereiro bissexto", () => {
+    expect(fimDoMes("2028-02-15")).toBe("2028-02-29");
+  });
+
+  it("dezembro não vaza pro ano seguinte", () => {
+    expect(fimDoMes("2026-12-05")).toBe("2026-12-31");
+  });
+
+  it("já estando no último dia, devolve o próprio dia", () => {
+    expect(fimDoMes("2026-08-31")).toBe("2026-08-31");
+  });
+
+  it("o fim nunca é anterior ao início do mesmo mês", () => {
+    for (const dia of ["2026-01-01", "2026-06-17", "2026-11-30"]) {
+      const inicio = `${dia.slice(0, 7)}-01`;
+      expect(fimDoMes(dia) >= inicio).toBe(true);
+      expect(fimDoMes(dia).slice(0, 7)).toBe(dia.slice(0, 7));
+    }
   });
 });
