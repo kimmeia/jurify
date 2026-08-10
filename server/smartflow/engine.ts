@@ -27,6 +27,15 @@ export interface SmartflowContexto {
   intencao?: string;
   /** Fuso IANA do escritório — usado pelas condições de dia/horário. */
   fusoHorario?: string;
+  /**
+   * Preenchido pelo passo `encerrar_conversa`. O engine é puro — quem escreve
+   * no banco é o dispatcher, ao finalizar a execução, lendo esta marca.
+   */
+  encerrarConversa?: {
+    status: "resolvido" | "fechado";
+    arquivar: boolean;
+    liberarAtendente: boolean;
+  };
   /** Resposta gerada pela IA */
   respostaIA?: string;
   /** Horário escolhido pelo cliente */
@@ -1787,6 +1796,63 @@ async function handleTransferir(
 }
 
 /**
+ * Handler do passo `encerrar_conversa`.
+ *
+ * Irmão do `transferir`, e a diferença importa: transferir marca
+ * `em_atendimento`, que CALA o bot naquela conversa pra sempre, porque um
+ * humano assumiu. Encerrar marca `resolvido` — ninguém assumiu, o assunto
+ * acabou. Se o cliente escrever de novo amanhã, o handler de mensagem devolve
+ * a conversa pra `aguardando` e o bot atende do começo, que é o comportamento
+ * certo pra um atendimento encerrado.
+ */
+async function handleEncerrarConversa(
+  passo: Passo,
+  ctx: SmartflowContexto,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    mensagem?: string;
+    status?: "resolvido" | "fechado";
+    arquivar?: boolean;
+    liberarAtendente?: boolean;
+  };
+
+  // Mesma convenção do transferir: não definida = texto padrão; definida e
+  // vazia = encerra em silêncio.
+  let resposta: string | undefined;
+  if (typeof cfg.mensagem === "string") {
+    const texto = cfg.mensagem.trim();
+    if (texto) {
+      const { interpolarVariaveis } = await import("./interpolar");
+      resposta = interpolarVariaveis(texto, ctx as any);
+    } else {
+      resposta = undefined;
+    }
+  } else {
+    resposta = "Atendimento encerrado. Se precisar de mais alguma coisa, é só chamar!";
+  }
+
+  const novoCtx: SmartflowContexto = {
+    ...ctx,
+    encerrarConversa: {
+      status: cfg.status === "fechado" ? "fechado" : "resolvido",
+      arquivar: cfg.arquivar === true,
+      liberarAtendente: cfg.liberarAtendente === true,
+    },
+  };
+  // Uma execução que encerra não pode ficar marcada como "esperando o
+  // cliente": a marca de espera sobrevive no contexto salvo, e a próxima
+  // mensagem retomaria ESTE fluxo já terminado em vez de começar um novo.
+  delete (novoCtx as any).aguardandoMensagem;
+  delete (novoCtx as any).aguardandoContatoId;
+  delete (novoCtx as any).aguardandoTimeoutMinutos;
+  delete (novoCtx as any).aguardandoOpcoes;
+  delete (novoCtx as any).aguardandoNodeClienteId;
+  delete (novoCtx as any).esperando;
+
+  return { sucesso: true, contexto: novoCtx, resposta, parar: true };
+}
+
+/**
  * Handler do passo `distribuir_atendimento`. Escolhe um atendente do setor e o
  * seta como dono da conversa (via executor), SEM parar o bot — o fluxo segue.
  * Saídas: `atribuido` (achou) e `sem_atendente` (ninguém elegível). Publica
@@ -2954,6 +3020,7 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   ia_responder: handleIAResponder,
   ia_consultar: handleIAConsultar,
   ia_atendente: handleIaAtendente,
+  encerrar_conversa: handleEncerrarConversa,
   ia_extrair_campos: handleIAExtrairCampos,
   crm_buscar_contato: handleCrmBuscarContato,
   crm_listar_acoes_cliente: handleCrmListarAcoesCliente,

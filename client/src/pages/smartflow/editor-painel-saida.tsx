@@ -72,6 +72,7 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
   transferir: [
     { path: "transferir", label: "Sinaliza transferência pra humano (encerra)", tipo: "booleano" },
   ],
+  encerrar_conversa: [],
   distribuir_atendimento: [
     { path: "atendente", label: "Nome do atendente (alias curto pra prompts)", tipo: "texto" },
     { path: "atendenteEscolhidoNome", label: "Nome do atendente que recebeu a conversa", tipo: "texto" },

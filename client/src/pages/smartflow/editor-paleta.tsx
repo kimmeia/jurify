@@ -72,6 +72,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   whatsapp_aguardar_resposta: Pause,
   whatsapp_pergunta_opcoes: MessageCircleQuestion,
   transferir: PhoneCall,
+  encerrar_conversa: CheckCircle2,
   distribuir_atendimento: Users,
   condicional: GitBranch,
   randomizar: Shuffle,
