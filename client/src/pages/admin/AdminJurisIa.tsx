@@ -28,7 +28,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { naturezaDoGrau } from "@shared/jurisia-grau";
-import JurisIaAssinantes from "./JurisIaAssinantes";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   fila: { label: "na fila", cls: "text-slate-500 bg-slate-500/10 border-slate-500/20" },
@@ -795,8 +794,6 @@ export default function AdminJurisIa() {
       <PainelSondagem />
 
       {natureza && <PainelNatureza dados={natureza} />}
-
-      <JurisIaAssinantes />
 
       <div className="grid gap-3 sm:grid-cols-4">
         <Card>
