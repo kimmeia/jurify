@@ -222,8 +222,69 @@ export const dashboardRouter = router({
               : []),
           ),
         );
-      const totalHojeCount =
-        Number(compHojeAgg?.total ?? 0) + Number(tarefasHojeAgg?.total ?? 0);
+      const compromissosHojeCount = Number(compHojeAgg?.total ?? 0);
+      const tarefasHojeCount = Number(tarefasHojeAgg?.total ?? 0);
+      const totalHojeCount = compromissosHojeCount + tarefasHojeCount;
+
+      // ─── Semana civil (domingo→sábado) pra faixa de calendário ──────
+      // Só a contagem por dia: o painel marca quais dias têm algo, e o
+      // clique leva pra /agenda. Trazer os itens dos sete dias seria
+      // carregar sete listas pra mostrar sete bolinhas.
+      const semanaInicio = new Date(hojeInicio.getTime() - hojeInicio.getDay() * 86400000);
+      const semanaFim = new Date(semanaInicio.getTime() + 7 * 86400000);
+      const chaveDia = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+      const [compSemana, tarefasSemana] = await Promise.all([
+        db
+          .select({
+            dia: sql<string>`DATE_FORMAT(${agendamentos.dataInicio}, '%Y-%m-%d')`,
+            total: sql<number>`COUNT(*)`,
+          })
+          .from(agendamentos)
+          .where(
+            and(
+              eq(agendamentos.escritorioId, escritorioId),
+              gte(agendamentos.dataInicio, semanaInicio),
+              lt(agendamentos.dataInicio, semanaFim),
+              or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento")),
+              ...(soProprios
+                ? [or(eq(agendamentos.responsavelId, colabId), eq(agendamentos.criadoPorId, colabId))!]
+                : []),
+            ),
+          )
+          .groupBy(sql`DATE_FORMAT(${agendamentos.dataInicio}, '%Y-%m-%d')`),
+        db
+          .select({
+            dia: sql<string>`DATE_FORMAT(${tarefas.dataVencimento}, '%Y-%m-%d')`,
+            total: sql<number>`COUNT(*)`,
+          })
+          .from(tarefas)
+          .where(
+            and(
+              eq(tarefas.escritorioId, escritorioId),
+              gte(tarefas.dataVencimento, semanaInicio),
+              lt(tarefas.dataVencimento, semanaFim),
+              or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+              ...(soProprios
+                ? [or(eq(tarefas.responsavelId, colabId), eq(tarefas.criadoPor, colabId))!]
+                : []),
+            ),
+          )
+          .groupBy(sql`DATE_FORMAT(${tarefas.dataVencimento}, '%Y-%m-%d')`),
+      ]);
+
+      const totaisPorDia = new Map<string, number>();
+      for (const linha of [...compSemana, ...tarefasSemana]) {
+        if (!linha.dia) continue;
+        totaisPorDia.set(linha.dia, (totaisPorDia.get(linha.dia) ?? 0) + Number(linha.total ?? 0));
+      }
+      const hojeKey = chaveDia(hojeInicio);
+      const semana = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(semanaInicio.getTime() + i * 86400000);
+        const key = chaveDia(d);
+        return { data: key, total: totaisPorDia.get(key) ?? 0, hoje: key === hojeKey };
+      });
 
       // ─── CRM / Conversas ────────────────────────────────────
       const conversasAguardando = await db
@@ -358,6 +419,11 @@ export const dashboardRouter = router({
           tarefasHoje: tarefasHoje.map((t) => ({ id: t.id, titulo: t.titulo, prioridade: t.prioridade })),
           atrasados: tarefasAtrasadas.length + compromissosAtrasados.length,
           totalHojeCount,
+          // As listas acima vêm com LIMIT 5. Sem estes dois, o rodapé do card
+          // contava o tamanho da lista e contradizia o número do topo.
+          compromissosHojeCount,
+          tarefasHojeCount,
+          semana,
         },
         crm: {
           conversasAguardando: conversasAguardando.length,
@@ -400,17 +466,29 @@ export const dashboardRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
+      // Sentinela única: os contadores precisam existir em TODA saída, senão
+      // o painel mostra "—" em um caminho e 0 em outro pro mesmo estado.
+      const VAZIO = {
+        pontos: [] as Array<{ data: string; recebido: number; pendente: number; vencido: number }>,
+        totalRecebido: 0,
+        totalPendente: 0,
+        totalVencido: 0,
+        cobrancasPendentes: 0,
+        cobrancasVencidas: 0,
+        clientesVencidos: 0,
+      };
+
       const db = await getDb();
-      if (!db) return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+      if (!db) return VAZIO;
 
       const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+      if (!esc) return VAZIO;
 
       // Se só tem verProprios no dashboard, dados financeiros do
       // escritório não aparecem pra ele — retorna série vazia.
       const perm = await checkPermission(ctx.user.id, "dashboard", "ver");
       if (!perm.verTodos && perm.verProprios) {
-        return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+        return VAZIO;
       }
 
       // Range ancorado no fuso do escritório (não no relógio UTC do server),
@@ -434,6 +512,7 @@ export const dashboardRouter = router({
             status: asaasCobrancas.status,
             vencimento: asaasCobrancas.vencimento,
             dataPagamento: asaasCobrancas.dataPagamento,
+            contatoId: asaasCobrancas.contatoId,
           })
           .from(asaasCobrancas)
           .where(
@@ -449,18 +528,28 @@ export const dashboardRouter = router({
           );
 
         // Agrupar por dia
-        const porDia = new Map<string, { recebido: number; pendente: number }>();
+        const porDia = new Map<string, { recebido: number; pendente: number; vencido: number }>();
         for (const key of pontosKeys) {
-          porDia.set(key, { recebido: 0, pendente: 0 });
+          porDia.set(key, { recebido: 0, pendente: 0, vencido: 0 });
         }
 
         let totalRecebido = 0;
         let totalPendente = 0;
         let totalVencido = 0;
+        let cobrancasPendentes = 0;
+        let cobrancasVencidas = 0;
+        // Contado aqui, no MESMO recorte do valor. O número de inadimplentes
+        // que o painel mostrava vinha de outra procedure, sem recorte de
+        // período — ficava "R$ 15 mil vencidos" ao lado de "579 clientes",
+        // dois recortes diferentes lado a lado lidos como um só.
+        const clientesVencidos = new Set<string>();
 
         for (const c of cobrancas) {
           const valor = parseFloat(c.valor) || 0;
           const pago = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status);
+          const venceu =
+            c.status === "OVERDUE" ||
+            (c.status === "PENDING" && !!c.vencimento && c.vencimento < hoje);
 
           if (pago) {
             // Bucket de "recebido" é a data do pagamento (cai no dia certo
@@ -469,16 +558,20 @@ export const dashboardRouter = router({
             totalRecebido += valor;
             const dia = (c.dataPagamento || c.vencimento || "").slice(0, 10);
             if (porDia.has(dia)) porDia.get(dia)!.recebido += valor;
-          } else if (c.status === "PENDING") {
-            if (c.vencimento && c.vencimento < hoje) {
-              totalVencido += valor;
-            } else {
-              totalPendente += valor;
-              const dia = (c.vencimento || "").slice(0, 10);
-              if (porDia.has(dia)) porDia.get(dia)!.pendente += valor;
-            }
-          } else if (c.status === "OVERDUE") {
+          } else if (venceu) {
             totalVencido += valor;
+            cobrancasVencidas += 1;
+            if (c.contatoId) clientesVencidos.add(String(c.contatoId));
+            // Vencido entra no gráfico pelo DIA DO VENCIMENTO — é a data em
+            // que o dinheiro deveria ter entrado, que é o que a linha do
+            // recebido responde no mesmo eixo.
+            const dia = (c.vencimento || "").slice(0, 10);
+            if (porDia.has(dia)) porDia.get(dia)!.vencido += valor;
+          } else if (c.status === "PENDING") {
+            totalPendente += valor;
+            cobrancasPendentes += 1;
+            const dia = (c.vencimento || "").slice(0, 10);
+            if (porDia.has(dia)) porDia.get(dia)!.pendente += valor;
           }
         }
 
@@ -486,12 +579,21 @@ export const dashboardRouter = router({
           data,
           recebido: Math.round(v.recebido * 100) / 100,
           pendente: Math.round(v.pendente * 100) / 100,
+          vencido: Math.round(v.vencido * 100) / 100,
         }));
 
-        return { pontos, totalRecebido, totalPendente, totalVencido };
+        return {
+          pontos,
+          totalRecebido,
+          totalPendente,
+          totalVencido,
+          cobrancasPendentes,
+          cobrancasVencidas,
+          clientesVencidos: clientesVencidos.size,
+        };
       } catch (err) {
         log.warn({ err: String(err) }, "Falha ao calcular cash flow");
-        return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+        return VAZIO;
       }
     }),
 

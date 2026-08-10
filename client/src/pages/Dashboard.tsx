@@ -30,6 +30,13 @@ import { AvisoBanner } from "./dashboards/common";
 type SetorTipo = "comercial" | "operacional" | "suporte" | "financeiro" | "outro";
 type Aba = "geral" | "comercial" | "operacional" | "financeiro";
 
+const ABAS: Array<{ valor: Aba; rotulo: string; icone: typeof LayoutDashboard }> = [
+  { valor: "geral", rotulo: "Geral", icone: LayoutDashboard },
+  { valor: "comercial", rotulo: "Comercial", icone: Handshake },
+  { valor: "operacional", rotulo: "Operacional", icone: Briefcase },
+  { valor: "financeiro", rotulo: "Financeiro", icone: Wallet },
+];
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [, nav] = useLocation();
@@ -143,36 +150,21 @@ function DashboardComTabs({
   return (
     <div className="space-y-4">
       <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)} className="w-full">
-        <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex">
-          <TabsList className="bg-transparent gap-1 p-0 h-auto">
-            <TabsTrigger
-              value="geral"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
-            >
-              <LayoutDashboard className="h-3.5 w-3.5" />
-              Geral
-            </TabsTrigger>
-            <TabsTrigger
-              value="comercial"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
-            >
-              <Handshake className="h-3.5 w-3.5" />
-              Comercial
-            </TabsTrigger>
-            <TabsTrigger
-              value="operacional"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
-            >
-              <Briefcase className="h-3.5 w-3.5" />
-              Operacional
-            </TabsTrigger>
-            <TabsTrigger
-              value="financeiro"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
-            >
-              <Wallet className="h-3.5 w-3.5" />
-              Financeiro
-            </TabsTrigger>
+        {/* Cores por token, não por `slate-*`/`bg-white` fixos: no tema escuro
+            a aba ativa ficava branca com texto branco por cima — sumia — e as
+            inativas viravam cinza sobre cinza. */}
+        <div className="inline-flex rounded-md border bg-muted p-1.5">
+          <TabsList className="h-auto gap-1 bg-transparent p-0">
+            {ABAS.map(({ valor, rotulo, icone: Icone }) => (
+              <TabsTrigger
+                key={valor}
+                value={valor}
+                className="gap-1.5 rounded-md px-3 py-1.5 text-xs text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:data-[state=active]:bg-background"
+              >
+                <Icone className="h-3.5 w-3.5" />
+                {rotulo}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </div>
 

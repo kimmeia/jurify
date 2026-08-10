@@ -304,10 +304,10 @@ function LinhaRanking({ colocacao, card }: { colocacao: number; card: any }) {
 function SkeletonPainel() {
   return (
     <div className="space-y-4">
-      <div className="h-48 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-100 animate-pulse" />
+      <div className="h-48 rounded-lg bg-gradient-to-br from-slate-200 to-slate-100 animate-pulse" />
       <div className="grid grid-cols-3 gap-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-24 rounded-xl bg-slate-100 animate-pulse" />
+          <div key={i} className="h-24 rounded-md bg-slate-100 animate-pulse" />
         ))}
       </div>
     </div>
