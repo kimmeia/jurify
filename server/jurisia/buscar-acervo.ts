@@ -71,6 +71,9 @@ export async function buscarRecorte(
       resultado: jurisiaProcessos.resultado,
       grau: jurisiaProcessos.grau,
       quantidade: sql<number>`COUNT(*)`,
+      // Só entre os decididos: transitado sem desfecho classificado não diz
+      // nada sobre "quanto costuma dar", e somá-lo inflaria a fração.
+      transitados: sql<number>`SUM(CASE WHEN ${jurisiaProcessos.transitadoEm} IS NOT NULL AND ${jurisiaProcessos.resultado} IS NOT NULL THEN 1 ELSE 0 END)`,
     })
     .from(jurisiaProcessos)
     .where(onde)
@@ -79,9 +82,11 @@ export async function buscarRecorte(
   const porResultado = { ...ZERO };
   const porGrau: Array<{ grau: string | null; quantidade: number }> = [];
   let total = 0;
+  let transitados = 0;
   for (const linha of agrupado) {
     const n = Number(linha.quantidade ?? 0);
     total += n;
+    transitados += Number(linha.transitados ?? 0);
     if (linha.resultado) porResultado[linha.resultado as ResultadoProcesso] += n;
     porGrau.push({ grau: linha.grau, quantidade: n });
   }
@@ -112,7 +117,7 @@ export async function buscarRecorte(
     .limit(opts?.maxFontes ?? MAX_FONTES_RECORTE);
 
   return {
-    estatistica: montarEstatistica(total, porResultado),
+    estatistica: { ...montarEstatistica(total, porResultado), transitados },
     natureza: contarNatureza(porGrau),
     processos: linhas.map((r) => ({
       id: r.id,
@@ -237,6 +242,55 @@ export async function composicaoDoAcervo(topo = 8): Promise<ComposicaoAcervo> {
     classesRestantes: Math.max(0, classes.length - topo),
     assuntosRestantes: Math.max(0, assuntos.length - topo),
     natureza: contarNatureza(graus),
+  };
+}
+
+/**
+ * Quantos processos do acervo têm desfecho, e por qual eixo.
+ *
+ * É a conferência que faltava: a varredura pode gravar 500 linhas com
+ * `resultadoRecurso` nulo em todas e o painel de progresso continuaria dizendo
+ * "500 no acervo", satisfeito. Sem este número, calibragem quebrada só
+ * apareceria quando um cliente pesquisasse e recebesse um gráfico vazio.
+ */
+export async function classificacaoDoAcervo(): Promise<{
+  total: number;
+  comDesfecho: number;
+  comRecurso: number;
+  semNada: number;
+  porRecurso: Array<{ resultado: string; quantidade: number }>;
+}> {
+  const db = await getDb();
+  if (!db) return { total: 0, comDesfecho: 0, comRecurso: 0, semNada: 0, porRecurso: [] };
+
+  const [linha] = await db
+    .select({
+      total: sql<number>`COUNT(*)`,
+      comDesfecho: sql<number>`SUM(CASE WHEN ${jurisiaProcessos.resultado} IS NOT NULL THEN 1 ELSE 0 END)`,
+      comRecurso: sql<number>`SUM(CASE WHEN ${jurisiaProcessos.resultadoRecurso} IS NOT NULL THEN 1 ELSE 0 END)`,
+      semNada: sql<number>`SUM(CASE WHEN ${jurisiaProcessos.resultado} IS NULL AND ${jurisiaProcessos.resultadoRecurso} IS NULL THEN 1 ELSE 0 END)`,
+    })
+    .from(jurisiaProcessos);
+
+  const fatias = await db
+    .select({
+      resultado: jurisiaProcessos.resultadoRecurso,
+      quantidade: sql<number>`COUNT(*)`,
+    })
+    .from(jurisiaProcessos)
+    .where(isNotNull(jurisiaProcessos.resultadoRecurso))
+    .groupBy(jurisiaProcessos.resultadoRecurso)
+    .orderBy(desc(sql`COUNT(*)`));
+
+  return {
+    total: Number(linha?.total ?? 0),
+    comDesfecho: Number(linha?.comDesfecho ?? 0),
+    comRecurso: Number(linha?.comRecurso ?? 0),
+    semNada: Number(linha?.semNada ?? 0),
+    porRecurso: fatias.map((f) => ({
+      resultado: String(f.resultado),
+      quantidade: Number(f.quantidade ?? 0),
+    })),
   };
 }
 

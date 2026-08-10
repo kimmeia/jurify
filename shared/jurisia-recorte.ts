@@ -61,6 +61,15 @@ export interface EstatisticaRecorte {
   fatias: FatiaResultado[];
   /** Estatística sobre punhado de caso é anedota. A tela precisa avisar. */
   amostraPequena: boolean;
+  /**
+   * Quantos dos decididos já transitaram em julgado.
+   *
+   * Opcional porque pesquisa gravada antes desta conta não tem o número — e
+   * `undefined` precisa ser lido como "não sei", nunca como zero: dizer
+   * "nenhum transitou" sobre um recorte que a gente não mediu é pior que
+   * calar.
+   */
+  transitados?: number;
 }
 
 /** Abaixo disso o percentual engana mais do que informa. */

@@ -194,6 +194,36 @@ function PainelPerfil({ p }: { p: PerfilRecorte }) {
 }
 
 /**
+ * Quanto do número já é definitivo.
+ *
+ * Sem isto, uma sentença procedente com apelação pendente conta como
+ * "procedente" e pode virar improcedente no ano seguinte — o painel estaria
+ * certo hoje e mentiroso depois, sem nada avisando.
+ *
+ * `transitados` ausente é "não medi", não zero. Pesquisa gravada antes desta
+ * conta não tem o número, e afirmar "nenhum transitou" sobre o que não foi
+ * medido é pior que ficar calado.
+ */
+function Transito({ e }: { e: EstatisticaRecorte }) {
+  if (e.transitados === undefined || e.comResultado === 0) return null;
+
+  const pct = Math.round((e.transitados * 100) / e.comResultado);
+  const provisorios = e.comResultado - e.transitados;
+
+  return (
+    <div className="mt-2 flex items-baseline gap-1.5 text-[11px]">
+      <span className="font-bold tabular-nums text-foreground">{pct}%</span>
+      <span className="text-muted-foreground">
+        já transitou em julgado
+        {provisorios > 0 && (
+          <> · {provisorios.toLocaleString("pt-BR")} ainda pode mudar em recurso</>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/**
  * Quanto do recorte é acórdão e quanto é sentença.
  *
  * Vem antes das barras de propósito: "isto é jurisprudência?" é uma pergunta
@@ -294,6 +324,7 @@ function PainelRecorte({
           <p className="mt-2 text-[10px] text-muted-foreground">
             Percentuais sobre os processos já decididos. Contagem do banco, não da IA.
           </p>
+          <Transito e={e} />
         </>
       ) : (
         // "Nenhum chegou ao fim" só é verdade quando HÁ processos. Com o
