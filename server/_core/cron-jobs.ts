@@ -230,6 +230,21 @@ export function iniciarJobs() {
   setTimeout(() => notificarPrazos(), 20000);
   setTimeout(() => verificarPrazosKanban(), 35000);
 
+  // Fila de ingestão do JurisIA: cada tick avança um pedaço da meta e grava.
+  // O tick é curto porque o progresso é commitado a cada ciclo — reiniciar o
+  // servidor custa um ciclo, não a tarefa inteira. Sem tarefa na fila o custo
+  // é uma consulta indexada que não devolve nada.
+  const rodarFilaJurisIa = async () => {
+    try {
+      const { rodarCicloFila } = await import("../jurisia/fila-ingestao");
+      await rodarCicloFila();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] fila JurisIA falhou");
+    }
+  };
+  setTimeout(rodarFilaJurisIa, 90 * 1000);
+  setInterval(rodarFilaJurisIa, 2 * 60 * 1000);
+
   // A cada 1 hora: expirar assinaturas + verificar prazos kanban
   setInterval(() => expirarAssinaturas(), 60 * 60 * 1000);
   setInterval(() => verificarPrazosKanban(), 60 * 60 * 1000);

@@ -118,6 +118,45 @@ export const adminRouter = router({
       .sort((a, b) => a.sigla.localeCompare(b.sigla));
   }),
 
+  // ─── Fila de ingestão ─────────────────────────────────────────────────────
+
+  jurisiaTarefas: adminProcedure.query(async () => {
+    const { listarTarefas } = await import("../jurisia/fila-ingestao");
+    return listarTarefas();
+  }),
+
+  /**
+   * Cria a meta e sai. O worker persegue em ciclos de 2 minutos.
+   *
+   * O teto de 200 mil não é arbitrário: é mais do que qualquer tribunal
+   * entrega num dia, e serve de guarda contra o zero a mais digitado sem
+   * querer numa tela de celular.
+   */
+  jurisiaCriarTarefa: adminProcedure
+    .input(
+      z.object({
+        tribunal: z.string().max(16).nullable(),
+        metaProcessos: z.number().int().min(100).max(200_000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { criarTarefa } = await import("../jurisia/fila-ingestao");
+      const id = await criarTarefa({
+        tribunal: input.tribunal,
+        metaProcessos: input.metaProcessos,
+        criadoPor: ctx.user.id,
+      });
+      return { id };
+    }),
+
+  jurisiaCancelarTarefa: adminProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ input }) => {
+      const { cancelarTarefa } = await import("../jurisia/fila-ingestao");
+      await cancelarTarefa(input.id);
+      return { ok: true };
+    }),
+
   /** O que seria apagado. A tela mostra isto antes de confirmar. */
   jurisiaContagemIngestao: adminProcedure.query(async () => {
     const { contarIngestao } = await import("../jurisia/zerar-ingestao");

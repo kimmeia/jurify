@@ -3952,6 +3952,42 @@ export const jurisiaMovimentos = mysqlTable(
   }),
 );
 
+/**
+ * Fila de ingestão — "quero N processos hoje".
+ *
+ * O botão de varredura é síncrono e faz poucas páginas por clique; com 59
+ * tribunais quem vira o laço de repetição é o admin. A tarefa guarda a meta e
+ * o worker a persegue em ciclos curtos.
+ */
+export const jurisiaTarefas = mysqlTable(
+  "jurisia_tarefas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    /** null = todos os tribunais, atacando sempre o mais atrasado. */
+    tribunal: varchar("tribunalJurisTar", { length: 16 }),
+    metaProcessos: int("metaProcessosJurisTar").notNull(),
+    processos: int("processosJurisTar").default(0).notNull(),
+    paginas: int("paginasJurisTar").default(0).notNull(),
+    status: mysqlEnum("statusJurisTar", [
+      "fila",
+      "rodando",
+      "concluida",
+      "cancelada",
+      "erro",
+    ])
+      .default("fila")
+      .notNull(),
+    ultimoErro: varchar("ultimoErroJurisTar", { length: 500 }),
+    criadoPor: int("criadoPorJurisTar"),
+    criadoEm: timestamp("criadoEmJurisTar").defaultNow().notNull(),
+    iniciadoEm: timestamp("iniciadoEmJurisTar"),
+    concluidoEm: timestamp("concluidoEmJurisTar"),
+  },
+  (t) => ({
+    porStatus: index("idx_jurisia_tarefa_status").on(t.status, t.id),
+  }),
+);
+
 /** Estado da varredura por tribunal — o cursor é o `search_after` do ES. */
 export const jurisiaVarredura = mysqlTable(
   "jurisia_varredura",
