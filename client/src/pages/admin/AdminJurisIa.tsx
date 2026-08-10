@@ -598,6 +598,8 @@ export default function AdminJurisIa() {
 function ResultadoAmostra({ dados }: { dados: any }) {
   const r = dados.porResultado ?? {};
   const classificados = Object.values(r).reduce((s: number, n) => s + Number(n), 0) as number;
+  const rec = dados.porRecurso ?? {};
+  const recursos = Object.values(rec).reduce((s: number, n) => s + Number(n), 0) as number;
 
   return (
     <Card className="border-violet-200">
@@ -638,6 +640,30 @@ function ResultadoAmostra({ dados }: { dados: any }) {
             </span>
           </div>
         </div>
+
+        {/* Instância superior não fala "procedência". Se este bloco vier
+            zerado num tribunal de recurso, a varredura ingeriria acórdão sem
+            desfecho nenhum — é a conferência que vale antes de varrer. */}
+        {recursos > 0 && (
+          <div>
+            <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+              Desfecho do recurso ({nf.format(recursos)} de {nf.format(dados.aceitos)})
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(rec)
+                .filter(([, v]) => Number(v) > 0)
+                .map(([k, v]) => (
+                  <span
+                    key={k}
+                    className="rounded border border-violet-200 bg-violet-50 px-2 py-1 text-xs text-violet-900 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-200"
+                  >
+                    {k.replace(/_/g, " ")}{" "}
+                    <b className="tabular-nums">{nf.format(Number(v))}</b>
+                  </span>
+                ))}
+            </div>
+          </div>
+        )}
 
         {dados.naoClassificados?.length > 0 && (
           <div>

@@ -15,6 +15,11 @@
 
 import { normalizarHit } from "./datajud-normalizar";
 import { deduzirDesfecho, type ResultadoProcesso } from "./datajud-desfecho";
+import {
+  deduzirDesfechoRecurso,
+  ORDEM_RECURSO,
+  type ResultadoRecurso,
+} from "./datajud-recurso";
 
 export interface ResumoAmostra {
   lidos: number;
@@ -23,6 +28,12 @@ export interface ResumoAmostra {
   invalidos: number;
   /** Quantos processos aceitos caíram em cada resultado. */
   porResultado: Record<ResultadoProcesso, number>;
+  /**
+   * O outro eixo. Num tribunal superior é este que enche e `porResultado` que
+   * fica zerado — se os dois vierem vazios, a calibragem falhou pra este
+   * tribunal e a varredura ingeriria processo sem desfecho nenhum.
+   */
+  porRecurso: Record<ResultadoRecurso, number>;
   semResultado: number;
   /**
    * Último movimento dos processos SEM resultado, por frequência. É o insumo
@@ -37,6 +48,7 @@ export interface ResumoAmostra {
     orgao: string | null;
     movimentos: number;
     resultado: ResultadoProcesso | null;
+    recurso: ResultadoRecurso | null;
     movimentoDecisivo: string | null;
   }>;
 }
@@ -49,8 +61,14 @@ const ZERO: Record<ResultadoProcesso, number> = {
   extinto_sem_merito: 0,
 };
 
+const ZERO_RECURSO = Object.fromEntries(ORDEM_RECURSO.map((r) => [r, 0])) as Record<
+  ResultadoRecurso,
+  number
+>;
+
 export function resumirAmostra(hits: unknown[], maxExemplos = 5): ResumoAmostra {
   const porResultado = { ...ZERO };
+  const porRecurso = { ...ZERO_RECURSO };
   const naoClassificados = new Map<string, number>();
   const exemplos: ResumoAmostra["exemplos"] = [];
 
@@ -69,8 +87,15 @@ export function resumirAmostra(hits: unknown[], maxExemplos = 5): ResumoAmostra 
     aceitos++;
 
     const d = deduzirDesfecho(n.movimentos);
+    const rec = deduzirDesfechoRecurso(n.movimentos);
+    if (rec) porRecurso[rec.resultado]++;
+
+    // "Sem resultado" agora quer dizer sem NENHUM dos dois eixos. Um acórdão
+    // do STJ não tem "procedência" e nem por isso está sem classificação.
     if (d) {
       porResultado[d.resultado]++;
+    } else if (rec) {
+      // classificado pelo outro eixo
     } else {
       semResultado++;
       // Só o ÚLTIMO movimento: é onde a sentença estaria. Contar todos
@@ -89,7 +114,8 @@ export function resumirAmostra(hits: unknown[], maxExemplos = 5): ResumoAmostra 
         orgao: n.processo.orgaoNome,
         movimentos: n.movimentos.length,
         resultado: d?.resultado ?? null,
-        movimentoDecisivo: d?.movimento ?? null,
+        recurso: rec?.resultado ?? null,
+        movimentoDecisivo: d?.movimento ?? rec?.movimento ?? null,
       });
     }
   }
@@ -100,6 +126,7 @@ export function resumirAmostra(hits: unknown[], maxExemplos = 5): ResumoAmostra 
     sigilosos,
     invalidos,
     porResultado,
+    porRecurso,
     semResultado,
     naoClassificados: [...naoClassificados.entries()]
       .map(([nome, vezes]) => ({ nome, vezes }))
