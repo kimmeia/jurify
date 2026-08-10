@@ -1,77 +1,58 @@
 /**
  * Dashboard COMERCIAL — pra setor tipo='comercial' (SDR, atendente, gestor).
  *
- * Visualmente foca em três indicadores conforme o pedido do produto:
- *   - Contratos fechados (qtd)
- *   - Contratos pagos (qtd)
- *   - % da meta atingido
+ * Mede três coisas conforme o briefing do produto: contratos fechados, contratos
+ * pagos e % da meta. Valores em R$ NÃO aparecem — o % usa `faturado/metaPeriodo`
+ * por baixo dos panos, mas o número absoluto fica fora da tela.
  *
- * NÃO mostra valores em R$ (faturado, meta em reais, ticket médio).
- * O cálculo do % usa `faturado / metaPeriodo` por baixo dos panos, mas
- * o número absoluto não aparece na UI — alinhado ao briefing.
- *
- * - Individual: hero (% meta) + 3 KPIs.
- * - Gestor: hero (% meta do time) + 3 KPIs do time + ranking.
+ * A meta ganhou um marcador de ritmo. Sem ele, "78% da meta" é ambíguo: no dia
+ * 5 é excelente e no dia 28 é problema, e o anel de progresso que vivia aqui
+ * desenhava a mesma figura nos dois casos.
  */
 
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent } from "@/components/ui/card";
+import { useLocation } from "wouter";
+import { AlertTriangle, ArrowRight, Handshake, Target } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
-  Handshake,
-  CheckCircle2,
-  Trophy,
-  Target,
-  User,
-} from "lucide-react";
-import {
-  Avatar,
-  HeroCard,
-  KPICard,
-  MetaPill,
-  NotaSetor,
-  PainelSection,
-  corPorPercentual,
-  corTextoPercentual,
+  AcaoCard,
+  BarraMeta,
+  BlocoPrincipal,
+  FaixaAcoes,
+  LinhaNumero,
+  LinhaRanking,
+  ListaCard,
+  PainelTopo,
+  Selo,
+  SubNumero,
+  SubNumeros,
+  formatDataCurta,
   formatPercent,
+  percentualDecorrido,
 } from "./common";
 
+/** Abaixo disto o colaborador entra na faixa de ação do topo. Menos de 40% da
+ *  meta com o mês correndo não se recupera sozinho — vira conversa. */
+const PISO_ATENCAO = 40;
+
 export default function DashboardComercial() {
+  const [, nav] = useLocation();
   const { data, isLoading } = (trpc as any).dashboard.comercial.useQuery(undefined, {
     refetchInterval: 60_000,
   });
 
-  if (isLoading) return <SkeletonPainel />;
-  if (!data) {
-    return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-sm text-muted-foreground">
-            Sem permissão para ver o painel comercial.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
+  if (isLoading) return <Esqueleto />;
+  if (!data) return <Aviso texto="Sem permissão para ver o painel comercial." />;
   if (!data.temSetor && data.modo === "individual") {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-sm text-muted-foreground">
-            Você não está atribuído a nenhum setor comercial. Solicite ao
-            administrador para vincular você a um setor do tipo "Comercial".
-          </p>
-        </CardContent>
-      </Card>
+      <Aviso texto='Você não está atribuído a nenhum setor comercial. Peça ao administrador para vincular você a um setor do tipo "Comercial".' />
     );
   }
 
   const meu = data.meu;
-  const ranking = data.ranking ?? [];
+  const ranking: any[] = data.ranking ?? [];
   const isGestor = data.modo === "gestor";
 
-  // ── Agregados pro hero do gestor (somatório do setor) ──
-  // Faturado é usado pra calcular o % de meta agregado, mas NÃO é exibido.
   const totais = isGestor
     ? ranking.reduce(
         (acc: any, c: any) => ({
@@ -83,217 +64,226 @@ export default function DashboardComercial() {
         { faturado: 0, contratosFechados: 0, contratosPagos: 0, metaPeriodo: 0 },
       )
     : null;
-  const progressoTime = totais && totais.metaPeriodo > 0
-    ? +((totais.faturado / totais.metaPeriodo) * 100).toFixed(1)
-    : null;
 
-  const heroProgresso = isGestor ? progressoTime : meu?.progressoMeta ?? null;
-  const fechados = isGestor ? totais!.contratosFechados : meu?.contratosFechados ?? 0;
-  const pagos = isGestor ? totais!.contratosPagos : meu?.contratosPagos ?? 0;
-  const taxaConversao = fechados > 0
-    ? +((pagos / fechados) * 100).toFixed(1)
-    : null;
-  const temMeta = isGestor
-    ? (totais!.metaPeriodo ?? 0) > 0
-    : (meu?.metaPeriodo ?? 0) > 0;
+  const progressoTime =
+    totais && totais.metaPeriodo > 0
+      ? +((totais.faturado / totais.metaPeriodo) * 100).toFixed(1)
+      : null;
+  const progresso = isGestor ? progressoTime : (meu?.progressoMeta ?? null);
+  const fechados = isGestor ? totais!.contratosFechados : (meu?.contratosFechados ?? 0);
+  const pagos = isGestor ? totais!.contratosPagos : (meu?.contratosPagos ?? 0);
+  const semPagamento = Math.max(0, fechados - pagos);
+  const conversao = fechados > 0 ? +((pagos / fechados) * 100).toFixed(1) : null;
+  const temMeta = isGestor ? (totais!.metaPeriodo ?? 0) > 0 : (meu?.metaPeriodo ?? 0) > 0;
+
+  const ritmo = percentualDecorrido(data.periodo?.dataInicio, data.periodo?.dataFim);
+  const noRitmo = progresso != null && ritmo != null && progresso >= ritmo;
+
+  const ordenado = [...ranking].sort((a, b) => {
+    const pa = a.progressoMeta ?? -1;
+    const pb = b.progressoMeta ?? -1;
+    if (pa === pb) return b.contratosPagos - a.contratosPagos;
+    return pb - pa;
+  });
+  const comMeta = ordenado.filter((c) => (c.metaPeriodo ?? 0) > 0);
+  const semMeta = ordenado.filter((c) => (c.metaPeriodo ?? 0) <= 0);
+  const bateram = comMeta.filter((c) => (c.progressoMeta ?? 0) >= 100).length;
+  const emAtencao = comMeta.filter((c) => (c.progressoMeta ?? 0) < PISO_ATENCAO).length;
+  const noCaminho = comMeta.length - bateram - emAtencao;
 
   return (
-    <PainelSection tema="comercial">
-      <HeroCard
-        tema="comercial"
-        setorLabel="Painel Comercial"
-        periodo={data.periodo}
-        decoracaoIcon={Handshake}
-        badgeDireito={
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/15 text-white border border-white/20">
-            {isGestor ? <Trophy className="w-3 h-3" /> : <User className="w-3 h-3" />}
-            {isGestor ? "Visão Gestor" : "Visão individual"}
+    <div className="space-y-3.5">
+      <PainelTopo
+        titulo="Painel Comercial"
+        subtitulo={
+          <span className="tabular-nums">
+            {isGestor ? "Visão gestor" : "Visão individual"} ·{" "}
+            {formatDataCurta(data.periodo?.dataInicio)} a {formatDataCurta(data.periodo?.dataFim)}
           </span>
         }
-        tituloPrincipal={
-          isGestor ? "Progresso da meta do time" : "Progresso da sua meta"
+        acao={
+          <Button variant="outline" size="sm" className="h-8 text-[12px]" onClick={() => nav("/relatorios")}>
+            Ver relatórios
+            <ArrowRight className="ml-1 h-3.5 w-3.5" />
+          </Button>
         }
-        valorPrincipal={
-          temMeta ? (
-            <>
-              {(heroProgresso ?? 0).toFixed(1)}
-              <span className="text-3xl">%</span>
-            </>
-          ) : (
-            <span className="text-3xl">Sem meta</span>
-          )
-        }
-        legenda={
-          <>
-            <b className="text-white">{fechados}</b> contrato{fechados !== 1 ? "s" : ""} fechado{fechados !== 1 ? "s" : ""}
-            {" · "}
-            <b className="text-white">{pagos}</b> pago{pagos !== 1 ? "s" : ""}
-            {taxaConversao != null && (
-              <>
-                {" · "}
-                <span className="text-emerald-200 font-medium">
-                  {formatPercent(taxaConversao, 0)} de conversão
-                </span>
-              </>
-            )}
-          </>
-        }
-        progresso={
-          temMeta
-            ? {
-                valor: heroProgresso ?? 0,
-                labelDir: (
-                  <span className="font-semibold text-white tabular-nums">
-                    {formatPercent(heroProgresso)}
-                  </span>
-                ),
-              }
-            : undefined
-        }
-        ringValue={temMeta ? (heroProgresso ?? 0) : undefined}
-        ringLabel={
-          temMeta && heroProgresso != null ? (
-            <>
-              {Math.round(heroProgresso)}
-              <span className="text-xl">%</span>
-            </>
-          ) : undefined
-        }
-        ringSublabel="da meta"
       />
 
-      {/* 3 KPIs: fechados · pagos · % meta */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <KPICard
-          label="Contratos fechados"
-          value={fechados}
-          icon={Handshake}
-          iconBg="bg-indigo-50"
-          iconFg="text-indigo-600"
-        />
-        <KPICard
-          label="Contratos pagos"
-          value={pagos}
-          icon={CheckCircle2}
-          iconBg="bg-emerald-50"
-          iconFg="text-emerald-600"
-          badge={
-            taxaConversao != null ? (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700">
-                {formatPercent(taxaConversao, 0)} conv
-              </span>
-            ) : undefined
-          }
-        />
-        <KPICard
-          label="% da meta"
-          value={temMeta ? formatPercent(heroProgresso) : "—"}
-          valueColor={corTextoPercentual(heroProgresso)}
-          icon={Target}
-          iconBg="bg-amber-50"
-          iconFg="text-amber-600"
-          hint={
-            !temMeta
-              ? "Configure a meta mensal do colaborador em Configurações → Equipe."
-              : undefined
-          }
-        />
-      </div>
+      {isGestor && (emAtencao > 0 || semMeta.length > 0 || semPagamento > 0) && (
+        <FaixaAcoes>
+          {emAtencao > 0 && (
+            <AcaoCard
+              icone={AlertTriangle}
+              valor={emAtencao}
+              label={`abaixo de ${PISO_ATENCAO}% da meta`}
+              critico
+              onClick={() => nav("/configuracoes?tab=equipe")}
+            />
+          )}
+          {semMeta.length > 0 && (
+            <AcaoCard
+              icone={Target}
+              valor={semMeta.length}
+              label={semMeta.length === 1 ? "colaborador sem meta definida" : "colaboradores sem meta definida"}
+              onClick={() => nav("/configuracoes?tab=equipe")}
+            />
+          )}
+          {semPagamento > 0 && (
+            <AcaoCard
+              icone={Handshake}
+              valor={semPagamento}
+              label="contratos fechados sem pagamento"
+              onClick={() => nav("/financeiro")}
+            />
+          )}
+        </FaixaAcoes>
+      )}
 
-      {/* Ranking (só gestor) */}
-      {isGestor && ranking.length > 0 && (
-        <Card className="border-slate-200 overflow-hidden p-0">
-          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-amber-500" />
-                Ranking do time comercial
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {ranking.length} colaborador(es) do setor — ordenado por % da meta
-              </p>
+      <div className="grid gap-3.5 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <BlocoPrincipal
+            rotulo={isGestor ? "Progresso da meta do time" : "Progresso da sua meta"}
+            valor={
+              temMeta && progresso != null ? (
+                <>
+                  {progresso.toFixed(1)}
+                  <span className="text-[22px]">%</span>
+                </>
+              ) : (
+                <span className="text-[22px]">Sem meta definida</span>
+              )
+            }
+            badge={
+              temMeta && ritmo != null ? (
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-bold ${
+                    noRitmo
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+                  }`}
+                >
+                  {noRitmo ? "Acima do ritmo do mês" : "Abaixo do ritmo do mês"}
+                </span>
+              ) : undefined
+            }
+            grafico={
+              temMeta ? (
+                <BarraMeta
+                  percentual={progresso ?? 0}
+                  referencia={ritmo}
+                  legendaReferencia={
+                    ritmo != null
+                      ? `ritmo esperado a esta altura do mês: ${Math.round(ritmo)}%`
+                      : "meta do período"
+                  }
+                  legendaDireita={
+                    <>
+                      <b className="text-foreground">{formatPercent(progresso)}</b>{" "}
+                      {isGestor ? "da meta do time" : "da sua meta"}
+                    </>
+                  }
+                />
+              ) : (
+                <p className="px-4 pb-4 pt-3 text-[11.5px] text-muted-foreground">
+                  Sem meta cadastrada para o período. Defina em Configurações → Equipe para
+                  acompanhar o progresso aqui.
+                </p>
+              )
+            }
+          >
+            <SubNumeros>
+              <SubNumero
+                label="Contratos fechados"
+                valor={fechados}
+                hint={semPagamento > 0 ? `${semPagamento} ainda sem pagamento` : undefined}
+              />
+              <SubNumero label="Contratos pagos" valor={pagos} hint="no período" />
+              <SubNumero
+                label="Conversão"
+                valor={formatPercent(conversao, 1)}
+                hint="pagos sobre fechados"
+              />
+            </SubNumeros>
+          </BlocoPrincipal>
+        </div>
+
+        {isGestor && (
+          <div className="relative min-h-0">
+            <div className="lg:absolute lg:inset-0">
+              <ListaCard
+                titulo="Como está o time"
+                subtitulo={`${ranking.length} ${ranking.length === 1 ? "pessoa" : "pessoas"} no setor comercial`}
+                esticar
+                rodape={
+                  <>
+                    <span>Ordenado por % da meta</span>
+                    <span>Atualiza a cada minuto</span>
+                  </>
+                }
+              >
+                <LinhaNumero label="Bateram a meta" valor={bateram} hint="100% ou mais" />
+                <LinhaNumero
+                  label="No caminho"
+                  valor={noCaminho}
+                  hint={`entre ${PISO_ATENCAO}% e 99%`}
+                />
+                <LinhaNumero
+                  label="Precisam de atenção"
+                  valor={emAtencao + semMeta.length}
+                  hint={`abaixo de ${PISO_ATENCAO}% ou sem meta`}
+                  ruim={emAtencao + semMeta.length > 0}
+                />
+              </ListaCard>
             </div>
           </div>
-          <div className="p-2 divide-y divide-slate-100">
-            {[...ranking]
-              .sort((a: any, b: any) => {
-                // Quem tem meta primeiro; dentro disso, maior % primeiro
-                const pa = a.progressoMeta ?? -1;
-                const pb = b.progressoMeta ?? -1;
-                if (pa === pb) return b.contratosPagos - a.contratosPagos;
-                return pb - pa;
-              })
-              .map((c: any, i: number) => (
-                <LinhaRanking key={c.atendenteId} colocacao={i + 1} card={c} />
-              ))}
-          </div>
-          <NotaSetor>
-            Apenas usuários do setor <b>Comercial</b> aparecem aqui — quem é
-            operacional, financeiro ou suporte fica fora.
-          </NotaSetor>
-        </Card>
-      )}
-    </PainelSection>
-  );
-}
+        )}
 
-// ─── Linha do ranking ────────────────────────────────────────────────────────
-
-function LinhaRanking({ colocacao, card }: { colocacao: number; card: any }) {
-  const pillCol =
-    colocacao === 1
-      ? "bg-gradient-to-br from-amber-200 to-yellow-400 text-amber-900"
-      : colocacao === 2
-        ? "bg-gradient-to-br from-slate-200 to-slate-400 text-slate-700"
-        : colocacao === 3
-          ? "bg-gradient-to-br from-orange-200 to-orange-400 text-orange-900"
-          : "bg-slate-100 text-slate-500";
-
-  const progresso = card.progressoMeta;
-  const temMeta = card.metaPeriodo != null && card.metaPeriodo > 0;
-  const corBar = corPorPercentual(progresso);
-  const corPercent = corTextoPercentual(progresso);
-
-  return (
-    <div className="grid grid-cols-[28px_40px_1fr_180px] gap-4 items-center p-3 rounded-xl hover:bg-slate-50/70 transition-colors">
-      <div className="flex justify-center">
-        <div className={`w-7 h-7 rounded-full ${pillCol} font-bold text-xs flex items-center justify-center shadow-sm`}>
-          {colocacao}
-        </div>
-      </div>
-      <Avatar nome={card.nome} />
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-semibold truncate">{card.nome}</p>
-          {colocacao === 1 && progresso != null && progresso >= 100 && (
-            <MetaPill tom="amber">TOP</MetaPill>
-          )}
-          {progresso != null && progresso >= 100 && colocacao !== 1 && (
-            <MetaPill tom="emerald">META</MetaPill>
-          )}
-          {temMeta && progresso != null && progresso < 40 && (
-            <MetaPill tom="rose">ATENÇÃO</MetaPill>
-          )}
-          {!temMeta && <MetaPill tom="slate">SEM META</MetaPill>}
-        </div>
-        <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground tabular-nums">
-          <span><b className="text-indigo-600 font-semibold">{card.contratosFechados}</b> fechados</span>
-          <span><b className="text-emerald-600 font-semibold">{card.contratosPagos}</b> pagos</span>
-        </div>
-      </div>
-      <div>
-        <div className="flex items-baseline justify-end gap-1 mb-1">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Meta</span>
-          <span className={`text-lg font-semibold tabular-nums ${corPercent}`}>
-            {temMeta ? formatPercent(progresso) : "—"}
-          </span>
-        </div>
-        {temMeta && (
-          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full bg-gradient-to-r ${corBar}`}
-              style={{ width: `${Math.max(0, Math.min(100, progresso ?? 0))}%` }}
-            />
+        {isGestor && ranking.length > 0 && (
+          <div className="lg:col-span-3">
+            <ListaCard
+              titulo="Ranking do time comercial"
+              subtitulo="Só quem é do setor Comercial aparece aqui"
+              acaoLabel="Ver equipe"
+              onAcao={() => nav("/configuracoes?tab=equipe")}
+              rodape={
+                <>
+                  <span>
+                    {ranking.length} {ranking.length === 1 ? "colaborador" : "colaboradores"} ·{" "}
+                    {fechados} fechados · {pagos} pagos
+                  </span>
+                  {emAtencao > 0 && (
+                    <span className="font-semibold text-rose-600 dark:text-rose-400">
+                      {emAtencao} abaixo de {PISO_ATENCAO}%
+                    </span>
+                  )}
+                </>
+              }
+            >
+              {ordenado.map((c: any, i: number) => {
+                const temMetaLinha = (c.metaPeriodo ?? 0) > 0;
+                const pct = temMetaLinha ? (c.progressoMeta ?? 0) : null;
+                return (
+                  <LinhaRanking
+                    key={c.atendenteId}
+                    posicao={i + 1}
+                    nome={c.nome}
+                    indice={i}
+                    detalhe={`${c.contratosFechados} fechados · ${c.contratosPagos} pagos`}
+                    percentual={pct}
+                    ruim={pct != null && pct < PISO_ATENCAO}
+                    selo={
+                      !temMetaLinha ? (
+                        <Selo tom="neutro">sem meta</Selo>
+                      ) : pct != null && pct >= 100 ? (
+                        <Selo tom="ok">{i === 0 ? "top" : "meta"}</Selo>
+                      ) : pct != null && pct < PISO_ATENCAO ? (
+                        <Selo tom="ruim">atenção</Selo>
+                      ) : undefined
+                    }
+                  />
+                );
+              })}
+            </ListaCard>
           </div>
         )}
       </div>
@@ -301,14 +291,26 @@ function LinhaRanking({ colocacao, card }: { colocacao: number; card: any }) {
   );
 }
 
-function SkeletonPainel() {
+function Aviso({ texto }: { texto: string }) {
   return (
-    <div className="space-y-4">
-      <div className="h-48 rounded-lg bg-gradient-to-br from-slate-200 to-slate-100 animate-pulse" />
-      <div className="grid grid-cols-3 gap-3">
+    <div className="rounded-md border bg-card px-4 py-6">
+      <p className="text-sm text-muted-foreground">{texto}</p>
+    </div>
+  );
+}
+
+function Esqueleto() {
+  return (
+    <div className="space-y-3.5">
+      <div className="h-14 animate-pulse rounded-md bg-muted" />
+      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-24 rounded-md bg-slate-100 animate-pulse" />
+          <div key={i} className="h-[62px] animate-pulse rounded-md bg-muted" />
         ))}
+      </div>
+      <div className="grid gap-3.5 lg:grid-cols-3">
+        <div className="h-56 animate-pulse rounded-md bg-muted lg:col-span-2" />
+        <div className="h-56 animate-pulse rounded-md bg-muted" />
       </div>
     </div>
   );
