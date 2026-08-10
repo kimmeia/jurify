@@ -12,7 +12,7 @@
  * canvas idêntico ao que o usuário deixou — auto-organizar é ação manual.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -46,7 +46,7 @@ import "@xyflow/react/dist/style.css";
 import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Banknote, BookOpen, Brain, Bot, Calendar, CheckCircle2, ChevronDown, Circle,
-  CircleDollarSign, Clock, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle, MessageCircleQuestion, Shuffle,
+  CircleDollarSign, Clock, Copy, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle, MessageCircleQuestion, Shuffle,
   Move, Pause, PhoneCall, Play, Plus, Repeat, Save, Search, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, X, Zap,
   CalendarCheck, Trash2, XCircle,
   Variable as VariableIcon,
@@ -103,6 +103,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EditorTopbar } from "./smartflow/editor-topbar";
 import { EditorPaleta } from "./smartflow/editor-paleta";
+import { arestasDaCopia, duplicarNo } from "./smartflow/editor-duplicar";
 import { EditorTestarDialog } from "./smartflow/editor-testar-dialog";
 import { EditorCanvasToolbar, calcularAutoLayout } from "./smartflow/editor-canvas-toolbar";
 import { variaveisPublicadasPorPasso } from "./smartflow/editor-painel-saida";
@@ -270,7 +271,34 @@ const FERRAMENTA_ATENDENTE_LABEL: Record<string, string> = {
   buscar_processo: "📂 ver processo →",
 };
 
-function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
+/**
+ * Barrinha que aparece ao passar o mouse. Fica ACIMA do nó, não dentro: por
+ * cima do cabeçalho ela cobriria o nome do bloco — foi o que o mockup pegou.
+ */
+function BarraAcoesNo({ nodeId }: { nodeId: string }) {
+  const acoes = useContext(AcoesNoContext);
+  if (!acoes) return null;
+  return (
+    <div className="absolute -top-8 right-0 z-10 hidden gap-0.5 rounded-lg border bg-card p-0.5 shadow-lg group-hover:flex">
+      <button
+        onClick={(e) => { e.stopPropagation(); acoes.duplicar(nodeId); }}
+        title="Duplicar bloco (Ctrl+D)"
+        className="flex h-6 w-6 items-center justify-center rounded text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40"
+      >
+        <Copy className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); acoes.excluir(nodeId); }}
+        title="Excluir bloco (Del)"
+        className="flex h-6 w-6 items-center justify-center rounded text-destructive hover:bg-red-50 dark:hover:bg-red-950/40"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function PassoNodeView({ id, data, selected }: NodeProps<PassoNode>) {
   const meta = getTipoPassoMeta(data.tipo);
   const Icon = TIPO_ICON[data.tipo] ?? Zap;
   const resumo = resumirConfig(data.tipo, data.config);
@@ -310,10 +338,11 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
 
   return (
     <div
-      className={`rounded-xl border-2 shadow-sm bg-card min-w-[230px] max-w-[290px] overflow-hidden transition-shadow ${
+      className={`group relative rounded-xl border-2 shadow-sm bg-card min-w-[230px] max-w-[290px] overflow-visible transition-shadow ${
         selected ? "ring-2 ring-violet-400 ring-offset-1 border-violet-400" : cor.border
       }`}
     >
+      <BarraAcoesNo nodeId={id} />
       <Handle type="target" position={Position.Left} className="!bg-muted-foreground/40" />
 
       {/* Header com gradiente da família + status dot */}
@@ -705,6 +734,103 @@ const edgeTypes = { removivel: RemovivelEdge };
  * o nó na posição e conecta automaticamente. Fecha em Escape ou clique
  * fora.
  */
+/**
+ * Menu do botão direito num bloco. Curto de propósito: as quatro coisas que
+ * se faz com um bloco pronto. O que configura vive no inspetor.
+ */
+function MenuDoNo({
+  x,
+  y,
+  ehGatilho,
+  onDuplicar,
+  onExcluir,
+  onDesligar,
+  onFechar,
+}: {
+  x: number;
+  y: number;
+  ehGatilho: boolean;
+  onDuplicar: () => void;
+  onExcluir: () => void;
+  onDesligar: () => void;
+  onFechar: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onFechar();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onFechar]);
+
+  const Item = ({
+    onClick,
+    icone,
+    texto,
+    atalho,
+    perigo,
+  }: {
+    onClick: () => void;
+    icone: React.ReactNode;
+    texto: string;
+    atalho?: string;
+    perigo?: boolean;
+  }) => (
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[12.5px] font-medium hover:bg-accent ${
+        perigo ? "text-destructive" : "text-foreground/85"
+      }`}
+    >
+      {icone}
+      <span className="flex-1">{texto}</span>
+      {atalho && (
+        <kbd className="rounded border bg-muted/60 px-1.5 py-px text-[10px] font-semibold text-muted-foreground">
+          {atalho}
+        </kbd>
+      )}
+    </button>
+  );
+
+  return (
+    <>
+      <div onClick={onFechar} onContextMenu={(e) => { e.preventDefault(); onFechar(); }} className="fixed inset-0 z-40" />
+      <div
+        className="fixed z-50 w-[214px] rounded-xl border bg-popover p-1 shadow-lg"
+        style={{ top: y, left: x }}
+      >
+        {ehGatilho ? (
+          <p className="px-2.5 py-2 text-[11.5px] text-muted-foreground">
+            O gatilho é único do fluxo — não dá pra duplicar nem excluir.
+          </p>
+        ) : (
+          <>
+            <Item
+              onClick={onDuplicar}
+              icone={<Copy className="h-3.5 w-3.5 text-violet-600" />}
+              texto="Duplicar bloco"
+              atalho="Ctrl D"
+            />
+            <Item
+              onClick={onDesligar}
+              icone={<Eraser className="h-3.5 w-3.5" />}
+              texto="Desligar das setas"
+            />
+            <div className="my-1 h-px bg-border" />
+            <Item
+              onClick={onExcluir}
+              icone={<Trash2 className="h-3.5 w-3.5" />}
+              texto="Excluir bloco"
+              atalho="Del"
+              perigo
+            />
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
 function MenuConectarPasso({
   x,
   y,
@@ -967,6 +1093,16 @@ function novoClienteId(): string {
   return "cli_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
 }
 
+/**
+ * Ações que a barrinha do nó dispara. Vai por contexto porque `PassoNodeView`
+ * é instanciado pelo ReactFlow, não pelo editor — passar por `data` obrigaria
+ * a reescrever a função em todo nó a cada render.
+ */
+const AcoesNoContext = createContext<{
+  duplicar: (nodeId: string) => void;
+  excluir: (nodeId: string) => void;
+} | null>(null);
+
 function criarNode(tipo: TipoPasso, y: number, config: Record<string, unknown> = {}): PassoNode {
   const meta = getTipoPassoMeta(tipo);
   // Blocos novos de distribuição já nascem "Todos do setor" (rodízio entre
@@ -1069,6 +1205,7 @@ function SmartFlowEditorInner() {
   // Dialogs do editor
   const [testarOpen, setTestarOpen] = useState(false);
   const [paletaRecolhida, setPaletaRecolhida] = useState(true);
+  const [menuNo, setMenuNo] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const [excluirOpen, setExcluirOpen] = useState(false);
 
   // Canvas começa com um nó de gatilho default (mensagem_canal).
@@ -1492,6 +1629,35 @@ function SmartFlowEditorInner() {
     if (primeira) trocarGatilho(primeira);
   };
 
+  /**
+   * Duplica um bloco. A cópia nasce ao lado, já selecionada, com config
+   * própria — e SEM as setas de saída (`arestasDaCopia` explica por quê).
+   */
+  const duplicarPasso = (nodeId: string) => {
+    const origem = nodes.find((n) => n.id === nodeId);
+    if (!origem || origem.type !== "passo") {
+      toast.error("O gatilho não pode ser duplicado — todo fluxo tem um só.");
+      return;
+    }
+    const { no } = duplicarNo(origem as any, novoNodeId(), novoClienteId());
+    setNodes((nds) => [...nds, no as any]);
+    setEdges((eds) => [...eds, ...arestasDaCopia()]);
+    setSelectedId(no.id);
+    marcarDirty();
+    toast.success("Bloco duplicado — a cópia entrou ao lado, sem as ligações de saída.");
+  };
+
+  const removerNode = (nodeId: string) => {
+    if (nodeId === GATILHO_NODE_ID) {
+      toast.error("O gatilho não pode ser removido. Troque o tipo na paleta à esquerda.");
+      return;
+    }
+    setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+    setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+    setSelectedId((atual) => (atual === nodeId ? null : atual));
+    marcarDirty();
+  };
+
   const removerSelecionado = () => {
     if (!selectedId) return;
     if (selectedId === GATILHO_NODE_ID) {
@@ -1742,6 +1908,22 @@ function SmartFlowEditorInner() {
     );
   }
 
+  // Ctrl/Cmd+D duplica o bloco selecionado. Ignora quando o foco está num
+  // campo — dentro de um textarea o atalho pertence ao texto, não ao canvas.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.key === "d" || e.key === "D") || !(e.ctrlKey || e.metaKey)) return;
+      const alvo = e.target as HTMLElement | null;
+      const tag = alvo?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || alvo?.isContentEditable) return;
+      if (!selectedId || selectedId === GATILHO_NODE_ID) return;
+      e.preventDefault();
+      duplicarPasso(selectedId);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  });
+
   const salvando = criarMut.isPending || atualizarMut.isPending;
   // Largura do inspetor quando aberto — toolbar e minimapa se afastam pra não
   // ficarem embaixo dele.
@@ -1804,6 +1986,7 @@ function SmartFlowEditorInner() {
         notebook de 1366 sobrava menos da metade da tela pro fluxo — que é a
         única parte da tela onde se trabalha.
       */}
+      <AcoesNoContext.Provider value={{ duplicar: duplicarPasso, excluir: removerNode }}>
       <div className="relative flex flex-1 min-h-0">
         <EditorPaleta
           recolhida={paletaRecolhida}
@@ -1830,7 +2013,12 @@ function SmartFlowEditorInner() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={(_e, n) => setSelectedId(n.id)}
-            onPaneClick={() => setSelectedId(null)}
+            onNodeContextMenu={(e, n) => {
+              e.preventDefault();
+              setSelectedId(n.id);
+              setMenuNo({ x: e.clientX, y: e.clientY, nodeId: n.id });
+            }}
+            onPaneClick={() => { setSelectedId(null); setMenuNo(null); }}
             onConnectStart={onConnectStart}
             onConnectEnd={onConnectEnd}
             onInit={setRfInstance}
@@ -1879,6 +2067,22 @@ function SmartFlowEditorInner() {
                 …ou monte do zero: abra a paleta de passos.
               </button>
             </div>
+          )}
+
+          {menuNo && (
+            <MenuDoNo
+              x={menuNo.x}
+              y={menuNo.y}
+              ehGatilho={menuNo.nodeId === GATILHO_NODE_ID}
+              onFechar={() => setMenuNo(null)}
+              onDuplicar={() => { duplicarPasso(menuNo.nodeId); setMenuNo(null); }}
+              onExcluir={() => { removerNode(menuNo.nodeId); setMenuNo(null); }}
+              onDesligar={() => {
+                setEdges((eds) => eds.filter((e) => e.source !== menuNo.nodeId && e.target !== menuNo.nodeId));
+                marcarDirty();
+                setMenuNo(null);
+              }}
+            />
           )}
 
           {/* Menu de "conectar a um novo passo" — aparece quando o usuário
@@ -1961,6 +2165,7 @@ function SmartFlowEditorInner() {
           </div>
         )}
       </div>
+      </AcoesNoContext.Provider>
 
       {/* Dialog de teste — só faz sentido em cenário já salvo. */}
       {editandoId && gatilhoNode && (
