@@ -1,32 +1,21 @@
 /**
  * Dashboard GERAL — visão consolidada pra dono/admin.
  *
- * Aplica o mesmo padrão visual dos painéis setoriais (hero card com
- * gradient, KPI cards modernos, avatares no feed) mas com tema "geral"
- * (slate executive) e dados agregados do escritório inteiro.
+ * Organizado por pergunta, não por módulo: o que precisa de mim agora (faixa
+ * de ações), quanto entrou (bloco do dinheiro), o que tem no dia (calendário) e
+ * de onde vêm os fechamentos.
  *
- * Diferente dos painéis setoriais, aqui mostramos VALORES (R$ recebido,
- * vencido, pipeline) pra que o dono enxergue a saúde financeira de uma
- * vez só.
+ * Cada número aparece UMA vez, no lugar onde se age sobre ele, e sempre no
+ * mesmo recorte do rótulo que o acompanha — foi a mistura de recortes (valor do
+ * mês ao lado de contagem de todos os tempos) que fez a tela mentir antes.
  */
 
+import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import {
-  TrendingUp,
-  ArrowRight,
-  DollarSign,
-  MessageCircle,
-  CheckSquare,
-  Gavel,
-  AlertTriangle,
-  Activity,
-  Sparkles,
-  CalendarDays,
-} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ArrowRight, MessageCircle, Gavel, AlertTriangle, TrendingUp, CalendarDays } from "lucide-react";
 import { useLocation } from "wouter";
 import { moduloOcultoNoMenu } from "@/config/visibility";
 import {
@@ -47,7 +36,6 @@ import {
   LinhaLista,
   ListaCard,
   PainelTopo,
-  PulseDot,
   SubNumero,
   SubNumeros,
   formatBRL,
@@ -70,29 +58,6 @@ function rotaSegura(rotaOriginal: string, fallback: string): string {
   return rotaOriginal;
 }
 
-function formatRelative(ts: string) {
-  const diff = Date.now() - new Date(ts).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return "agora";
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}min`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d`;
-  return new Date(ts).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-}
-
-const ACTIVITY_ICONS: Record<string, { icon: any; color: string; bg: string }> = {
-  // Cada fundo precisa do par escuro: sem ele são seis quadradinhos claros
-  // acesos em cima de um card escuro.
-  pagamento: { icon: DollarSign, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/40" },
-  mensagem: { icon: MessageCircle, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/40" },
-  movimentacao: { icon: Gavel, color: "text-indigo-600 dark:text-indigo-400", bg: "bg-indigo-50 dark:bg-indigo-950/40" },
-  tarefa: { icon: CheckSquare, color: "text-violet-600 dark:text-violet-400", bg: "bg-violet-50 dark:bg-violet-950/40" },
-  agendamento: { icon: CalendarDays, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/40" },
-  lead: { icon: TrendingUp, color: "text-rose-600 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-950/40" },
-};
 
 /** Legenda das séries do gráfico. Duas linhas no mesmo eixo sem legenda
  *  obrigam a pessoa a adivinhar qual cor é o quê. */
@@ -130,15 +95,12 @@ export default function DashboardGeral() {
     undefined,
     { enabled: !!user, retry: false, refetchInterval: 120_000 },
   );
-  const { data: feed } = trpc.dashboard.activityFeed.useQuery(
-    { limit: 5 },
-    { enabled: !!user, retry: false, refetchInterval: 30_000 },
-  );
-
   const creditsUsed = credits?.creditsUsed ?? 0;
   const creditsTotal = credits?.creditsTotal ?? 50;
   const creditsRemaining = credits?.creditsRemaining ?? creditsTotal;
   const isUnlimited = creditsTotal >= 999_999;
+  const percentCreditos =
+    creditsTotal > 0 ? Math.min(100, Math.round((creditsUsed / creditsTotal) * 100)) : 0;
   const ok = !!r;
 
   const totalHoje = ok ? r.agenda.totalHojeCount : 0;
@@ -411,169 +373,320 @@ export default function DashboardGeral() {
             linha e a altura volta a ser a natural. */}
         <div className="relative min-h-0">
           <div className="lg:absolute lg:inset-0">
-          {ok && (
-            <ListaCard
-              titulo="Agenda de hoje"
-              subtitulo={dataPorExtenso}
-              acaoLabel="Ver agenda"
-              onAcao={() => nav("/agenda")}
-              esticar
-              topo={
-                <FaixaSemana
-                  dias={r.agenda.semana ?? []}
-                  onDia={(d) => nav(`/agenda?data=${d}`)}
-                />
-              }
-              rodape={
-                <>
-                  <span>
-                    {compromissosHoje} {compromissosHoje === 1 ? "compromisso" : "compromissos"} ·{" "}
-                    {tarefasHoje} {tarefasHoje === 1 ? "tarefa" : "tarefas"}
-                  </span>
-                  {r.agenda.atrasados > 0 && (
-                    <span className="font-semibold text-rose-600 dark:text-rose-400">
-                      {r.agenda.atrasados} atrasados
-                    </span>
-                  )}
-                </>
-              }
-            >
-              {totalHoje === 0 ? (
-                <p className="px-2 py-8 text-center text-xs text-muted-foreground">Dia tranquilo.</p>
-              ) : (
-                <>
-                  {r.agenda.compromissosHoje.map((c: any) => (
-                    <LinhaLista
-                      key={`c-${c.id}`}
-                      cor={c.cor || COR_SERIE}
-                      quando={c.hora}
-                      texto={c.titulo}
-                      onClick={() => nav("/agenda")}
-                    />
-                  ))}
-                  {r.agenda.tarefasHoje.map((t: any) => (
-                    <LinhaLista
-                      key={`t-${t.id}`}
-                      cor="var(--viz-4)"
-                      quando="—"
-                      texto={t.titulo}
-                      onClick={() => nav("/tarefas")}
-                    />
-                  ))}
-                  {/* As listas vêm com LIMIT 5. Sem esta linha o card mostrava
-                      cinco itens embaixo de um contador que dizia doze. */}
-                  {foraDaLista > 0 && (
-                    <button
-                      onClick={() => nav("/agenda")}
-                      className="mx-2 mt-1 rounded-md px-2 py-1.5 text-left text-[11.5px] font-semibold text-violet-600 hover:bg-accent dark:text-violet-400"
-                    >
-                      + {foraDaLista} {foraDaLista === 1 ? "item" : "itens"} na agenda de hoje
-                    </button>
-                  )}
-                </>
-              )}
-            </ListaCard>
-          )}
+            {ok && (
+              <CardAgenda
+                semana={r.agenda.semana ?? []}
+                hojeStr={diaDeHoje}
+                compromissosHoje={r.agenda.compromissosHoje}
+                tarefasHoje={r.agenda.tarefasHoje}
+                totalCompromissosHoje={compromissosHoje}
+                totalTarefasHoje={tarefasHoje}
+                atrasados={r.agenda.atrasados}
+                nav={nav}
+              />
+            )}
           </div>
         </div>
 
-        {/* Últimas movimentações do acervo */}
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                  Atividade recente
-                </CardTitle>
-                <PulseDot />
-              </div>
-            </CardHeader>
-            <CardContent>
-              {!feed || feed.length === 0 ? (
-                <div className="text-center py-8">
-                  <Activity className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
-                  <p className="text-xs text-muted-foreground">Nenhuma atividade recente.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {feed.slice(0, 5).map((item: any) => {
-                    const cfg = ACTIVITY_ICONS[item.tipo] || ACTIVITY_ICONS.mensagem;
-                    const Icon = cfg.icon;
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => item.link && nav(item.link)}
-                        className="flex items-start gap-3 group cursor-pointer"
-                      >
-                        <div className={`h-9 w-9 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
-                          <Icon className={`h-4 w-4 ${cfg.color}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold truncate group-hover:text-primary">
-                            {item.titulo}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground truncate">
-                            {item.descricao}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground/70 mt-0.5 tabular-nums">
-                            {formatRelative(item.timestamp)}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        {/* ═══════════ DE ONDE VEM O FECHAMENTO ═══════════ */}
+        <CardCampanhas nav={nav} />
+        <CardFunil />
 
         {/* Créditos */}
-        <div className="lg:self-start">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-violet-500" />
-                Créditos de cálculo
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {isUnlimited ? (
-                <div className="flex items-center gap-3">
-                  <div className="h-2 w-full rounded-full bg-emerald-100 dark:bg-emerald-950/50">
-                    <div className="h-2 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 w-full" />
-                  </div>
-                  <span className="text-xs text-emerald-600 font-semibold whitespace-nowrap">
-                    ∞ Ilimitado
+        <ListaCard
+          titulo="Créditos de cálculo"
+          subtitulo={isUnlimited ? "Plano sem limite" : "Consumo do saldo"}
+          rodape={
+            <>
+              <span>{isUnlimited ? "Sem limite de consumo" : `${percentCreditos}% do saldo consumido`}</span>
+              {credits?.resetAt && (
+                <span className="tabular-nums">
+                  Último reset em {formatDataCurta(new Date(credits.resetAt))}
+                </span>
+              )}
+            </>
+          }
+        >
+          <div className="space-y-3 px-2 pb-2 pt-3">
+            {isUnlimited ? (
+              <div className="flex items-center gap-3">
+                <div className="h-2 w-full rounded-full bg-emerald-100 dark:bg-emerald-950/50">
+                  <div className="h-2 w-full rounded-full bg-emerald-500" />
+                </div>
+                <span className="whitespace-nowrap text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  ∞ Ilimitado
+                </span>
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between text-xs">
+                  <span className="tabular-nums text-muted-foreground">
+                    <b className="text-foreground">{creditsUsed}</b> usados de{" "}
+                    <b className="text-foreground">{creditsTotal}</b>
+                  </span>
+                  <span className="tabular-nums text-muted-foreground">
+                    <b className="text-foreground">{creditsRemaining}</b> restante(s)
                   </span>
                 </div>
-              ) : (
-                <>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground tabular-nums">
-                      <b className="text-foreground">{creditsUsed}</b> usados de{" "}
-                      <b className="text-foreground">{creditsTotal}</b>
-                    </span>
-                    <span className="text-muted-foreground tabular-nums">
-                      <b className="text-foreground">{creditsRemaining}</b> restante(s)
-                    </span>
-                  </div>
-                  <Progress
-                    value={
-                      creditsTotal > 0
-                        ? Math.min(100, Math.round((creditsUsed / creditsTotal) * 100))
-                        : 0
-                    }
-                    className="h-2"
-                  />
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                <Progress value={percentCreditos} className="h-2" />
+              </>
+            )}
+          </div>
+        </ListaCard>
       </div>
     </div>
+  );
+}
+
+// ─── Agenda navegável ────────────────────────────────────────────────────────
+
+/**
+ * O card do dia, com a semana clicável.
+ *
+ * Clicar num dia carrega aquele dia AQUI. Mandar pra /agenda respondia a mesma
+ * pergunta trocando a tela inteira — e a pessoa já estava olhando a resposta
+ * para hoje no mesmo card.
+ *
+ * O dia de hoje não dispara consulta: os dados já vieram no resumo. Isso é
+ * `enabled`, não retorno antecipado — hook depois de `return` muda a contagem
+ * entre renders e o React derruba a tela.
+ */
+function CardAgenda({
+  semana,
+  hojeStr,
+  compromissosHoje,
+  tarefasHoje,
+  totalCompromissosHoje,
+  totalTarefasHoje,
+  atrasados,
+  nav,
+}: {
+  semana: Array<{ data: string; total: number; hoje: boolean }>;
+  hojeStr?: string;
+  compromissosHoje: any[];
+  tarefasHoje: any[];
+  totalCompromissosHoje: number;
+  totalTarefasHoje: number;
+  atrasados: number;
+  nav: (rota: string) => void;
+}) {
+  const diaHoje = hojeStr ?? semana.find((d) => d.hoje)?.data ?? "";
+  const [diaAberto, setDiaAberto] = useState<string>(diaHoje);
+  const ehHoje = diaAberto === diaHoje;
+
+  const { data: doDia, isFetching } = trpc.dashboard.agendaDoDia.useQuery(
+    { data: diaAberto },
+    { enabled: !ehHoje && !!diaAberto, retry: false },
+  );
+
+  // Hoje sai do resumo que já está em memória; outro dia, da consulta.
+  const compromissos = ehHoje ? compromissosHoje : (doDia?.compromissos ?? []);
+  const listaTarefas = ehHoje ? tarefasHoje : (doDia?.tarefas ?? []);
+  const totalCompromissos = ehHoje ? totalCompromissosHoje : (doDia?.totalCompromissos ?? 0);
+  const totalTarefas = ehHoje ? totalTarefasHoje : (doDia?.totalTarefas ?? 0);
+  const total = totalCompromissos + totalTarefas;
+  const foraDaLista = Math.max(0, total - (compromissos.length + listaTarefas.length));
+
+  const rotuloDia = new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  })
+    .format(diaAberto ? new Date(`${diaAberto}T12:00:00`) : new Date())
+    .replace(/^./, (c) => c.toUpperCase());
+
+  return (
+    <ListaCard
+      titulo={ehHoje ? "Agenda de hoje" : "Agenda do dia"}
+      subtitulo={rotuloDia}
+      acaoLabel={ehHoje ? "Ver agenda" : "Voltar pra hoje"}
+      onAcao={() => (ehHoje ? nav("/agenda") : setDiaAberto(diaHoje))}
+      esticar
+      topo={
+        <FaixaSemana
+          dias={semana}
+          diaAberto={diaAberto}
+          onDia={(d) => setDiaAberto(d)}
+        />
+      }
+      rodape={
+        <>
+          <span>
+            {totalCompromissos} {totalCompromissos === 1 ? "compromisso" : "compromissos"} ·{" "}
+            {totalTarefas} {totalTarefas === 1 ? "tarefa" : "tarefas"}
+          </span>
+          {atrasados > 0 && (
+            <span className="font-semibold text-rose-600 dark:text-rose-400">
+              {atrasados} atrasados
+            </span>
+          )}
+        </>
+      }
+    >
+      {isFetching && !ehHoje ? (
+        <p className="px-2 py-8 text-center text-xs text-muted-foreground">Carregando…</p>
+      ) : total === 0 ? (
+        <p className="px-2 py-8 text-center text-xs text-muted-foreground">
+          {ehHoje ? "Dia tranquilo." : "Nada marcado nesse dia."}
+        </p>
+      ) : (
+        <>
+          {compromissos.map((c: any) => (
+            <LinhaLista
+              key={`c-${c.id}`}
+              cor={c.cor || COR_SERIE}
+              quando={c.hora}
+              texto={c.titulo}
+              onClick={() => nav("/agenda")}
+            />
+          ))}
+          {listaTarefas.map((t: any) => (
+            <LinhaLista
+              key={`t-${t.id}`}
+              cor="var(--viz-4)"
+              quando="—"
+              texto={t.titulo}
+              onClick={() => nav("/tarefas")}
+            />
+          ))}
+          {/* As listas vêm cortadas. Sem esta linha o card mostrava cinco itens
+              embaixo de um contador que dizia doze. */}
+          {foraDaLista > 0 && (
+            <button
+              onClick={() => nav("/agenda")}
+              className="mx-2 mt-1 rounded-md px-2 py-1.5 text-left text-[11.5px] font-semibold text-violet-600 hover:bg-accent dark:text-violet-400"
+            >
+              + {foraDaLista} {foraDaLista === 1 ? "item" : "itens"} nesse dia
+            </button>
+          )}
+        </>
+      )}
+    </ListaCard>
+  );
+}
+
+// ─── De onde vem o fechamento ────────────────────────────────────────────────
+
+function CardCampanhas({ nav }: { nav: (rota: string) => void }) {
+  const { data } = trpc.dashboard.desempenhoComercial.useQuery(undefined, {
+    retry: false,
+    refetchInterval: 120_000,
+  });
+  const campanhas = data?.campanhas ?? [];
+  const maior = campanhas[0]?.fechamentos ?? 0;
+
+  return (
+    <ListaCard
+      titulo="Campanhas que mais fecham"
+      subtitulo="Origem dos negócios ganhos no mês"
+      acaoLabel="Ver funil"
+      onAcao={() => nav("/kanban")}
+      rodape={
+        campanhas.length > 0 ? (
+          <>
+            <span>
+              {data?.ganhos ?? 0} {(data?.ganhos ?? 0) === 1 ? "fechamento" : "fechamentos"} no mês
+            </span>
+            <span className="font-semibold text-foreground">{formatBRL(data?.valorGanho ?? 0)}</span>
+          </>
+        ) : undefined
+      }
+    >
+      {campanhas.length === 0 ? (
+        <p className="px-2 py-6 text-center text-[11.5px] leading-relaxed text-muted-foreground">
+          Nenhum negócio fechado neste mês.
+        </p>
+      ) : (
+        <div className="space-y-2 px-2 pb-1 pt-2">
+          {campanhas.map((c, i) => (
+            <div key={c.origem}>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="min-w-0 truncate text-[12.5px] font-semibold">{c.origem}</span>
+                <span className="shrink-0 text-[12px] font-bold tabular-nums">
+                  {c.fechamentos}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                  <span
+                    className="block h-full rounded-full"
+                    style={{
+                      width: `${maior > 0 ? Math.round((c.fechamentos / maior) * 100) : 0}%`,
+                      background: i === 0 ? COR_SERIE : "var(--viz-3)",
+                    }}
+                  />
+                </span>
+                <span className="shrink-0 text-[10.5px] tabular-nums text-muted-foreground">
+                  {formatBRL(c.valor)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </ListaCard>
+  );
+}
+
+function CardFunil() {
+  const { data } = trpc.dashboard.desempenhoComercial.useQuery(undefined, {
+    retry: false,
+    refetchInterval: 120_000,
+  });
+  const ganhos = data?.ganhos ?? 0;
+  const perdidos = data?.perdidos ?? 0;
+  const decididos = ganhos + perdidos;
+
+  return (
+    <ListaCard
+      titulo="Ganhos e perdas do mês"
+      subtitulo="Negócios que saíram do funil"
+      rodape={
+        decididos > 0 ? (
+          <>
+            <span>{decididos} decididos no mês</span>
+            <span className="font-semibold text-foreground">
+              {formatPercent(data?.taxaGanho ?? null, 0)} de aproveitamento
+            </span>
+          </>
+        ) : undefined
+      }
+    >
+      {decididos === 0 ? (
+        <p className="px-2 py-6 text-center text-[11.5px] leading-relaxed text-muted-foreground">
+          Nenhum negócio decidido neste mês.
+        </p>
+      ) : (
+        <div className="space-y-3 px-2 pb-1 pt-3">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[11px] text-muted-foreground">Ganhos</p>
+              <p className="text-[22px] font-bold leading-none tabular-nums text-emerald-600 dark:text-emerald-400">
+                {ganhos}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[11px] text-muted-foreground">Perdidos</p>
+              <p className="text-[22px] font-bold leading-none tabular-nums text-rose-600 dark:text-rose-400">
+                {perdidos}
+              </p>
+            </div>
+          </div>
+          {/* Uma barra só, dividida: duas barras separadas obrigam a comparar
+              comprimentos que não partem do mesmo ponto. */}
+          <span className="flex h-2 overflow-hidden rounded-full bg-muted">
+            <span
+              className="block h-full bg-emerald-500"
+              style={{ width: `${Math.round((ganhos / decididos) * 100)}%` }}
+            />
+            <span
+              className="block h-full bg-rose-500"
+              style={{ width: `${Math.round((perdidos / decididos) * 100)}%` }}
+            />
+          </span>
+        </div>
+      )}
+    </ListaCard>
   );
 }
 

@@ -188,3 +188,21 @@ export function resolverRangeCashFlow(
   const anchor = new Date(Date.UTC(ano!, mes! - 1, dia!, 12, 0, 0));
   return calcularRangeCashFlow(days, anchor);
 }
+
+/**
+ * Último dia do mês civil a que `hojeStr` pertence, em `YYYY-MM-DD`.
+ *
+ * É o teto que faltava no cash flow. O filtro só tinha piso (`>= dia 1`), então
+ * "a receber, em dia" somava TODA parcela futura do escritório — no painel do
+ * dono isso virou "1268 cobranças a vencer" embaixo de um card que dizia
+ * "no período". Parcela que vence em março do ano que vem não é receita
+ * de agosto.
+ *
+ * `Date.UTC(ano, mes, 0)` devolve o último dia do mês anterior ao índice
+ * informado; como `mes` aqui é 1-based, o índice já aponta pro mês seguinte e
+ * o dia 0 volta pro fim do mês corrente — inclusive em fevereiro bissexto.
+ */
+export function fimDoMes(hojeStr: string): string {
+  const [ano, mes] = hojeStr.split("-").map(Number);
+  return new Date(Date.UTC(ano!, mes!, 0, 12, 0, 0)).toISOString().slice(0, 10);
+}
