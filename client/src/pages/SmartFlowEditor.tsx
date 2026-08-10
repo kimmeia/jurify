@@ -12,7 +12,7 @@
  * canvas idêntico ao que o usuário deixou — auto-organizar é ação manual.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -46,7 +46,7 @@ import "@xyflow/react/dist/style.css";
 import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Banknote, BookOpen, Brain, Bot, Calendar, CheckCircle2, ChevronDown, Circle,
-  CircleDollarSign, Clock, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle, MessageCircleQuestion, Shuffle,
+  CircleDollarSign, Clock, Copy, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle, MessageCircleQuestion, Shuffle,
   Move, Pause, PhoneCall, Play, Plus, Repeat, Save, Search, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, X, Zap,
   CalendarCheck, Trash2, XCircle,
   Variable as VariableIcon,
@@ -103,6 +103,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EditorTopbar } from "./smartflow/editor-topbar";
 import { EditorPaleta } from "./smartflow/editor-paleta";
+import { arestasDaCopia, duplicarNo } from "./smartflow/editor-duplicar";
 import { EditorTestarDialog } from "./smartflow/editor-testar-dialog";
 import { EditorCanvasToolbar, calcularAutoLayout } from "./smartflow/editor-canvas-toolbar";
 import { variaveisPublicadasPorPasso } from "./smartflow/editor-painel-saida";
@@ -129,6 +130,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   whatsapp_aguardar_resposta: Pause,
   whatsapp_pergunta_opcoes: MessageCircleQuestion,
   transferir: PhoneCall,
+  encerrar_conversa: CheckCircle2,
   distribuir_atendimento: Users,
   condicional: GitBranch,
   randomizar: Shuffle,
@@ -241,6 +243,7 @@ const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
   whatsapp_aguardar_resposta: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
   whatsapp_pergunta_opcoes: { grad: "from-cyan-500 to-teal-500", border: "border-cyan-300 dark:border-cyan-800" },
   transferir: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
+  encerrar_conversa: { grad: "from-slate-500 to-slate-700", border: "border-slate-300 dark:border-slate-700" },
   distribuir_atendimento: { grad: "from-teal-500 to-emerald-600", border: "border-teal-300 dark:border-teal-800" },
   condicional: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
   randomizar: { grad: "from-fuchsia-500 to-pink-500", border: "border-fuchsia-300 dark:border-fuchsia-800" },
@@ -268,7 +271,34 @@ const FERRAMENTA_ATENDENTE_LABEL: Record<string, string> = {
   buscar_processo: "📂 ver processo →",
 };
 
-function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
+/**
+ * Barrinha que aparece ao passar o mouse. Fica ACIMA do nó, não dentro: por
+ * cima do cabeçalho ela cobriria o nome do bloco — foi o que o mockup pegou.
+ */
+function BarraAcoesNo({ nodeId }: { nodeId: string }) {
+  const acoes = useContext(AcoesNoContext);
+  if (!acoes) return null;
+  return (
+    <div className="absolute -top-8 right-0 z-10 hidden gap-0.5 rounded-lg border bg-card p-0.5 shadow-lg group-hover:flex">
+      <button
+        onClick={(e) => { e.stopPropagation(); acoes.duplicar(nodeId); }}
+        title="Duplicar bloco (Ctrl+D)"
+        className="flex h-6 w-6 items-center justify-center rounded text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40"
+      >
+        <Copy className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); acoes.excluir(nodeId); }}
+        title="Excluir bloco (Del)"
+        className="flex h-6 w-6 items-center justify-center rounded text-destructive hover:bg-red-50 dark:hover:bg-red-950/40"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function PassoNodeView({ id, data, selected }: NodeProps<PassoNode>) {
   const meta = getTipoPassoMeta(data.tipo);
   const Icon = TIPO_ICON[data.tipo] ?? Zap;
   const resumo = resumirConfig(data.tipo, data.config);
@@ -308,10 +338,11 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
 
   return (
     <div
-      className={`rounded-xl border-2 shadow-sm bg-card min-w-[230px] max-w-[290px] overflow-hidden transition-shadow ${
+      className={`group relative rounded-xl border-2 shadow-sm bg-card min-w-[230px] max-w-[290px] overflow-visible transition-shadow ${
         selected ? "ring-2 ring-violet-400 ring-offset-1 border-violet-400" : cor.border
       }`}
     >
+      <BarraAcoesNo nodeId={id} />
       <Handle type="target" position={Position.Left} className="!bg-muted-foreground/40" />
 
       {/* Header com gradiente da família + status dot */}
@@ -703,6 +734,103 @@ const edgeTypes = { removivel: RemovivelEdge };
  * o nó na posição e conecta automaticamente. Fecha em Escape ou clique
  * fora.
  */
+/**
+ * Menu do botão direito num bloco. Curto de propósito: as quatro coisas que
+ * se faz com um bloco pronto. O que configura vive no inspetor.
+ */
+function MenuDoNo({
+  x,
+  y,
+  ehGatilho,
+  onDuplicar,
+  onExcluir,
+  onDesligar,
+  onFechar,
+}: {
+  x: number;
+  y: number;
+  ehGatilho: boolean;
+  onDuplicar: () => void;
+  onExcluir: () => void;
+  onDesligar: () => void;
+  onFechar: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onFechar();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onFechar]);
+
+  const Item = ({
+    onClick,
+    icone,
+    texto,
+    atalho,
+    perigo,
+  }: {
+    onClick: () => void;
+    icone: React.ReactNode;
+    texto: string;
+    atalho?: string;
+    perigo?: boolean;
+  }) => (
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[12.5px] font-medium hover:bg-accent ${
+        perigo ? "text-destructive" : "text-foreground/85"
+      }`}
+    >
+      {icone}
+      <span className="flex-1">{texto}</span>
+      {atalho && (
+        <kbd className="rounded border bg-muted/60 px-1.5 py-px text-[10px] font-semibold text-muted-foreground">
+          {atalho}
+        </kbd>
+      )}
+    </button>
+  );
+
+  return (
+    <>
+      <div onClick={onFechar} onContextMenu={(e) => { e.preventDefault(); onFechar(); }} className="fixed inset-0 z-40" />
+      <div
+        className="fixed z-50 w-[214px] rounded-xl border bg-popover p-1 shadow-lg"
+        style={{ top: y, left: x }}
+      >
+        {ehGatilho ? (
+          <p className="px-2.5 py-2 text-[11.5px] text-muted-foreground">
+            O gatilho é único do fluxo — não dá pra duplicar nem excluir.
+          </p>
+        ) : (
+          <>
+            <Item
+              onClick={onDuplicar}
+              icone={<Copy className="h-3.5 w-3.5 text-violet-600" />}
+              texto="Duplicar bloco"
+              atalho="Ctrl D"
+            />
+            <Item
+              onClick={onDesligar}
+              icone={<Eraser className="h-3.5 w-3.5" />}
+              texto="Desligar das setas"
+            />
+            <div className="my-1 h-px bg-border" />
+            <Item
+              onClick={onExcluir}
+              icone={<Trash2 className="h-3.5 w-3.5" />}
+              texto="Excluir bloco"
+              atalho="Del"
+              perigo
+            />
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
 function MenuConectarPasso({
   x,
   y,
@@ -965,6 +1093,16 @@ function novoClienteId(): string {
   return "cli_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
 }
 
+/**
+ * Ações que a barrinha do nó dispara. Vai por contexto porque `PassoNodeView`
+ * é instanciado pelo ReactFlow, não pelo editor — passar por `data` obrigaria
+ * a reescrever a função em todo nó a cada render.
+ */
+const AcoesNoContext = createContext<{
+  duplicar: (nodeId: string) => void;
+  excluir: (nodeId: string) => void;
+} | null>(null);
+
 function criarNode(tipo: TipoPasso, y: number, config: Record<string, unknown> = {}): PassoNode {
   const meta = getTipoPassoMeta(tipo);
   // Blocos novos de distribuição já nascem "Todos do setor" (rodízio entre
@@ -1067,6 +1205,7 @@ function SmartFlowEditorInner() {
   // Dialogs do editor
   const [testarOpen, setTestarOpen] = useState(false);
   const [paletaRecolhida, setPaletaRecolhida] = useState(true);
+  const [menuNo, setMenuNo] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const [excluirOpen, setExcluirOpen] = useState(false);
 
   // Canvas começa com um nó de gatilho default (mensagem_canal).
@@ -1490,6 +1629,35 @@ function SmartFlowEditorInner() {
     if (primeira) trocarGatilho(primeira);
   };
 
+  /**
+   * Duplica um bloco. A cópia nasce ao lado, já selecionada, com config
+   * própria — e SEM as setas de saída (`arestasDaCopia` explica por quê).
+   */
+  const duplicarPasso = (nodeId: string) => {
+    const origem = nodes.find((n) => n.id === nodeId);
+    if (!origem || origem.type !== "passo") {
+      toast.error("O gatilho não pode ser duplicado — todo fluxo tem um só.");
+      return;
+    }
+    const { no } = duplicarNo(origem as any, novoNodeId(), novoClienteId());
+    setNodes((nds) => [...nds, no as any]);
+    setEdges((eds) => [...eds, ...arestasDaCopia()]);
+    setSelectedId(no.id);
+    marcarDirty();
+    toast.success("Bloco duplicado — a cópia entrou ao lado, sem as ligações de saída.");
+  };
+
+  const removerNode = (nodeId: string) => {
+    if (nodeId === GATILHO_NODE_ID) {
+      toast.error("O gatilho não pode ser removido. Troque o tipo na paleta à esquerda.");
+      return;
+    }
+    setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+    setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+    setSelectedId((atual) => (atual === nodeId ? null : atual));
+    marcarDirty();
+  };
+
   const removerSelecionado = () => {
     if (!selectedId) return;
     if (selectedId === GATILHO_NODE_ID) {
@@ -1740,6 +1908,22 @@ function SmartFlowEditorInner() {
     );
   }
 
+  // Ctrl/Cmd+D duplica o bloco selecionado. Ignora quando o foco está num
+  // campo — dentro de um textarea o atalho pertence ao texto, não ao canvas.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.key === "d" || e.key === "D") || !(e.ctrlKey || e.metaKey)) return;
+      const alvo = e.target as HTMLElement | null;
+      const tag = alvo?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || alvo?.isContentEditable) return;
+      if (!selectedId || selectedId === GATILHO_NODE_ID) return;
+      e.preventDefault();
+      duplicarPasso(selectedId);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  });
+
   const salvando = criarMut.isPending || atualizarMut.isPending;
   // Largura do inspetor quando aberto — toolbar e minimapa se afastam pra não
   // ficarem embaixo dele.
@@ -1802,6 +1986,7 @@ function SmartFlowEditorInner() {
         notebook de 1366 sobrava menos da metade da tela pro fluxo — que é a
         única parte da tela onde se trabalha.
       */}
+      <AcoesNoContext.Provider value={{ duplicar: duplicarPasso, excluir: removerNode }}>
       <div className="relative flex flex-1 min-h-0">
         <EditorPaleta
           recolhida={paletaRecolhida}
@@ -1828,7 +2013,12 @@ function SmartFlowEditorInner() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={(_e, n) => setSelectedId(n.id)}
-            onPaneClick={() => setSelectedId(null)}
+            onNodeContextMenu={(e, n) => {
+              e.preventDefault();
+              setSelectedId(n.id);
+              setMenuNo({ x: e.clientX, y: e.clientY, nodeId: n.id });
+            }}
+            onPaneClick={() => { setSelectedId(null); setMenuNo(null); }}
             onConnectStart={onConnectStart}
             onConnectEnd={onConnectEnd}
             onInit={setRfInstance}
@@ -1877,6 +2067,22 @@ function SmartFlowEditorInner() {
                 …ou monte do zero: abra a paleta de passos.
               </button>
             </div>
+          )}
+
+          {menuNo && (
+            <MenuDoNo
+              x={menuNo.x}
+              y={menuNo.y}
+              ehGatilho={menuNo.nodeId === GATILHO_NODE_ID}
+              onFechar={() => setMenuNo(null)}
+              onDuplicar={() => { duplicarPasso(menuNo.nodeId); setMenuNo(null); }}
+              onExcluir={() => { removerNode(menuNo.nodeId); setMenuNo(null); }}
+              onDesligar={() => {
+                setEdges((eds) => eds.filter((e) => e.source !== menuNo.nodeId && e.target !== menuNo.nodeId));
+                marcarDirty();
+                setMenuNo(null);
+              }}
+            />
           )}
 
           {/* Menu de "conectar a um novo passo" — aparece quando o usuário
@@ -1959,6 +2165,7 @@ function SmartFlowEditorInner() {
           </div>
         )}
       </div>
+      </AcoesNoContext.Provider>
 
       {/* Dialog de teste — só faz sentido em cenário já salvo. */}
       {editandoId && gatilhoNode && (
@@ -3957,6 +4164,105 @@ function ConfigDistribuirAtendimentoFields({
   );
 }
 
+function ConfigEncerrarConversaFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const definido = typeof cfg.mensagem === "string";
+  const status = cfg.status === "fechado" ? "fechado" : "resolvido";
+  const insertNoCfg = (path: string) => {
+    const atual = String(cfg.mensagem || "");
+    onChange({ mensagem: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+  return (
+    <div className="space-y-2">
+      <div className="rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-800 dark:bg-slate-900/40">
+        <p className="text-[11px] text-slate-700 dark:text-slate-300">
+          Fecha o atendimento: manda a despedida e marca a conversa como{" "}
+          <strong>{status === "fechado" ? "fechada" : "resolvida"}</strong>.
+          Diferente de <strong>Transferir</strong> — aqui ninguém assume.
+          Se o cliente escrever de novo, o bot atende normalmente.
+        </p>
+      </div>
+
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <Label className="text-xs">Mensagem de despedida (opcional)</Label>
+          <VariableTrigger
+            inputId="cfg-encerrar-mensagem"
+            variaveis={variaveis}
+            onInsert={insertNoCfg}
+          />
+        </div>
+        <VariableInput
+          id="cfg-encerrar-mensagem"
+          as="textarea"
+          rows={3}
+          highlight
+          preview
+          value={String(cfg.mensagem ?? "")}
+          onChange={(v) => onChange({ mensagem: v })}
+          variaveis={variaveis}
+          placeholder="Atendimento encerrado. Se precisar de mais alguma coisa, é só chamar!"
+        />
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          {definido
+            ? "Deixe em branco para encerrar sem enviar nenhuma mensagem."
+            : "Sem preencher, envia o texto do exemplo acima."}
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Como marcar a conversa</Label>
+        <Select value={status} onValueChange={(v) => onChange({ status: v })}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="resolvido">Resolvida — atendimento concluído</SelectItem>
+            <SelectItem value="fechado">Fechada — sem desfecho (sumiu, engano, spam)</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Só <strong>Resolvida</strong> entra no contador de "resolvidas hoje" do painel de Atendimento.
+        </p>
+      </div>
+
+      <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={cfg.arquivar === true}
+          onChange={(e) => onChange({ arquivar: e.target.checked })}
+        />
+        <span className="text-[11px] leading-snug">
+          <strong>Arquivar também</strong>
+          <span className="block text-muted-foreground">
+            Some das listas do inbox. Mensagem nova do cliente desarquiva sozinha.
+          </span>
+        </span>
+      </label>
+
+      <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={cfg.liberarAtendente === true}
+          onChange={(e) => onChange({ liberarAtendente: e.target.checked })}
+        />
+        <span className="text-[11px] leading-snug">
+          <strong>Soltar o atendente</strong>
+          <span className="block text-muted-foreground">
+            Tira o dono da conversa. Útil quando o fluxo atribuiu alguém e o assunto se resolveu sozinho.
+          </span>
+        </span>
+      </label>
+    </div>
+  );
+}
+
 function ConfigTransferirFields({
   cfg,
   onChange,
@@ -5741,6 +6047,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigWhatsappEnviarFields cfg={cfg} onChange={onChange} />;
     case "transferir":
       return <ConfigTransferirFields cfg={cfg} onChange={onChange} />;
+    case "encerrar_conversa":
+      return <ConfigEncerrarConversaFields cfg={cfg} onChange={onChange} />;
     case "distribuir_atendimento":
       return <ConfigDistribuirAtendimentoFields cfg={cfg} onChange={onChange} />;
     case "condicional":

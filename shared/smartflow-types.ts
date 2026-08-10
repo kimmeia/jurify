@@ -74,6 +74,7 @@ export type TipoPasso =
   | "whatsapp_aguardar_resposta"
   | "whatsapp_pergunta_opcoes"
   | "transferir"
+  | "encerrar_conversa"
   | "distribuir_atendimento"
   | "condicional"
   | "randomizar"
@@ -482,6 +483,35 @@ export interface ConfigTransferir {
 }
 
 /**
+ * Config do passo `encerrar_conversa` — fecha o atendimento.
+ *
+ * É o par de `transferir`, e a diferença está em quem fica com a conversa.
+ * Transferir marca `em_atendimento`: um humano assumiu, e o bot fica calado
+ * PRA SEMPRE naquela conversa. Encerrar marca `resolvido`: ninguém assumiu,
+ * o assunto acabou — e se o cliente escrever de novo amanhã, a conversa
+ * volta pra `aguardando` e o bot atende do começo, que é o que se espera de
+ * um atendimento encerrado.
+ */
+export interface ConfigEncerrarConversa {
+  /**
+   * Despedida. `undefined` usa o texto padrão; string vazia encerra em
+   * silêncio — mesma convenção de `transferir`.
+   */
+  mensagem?: string;
+  /**
+   * Status final. `resolvido` (padrão) é o que conta como "resolvida hoje"
+   * no painel de Atendimento. `fechado` é pra encerramento sem desfecho —
+   * cliente sumiu, contato errado, spam.
+   */
+  status?: "resolvido" | "fechado";
+  /** Também arquiva: some das vistas padrão do inbox. Mensagem nova do
+   *  contato desarquiva sozinha. */
+  arquivar?: boolean;
+  /** Solta o atendente atribuído, devolvendo a conversa pra fila sem dono. */
+  liberarAtendente?: boolean;
+}
+
+/**
  * Config do passo `distribuir_atendimento` — atribui um atendente como dono
  * da conversa (`atendenteId`), SEM marcar "em atendimento" (o bot segue o
  * fluxo; só para quando o atendente manda mensagem no inbox). Dois modos:
@@ -737,6 +767,7 @@ export type PassoConfigByTipo =
   | { tipo: "whatsapp_aguardar_resposta"; config: ConfigWhatsappAguardarResposta }
   | { tipo: "whatsapp_pergunta_opcoes"; config: ConfigWhatsappPerguntaOpcoes }
   | { tipo: "transferir"; config: ConfigTransferir }
+  | { tipo: "encerrar_conversa"; config: ConfigEncerrarConversa }
   | { tipo: "distribuir_atendimento"; config: ConfigDistribuirAtendimento }
   | { tipo: "condicional"; config: ConfigCondicional }
   | { tipo: "randomizar"; config: ConfigRandomizar }
@@ -894,6 +925,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "whatsapp_aguardar_resposta", label: "Aguardar resposta", descricao: "Pausa o fluxo até o cliente responder (com timeout). Use pra menus ('digite 1'), confirmações e coletar UMA resposta. Não precisa dele depois do Atendente IA — esse já espera o cliente sozinho.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
   { id: "whatsapp_pergunta_opcoes", label: "Pergunta com opções", descricao: "Envia BOTÕES clicáveis (até 3) ou LISTA suspensa (até 10) pelo WhatsApp oficial. Cliente clica em vez de digitar — cada opção vira uma saída do bloco. Saídas extras: 'outra_resposta' (digitou texto) e 'sem_resposta' (timeout). SÓ funciona em canal Cloud API oficial.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
   { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e PARA o bot de responder (conversa fica 'em atendimento'). Use no fim de um caminho pra passar pro atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
+  { id: "encerrar_conversa", label: "Encerrar conversa", descricao: "Fecha o atendimento: manda a despedida e marca a conversa como resolvida. Diferente de Transferir — aqui NINGUÉM assume, o assunto acabou. Se o cliente escrever de novo, o bot atende normalmente. Ligue na saída \"Encerrar conversa\" do Atendente IA.", cor: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300", grupo: "mensagem" },
   { id: "distribuir_atendimento", label: "Distribuir atendimento", descricao: "Atribui um atendente à conversa. Dois modos: SETOR (rotação dentro de um setor — Comercial, Financeiro… — menor carga / online primeiro) ou ATENDENTE FIXO (atribui sempre a pessoa escolhida). O bot SEGUE o fluxo — só para quando o atendente responder no inbox. Saídas: atribuído / sem atendente.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
   { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },
   { id: "randomizar", label: "Randomizador", descricao: "Sorteia uma saída entre N opções (com pesos opcionais). Lead que passa por aqui cai num caminho aleatório — útil pra A/B testing de mensagens ou balancear leads entre 2 SDRs em fluxos paralelos. Sem pesos = distribuição uniforme.", cor: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300", grupo: "fluxo" },
