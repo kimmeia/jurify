@@ -244,30 +244,36 @@ describe("proximaPagina", () => {
     }));
 
   it("página cheia devolve o cursor do último hit", () => {
-    const p = proximaPagina({ hits: { hits: hits(100) } }, 100);
+    const p = proximaPagina({ hits: { hits: hits(100) } }, 100, "@timestamp+numeroProcesso");
     expect(p.hits).toHaveLength(100);
-    expect(JSON.parse(p.proximoCursor!)).toEqual([1700000000099, "id-99"]);
+    // O cursor carrega a ordenação que o produziu — sem isso, um redeploy
+    // fazia a varredura recomeçar por outra ordenação e o cursor gravado
+    // deixava de servir, travando a fila.
+    expect(JSON.parse(p.proximoCursor!)).toEqual({
+      o: "@timestamp+numeroProcesso",
+      v: [1700000000099, "id-99"],
+    });
   });
 
   it("página incompleta encerra o tribunal", () => {
     // Pedir a próxima só gastaria requisição pra receber vazio.
-    expect(proximaPagina({ hits: { hits: hits(37) } }, 100).proximoCursor).toBeNull();
+    expect(proximaPagina({ hits: { hits: hits(37) } }, 100, "@timestamp+numeroProcesso").proximoCursor).toBeNull();
   });
 
   it("página vazia encerra", () => {
-    expect(proximaPagina({ hits: { hits: [] } }, 100).proximoCursor).toBeNull();
+    expect(proximaPagina({ hits: { hits: [] } }, 100, "@timestamp+numeroProcesso").proximoCursor).toBeNull();
   });
 
   it("hit sem 'sort' encerra em vez de reler a primeira página pra sempre", () => {
     // Sem cursor, o próximo pedido volta ao início — loop infinito silencioso.
-    const p = proximaPagina({ hits: { hits: hits(100, false) } }, 100);
+    const p = proximaPagina({ hits: { hits: hits(100, false) } }, 100, "@timestamp+numeroProcesso");
     expect(p.proximoCursor).toBeNull();
   });
 
   it("lê o total nos dois formatos que o ES usa", () => {
-    expect(proximaPagina({ hits: { hits: [], total: 4200 } }, 100).total).toBe(4200);
-    expect(proximaPagina({ hits: { hits: [], total: { value: 4200 } } }, 100).total).toBe(4200);
-    expect(proximaPagina({ hits: { hits: [] } }, 100).total).toBeNull();
+    expect(proximaPagina({ hits: { hits: [], total: 4200 } }, 100, "@timestamp+numeroProcesso").total).toBe(4200);
+    expect(proximaPagina({ hits: { hits: [], total: { value: 4200 } } }, 100, "@timestamp+numeroProcesso").total).toBe(4200);
+    expect(proximaPagina({ hits: { hits: [] } }, 100, "@timestamp+numeroProcesso").total).toBeNull();
   });
 
   // O ES para de contar em 10.000 e sinaliza com relation "gte". Sem ler esse
@@ -288,18 +294,18 @@ describe("proximaPagina", () => {
     expect(exato.totalEhMinimo).toBe(false);
 
     // Formato antigo (total numérico puro) nunca é capado.
-    expect(proximaPagina({ hits: { hits: [], total: 4200 } }, 100).totalEhMinimo).toBe(false);
-    expect(proximaPagina({ hits: { hits: [] } }, 100).totalEhMinimo).toBe(false);
+    expect(proximaPagina({ hits: { hits: [], total: 4200 } }, 100, "@timestamp+numeroProcesso").totalEhMinimo).toBe(false);
+    expect(proximaPagina({ hits: { hits: [] } }, 100, "@timestamp+numeroProcesso").totalEhMinimo).toBe(false);
   });
 
   it("resposta fora do formato não quebra a varredura", () => {
-    expect(proximaPagina(null, 100)).toEqual({
+    expect(proximaPagina(null, 100, "@timestamp+numeroProcesso")).toEqual({
       hits: [],
       proximoCursor: null,
       total: null,
       totalEhMinimo: false,
     });
-    expect(proximaPagina({ erro: "x" }, 100).hits).toEqual([]);
+    expect(proximaPagina({ erro: "x" }, 100, "@timestamp+numeroProcesso").hits).toEqual([]);
   });
 });
 
