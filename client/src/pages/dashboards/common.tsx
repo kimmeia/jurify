@@ -88,24 +88,6 @@ export const TEMA: Record<SetorTema, { gradient: string; bg: string; accent: str
   },
 };
 
-/** Cor do progresso de uma meta/percentual conforme atingimento. */
-export function corPorPercentual(v: number | null): string {
-  if (v == null) return "from-slate-300 to-slate-400";
-  if (v >= 100) return "from-emerald-400 to-green-500";
-  if (v >= 70) return "from-blue-500 to-indigo-500";
-  if (v >= 40) return "from-amber-400 to-orange-500";
-  return "from-rose-400 to-rose-500";
-}
-
-/** Tom de texto pra valores de % conforme severidade. */
-export function corTextoPercentual(v: number | null): string {
-  if (v == null) return "text-slate-400";
-  if (v >= 100) return "text-emerald-600";
-  if (v >= 70) return "text-blue-600";
-  if (v >= 40) return "text-amber-600";
-  return "text-rose-600";
-}
-
 // ─── Avatar (iniciais com gradient) ──────────────────────────────────────────
 
 /** Gera iniciais do nome (max 2 chars). */
@@ -398,66 +380,6 @@ export function KPICard({
   );
 }
 
-// ─── Mini pill (TOP, META, SDR, etc.) ────────────────────────────────────────
-
-export function MetaPill({ children, tom }: { children: ReactNode; tom: "amber" | "emerald" | "blue" | "rose" | "slate" | "violet" }) {
-  const cores = {
-    amber: "bg-amber-50 text-amber-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    blue: "bg-blue-50 text-blue-700",
-    rose: "bg-rose-50 text-rose-700",
-    slate: "bg-slate-100 text-slate-600",
-    violet: "bg-violet-50 text-violet-700",
-  };
-  return (
-    <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full tracking-wide ${cores[tom]}`}>
-      {children}
-    </span>
-  );
-}
-
-// ─── Card de mini-KPI colorido (usado dentro do operacional) ─────────────────
-
-export function MiniStat({
-  label,
-  value,
-  hint,
-  tom,
-}: {
-  label: string;
-  value: ReactNode;
-  hint?: string;
-  tom: "blue" | "rose" | "emerald" | "amber";
-}) {
-  const cores = {
-    blue: { wrap: "bg-blue-50/60 border-blue-100", chip: "text-blue-700", num: "text-blue-600" },
-    rose: { wrap: "bg-rose-50/60 border-rose-100", chip: "text-rose-700", num: "text-rose-600" },
-    emerald: { wrap: "bg-emerald-50/60 border-emerald-100", chip: "text-emerald-700", num: "text-emerald-600" },
-    amber: { wrap: "bg-amber-50/60 border-amber-100", chip: "text-amber-700", num: "text-amber-600" },
-  };
-  const c = cores[tom];
-  return (
-    <div className={`rounded-md p-3 border ${c.wrap}`}>
-      <p className={`text-[10px] uppercase tracking-wider font-semibold ${c.chip}`}>{label}</p>
-      <div className="flex items-baseline gap-1.5 mt-1">
-        <span className={`text-2xl font-bold tracking-tight tabular-nums leading-none ${c.num}`}>{value}</span>
-        {hint && <span className="text-[10px] text-muted-foreground">{hint}</span>}
-      </div>
-    </div>
-  );
-}
-
-// ─── Rodapé informativo (nota explicativa do filtro de setor) ────────────────
-
-export function NotaSetor({ children }: { children: ReactNode }) {
-  return (
-    <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/50 text-[11px] text-muted-foreground flex items-start gap-2">
-      <Info className="w-3 h-3 mt-0.5 shrink-0" />
-      <span>{children}</span>
-    </div>
-  );
-}
-
 // ─── Banner amarelo (sem setor configurado, etc.) ────────────────────────────
 
 export function AvisoBanner({
@@ -477,22 +399,6 @@ export function AvisoBanner({
         <p className="text-xs text-amber-800 mt-1">{descricao}</p>
       </div>
       {acao}
-    </div>
-  );
-}
-
-// ─── Wrapper de seção de painel (bg sutil setorial) ──────────────────────────
-
-export function PainelSection({
-  tema,
-  children,
-}: {
-  tema: SetorTema;
-  children: ReactNode;
-}) {
-  return (
-    <div className={`rounded-lg ${TEMA[tema].bg} p-6 space-y-6`}>
-      {children}
     </div>
   );
 }
@@ -828,4 +734,277 @@ export function LinhaLista({
       {meta && <span className="shrink-0 text-[10.5px] text-muted-foreground/70">{meta}</span>}
     </button>
   );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Primitivos dos painéis setoriais
+//
+// Os três setores respondem perguntas diferentes com a mesma gramática: um
+// número grande com uma referência ao lado, uma lista de pessoas comparáveis,
+// e uma lista de valores. Ter isso aqui é o que impede as três telas de virarem
+// três interpretações do mesmo layout.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Barra de progresso com marcador de referência.
+ *
+ * O marcador é o que transforma o número em informação: 78% da meta no dia 10
+ * é ótimo, no dia 28 é problema, e o anel de progresso que vivia no hero
+ * desenhava a mesma figura bonita nos dois casos.
+ *
+ * O rótulo da referência mora na legenda, não flutuando sobre a barra —
+ * solto ali em cima ele colidia com o badge do canto sempre que a referência
+ * caía perto do fim, e rótulo que às vezes colide é pior que rótulo fixo.
+ */
+export function BarraMeta({
+  percentual,
+  referencia,
+  legendaReferencia,
+  legendaDireita,
+  cor,
+}: {
+  percentual: number;
+  /** Onde está a linha de comparação, em % da barra. */
+  referencia?: number | null;
+  legendaReferencia?: ReactNode;
+  legendaDireita?: ReactNode;
+  cor?: string;
+}) {
+  const preenchido = Math.max(0, Math.min(100, percentual));
+  return (
+    <div className="px-4 pb-4 pt-4">
+      <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${preenchido}%`, background: cor ?? COR_SERIE }}
+        />
+        {referencia != null && (
+          <span
+            className="absolute inset-y-0 w-px bg-foreground/60"
+            style={{ left: `${Math.max(0, Math.min(100, referencia))}%` }}
+          />
+        )}
+      </div>
+      <div className="mt-2.5 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+        <span className="flex min-w-0 items-center gap-1.5">
+          {referencia != null && <span className="inline-block h-3 w-px shrink-0 bg-foreground/60" />}
+          <span className="truncate">{legendaReferencia}</span>
+        </span>
+        <span className="shrink-0">{legendaDireita}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Selo curto ao lado de um nome. */
+export function Selo({
+  children,
+  tom = "neutro",
+}: {
+  children: ReactNode;
+  tom?: "ok" | "ruim" | "neutro";
+}) {
+  const tons = {
+    ok: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
+    ruim: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300",
+    neutro: "border-border bg-muted text-muted-foreground",
+  };
+  return (
+    <span className={`shrink-0 rounded border px-1 text-[9px] font-bold uppercase ${tons[tom]}`}>
+      {children}
+    </span>
+  );
+}
+
+const CORES_AVATAR = ["#7c3aed", "#0891b2", "#eda100", "#1baf7a", "#e87ba4", "#eb6834"];
+
+function iniciaisDe(nome: string): string {
+  return nome
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase();
+}
+
+export function AvatarIniciais({ nome, indice }: { nome: string; indice: number }) {
+  return (
+    <span
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+      style={{ background: CORES_AVATAR[indice % CORES_AVATAR.length] }}
+    >
+      {iniciaisDe(nome)}
+    </span>
+  );
+}
+
+/**
+ * Uma pessoa no ranking.
+ *
+ * A barra ocupa a sobra da linha em vez de uma faixa estreita no canto: barra
+ * curta demais faz todo mundo parecer igual, que é o oposto do que um ranking
+ * precisa mostrar — e ainda deixa um vão branco no meio da linha.
+ *
+ * `percentual: null` é ausência de referência (ninguém cadastrou a meta), não
+ * zero. Mostrar "0%" acusa a pessoa por uma configuração que ninguém fez.
+ */
+export function LinhaRanking({
+  posicao,
+  nome,
+  detalhe,
+  percentual,
+  indice,
+  selo,
+  ruim,
+  onClick,
+}: {
+  posicao?: number;
+  nome: string;
+  detalhe: ReactNode;
+  percentual: number | null;
+  indice: number;
+  selo?: ReactNode;
+  ruim?: boolean;
+  onClick?: () => void;
+}) {
+  const semReferencia = percentual == null;
+  const corPercentual = semReferencia
+    ? "text-muted-foreground"
+    : ruim
+      ? "text-rose-600 dark:text-rose-400"
+      : percentual >= 100
+        ? "text-emerald-600 dark:text-emerald-400"
+        : "";
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent"
+    >
+      {posicao != null && (
+        <span className="w-4 shrink-0 text-center text-[11px] font-bold tabular-nums text-muted-foreground/70">
+          {posicao}
+        </span>
+      )}
+      <AvatarIniciais nome={nome} indice={indice} />
+      <span className="w-[190px] shrink-0 sm:w-[240px]">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-[12.5px] font-semibold">{nome}</span>
+          {selo}
+        </span>
+        <span className="mt-0.5 block truncate text-[10.5px] text-muted-foreground">{detalhe}</span>
+      </span>
+      <span className="hidden min-w-0 flex-1 sm:block">
+        <span className="block h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          {!semReferencia && (
+            <span
+              className="block h-full rounded-full"
+              style={{
+                width: `${Math.max(0, Math.min(100, percentual))}%`,
+                background: ruim ? "var(--viz-2)" : COR_SERIE,
+              }}
+            />
+          )}
+        </span>
+      </span>
+      <span className={`w-[52px] shrink-0 text-right text-[12px] font-bold tabular-nums ${corPercentual}`}>
+        {semReferencia ? "—" : formatPercent(percentual, 1)}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Uma linha de valor (devedor, contrato, cobrança).
+ *
+ * Sem barra de propósito: a barra do ranking compara contra uma meta, e aqui
+ * não existe meta. Transformar reais em "100%, 68%, 51%" inventaria uma escala
+ * que o número não tem.
+ */
+export function LinhaValor({
+  nome,
+  detalhe,
+  valor,
+  rodapeValor,
+  indice,
+  onClick,
+}: {
+  nome: string;
+  detalhe: ReactNode;
+  valor: ReactNode;
+  rodapeValor?: ReactNode;
+  indice: number;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent"
+    >
+      <AvatarIniciais nome={nome} indice={indice} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12.5px] font-semibold">{nome}</span>
+        <span className="mt-0.5 block truncate text-[10.5px] text-muted-foreground">{detalhe}</span>
+      </span>
+      <span className="shrink-0 text-right">
+        <span className="block text-[13.5px] font-bold tabular-nums text-rose-700 dark:text-rose-400">
+          {valor}
+        </span>
+        {rodapeValor && (
+          <span className="mt-0.5 block text-[10px] text-muted-foreground">{rodapeValor}</span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+/** Um número com rótulo e contexto, para os cards laterais. */
+export function LinhaNumero({
+  label,
+  valor,
+  hint,
+  ruim,
+}: {
+  label: ReactNode;
+  valor: ReactNode;
+  hint?: ReactNode;
+  ruim?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 rounded-lg px-2 py-2">
+      <span className="min-w-0">
+        <span className="block text-[12px]">{label}</span>
+        {hint && <span className="mt-0.5 block text-[10.5px] text-muted-foreground">{hint}</span>}
+      </span>
+      <span
+        className={`shrink-0 text-[18px] font-bold tabular-nums ${
+          ruim ? "text-rose-700 dark:text-rose-400" : ""
+        }`}
+      >
+        {valor}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Quanto do período já passou, em %.
+ *
+ * É a referência do "ritmo" nas barras de meta. Antes de o mês acabar, comparar
+ * o atingido com o esperado A ESTA ALTURA é a única leitura honesta — 60% da
+ * meta no dia 5 e 60% no dia 28 são situações opostas.
+ */
+export function percentualDecorrido(
+  dataInicio: string,
+  dataFim: string,
+  hoje = new Date(),
+): number | null {
+  if (!dataInicio || !dataFim) return null;
+  const inicio = new Date(`${dataInicio}T00:00:00`).getTime();
+  const fim = new Date(`${dataFim}T23:59:59`).getTime();
+  if (Number.isNaN(inicio) || Number.isNaN(fim) || fim <= inicio) return null;
+  const agora = hoje.getTime();
+  if (agora <= inicio) return 0;
+  if (agora >= fim) return 100;
+  return +(((agora - inicio) / (fim - inicio)) * 100).toFixed(1);
 }

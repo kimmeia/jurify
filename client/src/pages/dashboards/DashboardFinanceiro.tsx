@@ -1,263 +1,388 @@
 /**
  * Dashboard FINANCEIRO — pra setor tipo='financeiro'.
  *
- * Foco em receita vs vencido. Clientes (não usuários) aparecem como
- * top devedores, com avatar gradient + cobranças vencidas + valor.
+ * Receita contra inadimplência. O gráfico é o MESMO do painel Geral, alimentado
+ * pela mesma procedure (`dashboard.cashFlow`): dois números iguais em telas
+ * diferentes precisam vir da mesma conta, senão eles divergem e a pessoa passa
+ * a não confiar em nenhum dos dois.
+ *
+ * Os devedores não ganham barra de porcentagem: barra compara contra uma meta,
+ * e aqui não existe meta. Transformar reais em "100%, 68%, 51%" inventaria uma
+ * escala que o número não tem.
  */
 
-import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent } from "@/components/ui/card";
+import { useLocation } from "wouter";
+import { AlertTriangle, ArrowRight, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  Wallet,
-  DollarSign,
-  Clock,
-  AlertTriangle,
-  TrendingUp,
-  Users,
-  TrendingDown,
-  ChevronRight,
-} from "lucide-react";
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 import {
-  Avatar,
-  HeroCard,
-  KPICard,
-  MetaPill,
-  NotaSetor,
-  PainelSection,
-  corTextoPercentual,
+  AcaoCard,
+  BlocoPrincipal,
+  COR_SERIE,
+  FaixaAcoes,
+  LinhaNumero,
+  LinhaValor,
+  ListaCard,
+  PainelTopo,
+  SubNumero,
+  SubNumeros,
   formatBRL,
-  formatBRLShort,
+  formatDataCurta,
+  formatEixoValor,
   formatPercent,
 } from "./common";
+
+const COR_VENCIDO = "var(--viz-2)";
+
+function diasDesde(dataIso: string | null): number | null {
+  if (!dataIso) return null;
+  const alvo = new Date(`${dataIso}T12:00:00`).getTime();
+  if (Number.isNaN(alvo)) return null;
+  return Math.max(0, Math.floor((Date.now() - alvo) / 86400000));
+}
 
 export default function DashboardFinanceiro() {
   const [, nav] = useLocation();
   const { data, isLoading } = (trpc as any).dashboard.financeiro.useQuery(undefined, {
     refetchInterval: 60_000,
   });
+  const { data: cashFlow } = trpc.dashboard.cashFlow.useQuery(undefined, {
+    retry: false,
+    refetchInterval: 120_000,
+  });
 
-  if (isLoading) return <SkeletonPainel />;
-  // Servidor devolve o sentinel ZERO (periodo com datas vazias) quando o
-  // usuário não tem `dashboard.verTodos` — é o sinal de "sem permissão".
+  if (isLoading) return <Esqueleto />;
+  // O servidor devolve o sentinel ZERO (período com datas vazias) quando falta
+  // `dashboard.verTodos` — é o sinal de "sem permissão".
   if (!data || !data.periodo?.dataInicio) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-sm text-muted-foreground">
-            Sem permissão para ver o painel financeiro.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="rounded-md border bg-card px-4 py-6">
+        <p className="text-sm text-muted-foreground">Sem permissão para ver o painel financeiro.</p>
+      </div>
     );
   }
 
+  const pagamentos = cashFlow?.pagamentosRecebidos ?? 0;
+  const ticketMedio = pagamentos > 0 ? (cashFlow?.totalRecebido ?? 0) / pagamentos : null;
+  const saldoPositivo = data.recebido >= data.vencido;
+  const devedores: any[] = data.topDevedores ?? [];
+  const cobrancasVencidas = cashFlow?.cobrancasVencidas ?? 0;
+
   return (
-    <PainelSection tema="financeiro">
-      <HeroCard
-        tema="financeiro"
-        setorLabel="Painel Financeiro"
-        periodo={data.periodo}
-        decoracaoIcon={DollarSign}
-        badgeDireito={
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/15 text-white border border-white/20">
-            <Wallet className="w-3 h-3" />
-            Receita do escritório
+    <div className="space-y-3.5">
+      <PainelTopo
+        titulo="Painel Financeiro"
+        subtitulo={
+          <span className="tabular-nums">
+            Receita do escritório · {formatDataCurta(data.periodo.dataInicio)} a{" "}
+            {formatDataCurta(data.periodo.dataFim)}
           </span>
         }
-        tituloPrincipal="Recebido no período"
-        valorPrincipal={formatBRL(data.recebido)}
-        legenda={
-          <>
-            {formatBRL(data.pendente)} ainda a receber
-            {data.vencido > 0 && (
-              <>
-                {" · "}
-                <b className="text-rose-200">{formatBRL(data.vencido)} vencido</b>
-              </>
-            )}
-          </>
+        acao={
+          <Button variant="outline" size="sm" className="h-8 text-[12px]" onClick={() => nav("/financeiro")}>
+            Ver financeiro
+            <ArrowRight className="ml-1 h-3.5 w-3.5" />
+          </Button>
         }
-        ringValue={data.percentInadimplenciaValor ?? 0}
-        ringLabel={
-          <>
-            {(data.percentInadimplenciaValor ?? 0).toFixed(1)}
-            <span className="text-xl">%</span>
-          </>
-        }
-        ringSublabel="inadimpl."
       />
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KPICard
-          label="Recebido"
-          value={formatBRLShort(data.recebido)}
-          icon={DollarSign}
-          iconBg="bg-emerald-50"
-          iconFg="text-emerald-600"
-        />
-        <KPICard
-          label="A receber (em dia)"
-          value={formatBRLShort(data.pendente)}
-          icon={Clock}
-          iconBg="bg-blue-50"
-          iconFg="text-blue-600"
-        />
-        <KPICard
-          label="Vencido"
-          value={formatBRLShort(data.vencido)}
-          valueColor="text-rose-600"
-          icon={AlertTriangle}
-          iconBg="bg-rose-50"
-          iconFg="text-rose-600"
-          badge={
-            data.clientesInadimplentes > 0 ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700">
-                ⚠ {data.clientesInadimplentes} cliente{data.clientesInadimplentes !== 1 ? "s" : ""}
+      {(data.clientesInadimplentes > 0 || cobrancasVencidas > 0) && (
+        <FaixaAcoes>
+          {data.clientesInadimplentes > 0 && (
+            <AcaoCard
+              icone={AlertTriangle}
+              valor={data.clientesInadimplentes}
+              label={
+                data.clientesInadimplentes === 1
+                  ? "cliente com cobrança vencida"
+                  : "clientes com cobrança vencida"
+              }
+              critico
+              onClick={() => nav("/financeiro?tab=clientes&chip=inadimplentes")}
+            />
+          )}
+          {cobrancasVencidas > 0 && (
+            <AcaoCard
+              icone={Clock}
+              valor={cobrancasVencidas}
+              label={
+                cobrancasVencidas === 1
+                  ? "cobrança vencida no período"
+                  : "cobranças vencidas no período"
+              }
+              onClick={() => nav("/financeiro")}
+            />
+          )}
+        </FaixaAcoes>
+      )}
+
+      <div className="grid gap-3.5 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <BlocoPrincipal
+            rotulo="Recebido no período"
+            valor={formatBRL(data.recebido)}
+            badge={
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-bold ${
+                  saldoPositivo
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+                }`}
+              >
+                {saldoPositivo ? "Saldo positivo" : "Saldo negativo"}
               </span>
-            ) : undefined
-          }
-        />
-        <KPICard
-          label="Inadimplência (valor)"
-          value={formatPercent(data.percentInadimplenciaValor)}
-          valueColor={corTextoPercentual(data.percentInadimplenciaValor)}
-          icon={TrendingDown}
-          iconBg="bg-amber-50"
-          iconFg="text-amber-600"
-        />
+            }
+            grafico={
+              cashFlow && cashFlow.pontos.length > 0 ? (
+                <>
+                  <div className="flex items-center justify-end gap-3.5 px-2 pb-1 text-[10.5px] text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-[3px] w-3.5 rounded-full" style={{ background: COR_SERIE }} />
+                      Recebido
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-[3px] w-3.5 rounded-full" style={{ background: COR_VENCIDO }} />
+                      Vencido
+                    </span>
+                  </div>
+                  <div className="h-[168px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={cashFlow.pontos} margin={{ top: 6, right: 12, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="finRecebido" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={COR_SERIE} stopOpacity={0.2} />
+                            <stop offset="100%" stopColor={COR_SERIE} stopOpacity={0.02} />
+                          </linearGradient>
+                          <linearGradient id="finVencido" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={COR_VENCIDO} stopOpacity={0.16} />
+                            <stop offset="100%" stopColor={COR_VENCIDO} stopOpacity={0.02} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="0" vertical={false} stroke="var(--border)" />
+                        <XAxis
+                          dataKey="data"
+                          tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                          tickFormatter={(d) => formatDataCurta(d)}
+                          tickLine={false}
+                          axisLine={false}
+                          minTickGap={24}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                          tickFormatter={(v) => formatEixoValor(v)}
+                          tickLine={false}
+                          axisLine={false}
+                          width={38}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            background: "var(--popover)",
+                            border: "1px solid var(--border)",
+                            borderRadius: "8px",
+                            fontSize: "12px",
+                            color: "var(--popover-foreground)",
+                          }}
+                          labelFormatter={(d) => formatDataCurta(d)}
+                          formatter={(v: number, nome) => [formatBRL(v), nome]}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="recebido"
+                          stroke={COR_SERIE}
+                          strokeWidth={2}
+                          fill="url(#finRecebido)"
+                          name="Recebido"
+                          dot={{ r: 3, fill: "var(--card)", stroke: COR_SERIE, strokeWidth: 2 }}
+                          activeDot={{ r: 5, fill: COR_SERIE, stroke: "var(--card)", strokeWidth: 2 }}
+                        />
+                        {/* Tracejada porque é dinheiro que NÃO entrou: sólida do
+                            lado de uma sólida, as duas leem como receita. */}
+                        <Area
+                          type="monotone"
+                          dataKey="vencido"
+                          stroke={COR_VENCIDO}
+                          strokeWidth={2}
+                          strokeDasharray="4 3"
+                          fill="url(#finVencido)"
+                          name="Vencido"
+                          dot={false}
+                          activeDot={{ r: 4, fill: COR_VENCIDO, stroke: "var(--card)", strokeWidth: 2 }}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </>
+              ) : (
+                <div className="flex h-[168px] items-center justify-center text-xs text-muted-foreground">
+                  Sem dados no período.
+                </div>
+              )
+            }
+          >
+            <SubNumeros>
+              <SubNumero
+                label="A receber, em dia"
+                valor={formatBRL(data.pendente)}
+                hint={
+                  (cashFlow?.cobrancasPendentes ?? 0) > 0
+                    ? `${cashFlow!.cobrancasPendentes} ${cashFlow!.cobrancasPendentes === 1 ? "cobrança" : "cobranças"} a vencer`
+                    : undefined
+                }
+              />
+              <SubNumero
+                label="Vencido no período"
+                valor={formatBRL(data.vencido)}
+                ruim={data.vencido > 0}
+                tag={
+                  data.vencido > 0 ? (
+                    <span className="rounded border border-rose-200 bg-rose-50 px-1.5 text-[10px] font-bold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                      {formatPercent(data.percentInadimplenciaValor, 0)}
+                    </span>
+                  ) : undefined
+                }
+                hint={
+                  data.clientesInadimplentes > 0
+                    ? `${data.clientesInadimplentes} ${data.clientesInadimplentes === 1 ? "cliente" : "clientes"} no período`
+                    : undefined
+                }
+              />
+              <SubNumero
+                label="Ticket médio recebido"
+                valor={ticketMedio != null ? formatBRL(ticketMedio) : "—"}
+                hint={
+                  pagamentos > 0
+                    ? `${pagamentos} ${pagamentos === 1 ? "pagamento" : "pagamentos"} no período`
+                    : undefined
+                }
+              />
+            </SubNumeros>
+          </BlocoPrincipal>
+        </div>
+
+        <div className="relative min-h-0">
+          <div className="lg:absolute lg:inset-0">
+            <ListaCard
+              titulo="Maiores valores em aberto"
+              subtitulo="Não filtrado por setor"
+              acaoLabel="Ver todos"
+              onAcao={() => nav("/financeiro?tab=clientes&chip=inadimplentes")}
+              esticar
+              rodape={
+                devedores.length > 0 ? (
+                  <>
+                    <span>
+                      {devedores.length} de {data.clientesInadimplentes}{" "}
+                      {data.clientesInadimplentes === 1 ? "cliente" : "clientes"}
+                    </span>
+                    <span className="font-semibold text-rose-600 dark:text-rose-400">
+                      {formatBRL(devedores.reduce((s: number, d: any) => s + d.valor, 0))}
+                    </span>
+                  </>
+                ) : undefined
+              }
+            >
+              {devedores.length === 0 ? (
+                <p className="px-2 py-8 text-center text-xs text-muted-foreground">
+                  Nenhum cliente com cobrança vencida.
+                </p>
+              ) : (
+                devedores.map((d: any, i: number) => {
+                  const dias = diasDesde(d.vencimentoMaisAntigo ?? null);
+                  return (
+                    <LinhaValor
+                      key={d.contatoId}
+                      nome={d.nome}
+                      indice={i}
+                      detalhe={
+                        dias != null
+                          ? `${d.cobrancasVencidas} ${d.cobrancasVencidas === 1 ? "vencida" : "vencidas"} · a mais antiga há ${dias} ${dias === 1 ? "dia" : "dias"}`
+                          : `${d.cobrancasVencidas} ${d.cobrancasVencidas === 1 ? "cobrança vencida" : "cobranças vencidas"}`
+                      }
+                      valor={formatBRL(d.valor)}
+                      rodapeValor="em aberto"
+                      onClick={() => nav(`/clientes?id=${d.contatoId}`)}
+                    />
+                  );
+                })
+              )}
+            </ListaCard>
+          </div>
+        </div>
+
+        <div className="lg:col-span-3">
+          <div className="overflow-hidden rounded-md border bg-card">
+            <div className="px-4 pt-3.5">
+              <p className="text-sm font-bold leading-tight">Inadimplência por cliente</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Cliente inadimplente = com ao menos uma cobrança vencida no período.
+              </p>
+            </div>
+            <div className="px-4 pb-4 pt-4">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.min(100, data.percentInadimplenciaClientes ?? 0)}%`,
+                    background: COR_VENCIDO,
+                  }}
+                />
+              </div>
+            </div>
+            <SubNumeros>
+              <SubNumero
+                label="Com cobrança vencida"
+                valor={data.clientesInadimplentes}
+                ruim={data.clientesInadimplentes > 0}
+                hint="clientes no período"
+              />
+              <SubNumero
+                label="Total com cobrança"
+                valor={data.clientesComCobranca}
+                hint="base de comparação"
+              />
+              <SubNumero
+                label="Inadimplência por cliente"
+                valor={formatPercent(data.percentInadimplenciaClientes)}
+                hint={`${data.clientesInadimplentes} de ${data.clientesComCobranca}`}
+              />
+            </SubNumeros>
+          </div>
+        </div>
       </div>
 
-      {/* Inadimplência por cliente */}
-      <Card className="border-slate-200">
-        <CardContent className="pt-6 pb-6">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <span className="w-7 h-7 rounded-lg bg-rose-50 flex items-center justify-center">
-                  <Users className="w-4 h-4 text-rose-600" />
-                </span>
-                Clientes inadimplentes
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Definição: cliente com pelo menos 1 cobrança vencida.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center">
-              <p className="text-4xl font-bold tracking-tight tabular-nums text-rose-600">
-                {data.clientesInadimplentes}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1.5">Com vencido</p>
-            </div>
-            <div className="text-center border-x border-slate-100">
-              <p className="text-4xl font-bold tracking-tight tabular-nums">
-                {data.clientesComCobranca}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1.5">Total com cobrança</p>
-            </div>
-            <div className="text-center">
-              <p
-                className={`text-4xl font-bold tracking-tight tabular-nums ${corTextoPercentual(data.percentInadimplenciaClientes)}`}
-              >
-                {(data.percentInadimplenciaClientes ?? 0).toFixed(1)}
-                <span className="text-xl">%</span>
-              </p>
-              <p className="text-xs text-muted-foreground mt-1.5">% por cliente</p>
-            </div>
-          </div>
-
-          <div className="mt-5 h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500"
-              style={{ width: `${Math.min(100, data.percentInadimplenciaClientes ?? 0)}%` }}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Top devedores */}
-      {data.topDevedores.length > 0 && (
-        <Card className="border-slate-200 overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-500" />
-                Top 5 devedores
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Maior valor em aberto.
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs h-7"
-              onClick={() => nav("/financeiro?tab=clientes&chip=inadimplentes")}
-            >
-              Ver todos <ChevronRight className="w-3 h-3 ml-1" />
-            </Button>
-          </div>
-          <div className="p-2 divide-y divide-slate-100">
-            {data.topDevedores.map((d: any) => (
-              <div
-                key={d.contatoId}
-                onClick={() => nav(`/clientes?id=${d.contatoId}`)}
-                className="grid grid-cols-[40px_1fr_auto] gap-3 items-center p-3 rounded-xl hover:bg-slate-50/70 cursor-pointer transition-colors"
-              >
-                <Avatar nome={d.nome} />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate">{d.nome}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <MetaPill tom={d.cobrancasVencidas >= 2 ? "rose" : "amber"}>
-                      {d.cobrancasVencidas} vencida{d.cobrancasVencidas !== 1 ? "s" : ""}
-                    </MetaPill>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-lg font-semibold tabular-nums text-rose-600">
-                    {formatBRLShort(d.valor)}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">em aberto</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <NotaSetor>
-            Dados financeiros são transversais ao escritório — não filtramos
-            por setor aqui (todos os devedores aparecem).
-          </NotaSetor>
-        </Card>
+      {devedores.length === 0 && data.clientesInadimplentes === 0 && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+          <p className="text-sm text-emerald-700 dark:text-emerald-300">
+            Nenhum cliente inadimplente no período.
+          </p>
+        </div>
       )}
-
-      {data.topDevedores.length === 0 && data.clientesInadimplentes === 0 && (
-        <Card className="border-emerald-200 bg-emerald-50/30">
-          <CardContent className="pt-6">
-            <p className="text-sm text-emerald-700 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" />
-              Nenhum cliente inadimplente no período. Parabéns!
-            </p>
-          </CardContent>
-        </Card>
-      )}
-    </PainelSection>
+    </div>
   );
 }
 
-function SkeletonPainel() {
+function Esqueleto() {
   return (
-    <div className="space-y-4">
-      <div className="h-48 rounded-lg bg-gradient-to-br from-slate-200 to-slate-100 animate-pulse" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-24 rounded-md bg-slate-100 animate-pulse" />
+    <div className="space-y-3.5">
+      <div className="h-14 animate-pulse rounded-md bg-muted" />
+      <div className="grid gap-2.5 sm:grid-cols-2">
+        {[1, 2].map((i) => (
+          <div key={i} className="h-[62px] animate-pulse rounded-md bg-muted" />
         ))}
       </div>
-      <div className="h-40 rounded-md bg-slate-100 animate-pulse" />
+      <div className="grid gap-3.5 lg:grid-cols-3">
+        <div className="h-[366px] animate-pulse rounded-md bg-muted lg:col-span-2" />
+        <div className="h-[366px] animate-pulse rounded-md bg-muted" />
+      </div>
     </div>
   );
 }

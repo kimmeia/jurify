@@ -1,5 +1,0 @@
-# Artefatos gerados — saem de `gerar.py` + `shot.mjs` a qualquer momento.
-# O CSS é uma cópia do build do app (2,3 MB de binário que envelhece a cada
-# mudança de tema não valem o histórico).
-app.css
-*.png
