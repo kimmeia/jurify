@@ -49,10 +49,14 @@ function diagnosticarFalha(err: unknown): { causa: CausaFalha; detalhe: string }
   if (code === "UND_ERR_CONNECT_TIMEOUT") {
     return { causa: "tcp", detalhe: "não completou a conexão — cheira a firewall silencioso" };
   }
-  if (code.startsWith("CERT_") || /certificate|self.signed|TLS/i.test(msg)) {
-    return { causa: "tls", detalhe: "handshake TLS falhou" };
+  // O código do erro de TLS é o que diz o que fazer: certificado de cadeia
+  // incompleta, raiz que o Node não conhece e versão de protocolo recusada
+  // são três problemas diferentes, e só um deles é nosso. Guardar só "falhou"
+  // apagava exatamente a informação útil.
+  if (code.startsWith("CERT_") || code.startsWith("ERR_TLS") || /certificate|self.signed|SSL|TLS/i.test(msg)) {
+    return { causa: "tls", detalhe: [code, msg].filter(Boolean).join(" — ").slice(0, 200) };
   }
-  return { causa: "outra", detalhe: msg.slice(0, 180) };
+  return { causa: "outra", detalhe: [code, msg].filter(Boolean).join(" — ").slice(0, 200) };
 }
 
 export interface CandidatoSonda {
