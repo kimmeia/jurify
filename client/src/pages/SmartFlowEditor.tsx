@@ -69,6 +69,7 @@ import {
   GRUPO_META,
   CATEGORIAS_PASSO,
   getTipoPassoMeta,
+  configInicialPasso,
   getGatilhoMeta,
   getCategoriaDoTipo,
   CAMPOS_CONDICIONAL,
@@ -459,7 +460,14 @@ function PassoNodeView({ id, data, selected }: NodeProps<PassoNode>) {
               return (
                 <HandleRow key={o.id || i} handleId={`cond_${o.id}`} label={`${o.label || o.id || `opção ${i + 1}`} (${pct}%)`} cor="#d946ef" />
               );
-            }) : <p className="text-[10px] text-muted-foreground italic px-3 py-2">Configure as opções no painel.</p>;
+            }) : (
+              // Bloco antigo salvo sem opção nenhuma: sem opção não há handle,
+              // e sem handle não há de onde puxar a seta. Dizer isso evita a
+              // conclusão de que arrastar está quebrado.
+              <p className="text-[10px] italic text-amber-700 dark:text-amber-400 px-3 py-2">
+                Sem saídas ainda — adicione as opções no painel pra poder ligar os próximos blocos.
+              </p>
+            );
           })()}
         </div>
       ) : data.tipo === "ia_atendente" ? (
@@ -1164,11 +1172,9 @@ const AcoesNoContext = createContext<{
 
 function criarNode(tipo: TipoPasso, y: number, config: Record<string, unknown> = {}): PassoNode {
   const meta = getTipoPassoMeta(tipo);
-  // Blocos novos de distribuição já nascem "Todos do setor" (rodízio entre
-  // todos, ignora online) — padrão mais intuitivo. Fluxos antigos não passam
-  // por aqui (são carregados do banco), então não mudam.
-  const configFinal: Record<string, unknown> =
-    tipo === "distribuir_atendimento" ? { modoDistribuicao: "todos", ...config } : config;
+  // Fluxos antigos não passam por aqui (são carregados do banco), então os
+  // defaults só valem pra bloco novo.
+  const configFinal: Record<string, unknown> = { ...configInicialPasso(tipo), ...config };
   return {
     id: novoNodeId(),
     type: "passo",

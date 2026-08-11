@@ -971,6 +971,28 @@ export const TIPO_CANAL_META: ReadonlyArray<TipoCanalMeta> = [
   { id: "facebook", label: "Facebook", emBreve: true },
 ];
 
+/**
+ * Config com que um passo NASCE no editor.
+ *
+ * Importa pros blocos cujas saídas vêm da config: o nó só desenha um handle
+ * por item, então config vazia = bloco sem bolinha nenhuma, e não há de onde
+ * arrastar a seta. Foi o que aconteceu com o randomizador — ele nascia com
+ * `opcoes: []` e ficava mudo no canvas, sem nada indicando que a saída
+ * dependia de configurar antes.
+ */
+export function configInicialPasso(tipo: string): Record<string, unknown> {
+  if (tipo === "distribuir_atendimento") return { modoDistribuicao: "todos" };
+  if (tipo === "randomizar") {
+    return {
+      opcoes: [
+        { id: "opcao_1", label: "Opção A", peso: 1 },
+        { id: "opcao_2", label: "Opção B", peso: 1 },
+      ],
+    };
+  }
+  return {};
+}
+
 export function getTipoPassoMeta(tipo: string): TipoPassoMeta {
   return (
     TIPO_PASSO_META.find((t) => t.id === tipo) ?? {
