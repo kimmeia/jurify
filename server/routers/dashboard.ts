@@ -1112,6 +1112,7 @@ export const dashboardRouter = router({
           atendenteId: asaasCobrancas.atendenteId,
           faturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
           contratosPagos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
+          clientesPagantes: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId}))`,
         })
         .from(asaasCobrancas)
         .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
@@ -1130,18 +1131,19 @@ export const dashboardRouter = router({
         ))
         .groupBy(asaasCobrancas.atendenteId);
 
-      const mapaPagos = new Map<number, { faturado: number; contratosPagos: number }>();
+      const mapaPagos = new Map<number, { faturado: number; contratosPagos: number; clientesPagantes: number }>();
       for (const r of pagosRows) {
         if (r.atendenteId == null) continue;
         mapaPagos.set(Number(r.atendenteId), {
           faturado: Number(r.faturado || 0),
           contratosPagos: Number(r.contratosPagos || 0),
+          clientesPagantes: Number(r.clientesPagantes || 0),
         });
       }
 
       const cardOf = (c: typeof todosComerciais[number]) => {
         const fechados = mapaFechados.get(c.id) ?? 0;
-        const pagos = mapaPagos.get(c.id) ?? { faturado: 0, contratosPagos: 0 };
+        const pagos = mapaPagos.get(c.id) ?? { faturado: 0, contratosPagos: 0, clientesPagantes: 0 };
         const metaTotal = c.metaMensal != null ? Number(c.metaMensal) : null;
         const metaPeriodo = proporcionalizarMeta(metaTotal, dataInicio, dataFim);
         const progressoMeta = calcularProgressoMeta(pagos.faturado, metaPeriodo);
@@ -1151,6 +1153,7 @@ export const dashboardRouter = router({
           setorNome: c.setorNome,
           contratosFechados: fechados,
           contratosPagos: pagos.contratosPagos,
+          clientesPagantes: pagos.clientesPagantes,
           faturado: pagos.faturado,
           meta: metaTotal,
           metaPeriodo,
@@ -1167,11 +1170,53 @@ export const dashboardRouter = router({
             .sort((a, b) => b.faturado - a.faturado)
         : null;
 
+      /**
+       * Total do time contado de uma vez, e não somando as linhas do ranking.
+       *
+       * Duas razões. A primeira é aritmética: o DISTINCT do ranking vale
+       * DENTRO de cada atendente, então um parcelamento com parcelas atribuídas
+       * a dois atendentes era contado duas vezes na soma. A segunda é que o
+       * relatório comercial mede CLIENTES e o painel mede CONTRATOS — sem os
+       * dois números na mesma resposta, não há como a tela mostrar que 10
+       * contratos e 9 clientes são o mesmo período, e a diferença vira
+       * suspeita de dado errado.
+       */
+      const [totaisAgg] = verTodos
+        ? await db
+            .select({
+              faturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
+              contratosPagos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
+              clientesPagantes: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId}))`,
+            })
+            .from(asaasCobrancas)
+            .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
+            .where(and(
+              eq(asaasCobrancas.escritorioId, eid),
+              inArray(asaasCobrancas.atendenteId, idsAtendentes),
+              inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
+              gte(asaasCobrancas.dataPagamento, dataInicioStr),
+              lte(asaasCobrancas.dataPagamento, dataFimStr),
+              buildFiltroComissaoSQL(["sim"])!,
+              sql`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId}) IN (${contatosFechadosAtual})`,
+            ))
+        : [null];
+
+      const totais = verTodos
+        ? {
+            faturado: Number(totaisAgg?.faturado || 0),
+            contratosPagos: Number(totaisAgg?.contratosPagos || 0),
+            clientesPagantes: Number(totaisAgg?.clientesPagantes || 0),
+            contratosFechados: (ranking ?? []).reduce((s, c) => s + c.contratosFechados, 0),
+            metaPeriodo: (ranking ?? []).reduce((s, c) => s + (c.metaPeriodo ?? 0), 0),
+          }
+        : null;
+
       return {
         periodo: { dataInicio: dataInicioStr, dataFim: dataFimStr },
         modo: verTodos ? ("gestor" as const) : ("individual" as const),
         meu,
         ranking,
+        totais,
         temSetor: meuComercial != null,
       };
     }),
