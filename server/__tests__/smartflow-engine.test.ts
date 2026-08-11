@@ -1201,6 +1201,63 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  /**
+   * Os dois operadores abaixo saíram do dropdown do editor — "está no dia e
+   * horário" faz o que eles faziam separados. Mas fluxo já publicado continua
+   * com eles salvos no banco, e aposentar na UI não pode mudar o que o motor
+   * decide: o lead que caía num ramo tem que continuar caindo no mesmo.
+   */
+  describe("operadores aposentados na UI seguem valendo no motor", () => {
+    const rota = (operador: string, valor: string, valor2?: string): Passo[] => [
+      {
+        id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+        proximoSe: { cond_x: "sim", fallback: "nao" },
+        config: { condicoes: [{ id: "x", campo: "", operador, valor, valor2 }] },
+      },
+      { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "sim", config: { template: "DENTRO" } },
+      { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "nao", config: { template: "FORA" } },
+    ];
+    const ctxBase = { canalId: 1, telefoneCliente: "5585" };
+
+    afterEach(() => vi.useRealTimers());
+
+    it("horario_entre continua roteando pelo horário", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-05-27T17:00:00Z")); // 14:00 Brasília
+      const dentro = await executarCenario(rota("horario_entre", "09:00", "18:00"), { ...ctxBase }, criarMockExecutores());
+      expect(dentro.respostas).toContain("DENTRO");
+
+      vi.setSystemTime(new Date("2026-05-28T00:00:00Z")); // 21:00 Brasília
+      const fora = await executarCenario(rota("horario_entre", "09:00", "18:00"), { ...ctxBase }, criarMockExecutores());
+      expect(fora.respostas).toContain("FORA");
+    });
+
+    it("dia_semana continua roteando pelo dia", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-05-27T17:00:00Z")); // quarta
+      const dentro = await executarCenario(rota("dia_semana", "seg,ter,qua,qui,sex"), { ...ctxBase }, criarMockExecutores());
+      expect(dentro.respostas).toContain("DENTRO");
+
+      vi.setSystemTime(new Date("2026-05-30T17:00:00Z")); // sábado
+      const fora = await executarCenario(rota("dia_semana", "seg,ter,qua,qui,sex"), { ...ctxBase }, criarMockExecutores());
+      expect(fora.respostas).toContain("FORA");
+    });
+
+    it("os dois obedecem o fuso do escritório, não o relógio do servidor", async () => {
+      vi.useFakeTimers();
+      // 21:30 UTC = 18:30 em São Paulo (fora) e 17:30 em Manaus (dentro).
+      vi.setSystemTime(new Date("2026-05-27T21:30:00Z"));
+      const sp = await executarCenario(rota("horario_entre", "09:00", "18:00"), { ...ctxBase }, criarMockExecutores());
+      expect(sp.respostas).toContain("FORA");
+      const manaus = await executarCenario(
+        rota("horario_entre", "09:00", "18:00"),
+        { ...ctxBase, fusoHorario: "America/Manaus" },
+        criarMockExecutores(),
+      );
+      expect(manaus.respostas).toContain("DENTRO");
+    });
+  });
+
   describe("condição de dia e horário (janela_horario)", () => {
     const rota = (valor: string, valor2: string): Passo[] => [
       {

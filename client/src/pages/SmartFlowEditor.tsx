@@ -94,6 +94,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { validarGrafo } from "@shared/smartflow-graph-validation";
+import { FUSO_HORARIO_PADRAO } from "@shared/escritorio-types";
 import { VariableInput, VariableTrigger } from "@/components/VariableInput";
 import { TagsChipPicker } from "@/components/TagsChipPicker";
 import { useSmartFlowVariaveis } from "@/hooks/useSmartFlowVariaveis";
@@ -3601,6 +3602,14 @@ function ConfigCondicionalFields({
   // Catálogo dinâmico — mesmo do autocomplete `{{...}}`. Inclui campos
   // personalizados do escritório (`cliente.campos.<chave>`).
   const variaveis = useSmartFlowVariaveis();
+  // Fuso configurado do escritório. O motor avalia dia e horário NELE, não no
+  // relógio de quem está montando o fluxo — e o editor mostra qual é, porque
+  // um fuso errado só se manifesta na hora em que o lead cai no time errado.
+  const { data: meuEsc } = (trpc as any).configuracoes?.meuEscritorio?.useQuery?.(
+    undefined,
+    { retry: false, refetchOnWindowFocus: false },
+  ) || { data: null };
+  const fusoEscritorio: string = meuEsc?.escritorio?.fusoHorario || FUSO_HORARIO_PADRAO;
   // Mantém os paths legados pra cenários antigos que salvaram exatamente
   // esses valores (a maioria já vem no catálogo, mas `transferir` e
   // similares não estão lá).
@@ -3761,7 +3770,24 @@ function ConfigCondicionalFields({
                                 <SelectItem value="tem_tag">tem a tag (contato)</SelectItem>
                                 <SelectItem value="nao_tem_tag">não tem a tag (contato)</SelectItem>
                                 <SelectItem value="janela_horario">está no dia e horário</SelectItem>
-                                {r.operador === "janela_horario" && (() => {
+                                {/* Aposentados. "está no dia e horário" faz o que os dois
+                                    faziam separados, então não são mais oferecidos pra uso
+                                    novo — mas continuam listados QUANDO o requisito já usa
+                                    um deles, senão o cenário antigo abriria com o seletor
+                                    em branco e perderia a regra no primeiro salvamento. */}
+                                {r.operador === "horario_entre" && (
+                                  <SelectItem value="horario_entre">está no horário (faixa) · antigo</SelectItem>
+                                )}
+                                {r.operador === "dia_semana" && (
+                                  <SelectItem value="dia_semana">é dia da semana · antigo</SelectItem>
+                                )}
+                              </SelectContent>
+                            </Select>
+                            {/* Os campos da janela ficam FORA do <Select>. Dentro do
+                                <SelectContent> eles só existiam com o menu aberto — e
+                                Radix trata o conteúdo do menu como lista de opções, então
+                                nem dava pra digitar a hora. */}
+                            {r.operador === "janela_horario" && (() => {
                               const [ini, fim] = String(r.valor || "-").split("-");
                               const dias = String(r.valor2 || "").split(",").map((d) => d.trim()).filter(Boolean);
                               const setFaixa = (novoIni: string, novoFim: string) =>
@@ -3797,19 +3823,19 @@ function ConfigCondicionalFields({
                                     {dias.length === 0
                                       ? "Nenhum dia marcado — vale todos os dias da semana."
                                       : "Vale só nos dias marcados."}{" "}
-                                    Fim exclusivo (18:00 já está fora). Fuso do escritório.
+                                    Fim exclusivo ({fim || "18:00"} já está fora).
+                                  </p>
+                                  {/* O fuso decide o resultado da condição, então aparece
+                                      explícito: implícito, ninguém descobre que o horário
+                                      foi avaliado noutro fuso até distribuir pro time errado. */}
+                                  <p className="text-[10px] font-medium text-violet-600 dark:text-violet-400">
+                                    Avaliado no fuso {fusoEscritorio}
+                                    {fusoEscritorio === FUSO_HORARIO_PADRAO ? " (padrão)" : ""} · trocar em
+                                    Configurações → Escritório.
                                   </p>
                                 </div>
                               );
                             })()}
-                            {r.operador === "horario_entre" && (
-                                  <SelectItem value="horario_entre">está no horário (faixa)</SelectItem>
-                                )}
-                                {r.operador === "dia_semana" && (
-                                  <SelectItem value="dia_semana">é dia da semana</SelectItem>
-                                )}
-                              </SelectContent>
-                            </Select>
                             {r.operador !== "existe" && r.operador !== "nao_existe" && r.operador !== "verdadeiro" && r.operador !== "janela_horario" && r.operador !== "horario_entre" && r.operador !== "dia_semana" && (
                               <Input
                                 value={String(r.valor || "")}
