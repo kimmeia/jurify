@@ -4,12 +4,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   AlertTriangle,
   ArrowLeft,
   Clock,
   DollarSign,
   Loader2,
   MessageCircle,
+  MoreVertical,
   Play,
   Save,
   Trash2,
@@ -161,17 +168,29 @@ export function EditorTopbar({
         </Button>
       )}
 
-      {/* Excluir (só em cenários salvos) */}
+      {/*
+        Excluir (só em cenários salvos).
+        Fica atrás de um menu, escrito por extenso: como lixeira vermelha
+        solta, era o mesmo ícone da lixeira que remove UM bloco, dois cliques
+        de distância — e apagava o fluxo inteiro.
+      */}
       {!novo && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onExcluir}
-          className="text-destructive hover:text-destructive hover:bg-destructive/10 px-2"
-          title="Excluir cenário"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="px-2" title="Mais ações do cenário">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={onExcluir}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Excluir cenário inteiro
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
 
       {/* Salvar */}

@@ -2353,6 +2353,12 @@ export const smartflowCenarios = mysqlTable("smartflow_cenarios", {
   /** Quando o cenário foi criado a partir de um modelo da plataforma,
    *  aponta pro `smartflow_templates.id` de origem. NULL = criado do zero. */
   origemTemplateId: int("origemTemplateIdSF"),
+  /**
+   * Lixeira. Preenchido = excluído pelo usuário; a linha fica pra poder ser
+   * restaurada. O delete também zera `ativo`, e é isso que impede o motor de
+   * disparar um cenário na lixeira — todo carregador já filtra por ativo.
+   */
+  deletadoEm: timestamp("deletadoEmSF"),
   createdAt: timestamp("createdAtSF").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtSF").defaultNow().onUpdateNow().notNull(),
 });

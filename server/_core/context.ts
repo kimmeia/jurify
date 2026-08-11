@@ -7,7 +7,11 @@ import { sdk } from "./sdk";
  * presente, significa que um admin está logado COMO este user. Toda
  * ação de auditoria deve usar `impersonatedBy` como ator real.
  */
-export type AuthenticatedUser = User & { impersonatedBy?: string };
+export type AuthenticatedUser = User & {
+  impersonatedBy?: string;
+  /** Quando o token de impersonation expira (epoch ms). */
+  impersonacaoExpiraEm?: number;
+};
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];

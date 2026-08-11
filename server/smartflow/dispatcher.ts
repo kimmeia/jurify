@@ -1284,8 +1284,8 @@ export async function dispararProximoVencimento(
  * Cloud, Instagram, Facebook).
  *
  * Seleção de cenário: cenários com gatilho `mensagem_canal` cujo
- * `configGatilho.canais` inclua o canalTipo (ou esteja vazio = aceita
- * qualquer canal).
+ * `configGatilho.canaisIds` inclua o canalId (ou, na ausência dele, cujo
+ * `configGatilho.canais` inclua o canalTipo — vazio = qualquer canal).
  *
  * Retorna `executou=true` se algum cenário rodou — nesse caso o chatbot
  * padrão NÃO deve responder.
@@ -1394,7 +1394,7 @@ export async function dispararMensagemCanal(
     // 1. Tenta cenários `mensagem_canal` com filtro de canal
     const cenariosMC = await carregarCenariosAtivos(escritorioId, ["mensagem_canal"]);
     const aceitos = cenariosMC.filter((c) =>
-      aceitaCanal(c.configGatilho as ConfigGatilhoMensagemCanal, params.canalTipo),
+      aceitaCanal(c.configGatilho as ConfigGatilhoMensagemCanal, params.canalTipo, params.canalId),
     );
 
     if (aceitos.length > 0) {

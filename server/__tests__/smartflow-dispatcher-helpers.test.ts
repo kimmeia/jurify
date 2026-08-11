@@ -134,6 +134,36 @@ describe("aceitaCanal (gatilho mensagem_canal)", () => {
     expect(aceitaCanal(cfg, "instagram")).toBe(true);
     expect(aceitaCanal(cfg, "facebook")).toBe(false);
   });
+
+  /**
+   * Escritório com dois números na mesma WABA (comercial e cobrança) via
+   * filtro por TIPO rodava os dois fluxos nas duas linhas. O filtro por número
+   * é o que separa.
+   */
+  it("filtra pelo NÚMERO quando canaisIds está populado", () => {
+    const cfg = { canaisIds: [7] };
+    expect(aceitaCanal(cfg, "whatsapp_api", 7)).toBe(true);
+    expect(aceitaCanal(cfg, "whatsapp_api", 8)).toBe(false);
+  });
+
+  it("sem canalId conhecido, número escolhido não casa — fail-closed", () => {
+    expect(aceitaCanal({ canaisIds: [7] }, "whatsapp_api")).toBe(false);
+  });
+
+  it("canaisIds vence canais: o tipo não pode descartar o número escolhido", () => {
+    const cfg = { canais: ["instagram" as const], canaisIds: [7] };
+    expect(aceitaCanal(cfg, "whatsapp_api", 7)).toBe(true);
+  });
+
+  it("canaisIds vazio cai no filtro por tipo (cenários antigos)", () => {
+    expect(aceitaCanal({ canaisIds: [], canais: ["whatsapp_api" as const] }, "whatsapp_api", 7)).toBe(true);
+    expect(aceitaCanal({ canaisIds: [], canais: ["whatsapp_api" as const] }, "instagram", 7)).toBe(false);
+  });
+
+  // O configGatilho volta do banco como JSON solto (`z.record(z.any())`).
+  it("aceita id gravado como string", () => {
+    expect(aceitaCanal({ canaisIds: ["7" as unknown as number] }, "whatsapp_api", 7)).toBe(true);
+  });
 });
 
 describe("deveDispararVencido (gatilho pagamento_vencido)", () => {

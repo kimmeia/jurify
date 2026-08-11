@@ -11,7 +11,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { eq, inArray, desc, and, gt, sql } from "drizzle-orm";
-import { adminProcedure, router } from "../_core/trpc";
+import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { registrarAuditoria } from "../_core/audit";
 import { consume as rateLimitConsume } from "../_core/rate-limit";
 import { createLogger } from "../_core/logger";
@@ -980,7 +980,7 @@ export const adminRouter = router({
    * registradas em nome do admin (auditoria).
    *
    * Limite: sessão de impersonation dura 1 hora (não a SESSION_DURATION
-   * normal). Pra "sair" da impersonation, o admin clica em logout.
+   * normal). A saída é `encerrarImpersonacao`, logo abaixo.
    */
   impersonarUsuario: adminProcedure
     .input(z.object({ userId: z.number() }))
@@ -1037,6 +1037,108 @@ export const adminRouter = router({
         targetName: targetUser.name || targetUser.email,
       };
     }),
+
+  /**
+   * Dados da faixa de impersonation. Roda com a sessão do usuário-alvo
+   * (que não é admin), então precisa ser `protectedProcedure` — o gate é
+   * a própria presença do `impersonatedBy` no token.
+   */
+  contextoImpersonacao: protectedProcedure.query(async ({ ctx }) => {
+    if (!ctx.user.impersonatedBy) return null;
+
+    const db = await getDb();
+    let escritorioNome: string | null = null;
+    if (db) {
+      const [vinculo] = await db
+        .select({ nome: escritorios.nome })
+        .from(colaboradores)
+        .innerJoin(escritorios, eq(colaboradores.escritorioId, escritorios.id))
+        .where(and(eq(colaboradores.userId, ctx.user.id), eq(colaboradores.ativo, true)))
+        .limit(1);
+      escritorioNome = vinculo?.nome ?? null;
+    }
+
+    return {
+      alvoNome: ctx.user.name || ctx.user.email || "Usuário",
+      escritorioNome,
+      expiraEm: ctx.user.impersonacaoExpiraEm ?? null,
+    };
+  }),
+
+  /**
+   * Encerra a impersonation devolvendo o admin à própria sessão.
+   *
+   * Entrar como alguém SUBSTITUI o cookie — a sessão do admin deixa de
+   * existir, e o único rastro dela é o `impersonatedBy` dentro do token.
+   * Por isso a volta é uma sessão nova assinada aqui, e não um token
+   * guardado em algum lugar.
+   *
+   * O cargo é conferido AGORA, e não herdado do que valia na entrada: se
+   * o admin foi rebaixado ou bloqueado no meio da impersonation, sair não
+   * pode devolver os poderes. Nesse caso a sessão é derrubada por
+   * completo — voltar ao login é o comportamento correto.
+   */
+  encerrarImpersonacao: protectedProcedure.mutation(async ({ ctx }) => {
+    const impersonatorOpenId = ctx.user.impersonatedBy;
+    if (!impersonatorOpenId) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Esta sessão não é uma impersonação.",
+      });
+    }
+
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    const [admin] = await db
+      .select()
+      .from(users)
+      .where(eq(users.openId, impersonatorOpenId))
+      .limit(1);
+
+    const { COOKIE_NAME } = await import("../../shared/const");
+    const { getSessionCookieOptions } = await import("../_core/cookies");
+    const cookieOptions = getSessionCookieOptions(ctx.req);
+
+    if (!admin || admin.role !== "admin" || admin.bloqueado) {
+      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      log.warn(
+        { impersonatorOpenId, alvoUserId: ctx.user.id },
+        "Saída de impersonation sem admin válido — sessão derrubada",
+      );
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "Sua conta de administrador não está mais ativa. Faça login novamente.",
+      });
+    }
+
+    const { sdk } = await import("../_core/sdk");
+    const { SESSION_DURATION_MS } = await import("../../shared/const");
+
+    const sessionToken = await sdk.signSession({
+      openId: admin.openId,
+      appId: "jurify",
+      name: admin.name || admin.email || "Admin",
+    });
+
+    ctx.res.cookie(COOKIE_NAME, sessionToken, {
+      ...cookieOptions,
+      maxAge: SESSION_DURATION_MS,
+    });
+
+    // Só a entrada era auditada. Sem a saída não dá pra saber por quanto
+    // tempo o admin ficou dentro da conta do cliente.
+    await registrarAuditoria({
+      ctx,
+      acao: "user.impersonar.encerrar",
+      alvoTipo: "user",
+      alvoId: ctx.user.id,
+      alvoNome: ctx.user.name || ctx.user.email || undefined,
+    });
+
+    return { success: true };
+  }),
 
   /**
    * Reset de senha — gera senha temporária para usuários que perderam

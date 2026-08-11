@@ -3,6 +3,7 @@ import { useNotificacoes } from "@/hooks/useNotificacoes";
 import { ChamadaWhatsappProvider } from "@/hooks/whatsapp-call-context";
 import NotificacoesSino from "@/components/NotificacoesSino";
 import { MarcaJ } from "@/components/MarcaJ";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { trpc } from "@/lib/trpc";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -656,7 +657,7 @@ function AppSidebarContent({
       <SidebarInset>
         {/* Banner de impersonation — mostrado quando admin entrou como cliente */}
         {(user as any)?.impersonatedBy && (
-          <ImpersonationBanner targetName={user?.name || user?.email || "Usuário"} onExit={logout} />
+          <ImpersonationBanner alvoNome={user?.name || user?.email || "Usuário"} />
         )}
         {/* Banner topo: trial em andamento (Fase 3) */}
         <TrialBanner />
@@ -776,30 +777,3 @@ function TrialBanner() {
   );
 }
 
-/**
- * Banner amarelo persistente no topo do app indicando que o admin do
- * JuridFlow está vendo a conta de outro usuário (impersonation). Botão
- * "Sair" faz logout (que limpa o cookie de impersonation).
- */
-function ImpersonationBanner({ targetName, onExit }: { targetName: string; onExit: () => void }) {
-  return (
-    <div className="bg-amber-500 text-amber-950 px-4 py-2.5 flex items-center justify-between gap-3 sticky top-0 z-50 border-b border-amber-600 shadow-md">
-      <div className="flex items-center gap-2 text-sm font-medium">
-        <Lock className="h-4 w-4" />
-        <span>
-          Você está vendo o sistema como <strong>{targetName}</strong> — toda ação
-          é registrada em nome do admin original.
-        </span>
-      </div>
-      <Button
-        size="sm"
-        variant="outline"
-        className="bg-white hover:bg-amber-50 border-amber-700 text-amber-950 h-8 text-xs font-medium"
-        onClick={onExit}
-      >
-        <LogOut className="h-3.5 w-3.5 mr-1.5" />
-        Sair da impersonação
-      </Button>
-    </div>
-  );
-}
