@@ -38,6 +38,7 @@ import {
   Lock,
   FileSearch,
   Gavel,
+  Scale,
   FileText,
   Handshake,
   Headphones,
@@ -131,6 +132,10 @@ const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
       // aparecia pra qualquer um com Processos e entregava "não está no seu
       // plano" depois do clique.
       { id: "jurisia", rotulo: "JurisIA", rota: "/jurisia", icone: Gavel, ver: (c) => c("processos"), ocultaPor: "jurisia", selo: "beta" },
+      // Redator de peças. Já existia pronto em /agente-juridico, alcançável só
+      // por um card dentro de Automações — enquanto o JurisIA anunciava
+      // "Redigir peça · em breve" pra um recurso que estava no ar.
+      { id: "agente-juridico", rotulo: "Redigir peça", rota: "/agente-juridico", icone: Scale, ver: (c) => c("processos"), ocultaPor: "processos" },
       { id: "calculos", rotulo: "Cálculos", rota: "/calculos", icone: Calculator, ver: (c) => c("calculos"), ocultaPor: "calculos" },
       { id: "modelos", rotulo: "Modelos", rota: "/modelos-contrato", icone: FileText, ver: (c) => c("modelos") },
       // Fusão de SmartFlow (Fluxos) + Agentes IA: aparece com qualquer um dos
