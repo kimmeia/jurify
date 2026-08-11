@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -481,16 +482,17 @@ function PainelRecorte({
 /**
  * Os três modos do assistente.
  *
- * Só Pesquisar responde hoje. Os outros dois aparecem marcados como "em breve"
- * em vez de sumirem: o advogado precisa saber que existem — mas mostrar aba
- * viva que não faz nada foi exatamente o defeito que o módulo já teve no menu.
+ * "Redigir peça" ficou marcado como "em breve" enquanto o redator já rodava em
+ * /agente-juridico, alcançável só por um card dentro de Automações. O selo
+ * agora diz onde a peça mora, e o clique leva até lá — as duas bases ainda são
+ * separadas, e isso é o que o modo explica antes de mandar o advogado embora.
  */
 export type Modo = "pesquisar" | "estrategia" | "peca";
 
 const MODOS = [
-  { id: "pesquisar", rotulo: "Pesquisar", icone: Search, pronto: true },
-  { id: "estrategia", rotulo: "Estratégia", icone: BarChart3, pronto: true },
-  { id: "peca", rotulo: "Redigir peça", icone: Pencil, pronto: false },
+  { id: "pesquisar", rotulo: "Pesquisar", icone: Search },
+  { id: "estrategia", rotulo: "Estratégia", icone: BarChart3 },
+  { id: "peca", rotulo: "Redigir peça", icone: Pencil },
 ] as const;
 
 function SeletorModo({ modo, onModo }: { modo: Modo; onModo: (m: Modo) => void }) {
@@ -503,27 +505,57 @@ function SeletorModo({ modo, onModo }: { modo: Modo; onModo: (m: Modo) => void }
           <button
             key={m.id}
             type="button"
-            disabled={!m.pronto}
-            onClick={() => m.pronto && onModo(m.id as Modo)}
-            title={m.pronto ? undefined : "Chegando — pesquisa e estratégia já funcionam."}
+            onClick={() => onModo(m.id as Modo)}
             className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11.5px] font-semibold ${
-              !m.pronto
-                ? "cursor-not-allowed text-muted-foreground/60"
-                : ativo
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+              ativo
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <Icone className="h-3.5 w-3.5" />
             {m.rotulo}
-            {!m.pronto && (
-              <span className="rounded-full border px-1.5 text-[8.5px] font-extrabold uppercase tracking-[0.06em]">
-                em breve
-              </span>
-            )}
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Modo "Redigir peça" — ponte pro redator.
+ *
+ * Diz o que ele faz e, principalmente, o que ele NÃO faz: a minuta sai do
+ * caso e da base do escritório, não da estatística do acervo. Vender uma peça
+ * "fundamentada no acervo" antes da fusão seria prometer o que ainda não
+ * existe.
+ */
+function PainelPeca() {
+  return (
+    <div className="rounded-md border bg-card p-4">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white">
+          <Scale className="h-4.5 w-4.5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">A redação de peças fica no Agente Jurídico</p>
+          <p className="mt-1 text-[12.5px] leading-snug text-muted-foreground">
+            Você escolhe o cliente e o processo; ele lê a movimentação, os documentos anexados e a
+            base de fontes do escritório, e devolve a minuta pronta pra editar — com exportação em
+            .docx no timbre do escritório. Toda peça é minuta: revisão humana antes de protocolar.
+          </p>
+          <p className="mt-2 rounded border border-dashed px-2.5 py-1.5 text-[11.5px] leading-snug text-muted-foreground">
+            Ainda são duas bases separadas. A minuta se apoia no caso e nas fontes do escritório —
+            <strong className="font-semibold"> não</strong> na estatística do acervo público que você
+            vê em Pesquisar. Cruzar as duas é o próximo passo do módulo.
+          </p>
+          <Link href="/agente-juridico">
+            <a className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-violet-700">
+              <Scale className="h-3.5 w-3.5" />
+              Abrir o Agente Jurídico
+            </a>
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1262,6 +1294,7 @@ export default function JurisIa() {
 
           <div className="border-t px-4 py-3">
             <SeletorModo modo={modo} onModo={setModo} />
+            {modo === "peca" ? <PainelPeca /> : (<>
             <div className="flex items-center gap-2">
               <Input
                 value={pergunta}
@@ -1298,6 +1331,7 @@ export default function JurisIa() {
                 ? `Você usou as ${cota.limite} mensagens deste mês.`
                 : "Beta — acervo público do CNJ (DataJud). Confira as fontes antes de peticionar."}
             </p>
+            </>)}
           </div>
         </div>
 
