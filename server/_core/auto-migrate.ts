@@ -21,8 +21,18 @@ import path from "path";
 import mysql from "mysql2/promise";
 import { fileURLToPath } from "url";
 import { createLogger } from "./logger";
+import { smartflowCenarios, smartflowPassos } from "../../drizzle/schema";
 
 const log = createLogger("auto-migrate");
+
+/**
+ * Valores de um enum do drizzle na forma que o MySQL espera:
+ * `'a','b','c'`. A ordem é a do schema — a mesma das migrations de arquivo,
+ * então reaplicar não remapeia linha nenhuma.
+ */
+export function listaEnumSql(valores: readonly string[]): string {
+  return valores.map((v) => `'${v.replace(/'/g, "''")}'`).join(",");
+}
 
 // Resolve o diretório drizzle/ relativo ao projeto.
 // Em dev: server/_core/auto-migrate.ts → ../../drizzle
@@ -1347,14 +1357,20 @@ export async function runMigrations(): Promise<void> {
     }
 
     // SmartFlow enum updates.
-    // IMPORTANTE: esta lista é a FONTE DA VERDADE do enum — roda todo boot e
-    // sobrescreve o enum inteiro. Tem que incluir TODOS os tipos de passo,
-    // senão um reboot remove os valores adicionados por migrations de arquivo
-    // (que só rodam uma vez) e INSERTs com o tipo "sumido" passam a falhar.
-    // Ao adicionar tipo novo de passo: incluir AQUI + no schema.ts.
+    // Este MODIFY roda a TODO boot e sobrescreve o enum inteiro, enquanto as
+    // migrations de arquivo rodam uma vez só. Enquanto a lista era escrita à
+    // mão aqui, cada tipo de passo novo entrava pela migration e era removido
+    // no reboot seguinte — `whatsapp_pergunta_opcoes` e `randomizar` ficaram
+    // impossíveis de salvar por causa disso, com o erro cru do MySQL na cara
+    // do usuário. Agora sai do schema do drizzle, que é a mesma fonte das
+    // migrations: um tipo novo não tem como ficar de fora.
     try {
-      await connection.query(`ALTER TABLE smartflow_cenarios MODIFY COLUMN gatilhoSF ENUM('whatsapp_mensagem','mensagem_canal','novo_lead','agendamento_criado','agendamento_cancelado','agendamento_remarcado','agendamento_lembrete','pagamento_recebido','pagamento_vencido','pagamento_proximo_vencimento','manual') NOT NULL`);
-      await connection.query(`ALTER TABLE smartflow_passos MODIFY COLUMN tipoPasso ENUM('ia_classificar','ia_responder','ia_consultar','ia_atendente','ia_extrair_campos','crm_buscar_contato','crm_listar_acoes_cliente','processo_buscar_movimentacoes','calcom_horarios','calcom_agendar','calcom_listar','calcom_cancelar','calcom_remarcar','agenda_criar','whatsapp_enviar','whatsapp_aguardar_resposta','transferir','encerrar_conversa','distribuir_atendimento','condicional','para_cada_item','esperar','webhook','kanban_criar_card','kanban_mover_card','kanban_atribuir_responsavel','kanban_tags','asaas_gerar_cobranca','asaas_cancelar_cobranca','asaas_consultar_valor_aberto','asaas_marcar_recebida','definir_variavel','definir_campo_personalizado','contato_tags') NOT NULL`);
+      await connection.query(
+        `ALTER TABLE smartflow_cenarios MODIFY COLUMN gatilhoSF ENUM(${listaEnumSql(smartflowCenarios.gatilho.enumValues)}) NOT NULL`,
+      );
+      await connection.query(
+        `ALTER TABLE smartflow_passos MODIFY COLUMN tipoPasso ENUM(${listaEnumSql(smartflowPassos.tipo.enumValues)}) NOT NULL`,
+      );
     } catch (err: any) {
       if (!isHarmlessError(err.message || String(err))) log.warn({ err: err.message }, "Falha ao atualizar enums SmartFlow");
     }

@@ -9,7 +9,7 @@ import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
 import { getDb } from "../db";
 import { smartflowCenarios, smartflowPassos, smartflowExecucoes, smartflowTemplates } from "../../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull, isNotNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { executarManual } from "./dispatcher";
 import { createLogger } from "../_core/logger";
@@ -80,25 +80,67 @@ async function garantirOwnership(
   userId: number,
   verTodos: boolean,
   verProprios: boolean,
+  /** Só `restaurar` e `excluirDefinitivo` operam sobre cenário na lixeira. */
+  permitirExcluido = false,
 ) {
-  if (verTodos) {
-    const [c] = await db
-      .select({ criadoPor: smartflowCenarios.criadoPor })
-      .from(smartflowCenarios)
-      .where(and(eq(smartflowCenarios.id, cenarioId), eq(smartflowCenarios.escritorioId, escritorioId)))
-      .limit(1);
-    if (!c) throw new TRPCError({ code: "NOT_FOUND" });
-    return;
+  if (!verTodos && !verProprios) return;
+
+  const [c] = await db
+    .select({
+      criadoPor: smartflowCenarios.criadoPor,
+      deletadoEm: smartflowCenarios.deletadoEm,
+    })
+    .from(smartflowCenarios)
+    .where(and(eq(smartflowCenarios.id, cenarioId), eq(smartflowCenarios.escritorioId, escritorioId)))
+    .limit(1);
+  if (!c) throw new TRPCError({ code: "NOT_FOUND" });
+
+  // Cenário na lixeira não se edita, não se ativa e não se executa — sem
+  // isso, salvar por cima de um fluxo excluído o ressuscitaria pela metade.
+  if (c.deletadoEm && !permitirExcluido) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Este cenário está na lixeira." });
   }
-  if (verProprios) {
-    const [c] = await db
-      .select({ criadoPor: smartflowCenarios.criadoPor })
-      .from(smartflowCenarios)
-      .where(and(eq(smartflowCenarios.id, cenarioId), eq(smartflowCenarios.escritorioId, escritorioId)))
-      .limit(1);
-    if (!c) throw new TRPCError({ code: "NOT_FOUND" });
-    if (c.criadoPor !== userId) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode alterar seus próprios cenários." });
+
+  if (verProprios && !verTodos && c.criadoPor !== userId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode alterar seus próprios cenários." });
+  }
+}
+
+/**
+ * Grava os passos de um cenário, um a um, traduzindo falha do banco.
+ *
+ * O erro cru do mysql2 subia direto pro toast: o usuário via o INSERT inteiro
+ * com todos os parâmetros e nenhuma pista de qual bloco tinha estourado. Aqui
+ * o SQL fica no log do servidor e a tela recebe a posição e o nome do bloco.
+ */
+async function gravarPassos(
+  tx: any,
+  cenarioId: number,
+  passos: Array<z.infer<typeof passoInputSchema>>,
+): Promise<void> {
+  for (let i = 0; i < passos.length; i++) {
+    const p = passos[i]!;
+    try {
+      await tx.insert(smartflowPassos).values({
+        cenarioId,
+        ordem: i + 1,
+        tipo: p.tipo,
+        config: p.config ? JSON.stringify(p.config) : null,
+        clienteId: p.clienteId || null,
+        proximoSe: p.proximoSe && Object.keys(p.proximoSe).length > 0
+          ? JSON.stringify(p.proximoSe)
+          : null,
+      });
+    } catch (err: any) {
+      const rotulo = TIPO_PASSO_META.find((t) => t.id === p.tipo)?.label ?? p.tipo;
+      log.error(
+        { cenarioId, ordem: i + 1, tipo: p.tipo, err: String(err?.message || err) },
+        "Falha ao gravar passo do SmartFlow",
+      );
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Não consegui salvar o bloco ${i + 1} ("${rotulo}"). Nada foi alterado — o fluxo continua como estava. O erro ficou registrado no servidor.`,
+      });
     }
   }
 }
@@ -235,7 +277,10 @@ export const smartflowRouter = router({
     const db = await getDb();
     if (!db) return [];
 
-    const conds: any[] = [eq(smartflowCenarios.escritorioId, perm.escritorioId)];
+    const conds: any[] = [
+      eq(smartflowCenarios.escritorioId, perm.escritorioId),
+      isNull(smartflowCenarios.deletadoEm),
+    ];
     if (!perm.verTodos && perm.verProprios) {
       conds.push(eq(smartflowCenarios.criadoPor, ctx.user.id));
     }
@@ -348,19 +393,7 @@ export const smartflowRouter = router({
       });
       const cenarioId = (result as { insertId: number }).insertId;
 
-      for (let i = 0; i < input.passos.length; i++) {
-        const p = input.passos[i];
-        await db.insert(smartflowPassos).values({
-          cenarioId,
-          ordem: i + 1,
-          tipo: p.tipo,
-          config: p.config ? JSON.stringify(p.config) : null,
-          clienteId: p.clienteId || null,
-          proximoSe: p.proximoSe && Object.keys(p.proximoSe).length > 0
-            ? JSON.stringify(p.proximoSe)
-            : null,
-        });
-      }
+      await gravarPassos(db, cenarioId, input.passos);
 
       return { id: cenarioId };
     }),
@@ -406,20 +439,13 @@ export const smartflowRouter = router({
       // Substitui os passos atomicamente (delete + insert). Os IDs do DB
       // mudam, mas `clienteId` (UUID estável gerado pelo editor) sobrevive,
       // então as edges no `proximoSe` continuam apontando pros passos certos.
-      await db.delete(smartflowPassos).where(eq(smartflowPassos.cenarioId, input.id));
-      for (let i = 0; i < input.passos.length; i++) {
-        const p = input.passos[i];
-        await db.insert(smartflowPassos).values({
-          cenarioId: input.id,
-          ordem: i + 1,
-          tipo: p.tipo,
-          config: p.config ? JSON.stringify(p.config) : null,
-          clienteId: p.clienteId || null,
-          proximoSe: p.proximoSe && Object.keys(p.proximoSe).length > 0
-            ? JSON.stringify(p.proximoSe)
-            : null,
-        });
-      }
+      // Em transação: sem ela, um passo que falhasse no meio deixava o
+      // cenário com os blocos antigos já apagados e só uma parte dos novos —
+      // fluxo mutilado, e o usuário só descobria abrindo de novo.
+      await db.transaction(async (tx) => {
+        await tx.delete(smartflowPassos).where(eq(smartflowPassos.cenarioId, input.id));
+        await gravarPassos(tx, input.id, input.passos);
+      });
 
       return { success: true };
     }),
@@ -442,7 +468,15 @@ export const smartflowRouter = router({
       return { success: true };
     }),
 
-  /** Deleta cenário + passos */
+  /**
+   * Manda o cenário pra lixeira. Não apaga linha nenhuma: marca `deletadoEm`
+   * e desliga o `ativo`.
+   *
+   * Desligar o ativo não é detalhe — é o que impede o motor de disparar um
+   * cenário na lixeira, já que todos os carregadores filtram por ativo. Assim
+   * a garantia não depende de alguém lembrar de checar `deletadoEm` em cada
+   * consulta nova.
+   */
   deletar: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
@@ -452,6 +486,87 @@ export const smartflowRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       await garantirOwnership(db, input.id, perm.escritorioId, ctx.user.id, perm.verTodos, perm.verProprios);
+
+      await db
+        .update(smartflowCenarios)
+        .set({ deletadoEm: new Date(), ativo: false })
+        .where(and(eq(smartflowCenarios.id, input.id), eq(smartflowCenarios.escritorioId, perm.escritorioId)));
+
+      return { success: true };
+    }),
+
+  /** Cenários na lixeira, mais recentes primeiro. */
+  listarExcluidos: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "smartflow", "ver");
+    if (!perm.allowed) return [];
+    const db = await getDb();
+    if (!db) return [];
+
+    const conds: any[] = [
+      eq(smartflowCenarios.escritorioId, perm.escritorioId),
+      isNotNull(smartflowCenarios.deletadoEm),
+    ];
+    if (!perm.verTodos && perm.verProprios) {
+      conds.push(eq(smartflowCenarios.criadoPor, ctx.user.id));
+    }
+
+    const linhas = await db
+      .select({
+        id: smartflowCenarios.id,
+        nome: smartflowCenarios.nome,
+        gatilho: smartflowCenarios.gatilho,
+        deletadoEm: smartflowCenarios.deletadoEm,
+      })
+      .from(smartflowCenarios)
+      .where(and(...conds))
+      .orderBy(desc(smartflowCenarios.deletadoEm))
+      .limit(50);
+
+    return linhas;
+  }),
+
+  /** Tira da lixeira. Volta INATIVO — religar é decisão consciente. */
+  restaurar: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "smartflow", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para restaurar cenários." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await garantirOwnership(db, input.id, perm.escritorioId, ctx.user.id, perm.verTodos, perm.verProprios, true);
+
+      await db
+        .update(smartflowCenarios)
+        .set({ deletadoEm: null })
+        .where(and(eq(smartflowCenarios.id, input.id), eq(smartflowCenarios.escritorioId, perm.escritorioId)));
+
+      return { success: true };
+    }),
+
+  /** Apaga de vez, e só a partir da lixeira. É o único DELETE que sobrou. */
+  excluirDefinitivo: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "smartflow", "excluir");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para excluir cenários." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [alvo] = await db
+        .select({ deletadoEm: smartflowCenarios.deletadoEm })
+        .from(smartflowCenarios)
+        .where(and(eq(smartflowCenarios.id, input.id), eq(smartflowCenarios.escritorioId, perm.escritorioId)))
+        .limit(1);
+      if (!alvo) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!alvo.deletadoEm) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Só dá pra apagar de vez a partir da lixeira.",
+        });
+      }
+
+      await garantirOwnership(db, input.id, perm.escritorioId, ctx.user.id, perm.verTodos, perm.verProprios, true);
 
       await db.delete(smartflowPassos).where(eq(smartflowPassos.cenarioId, input.id));
       await db.delete(smartflowCenarios)
@@ -563,22 +678,20 @@ export const smartflowRouter = router({
       });
       const cenarioId = (result as { insertId: number }).insertId;
 
-      for (let i = 0; i < tpl.passos.length; i++) {
-        const p = tpl.passos[i];
-        // Aplica patch de config do wizard (merge raso sobre a config do template).
-        const patch = input.passosConfig?.[p.clienteId];
-        const configFinal = patch ? { ...p.config, ...patch } : p.config;
-        await db.insert(smartflowPassos).values({
-          cenarioId,
-          ordem: i + 1,
-          tipo: p.tipo as any,
-          config: JSON.stringify(configFinal),
-          clienteId: p.clienteId || null,
-          proximoSe: p.proximoSe && Object.keys(p.proximoSe).length > 0
-            ? JSON.stringify(p.proximoSe)
-            : null,
-        });
-      }
+      await gravarPassos(
+        db,
+        cenarioId,
+        tpl.passos.map((p) => {
+          // Aplica patch de config do wizard (merge raso sobre a do template).
+          const patch = input.passosConfig?.[p.clienteId];
+          return {
+            tipo: p.tipo as TipoPasso,
+            config: patch ? { ...p.config, ...patch } : p.config,
+            clienteId: p.clienteId || undefined,
+            proximoSe: p.proximoSe,
+          };
+        }),
+      );
 
       return { id: cenarioId, nome: nomeFinal };
     }),

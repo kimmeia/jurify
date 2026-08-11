@@ -3,6 +3,8 @@ import {
   CheckCircle2,
   LayoutList,
   Maximize,
+  Redo2,
+  Undo2,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -24,6 +26,8 @@ export function EditorCanvasToolbar({
   onFit,
   onAutoArranjar,
   onValidar,
+  onDesfazer,
+  onRefazer,
   recuoDireita = 0,
 }: {
   onZoomIn: () => void;
@@ -31,6 +35,8 @@ export function EditorCanvasToolbar({
   onFit: () => void;
   onAutoArranjar: () => void;
   onValidar: () => void;
+  onDesfazer: () => void;
+  onRefazer: () => void;
   /** Px a afastar da borda direita — o inspetor flutua ali por cima. */
   recuoDireita?: number;
 }) {
@@ -39,6 +45,27 @@ export function EditorCanvasToolbar({
       className="absolute bottom-4 z-10 bg-card rounded-lg border border-slate-200 dark:border-slate-800 shadow-lg p-1 flex items-center gap-0.5 transition-[right]"
       style={{ right: 16 + recuoDireita }}
     >
+      {/* Desfazer vem primeiro de propósito: quem apagou um bloco sem querer
+          procura a saída antes de qualquer outra coisa. */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="w-7 h-7 p-0"
+        onClick={onDesfazer}
+        title="Desfazer (Ctrl+Z)"
+      >
+        <Undo2 className="h-3.5 w-3.5" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="w-7 h-7 p-0"
+        onClick={onRefazer}
+        title="Refazer (Ctrl+Shift+Z)"
+      >
+        <Redo2 className="h-3.5 w-3.5" />
+      </Button>
+      <div className="w-px h-5 bg-border mx-0.5"></div>
       <Button
         variant="ghost"
         size="sm"

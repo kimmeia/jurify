@@ -95,6 +95,7 @@ import {
 } from "@/components/ui/command";
 import { validarGrafo } from "@shared/smartflow-graph-validation";
 import { FUSO_HORARIO_PADRAO } from "@shared/escritorio-types";
+import { formatarTelefone } from "@shared/validacoes";
 import { VariableInput, VariableTrigger } from "@/components/VariableInput";
 import { TagsChipPicker } from "@/components/TagsChipPicker";
 import { useSmartFlowVariaveis } from "@/hooks/useSmartFlowVariaveis";
@@ -600,7 +601,8 @@ function CategoriaPopoverButton({
 function GatilhoNodeView({ data, selected }: NodeProps<GatilhoNode>) {
   const meta = getGatilhoMeta(data.gatilho);
   const OpIcon = GATILHO_ICON[data.gatilho] ?? Zap;
-  const resumo = resumirConfigGatilho(data.gatilho, data.configGatilho);
+  const canaisDisparo = useCanaisDisparo();
+  const resumo = resumirConfigGatilho(data.gatilho, data.configGatilho, canaisDisparo);
   const grupoMeta = GRUPO_META.find((g) => g.id === meta.grupo);
   const GrupoIconComp = GRUPO_ICON[meta.grupo] ?? Zap;
 
@@ -947,14 +949,70 @@ function MenuConectarPasso({
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function resumirConfigGatilho(g: GatilhoSmartflow, cfg: Record<string, unknown>): string {
+/** IDs de canal gravados no gatilho. O config passa por JSON — pode voltar string. */
+function idsDeCanais(cfg: Record<string, unknown> | undefined): number[] {
+  const bruto = Array.isArray(cfg?.canaisIds) ? (cfg!.canaisIds as unknown[]) : [];
+  return bruto.map((v) => Number(v)).filter((v) => Number.isFinite(v));
+}
+
+type CanalDisparo = {
+  id: number;
+  tipo: string;
+  tipoLabel: string;
+  rotulo: string;
+  conectado: boolean;
+};
+
+/**
+ * Canais conectados que podem disparar o gatilho `mensagem_canal`, já com
+ * rótulo pronto (nome + número). A query é a mesma da tela de Configurações;
+ * o React Query dedupe entre o nó do canvas e o inspetor.
+ */
+function useCanaisDisparo(): CanalDisparo[] {
+  const { data } = trpc.configuracoes.listarCanais.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
+  });
+  return useMemo(() => {
+    const tiposValidos = new Set(TIPO_CANAL_META.map((m) => m.id as string));
+    const brutos = (data?.canais ?? []) as Array<{
+      id: number; tipo: string; nome?: string; telefone?: string; status?: string;
+    }>;
+    return brutos
+      .filter((c) => tiposValidos.has(c.tipo))
+      .map((c) => {
+        const tipoLabel = TIPO_CANAL_META.find((m) => m.id === c.tipo)?.label || c.tipo;
+        const numero = c.telefone ? formatarTelefone(c.telefone) : "";
+        const nome = (c.nome || "").trim();
+        return {
+          id: c.id,
+          tipo: c.tipo,
+          tipoLabel,
+          rotulo: [nome, numero].filter(Boolean).join(" · ") || tipoLabel,
+          conectado: c.status === "conectado",
+        };
+      });
+  }, [data]);
+}
+
+function resumirConfigGatilho(
+  g: GatilhoSmartflow,
+  cfg: Record<string, unknown>,
+  canais?: CanalDisparo[],
+): string {
   if (!cfg) return "";
   if (g === "mensagem_canal") {
-    const canais = Array.isArray(cfg.canais) ? (cfg.canais as string[]) : [];
+    const ids = idsDeCanais(cfg);
+    const tipos = Array.isArray(cfg.canais) ? (cfg.canais as string[]) : [];
     const palavras = Array.isArray(cfg.palavrasChave) ? (cfg.palavrasChave as string[]) : [];
-    const canalTxt = canais.length === 0
+    const canalTxt = ids.length > 0
+      ? ids
+          .map((id) => canais?.find((c) => c.id === id)?.rotulo || `canal #${id}`)
+          .join(", ")
+      : tipos.length === 0
       ? "Qualquer canal"
-      : canais.map((c) => TIPO_CANAL_META.find((m) => m.id === c)?.label || c).join(", ");
+      : tipos.map((c) => TIPO_CANAL_META.find((m) => m.id === c)?.label || c).join(", ");
     const extra = palavras.length > 0
       ? ` · ${palavras.join("/")} (${cfg.modoPalavraChave === "comeca_com" ? "começa" : "exato"})`
       : cfg.gatilhoPadrao === true
@@ -1394,8 +1452,9 @@ function SmartFlowEditorInner() {
   });
   const deletarMut = (trpc as any).smartflow.deletar.useMutation({
     onSuccess: () => {
-      toast.success("Cenário excluído");
+      toast.success("Cenário movido para a lixeira — dá pra restaurar na lista.");
       utils?.smartflow?.listar?.invalidate();
+      utils?.smartflow?.listarExcluidos?.invalidate();
       navigate("/smartflow");
     },
     onError: (e: any) => toast.error(e.message),
@@ -1467,28 +1526,80 @@ function SmartFlowEditorInner() {
     });
   }, [edges, selectedId]);
 
+  /**
+   * Histórico do canvas.
+   *
+   * Existe porque apagar um bloco era definitivo: um clique no lugar errado e
+   * o trabalho ia junto, sem volta. Guarda o estado ANTES de cada mudança
+   * estrutural — mexer na config de um bloco não entra, senão cada tecla
+   * digitada viraria um passo de desfazer.
+   */
+  const canvasAtualRef = useRef<{ nodes: AnyNode[]; edges: Edge[] }>({ nodes: [], edges: [] });
+  canvasAtualRef.current = { nodes, edges };
+  const historicoRef = useRef<Array<{ nodes: AnyNode[]; edges: Edge[] }>>([]);
+  const refazerRef = useRef<Array<{ nodes: AnyNode[]; edges: Edge[] }>>([]);
+
+  const registrarHistorico = useCallback(() => {
+    historicoRef.current.push(canvasAtualRef.current);
+    if (historicoRef.current.length > 50) historicoRef.current.shift();
+    refazerRef.current = [];
+  }, []);
+
+  const desfazer = useCallback(() => {
+    const anterior = historicoRef.current.pop();
+    if (!anterior) {
+      toast.info("Nada pra desfazer neste fluxo.");
+      return;
+    }
+    refazerRef.current.push(canvasAtualRef.current);
+    setNodes(anterior.nodes);
+    setEdges(anterior.edges);
+    setSelectedId(null);
+    marcarDirty();
+  }, [marcarDirty]);
+
+  const refazer = useCallback(() => {
+    const proximo = refazerRef.current.pop();
+    if (!proximo) return;
+    historicoRef.current.push(canvasAtualRef.current);
+    setNodes(proximo.nodes);
+    setEdges(proximo.edges);
+    setSelectedId(null);
+    marcarDirty();
+  }, [marcarDirty]);
+
+  const desfazerRef = useRef(desfazer);
+  desfazerRef.current = desfazer;
+  const refazerFnRef = useRef(refazer);
+  refazerFnRef.current = refazer;
+
   // Callbacks canvas. Drag/move/select também passa por `onNodesChange`,
   // mas só os tipos com efeito persistente marcam dirty (skip "select").
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
+      // Delete/Backspace do ReactFlow não passa por `removerNode` — chega
+      // direto aqui. É o caminho que apaga vários blocos de uma vez.
+      if (changes.some((c) => c.type === "remove")) registrarHistorico();
       setNodes((nds) => applyNodeChanges(changes, nds) as AnyNode[]);
       const algumPersistente = changes.some(
         (c) => c.type !== "select" && c.type !== "dimensions",
       );
       if (algumPersistente) marcarDirty();
     },
-    [marcarDirty],
+    [marcarDirty, registrarHistorico],
   );
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
+      if (changes.some((c) => c.type === "remove")) registrarHistorico();
       setEdges((eds) => applyEdgeChanges(changes, eds));
       const algumPersistente = changes.some((c) => c.type !== "select");
       if (algumPersistente) marcarDirty();
     },
-    [marcarDirty],
+    [marcarDirty, registrarHistorico],
   );
   const onConnect = useCallback(
     (conn: Connection) => {
+      registrarHistorico();
       setEdges((eds) =>
         addEdge(
           {
@@ -1509,7 +1620,7 @@ function SmartFlowEditorInner() {
       );
       marcarDirty();
     },
-    [marcarDirty],
+    [marcarDirty, registrarHistorico],
   );
 
   /** Guarda a origem da conexão pra reaproveitar no `onConnectEnd`. */
@@ -1554,6 +1665,7 @@ function SmartFlowEditorInner() {
   }, []);
 
   const adicionarPasso = (tipo: TipoPasso) => {
+    registrarHistorico();
     const passos = nodes.filter((n) => n.type === "passo");
     const novoNode = criarNode(tipo, 0);
     // Origem do auto-link: o nó SELECIONADO (se for um passo) — mais previsível —
@@ -1600,6 +1712,7 @@ function SmartFlowEditorInner() {
    * dados. Zera `configGatilho` porque a shape muda entre operações.
    */
   const trocarGatilho = (novoGatilho: GatilhoSmartflow) => {
+    registrarHistorico();
     setNodes((nds) =>
       nds.map((n) =>
         isGatilhoNode(n)
@@ -1647,10 +1760,23 @@ function SmartFlowEditorInner() {
    */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!(e.key === "d" || e.key === "D") || !(e.ctrlKey || e.metaKey)) return;
+      if (!(e.ctrlKey || e.metaKey)) return;
       const alvo = e.target as HTMLElement | null;
       const tag = alvo?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || alvo?.isContentEditable) return;
+
+      if (e.key === "z" || e.key === "Z") {
+        e.preventDefault();
+        if (e.shiftKey) refazerFnRef.current();
+        else desfazerRef.current();
+        return;
+      }
+      if (e.key === "y" || e.key === "Y") {
+        e.preventDefault();
+        refazerFnRef.current();
+        return;
+      }
+      if (e.key !== "d" && e.key !== "D") return;
       if (!selectedIdRef.current || selectedIdRef.current === GATILHO_NODE_ID) return;
       e.preventDefault();
       duplicarPassoRef.current(selectedIdRef.current);
@@ -1669,6 +1795,7 @@ function SmartFlowEditorInner() {
       toast.error("O gatilho não pode ser duplicado — todo fluxo tem um só.");
       return;
     }
+    registrarHistorico();
     const { no } = duplicarNo(origem as any, novoNodeId(), novoClienteId());
     // A seleção MIGRA pra cópia: deixar o original selecionado junto faria o
     // ReactFlow arrastar os dois de uma vez, porque ele move todo nó marcado.
@@ -1688,10 +1815,15 @@ function SmartFlowEditorInner() {
       toast.error("O gatilho não pode ser removido. Troque o tipo na paleta à esquerda.");
       return;
     }
+    registrarHistorico();
     setNodes((nds) => nds.filter((n) => n.id !== nodeId));
     setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
     setSelectedId((atual) => (atual === nodeId ? null : atual));
     marcarDirty();
+    toast("Bloco removido", {
+      description: "As ligações dele saíram junto.",
+      action: { label: "Desfazer", onClick: () => desfazerRef.current() },
+    });
   };
 
   const removerSelecionado = () => {
@@ -1700,10 +1832,15 @@ function SmartFlowEditorInner() {
       toast.error("O gatilho não pode ser removido. Troque o tipo na paleta à esquerda.");
       return;
     }
+    registrarHistorico();
     setNodes((nds) => nds.filter((n) => n.id !== selectedId));
     setEdges((eds) => eds.filter((e) => e.source !== selectedId && e.target !== selectedId));
     setSelectedId(null);
     marcarDirty();
+    toast("Bloco removido", {
+      description: "As ligações dele saíram junto.",
+      action: { label: "Desfazer", onClick: () => desfazerRef.current() },
+    });
   };
 
   /**
@@ -1712,6 +1849,7 @@ function SmartFlowEditorInner() {
    * caso comum — o usuário só escolhe o agente. Reusa criarNode + auto-layout.
    */
   const inserirConversaPronta = () => {
+    registrarHistorico();
     const atendente = criarNode("ia_atendente", 0, {
       ferramentas: ["agendar", "transferir"],
       roteiro:
@@ -1749,6 +1887,7 @@ function SmartFlowEditorInner() {
    * Auto-arranja todos os nós em layout horizontal (esquerda→direita).
    */
   const autoArranjar = () => {
+    registrarHistorico();
     const layout = calcularAutoLayout(
       nodes.map((n) => ({ id: n.id, position: n.position, type: n.type as string })),
       edges.map((e) => ({ source: e.source, target: e.target })),
@@ -2067,6 +2206,8 @@ function SmartFlowEditorInner() {
             onFit={() => rfInstance?.fitView?.({ padding: 0.15, duration: 300 })}
             onAutoArranjar={autoArranjar}
             onValidar={validarFluxo}
+            onDesfazer={desfazer}
+            onRefazer={refazer}
           />
 
           {passoNodesOrdenados(nodes).length === 0 && (
@@ -2098,6 +2239,7 @@ function SmartFlowEditorInner() {
               onDuplicar={() => { duplicarPasso(menuNo.nodeId); setMenuNo(null); }}
               onExcluir={() => { removerNode(menuNo.nodeId); setMenuNo(null); }}
               onDesligar={() => {
+                registrarHistorico();
                 setEdges((eds) => eds.filter((e) => e.source !== menuNo.nodeId && e.target !== menuNo.nodeId));
                 marcarDirty();
                 setMenuNo(null);
@@ -2202,11 +2344,13 @@ function SmartFlowEditorInner() {
       <AlertDialog open={excluirOpen} onOpenChange={setExcluirOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir este cenário?</AlertDialogTitle>
+            <AlertDialogTitle>Excluir o cenário inteiro?</AlertDialogTitle>
             <AlertDialogDescription>
-              O cenário <strong>{nome || "sem nome"}</strong> será removido
-              permanentemente. As execuções históricas continuam no log, mas
-              o cenário não vai mais disparar. Esta ação não pode ser desfeita.
+              Isto não é remover um bloco: o cenário{" "}
+              <strong>{nome || "sem nome"}</strong> inteiro, com os{" "}
+              {nodes.filter((n) => n.type === "passo").length} blocos, sai da
+              lista e para de disparar. Ele fica na lixeira, no fim da página de
+              Automações, e dá pra restaurar depois.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2221,7 +2365,7 @@ function SmartFlowEditorInner() {
             >
               {deletarMut.isPending ? (
                 <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Excluindo...</>
-              ) : "Excluir"}
+              ) : "Excluir cenário"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2428,46 +2572,107 @@ function ConfigGatilhoFields({
   onChange: (patch: Record<string, unknown>) => void;
 }) {
   const cfg = node.data.configGatilho;
+  const canaisDisponiveis = useCanaisDisparo();
+  const idsEscolhidos = idsDeCanais(cfg);
+  // Permite abrir a lista antes de marcar o primeiro número — sem isso, o
+  // modo voltaria pra "todos" no mesmo clique.
+  const [escolhendoCanal, setEscolhendoCanal] = useState(idsEscolhidos.length > 0);
 
   if (node.data.gatilho === "mensagem_canal") {
-    const atuais = new Set<string>(Array.isArray(cfg.canais) ? (cfg.canais as string[]) : []);
-    const toggle = (id: TipoCanalMensagem, checked: boolean) => {
-      const prox = new Set(atuais);
-      if (checked) prox.add(id);
-      else prox.delete(id);
-      onChange({ canais: Array.from(prox) });
+    const tiposLegado = Array.isArray(cfg.canais) ? (cfg.canais as string[]) : [];
+    const porNumero = escolhendoCanal || idsEscolhidos.length > 0;
+    const toggleCanal = (id: number, checked: boolean) => {
+      const prox = checked
+        ? [...idsEscolhidos.filter((x) => x !== id), id]
+        : idsEscolhidos.filter((x) => x !== id);
+      // Zera o filtro por tipo: escolher o número já diz o tipo, e manter os
+      // dois só teria como efeito descartar o número escolhido.
+      onChange({ canaisIds: prox, canais: [] });
     };
+    // Número escolhido que não existe mais (canal removido depois do fluxo).
+    const orfaos = idsEscolhidos.filter((id) => !canaisDisponiveis.some((c) => c.id === id));
+
     return (
       <div className="space-y-2">
         <Label className="text-xs">Canais que disparam o fluxo</Label>
-        <div className="space-y-1.5">
-          {TIPO_CANAL_META.map((c) => {
-            const checked = atuais.has(c.id);
-            const disabled = !!c.emBreve;
-            return (
-              <label
-                key={c.id}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded border text-xs cursor-pointer ${
-                  disabled
-                    ? "opacity-50 cursor-not-allowed border-dashed"
-                    : checked
-                    ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
-                    : "border-border hover:bg-muted/40"
-                }`}
-              >
-                <Checkbox
-                  checked={checked}
-                  disabled={disabled}
-                  onCheckedChange={(v) => toggle(c.id, v === true)}
-                />
-                <span className="flex-1">{c.label}</span>
-              </label>
-            );
-          })}
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={() => { setEscolhendoCanal(false); onChange({ canaisIds: [], canais: [] }); }}
+            className={`rounded border px-2 py-1.5 text-[11px] font-medium ${
+              porNumero ? "border-border hover:bg-muted/40" : "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
+            }`}
+          >
+            Todos os canais
+          </button>
+          <button
+            type="button"
+            onClick={() => setEscolhendoCanal(true)}
+            className={`rounded border px-2 py-1.5 text-[11px] font-medium ${
+              porNumero ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20" : "border-border hover:bg-muted/40"
+            }`}
+          >
+            Escolher números
+          </button>
         </div>
-        <p className="text-[10px] text-muted-foreground">
-          Sem seleção = dispara em qualquer canal conectado.
-        </p>
+
+        {porNumero ? (
+          <div className="space-y-1.5">
+            {canaisDisponiveis.length === 0 && (
+              <p className="rounded border border-dashed px-2 py-2 text-[10px] text-muted-foreground">
+                Nenhum canal conectado ainda. Conecte em Configurações → Canais.
+              </p>
+            )}
+            {canaisDisponiveis.map((c) => {
+              const checked = idsEscolhidos.includes(c.id);
+              return (
+                <label
+                  key={c.id}
+                  className={`flex items-center gap-2 rounded border px-2 py-1.5 text-xs cursor-pointer ${
+                    checked ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20" : "border-border hover:bg-muted/40"
+                  }`}
+                >
+                  <Checkbox checked={checked} onCheckedChange={(v) => toggleCanal(c.id, v === true)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{c.rotulo}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      {c.tipoLabel}
+                      {c.conectado ? "" : " · desconectado"}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+            {orfaos.length > 0 && (
+              <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+                {orfaos.length === 1 ? "Um canal escolhido não existe mais" : `${orfaos.length} canais escolhidos não existem mais`} —
+                enquanto ficar assim, esse fluxo não dispara por ele.{" "}
+                <button
+                  type="button"
+                  className="underline underline-offset-2"
+                  onClick={() => onChange({ canaisIds: idsEscolhidos.filter((id) => !orfaos.includes(id)) })}
+                >
+                  Remover da lista
+                </button>
+              </p>
+            )}
+            <p className="text-[10px] text-muted-foreground">
+              Sem nenhum marcado = dispara em qualquer canal conectado.
+            </p>
+          </div>
+        ) : (
+          <p className="text-[10px] text-muted-foreground">
+            Dispara em qualquer canal conectado ao escritório.
+          </p>
+        )}
+
+        {!porNumero && tiposLegado.length > 0 && (
+          <p className="rounded border border-dashed px-2 py-1.5 text-[10px] text-muted-foreground">
+            Este fluxo ainda filtra por <strong>tipo</strong> de canal (
+            {tiposLegado.map((t) => TIPO_CANAL_META.find((m) => m.id === t)?.label || t).join(", ")}
+            ). Escolher números substitui esse filtro por um mais preciso.
+          </p>
+        )}
 
         <div className="pt-2 mt-1 border-t space-y-2">
           <Label className="text-xs">Palavras-chave (roteamento de campanha)</Label>
