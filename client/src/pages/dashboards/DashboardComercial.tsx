@@ -53,17 +53,10 @@ export default function DashboardComercial() {
   const ranking: any[] = data.ranking ?? [];
   const isGestor = data.modo === "gestor";
 
-  const totais = isGestor
-    ? ranking.reduce(
-        (acc: any, c: any) => ({
-          faturado: acc.faturado + c.faturado,
-          contratosFechados: acc.contratosFechados + c.contratosFechados,
-          contratosPagos: acc.contratosPagos + c.contratosPagos,
-          metaPeriodo: acc.metaPeriodo + (c.metaPeriodo ?? 0),
-        }),
-        { faturado: 0, contratosFechados: 0, contratosPagos: 0, metaPeriodo: 0 },
-      )
-    : null;
+  // Vem pronto do servidor, contado de uma vez. Somar as linhas do ranking
+  // contava duas vezes o parcelamento dividido entre dois atendentes — o
+  // DISTINCT de cada linha só vale dentro dela.
+  const totais = isGestor ? data.totais : null;
 
   const progressoTime =
     totais && totais.metaPeriodo > 0
@@ -72,6 +65,9 @@ export default function DashboardComercial() {
   const progresso = isGestor ? progressoTime : (meu?.progressoMeta ?? null);
   const fechados = isGestor ? totais!.contratosFechados : (meu?.contratosFechados ?? 0);
   const pagos = isGestor ? totais!.contratosPagos : (meu?.contratosPagos ?? 0);
+  const clientesPagantes: number | null = isGestor
+    ? (totais?.clientesPagantes ?? null)
+    : (meu?.clientesPagantes ?? null);
   const semPagamento = Math.max(0, fechados - pagos);
   const conversao = fechados > 0 ? +((pagos / fechados) * 100).toFixed(1) : null;
   const temMeta = isGestor ? (totais!.metaPeriodo ?? 0) > 0 : (meu?.metaPeriodo ?? 0) > 0;
@@ -197,7 +193,20 @@ export default function DashboardComercial() {
                 valor={fechados}
                 hint={semPagamento > 0 ? `${semPagamento} ainda sem pagamento` : undefined}
               />
-              <SubNumero label="Contratos pagos" valor={pagos} hint="no período" />
+              {/* O relatório comercial conta CLIENTES que pagaram; aqui conta
+                  CONTRATOS. Um cliente com dois contratos faz os dois painéis
+                  mostrarem números diferentes pro mesmo período — a dica traz
+                  o número do relatório junto pra diferença deixar de parecer
+                  erro de dado. */}
+              <SubNumero
+                label="Contratos pagos"
+                valor={pagos}
+                hint={
+                  clientesPagantes != null && clientesPagantes !== pagos
+                    ? `de ${clientesPagantes} ${clientesPagantes === 1 ? "cliente" : "clientes"}`
+                    : "no período"
+                }
+              />
               <SubNumero
                 label="Conversão"
                 valor={formatPercent(conversao, 1)}
