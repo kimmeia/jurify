@@ -1254,6 +1254,18 @@ export const acordos = mysqlTable("acordos", {
   valorFechado: int("valorFechadoAcordo"),
   status: mysqlEnum("statusAcordo", ["negociando", "proposta_enviada", "fechado", "cancelado"])
     .default("negociando").notNull(),
+  /**
+   * Quando fechou. Não dá pra usar `updatedAt` pra recortar "fechados no mês":
+   * ele muda em qualquer escrita na linha, e um acordo de janeiro reapareceria
+   * em agosto por causa de uma correção de telefone.
+   */
+  fechadoEm: timestamp("fechadoEmAcordo"),
+  /** Cobrança gerada a partir do acordo fechado (`asaas_cobrancas.id`).
+   *  NULL num acordo fechado = dinheiro que ninguém foi cobrar ainda. */
+  cobrancaId: int("cobrancaIdAcordo"),
+  /** Cache de exibição do próximo passo — a verdade está na tarefa. */
+  proximoPassoEm: timestamp("proximoPassoEmAcordo"),
+  tarefaRetornoId: int("tarefaRetornoIdAcordo"),
   /** Preenchido quando status = cancelado (o "porquê" que não pode se perder). */
   motivoCancelamento: varchar("motivoCancelamentoAcordo", { length: 512 }),
   criadoPor: int("criadoPorAcordo"),
