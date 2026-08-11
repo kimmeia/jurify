@@ -860,6 +860,16 @@ export interface ConfigGatilhoMensagemCanal {
   /** Canais permitidos. Vazio/ausente = aceita qualquer canal. */
   canais?: TipoCanalMensagem[];
   /**
+   * IDs de `canais_integrados` — os NÚMEROS/contas específicos que disparam
+   * este fluxo. Vazio/ausente = qualquer canal conectado.
+   *
+   * Tem precedência sobre `canais`: escolher números já declara o tipo, e
+   * combinar os dois só serviria pra descartar o número escolhido. Escritório
+   * com dois números (ex.: comercial e cobrança) precisa disso pra não rodar
+   * o fluxo do comercial em quem escreveu pra cobrança.
+   */
+  canaisIds?: number[];
+  /**
    * Palavras-chave que disparam ESTE fluxo. Vazio = não filtra por palavra
    * (fluxo geral). Usado pra rotear campanhas: ex. ["QUERO50"] manda quem
    * mandar "QUERO50" pra um fluxo específico.

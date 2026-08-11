@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/select";
 import {
   Activity, AlertTriangle, CheckCircle2, Clock,
-  FileText, Filter, Loader2, Search, XCircle, Zap,
+  FileText, Filter, Loader2, Search, Trash2, XCircle, Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -60,6 +60,10 @@ function resumirGatilho(c: any): string | null {
     let cfg: any = c.configGatilho;
     if (typeof cfg === "string") {
       try { cfg = JSON.parse(cfg); } catch { cfg = null; }
+    }
+    const ids = Array.isArray(cfg?.canaisIds) ? (cfg.canaisIds as unknown[]) : [];
+    if (ids.length > 0) {
+      return ids.length === 1 ? "1 canal específico" : `${ids.length} canais específicos`;
     }
     const canais = Array.isArray(cfg?.canais) ? (cfg.canais as string[]) : [];
     if (canais.length === 0) return "Qualquer canal";
@@ -101,6 +105,7 @@ export default function SmartFlow() {
   const [statusFilter, setStatusFilter] = useState<"todos" | StatusExecucao>("todos");
   const [cenarioFilter, setCenarioFilter] = useState<number | "todos">("todos");
 
+  const utils = trpc.useUtils();
   const { data: cenarios, isLoading, refetch } = (trpc as any).smartflow.listar.useQuery();
   const { data: execucoes } = (trpc as any).smartflow.execucoes.useQuery(
     { limite: 200 },
@@ -110,9 +115,10 @@ export default function SmartFlow() {
   const toggleMut = (trpc as any).smartflow.toggleAtivo.useMutation({ onSuccess: () => refetch() });
   const deletarMut = (trpc as any).smartflow.deletar.useMutation({
     onSuccess: () => {
-      toast.success("Cenário removido");
+      toast.success("Cenário movido para a lixeira.");
       setExcluirCenario(null);
       refetch();
+      (utils as any).smartflow.listarExcluidos.invalidate();
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -317,6 +323,8 @@ export default function SmartFlow() {
               <LegendaCores />
             </>
           )}
+
+          <Lixeira />
         </TabsContent>
 
         {/* ─── Aba Execuções ──────────────────────────────────────────── */}
@@ -435,11 +443,11 @@ export default function SmartFlow() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir cenário?</AlertDialogTitle>
+            <AlertDialogTitle>Mandar para a lixeira?</AlertDialogTitle>
             <AlertDialogDescription>
-              O cenário <strong>{excluirCenario?.nome}</strong> será removido
-              permanentemente. Execuções já registradas serão preservadas no
-              histórico, mas o cenário não rodará mais. Esta ação não pode ser desfeita.
+              O cenário <strong>{excluirCenario?.nome}</strong> sai da lista e
+              para de disparar na hora. Ele fica na lixeira, no fim desta
+              página, e dá pra restaurar depois.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -554,6 +562,116 @@ function ExecucaoDetalheDialog({ id, onClose }: { id: number | null; onClose: ()
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Lixeira dos cenários. Só aparece quando tem alguma coisa dentro — em uso
+ * normal ela some do caminho, e no dia em que o fluxo errado for excluído ela
+ * é a primeira coisa que a pessoa procura no fim da lista.
+ */
+function Lixeira() {
+  const utils = trpc.useUtils();
+  const { data: excluidos } = (trpc as any).smartflow.listarExcluidos.useQuery();
+  const [apagarDeVez, setApagarDeVez] = useState<{ id: number; nome: string } | null>(null);
+
+  const recarregar = () => {
+    (utils as any).smartflow.listar.invalidate();
+    (utils as any).smartflow.listarExcluidos.invalidate();
+  };
+
+  const restaurarMut = (trpc as any).smartflow.restaurar.useMutation({
+    onSuccess: () => {
+      toast.success("Cenário restaurado — voltou desligado, é só reativar.");
+      recarregar();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const definitivoMut = (trpc as any).smartflow.excluirDefinitivo.useMutation({
+    onSuccess: () => {
+      toast.success("Cenário apagado de vez.");
+      setApagarDeVez(null);
+      recarregar();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const lista = (excluidos || []) as Array<{ id: number; nome: string; gatilho: string; deletadoEm: string | Date | null }>;
+  if (lista.length === 0) return null;
+
+  return (
+    <div className="rounded-md border border-dashed">
+      <div className="flex items-center gap-2 border-b px-3 py-2">
+        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-xs font-semibold">Lixeira</span>
+        <span className="text-[11px] text-muted-foreground">
+          {lista.length === 1 ? "1 cenário excluído" : `${lista.length} cenários excluídos`} · não disparam
+        </span>
+      </div>
+      <div className="divide-y">
+        {lista.map((c) => (
+          <div key={c.id} className="flex items-center gap-2 px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium">{c.nome}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {GATILHO_META.find((g) => g.id === c.gatilho)?.label || c.gatilho}
+                {c.deletadoEm
+                  ? ` · excluído em ${new Date(c.deletadoEm).toLocaleDateString("pt-BR")}`
+                  : ""}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[11px]"
+              disabled={restaurarMut.isPending}
+              onClick={() => restaurarMut.mutate({ id: c.id })}
+            >
+              Restaurar
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-[11px] text-destructive hover:text-destructive"
+              onClick={() => setApagarDeVez({ id: c.id, nome: c.nome })}
+            >
+              Apagar de vez
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      <AlertDialog
+        open={apagarDeVez !== null}
+        onOpenChange={(open) => { if (!open) setApagarDeVez(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar de vez?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{apagarDeVez?.nome}</strong> e todos os blocos dele somem
+              do banco. Daqui não tem restaurar. O histórico de execuções
+              continua registrado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={definitivoMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={definitivoMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (apagarDeVez) definitivoMut.mutate({ id: apagarDeVez.id });
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {definitivoMut.isPending ? (
+                <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Apagando...</>
+              ) : "Apagar de vez"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }
 

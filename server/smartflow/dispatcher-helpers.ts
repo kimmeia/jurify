@@ -15,8 +15,25 @@ import type {
 /**
  * Retorna `true` se o cenário (com gatilho `mensagem_canal`) aceita o canal
  * informado. Config vazia = aceita qualquer canal.
+ *
+ * `canaisIds` (números específicos) vence `canais` (tipos): quem escolheu o
+ * número já disse o tipo, e cruzar os dois só teria como efeito descartar o
+ * número escolhido. Cenários antigos não têm `canaisIds` e seguem no filtro
+ * por tipo.
  */
-export function aceitaCanal(cfg: ConfigGatilhoMensagemCanal | undefined, canalTipo: TipoCanalMensagem): boolean {
+export function aceitaCanal(
+  cfg: ConfigGatilhoMensagemCanal | undefined,
+  canalTipo: TipoCanalMensagem,
+  canalId?: number,
+): boolean {
+  // O JSON do config passa por `z.record(z.any())` — id pode voltar string.
+  const ids = (Array.isArray(cfg?.canaisIds) ? cfg!.canaisIds! : [])
+    .map((v) => Number(v))
+    .filter((v) => Number.isFinite(v));
+  if (ids.length > 0) {
+    return typeof canalId === "number" && ids.includes(canalId);
+  }
+
   const canais = Array.isArray(cfg?.canais) ? cfg!.canais : [];
   if (canais.length === 0) return true;
   return canais.includes(canalTipo);

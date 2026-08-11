@@ -237,6 +237,33 @@ export function VariableInput({
   const [autocompleteFiltro, setAutocompleteFiltro] = useState("");
   const [posicaoCaret, setPosicaoCaret] = useState(0);
 
+  /**
+   * O campo é controlado pelo estado LOCAL, não pelo `value` do pai.
+   *
+   * No editor do SmartFlow cada tecla remonta o array de nós inteiro. Quando
+   * a digitação passa na frente do render, o React reescreve o `value` antigo
+   * no DOM e o caret volta pra posição daquele texto — que é o cursor
+   * "andando pra trás" no meio da frase. Com o buffer local, o que está no
+   * campo nunca depende da velocidade do pai.
+   */
+  const [texto, setTexto] = useState(value);
+  const ultimoEmitido = useRef(value);
+
+  useEffect(() => {
+    // Só aceita valor de fora quando NÃO é o eco do que acabamos de emitir
+    // (troca de bloco, carregar cenário, inserção por outro botão).
+    if (value !== ultimoEmitido.current) {
+      ultimoEmitido.current = value;
+      setTexto(value);
+    }
+  }, [value]);
+
+  function emitir(novo: string) {
+    ultimoEmitido.current = novo;
+    setTexto(novo);
+    onChange(novo);
+  }
+
   // Highlight só faz sentido em textarea. Métricas idênticas às do
   // componente Textarea (px-3 py-2 text-base md:text-sm) garantem que o
   // texto do backdrop alinhe exatamente com o do textarea por cima.
@@ -273,7 +300,7 @@ export function VariableInput({
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     const novoValor = e.target.value;
-    onChange(novoValor);
+    emitir(novoValor);
     setPosicaoCaret(e.target.selectionStart || 0);
     detectarTrigger(novoValor, e.target.selectionStart || 0);
   }
@@ -300,7 +327,7 @@ export function VariableInput({
       novo = cur.slice(0, posicaoCaret) + `{{${path}}}` + cur.slice(posicaoCaret);
       novaPos = posicaoCaret + path.length + 4;
     }
-    onChange(novo);
+    emitir(novo);
     setAutocompleteOpen(false);
     requestAnimationFrame(() => {
       elem.focus();
@@ -313,7 +340,7 @@ export function VariableInput({
            v.label.toLowerCase().includes(autocompleteFiltro.toLowerCase()),
   );
 
-  const temVariavel = /\{\{[^}]+\}\}/.test(value);
+  const temVariavel = /\{\{[^}]+\}\}/.test(texto);
 
   return (
     <div className="relative">
@@ -328,7 +355,7 @@ export function VariableInput({
               aria-hidden
               className={`${metricasTextarea} ${className ?? ""} absolute inset-0 overflow-auto whitespace-pre-wrap break-words pointer-events-none border-transparent text-foreground`}
             >
-              {partesComVariaveis(value).map((p, i) =>
+              {partesComVariaveis(texto).map((p, i) =>
                 p.tipo === "var" ? (
                   <span
                     key={i}
@@ -346,7 +373,7 @@ export function VariableInput({
             <Textarea
               ref={inputRef as any}
               id={id}
-              value={value}
+              value={texto}
               onChange={handleChange}
               onKeyUp={handleKeyUp}
               onScroll={syncScroll}
@@ -361,7 +388,7 @@ export function VariableInput({
           <Textarea
             ref={inputRef as any}
             id={id}
-            value={value}
+            value={texto}
             onChange={handleChange}
             onKeyUp={handleKeyUp}
             onBlur={() => setTimeout(() => setAutocompleteOpen(false), 150)}
@@ -375,7 +402,7 @@ export function VariableInput({
         <Input
           ref={inputRef as any}
           id={id}
-          value={value}
+          value={texto}
           onChange={handleChange}
           onKeyUp={handleKeyUp}
           onBlur={() => setTimeout(() => setAutocompleteOpen(false), 150)}
@@ -391,7 +418,7 @@ export function VariableInput({
             👁 Como vai sair pro cliente
           </p>
           <p className="text-[11px] text-foreground/80 italic leading-snug whitespace-pre-wrap">
-            {montarPreview(value, variaveis)}
+            {montarPreview(texto, variaveis)}
           </p>
         </div>
       )}

@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -285,27 +286,7 @@ function AdminSidebarContent({
         {/* Banner de impersonation — caso admin vá pra área admin
             estando impersonando alguém */}
         {(user as any)?.impersonatedBy && (
-          <div className="bg-amber-500 text-amber-950 px-4 py-2.5 flex items-center justify-between gap-3 sticky top-0 z-50 border-b border-amber-600 shadow-md">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <ShieldCheck className="h-4 w-4" />
-              <span>
-                Você está vendo o sistema como <strong>{user?.name || user?.email}</strong>{" "}
-                — toda ação é registrada em nome do admin original.
-              </span>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="bg-white hover:bg-amber-50 border-amber-700 text-amber-950 h-8 text-xs font-medium"
-              onClick={async () => {
-                await logout();
-                window.location.href = "/";
-              }}
-            >
-              <LogOut className="h-3.5 w-3.5 mr-1.5" />
-              Sair da impersonação
-            </Button>
-          </div>
+          <ImpersonationBanner alvoNome={user?.name || user?.email || "Usuário"} />
         )}
         {isMobile && (
           <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
