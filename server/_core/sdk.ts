@@ -86,6 +86,8 @@ class SDKServer {
     appId: string;
     name: string;
     impersonatedBy?: string;
+    /** `exp` do JWT em milissegundos. */
+    expiraEm?: number;
   } | null> {
     if (!cookieValue) {
       log.debug("Missing session cookie");
@@ -97,7 +99,7 @@ class SDKServer {
       const { payload } = await jwtVerify(cookieValue, secretKey, {
         algorithms: ["HS256"],
       });
-      const { openId, appId, name, impersonatedBy } = payload as Record<string, unknown>;
+      const { openId, appId, name, impersonatedBy, exp } = payload as Record<string, unknown>;
 
       // Apenas openId é obrigatório. appId e name têm defaults razoáveis
       // pra suportar JWTs gerados sem essas variáveis configuradas.
@@ -111,6 +113,7 @@ class SDKServer {
         appId: isNonEmptyString(appId) ? appId : "jurify",
         name: isNonEmptyString(name) ? name : "Usuário",
         impersonatedBy: isNonEmptyString(impersonatedBy) ? impersonatedBy : undefined,
+        expiraEm: typeof exp === "number" ? exp * 1000 : undefined,
       };
     } catch (error) {
       log.warn({ err: String(error) }, "Session verification failed");
@@ -118,7 +121,9 @@ class SDKServer {
     }
   }
 
-  async authenticateRequest(req: Request): Promise<User & { impersonatedBy?: string }> {
+  async authenticateRequest(
+    req: Request,
+  ): Promise<User & { impersonatedBy?: string; impersonacaoExpiraEm?: number }> {
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
     const session = await this.verifySession(sessionCookie);
@@ -156,7 +161,11 @@ class SDKServer {
       });
     }
 
-    return { ...user, impersonatedBy: session.impersonatedBy };
+    return {
+      ...user,
+      impersonatedBy: session.impersonatedBy,
+      impersonacaoExpiraEm: session.impersonatedBy ? session.expiraEm : undefined,
+    };
   }
 }
 
