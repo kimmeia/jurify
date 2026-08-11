@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href=".claude/skills/mockup-juridflow/assets/fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+    --viz-1:#2a78d6; --viz-2:#eb6834; --viz-3:#1baf7a; --viz-4:#eda100; --viz-5:#e87ba4;
+    --viz-trilho:#e8edf3;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:24px 30px; height:100%; display:flex; flex-direction:column; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .topo-dir { display:flex; align-items:center; gap:12px; }
+  .cota { text-align:right; }
+  .cota .n { font-size:12.5px; font-weight:700; color:var(--corpo); }
+  .cota .l { font-size:11px; color:var(--fraco); margin-top:1px; }
+  .btn-primary { background:var(--acento); color:#fff; font-weight:600; font-size:13.5px;
+                 border-radius:10px; padding:11px 18px; display:flex; align-items:center; gap:8px;
+                 box-shadow:0 8px 18px -8px #7c3aed88; }
+
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  .corpo { flex:1 1 auto; min-height:0; display:flex; gap:14px; margin-top:16px; }
+
+  /* ── coluna esquerda ── */
+  .col-esq { width:238px; flex:0 0 auto; display:flex; flex-direction:column; gap:11px; }
+  .btn-novo { border:1px solid var(--borda); background:var(--surface); border-radius:10px; height:38px;
+              display:flex; align-items:center; justify-content:center; gap:7px;
+              font-size:12.5px; font-weight:600; color:var(--corpo); }
+  .trabalhos { padding:11px; flex:1 1 auto; min-height:0; }
+  .base-esc { padding:11px 12px; flex:0 0 auto; }
+  .base-esc .t { font-size:12px; font-weight:700; color:var(--tinta-2); display:flex; align-items:center; gap:6px; }
+  .base-esc .c { font-size:10.8px; color:var(--mudo); line-height:1.45; margin-top:4px; }
+  .trab { padding:9px 10px; border-radius:9px; margin-top:6px; }
+  .trab.on { background:var(--acento-bg-2); border:1px solid #ddd6fe; }
+  .trab .t { font-size:12.3px; font-weight:600; color:var(--tinta-2); line-height:1.3; }
+  .trab .m { font-size:10.5px; color:var(--fraco); margin-top:3px; }
+  .trab.on .m { color:var(--acento-forte); font-weight:600; }
+
+  /* ── coluna centro ── */
+  .col-centro { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:11px; }
+
+  .pedido { display:flex; gap:9px; align-items:flex-start; flex:0 0 auto; }
+  .av-adv { width:26px; height:26px; border-radius:50%; background:var(--tinta); color:#fff;
+            font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .bolha { background:var(--surface); border:1px solid var(--borda); border-radius:12px;
+           padding:9px 13px; font-size:13px; color:var(--corpo); line-height:1.45; }
+
+  .leu { display:flex; align-items:center; gap:7px; flex-wrap:wrap; flex:0 0 auto; }
+  .leu .lab { font-size:11.5px; color:var(--mudo); font-weight:600; }
+  .pill { border:1px solid var(--borda); background:var(--surface); border-radius:999px;
+          padding:4px 10px; font-size:11px; font-weight:600; color:var(--corpo-2);
+          display:inline-flex; align-items:center; gap:6px; }
+  .pill.acervo { border-color:#ddd6fe; background:var(--acento-bg-2); color:var(--acento-forte); }
+
+  /* âncoras de origem */
+  .anc { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px;
+         border-radius:4px; font-size:9px; font-weight:800; vertical-align:2px; margin:0 1px; }
+  .anc.a { background:var(--acento-bg-2); color:var(--acento-forte); border:1px solid #ddd6fe; }
+  .anc.d { background:var(--hairline); color:var(--corpo-2); border:1px solid var(--borda); }
+  .anc.f { background:#fffbeb; color:#a16207; border:1px solid #fde68a; }
+
+  /* minuta */
+  .minuta { flex:0 0 auto; overflow:hidden; }
+  .minuta-topo { padding:12px 15px; border-bottom:1px solid var(--hairline);
+                 display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .minuta-topo .tit { font-family:'Poppins'; font-weight:700; font-size:15.5px; letter-spacing:-.01em; }
+  .minuta-topo .met { font-size:11px; color:var(--fraco); margin-top:2px; }
+  .acoes { display:flex; gap:7px; flex:0 0 auto; }
+  .btn-sm { border:1px solid var(--borda); border-radius:8px; padding:6px 11px;
+            font-size:11.5px; font-weight:600; color:var(--corpo); display:flex; align-items:center; gap:6px; }
+  .btn-sm.acento { background:var(--acento); border-color:var(--acento); color:#fff; }
+
+  .sec { padding:10px 15px; border-bottom:1px solid var(--hairline-2); display:flex; gap:11px; }
+  .sec:last-child { border-bottom:0; }
+  .sec .num { font-size:11px; font-weight:800; color:var(--fantasma); width:22px; flex:0 0 auto; padding-top:1px; }
+  .sec .st { font-size:12.8px; font-weight:700; color:var(--tinta-2); }
+  .sec .sc { font-size:12px; color:var(--corpo); line-height:1.5; margin-top:3px; }
+
+  /* faixa de prova do acervo dentro da seção */
+  .prova { margin-top:9px; border:1px solid #ddd6fe; background:var(--acento-bg); border-radius:10px; padding:9px 11px; }
+  .prova-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .prova-top .e { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--acento-forte); }
+  .prova-top .q { font-size:10.5px; color:var(--acento-forte); font-weight:600; }
+  .prova-lin { display:grid; grid-template-columns:1fr auto; align-items:center; gap:10px; margin-top:7px; }
+  .prova-lin .txt { font-size:11.8px; color:var(--corpo); }
+  .prova-lin .txt b { color:var(--tinta); font-weight:700; }
+  .trilho { height:7px; border-radius:3px; background:var(--viz-trilho); overflow:hidden; margin-top:6px; }
+  .trilho i { display:block; height:100%; background:var(--viz-5); border-radius:3px; }
+  .prova-num { font-size:17px; font-weight:800; line-height:1; color:var(--tinta); font-variant-numeric:tabular-nums; }
+  .prova-num span { font-size:10.5px; font-weight:600; color:var(--mudo); margin-left:4px; }
+
+  /* checagem */
+  .checagem { flex:0 0 auto; padding:10px 14px; display:flex; align-items:flex-start; gap:10px;
+              border-color:#a7f3d0; background:#f0fdf4; }
+  .checagem .ic { width:22px; height:22px; border-radius:50%; background:var(--ok); flex:0 0 auto;
+                  display:flex; align-items:center; justify-content:center; }
+  .checagem .t { font-size:12.3px; font-weight:700; color:#065f46; }
+  .checagem .c { font-size:11.5px; color:#047857; line-height:1.45; margin-top:2px; }
+
+  /* composer */
+  .composer { flex:0 0 auto; padding:11px 13px; margin-top:auto; }
+  .modos { display:inline-flex; gap:3px; background:var(--hairline); padding:3px; border-radius:9px; }
+  .modos span { padding:6px 12px; font-size:11.5px; font-weight:600; color:var(--mudo); border-radius:7px;
+                display:inline-flex; align-items:center; gap:6px; }
+  .modos span.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+  .campo { margin-top:9px; display:flex; gap:9px; align-items:center; }
+  .campo .inp { flex:1; height:38px; border:1px solid var(--borda); border-radius:9px; padding:0 12px;
+                display:flex; align-items:center; font-size:13px; color:var(--fraco); }
+  .campo .env { width:38px; height:38px; border-radius:9px; background:var(--acento);
+                display:flex; align-items:center; justify-content:center; }
+  .rodape-c { margin-top:7px; font-size:10.5px; color:var(--fraco); }
+  .mini-prova { margin-top:8px; border:1px solid #ddd6fe; background:var(--acento-bg); border-radius:9px;
+                padding:8px 10px; display:grid; grid-template-columns:1fr auto; align-items:center; gap:11px; }
+  .mini-prova .tx { font-size:11.5px; color:var(--corpo); line-height:1.4; }
+  .mini-prova .tx b { color:var(--tinta); font-weight:700; }
+  .mini-prova .nm { font-size:16px; font-weight:800; color:var(--tinta); font-variant-numeric:tabular-nums;
+                    text-align:right; line-height:1; }
+  .mini-prova .nm span { display:block; font-size:10px; font-weight:600; color:var(--mudo); margin-top:3px; }
+
+  /* ── coluna direita ── */
+  .col-dir { width:342px; flex:0 0 auto; display:flex; flex-direction:column; gap:11px; }
+  .recorte { padding:13px 14px; flex:0 0 auto; }
+  .rec-chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+  .rec-chip { border:1px solid var(--borda); border-radius:6px; padding:3px 8px;
+              font-size:10.5px; font-weight:600; color:var(--corpo-2); background:var(--hairline-2); }
+  .tiles { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:11px; }
+  .tile { border:1px solid var(--borda); background:var(--hairline-2); border-radius:9px; padding:8px 10px; }
+  .tile .n { font-size:19px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  .tile .l { font-size:10px; color:var(--mudo); margin-top:4px; line-height:1.25; }
+
+  .barras { margin-top:11px; display:flex; flex-direction:column; gap:6px; }
+  .bl { display:grid; grid-template-columns:104px 1fr auto; align-items:center; gap:8px; }
+  .bl .r { font-size:11px; color:var(--corpo-2); }
+  .bl .t2 { height:8px; border-radius:2px; background:var(--viz-trilho); overflow:hidden; }
+  .bl .t2 i { display:block; height:100%; border-radius:0 4px 4px 0; }
+  .bl .v { font-size:11px; font-variant-numeric:tabular-nums; display:flex; }
+  .bl .v .p { width:32px; text-align:right; font-weight:700; color:var(--corpo); }
+  .bl .v .q { width:44px; text-align:right; color:var(--fraco); }
+
+  .tese { padding:13px 14px; flex:0 0 auto; border-color:#ddd6fe; background:var(--acento-bg); }
+  .tese .cab { display:flex; align-items:center; gap:7px; }
+  .tese .big { display:flex; align-items:baseline; gap:8px; margin-top:9px; }
+  .tese .big .n { font-family:'Poppins'; font-size:34px; font-weight:800; line-height:1; color:var(--acento-forte); }
+  .tese .big .l { font-size:12px; color:var(--corpo); line-height:1.35; }
+  .tese .nota { font-size:11px; color:var(--corpo-2); line-height:1.45; margin-top:9px; }
+
+  .guarda { padding:11px 13px; flex:1 1 auto; display:flex; flex-direction:column; border-style:dashed; }
+  .legenda { padding:12px 14px; flex:0 0 auto; }
+  .lg-row { display:flex; align-items:flex-start; gap:9px; margin-top:8px; }
+  .lg-row .tx { font-size:11.3px; color:var(--corpo); line-height:1.4; }
+  .lg-row .tx b { color:var(--tinta-2); font-weight:700; }
+  .lg-row .qt { margin-left:auto; font-size:10.5px; font-weight:700; color:var(--fraco);
+                font-variant-numeric:tabular-nums; flex:0 0 auto; padding-top:1px; }
+  .tese-split { display:flex; gap:6px; margin-top:10px; }
+  .tese-split div { border-radius:7px; padding:6px 9px; background:#ffffffb8; flex:1; }
+  .tese-split .n2 { font-size:14px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  .tese-split .l2 { font-size:10px; color:var(--mudo); margin-top:3px; line-height:1.25; }
+  .guarda .t { font-size:11.5px; font-weight:700; color:var(--corpo); display:flex; align-items:center; gap:6px; }
+  .guarda .c { font-size:11px; color:var(--mudo); line-height:1.5; margin-top:5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topo">
+    <div>
+      <div class="h1">JurisIA · Redigir peça</div>
+      <div class="sub">A minuta sai do caso — e o fundamento sai do acervo, com o número contado no banco.</div>
+    </div>
+    <div class="topo-dir">
+      <div class="cota">
+        <div class="n">128 de 900</div>
+        <div class="l">mensagens de agosto</div>
+      </div>
+      <div class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Exportar .docx
+      </div>
+    </div>
+  </div>
+
+  <div class="corpo">
+
+    <!-- ─── esquerda ─── -->
+    <div class="col-esq">
+      <div class="btn-novo">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#334155" stroke-width="2.4" stroke-linecap="round"/></svg>
+        Novo trabalho
+      </div>
+      <div class="card trabalhos">
+        <div class="micro">Trabalhos</div>
+        <div class="trab on">
+          <div class="t">Contestação — Marcos Vinícius Albuquerque</div>
+          <div class="m">Busca e apreensão · agora</div>
+        </div>
+        <div class="trab">
+          <div class="t">Vale a pena a revisional da Cláudia?</div>
+          <div class="m">Estratégia · ontem</div>
+        </div>
+        <div class="trab">
+          <div class="t">Execução fiscal em Fortaleza</div>
+          <div class="m">Pesquisa · 6 ago</div>
+        </div>
+        <div class="trab">
+          <div class="t">Apelação — Espólio de Raimundo Sales</div>
+          <div class="m">Redigir peça · 4 ago</div>
+        </div>
+      </div>
+      <div class="card base-esc">
+        <div class="t">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 5.5A2 2 0 016 4h5v16H6a2 2 0 01-2-2v-12zM20 5.5A2 2 0 0018 4h-5v16h5a2 2 0 002-2v-12z" stroke="#1e293b" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          Base do escritório
+        </div>
+        <div class="c">24 fontes indexadas — súmulas, teses e modelos que você subiu. É daqui que sai o <b>F</b>.</div>
+      </div>
+    </div>
+
+    <!-- ─── centro ─── -->
+    <div class="col-centro">
+
+      <div class="pedido">
+        <div class="av-adv">RC</div>
+        <div class="bolha">
+          Redige a contestação do Marcos. O banco pediu busca e apreensão, mas a notificação foi
+          para o endereço antigo.
+        </div>
+      </div>
+
+      <div class="leu">
+        <span class="lab">Li antes de escrever:</span>
+        <span class="pill">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="#475569" stroke-width="2.2" stroke-linecap="round"/></svg>
+          12 movimentações do processo
+        </span>
+        <span class="pill">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z" stroke="#475569" stroke-width="2" stroke-linejoin="round"/></svg>
+          3 documentos anexados
+        </span>
+        <span class="pill acervo">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="6" rx="8" ry="3" stroke="#5b21b6" stroke-width="2"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6" stroke="#5b21b6" stroke-width="2"/></svg>
+          1.284 acórdãos do acervo
+        </span>
+      </div>
+
+      <div class="pedido">
+        <div class="av-adv" style="background:var(--acento);">IA</div>
+        <div class="bolha">
+          O endereço da notificação não bate com o do contrato, e a certidão do oficial não prova
+          recebimento. Montei a preliminar em cima disso — no TJCE é onde esta tese decide. Pedido
+          principal: extinção. Subsidiário: purgação.
+        </div>
+      </div>
+
+      <div class="card minuta">
+        <div class="minuta-topo">
+          <div>
+            <div class="tit">Contestação — Busca e Apreensão (DL 911/69)</div>
+            <div class="met">Minuta · 4 seções · revisão humana antes de protocolar</div>
+          </div>
+          <div class="acoes">
+            <div class="btn-sm">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10-10a2.8 2.8 0 10-4-4L4 16v4z" stroke="#334155" stroke-width="2" stroke-linejoin="round"/></svg>
+              Editar
+            </div>
+            <div class="btn-sm acento">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              .docx
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="num">I</div>
+          <div>
+            <div class="st">Da tempestividade</div>
+            <div class="sc">Citação em 04/08/2026 <span class="anc d">D</span>. Prazo de 15 dias do art. 3º, §3º do
+              DL 911/69 <span class="anc f">F</span> — a contestação é tempestiva.</div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="num">II</div>
+          <div style="flex:1; min-width:0;">
+            <div class="st">Preliminar — ausência de constituição em mora</div>
+            <div class="sc">
+              A notificação extrajudicial foi dirigida à Rua Pedro Pereira, 340, enquanto o contrato
+              indica a Av. Bezerra de Menezes, 1.402 <span class="anc d">D</span>. A certidão do
+              oficial não comprova recebimento <span class="anc d">D</span>. A comprovação da mora é
+              requisito do art. 2º, §2º do DL 911/69 e da Súmula 72 do STJ <span class="anc f">F</span>.
+            </div>
+
+            <div class="prova">
+              <div class="prova-top">
+                <div class="e">Prova do acervo <span class="anc a" style="margin-left:4px;">A</span></div>
+                <div class="q">TJCE · 2º grau · 2021–2026</div>
+              </div>
+              <div class="prova-lin">
+                <div>
+                  <div class="txt">Acórdãos em que a mora <b>não foi validamente constituída</b> — ação extinta sem mérito</div>
+                  <div class="trilho"><i style="width:81%"></i></div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="prova-num">81%<span>96 de 118</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="num">III</div>
+          <div>
+            <div class="st">No mérito — purgação subsidiária</div>
+            <div class="sc">Caso superada a preliminar, requer-se a purgação com depósito do valor em
+              aberto, conforme planilha discriminada das parcelas 14 a 17 <span class="anc d">D</span>.</div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="num">IV</div>
+          <div>
+            <div class="st">Dos pedidos</div>
+            <div class="sc">Extinção sem resolução do mérito; subsidiariamente, purgação da mora e restituição do veículo.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card checagem">
+        <div class="ic">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4.5 12.5l5 5 10-11" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div>
+          <div class="t">Checagem de citações: nenhuma invenção.</div>
+          <div class="c">
+            Os 2 dispositivos e a súmula citados existem nas fontes usadas. O percentual acima foi
+            contado em SQL sobre o recorte — o texto da IA não escreve número.
+          </div>
+        </div>
+      </div>
+
+      <div class="pedido">
+        <div class="av-adv">RC</div>
+        <div class="bolha">E se o juiz não acolher a preliminar? Vale insistir ou já negocio?</div>
+      </div>
+
+      <div class="pedido">
+        <div class="av-adv" style="background:var(--acento);">IA</div>
+        <div class="bolha" style="flex:1; min-width:0;">
+          Nos acórdãos deste recorte em que a preliminar de mora foi <b>afastada</b>, o pedido do
+          banco foi acolhido na quase totalidade das vezes — insistir só na preliminar deixa pouca
+          margem. A purgação subsidiária da seção III é o que sustenta a negociação.
+          <div class="mini-prova">
+            <div class="tx">
+              <b>Preliminar afastada</b> → busca e apreensão procedente
+              <span class="anc a">A</span>
+            </div>
+            <div class="nm">88%<span>188 de 214</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card composer">
+        <div class="modos">
+          <span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#64748b" stroke-width="2.2"/><path d="M16 16l4.5 4.5" stroke="#64748b" stroke-width="2.2" stroke-linecap="round"/></svg>
+            Pesquisar
+          </span>
+          <span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" stroke="#64748b" stroke-width="2.2" stroke-linecap="round"/></svg>
+            Estratégia
+          </span>
+          <span class="on">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10-10a2.8 2.8 0 10-4-4L4 16v4z" stroke="#0f172a" stroke-width="2" stroke-linejoin="round"/></svg>
+            Redigir peça
+          </span>
+        </div>
+        <div class="campo">
+          <div class="inp">Pergunte sobre o caso, ou peça outra peça…</div>
+          <div class="env">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12h15M13 6l6 6-6 6" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+        <div class="rodape-c">
+          Beta — acervo público do CNJ (DataJud) + documentos do seu processo. Confira as fontes antes de protocolar.
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ─── direita ─── -->
+    <div class="col-dir">
+
+      <div class="card recorte">
+        <div class="micro">O recorte que fundamenta</div>
+        <div class="rec-chips">
+          <span class="rec-chip">TJCE</span>
+          <span class="rec-chip">2º grau</span>
+          <span class="rec-chip">Busca e apreensão · DL 911/69</span>
+          <span class="rec-chip">2021–2026</span>
+        </div>
+        <div class="tiles">
+          <div class="tile"><div class="n">1.284</div><div class="l">acórdãos no recorte</div></div>
+          <div class="tile"><div class="n">1.107</div><div class="l">já com desfecho</div></div>
+        </div>
+        <div class="barras">
+          <div class="bl">
+            <div class="r">Procedente</div>
+            <div class="t2"><i style="width:51%; background:var(--viz-1)"></i></div>
+            <div class="v"><span class="p">51%</span><span class="q">(565)</span></div>
+          </div>
+          <div class="bl">
+            <div class="r">Extinto sem mérito</div>
+            <div class="t2"><i style="width:24%; background:var(--viz-5)"></i></div>
+            <div class="v"><span class="p">24%</span><span class="q">(266)</span></div>
+          </div>
+          <div class="bl">
+            <div class="r">Parcial</div>
+            <div class="t2"><i style="width:12%; background:var(--viz-2)"></i></div>
+            <div class="v"><span class="p">12%</span><span class="q">(133)</span></div>
+          </div>
+          <div class="bl">
+            <div class="r">Improcedente</div>
+            <div class="t2"><i style="width:9%; background:var(--viz-3)"></i></div>
+            <div class="v"><span class="p">9%</span><span class="q">(100)</span></div>
+          </div>
+          <div class="bl">
+            <div class="r">Acordo</div>
+            <div class="t2"><i style="width:4%; background:var(--viz-4)"></i></div>
+            <div class="v"><span class="p">4%</span><span class="q">(43)</span></div>
+          </div>
+        </div>
+        <div style="margin-top:11px; padding-top:9px; border-top:1px solid var(--hairline); display:flex; align-items:center; gap:7px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M3 17l6-6 4 4 8-8" stroke="#eb6834" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7h6v6" stroke="#eb6834" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div style="font-size:11px; color:var(--corpo-2); line-height:1.4;">
+            Extinção sem mérito vem <b style="color:var(--tinta)">subindo</b> — era 19% nos acórdãos
+            de 2021–2023 e é 24% no recorte todo.
+          </div>
+        </div>
+      </div>
+
+      <div class="card tese">
+        <div class="cab">
+          <div class="micro" style="color:var(--acento-forte)">A tese desta peça, no recorte</div>
+        </div>
+        <div class="big">
+          <div class="n">81%</div>
+          <div class="l">dos 118 acórdãos com mora mal constituída terminaram em extinção sem mérito.</div>
+        </div>
+        <div class="tese-split">
+          <div><div class="n2" style="color:var(--viz-5)">96</div><div class="l2">extintos sem mérito</div></div>
+          <div><div class="n2" style="color:var(--corpo)">22</div><div class="l2">seguiram assim mesmo</div></div>
+        </div>
+        <div class="nota">
+          É este número que entra na seção II da minuta. Ele vem do banco, não do modelo — e some da
+          peça se o recorte deixar de sustentá-lo.
+        </div>
+      </div>
+
+      <div class="card legenda">
+        <div class="micro">De onde veio cada trecho</div>
+        <div class="lg-row">
+          <span class="anc a" style="flex:0 0 auto;">A</span>
+          <div class="tx"><b>Acervo público</b> — estatística contada no DataJud.</div>
+          <div class="qt">1</div>
+        </div>
+        <div class="lg-row">
+          <span class="anc d" style="flex:0 0 auto;">D</span>
+          <div class="tx"><b>Documento do caso</b> — contrato, notificação, certidão.</div>
+          <div class="qt">4</div>
+        </div>
+        <div class="lg-row">
+          <span class="anc f" style="flex:0 0 auto;">F</span>
+          <div class="tx"><b>Fonte do escritório</b> — súmula, tese, modelo indexado.</div>
+          <div class="qt">2</div>
+        </div>
+      </div>
+
+      <div class="card guarda">
+        <div class="t">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.4-3 8.3-7 9.4-4-1.1-7-5-7-9.4V6l7-3z" stroke="#334155" stroke-width="1.9" stroke-linejoin="round"/></svg>
+          O que o acervo não faz
+        </div>
+        <div class="c">
+          Sentença de 1º grau fica de fora do fundamento — prevê o comportamento da vara, mas não é
+          precedente. E o documento do seu cliente nunca entra no acervo público: as duas bases se
+          encontram na peça, não no banco.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>
