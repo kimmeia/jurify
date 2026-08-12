@@ -563,7 +563,12 @@ function AbaAtendimentoConteudo({
               .map((a, i) => (
                 <div key={a.colabId} className="flex items-center gap-2.5">
                   <Avatar nome={a.nome} indice={i} />
-                  <span className="flex-1 truncate text-xs">{a.nome}</span>
+                  <span className={`flex-1 truncate text-xs ${a.removido ? "text-muted-foreground" : ""}`}>
+                    {a.nome}
+                    {a.removido && (
+                      <span className="ml-1.5 text-[9.5px] uppercase tracking-wide">· removido</span>
+                    )}
+                  </span>
                   <span className="text-sm font-bold tabular-nums">
                     {a.atendimentos.toLocaleString("pt-BR")}
                   </span>
@@ -659,9 +664,20 @@ function AbaAtendimentoConteudo({
               {tabela.map((a, i) => (
                 <TableRow key={a.colabId}>
                   <TableCell className="text-xs font-medium">
-                    <span className="flex items-center gap-2">
+                    {/* Removido aparece MARCADO, não escondido: o atendimento
+                        dele está dentro do total de conversas, e sumir com a
+                        linha faria a tabela somar menos que o KPI acima. */}
+                    <span className={`flex items-center gap-2 ${a.removido ? "text-muted-foreground" : ""}`}>
                       <Avatar nome={a.nome} indice={i} />
                       <span className="truncate">{a.nome}</span>
+                      {a.removido && (
+                        <span
+                          className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide"
+                          title="Saiu do escritório — o trabalho do período continua contado"
+                        >
+                          removido
+                        </span>
+                      )}
                     </span>
                   </TableCell>
                   <TableCell className="text-center text-xs tabular-nums">{a.atendimentos}</TableCell>

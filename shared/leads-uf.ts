@@ -100,31 +100,15 @@ export function ufDoTelefone(telefone: string | null | undefined): string | null
   return ddd ? ufDoDdd(ddd) : null;
 }
 
-export type OrigemUf = "cadastro" | "ddd";
-
-export interface EstadoDoLead {
-  uf: string;
-  origem: OrigemUf;
-}
-
 /**
- * O estado de um lead, com a procedência junto.
+ * O estado de um lead. Um critério só: o DDD.
  *
- * A procedência não é detalhe de auditoria: é ela que separa "o cliente mora
- * no Ceará" de "o telefone do cliente foi habilitado no Ceará". A tela mostra
- * a proporção entre as duas, porque um painel onde 85% é dedução e 15% é fato
- * não pode ser lido como se fosse tudo fato.
+ * Recebe o contato inteiro (e não só o telefone) de propósito — a assinatura
+ * documenta que `uf` existe e está sendo deliberadamente ignorado aqui, em vez
+ * de parecer esquecimento pra quem ler depois.
  */
-export function estadoDoLead(c: {
-  uf?: string | null;
-  telefone?: string | null;
-}): EstadoDoLead | null {
-  const cadastrada = String(c.uf || "").trim().toUpperCase();
-  if (cadastrada.length === 2 && (UFS as readonly string[]).includes(cadastrada)) {
-    return { uf: cadastrada, origem: "cadastro" };
-  }
-  const doDdd = ufDoTelefone(c.telefone);
-  return doDdd ? { uf: doDdd, origem: "ddd" } : null;
+export function estadoDoLead(c: { telefone?: string | null }): string | null {
+  return ufDoTelefone(c.telefone);
 }
 
 /**
@@ -148,12 +132,10 @@ export interface LinhaEstado {
 export interface LeadsPorEstado {
   /** Estados com pelo menos um lead, do maior volume pro menor. */
   estados: LinhaEstado[];
-  /** Leads que entraram na conta (têm estado). */
+  /** Leads cujo DDD identificou um estado. */
   comEstado: number;
-  /** Leads sem UF cadastrada e sem DDD utilizável. */
+  /** Leads sem telefone, ou com DDD que não existe na tabela da Anatel. */
   semEstado: number;
-  /** Quantos vieram de cada procedência — a base da faixa de veracidade. */
-  porOrigem: { cadastro: number; ddd: number };
 }
 
 /**
@@ -166,23 +148,23 @@ export interface LeadsPorEstado {
  * nome da etapa é assunto do funil, não deste arquivo.
  */
 export function agregarLeadsPorEstado(
-  linhas: Array<{ uf?: string | null; telefone?: string | null; ganho: boolean }>,
+  linhas: Array<{ telefone?: string | null; ganho: boolean }>,
 ): LeadsPorEstado {
   const porUf = new Map<string, { leads: number; ganhos: number }>();
-  const porOrigem = { cadastro: 0, ddd: 0 };
+  let comEstado = 0;
   let semEstado = 0;
 
   for (const l of linhas) {
-    const e = estadoDoLead(l);
-    if (!e) {
+    const uf = estadoDoLead(l);
+    if (!uf) {
       semEstado++;
       continue;
     }
-    porOrigem[e.origem]++;
-    const atual = porUf.get(e.uf) ?? { leads: 0, ganhos: 0 };
+    comEstado++;
+    const atual = porUf.get(uf) ?? { leads: 0, ganhos: 0 };
     atual.leads++;
     if (l.ganho) atual.ganhos++;
-    porUf.set(e.uf, atual);
+    porUf.set(uf, atual);
   }
 
   const estados: LinhaEstado[] = [...porUf.entries()]
@@ -196,10 +178,5 @@ export function agregarLeadsPorEstado(
     // mesmo volume muda a cada consulta e a lista "pisca" entre recarregamentos.
     .sort((a, b) => b.leads - a.leads || a.uf.localeCompare(b.uf));
 
-  return {
-    estados,
-    comEstado: porOrigem.cadastro + porOrigem.ddd,
-    semEstado,
-    porOrigem,
-  };
+  return { estados, comEstado, semEstado };
 }

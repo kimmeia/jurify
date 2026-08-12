@@ -137,6 +137,7 @@ export async function listarColaboradores(escritorioId: number) {
       setorCor: setores.cor,
       setorTipo: setores.tipo,
       metaMensal: colaboradores.metaMensal,
+      jornadaSemanal: colaboradores.jornadaSemanal,
       ativo: colaboradores.ativo,
       maxAtendimentosSimultaneos: colaboradores.maxAtendimentosSimultaneos,
       recebeLeadsAutomaticos: colaboradores.recebeLeadsAutomaticos,
@@ -190,6 +191,8 @@ export async function atualizarColaborador(
     /** null = sem limite de atendimentos simultâneos. */
     maxAtendimentosSimultaneos?: number | null;
     recebeLeadsAutomaticos?: boolean;
+    /** JSON já validado por `normalizarJornada`. Null limpa. */
+    jornadaSemanal?: string | null;
   },
 ) {
   const db = await getDb();
@@ -219,6 +222,7 @@ export async function atualizarColaborador(
   if (dados.ativo !== undefined) updateData.ativo = dados.ativo;
   if (dados.maxAtendimentosSimultaneos !== undefined) updateData.maxAtendimentosSimultaneos = dados.maxAtendimentosSimultaneos;
   if (dados.recebeLeadsAutomaticos !== undefined) updateData.recebeLeadsAutomaticos = dados.recebeLeadsAutomaticos;
+  if (dados.jornadaSemanal !== undefined) updateData.jornadaSemanal = dados.jornadaSemanal;
   if (dados.metaMensal !== undefined) {
     updateData.metaMensal = dados.metaMensal === null ? null : dados.metaMensal.toFixed(2);
   }

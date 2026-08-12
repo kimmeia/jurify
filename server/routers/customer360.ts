@@ -36,7 +36,6 @@ import {
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { createLogger } from "../_core/logger";
 import { toIsoString } from "../_core/dates";
-import { estadoDoLead, UFS } from "../../shared/leads-uf";
 
 const log = createLogger("customer360");
 
@@ -356,17 +355,6 @@ export const customer360Router = router({
             optOutWhatsapp: !!contato.optOutWhatsapp,
             optOutWhatsappEm: toIsoString(contato.optOutWhatsappEm),
             createdAt: toIsoString(contato.createdAt) ?? "",
-            /**
-             * O estado, com a procedência junto.
-             *
-             * O relatório mostra de onde vêm os leads, e hoje 85% daquele
-             * painel é dedução do DDD — porque o endereço só é preenchido à
-             * mão, lá no formulário de qualificação, quando o caso já virou
-             * peça. Aqui o atendente está falando com a pessoa: é o momento
-             * mais barato do processo pra confirmar, e um clique transforma
-             * dedução em fato.
-             */
-            estado: estadoDoLead({ uf: contato.uf, telefone: contato.telefone }),
           },
           financeiro,
           leads: leadsAtivos.map((l) => ({
@@ -482,46 +470,4 @@ export const customer360Router = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  /**
-   * Confirma (ou corrige) o estado do contato.
-   *
-   * O relatório separa o estado que alguém confirmou do que foi deduzido do
-   * DDD, e hoje a segunda fatia domina — o endereço só chega no formulário de
-   * qualificação, que é preenchido quando o caso já virou peça. Este é o
-   * atalho: o atendente está com a pessoa na linha, vê a dedução, e confirma
-   * ou corrige num clique.
-   *
-   * Grava em `contatos.uf`, que é o mesmo campo do formulário. Não existe
-   * "confirmado" como flag separada de propósito: o que faz o estado contar
-   * como fato é ele estar preenchido, e um humano é quem preenche. Promover
-   * dedução a fato em massa, sem alguém dizer, seria falsificar exatamente a
-   * distinção que o painel existe pra mostrar.
-   */
-  confirmarEstado: protectedProcedure
-    .input(
-      z.object({
-        contatoId: z.number(),
-        uf: z.enum(UFS),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado");
-      const db = await getDb();
-      if (!db) throw new Error("DB indisponível");
-
-      const [alvo] = await db
-        .select({ id: contatos.id })
-        .from(contatos)
-        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, esc.escritorio.id)))
-        .limit(1);
-      if (!alvo) throw new Error("Contato não encontrado");
-
-      await db
-        .update(contatos)
-        .set({ uf: input.uf })
-        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, esc.escritorio.id)));
-
-      return { uf: input.uf };
-    }),
 });
