@@ -753,12 +753,29 @@ export const relatoriosRouter = router({
 
     // Lista master de colaboradores (nome + email) pra hidratar a tabela.
     const todosColabRows = await db
-      .select({ id: colaboradores.id, nome: users.name, email: users.email })
+      .select({
+        id: colaboradores.id,
+        nome: users.name,
+        email: users.email,
+        ativo: colaboradores.ativo,
+        removidoEm: colaboradores.removidoEm,
+      })
       .from(colaboradores)
       .innerJoin(users, eq(colaboradores.userId, users.id))
       .where(eq(colaboradores.escritorioId, eid));
-    const nomePorColab = new Map<number, { nome: string; email: string }>();
-    for (const c of todosColabRows) nomePorColab.set(c.id, { nome: c.nome || c.email || `#${c.id}`, email: c.email || "" });
+    // Quem saiu do escritório continua no relatório, e MARCADO — não
+    // escondido. O atendimento que ele fez no período aconteceu e está dentro
+    // do total de conversas; sumir com a linha faria a tabela somar menos que
+    // o KPI logo acima, e é justamente esse tipo de divergência que faz alguém
+    // parar de confiar no relatório inteiro.
+    const nomePorColab = new Map<number, { nome: string; email: string; removido: boolean }>();
+    for (const c of todosColabRows) {
+      nomePorColab.set(c.id, {
+        nome: c.nome || c.email || `#${c.id}`,
+        email: c.email || "",
+        removido: !c.ativo || !!c.removidoEm,
+      });
+    }
 
     // ─── Ligações (tabela chamadas) — mesmos filtros do relatório ───────
     const baseCham = and(
@@ -805,6 +822,8 @@ export const relatoriosRouter = router({
     const porAtendente = new Map<number, {
       colabId: number;
       nome: string;
+      /** Saiu do escritório. A linha continua — o trabalho dela aconteceu. */
+      removido: boolean;
       atendimentos: number;
       leadsTotal: number;
       ganhos: number;
@@ -816,6 +835,7 @@ export const relatoriosRouter = router({
       if (!porAtendente.has(id)) {
         porAtendente.set(id, {
           colabId: id, nome: nomePorColab.get(id)?.nome || `#${id}`,
+          removido: nomePorColab.get(id)?.removido ?? false,
           atendimentos: 0, leadsTotal: 0, ganhos: 0, perdidos: 0, emAberto: 0, valorFechado: 0,
         });
       }
