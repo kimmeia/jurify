@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href=".claude/skills/mockup-juridflow/assets/fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+    --viz-1:#2a78d6; --viz-2:#eb6834; --viz-3:#1baf7a; --viz-4:#eda100; --viz-5:#e87ba4;
+    --viz-trilho:#e8edf3;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:24px 30px; height:100%; display:flex; flex-direction:column; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .topo-dir { display:flex; align-items:center; gap:9px; }
+  .select { height:38px; border:1px solid var(--borda); background:var(--surface); border-radius:9px;
+            padding:0 12px; display:flex; align-items:center; gap:9px; font-size:13px; font-weight:500; color:var(--corpo); }
+  .btn-primary { background:var(--acento); color:#fff; font-weight:600; font-size:13.5px;
+                 border-radius:10px; padding:11px 18px; display:flex; align-items:center; gap:8px;
+                 box-shadow:0 8px 18px -8px #7c3aed88; }
+
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  /* faixa de pendências */
+  .faixa { display:flex; gap:11px; margin-top:15px; flex:0 0 auto; }
+  .acao { flex:0 0 auto; min-width:250px; padding:11px 14px; display:flex; align-items:center; gap:11px;
+          border-radius:12px; border:1px solid var(--borda); background:var(--surface); }
+  .acao.critico { border-color:var(--alerta-borda); background:var(--alerta-bg); }
+  .acao .ic { width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+              background:var(--hairline); flex:0 0 auto; }
+  .acao.critico .ic { background:#fee2e2; }
+  .acao .n { font-size:20px; font-weight:800; line-height:1; }
+  .acao.critico .n { color:var(--alerta-forte); }
+  .acao .l { font-size:11px; color:var(--mudo); margin-top:3px; line-height:1.3; }
+  .acao .seta { margin-left:auto; color:var(--fantasma); }
+
+  .corpo { flex:1 1 auto; min-height:0; display:flex; gap:14px; margin-top:14px; }
+  .col-a { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:12px; }
+  .col-a > .equipe { flex:0 0 auto; }
+  .conduta { flex:1 1 auto; padding:13px 15px; display:flex; flex-direction:column; min-height:0; }
+  .cd-row { display:grid; grid-template-columns:76px 22px 190px 1fr 150px; gap:11px; align-items:flex-start;
+            padding:9px 0; border-bottom:1px solid var(--hairline-2); }
+  .cd-row:last-child { border-bottom:0; }
+  .cd-row .dt { font-size:11px; color:var(--fraco); font-variant-numeric:tabular-nums; padding-top:1px; }
+  .cd-ic { width:22px; height:22px; border-radius:7px; display:flex; align-items:center; justify-content:center; }
+  .cd-ic.el { background:#f0fdf4; border:1px solid #a7f3d0; }
+  .cd-ic.ad { background:#fffbeb; border:1px solid #fde68a; }
+  .cd-ic.ob { background:var(--hairline); border:1px solid var(--borda); }
+  .cd-row .qm { font-size:12.3px; font-weight:600; color:var(--tinta-2); }
+  .cd-row .tp { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin-top:2px; }
+  .cd-row .tp.el { color:#047857; }
+  .cd-row .tp.ad { color:#a16207; }
+  .cd-row .tp.ob { color:var(--mudo); }
+  .cd-row .tx { font-size:12px; color:var(--corpo); line-height:1.45; }
+  .cd-row .au { font-size:10.5px; color:var(--fraco); text-align:right; line-height:1.4; }
+  .col-b { width:326px; flex:0 0 auto; display:flex; flex-direction:column; gap:12px; }
+
+  /* tabela da equipe */
+  .tab-cab { padding:12px 15px 10px; display:flex; align-items:center; justify-content:space-between; }
+  .tab-cab .t { font-family:'Poppins'; font-weight:700; font-size:16px; }
+  .tab-cab .c { font-size:11.5px; color:var(--mudo); margin-top:2px; }
+  .grade { display:grid; grid-template-columns:236px 196px 236px 200px 174px; gap:12px;
+           padding:0 15px 7px; align-items:center; }
+  .grade.h { border-bottom:1px solid var(--hairline); }
+  .linha { padding-top:11px; padding-bottom:11px; border-bottom:1px solid var(--hairline-2); }
+  .linha:last-child { border-bottom:0; }
+
+  .pes { display:flex; align-items:center; gap:9px; min-width:0; }
+  .av { width:31px; height:31px; border-radius:50%; flex:0 0 auto; color:#fff;
+        font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .pes .nm { font-size:13px; font-weight:600; color:var(--tinta-2); line-height:1.25; }
+  .pes .fn { font-size:10.5px; color:var(--fraco); margin-top:2px; }
+
+  .hoje { display:flex; align-items:center; gap:7px; }
+  .dot { width:8px; height:8px; border-radius:50%; flex:0 0 auto; }
+  .hoje .st { font-size:12px; font-weight:600; color:var(--tinta-2); }
+  .hoje .hr { font-size:10.5px; color:var(--fraco); margin-top:2px; font-variant-numeric:tabular-nums; }
+
+  .jor .top { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+  .jor .hh { font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .jor .hh span { font-weight:500; color:var(--fraco); font-size:11px; }
+  .jor .sal { font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .jor .sal.pos { color:var(--ok); }
+  .jor .sal.neg { color:var(--alerta); }
+  .t2 { height:7px; border-radius:3px; background:var(--viz-trilho); overflow:hidden; margin-top:6px; }
+  .t2 i { display:block; height:100%; border-radius:0 3px 3px 0; }
+
+  .des .top { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+  .des .pct { font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .des .lb { font-size:10.5px; color:var(--fraco); }
+
+  .aval { display:flex; align-items:center; gap:9px; }
+  .nota { width:38px; height:38px; border-radius:10px; flex:0 0 auto; display:flex; flex-direction:column;
+          align-items:center; justify-content:center; border:1px solid var(--borda); background:var(--hairline-2); }
+  .nota .v { font-size:14px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  .nota .m { font-size:8px; font-weight:700; color:var(--fraco); margin-top:1px; }
+  .nota.bom { border-color:#a7f3d0; background:#f0fdf4; }
+  .nota.bom .v { color:#047857; }
+  .nota.ruim { border-color:var(--alerta-borda); background:var(--alerta-bg); }
+  .nota.ruim .v { color:var(--alerta-forte); }
+  .aval .q { font-size:10.5px; color:var(--mudo); line-height:1.35; }
+  .tag { display:inline-flex; align-items:center; gap:4px; border-radius:999px; padding:2px 7px;
+         font-size:9.5px; font-weight:700; margin-top:3px; }
+  .tag.venc { background:var(--alerta-bg); color:var(--alerta-forte); border:1px solid var(--alerta-borda); }
+  .tag.elogio { background:#f0fdf4; color:#047857; border:1px solid #a7f3d0; }
+  .tag.adv { background:#fffbeb; color:#a16207; border:1px solid #fde68a; }
+
+  /* coluna direita */
+  .agora { padding:13px 14px; flex:0 0 auto; }
+  .ag-row { display:flex; align-items:center; gap:9px; padding:7px 0; border-bottom:1px solid var(--hairline-2); }
+  .ag-row:last-child { border-bottom:0; }
+  .ag-row .nm { font-size:12.3px; font-weight:600; color:var(--tinta-2); flex:1; min-width:0; }
+  .ag-row .hr { font-size:11px; color:var(--mudo); font-variant-numeric:tabular-nums; }
+  .resumo-ag { display:flex; gap:7px; margin-top:9px; }
+  .resumo-ag div { flex:1; border-radius:8px; padding:7px 9px; background:var(--hairline-2); border:1px solid var(--borda); }
+  .resumo-ag .n { font-size:16px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  .resumo-ag .l { font-size:9.5px; color:var(--mudo); margin-top:3px; }
+
+  .diver { padding:13px 14px; flex:0 0 auto; border-color:#fde68a; background:#fffbeb; }
+  .dv-row { display:grid; grid-template-columns:1fr auto; gap:9px; padding:7px 0; border-bottom:1px solid #fef3c7; }
+  .dv-row:last-child { border-bottom:0; }
+  .dv-row .nm { font-size:12px; font-weight:600; color:#78350f; }
+  .dv-row .de { font-size:10.5px; color:#a16207; margin-top:2px; line-height:1.35; }
+  .dv-row .gap { font-size:12.5px; font-weight:800; color:#b45309; font-variant-numeric:tabular-nums; text-align:right; }
+
+  .nota-legal { padding:11px 13px; flex:1 1 auto; border-style:dashed; display:flex; flex-direction:column; }
+  .nota-legal .t { font-size:11.5px; font-weight:700; color:var(--corpo); display:flex; align-items:center; gap:6px; }
+  .nota-legal .c { font-size:11px; color:var(--mudo); line-height:1.5; margin-top:5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topo">
+    <div>
+      <div class="h1">RH · Equipe</div>
+      <div class="sub">Ponto, desempenho e conduta — 01 a 11 de agosto de 2026</div>
+    </div>
+    <div class="topo-dir">
+      <div class="select">
+        Agosto de 2026
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="select">
+        Todos os setores
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 11l2.5 2.5L16 8M12 3l7 3v6c0 4.4-3 8.3-7 9.4-4-1.1-7-5-7-9.4V6l7-3z" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Nova avaliação
+      </div>
+    </div>
+  </div>
+
+  <div class="faixa">
+    <div class="acao critico">
+      <div class="ic">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="#b91c1c" stroke-width="2"/><path d="M12 7.5V12l3 2" stroke="#b91c1c" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <div>
+        <div class="n">3</div>
+        <div class="l">dias sem batida de saída</div>
+      </div>
+      <div class="seta">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#cbd5e1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+    <div class="acao">
+      <div class="ic">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 11l2.5 2.5L16 8M12 3l7 3v6c0 4.4-3 8.3-7 9.4-4-1.1-7-5-7-9.4V6l7-3z" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <div class="n">2</div>
+        <div class="l">avaliações vencidas (ciclo trimestral)</div>
+      </div>
+      <div class="seta">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#cbd5e1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+    <div class="acao">
+      <div class="ic">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 19V9M10 19V5M16 19v-6M21 19H3" stroke="#475569" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <div>
+        <div class="n">1</div>
+        <div class="l">abaixo de 40% da meta com o mês correndo</div>
+      </div>
+      <div class="seta">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#cbd5e1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="corpo">
+    <!-- ─── equipe ─── -->
+    <div class="col-a">
+      <div class="card equipe">
+      <div class="tab-cab">
+        <div>
+          <div class="t">Equipe</div>
+          <div class="c">6 pessoas ativas · jornada de 8h, seg a sex</div>
+        </div>
+        <div class="micro">Ordenado por saldo do mês</div>
+      </div>
+
+      <div class="grade h">
+        <div class="micro">Pessoa</div>
+        <div class="micro">Hoje</div>
+        <div class="micro">Jornada do mês</div>
+        <div class="micro">Desempenho</div>
+        <div class="micro">Avaliação</div>
+      </div>
+
+      <!-- 1 -->
+      <div class="grade linha">
+        <div class="pes">
+          <div class="av" style="background:#7c3aed">MM</div>
+          <div><div class="nm">Milena Mello Mansur</div><div class="fn">Advogada · Comercial</div></div>
+        </div>
+        <div class="hoje">
+          <span class="dot" style="background:var(--ok)"></span>
+          <div><div class="st">Trabalhando</div><div class="hr">entrou 08:02</div></div>
+        </div>
+        <div class="jor">
+          <div class="top"><div class="hh">62h10 <span>/ 64h</span></div><div class="sal neg">−1h50</div></div>
+          <div class="t2"><i style="width:97%; background:var(--viz-1)"></i></div>
+        </div>
+        <div class="des">
+          <div class="top"><div class="pct">44,3%</div><div class="lb">da meta</div></div>
+          <div class="t2"><i style="width:44%; background:var(--viz-4)"></i></div>
+        </div>
+        <div class="aval">
+          <div class="nota bom"><div class="v">4,5</div><div class="m">DE 5</div></div>
+          <div class="q">há 1 mês<div class="tag elogio">2 elogios</div></div>
+        </div>
+      </div>
+
+      <!-- 2 -->
+      <div class="grade linha">
+        <div class="pes">
+          <div class="av" style="background:#0891b2">RA</div>
+          <div><div class="nm">Rodrigo Alencar Pinto</div><div class="fn">Advogado · Operacional</div></div>
+        </div>
+        <div class="hoje">
+          <span class="dot" style="background:var(--viz-4)"></span>
+          <div><div class="st">Em almoço</div><div class="hr">saiu 12:04 · volta 13:04</div></div>
+        </div>
+        <div class="jor">
+          <div class="top"><div class="hh">66h30 <span>/ 64h</span></div><div class="sal pos">+2h30</div></div>
+          <div class="t2"><i style="width:100%; background:var(--viz-1)"></i></div>
+        </div>
+        <div class="des">
+          <div class="top"><div class="pct">92%</div><div class="lb">tarefas no prazo</div></div>
+          <div class="t2"><i style="width:92%; background:var(--viz-3)"></i></div>
+        </div>
+        <div class="aval">
+          <div class="nota bom"><div class="v">4,8</div><div class="m">DE 5</div></div>
+          <div class="q">há 2 meses</div>
+        </div>
+      </div>
+
+      <!-- 3 -->
+      <div class="grade linha">
+        <div class="pes">
+          <div class="av" style="background:#eab308">CS</div>
+          <div><div class="nm">Cláudia Serpa Nogueira</div><div class="fn">Financeiro · Financeiro</div></div>
+        </div>
+        <div class="hoje">
+          <span class="dot" style="background:var(--ok)"></span>
+          <div><div class="st">Trabalhando</div><div class="hr">entrou 07:58</div></div>
+        </div>
+        <div class="jor">
+          <div class="top"><div class="hh">64h00 <span>/ 64h</span></div><div class="sal pos">0h00</div></div>
+          <div class="t2"><i style="width:100%; background:var(--viz-1)"></i></div>
+        </div>
+        <div class="des">
+          <div class="top"><div class="pct">88%</div><div class="lb">conciliação em dia</div></div>
+          <div class="t2"><i style="width:88%; background:var(--viz-3)"></i></div>
+        </div>
+        <div class="aval">
+          <div class="nota"><div class="v">—</div><div class="m">DE 5</div></div>
+          <div class="q">nunca avaliada<div class="tag venc">vencida</div></div>
+        </div>
+      </div>
+
+      <!-- 4 -->
+      <div class="grade linha">
+        <div class="pes">
+          <div class="av" style="background:#10b981">TB</div>
+          <div><div class="nm">Thiago Bezerra Lopes</div><div class="fn">SDR · Comercial</div></div>
+        </div>
+        <div class="hoje">
+          <span class="dot" style="background:var(--fantasma)"></span>
+          <div><div class="st">Não bateu ponto</div><div class="hr">último acesso 09:41</div></div>
+        </div>
+        <div class="jor">
+          <div class="top"><div class="hh">54h20 <span>/ 64h</span></div><div class="sal neg">−9h40</div></div>
+          <div class="t2"><i style="width:85%; background:var(--viz-2)"></i></div>
+        </div>
+        <div class="des">
+          <div class="top"><div class="pct">31,0%</div><div class="lb">da meta</div></div>
+          <div class="t2"><i style="width:31%; background:var(--viz-5)"></i></div>
+        </div>
+        <div class="aval">
+          <div class="nota ruim"><div class="v">2,6</div><div class="m">DE 5</div></div>
+          <div class="q">há 3 meses<div class="tag adv">1 advertência</div></div>
+        </div>
+      </div>
+
+      <!-- 5 -->
+      <div class="grade linha">
+        <div class="pes">
+          <div class="av" style="background:#e87ba4">JV</div>
+          <div><div class="nm">Juliana Viana Correia</div><div class="fn">Atendente · Suporte</div></div>
+        </div>
+        <div class="hoje">
+          <span class="dot" style="background:var(--ok)"></span>
+          <div><div class="st">Trabalhando</div><div class="hr">entrou 08:15</div></div>
+        </div>
+        <div class="jor">
+          <div class="top"><div class="hh">63h05 <span>/ 64h</span></div><div class="sal neg">−0h55</div></div>
+          <div class="t2"><i style="width:98%; background:var(--viz-1)"></i></div>
+        </div>
+        <div class="des">
+          <div class="top"><div class="pct">96%</div><div class="lb">conversas resolvidas</div></div>
+          <div class="t2"><i style="width:96%; background:var(--viz-3)"></i></div>
+        </div>
+        <div class="aval">
+          <div class="nota bom"><div class="v">4,2</div><div class="m">DE 5</div></div>
+          <div class="q">há 1 mês<div class="tag elogio">1 elogio</div></div>
+        </div>
+      </div>
+
+      <!-- 6 -->
+      <div class="grade linha">
+        <div class="pes">
+          <div class="av" style="background:#64748b">PE</div>
+          <div><div class="nm">Pedro Eustáquio Alves</div><div class="fn">Estagiário · Operacional</div></div>
+        </div>
+        <div class="hoje">
+          <span class="dot" style="background:var(--corpo-2)"></span>
+          <div><div class="st">Encerrou</div><div class="hr">08:00 → 14:03</div></div>
+        </div>
+        <div class="jor">
+          <div class="top"><div class="hh">41h30 <span>/ 48h</span></div><div class="sal neg">−6h30</div></div>
+          <div class="t2"><i style="width:86%; background:var(--viz-2)"></i></div>
+        </div>
+        <div class="des">
+          <div class="top"><div class="pct">74%</div><div class="lb">tarefas no prazo</div></div>
+          <div class="t2"><i style="width:74%; background:var(--viz-4)"></i></div>
+        </div>
+        <div class="aval">
+          <div class="nota"><div class="v">3,4</div><div class="m">DE 5</div></div>
+          <div class="q">há 4 meses<div class="tag venc">vencida</div></div>
+        </div>
+      </div>
+      </div>
+
+      <div class="card conduta">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div class="micro">Conduta e feedback · últimos registros</div>
+          <div class="micro" style="color:var(--acento)">+ Registrar</div>
+        </div>
+        <div style="margin-top:6px;">
+          <div class="cd-row">
+            <div class="dt">11 ago</div>
+            <div class="cd-ic el"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M7 11v9H4a1 1 0 01-1-1v-7a1 1 0 011-1h3zm0 0l4.5-8a2 2 0 013.7 1.3L14.5 8H20a1.5 1.5 0 011.5 1.8l-1.6 8A2 2 0 0118 19.5H7" stroke="#047857" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+            <div><div class="qm">Juliana Viana Correia</div><div class="tp el">Elogio</div></div>
+            <div class="tx">Assumiu a fila do plantão sozinha na sexta e zerou as 14 conversas pendentes até as 18h.</div>
+            <div class="au">por Rafael Costa<br>Dono</div>
+          </div>
+          <div class="cd-row">
+            <div class="dt">08 ago</div>
+            <div class="cd-ic ad"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 4l9 16H3l9-16z" stroke="#a16207" stroke-width="1.9" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="#a16207" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div><div class="qm">Thiago Bezerra Lopes</div><div class="tp ad">Advertência verbal</div></div>
+            <div class="tx">Terceiro atraso sem aviso no mês. Combinado: avisar no grupo até as 08h30 quando houver imprevisto.</div>
+            <div class="au">por Rafael Costa<br>Dono</div>
+          </div>
+          <div class="cd-row">
+            <div class="dt">05 ago</div>
+            <div class="cd-ic ob"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="#64748b" stroke-width="1.9"/><path d="M12 11v5M12 8h.01" stroke="#64748b" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div><div class="qm">Pedro Eustáquio Alves</div><div class="tp ob">Observação</div></div>
+            <div class="tx">Pediu para reduzir a jornada às terças por causa da faculdade. Ajustado no cadastro até dezembro.</div>
+            <div class="au">por Milena Mello<br>Gestora</div>
+          </div>
+          <div class="cd-row">
+            <div class="dt">02 ago</div>
+            <div class="cd-ic el"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M7 11v9H4a1 1 0 01-1-1v-7a1 1 0 011-1h3zm0 0l4.5-8a2 2 0 013.7 1.3L14.5 8H20a1.5 1.5 0 011.5 1.8l-1.6 8A2 2 0 0118 19.5H7" stroke="#047857" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+            <div><div class="qm">Milena Mello Mansur</div><div class="tp el">Elogio</div></div>
+            <div class="tx">Fechou o acordo do caso Albuquerque com desconto menor que a meta do setor.</div>
+            <div class="au">por Rafael Costa<br>Dono</div>
+          </div>
+          <div class="cd-row">
+            <div class="dt">28 jul</div>
+            <div class="cd-ic ob"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="#64748b" stroke-width="1.9"/><path d="M12 11v5M12 8h.01" stroke="#64748b" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div><div class="qm">Rodrigo Alencar Pinto</div><div class="tp ob">Observação</div></div>
+            <div class="tx">Banco de horas em +14h no trimestre. Combinar compensação antes de virar passivo.</div>
+            <div class="au">por Rafael Costa<br>Dono</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── direita ─── -->
+    <div class="col-b">
+      <div class="card agora">
+        <div class="micro">Agora · 11 de agosto, 14:52</div>
+        <div class="resumo-ag">
+          <div><div class="n" style="color:var(--ok)">3</div><div class="l">trabalhando</div></div>
+          <div><div class="n" style="color:#a16207">1</div><div class="l">em almoço</div></div>
+          <div><div class="n" style="color:var(--mudo)">2</div><div class="l">fora</div></div>
+        </div>
+        <div style="margin-top:11px; padding-top:9px; border-top:1px solid var(--hairline);">
+          <div class="ag-row"><span class="dot" style="background:var(--ok)"></span><span class="nm">Milena Mello</span><span class="hr">6h50</span></div>
+          <div class="ag-row"><span class="dot" style="background:var(--ok)"></span><span class="nm">Cláudia Serpa</span><span class="hr">6h54</span></div>
+          <div class="ag-row"><span class="dot" style="background:var(--ok)"></span><span class="nm">Juliana Viana</span><span class="hr">6h37</span></div>
+          <div class="ag-row"><span class="dot" style="background:var(--viz-4)"></span><span class="nm">Rodrigo Alencar</span><span class="hr">almoço</span></div>
+        </div>
+      </div>
+
+      <div class="card diver">
+        <div class="micro" style="color:#a16207">Batida × acesso ao sistema</div>
+        <div class="dv-row">
+          <div>
+            <div class="nm">Thiago Bezerra</div>
+            <div class="de">Sem batida hoje, mas acessou às 09:41</div>
+          </div>
+          <div class="gap">?</div>
+        </div>
+        <div class="dv-row">
+          <div>
+            <div class="nm">Pedro Eustáquio</div>
+            <div class="de">Bateu saída 14:03 · último acesso 17:22</div>
+          </div>
+          <div class="gap">3h19</div>
+        </div>
+        <div class="dv-row">
+          <div>
+            <div class="nm">Milena Mello · 08 ago</div>
+            <div class="de">Bateu 08:00 · primeiro acesso 09:12</div>
+          </div>
+          <div class="gap">1h12</div>
+        </div>
+      </div>
+
+      <div class="card nota-legal">
+        <div class="t">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.4-3 8.3-7 9.4-4-1.1-7-5-7-9.4V6l7-3z" stroke="#334155" stroke-width="1.9" stroke-linejoin="round"/></svg>
+          O que este ponto é, e o que não é
+        </div>
+        <div class="c">
+          Quem registra é o colaborador, com hora do servidor. O acesso ao sistema entra só como
+          <b>conferência</b> — é o que alimenta o quadro acima.
+          <br><br>
+          Não substitui registro eletrônico de ponto para fins trabalhistas: a Portaria 671/2021 exige
+          equipamento homologado, comprovante ao trabalhador e exportação em AFD. Isto é instrumento
+          de gestão interna.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
