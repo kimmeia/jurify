@@ -32,19 +32,6 @@
   .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
   .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
 
-  /* faixa de pendências */
-  .faixa { display:flex; gap:11px; margin-top:15px; flex:0 0 auto; }
-  .acao { flex:0 0 auto; min-width:250px; padding:11px 14px; display:flex; align-items:center; gap:11px;
-          border-radius:12px; border:1px solid var(--borda); background:var(--surface); }
-  .acao.critico { border-color:var(--alerta-borda); background:var(--alerta-bg); }
-  .acao .ic { width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center;
-              background:var(--hairline); flex:0 0 auto; }
-  .acao.critico .ic { background:#fee2e2; }
-  .acao .n { font-size:20px; font-weight:800; line-height:1; }
-  .acao.critico .n { color:var(--alerta-forte); }
-  .acao .l { font-size:11px; color:var(--mudo); margin-top:3px; line-height:1.3; }
-  .acao .seta { margin-left:auto; color:var(--fantasma); }
-
   .corpo { flex:1 1 auto; min-height:0; display:flex; gap:14px; margin-top:14px; }
   .col-a { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:12px; }
   .col-a > .equipe { flex:0 0 auto; }
@@ -159,45 +146,6 @@
       <div class="btn-primary">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 11l2.5 2.5L16 8M12 3l7 3v6c0 4.4-3 8.3-7 9.4-4-1.1-7-5-7-9.4V6l7-3z" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Nova avaliação
-      </div>
-    </div>
-  </div>
-
-  <div class="faixa">
-    <div class="acao critico">
-      <div class="ic">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="#b91c1c" stroke-width="2"/><path d="M12 7.5V12l3 2" stroke="#b91c1c" stroke-width="2" stroke-linecap="round"/></svg>
-      </div>
-      <div>
-        <div class="n">3</div>
-        <div class="l">dias sem batida de saída</div>
-      </div>
-      <div class="seta">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#cbd5e1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-    </div>
-    <div class="acao">
-      <div class="ic">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 11l2.5 2.5L16 8M12 3l7 3v6c0 4.4-3 8.3-7 9.4-4-1.1-7-5-7-9.4V6l7-3z" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <div>
-        <div class="n">2</div>
-        <div class="l">avaliações vencidas (ciclo trimestral)</div>
-      </div>
-      <div class="seta">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#cbd5e1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-    </div>
-    <div class="acao">
-      <div class="ic">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 19V9M10 19V5M16 19v-6M21 19H3" stroke="#475569" stroke-width="2" stroke-linecap="round"/></svg>
-      </div>
-      <div>
-        <div class="n">1</div>
-        <div class="l">abaixo de 40% da meta com o mês correndo</div>
-      </div>
-      <div class="seta">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#cbd5e1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
     </div>
   </div>
