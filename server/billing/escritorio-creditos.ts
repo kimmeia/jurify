@@ -98,22 +98,29 @@ export async function consumirCreditosEscritorio(
   }
 
   const novoSaldo = saldoAtual.saldo - custo;
-  await db.update(escritorioCreditos)
-    .set({
-      saldo: novoSaldo,
-      totalConsumido: saldoAtual.totalConsumido + custo,
-    })
-    .where(eq(escritorioCreditos.escritorioId, escritorioId));
 
-  await db.insert(escritorioTransacoes).values({
-    escritorioId,
-    tipo: "consumo",
-    quantidade: custo,
-    saldoAnterior: saldoAtual.saldo,
-    saldoDepois: novoSaldo,
-    operacao,
-    detalhes: detalhes ?? null,
-    userId,
+  // Saldo e extrato numa transação só: o saldo é cache do extrato, e cache
+  // que se atualiza sem o registro correspondente deixa o escritório com um
+  // número que ninguém consegue explicar. O robô auditor pegou isso em
+  // produção (CRED-01) antes desta trava existir.
+  await db.transaction(async (tx) => {
+    await tx.update(escritorioCreditos)
+      .set({
+        saldo: novoSaldo,
+        totalConsumido: saldoAtual.totalConsumido + custo,
+      })
+      .where(eq(escritorioCreditos.escritorioId, escritorioId));
+
+    await tx.insert(escritorioTransacoes).values({
+      escritorioId,
+      tipo: "consumo",
+      quantidade: custo,
+      saldoAnterior: saldoAtual.saldo,
+      saldoDepois: novoSaldo,
+      operacao,
+      detalhes: detalhes ?? null,
+      userId,
+    });
   });
 
   return { saldoAnterior: saldoAtual.saldo, saldoDepois: novoSaldo };
@@ -141,19 +148,21 @@ export async function creditarEscritorio(
     ? saldoAtual.totalComprado + quantidade
     : saldoAtual.totalComprado;
 
-  await db.update(escritorioCreditos)
-    .set({ saldo: novoSaldo, totalComprado: novoTotalComprado })
-    .where(eq(escritorioCreditos.escritorioId, escritorioId));
+  await db.transaction(async (tx) => {
+    await tx.update(escritorioCreditos)
+      .set({ saldo: novoSaldo, totalComprado: novoTotalComprado })
+      .where(eq(escritorioCreditos.escritorioId, escritorioId));
 
-  await db.insert(escritorioTransacoes).values({
-    escritorioId,
-    tipo,
-    quantidade,
-    saldoAnterior: saldoAtual.saldo,
-    saldoDepois: novoSaldo,
-    operacao,
-    detalhes: detalhes ?? null,
-    userId,
+    await tx.insert(escritorioTransacoes).values({
+      escritorioId,
+      tipo,
+      quantidade,
+      saldoAnterior: saldoAtual.saldo,
+      saldoDepois: novoSaldo,
+      operacao,
+      detalhes: detalhes ?? null,
+      userId,
+    });
   });
 
   return { saldoNovo: novoSaldo };
@@ -213,23 +222,25 @@ export async function resetCotaMensalEscritorios(): Promise<{ resetados: number 
     if (cotaAtual <= 0) continue; // free/sem plano: não acumula
 
     const novoSaldo = cred.saldo + cotaAtual;
-    await db.update(escritorioCreditos)
-      .set({
-        saldo: novoSaldo,
-        cotaMensal: cotaAtual,
-        ultimoReset: new Date(),
-      })
-      .where(eq(escritorioCreditos.id, cred.id));
+    await db.transaction(async (tx) => {
+      await tx.update(escritorioCreditos)
+        .set({
+          saldo: novoSaldo,
+          cotaMensal: cotaAtual,
+          ultimoReset: new Date(),
+        })
+        .where(eq(escritorioCreditos.id, cred.id));
 
-    await db.insert(escritorioTransacoes).values({
-      escritorioId: cred.escritorioId,
-      tipo: "reset_mensal",
-      quantidade: cotaAtual,
-      saldoAnterior: cred.saldo,
-      saldoDepois: novoSaldo,
-      operacao: "reset_mensal",
-      detalhes: `Cota mensal do plano (${cotaAtual} cred)`,
-      userId: 0, // sistema
+      await tx.insert(escritorioTransacoes).values({
+        escritorioId: cred.escritorioId,
+        tipo: "reset_mensal",
+        quantidade: cotaAtual,
+        saldoAnterior: cred.saldo,
+        saldoDepois: novoSaldo,
+        operacao: "reset_mensal",
+        detalhes: `Cota mensal do plano (${cotaAtual} cred)`,
+        userId: 0, // sistema
+      });
     });
 
     resetados++;

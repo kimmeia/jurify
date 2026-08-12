@@ -20,6 +20,7 @@
 import { createLogger } from "../../_core/logger";
 import { captureError } from "../../_core/sentry";
 import { varrer } from "./executor";
+import { salvarVarredura } from "./historico";
 import type { ResultadoVarredura, Severidade } from "./tipos";
 
 const log = createLogger("robo-auditor-cron");
@@ -70,6 +71,10 @@ export async function rodarVarreduraAgendada(): Promise<void> {
     const resultado = await varrer();
     const contagem = contagemPorRegra(resultado);
     const pioraram = regrasQuePioraram(contagem, ultimaContagem);
+
+    // Antes de qualquer alerta: o registro no banco é a única saída que não
+    // depende de integração externa estar de pé.
+    await salvarVarredura(resultado, "cron");
 
     log.info(
       {
