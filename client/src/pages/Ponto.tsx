@@ -52,6 +52,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  ShieldCheck,
   TriangleAlert,
   Trash2,
   Users,
@@ -70,6 +71,62 @@ import {
   type SituacaoFalta,
   type TipoOcorrencia,
 } from "@shared/ocorrencias";
+import {
+  CRITERIOS,
+  deltaDeNota,
+  mediaDasNotas,
+  NOTA_MAX,
+  situacaoDaAcao,
+  situacaoDoCiclo,
+  type AvaliacaoGravada,
+  type CriterioId,
+  type Notas,
+  type SituacaoCiclo,
+} from "@shared/avaliacao";
+
+const ROTULO_CICLO: Record<SituacaoCiclo, { texto: string; classe: string }> = {
+  em_dia: { texto: "", classe: "" },
+  vence_agora: {
+    texto: "avaliar neste mês",
+    classe: "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+  },
+  vencida: {
+    texto: "vencida",
+    classe: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+  },
+  nunca: {
+    texto: "nunca avaliada",
+    classe: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+  },
+};
+
+/** Cor da nota. A régua é a mesma dos três blocos pra não ensinar duas leituras. */
+function corDaNota(n: number): string {
+  if (n < 2) return "bg-rose-500";
+  if (n < 3) return "bg-orange-500";
+  if (n < 4) return "bg-amber-500";
+  return "bg-emerald-500";
+}
+
+function textoDaNota(n: number): string {
+  if (n < 2) return "text-rose-600";
+  if (n < 3) return "text-orange-600";
+  if (n < 4) return "text-amber-600";
+  return "text-emerald-600";
+}
+
+function dataCurta(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
+}
+
+function cicloPorExtenso(ciclo: string): string {
+  const d = new Date(`${ciclo}-01T12:00:00.000Z`);
+  return Number.isNaN(d.getTime())
+    ? ciclo
+    : d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+}
 
 /** O que o servidor devolve: a jornada calculada + a comparação com o contrato. */
 type JornadaComparada = Jornada & {
@@ -810,10 +867,418 @@ function PainelOcorrencias({
   );
 }
 
+/**
+ * O formulário da avaliação.
+ *
+ * A nota geral não é digitada: ela aparece calculada em cima, e muda enquanto
+ * o gestor mexe nos critérios. Deixar digitar a média junto com os critérios
+ * abriria a porta pros dois discordarem, e aí não dá pra saber qual dos dois é
+ * a avaliação.
+ */
+function DialogAvaliar({
+  aberto,
+  onFechar,
+  colaboradorId,
+  nome,
+  aoSalvar,
+}: {
+  aberto: boolean;
+  onFechar: () => void;
+  colaboradorId: number | null;
+  nome: string;
+  aoSalvar: () => void;
+}) {
+  const [notas, setNotas] = useState<Notas>({});
+  const [comentario, setComentario] = useState("");
+  const [acoes, setAcoes] = useState<Array<{ descricao: string; prazo: string }>>([]);
+
+  const mut = trpc.rh.avaliar.useMutation({
+    onSuccess: () => {
+      toast.success("Avaliação registrada");
+      setNotas({});
+      setComentario("");
+      setAcoes([]);
+      aoSalvar();
+      onFechar();
+    },
+    onError: (e) => toast.error("Não deu pra avaliar", { description: e.message }),
+  });
+
+  const media = mediaDasNotas(notas);
+  const avaliados = CRITERIOS.filter((c) => typeof notas[c.id] === "number").length;
+
+  return (
+    <Dialog open={aberto} onOpenChange={(v) => !v && onFechar()}>
+      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Avaliar {nome}</DialogTitle>
+          <DialogDescription>
+            Ciclo de {cicloPorExtenso(competenciaAtual())}. Critério sem nota fica de fora da
+            média — não vira zero.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-baseline gap-2 rounded-lg bg-muted/50 px-3 py-2">
+          <span className={`text-[26px] font-extrabold tabular-nums ${media != null ? textoDaNota(media) : "text-muted-foreground"}`}>
+            {media != null ? media.toFixed(1).replace(".", ",") : "—"}
+          </span>
+          <span className="text-[11.5px] text-muted-foreground">
+            de {NOTA_MAX},0 · média de {avaliados} {avaliados === 1 ? "critério" : "critérios"}
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          {CRITERIOS.map((c) => {
+            const v = notas[c.id];
+            return (
+              <div key={c.id}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <Label className="text-xs font-semibold">{c.rotulo}</Label>
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={`text-[13px] font-bold tabular-nums ${typeof v === "number" ? textoDaNota(v) : "text-muted-foreground"}`}
+                    >
+                      {typeof v === "number" ? v.toFixed(1).replace(".", ",") : "sem nota"}
+                    </span>
+                    {typeof v === "number" && (
+                      <button
+                        type="button"
+                        className="text-[10px] text-muted-foreground hover:text-rose-600"
+                        onClick={() => setNotas((n) => {
+                          const { [c.id]: _, ...resto } = n;
+                          return resto;
+                        })}
+                      >
+                        limpar
+                      </button>
+                    )}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={NOTA_MAX}
+                  step={0.5}
+                  value={typeof v === "number" ? v : 0}
+                  onChange={(e) =>
+                    setNotas((n) => ({ ...n, [c.id]: Number(e.target.value) as number }))
+                  }
+                  className="mt-1 w-full accent-violet-600"
+                />
+                <p className="text-[10.5px] leading-relaxed text-muted-foreground">{c.ajuda}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        <div>
+          <Label className="text-xs">Comentário</Label>
+          <Textarea
+            className="mt-1 min-h-[70px]"
+            placeholder="O que sustenta essas notas — é o que a pessoa vai ler."
+            value={comentario}
+            onChange={(e) => setComentario(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">Plano combinado</Label>
+            <button
+              type="button"
+              className="flex items-center gap-1 text-[11px] font-semibold text-violet-600 hover:underline"
+              onClick={() => setAcoes((a) => [...a, { descricao: "", prazo: "" }])}
+            >
+              <Plus className="h-3 w-3" />
+              adicionar
+            </button>
+          </div>
+          {acoes.length === 0 && (
+            <p className="mt-1 text-[10.5px] text-muted-foreground">
+              O que fica combinado pro próximo ciclo. Sem isso a avaliação vira só uma nota.
+            </p>
+          )}
+          <div className="mt-1 space-y-1.5">
+            {acoes.map((a, i) => (
+              <div key={i} className="flex gap-1.5">
+                <Input
+                  className="h-8 flex-1"
+                  placeholder="Ex.: avisar imprevisto no grupo até as 08h30"
+                  value={a.descricao}
+                  onChange={(e) =>
+                    setAcoes((lista) =>
+                      lista.map((x, j) => (j === i ? { ...x, descricao: e.target.value } : x)),
+                    )
+                  }
+                />
+                <Input
+                  type="date"
+                  className="h-8 w-[135px]"
+                  value={a.prazo}
+                  onChange={(e) =>
+                    setAcoes((lista) =>
+                      lista.map((x, j) => (j === i ? { ...x, prazo: e.target.value } : x)),
+                    )
+                  }
+                />
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-rose-600"
+                  onClick={() => setAcoes((lista) => lista.filter((_, j) => j !== i))}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onFechar}>
+            Cancelar
+          </Button>
+          <Button
+            disabled={mut.isPending || media == null || !colaboradorId}
+            onClick={() =>
+              colaboradorId && mut.mutate({
+                colaboradorId,
+                ciclo: competenciaAtual(),
+                notas: notas as Record<string, number>,
+                ...(comentario.trim() ? { comentario: comentario.trim() } : {}),
+                acoes: acoes
+                  .filter((a) => a.descricao.trim().length >= 3)
+                  .map((a) => ({
+                    descricao: a.descricao.trim(),
+                    ...(a.prazo ? { prazo: a.prazo } : {}),
+                  })),
+              })
+            }
+          >
+            Salvar avaliação
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * A última avaliação, o plano combinado e o histórico.
+ *
+ * O plano vem depois das notas de propósito: a nota diz onde a pessoa está, e
+ * o plano é a única parte da conversa que muda alguma coisa até o próximo
+ * ciclo. Avaliação que termina no número vira placar.
+ */
+function PainelAvaliacao({
+  avaliacoes,
+  gestor,
+  aoMudar,
+}: {
+  avaliacoes: AvaliacaoGravada[];
+  gestor: boolean;
+  aoMudar: () => void;
+}) {
+  const [verHistorico, setVerHistorico] = useState(false);
+  const [excluindo, setExcluindo] = useState<AvaliacaoGravada | null>(null);
+
+  const decidir = trpc.rh.decidirAcao.useMutation({
+    onSuccess: () => aoMudar(),
+    onError: (e) => toast.error("Não deu pra atualizar", { description: e.message }),
+  });
+  const excluir = trpc.rh.excluirAvaliacao.useMutation({
+    onSuccess: () => {
+      toast.success("Avaliação removida");
+      setExcluindo(null);
+      aoMudar();
+    },
+    onError: (e) => toast.error("Não deu pra remover", { description: e.message }),
+  });
+
+  const ultima = avaliacoes[0];
+  if (!ultima) return null;
+
+  const anterior = avaliacoes[1];
+  const delta = deltaDeNota(ultima.media, anterior?.media ?? null);
+  const hoje = hojeLocalISO();
+
+  return (
+    <div className="border-t px-3 py-2.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
+          Última avaliação · ciclo de {cicloPorExtenso(ultima.ciclo)}
+        </p>
+        {gestor && (
+          <button
+            type="button"
+            className="text-[10.5px] text-muted-foreground hover:text-rose-600"
+            onClick={() => setExcluindo(ultima)}
+          >
+            remover
+          </button>
+        )}
+      </div>
+
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span
+          className={`text-[22px] font-extrabold tabular-nums ${ultima.media != null ? textoDaNota(ultima.media) : ""}`}
+        >
+          {ultima.media != null ? ultima.media.toFixed(1).replace(".", ",") : "—"}
+        </span>
+        <span className="text-[11px] text-muted-foreground">de {NOTA_MAX},0</span>
+        {delta != null && delta !== 0 && (
+          <span
+            className={`text-[11px] font-bold tabular-nums ${delta > 0 ? "text-emerald-600" : "text-rose-600"}`}
+            title={`Ciclo anterior: ${anterior?.media?.toFixed(1).replace(".", ",")}`}
+          >
+            {delta > 0 ? "+" : "−"}
+            {Math.abs(delta).toFixed(1).replace(".", ",")}
+          </span>
+        )}
+        <span className="text-[10.5px] text-muted-foreground">
+          por {ultima.avaliadoPorNome || "—"} em {dataCurta(ultima.avaliadoEm)}
+        </span>
+      </div>
+
+      <div className="mt-2 grid gap-x-5 gap-y-1 sm:grid-cols-2">
+        {CRITERIOS.map((c) => {
+          const n = ultima.notas[c.id as CriterioId];
+          return (
+            <div key={c.id} className="flex items-center gap-2">
+              <span className="w-[130px] shrink-0 text-[11px]">{c.rotulo}</span>
+              <span className="block h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                {typeof n === "number" && (
+                  <span
+                    className={`block h-full rounded-full ${corDaNota(n)}`}
+                    style={{ width: `${(n / NOTA_MAX) * 100}%` }}
+                  />
+                )}
+              </span>
+              <span className="w-[26px] text-right text-[11px] font-bold tabular-nums">
+                {typeof n === "number" ? n.toFixed(1).replace(".", ",") : "—"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {ultima.comentario && (
+        <p className="mt-2 rounded-lg bg-muted/40 px-2.5 py-1.5 text-[11px] leading-relaxed">
+          {ultima.comentario}
+        </p>
+      )}
+
+      {ultima.acoes.length > 0 && (
+        <div className="mt-2">
+          <p className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
+            Plano combinado
+          </p>
+          <div className="mt-1 space-y-1">
+            {ultima.acoes.map((a) => {
+              const s = situacaoDaAcao(a, hoje);
+              return (
+                <div key={a.id} className="flex items-start gap-2">
+                  <button
+                    type="button"
+                    disabled={!gestor || decidir.isPending}
+                    onClick={() => decidir.mutate({ acaoId: a.id, concluir: !a.concluidoEm })}
+                    className={`mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                      s === "concluida"
+                        ? "border-emerald-600 bg-emerald-600 text-white"
+                        : "border-muted-foreground/40"
+                    } ${gestor ? "cursor-pointer" : "cursor-default"}`}
+                    title={gestor ? "Marcar como cumprida" : undefined}
+                  >
+                    {s === "concluida" && <Check className="h-2.5 w-2.5" />}
+                  </button>
+                  <span
+                    className={`text-[11px] leading-relaxed ${s === "concluida" ? "text-muted-foreground line-through" : ""}`}
+                  >
+                    {a.descricao}
+                    {a.prazo && (
+                      <span
+                        className={`ml-1.5 text-[10px] font-semibold ${s === "atrasada" ? "text-rose-600" : "text-muted-foreground"}`}
+                      >
+                        {s === "atrasada" ? "venceu" : "até"} {a.prazo.split("-").reverse().join("/")}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {avaliacoes.length > 1 && (
+        <div className="mt-2">
+          <button
+            type="button"
+            className="text-[10.5px] font-semibold text-violet-600 hover:underline"
+            onClick={() => setVerHistorico((v) => !v)}
+          >
+            {verHistorico ? "esconder" : `ver histórico (${avaliacoes.length - 1})`}
+          </button>
+          {verHistorico && (
+            <div className="mt-1 space-y-0.5">
+              {avaliacoes.slice(1).map((a, i) => {
+                const d = deltaDeNota(a.media, avaliacoes[i + 2]?.media ?? null);
+                return (
+                  <div key={a.id} className="flex items-baseline gap-2 text-[11px]">
+                    <span className="w-[120px] capitalize text-muted-foreground">
+                      {cicloPorExtenso(a.ciclo)}
+                    </span>
+                    <span
+                      className={`font-bold tabular-nums ${a.media != null ? textoDaNota(a.media) : ""}`}
+                    >
+                      {a.media != null ? a.media.toFixed(1).replace(".", ",") : "—"}
+                    </span>
+                    {d != null && d !== 0 && (
+                      <span
+                        className={`text-[10px] font-semibold tabular-nums ${d > 0 ? "text-emerald-600" : "text-rose-600"}`}
+                      >
+                        {d > 0 ? "+" : "−"}
+                        {Math.abs(d).toFixed(1).replace(".", ",")}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">
+                      por {a.avaliadoPorNome || "—"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      <AlertDialog open={!!excluindo} onOpenChange={(v) => !v && setExcluindo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover esta avaliação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O plano combinado dela vai junto, e a pessoa volta a aparecer como pendente de
+              avaliação no ciclo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => excluindo && excluir.mutate({ avaliacaoId: excluindo.id })}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 export default function Ponto() {
   const [competencia, setCompetencia] = useState(competenciaAtual());
   const [ajustando, setAjustando] = useState<{ colaboradorId: number; jornada: Jornada } | null>(null);
   const [lancando, setLancando] = useState<{ colaboradorId: number; nome: string } | null>(null);
+  const [avaliando, setAvaliando] = useState<{ colaboradorId: number; nome: string } | null>(null);
 
   const utils = trpc.useUtils();
   const meu = trpc.rh.meuEspelho.useQuery({ competencia });
@@ -885,6 +1350,11 @@ export default function Ponto() {
               gestor={false}
               aoMudar={() => utils.rh.meuEspelho.invalidate()}
             />
+            <PainelAvaliacao
+              avaliacoes={meu.data?.avaliacoes ?? []}
+              gestor={false}
+              aoMudar={() => utils.rh.meuEspelho.invalidate()}
+            />
           </>
         )}
       </div>
@@ -909,15 +1379,37 @@ export default function Ponto() {
                   </p>
                   <Total t={p.total} />
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1.5"
-                  onClick={() => setLancando({ colaboradorId: p.colaboradorId, nome: p.nome })}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Ocorrência
-                </Button>
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const s = situacaoDoCiclo(p.avaliacoes[0]?.ciclo, competencia);
+                    const r = ROTULO_CICLO[s];
+                    return r.texto ? (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${r.classe}`}
+                        title="A avaliação se repete a cada 3 meses"
+                      >
+                        {r.texto}
+                      </span>
+                    ) : null;
+                  })()}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={() => setLancando({ colaboradorId: p.colaboradorId, nome: p.nome })}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Ocorrência
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={() => setAvaliando({ colaboradorId: p.colaboradorId, nome: p.nome })}
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Avaliar
+                  </Button>
+                </div>
               </div>
               <Tabela
                 jornadas={p.jornadas}
@@ -928,6 +1420,14 @@ export default function Ponto() {
               </div>
               <PainelOcorrencias
                 ocorrencias={p.ocorrencias}
+                gestor
+                aoMudar={() => {
+                  utils.rh.espelhoEquipe.invalidate();
+                  utils.rh.meuEspelho.invalidate();
+                }}
+              />
+              <PainelAvaliacao
+                avaliacoes={p.avaliacoes}
                 gestor
                 aoMudar={() => {
                   utils.rh.espelhoEquipe.invalidate();
@@ -956,6 +1456,17 @@ export default function Ponto() {
         colaboradorId={lancando?.colaboradorId ?? null}
         nome={lancando?.nome ?? ""}
         diaInicial={hoje}
+        aoSalvar={() => {
+          utils.rh.espelhoEquipe.invalidate();
+          utils.rh.meuEspelho.invalidate();
+        }}
+      />
+
+      <DialogAvaliar
+        aberto={!!avaliando}
+        onFechar={() => setAvaliando(null)}
+        colaboradorId={avaliando?.colaboradorId ?? null}
+        nome={avaliando?.nome ?? ""}
         aoSalvar={() => {
           utils.rh.espelhoEquipe.invalidate();
           utils.rh.meuEspelho.invalidate();
