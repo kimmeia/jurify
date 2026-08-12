@@ -1,0 +1,255 @@
+/**
+ * De onde vêm os leads.
+ *
+ * Duas decisões de desenho que não são estéticas.
+ *
+ * O "mapa" é uma GRADE, não o contorno do Brasil. A pergunta aqui é "quantos
+ * leads", e num mapa geográfico a área do estado responde outra coisa: Roraima
+ * é doze vezes o Rio e pintaria um bloco enorme com zero lead dentro, enquanto
+ * o Distrito Federal — que costuma render — vira um ponto invisível. Cada
+ * estado ocupando o mesmo quadrado tira a distorção e mantém a leitura de
+ * "onde no país", que é o que o contorno tinha de útil.
+ *
+ * E a faixa de procedência embaixo não é rodapé: `contatos.uf` quase nunca
+ * está preenchido, então a maior parte da coluna é deduzida do DDD do
+ * telefone. Um painel onde 85% é dedução não pode ser lido como se fosse tudo
+ * fato — a faixa mostra a proporção, e a ressalva ao lado diz o que o DDD
+ * realmente significa.
+ */
+
+import { Database, Info, TriangleAlert } from "lucide-react";
+import { MINIMO_PARA_CONVERSAO, type LeadsPorEstado } from "@shared/leads-uf";
+
+/** Posição de cada UF na grade — Norte em cima, Sul embaixo, litoral à direita. */
+const GRADE: Array<[linha: number, coluna: number, uf: string]> = [
+  [1, 3, "RR"], [1, 4, "AP"],
+  [2, 2, "AM"], [2, 3, "PA"], [2, 4, "MA"], [2, 5, "CE"], [2, 6, "RN"],
+  [3, 1, "AC"], [3, 3, "TO"], [3, 4, "PI"], [3, 5, "PE"], [3, 6, "PB"],
+  [4, 1, "RO"], [4, 2, "MT"], [4, 4, "BA"], [4, 5, "AL"], [4, 6, "SE"],
+  [5, 1, "MS"], [5, 2, "GO"], [5, 3, "DF"], [5, 4, "MG"], [5, 5, "ES"],
+  [6, 2, "PR"], [6, 3, "SP"], [6, 4, "RJ"],
+  [7, 1, "RS"], [7, 2, "SC"],
+];
+
+/** Rampa sequencial na família do acento. Faixa fixa, não relativa ao maior:
+ *  senão o mesmo volume muda de cor quando o período muda, e a comparação
+ *  entre dois meses passa a depender do mês. */
+const FAIXAS: Array<{ ate: number; classe: string }> = [
+  { ate: 0, classe: "bg-muted/60 text-muted-foreground/50 border border-border" },
+  { ate: 4, classe: "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300" },
+  { ate: 9, classe: "bg-violet-200 text-violet-800 dark:bg-violet-900/70 dark:text-violet-200" },
+  { ate: 19, classe: "bg-violet-300 text-violet-900 dark:bg-violet-800 dark:text-violet-50" },
+  { ate: 49, classe: "bg-violet-400 text-violet-950 dark:bg-violet-700 dark:text-white" },
+  { ate: Infinity, classe: "bg-violet-600 text-white font-bold" },
+];
+
+function faixaDe(n: number): string {
+  return (FAIXAS.find((f) => n <= f.ate) ?? FAIXAS[FAIXAS.length - 1]!).classe;
+}
+
+const CORES_BARRA = [
+  "bg-violet-200 dark:bg-violet-900",
+  "bg-violet-300 dark:bg-violet-800",
+  "bg-violet-400 dark:bg-violet-700",
+  "bg-violet-600",
+];
+
+function corBarra(n: number): string {
+  if (n > 49) return CORES_BARRA[3]!;
+  if (n > 19) return CORES_BARRA[2]!;
+  if (n > 9) return CORES_BARRA[1]!;
+  return CORES_BARRA[0]!;
+}
+
+export function BlocoLeadsPorEstado({ dados }: { dados: LeadsPorEstado }) {
+  const total = dados.comEstado + dados.semEstado;
+  if (total === 0) {
+    return (
+      <div className="rounded-xl border bg-card px-4 py-6 text-center">
+        <p className="text-xs text-muted-foreground">
+          Nenhum lead criado no período — sem lead não há de onde ele veio.
+        </p>
+      </div>
+    );
+  }
+
+  const porUf = new Map(dados.estados.map((e) => [e.uf, e]));
+  const maior = dados.estados[0]?.leads ?? 0;
+  const lider = dados.estados[0];
+  const fatiaLider = lider && dados.comEstado > 0
+    ? Math.round((lider.leads / dados.comEstado) * 100)
+    : 0;
+  const pct = (n: number) => (total > 0 ? (n * 100) / total : 0);
+
+  return (
+    <div className="rounded-xl border border-violet-200 bg-card dark:border-violet-900">
+      <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-3.5">
+        <div>
+          <div className="flex items-center gap-2">
+            <Database className="h-4 w-4 text-violet-600" />
+            <h3 className="text-sm font-semibold">De onde vêm os leads</h3>
+          </div>
+          <p className="mt-1 text-[13px] font-bold">
+            {dados.comEstado.toLocaleString("pt-BR")}{" "}
+            {dados.comEstado === 1 ? "lead" : "leads"} em {dados.estados.length}{" "}
+            {dados.estados.length === 1 ? "estado" : "estados"}
+            {dados.semEstado > 0 && (
+              <span className="ml-1.5 text-[11.5px] font-medium text-muted-foreground">
+                {dados.semEstado} sem estado identificável
+              </span>
+            )}
+          </p>
+          {lider && fatiaLider > 0 && (
+            <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+              {lider.uf} concentra <b className="text-foreground">{fatiaLider}%</b> dos leads com
+              estado identificado.
+            </p>
+          )}
+        </div>
+        <span className="rounded-full border bg-muted/40 px-2.5 py-1 text-[10.5px] text-muted-foreground">
+          Leads criados no período
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-5 px-4 lg:grid-cols-[minmax(0,320px)_1fr]">
+        <div>
+          <div
+            className="grid gap-1"
+            style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }}
+          >
+            {GRADE.map(([linha, coluna, uf]) => {
+              const n = porUf.get(uf)?.leads ?? 0;
+              return (
+                <div
+                  key={uf}
+                  title={`${uf}: ${n} ${n === 1 ? "lead" : "leads"}`}
+                  style={{ gridRow: linha, gridColumn: coluna }}
+                  className={`flex flex-col items-center justify-center rounded-md py-1.5 ${faixaDe(n)}`}
+                >
+                  <span className="text-[10.5px] font-extrabold leading-none">{uf}</span>
+                  <span className="mt-0.5 text-[10.5px] leading-none tabular-nums">{n}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-2.5 flex items-center gap-2">
+            <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
+              Leads
+            </span>
+            <div className="flex items-center gap-0.5">
+              {FAIXAS.map((f) => (
+                <span key={f.ate} className={`h-2 w-5 rounded-[2px] ${f.classe}`} />
+              ))}
+            </div>
+            <span className="text-[10px] text-muted-foreground">0 · 1–4 · 5–9 · 10–19 · 20–49 · 50+</span>
+          </div>
+          <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
+            Cada estado ocupa o mesmo quadrado. Num mapa de verdade Roraima é doze vezes o Rio e
+            pintaria a tela com zero lead dentro.
+          </p>
+        </div>
+
+        <div>
+          <div className="grid grid-cols-[30px_1fr_44px_74px] items-center gap-2 border-b pb-1.5">
+            {["UF", "Volume", "Leads", "Conv. do lead"].map((h, i) => (
+              <span
+                key={h}
+                className={`text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground ${
+                  i >= 2 ? "text-right" : ""
+                }`}
+              >
+                {h}
+              </span>
+            ))}
+          </div>
+
+          <div className="max-h-[300px] overflow-y-auto">
+            {dados.estados.map((e) => (
+              <div
+                key={e.uf}
+                className="grid grid-cols-[30px_1fr_44px_74px] items-center gap-2 border-b border-border/40 py-[7px]"
+              >
+                <span className="text-[11.5px] font-extrabold">{e.uf}</span>
+                <span className="block h-2 overflow-hidden rounded-[2px] bg-muted">
+                  <span
+                    className={`block h-full rounded-r-[3px] ${corBarra(e.leads)}`}
+                    style={{ width: `${maior > 0 ? Math.max((e.leads / maior) * 100, 2) : 0}%` }}
+                  />
+                </span>
+                <span className="text-right text-[12px] font-bold tabular-nums">{e.leads}</span>
+                {e.conversao !== null ? (
+                  <span className="text-right text-[11px] tabular-nums text-muted-foreground">
+                    <b className="text-foreground">{e.conversao}%</b> · {e.ganhos}
+                  </span>
+                ) : (
+                  <span
+                    className="text-right text-[11px] text-muted-foreground/50"
+                    title={`Menos de ${MINIMO_PARA_CONVERSAO} leads — percentual seria ruído`}
+                  >
+                    —
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-muted/60 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-muted-foreground">
+            <Info className="mt-px h-3.5 w-3.5 shrink-0" />
+            <span>
+              Aqui a conversão é <b className="text-foreground">ganhos ÷ leads do estado</b>. O KPI
+              “Taxa de conversão” usa outra base (ganhos ÷ atendimentos), por isso os dois números
+              não batem — e só aparece a partir de <b className="text-foreground">{MINIMO_PARA_CONVERSAO} leads</b>:
+              abaixo disso um fechamento a mais move o percentual em dezenas de pontos.
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-4 border-t px-4 py-3 lg:grid-cols-[1fr_minmax(0,420px)]">
+        <div>
+          <p className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
+            De onde saiu o estado de cada lead
+          </p>
+          <div className="mt-1.5 flex h-2.5 gap-0.5 overflow-hidden rounded">
+            {dados.porOrigem.cadastro > 0 && (
+              <span className="bg-violet-600" style={{ width: `${pct(dados.porOrigem.cadastro)}%` }} />
+            )}
+            {dados.porOrigem.ddd > 0 && (
+              <span className="bg-violet-300 dark:bg-violet-800" style={{ width: `${pct(dados.porOrigem.ddd)}%` }} />
+            )}
+            {dados.semEstado > 0 && (
+              <span className="bg-muted" style={{ width: `${pct(dados.semEstado)}%` }} />
+            )}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            <Legenda cor="bg-violet-600" n={dados.porOrigem.cadastro} texto="endereço confirmado no cadastro" />
+            <Legenda cor="bg-violet-300 dark:bg-violet-800" n={dados.porOrigem.ddd} texto="deduzidos pelo DDD do telefone" />
+            <Legenda cor="bg-muted border" n={dados.semEstado} texto="sem telefone e sem endereço" />
+          </div>
+        </div>
+
+        <p className="flex items-start gap-2 rounded-lg border border-violet-200 bg-violet-50/60 px-2.5 py-2 text-[10.5px] leading-relaxed dark:border-violet-900 dark:bg-violet-950/25">
+          <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-300" />
+          <span>
+            <b className="text-violet-700 dark:text-violet-300">
+              O DDD diz onde a linha foi habilitada, não onde a pessoa mora hoje.
+            </b>{" "}
+            Quem mudou de estado e manteve o número aparece na origem antiga. Só o que está em
+            violeta escuro veio de endereço que alguém confirmou no cadastro — o resto é a melhor
+            aproximação que o dado permite, e está marcado como tal.
+          </span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Legenda({ cor, n, texto }: { cor: string; n: number; texto: string }) {
+  return (
+    <span className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
+      <span className={`h-2 w-2 shrink-0 rounded-[2px] ${cor}`} />
+      <b className="tabular-nums text-foreground">{n.toLocaleString("pt-BR")}</b> {texto}
+    </span>
+  );
+}
