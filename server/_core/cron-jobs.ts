@@ -618,4 +618,18 @@ export function iniciarJobs() {
     .then(({ iniciarCobrancasSchedulerSmartFlow }) => iniciarCobrancasSchedulerSmartFlow())
     .catch((err) => log.warn({ err: String(err) }, "[Cron] Falha ao iniciar SmartFlow cobranças scheduler"));
 
+  // Robô auditor — varre as invariantes do banco de hora em hora. Em
+  // shadow mode: só lê e reporta no Sentry quando o quadro piora.
+  const rodarRoboAuditor = async () => {
+    try {
+      const { rodarVarreduraAgendada } = await import("../admin/auditoria/cron-varredura");
+      await rodarVarreduraAgendada();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] robô auditor falhou");
+    }
+  };
+  // Primeira passada depois da partida: dá o estado do banco logo após o
+  // deploy, que é justamente quando dado torto costuma aparecer.
+  setTimeout(rodarRoboAuditor, 120_000);
+  setInterval(rodarRoboAuditor, 60 * 60 * 1000);
 }
