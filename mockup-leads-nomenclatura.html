@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --ambar:#b45309; --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:24px 30px; height:100%; display:flex; flex-direction:column; gap:13px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:16px; }
+
+  /* ── linha do tempo ── */
+  .linha { flex:0 0 auto; padding:15px 20px 17px; }
+  .trilho { position:relative; margin:16px 0 0; height:3px; background:var(--hairline); border-radius:2px; }
+  .marcos { display:grid; grid-template-columns:repeat(4,1fr); }
+  .marco { position:relative; padding-top:15px; }
+  .bola { position:absolute; top:-7px; left:0; width:15px; height:15px; border-radius:50%;
+          border:3px solid var(--surface); }
+  .b-lead { background:var(--acento); }
+  .b-cli  { background:var(--ok); }
+  .b-hoje { background:var(--fantasma); }
+  .data { font-size:11px; font-weight:700; color:var(--mudo); }
+  .evt { font-size:13px; font-weight:600; color:var(--tinta); margin-top:2px; }
+  .evt small { display:block; font-weight:500; font-size:11.5px; color:var(--mudo); margin-top:1px; }
+
+  .faixas { margin-top:14px; display:flex; flex-direction:column; gap:7px; }
+  .faixa { display:grid; grid-template-columns:250px 1fr 190px; align-items:center; gap:12px; }
+  .faixa-nome { font-size:12px; font-weight:600; color:var(--corpo); }
+  .faixa-nome span { display:block; font-size:10.5px; font-weight:500; color:var(--fraco); }
+  .celas { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; }
+  .cela { height:33px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+          font-size:11.5px; font-weight:600; border:1px solid var(--borda); background:var(--hairline-2);
+          color:var(--fraco); }
+  .cela.viva { background:var(--acento-bg); border-color:#ddd6fe; color:var(--acento-forte); }
+  .cela.saiu { background:var(--hairline); border-color:var(--borda); color:var(--fraco); }
+  .cela.mais { background:var(--ok-bg); border-color:var(--ok-borda); color:#047857; }
+  .veredito { border-radius:9px; padding:7px 11px; font-size:11.5px; font-weight:700; text-align:center; }
+  .v-nao { background:var(--alerta-bg); border:1px solid var(--alerta-borda); color:var(--alerta-forte); }
+  .v-dois { background:var(--ok-bg); border:1px solid var(--ok-borda); color:#047857; }
+
+  /* ── comparação ── */
+  .comparacao { flex:1 1 auto; display:grid; grid-template-columns:1fr 108px 1fr; gap:0; align-items:stretch; min-height:0; }
+  .tela { padding:15px 18px 16px; display:flex; flex-direction:column; }
+  .tela-cab { font-size:11.5px; font-weight:600; color:var(--mudo); }
+  .num { font-family:'Poppins'; font-weight:700; font-size:42px; line-height:1.05; margin-top:7px; }
+  .num small { font-family:'Inter'; font-size:13px; font-weight:600; color:var(--mudo); margin-left:7px; }
+  .oque { font-size:13px; font-weight:600; color:var(--tinta); margin-top:5px; }
+  .recorte { display:inline-flex; align-items:center; gap:6px; margin-top:8px; border-radius:999px;
+             padding:5px 11px; font-size:11px; font-weight:700; }
+  .r-estoque { background:var(--ambar-bg); border:1px solid var(--ambar-borda); color:var(--ambar); }
+  .r-periodo { background:var(--acento-bg); border:1px solid #ddd6fe; color:var(--acento-forte); }
+
+  .lista { margin-top:11px; border-top:1px solid var(--hairline); }
+  .item { display:flex; align-items:center; gap:9px; padding:8.5px 0; border-bottom:1px solid var(--hairline-2); }
+  .av { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+        color:#fff; font-size:9.5px; font-weight:700; flex:0 0 auto; }
+  .nm { font-size:12px; font-weight:500; color:var(--tinta-2); flex:1; }
+  .tag { font-size:10.5px; font-weight:600; color:var(--fraco); }
+  .item.foco { background:var(--acento-bg-2); margin:0 -8px; padding-left:8px; padding-right:8px; border-radius:7px; }
+  .item.foco .nm { font-weight:700; color:var(--acento-forte); }
+  .resto { padding:7px 0 0; font-size:11.5px; font-weight:600; color:var(--fraco); }
+  .ausente { display:flex; align-items:center; gap:9px; padding:8px 9px; margin-top:auto;
+             border:1px dashed var(--fantasma); border-radius:9px; }
+  .ausente .nm { font-size:11.5px; font-weight:600; color:var(--mudo); }
+
+  .meio { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; }
+  .dif { font-family:'Poppins'; font-weight:700; font-size:19px; color:var(--fraco); }
+  .selo-ok { background:var(--ok-bg); border:1px solid var(--ok-borda); color:#047857; border-radius:999px;
+             padding:6px 10px; font-size:10.5px; font-weight:700; text-align:center; line-height:1.35; }
+
+  /* ── proposta ── */
+  .proposta { flex:0 0 auto; padding:14px 20px 15px; display:grid; grid-template-columns:1fr 350px; gap:26px; align-items:center; }
+  .antes-depois { display:flex; align-items:center; gap:13px; margin-top:9px; }
+  .pill { border-radius:9px; padding:8px 13px; font-size:13px; font-weight:700; }
+  .p-antes { background:var(--hairline); border:1px solid var(--borda); color:var(--mudo); text-decoration:line-through; }
+  .p-depois { background:var(--acento); color:#fff; box-shadow:0 8px 18px -8px #7c3aed88; }
+  .nota { font-size:12px; color:var(--corpo-2); line-height:1.55; }
+  .nota b { color:var(--tinta); }
+  .novo { background:var(--acento); color:#fff; border-radius:999px; padding:3px 9px;
+          font-size:9.5px; font-weight:700; letter-spacing:.05em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topo">
+    <div>
+      <div class="h1">Por que os dois “Leads” não batem</div>
+      <div class="sub">A mesma palavra conta duas coisas diferentes. Nenhuma das duas está errada.</div>
+    </div>
+    <div style="text-align:right">
+      <div class="micro">Exemplo</div>
+      <div style="font-size:13.5px;font-weight:600;margin-top:3px">Marilene Farias Batista</div>
+      <div style="font-size:11.5px;color:var(--mudo)">uma cliente que voltou com um segundo caso</div>
+    </div>
+  </div>
+
+  <!-- LINHA DO TEMPO -->
+  <div class="card linha">
+    <div class="h2">O que aconteceu com a Marilene</div>
+
+    <div class="trilho"></div>
+    <div class="marcos">
+      <div class="marco"><div class="bola b-lead"></div>
+        <div class="data">12 DE MARÇO</div>
+        <div class="evt">Chegou pelo WhatsApp<small>Caso trabalhista — verbas rescisórias</small></div>
+      </div>
+      <div class="marco"><div class="bola b-cli"></div>
+        <div class="data">04 DE ABRIL</div>
+        <div class="evt">Assinou o contrato<small>Deixou de ser lead: virou cliente</small></div>
+      </div>
+      <div class="marco"><div class="bola b-lead"></div>
+        <div class="data">05 DE AGOSTO</div>
+        <div class="evt">Voltou com outro caso<small>Previdenciário — aposentadoria da mãe</small></div>
+      </div>
+      <div class="marco"><div class="bola b-hoje"></div>
+        <div class="data">HOJE</div>
+        <div class="evt">Cliente com 2 casos<small>Um fechado, um em negociação</small></div>
+      </div>
+    </div>
+
+    <div class="faixas">
+      <div class="faixa">
+        <div class="faixa-nome">Aba “Leads”, em Clientes<span>conta PESSOAS que ainda não fecharam</span></div>
+        <div class="celas">
+          <div class="cela viva">aparece na aba</div>
+          <div class="cela saiu">saiu da aba</div>
+          <div class="cela saiu">continua fora</div>
+          <div class="cela saiu">continua fora</div>
+        </div>
+        <div class="veredito v-nao">Hoje ela NÃO aparece</div>
+      </div>
+
+      <div class="faixa">
+        <div class="faixa-nome">Coluna “Leads”, no Relatório<span>conta NEGOCIAÇÕES que entraram no mês</span></div>
+        <div class="celas">
+          <div class="cela mais">+1 em março</div>
+          <div class="cela">—</div>
+          <div class="cela mais">+1 em agosto</div>
+          <div class="cela">—</div>
+        </div>
+        <div class="veredito v-dois">Ela contou 2 vezes</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPARAÇÃO -->
+  <div class="comparacao">
+    <div class="card tela">
+      <div class="tela-cab">Clientes › aba <b style="color:var(--tinta)">Leads</b></div>
+      <div class="num">34<small>pessoas</small></div>
+      <div class="oque">Quem está esperando resposta agora</div>
+      <div class="recorte r-estoque">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="#b45309" stroke-width="2.4" stroke-linecap="round"/></svg>
+        SEM MÊS — é o estoque de hoje
+      </div>
+      <div class="lista">
+        <div class="item"><div class="av" style="background:#7c3aed">JS</div><div class="nm">Josefa Siqueira do Amaral</div><div class="tag">há 3 dias</div></div>
+        <div class="item"><div class="av" style="background:#0891b2">RA</div><div class="nm">Reginaldo Alves Peixoto</div><div class="tag">há 6 dias</div></div>
+        <div class="item"><div class="av" style="background:#d97706">CM</div><div class="nm">Cleide Moraes Tavares</div><div class="tag">há 12 dias</div></div>
+        <div class="item"><div class="av" style="background:#059669">AQ</div><div class="nm">Anderson Luiz Quirino</div><div class="tag">há 15 dias</div></div>
+        <div class="item"><div class="av" style="background:#db2777">VC</div><div class="nm">Vanuza Correia Pinheiro</div><div class="tag">há 19 dias</div></div>
+        <div class="item"><div class="av" style="background:#7c3aed">SF</div><div class="nm">Sebastião Ramos Fontenele</div><div class="tag">há 23 dias</div></div>
+        <div class="item"><div class="av" style="background:#0891b2">NC</div><div class="nm">Nilza Bezerra Coutinho</div><div class="tag">há 27 dias</div></div>
+        <div class="item"><div class="av" style="background:#d97706">DN</div><div class="nm">Damião Sousa Nogueira</div><div class="tag">há 31 dias</div></div>
+        <div class="resto">+ 26 outras pessoas esperando</div>
+      </div>
+      <div class="ausente">
+        <div class="av" style="background:var(--fantasma)">MB</div>
+        <div class="nm">Marilene não está aqui — virou cliente em abril</div>
+      </div>
+    </div>
+
+    <div class="meio">
+      <div class="dif">34 ≠ 51</div>
+      <div class="selo-ok">e está<br>tudo certo</div>
+    </div>
+
+    <div class="card tela">
+      <div class="tela-cab">Relatórios › Atendimento › <b style="color:var(--tinta)">agosto</b></div>
+      <div class="num">51<small>negociações</small></div>
+      <div class="oque">Quantos casos entraram no mês</div>
+      <div class="recorte r-periodo">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2.5" stroke="#5b21b6" stroke-width="2.2"/><path d="M3 10h18M8 3v4M16 3v4" stroke="#5b21b6" stroke-width="2.2" stroke-linecap="round"/></svg>
+        SÓ AGOSTO — entrou no mês
+      </div>
+      <div class="lista">
+        <div class="item foco"><div class="av" style="background:#7c3aed">MB</div><div class="nm">Marilene — previdenciário</div><div class="tag">05/08</div></div>
+        <div class="item"><div class="av" style="background:#0891b2">RA</div><div class="nm">Reginaldo — revisão de FGTS</div><div class="tag">07/08</div></div>
+        <div class="item"><div class="av" style="background:#059669">EN</div><div class="nm">Edvaldo — inventário</div><div class="tag">09/08</div></div>
+        <div class="item"><div class="av" style="background:#7c3aed">JS</div><div class="nm">Josefa — rescisão indireta</div><div class="tag">11/08</div></div>
+        <div class="item"><div class="av" style="background:#d97706">CM</div><div class="nm">Cleide — pensão alimentícia</div><div class="tag">12/08</div></div>
+        <div class="item"><div class="av" style="background:#059669">AQ</div><div class="nm">Anderson — acidente de trabalho</div><div class="tag">12/08</div></div>
+        <div class="item"><div class="av" style="background:#db2777">VC</div><div class="nm">Vanuza — guarda compartilhada</div><div class="tag">13/08</div></div>
+        <div class="item"><div class="av" style="background:#7c3aed">SF</div><div class="nm">Sebastião — usucapião</div><div class="tag">14/08</div></div>
+        <div class="resto">+ 43 outras negociações no mês</div>
+      </div>
+      <div class="ausente" style="border-style:solid;border-color:var(--borda);background:var(--hairline-2)">
+        <div class="av" style="background:var(--acento-claro)">MB</div>
+        <div class="nm">A trabalhista dela já contou lá atrás, em março</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROPOSTA -->
+  <div class="card proposta" style="border-color:#ddd6fe;background:var(--acento-bg)">
+    <div>
+      <div style="display:flex;align-items:center;gap:9px">
+        <div class="h2">A correção: trocar uma palavra só</div>
+        <span class="novo">PROPOSTA</span>
+      </div>
+      <div class="antes-depois">
+        <div style="font-size:11.5px;color:var(--mudo);font-weight:600">No relatório:</div>
+        <div class="pill p-antes">Leads</div>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#7c3aed" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="pill p-depois">Oportunidades</div>
+        <div style="font-size:11.5px;color:var(--corpo-2);margin-left:6px">A aba em Clientes continua se chamando <b style="color:var(--tinta)">Leads</b> — ali a palavra está certa.</div>
+      </div>
+    </div>
+    <div class="nota">
+      Só o rótulo muda. <b>Nenhum número se mexe</b>, nenhuma conta é refeita, o banco fica igual.<br>
+      Unificar os dois seria pior: você perderia de vista que a Marilene voltou.
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

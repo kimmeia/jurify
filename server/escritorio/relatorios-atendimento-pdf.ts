@@ -376,7 +376,7 @@ export async function gerarAtendimentoPdf(args: {
         doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(7.5);
         doc.text("Atendente", xNome, yh, { width: wNome });
         doc.text("Atend.", xAtend, yh, { width: wCol, align: "right" });
-        doc.text("Leads", xLeads, yh, { width: wCol, align: "right" });
+        doc.text("Oportun.", xLeads, yh, { width: wCol, align: "right" });
         doc.text("Ganhos", xGanhos, yh, { width: wCol, align: "right" });
         doc.text("Perd.", xPerd, yh, { width: wCol, align: "right" });
         doc.text("Conv.", xConv, yh, { width: wCol, align: "right" });

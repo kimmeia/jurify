@@ -130,7 +130,7 @@ const STATUS_INFO: Record<string, { label: string; bg: string; fg: string }> = {
   pago: { label: "Pago integral", bg: "#d1fae5", fg: "#047857" },
   parcial: { label: "Parcial", bg: "#fef3c7", fg: "#b45309" },
   aguardando: { label: "Aguardando", bg: "#f1f5f9", fg: "#475569" },
-  so_pago: { label: "Pago s/ lead", bg: "#dbeafe", fg: "#1d4ed8" },
+  so_pago: { label: "Pago s/ oportun.", bg: "#dbeafe", fg: "#1d4ed8" },
 };
 
 function corMeta(p: number): string {
@@ -317,7 +317,7 @@ export async function gerarComercialPdf(args: {
         });
         kpi(1, {
           label: "Contratos fechados", value: String(k.contratosFechados), color: C.blue, bd: C.blueBd,
-          delta: k.variacaoContratosFechados, foot: "leads ganhos no período",
+          delta: k.variacaoContratosFechados, foot: "oportunidades ganhas no período",
         });
         kpi(2, {
           label: "Clientes que pagaram", value: String(k.clientesPagantes), color: C.indigo, bd: C.indigoBd,
@@ -640,7 +640,7 @@ export async function gerarComercialPdf(args: {
       doc.y += 6;
       doc.fillColor(C.faint).font("Helvetica-Oblique").fontSize(7).text(
         "Recebido: cobranças pagas comissionáveis no período de clientes fechados no mesmo período. " +
-          "Contratos fechados: leads movidos para a etapa Ganho. Clientes que pagaram: clientes " +
+          "Contratos fechados: oportunidades movidas para a etapa Ganho. Clientes que pagaram: clientes " +
           "distintos com cobrança paga no período — quantas cobranças ou parcelas cada um pagou " +
           "não altera a contagem. Ticket médio fechado = total fechado ÷ contratos fechados.",
         L, doc.y, { width: W, align: "left" },
