@@ -36,6 +36,7 @@ import CalculosDiversos from "./pages/calculos/CalculosDiversos";
 import Processos from "./pages/Processos";
 import Movimentacoes from "./pages/Movimentacoes";
 import JurisIa from "./pages/JurisIa";
+import Ponto from "./pages/Ponto";
 import Configuracoes from "./pages/Configuracoes";
 import ModelosContrato from "./pages/ModelosContrato";
 import Agendamento from "./pages/Agendamento";
@@ -254,6 +255,11 @@ function Router() {
       <Route path="/movimentacoes">
         <ClientArea>
           <Movimentacoes />
+        </ClientArea>
+      </Route>
+      <Route path="/ponto">
+        <ClientArea>
+          <Ponto />
         </ClientArea>
       </Route>
       <Route path="/jurisia">

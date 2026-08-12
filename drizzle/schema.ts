@@ -4043,3 +4043,48 @@ export const jurisiaVarredura = mysqlTable(
     porTribunal: uniqueIndex("jurisia_varr_tribunal").on(t.tribunal),
   }),
 );
+
+/**
+ * Ponto digital — uma linha por colaborador por dia.
+ *
+ * As colunas de ORIGEM carregam o desenho inteiro: entrada e saída podem vir
+ * do login, da última atividade no sistema ou da mão do gestor. Jornada
+ * calculada em cima de saída inferida não pode se passar por jornada batida —
+ * quase ninguém clica em "sair", e marcar a saída pelo logout registraria 23h
+ * pra quem esqueceu a aba aberta e nada pra quem fechou o notebook.
+ */
+export const pontoDias = mysqlTable(
+  "ponto_dias",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdPonto").notNull(),
+    colaboradorId: int("colaboradorIdPonto").notNull(),
+    /** Dia civil no fuso do escritório (YYYY-MM-DD), não um instante UTC. */
+    dia: varchar("diaPonto", { length: 10 }).notNull(),
+
+    entradaEm: timestamp("entradaEmPonto"),
+    entradaOrigem: mysqlEnum("entradaOrigemPonto", ["login", "manual"]),
+
+    pausaInicioEm: timestamp("pausaInicioEmPonto"),
+    pausaFimEm: timestamp("pausaFimEmPonto"),
+
+    saidaEm: timestamp("saidaEmPonto"),
+    saidaOrigem: mysqlEnum("saidaOrigemPonto", ["registrada", "atividade", "manual"]),
+
+    /** Último sinal de vida no sistema naquele dia. */
+    ultimaAtividadeEm: timestamp("ultimaAtividadeEmPonto"),
+
+    ajustadoPor: int("ajustadoPorPonto"),
+    ajustadoEm: timestamp("ajustadoEmPonto"),
+    observacao: varchar("observacaoPonto", { length: 255 }),
+
+    createdAt: timestamp("createdAtPonto").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAtPonto").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    unico: uniqueIndex("ponto_colab_dia").on(t.colaboradorId, t.dia),
+    porEscritorio: index("idx_ponto_esc_dia").on(t.escritorioId, t.dia),
+  }),
+);
+
+export type PontoDia = typeof pontoDias.$inferSelect;
