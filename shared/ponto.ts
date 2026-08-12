@@ -229,6 +229,11 @@ export function diaLocalISO(instante: Date, offsetMinutos: number): string {
   return deslocado.toISOString().slice(0, 10);
 }
 
+/** Dia que o gestor precisa resolver antes de a folha valer. */
+export function ehPendente(status: StatusDia): boolean {
+  return status === "sem_saida" || status === "inconsistente" || status === "revisar";
+}
+
 /** Soma os minutos dos dias que fecharam. Dia aberto não entra: somar o que
  *  não se sabe produz um total que ninguém consegue conferir. */
 export function totalDoPeriodo(jornadas: Jornada[]): {
@@ -243,7 +248,7 @@ export function totalDoPeriodo(jornadas: Jornada[]): {
     if (j.status === "fechado" && j.minutos != null) {
       minutos += j.minutos;
       diasFechados++;
-    } else if (j.status === "sem_saida" || j.status === "inconsistente" || j.status === "revisar") {
+    } else if (ehPendente(j.status)) {
       diasPendentes++;
     }
   }

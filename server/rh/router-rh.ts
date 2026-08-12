@@ -32,7 +32,16 @@ import {
   pontualidade,
   type JornadaSemanal,
 } from "../../shared/jornada";
-import { diaCivilEmTz } from "../_core/dates";
+import { diaCivilEmTz, toIsoString } from "../_core/dates";
+import {
+  contarFaltas,
+  exigeMotivo,
+  MOTIVOS_FALTA,
+  situacaoDoDia,
+  TIPOS_OCORRENCIA,
+  type OcorrenciaGravada,
+} from "../../shared/ocorrencias";
+import { ehPendente } from "../../shared/ponto";
 import {
   ajustarDia,
   diasDoEscritorio,
@@ -40,6 +49,15 @@ import {
   marcarPausa,
   observandoDesde,
 } from "./ponto-repo";
+import {
+  acharOcorrencia,
+  anexarAtestado,
+  decidirAtestado,
+  excluirOcorrencia,
+  ocorrenciasDoEscritorio,
+  ocorrenciasDoPeriodo,
+  registrarOcorrencia,
+} from "./ocorrencias-repo";
 
 /** "2026-08" → { de: "2026-08-01", ate: "2026-08-31" }. */
 function limitesDoMes(competencia: string): { de: string; ate: string } {
@@ -125,37 +143,83 @@ function montarEspelho(
   jornada: JornadaSemanal | null,
   fuso: string,
   desde: Date | null = null,
+  ocorrencias: OcorrenciaGravada[] = [],
 ) {
-  const jornadas = linhas.map((l) => {
-    const j = calcularJornada(l, agora);
-    const previsto = minutosPrevistos(jornada, j.dia);
-    const apuravel = pontualidadeApuravel(jornada, j.dia, fuso, desde);
-    const p = apuravel
-      ? pontualidade(jornada, j.dia, minutosLocais(j.entrada, fuso))
-      : { atrasoMin: 0, atrasado: false };
-    return {
-      ...j,
-      previstoMin: previsto,
-      // Saldo só existe quando os dois lados existem. Dia aberto ou sem
-      // jornada não vira "-8h" — seria cobrar uma falta que ninguém apurou.
-      saldoMin: j.minutos != null && previsto > 0 ? j.minutos - previsto : null,
-      atrasoMin: p.atrasoMin,
-      atrasado: p.atrasado,
-      avisos: apuravel
-        ? j.avisos
-        : [
-            ...j.avisos,
-            "O ponto passou a registrar depois do início do expediente deste dia — a hora de entrada não foi observada e o atraso não foi apurado.",
-          ],
-    };
-  });
+  const porDia = new Map<string, OcorrenciaGravada[]>();
+  for (const o of ocorrencias) {
+    const lista = porDia.get(o.dia) ?? [];
+    lista.push(o);
+    porDia.set(o.dia, lista);
+  }
+
+  // Falta lançada em dia que ninguém logou não tem linha de ponto — e é
+  // justamente o caso mais comum. Sem a linha sintética a falta some da
+  // tabela e o espelho volta a mostrar o dia em branco que ela veio explicar.
+  const comPonto = new Set(linhas.map((l) => l.dia));
+  const sinteticas: DiaPontoBruto[] = [...porDia.keys()]
+    .filter((d) => !comPonto.has(d))
+    .map((dia) => ({
+      dia,
+      entradaEm: null,
+      pausaInicioEm: null,
+      pausaFimEm: null,
+      saidaEm: null,
+      ultimaAtividadeEm: null,
+    }));
+
+  const jornadas = [...linhas, ...sinteticas]
+    .sort((a, b) => a.dia.localeCompare(b.dia))
+    .map((l) => {
+      const j = calcularJornada(l, agora);
+      const doDia = porDia.get(j.dia) ?? [];
+      const falta = situacaoDoDia(doDia);
+      // Abonada zera o previsto: cobrar a jornada de um dia de férias seria
+      // transformar o direito em dívida.
+      const previsto = falta === "abonada" ? 0 : minutosPrevistos(jornada, j.dia);
+      const apuravel = pontualidadeApuravel(jornada, j.dia, fuso, desde);
+      const p = apuravel
+        ? pontualidade(jornada, j.dia, minutosLocais(j.entrada, fuso))
+        : { atrasoMin: 0, atrasado: false };
+
+      return {
+        ...j,
+        previstoMin: previsto,
+        // Saldo só existe quando os dois lados existem. Dia aberto ou sem
+        // jornada não vira "-8h" — seria cobrar uma falta que ninguém apurou.
+        // Atestado ainda não revisado também fica de fora: enquanto ninguém
+        // olhou o papel, descontar já seria uma decisão tomada.
+        saldoMin:
+          falta === "abonada" || falta === "aguardando"
+            ? null
+            : falta === "descontada"
+              ? previsto > 0 ? (j.minutos ?? 0) - previsto : null
+              : j.minutos != null && previsto > 0 ? j.minutos - previsto : null,
+        atrasoMin: p.atrasoMin,
+        atrasado: p.atrasado,
+        ocorrencias: doDia,
+        falta,
+        avisos: apuravel
+          ? j.avisos
+          : [
+              ...j.avisos,
+              "O ponto passou a registrar depois do início do expediente deste dia — a hora de entrada não foi observada e o atraso não foi apurado.",
+            ],
+      };
+    });
 
   const total = totalDoPeriodo(jornadas);
   const previstoMin = jornadas.reduce((s, j) => s + j.previstoMin, 0);
+  // Dia com falta lançada não é dia pendente: pendente é o que falta o gestor
+  // resolver, e a falta É a resolução. Deixá-lo nos dois lugares faria a tela
+  // pedir de volta uma decisão já tomada.
+  const resolvidosPorFalta = jornadas.filter((j) => ehPendente(j.status) && j.falta != null).length;
+
   return {
     jornadas,
+    ocorrencias,
     total: {
       ...total,
+      diasPendentes: Math.max(total.diasPendentes - resolvidosPorFalta, 0),
       previstoMin,
       // O saldo do mês compara o realizado dos dias FECHADOS com o previsto
       // desses mesmos dias: misturar previsto de dia pendente daria um
@@ -164,8 +228,66 @@ function montarEspelho(
         .filter((j) => j.saldoMin != null)
         .reduce((s, j) => s + (j.saldoMin ?? 0), 0),
       diasAtrasados: jornadas.filter((j) => j.atrasado).length,
+      faltas: contarFaltas(ocorrencias),
     },
   };
+}
+
+/** O que o banco devolve, no formato que a tela consome. */
+function paraGravada(
+  linhas: Array<{
+    id: number;
+    colaboradorId: number;
+    dia: string;
+    tipo: string;
+    motivo: string | null;
+    descricao: string | null;
+    atestadoUrl: string | null;
+    atestadoNome: string | null;
+    aprovadoEm: Date | string | null;
+  }>,
+): OcorrenciaGravada[] {
+  return linhas.map((l) => ({
+    id: l.id,
+    colaboradorId: l.colaboradorId,
+    dia: l.dia,
+    tipo: l.tipo as OcorrenciaGravada["tipo"],
+    motivo: l.motivo as OcorrenciaGravada["motivo"],
+    descricao: l.descricao,
+    atestadoUrl: l.atestadoUrl,
+    atestadoNome: l.atestadoNome,
+    aprovadoEm: toIsoString(l.aprovadoEm) ?? null,
+  }));
+}
+
+/**
+ * O gate de escrita do RH.
+ *
+ * Registrar falta, anexar atestado e abonar são atos que mexem no que a pessoa
+ * recebe. Exigem `verTodos` E `editar` — quem só enxerga a própria linha não
+ * pode escrever na de ninguém, inclusive na dela.
+ */
+async function exigirGestorDeEquipe(userId: number) {
+  const perm = await checkPermission(userId, "equipe", "editar");
+  if (!perm.allowed || !perm.verTodos || !perm.editar) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Só quem gerencia a equipe pode fazer isso." });
+  }
+  return perm;
+}
+
+/** O colaborador existe e é deste escritório? */
+async function exigirColaboradorDoEscritorio(escritorioId: number, colaboradorId: number) {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+  const [alvo] = await db
+    .select({ id: colaboradores.id })
+    .from(colaboradores)
+    .where(and(
+      eq(colaboradores.id, colaboradorId),
+      eq(colaboradores.escritorioId, escritorioId),
+    ))
+    .limit(1);
+  if (!alvo) throw new TRPCError({ code: "NOT_FOUND", message: "Colaborador não encontrado." });
 }
 
 export const rhRouter = router({
@@ -175,12 +297,20 @@ export const rhRouter = router({
     .query(async ({ ctx, input }) => {
       const { esc, fuso } = await contexto(ctx.user.id);
       const { de, ate } = limitesDoMes(input.competencia);
-      const [linhas, desde] = await Promise.all([
+      const [linhas, desde, ocorrencias] = await Promise.all([
         diasDoPeriodo(esc.escritorio.id, esc.colaborador.id, de, ate),
         observandoDesde(esc.escritorio.id),
+        ocorrenciasDoPeriodo(esc.escritorio.id, esc.colaborador.id, de, ate),
       ]);
       const jornada = normalizarJornada((esc.colaborador as { jornadaSemanal?: string | null }).jornadaSemanal);
-      return montarEspelho(linhas as unknown as DiaPontoBruto[], new Date(), jornada, fuso, desde);
+      return montarEspelho(
+        linhas as unknown as DiaPontoBruto[],
+        new Date(),
+        jornada,
+        fuso,
+        desde,
+        paraGravada(ocorrencias),
+      );
     }),
 
   /** O ponto da equipe. Exige enxergar além da própria linha. */
@@ -194,9 +324,10 @@ export const rhRouter = router({
       }
 
       const { de, ate } = limitesDoMes(input.competencia);
-      const [linhas, desde, equipe] = await Promise.all([
+      const [linhas, desde, ocorrencias, equipe] = await Promise.all([
         diasDoEscritorio(esc.escritorio.id, de, ate),
         observandoDesde(esc.escritorio.id),
+        ocorrenciasDoEscritorio(esc.escritorio.id, de, ate),
         (async () => {
           const db = await getDb();
           if (!db) return [];
@@ -223,25 +354,32 @@ export const rhRouter = router({
         porColab.set(l.colaboradorId, lista);
       }
 
+      const ocorPorColab = new Map<number, OcorrenciaGravada[]>();
+      for (const o of paraGravada(ocorrencias)) {
+        const lista = ocorPorColab.get(o.colaboradorId) ?? [];
+        lista.push(o);
+        ocorPorColab.set(o.colaboradorId, lista);
+      }
+
       return {
         // Quem foi removido aparece MARCADO, não escondido: as horas que ele
         // trabalhou no mês existiram, e sumir com a linha faria o total da
         // equipe não bater com a soma das pessoas.
         pessoas: equipe
           .map((c) => {
-            const { jornadas, total } = montarEspelho(
+            const espelho = montarEspelho(
               porColab.get(c.id) ?? [],
               agora,
               normalizarJornada(c.jornadaSemanal),
               fuso,
               desde,
+              ocorPorColab.get(c.id) ?? [],
             );
             return {
               colaboradorId: c.id,
               nome: c.nome || c.email || `#${c.id}`,
               removido: !c.ativo || !!c.removidoEm,
-              jornadas,
-              total,
+              ...espelho,
             };
           })
           .filter((p) => p.jornadas.length > 0 || !p.removido)
@@ -280,22 +418,8 @@ export const rhRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const { esc, fuso } = await contexto(ctx.user.id);
-      const perm = await checkPermission(ctx.user.id, "equipe", "editar");
-      if (!perm.allowed || !perm.verTodos || !perm.editar) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Só quem gerencia a equipe pode ajustar o ponto." });
-      }
-
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [alvo] = await db
-        .select({ id: colaboradores.id })
-        .from(colaboradores)
-        .where(and(
-          eq(colaboradores.id, input.colaboradorId),
-          eq(colaboradores.escritorioId, esc.escritorio.id),
-        ))
-        .limit(1);
-      if (!alvo) throw new TRPCError({ code: "NOT_FOUND", message: "Colaborador não encontrado." });
+      await exigirGestorDeEquipe(ctx.user.id);
+      await exigirColaboradorDoEscritorio(esc.escritorio.id, input.colaboradorId);
 
       const hora = (v: string | undefined) =>
         v === undefined ? undefined : v === "" ? null : instanteDe(input.dia, v, fuso);
@@ -312,6 +436,138 @@ export const rhRouter = router({
         saidaEm: hora(input.saida),
       });
 
+      return { ok: true };
+    }),
+
+  /**
+   * Lança uma ocorrência. Gestor apenas — inclusive a do próprio gestor.
+   *
+   * Falta exige motivo, e conduta exige descrição: "advertência" sem o que
+   * aconteceu não serve de nada três meses depois, que é exatamente quando
+   * alguém vai ler.
+   */
+  registrarOcorrencia: protectedProcedure
+    .input(z.object({
+      colaboradorId: z.number().int().positive(),
+      dia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      tipo: z.enum(TIPOS_OCORRENCIA as [string, ...string[]]),
+      motivo: z.enum(MOTIVOS_FALTA as [string, ...string[]]).optional(),
+      descricao: z.string().trim().max(500).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { esc } = await contexto(ctx.user.id);
+      const perm = await exigirGestorDeEquipe(ctx.user.id);
+      await exigirColaboradorDoEscritorio(esc.escritorio.id, input.colaboradorId);
+
+      const tipo = input.tipo as OcorrenciaGravada["tipo"];
+      const motivo = (input.motivo ?? null) as OcorrenciaGravada["motivo"];
+      const descricao = input.descricao?.trim() || null;
+
+      if (exigeMotivo(tipo) && !motivo) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Toda falta precisa de um motivo." });
+      }
+      if (!exigeMotivo(tipo) && !descricao) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Descreva o que aconteceu — o registro é lido meses depois.",
+        });
+      }
+
+      const id = await registrarOcorrencia({
+        escritorioId: esc.escritorio.id,
+        colaboradorId: input.colaboradorId,
+        dia: input.dia,
+        tipo,
+        // Motivo em ocorrência que não é falta seria ruído gravado.
+        motivo: exigeMotivo(tipo) ? motivo : null,
+        descricao,
+        gestorId: perm.colaboradorId,
+      });
+      return { id };
+    }),
+
+  /**
+   * Anexa o atestado a uma falta. Só o gestor, por decisão do dono.
+   *
+   * Anexar não abona — a aprovação é ato separado. E a URL precisa ser do
+   * próprio escritório: sem essa checagem, o campo aceitaria o caminho de um
+   * arquivo de outro cliente do sistema.
+   */
+  anexarAtestado: protectedProcedure
+    .input(z.object({
+      ocorrenciaId: z.number().int().positive(),
+      url: z.string().max(500),
+      nome: z.string().trim().min(1).max(255),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { esc } = await contexto(ctx.user.id);
+      await exigirGestorDeEquipe(ctx.user.id);
+
+      const prefixo = `/uploads/escritorio_${esc.escritorio.id}/`;
+      if (!input.url.startsWith(prefixo) || input.url.includes("..")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Arquivo fora deste escritório." });
+      }
+
+      const ocor = await acharOcorrencia(esc.escritorio.id, input.ocorrenciaId);
+      if (!ocor) throw new TRPCError({ code: "NOT_FOUND", message: "Ocorrência não encontrada." });
+      if (ocor.tipo !== "falta") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Atestado só entra em falta." });
+      }
+
+      await anexarAtestado({
+        escritorioId: esc.escritorio.id,
+        ocorrenciaId: input.ocorrenciaId,
+        url: input.url,
+        nome: input.nome.trim(),
+      });
+      return { ok: true };
+    }),
+
+  /**
+   * Aprova (ou desfaz a aprovação do) atestado. Gestor apenas.
+   *
+   * Aprovar sem documento anexado é recusado de propósito: a aprovação existe
+   * justamente pra registrar que alguém OLHOU o papel. Sem papel, o clique
+   * viraria um abono automático com aparência de conferência.
+   */
+  decidirAtestado: protectedProcedure
+    .input(z.object({
+      ocorrenciaId: z.number().int().positive(),
+      aprovar: z.boolean(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { esc } = await contexto(ctx.user.id);
+      const perm = await exigirGestorDeEquipe(ctx.user.id);
+
+      const ocor = await acharOcorrencia(esc.escritorio.id, input.ocorrenciaId);
+      if (!ocor) throw new TRPCError({ code: "NOT_FOUND", message: "Ocorrência não encontrada." });
+      if (input.aprovar && !ocor.atestadoUrl) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Anexe o atestado antes de aprovar.",
+        });
+      }
+
+      await decidirAtestado({
+        escritorioId: esc.escritorio.id,
+        ocorrenciaId: input.ocorrenciaId,
+        gestorId: perm.colaboradorId,
+        aprovar: input.aprovar,
+      });
+      return { ok: true };
+    }),
+
+  /** Apaga uma ocorrência lançada por engano. Gestor apenas. */
+  excluirOcorrencia: protectedProcedure
+    .input(z.object({ ocorrenciaId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const { esc } = await contexto(ctx.user.id);
+      await exigirGestorDeEquipe(ctx.user.id);
+
+      const ocor = await acharOcorrencia(esc.escritorio.id, input.ocorrenciaId);
+      if (!ocor) throw new TRPCError({ code: "NOT_FOUND", message: "Ocorrência não encontrada." });
+
+      await excluirOcorrencia(esc.escritorio.id, input.ocorrenciaId);
       return { ok: true };
     }),
 });
