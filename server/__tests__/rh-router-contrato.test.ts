@@ -32,8 +32,12 @@ describe("router rh", () => {
     const nomes = Object.keys(procs()).filter((k) => k.startsWith("rh."));
     expect(nomes.sort()).toEqual([
       "rh.ajustarDia",
+      "rh.anexarAtestado",
+      "rh.decidirAtestado",
       "rh.espelhoEquipe",
+      "rh.excluirOcorrencia",
       "rh.meuEspelho",
+      "rh.registrarOcorrencia",
       "rh.registrarPausa",
     ]);
   });
@@ -50,6 +54,9 @@ describe("router rh", () => {
     expect(proc("rh.espelhoEquipe")._def.type).toBe("query");
     expect(proc("rh.registrarPausa")._def.type).toBe("mutation");
     expect(proc("rh.ajustarDia")._def.type).toBe("mutation");
+    for (const n of ["registrarOcorrencia", "anexarAtestado", "decidirAtestado", "excluirOcorrencia"]) {
+      expect(proc(`rh.${n}`)._def.type, n).toBe("mutation");
+    }
   });
 });
 
@@ -91,5 +98,25 @@ describe("validação de entrada", () => {
   it("pausa só aceita os dois lados que existem", () => {
     expect(input("rh.registrarPausa").parse({ lado: "inicio" }).lado).toBe("inicio");
     expect(() => input("rh.registrarPausa").parse({ lado: "almoco" })).toThrow();
+  });
+
+  it("ocorrência só aceita os tipos e motivos que a apuração conhece", () => {
+    const i = input("rh.registrarOcorrencia");
+    const base = { colaboradorId: 1, dia: "2026-08-11" };
+    expect(i.parse({ ...base, tipo: "falta", motivo: "atestado" }).motivo).toBe("atestado");
+    expect(i.parse({ ...base, tipo: "elogio", descricao: "fechou 3 contratos" }).tipo).toBe("elogio");
+
+    // Tipo ou motivo fora da lista chegaria ao banco como enum inválido e
+    // sairia da leitura sem situação — o dia sumiria da apuração calado.
+    expect(() => i.parse({ ...base, tipo: "suspensao" })).toThrow();
+    expect(() => i.parse({ ...base, tipo: "falta", motivo: "doente" })).toThrow();
+    expect(() => i.parse({ ...base, tipo: "falta", dia: "2026-08" })).toThrow();
+  });
+
+  it("aprovar atestado é decisão explícita, não um toggle sem lado", () => {
+    const i = input("rh.decidirAtestado");
+    expect(i.parse({ ocorrenciaId: 3, aprovar: true }).aprovar).toBe(true);
+    expect(i.parse({ ocorrenciaId: 3, aprovar: false }).aprovar).toBe(false);
+    expect(() => i.parse({ ocorrenciaId: 3 })).toThrow();
   });
 });

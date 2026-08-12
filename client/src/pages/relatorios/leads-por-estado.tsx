@@ -3,22 +3,24 @@
  *
  * Duas decisões de desenho que não são estéticas.
  *
- * O "mapa" é uma GRADE, não o contorno do Brasil. A pergunta aqui é "quantos
- * leads", e num mapa geográfico a área do estado responde outra coisa: Roraima
- * é doze vezes o Rio e pintaria um bloco enorme com zero lead dentro, enquanto
- * o Distrito Federal — que costuma render — vira um ponto invisível. Cada
- * estado ocupando o mesmo quadrado tira a distorção e mantém a leitura de
- * "onde no país", que é o que o contorno tinha de útil.
+ * A coluna da direita conta QUANTOS FECHARAM, não uma taxa. Ela já mostrou
+ * "40%" ao lado de um KPI "Taxa de conversão: 4%" na mesma tela, com um
+ * rodapé explicando que os dois não batem — e rodapé não conserta
+ * contradição, só documenta. Os dois números respondem perguntas diferentes:
+ * aqui é uma COORTE (dos leads que entraram no período, quantos já fecharam),
+ * lá é FLUXO (quantos contratos fecharam no período, tenham entrado quando
+ * tiverem). Como jamais vão convergir, a saída é a coluna não se chamar
+ * conversão nem exibir percentual: "19 de 48" o leitor confere somando, e a
+ * eficiência relativa ele compara sozinho.
  *
- * E a faixa de procedência embaixo não é rodapé: `contatos.uf` quase nunca
- * está preenchido, então a maior parte da coluna é deduzida do DDD do
- * telefone. Um painel onde 85% é dedução não pode ser lido como se fosse tudo
- * fato — a faixa mostra a proporção, e a ressalva ao lado diz o que o DDD
- * realmente significa.
+ * E a faixa de procedência embaixo não é rodapé: o estado vem do DDD do
+ * telefone, não do cadastro. Um painel inteiro construído sobre dedução não
+ * pode ser lido como fato — a faixa mostra quanto do total tem DDD
+ * reconhecível, e a ressalva ao lado diz o que o DDD realmente significa.
  */
 
 import { Database, Info, TriangleAlert } from "lucide-react";
-import { MINIMO_PARA_CONVERSAO, type LeadsPorEstado } from "@shared/leads-uf";
+import type { LeadsPorEstado } from "@shared/leads-uf";
 import { CENTROS_UF, PATHS_UF, VIEWBOX_BRASIL } from "./mapa-brasil";
 
 /**
@@ -108,6 +110,11 @@ export function BlocoLeadsPorEstado({
               estado identificado.
             </p>
           )}
+          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+            <b className="text-foreground">{dados.ganhos.toLocaleString("pt-BR")}</b>{" "}
+            {dados.ganhos === 1 ? "já fechou contrato" : "já fecharam contrato"} — é a soma da
+            coluna ao lado mais os que não têm estado identificado.
+          </p>
         </div>
         <span className="rounded-full border bg-muted/40 px-2.5 py-1 text-[10.5px] text-muted-foreground">
           {selecionada
@@ -193,7 +200,7 @@ export function BlocoLeadsPorEstado({
 
         <div>
           <div className="grid grid-cols-[30px_1fr_44px_74px] items-center gap-2 border-b pb-1.5">
-            {["UF", "Volume", "Leads", "Conv. do lead"].map((h, i) => (
+            {["UF", "Volume", "Leads", "Já fecharam"].map((h, i) => (
               <span
                 key={h}
                 className={`text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground ${
@@ -225,18 +232,16 @@ export function BlocoLeadsPorEstado({
                   />
                 </span>
                 <span className="text-right text-[12px] font-bold tabular-nums">{e.leads}</span>
-                {e.conversao !== null ? (
-                  <span className="text-right text-[11px] tabular-nums text-muted-foreground">
-                    <b className="text-foreground">{e.conversao}%</b> · {e.ganhos}
-                  </span>
-                ) : (
-                  <span
-                    className="text-right text-[11px] text-muted-foreground/50"
-                    title={`Menos de ${MINIMO_PARA_CONVERSAO} leads — percentual seria ruído`}
-                  >
-                    —
-                  </span>
-                )}
+                <span
+                  className="text-right text-[11px] tabular-nums text-muted-foreground"
+                  title={
+                    e.conversao !== null
+                      ? `${e.ganhos} dos ${e.leads} leads de ${e.uf} já fecharam — ${e.conversao}%`
+                      : `${e.ganhos} dos ${e.leads} leads de ${e.uf} já fecharam`
+                  }
+                >
+                  <b className={e.ganhos > 0 ? "text-foreground" : ""}>{e.ganhos}</b> de {e.leads}
+                </span>
               </button>
             ))}
           </div>
@@ -244,10 +249,12 @@ export function BlocoLeadsPorEstado({
           <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-muted/60 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-muted-foreground">
             <Info className="mt-px h-3.5 w-3.5 shrink-0" />
             <span>
-              Aqui a conversão é <b className="text-foreground">ganhos ÷ leads do estado</b>. O KPI
-              “Taxa de conversão” usa outra base (ganhos ÷ atendimentos), por isso os dois números
-              não batem — e só aparece a partir de <b className="text-foreground">{MINIMO_PARA_CONVERSAO} leads</b>:
-              abaixo disso um fechamento a mais move o percentual em dezenas de pontos.
+              “Já fecharam” conta, <b className="text-foreground">dos leads que entraram neste
+              período</b>, quantos fecharam contrato até hoje — inclusive os que fecharam depois do
+              fim do período. Por isso ele ainda pode subir: um lead de agosto que fechar em
+              dezembro passa a contar em agosto. É pergunta diferente da do KPI “Taxa de conversão”
+              lá em cima, que conta o que <b className="text-foreground">fechou dentro do
+              período</b> — os dois nunca vão dar o mesmo número, e nenhum dos dois está errado.
             </span>
           </p>
         </div>
