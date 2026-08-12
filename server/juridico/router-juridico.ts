@@ -366,7 +366,7 @@ export const juridicoRouter = router({
       // agente LER os documentos na conversa, não só saber que existem.
       const docsCtx = input.contatoId
         ? await garantirConteudoDocs(db, esc.escritorio.id, input.contatoId, modelo)
-        : { texto: "" };
+        : { texto: "", lidos: 0, total: 0, ignorados: 0, notas: [] as string[] };
 
       // 2. Jurisprudência: RAG na última fala do usuário (+ resumo do processo).
       const ultimaUser = [...input.mensagens].reverse().find((m) => m.role === "user")?.content || "";
@@ -406,6 +406,10 @@ export const juridicoRouter = router({
         documentos: docsCtx.texto || undefined,
         jurisprudencia,
         acervo: prova ? formatarProvaParaPrompt(prova) : undefined,
+        // O agente precisa saber o que NÃO conseguiu ler. Sem isto ele
+        // responde "não tenho acesso aos autos" de forma genérica, quando o
+        // certo é dizer QUAIS arquivos falharam e por quê.
+        documentosNaoLidos: docsCtx.notas?.length ? docsCtx.notas : undefined,
       });
 
       const r = await conversarLLMEscritorio(esc.escritorio.id, { system, mensagens: input.mensagens, modelo });
@@ -419,7 +423,12 @@ export const juridicoRouter = router({
           temDossie: !!dossie?.qualificacao,
           temProcesso: !!dossie?.processo,
           acervo: prova ? prova.comResultado : 0,
+          documentosTotal: (docsCtx as { total?: number }).total ?? 0,
+          documentosIgnorados: (docsCtx as { ignorados?: number }).ignorados ?? 0,
         },
+        // Falha de leitura não pode viver só no log: a tela mostra o que não
+        // entrou, com o motivo, e o advogado decide o que fazer.
+        naoLidos: docsCtx.notas ?? [],
         // O número vai separado do texto de propósito: quem o mostra é a tela,
         // com o que saiu da contagem. O modelo tem ordem de não escrevê-lo.
         prova,

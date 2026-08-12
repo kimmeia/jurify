@@ -105,6 +105,16 @@ export interface Dossie {
  * recente pro mais antigo, já formatada pro contexto do agente. Vazio se não
  * há eventos capturados pra esse processo.
  */
+/**
+ * Quanto de cada teor entra no contexto.
+ *
+ * Sentença inteira em 15 movimentações estoura qualquer janela. O dispositivo
+ * — que é o que decide — costuma vir no fim, mas o relatório e a fundamentação
+ * vêm antes; 2.500 caracteres pegam a fundamentação de uma decisão comum sem
+ * transformar a conversa num despejo de autos.
+ */
+const TEOR_NO_CONTEXTO = 2_500;
+
 export async function montarMovimentacao(
   db: any,
   escritorioId: number,
@@ -118,6 +128,8 @@ export async function montarMovimentacao(
       dataEvento: eventosProcesso.dataEvento,
       conteudo: eventosProcesso.conteudo,
       resumoIa: eventosProcesso.resumoIa,
+      teor: eventosProcesso.teor,
+      teorNome: eventosProcesso.teorNome,
     })
     .from(eventosProcesso)
     .where(and(eq(eventosProcesso.escritorioId, escritorioId), eq(eventosProcesso.cnjAfetado, cnj)))
@@ -128,7 +140,14 @@ export async function montarMovimentacao(
     .map((e: any) => {
       const d = e.dataEvento ? new Date(e.dataEvento).toLocaleDateString("pt-BR") : "";
       const txt = String(e.resumoIa || e.conteudo || e.tipo || "").replace(/\s+/g, " ").trim().slice(0, 300);
-      return `- ${d}${e.tipo ? ` [${e.tipo}]` : ""}: ${txt}`;
+      const linha = `- ${d}${e.tipo ? ` [${e.tipo}]` : ""}: ${txt}`;
+      // O TEOR é o documento que o juiz assinou; `conteudo` é só o rótulo do
+      // movimento na timeline. O sistema já capturava o teor pra Movimentações
+      // e o redator não o recebia — pedia estratégia sobre "Julgado
+      // procedente o pedido" sem saber o que a sentença diz.
+      const teor = String(e.teor || "").replace(/\s+/g, " ").trim();
+      if (!teor) return linha;
+      return `${linha}\n  TEOR${e.teorNome ? ` (${e.teorNome})` : ""}: ${teor.slice(0, TEOR_NO_CONTEXTO)}`;
     })
     .join("\n");
 }

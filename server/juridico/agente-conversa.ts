@@ -29,6 +29,8 @@ export interface ContextoAgente {
   jurisprudencia?: FonteAgente[];
   /** Como o tribunal decide casos como este — já formatado (prova-acervo). */
   acervo?: string;
+  /** Documentos anexados que NÃO puderam ser lidos, com o motivo. */
+  documentosNaoLidos?: string[];
 }
 
 export function montarSystemPromptAgente(ctx: ContextoAgente): string {
@@ -91,6 +93,15 @@ export function montarSystemPromptAgente(ctx: ContextoAgente): string {
   if (ctx.dossie?.fatosContexto) p.push(ctx.dossie.fatosContexto);
   if (ctx.movimentacao) p.push(`MOVIMENTAÇÃO PROCESSUAL (mais recente primeiro):\n${ctx.movimentacao}`);
   if (ctx.documentos) p.push(`CONTEÚDO DOS DOCUMENTOS DO CLIENTE (use como fatos; não invente além disto):\n${ctx.documentos}`);
+
+  if (ctx.documentosNaoLidos?.length) {
+    p.push(
+      "DOCUMENTOS QUE NÃO CONSEGUI LER (existem no caso, mas o conteúdo não entrou no contexto):\n" +
+        ctx.documentosNaoLidos.map((n) => `- ${n}`).join("\n") +
+        "\nSe a pergunta depender de algum deles, DIGA O NOME DO ARQUIVO e o motivo, e peça pro advogado reenviar " +
+        "ou colar o trecho. Nunca finja que leu, e nunca responda só 'não tenho acesso aos autos' — seja específico.",
+    );
+  }
 
   if (ctx.acervo) p.push(ctx.acervo);
 
