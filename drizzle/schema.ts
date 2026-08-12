@@ -4210,3 +4210,39 @@ export const rhAvaliacaoAcoes = mysqlTable(
 );
 
 export type RhAvaliacaoAcao = typeof rhAvaliacaoAcoes.$inferSelect;
+
+/**
+ * Histórico de varreduras do robô auditor.
+ *
+ * Existe porque a varredura agendada só reportava no Sentry, e Sentry
+ * desligado (ou DSN ausente) fazia o achado evaporar sem rastro — o painel
+ * ficava vazio e isso parecia banco saudável. Persistindo aqui, "não tem
+ * nada em aberto" passa a ser uma afirmação verificável: dá pra ver a hora
+ * da última varredura e o que ela encontrou.
+ *
+ * Guarda o AGREGADO, não as linhas violadas. As linhas mudam a cada
+ * varredura e envelhecem em minutos; o que interessa no histórico é a
+ * curva — se o número de achados cai (app melhorando) ou sobe.
+ */
+export const roboAuditorVarreduras = mysqlTable(
+  "robo_auditor_varreduras",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    runId: varchar("runIdVarredura", { length: 32 }).notNull(),
+    origem: mysqlEnum("origemVarredura", ["cron", "manual"]).default("cron").notNull(),
+    iniciadoEm: timestamp("iniciadoEmVarredura").notNull(),
+    latenciaMs: int("latenciaMsVarredura").default(0).notNull(),
+    regrasExecutadas: int("regrasExecutadasVarredura").default(0).notNull(),
+    achados: int("achadosVarredura").default(0).notNull(),
+    linhasAfetadas: int("linhasAfetadasVarredura").default(0).notNull(),
+    regrasComErro: int("regrasComErroVarredura").default(0).notNull(),
+    /** JSON: [{ id, severidade, total, erro? }] — uma entrada por regra. */
+    detalhePorRegra: text("detalhePorRegraVarredura"),
+    createdAt: timestamp("createdAtVarredura").defaultNow().notNull(),
+  },
+  (t) => ({
+    porCriacao: index("idx_robo_varredura_created").on(t.createdAt),
+  }),
+);
+
+export type RoboAuditorVarredura = typeof roboAuditorVarreduras.$inferSelect;
