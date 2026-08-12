@@ -3,10 +3,25 @@ name: Smoke contra staging
 # Roda os 3 specs leves (health, headers, login) contra a URL pública
 # de staging. Se quebrar, dispara erro no Sentry de staging — aparece
 # em /admin/erros.
+#
+# AGENDAMENTO PARADO.
+#
+# O spec de login depende de uma conta que só existe em staging depois que o
+# workflow "Seed staging (one-shot)" roda, e ele precisa de dois secrets que
+# ainda não foram criados: SEED_DATABASE_URL e SMOKE_PASSWORD. Sem eles o
+# login falha em toda execução — de 15 em 15 minutos, vermelho constante. Um
+# alarme que dispara sempre é um alarme que ninguém lê, e o custo real é o dia
+# em que quebrar algo de verdade e a falha se perder no meio das outras.
+#
+# Pra religar, na ordem:
+#   1. criar os secrets SEED_DATABASE_URL e SMOKE_PASSWORD;
+#   2. rodar "Seed staging (one-shot)" uma vez;
+#   3. disparar este workflow no botão e confirmar que passa;
+#   4. descomentar as duas linhas de `schedule` abaixo.
 on:
-  schedule:
-    - cron: "*/15 * * * *" # a cada 15 minutos
-  workflow_dispatch: # permite disparo manual
+  # schedule:
+  #   - cron: "*/15 * * * *" # a cada 15 minutos
+  workflow_dispatch: # disparo manual — o único caminho enquanto o cron está parado
 
 jobs:
   smoke:
