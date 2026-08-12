@@ -102,8 +102,8 @@ export async function gerarRelatorioPdf(args: {
           valor: d.ticketMedio != null ? brl(d.ticketMedio) : "—",
           variacao: varTxt(calcularDelta(d.ticketMedio, ant?.ticketMedio)),
         },
-        { rotulo: "Leads ganhos", valor: num(d.leadsGanhos) },
-        { rotulo: "Leads perdidos", valor: num(d.leadsPerdidos) },
+        { rotulo: "Oportunidades ganhas", valor: num(d.leadsGanhos) },
+        { rotulo: "Oportunidades perdidas", valor: num(d.leadsPerdidos) },
       ],
     };
   }
