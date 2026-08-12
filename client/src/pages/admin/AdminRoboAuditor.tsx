@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
   CheckCircle2,
+  Clock,
   Eye,
   Play,
   ShieldAlert,
@@ -66,8 +67,10 @@ const DOMINIO_LABEL: Record<string, string> = {
 
 export default function AdminRoboAuditor() {
   const regrasQuery = trpc.adminRoboAuditor.listarRegras.useQuery();
+  const historicoQuery = trpc.adminRoboAuditor.historico.useQuery({ limite: 8 });
   const varrer = trpc.adminRoboAuditor.varrer.useMutation({
     onError: (e) => toast.error(e.message),
+    onSuccess: () => historicoQuery.refetch(),
   });
   const [selecionado, setSelecionado] = useState<string | null>(null);
 
@@ -81,6 +84,8 @@ export default function AdminRoboAuditor() {
 
   const regras = regrasQuery.data?.regras ?? [];
   const resumo = resultado?.resumo;
+  const varreduras = historicoQuery.data?.varreduras ?? [];
+  const ultimaAutomatica = varreduras.find((v) => v.origem === "cron") ?? null;
 
   return (
     <div className="space-y-6">
@@ -106,6 +111,8 @@ export default function AdminRoboAuditor() {
           caminho para executá-la — nem para as regras de nível A.
         </div>
       </div>
+
+      <UltimaAutomatica varredura={ultimaAutomatica} carregando={historicoQuery.isLoading} />
 
       {resumo && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -183,6 +190,90 @@ export default function AdminRoboAuditor() {
       ) : (
         <CatalogoInicial regras={regras} carregando={regrasQuery.isLoading} />
       )}
+    </div>
+  );
+}
+
+interface Varredura {
+  runId: string;
+  origem: "cron" | "manual";
+  iniciadoEm: string;
+  latenciaMs: number;
+  regrasExecutadas: number;
+  achados: number;
+  linhasAfetadas: number;
+  regrasComErro: number;
+}
+
+function tempoDecorrido(iso: string): string {
+  const minutos = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (minutos < 1) return "agora";
+  if (minutos < 60) return `há ${minutos} min`;
+  const horas = Math.round(minutos / 60);
+  if (horas < 24) return `há ${horas} h`;
+  return `há ${Math.round(horas / 24)} d`;
+}
+
+/**
+ * A varredura do cron é o que responde "o robô está de pé?". Sem esta
+ * faixa, painel de erros vazio era ambíguo: podia ser banco saudável ou
+ * alerta que nunca saiu do processo.
+ */
+function UltimaAutomatica({
+  varredura,
+  carregando,
+}: {
+  varredura: Varredura | null;
+  carregando: boolean;
+}) {
+  if (carregando) return <Skeleton className="h-12 w-full" />;
+
+  if (!varredura) {
+    return (
+      <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+        <Clock className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+        <div className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Nenhuma varredura automática registrada.</span>{" "}
+          O robô roda 2 min após a partida do servidor e de hora em hora. Se isso persistir depois de
+          um deploy, o agendamento não está rodando.
+        </div>
+      </div>
+    );
+  }
+
+  const limpo = varredura.achados === 0 && varredura.regrasComErro === 0;
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 flex-wrap">
+      <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+      <span className="text-sm">
+        <span className="font-medium">Última varredura automática</span>{" "}
+        <span className="text-muted-foreground">{tempoDecorrido(varredura.iniciadoEm)}</span>
+      </span>
+      <span className="text-muted-foreground">·</span>
+      <span className="text-sm text-muted-foreground">
+        {varredura.regrasExecutadas} regras em {varredura.latenciaMs} ms
+      </span>
+      {limpo ? (
+        <Badge variant="outline" className="text-emerald-600 bg-emerald-500/10 border-emerald-500/20">
+          <CheckCircle2 className="h-3 w-3 mr-1" />
+          Sem achados
+        </Badge>
+      ) : (
+        <>
+          <Badge variant="outline" className="text-amber-600 bg-amber-500/10 border-amber-500/20">
+            {varredura.achados} {varredura.achados === 1 ? "invariante violada" : "invariantes violadas"} ·{" "}
+            {varredura.linhasAfetadas} linhas
+          </Badge>
+          {varredura.regrasComErro > 0 && (
+            <Badge variant="outline" className="text-red-600 bg-red-500/10 border-red-500/20">
+              <XCircle className="h-3 w-3 mr-1" />
+              {varredura.regrasComErro} regra(s) falhando
+            </Badge>
+          )}
+        </>
+      )}
+      <span className="text-xs text-muted-foreground ml-auto font-mono">{varredura.runId}</span>
     </div>
   );
 }

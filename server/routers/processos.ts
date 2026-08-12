@@ -1058,23 +1058,27 @@ export const processosRouter = router({
       }
 
       const novoSaldo = creditos.saldo + input.quantidade;
-      await db
-        .update(motorCreditos)
-        .set({
-          saldo: novoSaldo,
-          totalComprado: creditos.totalComprado + input.quantidade,
-        })
-        .where(eq(motorCreditos.id, creditos.id));
+      // Saldo e extrato juntos: saldo é cache do extrato, e atualizar um
+      // sem o outro deixa crédito que ninguém consegue explicar depois.
+      await db.transaction(async (tx) => {
+        await tx
+          .update(motorCreditos)
+          .set({
+            saldo: novoSaldo,
+            totalComprado: creditos.totalComprado + input.quantidade,
+          })
+          .where(eq(motorCreditos.id, creditos.id));
 
-      await db.insert(motorTransacoes).values({
-        escritorioId: input.escritorioId,
-        tipo: "compra",
-        quantidade: input.quantidade,
-        saldoAnterior: creditos.saldo,
-        saldoDepois: novoSaldo,
-        operacao: "compra_admin",
-        detalhes: input.motivo,
-        userId: ctx.user.id,
+        await tx.insert(motorTransacoes).values({
+          escritorioId: input.escritorioId,
+          tipo: "compra",
+          quantidade: input.quantidade,
+          saldoAnterior: creditos.saldo,
+          saldoDepois: novoSaldo,
+          operacao: "compra_admin",
+          detalhes: input.motivo,
+          userId: ctx.user.id,
+        });
       });
 
       return { adicionados: input.quantidade, saldoNovo: novoSaldo };

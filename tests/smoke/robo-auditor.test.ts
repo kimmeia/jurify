@@ -40,12 +40,14 @@ import {
 } from "../../drizzle/schema";
 import { varrer } from "../../server/admin/auditoria/executor";
 import { REGRAS } from "../../server/admin/auditoria/regras";
+import { listarUltimasVarreduras, salvarVarredura } from "../../server/admin/auditoria/historico";
 
 const TEM_DB = !!process.env.DATABASE_URL;
 
 const ONTEM = new Date(Date.now() - 24 * 60 * 60 * 1000);
 const HA_5_DIAS = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
 const AMANHA = new Date(Date.now() + 24 * 60 * 60 * 1000);
+const DAQUI_7_DIAS = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
 /** Tabelas que o seed suja, em ordem segura de limpeza. */
 const TABELAS = [
@@ -65,6 +67,7 @@ const TABELAS = [
   "escritorio_transacoes",
   "escritorio_creditos",
   "escritorios",
+  "robo_auditor_varreduras",
 ];
 
 /** id da linha que cada regra DEVE pegar. */
@@ -182,16 +185,26 @@ async function semear() {
   ]);
   esperado["INT-02"] = [convRuim.id];
 
-  // FLW-05 — rodando e parada há dias.
-  const [execRuim] = await db
+  // FLW-05 — "rodando" é também o estado de quem espera, então os
+  // cenários saudáveis aqui são os que mais importam: foram eles que
+  // apareceram como 14 falsos positivos na primeira varredura real.
+  const [execOrfa] = await db
     .insert(smartflowExecucoes)
     .values({ cenarioId: 1, escritorioId: escA.id, status: "rodando", passoAtual: 3, updatedAt: HA_5_DIAS })
     .$returningId();
+  const [execAtrasada] = await db
+    .insert(smartflowExecucoes)
+    .values({ cenarioId: 1, escritorioId: escA.id, status: "rodando", passoAtual: 2, retomarEm: ONTEM, updatedAt: ONTEM })
+    .$returningId();
   await db.insert(smartflowExecucoes).values([
+    // Passo "esperar 7 dias": parada há dias, mas com hora marcada pra voltar.
+    { cenarioId: 1, escritorioId: escA.id, status: "rodando", passoAtual: 1, retomarEm: DAQUI_7_DIAS, updatedAt: HA_5_DIAS },
+    // Aguardando resposta do contato, com timeout no futuro.
+    { cenarioId: 1, escritorioId: escA.id, status: "rodando", passoAtual: 4, aguardandoMensagemContatoId: contatoA.id, retomarEm: AMANHA, updatedAt: HA_5_DIAS },
     { cenarioId: 1, escritorioId: escA.id, status: "rodando", passoAtual: 1, updatedAt: new Date() },
     { cenarioId: 1, escritorioId: escA.id, status: "concluido", passoAtual: 9, updatedAt: HA_5_DIAS },
   ]);
-  esperado["FLW-05"] = [execRuim.id];
+  esperado["FLW-05"] = [execOrfa.id, execAtrasada.id];
 
   // COL-01 e KAN-01.
   const [colRuim] = await db
@@ -257,6 +270,23 @@ describe("robô auditor contra banco real", () => {
     }
 
     expect(divergencias).toEqual([]);
+  }, 120_000);
+
+  it("grava a varredura no histórico e devolve na listagem", async () => {
+    if (!TEM_DB) return;
+
+    // O histórico é o que faz "nada em aberto" significar alguma coisa: sem
+    // ele, alerta perdido (Sentry desligado) e banco saudável ficam iguais.
+    const resultado = await varrer();
+    await salvarVarredura(resultado, "cron");
+
+    const [ultima] = await listarUltimasVarreduras(1);
+    expect(ultima.runId).toBe(resultado.runId);
+    expect(ultima.origem).toBe("cron");
+    expect(ultima.achados).toBe(resultado.resumo.achados);
+    expect(ultima.linhasAfetadas).toBe(resultado.resumo.linhasAfetadas);
+    // Inclusive as regras limpas, pra dar pra ver quando uma passa a violar.
+    expect(ultima.regras).toHaveLength(resultado.resumo.regrasExecutadas);
   }, 120_000);
 
   it("descreve cada linha e preenche os valores de apoio", async () => {

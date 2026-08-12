@@ -95,6 +95,19 @@ describe("robô auditor é read-only na fase 1", () => {
     });
   }
 
+  it("o histórico só escreve na tabela do próprio robô", () => {
+    // `historico.ts` é a única exceção ao read-only: ele grava o resultado
+    // da varredura. A exceção continua estreita enquanto ele não tocar em
+    // tabela de negócio — que é o que este teste mede.
+    const fonte = readFileSync(join(DIR, "historico.ts"), "utf8");
+    const alvos = [...fonte.matchAll(/\.(?:insert|update|delete)\(\s*(\w+)/g)].map((m) => m[1]);
+
+    expect(alvos.length, "historico.ts deveria escrever em algo").toBeGreaterThan(0);
+    for (const alvo of alvos) {
+      expect(alvo, `historico.ts escreve em ${alvo}`).toBe("roboAuditorVarreduras");
+    }
+  });
+
   it("o router do robô não expõe procedure de correção", () => {
     const fonte = readFileSync(join(DIR, "..", "router-admin-auditoria-robo.ts"), "utf8");
     // O que protege o banco em shadow mode é não existir caminho de escrita

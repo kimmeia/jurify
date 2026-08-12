@@ -1,7 +1,8 @@
 /**
  * Router admin — Robô auditor.
  *
- * Expõe o catálogo de invariantes e dispara a varredura sob demanda.
+ * Expõe o catálogo de invariantes, o histórico de varreduras e o disparo
+ * sob demanda.
  *
  * Fase 1: shadow mode. Não existe procedure de correção neste router, e
  * isso é proposital — enquanto as regras não tiverem histórico provando
@@ -12,6 +13,7 @@
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import { listarRegras, varrer, LIMITE_LINHAS_PADRAO } from "./auditoria/executor";
+import { listarUltimasVarreduras, salvarVarredura } from "./auditoria/historico";
 
 export const adminRoboAuditorRouter = router({
   /** Catálogo de invariantes vigiando o banco. */
@@ -19,6 +21,17 @@ export const adminRoboAuditorRouter = router({
     regras: listarRegras(),
     limiteLinhasPadrao: LIMITE_LINHAS_PADRAO,
   })),
+
+  /**
+   * Últimas varreduras gravadas — inclusive as do cron. É o que permite
+   * responder "quando o robô olhou pela última vez?" sem depender do
+   * Sentry estar configurado.
+   */
+  historico: adminProcedure
+    .input(z.object({ limite: z.number().int().min(1).max(50).optional() }).optional())
+    .query(async ({ input }) => ({
+      varreduras: await listarUltimasVarreduras(input?.limite ?? 10),
+    })),
 
   /**
    * Roda a varredura. Mutation porque é ação (N queries no banco de
@@ -33,7 +46,12 @@ export const adminRoboAuditorRouter = router({
         })
         .optional(),
     )
-    .mutation(async ({ input }) =>
-      varrer({ ids: input?.ids, limiteLinhas: input?.limiteLinhas }),
-    ),
+    .mutation(async ({ input }) => {
+      const resultado = await varrer({ ids: input?.ids, limiteLinhas: input?.limiteLinhas });
+      // Varredura parcial (com `ids`) não entra no histórico: ela não
+      // descreve o estado do banco, e registrada viraria uma "última
+      // varredura" enganosa com 1 regra executada.
+      if (!input?.ids?.length) await salvarVarredura(resultado, "manual");
+      return resultado;
+    }),
 });

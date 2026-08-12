@@ -38,8 +38,15 @@ import { ORDEM_SEVERIDADE, type Regra } from "./tipos";
  */
 const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
 
-/** Uma execução de SmartFlow parada além disso não vai retomar sozinha. */
-const HORAS_EXECUCAO_TRAVADA = 48;
+/** Execução órfã parada além disso já não retoma sozinha. */
+const HORAS_EXECUCAO_ORFA = 48;
+
+/**
+ * Folga sobre o `retomarEm` vencido. O scheduler roda a cada 60s, então
+ * retomada atrasada em horas significa que ele não está pegando aquela
+ * linha — não que está ocupado.
+ */
+const HORAS_RETOMADA_ATRASADA = 2;
 
 export const REGRAS: Regra[] = [
   {
@@ -355,14 +362,20 @@ export const REGRAS: Regra[] = [
     nivel: "B",
     tabela: "smartflow_execucoes",
     invariante:
-      `Execução com status "rodando" deve avançar. Parada há mais de ` +
-      `${HORAS_EXECUCAO_TRAVADA}h sem concluir nem falhar, não retoma sozinha.`,
+      "Execução com status “rodando” deve ter quem a retome: um retomarEm " +
+      "no futuro ou um contato de quem se espera resposta. Sem nenhum dos " +
+      "dois, ou com retomarEm vencido há horas, ela não sai do lugar.",
     correcaoPrevista:
       "Marcar como erro para liberar o contato para novos fluxos. Encerrar " +
-      "execução é decisão de produto — pode haver passo aguardando resposta longa.",
+      "execução é decisão de produto — o passo pode ter parado no meio de algo.",
     shadow: true,
     async detectar(db, limite) {
-      const limiteTempo = new Date(Date.now() - HORAS_EXECUCAO_TRAVADA * 60 * 60 * 1000);
+      // "rodando" NÃO significa ocupada: é também o estado de quem espera.
+      // Um passo `esperar 7 dias` e um `aguardar resposta` com timeout de
+      // 24h ficam rodando e parados legitimamente — a primeira versão desta
+      // regra acusava os dois e devolveu 14 falsos positivos em produção.
+      const orfaDesde = new Date(Date.now() - HORAS_EXECUCAO_ORFA * 60 * 60 * 1000);
+      const retomadaVencidaEm = new Date(Date.now() - HORAS_RETOMADA_ATRASADA * 60 * 60 * 1000);
 
       const linhas = await db
         .select({
@@ -372,27 +385,46 @@ export const REGRAS: Regra[] = [
           contatoId: smartflowExecucoes.contatoId,
           passoAtual: smartflowExecucoes.passoAtual,
           updatedAt: smartflowExecucoes.updatedAt,
+          retomarEm: smartflowExecucoes.retomarEm,
+          aguardandoContatoId: smartflowExecucoes.aguardandoMensagemContatoId,
         })
         .from(smartflowExecucoes)
         .where(
           and(
             eq(smartflowExecucoes.status, "rodando"),
-            lt(smartflowExecucoes.updatedAt, limiteTempo),
+            or(
+              // Órfã: ninguém vai retomar, e faz tempo que não anda.
+              and(
+                isNull(smartflowExecucoes.retomarEm),
+                isNull(smartflowExecucoes.aguardandoMensagemContatoId),
+                lt(smartflowExecucoes.updatedAt, orfaDesde),
+              ),
+              // A hora de retomar passou e o scheduler não pegou.
+              lt(smartflowExecucoes.retomarEm, retomadaVencidaEm),
+            ),
           ),
         )
         .limit(limite);
 
-      return linhas.map((l) => ({
-        escritorioId: l.escritorioId,
-        alvoId: l.id,
-        descricao: `Execução ${l.id} do cenário ${l.cenarioId} parada no passo ${l.passoAtual}`,
-        valores: {
-          cenarioId: l.cenarioId,
-          contatoId: l.contatoId,
-          passoAtual: l.passoAtual,
-          paradaDesde: l.updatedAt?.toISOString() ?? null,
-        },
-      }));
+      return linhas.map((l) => {
+        const orfa = !l.retomarEm && !l.aguardandoContatoId;
+        return {
+          escritorioId: l.escritorioId,
+          alvoId: l.id,
+          descricao: orfa
+            ? `Execução ${l.id} do cenário ${l.cenarioId} parada no passo ${l.passoAtual}, sem nada que a retome`
+            : `Execução ${l.id} do cenário ${l.cenarioId} devia ter retomado em ${l.retomarEm?.toISOString()}`,
+          valores: {
+            motivo: orfa ? "sem retomada agendada" : "retomada vencida",
+            cenarioId: l.cenarioId,
+            contatoId: l.contatoId,
+            passoAtual: l.passoAtual,
+            retomarEm: l.retomarEm?.toISOString() ?? null,
+            aguardandoContatoId: l.aguardandoContatoId,
+            paradaDesde: l.updatedAt?.toISOString() ?? null,
+          },
+        };
+      });
     },
   },
 
