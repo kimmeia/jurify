@@ -41,7 +41,7 @@ import {
   dataHojeBR,
   FUSO_HORARIO_PADRAO,
 } from "../../shared/escritorio-types";
-import { agregarLeadsPorEstado } from "../../shared/leads-uf";
+import { agregarLeadsPorEstado, estadoDoLead } from "../../shared/leads-uf";
 import { gerarComercialPdf, type DetalheAtendentePdf } from "./relatorios-comercial-pdf";
 import { gerarAgendaPdf } from "./relatorios-agenda-pdf";
 import { gerarAtendimentoPdf } from "./relatorios-atendimento-pdf";
@@ -143,6 +143,9 @@ const AtendimentoInput = z
     setorId: z.number().int().positive().optional(),
     atendenteId: z.number().int().positive().optional(),
     canalId: z.number().int().positive().optional(),
+    /** Sigla da UF. Filtra o relatório inteiro, menos o próprio bloco de
+     *  estados — que é o controle que aplica o filtro. */
+    uf: z.string().trim().length(2).optional(),
     /** Dobra os agregados de operação no período imediatamente anterior.
      *  Opt-in porque custa um segundo conjunto de queries — a tela só liga
      *  quando o usuário marca "comparar com período anterior". */
@@ -213,6 +216,66 @@ async function resolverColaboradorIds(args: {
   }
 
   return null;
+}
+
+/**
+ * Contatos de um estado, resolvidos em ids.
+ *
+ * O caminho óbvio seria filtrar em SQL — mas o estado de um contato não é uma
+ * coluna: é `contatos.uf` quando existe, e o DDD do telefone quando não. Pôr
+ * essa regra num WHERE significa escrevê-la uma segunda vez, em SQL, ao lado da
+ * versão de `shared/leads-uf`. As duas iam divergir, e o dia em que
+ * divergissem o mapa mostraria um número e o relatório filtrado mostraria
+ * outro — exatamente a divergência de unidade que já nos custou suporte.
+ *
+ * Então a regra continua uma só: puxa os contatos com movimento no período,
+ * roda a MESMA função pura, e devolve ids. O corte por período é o que segura
+ * o tamanho — é a atividade do mês, não a base inteira.
+ *
+ * `[-1]` (e não `[]`) quando nada casa: `IN ()` é erro de sintaxe no MySQL, e
+ * o resto do arquivo já usa essa convenção.
+ */
+async function resolverContatoIdsPorUf(args: {
+  db: any;
+  escritorioId: number;
+  uf: string;
+  dataInicio: Date;
+  dataFim: Date;
+}): Promise<number[]> {
+  const { db, escritorioId, uf, dataInicio, dataFim } = args;
+  const alvo = uf.trim().toUpperCase();
+
+  const [deConversas, deLeads] = await Promise.all([
+    db.select({ id: contatos.id, uf: contatos.uf, telefone: contatos.telefone })
+      .from(contatos)
+      .innerJoin(conversas, eq(conversas.contatoId, contatos.id))
+      .where(and(
+        eq(contatos.escritorioId, escritorioId),
+        gte(conversas.createdAt, dataInicio),
+        lte(conversas.createdAt, dataFim),
+      ))
+      .groupBy(contatos.id, contatos.uf, contatos.telefone),
+    db.select({ id: contatos.id, uf: contatos.uf, telefone: contatos.telefone })
+      .from(contatos)
+      .innerJoin(leads, eq(leads.contatoId, contatos.id))
+      .where(and(
+        eq(contatos.escritorioId, escritorioId),
+        gte(leads.createdAt, dataInicio),
+        lte(leads.createdAt, dataFim),
+      ))
+      .groupBy(contatos.id, contatos.uf, contatos.telefone),
+  ]);
+
+  const vistos = new Map<number, { uf: string | null; telefone: string | null }>();
+  for (const r of [...deConversas, ...deLeads] as Array<{ id: number; uf: string | null; telefone: string | null }>) {
+    if (!vistos.has(r.id)) vistos.set(r.id, { uf: r.uf, telefone: r.telefone });
+  }
+
+  const ids: number[] = [];
+  for (const [id, c] of vistos) {
+    if (estadoDoLead(c)?.uf === alvo) ids.push(id);
+  }
+  return ids.length ? ids : [-1];
 }
 
 /** Input do relatório Comercial — aceita preset de dias OU range
@@ -452,12 +515,25 @@ export const relatoriosRouter = router({
       ? [eq(conversas.canalId, input.canalId)]
       : [];
 
+    // Filtro por estado. Vale pro relatório inteiro, MENOS pro bloco que o
+    // gera: o mapa é o controle que aplica o filtro, e controle que se filtra
+    // a si mesmo deixa de dar como voltar — é a mesma razão pela qual o select
+    // de atendente continua listando todos com um deles escolhido.
+    const contatoIdsUf = input?.uf
+      ? await resolverContatoIdsPorUf({
+        db, escritorioId: eid, uf: input.uf, dataInicio, dataFim,
+      })
+      : null;
+    const filtroUfConv = contatoIdsUf ? [inArray(conversas.contatoId, contatoIdsUf)] : [];
+    const filtroUfLead = contatoIdsUf ? [inArray(leads.contatoId, contatoIdsUf)] : [];
+
     const baseConv = and(
       eq(conversas.escritorioId, eid),
       gte(conversas.createdAt, dataInicio),
       lte(conversas.createdAt, dataFim),
       ...filtroAtendConv,
       ...filtroCanal,
+      ...filtroUfConv,
     );
     // Pra contar leads filtrados por canal, precisa join com conversas.
     // Conditions reusados em vários querys de leads.
@@ -466,6 +542,7 @@ export const relatoriosRouter = router({
       gte(leads.createdAt, di),
       lte(leads.createdAt, df),
       ...filtroRespLead,
+      ...filtroUfLead,
     );
     const baseLeadFechado = (di: Date, df: Date, etapa: "fechado_ganho" | "fechado_perdido") => and(
       eq(leads.escritorioId, eid),
@@ -474,6 +551,7 @@ export const relatoriosRouter = router({
       gte(leads.fechadoEm, di),
       lte(leads.fechadoEm, df),
       ...filtroRespLead,
+      ...filtroUfLead,
     );
 
     // ─── Conversas: status, mensagens, por dia ──────────────────────────
@@ -489,6 +567,7 @@ export const relatoriosRouter = router({
           lte(mensagens.createdAt, dataFim),
           ...filtroAtendConv,
           ...filtroCanal,
+          ...filtroUfConv,
         ))
         .groupBy(mensagens.direcao),
       db.select({ dia: sql<string>`DATE(createdAtConv)`, total: sql<number>`COUNT(*)` })
@@ -809,7 +888,12 @@ export const relatoriosRouter = router({
           contatos,
           and(eq(leads.contatoId, contatos.id), eq(contatos.escritorioId, eid)),
         )
-    ).where(baseLeadCriacao(dataInicio, dataFim));
+    ).where(and(
+      eq(leads.escritorioId, eid),
+      gte(leads.createdAt, dataInicio),
+      lte(leads.createdAt, dataFim),
+      ...filtroRespLead,
+    ));
 
     const leadsPorEstado = agregarLeadsPorEstado(
       (leadsComContato as Array<{ uf: string | null; telefone: string | null; etapa: string }>)
@@ -958,6 +1042,7 @@ export const relatoriosRouter = router({
         setorId: input?.setorId ?? null,
         atendenteId: input?.atendenteId ?? null,
         canalId: input?.canalId ?? null,
+        uf: input?.uf ? input.uf.toUpperCase() : null,
       },
       // KPIs Funil
       leadsRecebidos,
@@ -2607,6 +2692,10 @@ export const relatoriosPdfRouter = router({
           setorId: z.number().int().positive().optional(),
           atendenteId: z.number().int().positive().optional(),
           canalId: z.number().int().positive().optional(),
+          // Sem isto o zod descarta o `uf` que a tela manda e o PDF sai com o
+          // relatório inteiro enquanto a tela mostra um estado só — divergência
+          // silenciosa, que é a pior espécie.
+          uf: z.string().trim().length(2).optional(),
         })
         .optional(),
     )
@@ -2669,6 +2758,7 @@ export const relatoriosPdfRouter = router({
         setorLabel: await rotuloDe("setor", input?.setorId),
         atendenteLabel,
         canalLabel: await rotuloDe("canal", input?.canalId),
+        ufLabel: input?.uf ? input.uf.toUpperCase() : "Todos",
       });
 
       return {
