@@ -21,6 +21,7 @@ import type { Jornada } from "@shared/ponto";
 import { resumirJornada, normalizarJornada } from "@shared/jornada";
 import type { OcorrenciaGravada } from "@shared/ocorrencias";
 import type { AvaliacaoGravada } from "@shared/avaliacao";
+import { formatarEspera, type Desempenho } from "@shared/desempenho";
 import {
   Avisos,
   competenciaAtual,
@@ -41,6 +42,7 @@ interface PessoaDaEquipe {
   jornadas: JornadaComparada[];
   ocorrencias: OcorrenciaGravada[];
   avaliacoes: AvaliacaoGravada[];
+  desempenho: Desempenho;
   total: {
     minutos: number;
     diasFechados: number;
@@ -50,6 +52,82 @@ interface PessoaDaEquipe {
     diasAtrasados: number;
     faltas: { total: number; abonadas: number; descontadas: number; aguardando: number };
   };
+}
+
+
+const brl = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+
+/**
+ * O que a pessoa produziu no período.
+ *
+ * Sai da mesma regra do relatório de Atendimento — a tela diz isso de propósito.
+ * Número de desempenho que aparece em dois lugares e não bate é a coisa que
+ * mais rápido destrói a confiança num painel, e o leitor precisa saber que
+ * pode conferir um contra o outro.
+ */
+function BlocoDesempenho({ d, cargo }: { d: Desempenho; cargo: string | null | undefined }) {
+  const cartoes = [
+    {
+      valor: String(d.atendimentos),
+      rotulo: "atendimentos",
+      nota: "conversas abertas no período",
+    },
+    {
+      valor: String(d.oportunidades),
+      rotulo: "oportunidades",
+      nota: `${d.ganhos} ganhas · ${d.perdidos} perdidas · ${d.emAberto} em aberto`,
+    },
+    {
+      valor: d.taxaConversao != null ? `${d.taxaConversao}%` : "—",
+      rotulo: "conversão",
+      nota: d.taxaConversao != null ? "ganhos ÷ atendimentos" : "sem atendimento no período",
+    },
+    {
+      valor: brl(d.valorFechado),
+      rotulo: "valor fechado",
+      nota: "só o que entrou como ganho",
+    },
+    {
+      valor: String(d.agendamentos),
+      rotulo: "compromissos",
+      nota: `${d.agendamentosConcluidos} concluído${d.agendamentosConcluidos === 1 ? "" : "s"}`,
+    },
+    {
+      valor: formatarEspera(d.segPrimeiraResposta),
+      rotulo: "1ª resposta",
+      nota: "mediana, não média",
+    },
+  ];
+
+  return (
+    <div className="rounded-xl border bg-card">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-4 py-2.5">
+        <p className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
+          Desempenho da função{cargo ? ` · ${cargo}` : ""}
+        </p>
+        <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
+          vem do CRM e da agenda
+        </span>
+      </div>
+      <div className="grid grid-cols-2 divide-x divide-y sm:grid-cols-3">
+        {cartoes.map((c) => (
+          <div key={c.rotulo} className="px-3.5 py-2.5">
+            <b className="block text-[19px] leading-tight tabular-nums">{c.valor}</b>
+            <span className="block text-[11px] font-semibold">{c.rotulo}</span>
+            <span className="mt-0.5 block text-[10px] leading-snug text-muted-foreground">
+              {c.nota}
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="border-t px-4 py-2 text-[10px] leading-relaxed text-muted-foreground">
+        Mesma regra do relatório de Atendimento: oportunidade conta se foi criada ou fechada no
+        mês, e a conversão é ganhos ÷ atendimentos. Selecione o mesmo período lá e os números
+        batem.
+      </p>
+    </div>
+  );
 }
 
 export default function FichaColaborador() {
@@ -146,6 +224,8 @@ export default function FichaColaborador() {
                   <Avisos jornadas={pessoa.jornadas} />
                 </div>
               </div>
+
+              <BlocoDesempenho d={pessoa.desempenho} cargo={pessoa.cargo} />
 
               <div className="rounded-xl border bg-card">
                 <PainelOcorrencias ocorrencias={pessoa.ocorrencias} gestor aoMudar={invalidar} />
