@@ -4095,3 +4095,53 @@ export const pontoDias = mysqlTable(
 );
 
 export type PontoDia = typeof pontoDias.$inferSelect;
+
+/**
+ * Conduta e faltas — log, não coluna em `ponto_dias`.
+ *
+ * O mesmo dia pode ter mais de um registro (faltou E levou advertência), e
+ * conduta existe em dia que o ponto nem tem linha: elogio de sexta não depende
+ * de a pessoa ter logado. Por isso não há UNIQUE em (colaborador, dia) — a
+ * prevalência entre ocorrências do mesmo dia é resolvida no cálculo, em
+ * `shared/ocorrencias`.
+ */
+export const rhOcorrencias = mysqlTable(
+  "rh_ocorrencias",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdOcor").notNull(),
+    colaboradorId: int("colaboradorIdOcor").notNull(),
+    /** Dia civil no fuso do escritório (YYYY-MM-DD), igual ao de `ponto_dias`. */
+    dia: varchar("diaOcor", { length: 10 }).notNull(),
+
+    tipo: mysqlEnum("tipoOcor", ["falta", "advertencia", "elogio", "observacao"]).notNull(),
+    /** Só faz sentido em falta. NULL nos demais tipos. */
+    motivo: mysqlEnum("motivoOcor", [
+      "atestado",
+      "justificada",
+      "injustificada",
+      "folga",
+      "ferias",
+      "licenca",
+    ]),
+    descricao: varchar("descricaoOcor", { length: 500 }),
+
+    atestadoUrl: varchar("atestadoUrlOcor", { length: 500 }),
+    atestadoNome: varchar("atestadoNomeOcor", { length: 255 }),
+
+    /** Só do atestado: é o único motivo que não abona sozinho. */
+    aprovadoPor: int("aprovadoPorOcor"),
+    aprovadoEm: timestamp("aprovadoEmOcor"),
+
+    registradoPor: int("registradoPorOcor").notNull(),
+
+    createdAt: timestamp("createdAtOcor").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAtOcor").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    porColab: index("idx_ocor_colab_dia").on(t.colaboradorId, t.dia),
+    porEscritorio: index("idx_ocor_esc_dia").on(t.escritorioId, t.dia),
+  }),
+);
+
+export type RhOcorrencia = typeof rhOcorrencias.$inferSelect;

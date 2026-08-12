@@ -124,6 +124,7 @@ export const MINIMO_PARA_CONVERSAO = 10;
 export interface LinhaEstado {
   uf: string;
   leads: number;
+  /** Quantos DESTES leads já fecharam contrato, até hoje. */
   ganhos: number;
   /** ganhos ÷ leads DO ESTADO, em %. null abaixo de `MINIMO_PARA_CONVERSAO`. */
   conversao: number | null;
@@ -136,6 +137,15 @@ export interface LeadsPorEstado {
   comEstado: number;
   /** Leads sem telefone, ou com DDD que não existe na tabela da Anatel. */
   semEstado: number;
+  /**
+   * Leads da coorte que já fecharam, COM e SEM estado identificado.
+   *
+   * Existe pra tela poder mostrar o total ao lado das partes: sem ele o leitor
+   * soma a coluna dos estados, não bate com nada, e conclui que o relatório
+   * está errado — quando na verdade faltava o pedaço de quem não tem DDD
+   * reconhecível.
+   */
+  ganhos: number;
 }
 
 /**
@@ -146,6 +156,15 @@ export interface LeadsPorEstado {
  * a Anatel emite código novo, e regra que vive numa função pura é testável sem
  * banco. O `ganho` entra como booleano já resolvido pelo chamador porque o
  * nome da etapa é assunto do funil, não deste arquivo.
+ *
+ * O que sai daqui é uma COORTE: leads que ENTRARAM no período, e quantos deles
+ * já fecharam até hoje. Não é a mesma pergunta do KPI "taxa de conversão" do
+ * relatório, que conta o que FECHOU no período tenha entrado quando tiver.
+ * Numerador e denominador aqui saem do mesmo conjunto — é o que garante que
+ * `ganhos` nunca passe de `leads` — e o preço é que o número se move depois:
+ * um lead de agosto que fechar em dezembro muda o agosto. Quem desenha a tela
+ * precisa dizer isso, senão os dois números viram uma contradição na cara do
+ * leitor.
  */
 export function agregarLeadsPorEstado(
   linhas: Array<{ telefone?: string | null; ganho: boolean }>,
@@ -153,8 +172,10 @@ export function agregarLeadsPorEstado(
   const porUf = new Map<string, { leads: number; ganhos: number }>();
   let comEstado = 0;
   let semEstado = 0;
+  let ganhos = 0;
 
   for (const l of linhas) {
+    if (l.ganho) ganhos++;
     const uf = estadoDoLead(l);
     if (!uf) {
       semEstado++;
@@ -178,5 +199,5 @@ export function agregarLeadsPorEstado(
     // mesmo volume muda a cada consulta e a lista "pisca" entre recarregamentos.
     .sort((a, b) => b.leads - a.leads || a.uf.localeCompare(b.uf));
 
-  return { estados, comEstado, semEstado };
+  return { estados, comEstado, semEstado, ganhos };
 }

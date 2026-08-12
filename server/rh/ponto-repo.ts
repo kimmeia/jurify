@@ -135,6 +135,33 @@ export async function marcarPausa(
   return { ok: true };
 }
 
+/**
+ * Desde quando o ponto está olhando pra este escritório.
+ *
+ * Existe por causa do primeiro dia: o módulo entrou no ar às 15h, o primeiro
+ * heartbeat de todo mundo foi o do deploy, e o espelho acusou sete horas de
+ * atraso de gente que estava trabalhando desde as oito. A conta estava certa;
+ * a premissa não. Às 08:00 daquele dia não havia sistema registrando nada.
+ *
+ * O instante da primeira linha do escritório é o marco: antes dele, o ponto
+ * não viu — e o que não foi visto não vira atraso. Vale pra qualquer
+ * escritório novo pelo mesmo motivo, e some sozinho no segundo dia.
+ */
+export async function observandoDesde(escritorioId: number): Promise<Date | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [linha] = await db
+    .select({ em: pontoDias.createdAt })
+    .from(pontoDias)
+    .where(eq(pontoDias.escritorioId, escritorioId))
+    .orderBy(pontoDias.createdAt)
+    .limit(1);
+  const em = linha?.em;
+  if (!em) return null;
+  const d = em instanceof Date ? em : new Date(em);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 /** Os dias de um colaborador num intervalo, crus — o cálculo é do `shared`. */
 export async function diasDoPeriodo(
   escritorioId: number,
