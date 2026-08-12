@@ -63,4 +63,15 @@ describe("filtro por estado", () => {
       uf: "SP",
     });
   });
+
+  it("confirmarEstado só aceita UF que existe", () => {
+    // O que entra aqui vai direto pra `contatos.uf` e passa a contar como
+    // FATO no relatório. Sigla inventada viraria um estado que o mapa não
+    // sabe desenhar e uma linha de ranking que não bate com nada.
+    const input = inputDe("customer360.confirmarEstado");
+    expect(input.parse({ contatoId: 1, uf: "CE" })).toMatchObject({ uf: "CE" });
+    expect(() => input.parse({ contatoId: 1, uf: "XX" })).toThrow();
+    expect(() => input.parse({ contatoId: 1, uf: "ce" })).toThrow();
+    expect(() => input.parse({ contatoId: 1 })).toThrow();
+  });
 });
