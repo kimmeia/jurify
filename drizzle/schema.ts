@@ -4145,3 +4145,68 @@ export const rhOcorrencias = mysqlTable(
 );
 
 export type RhOcorrencia = typeof rhOcorrencias.$inferSelect;
+
+/**
+ * Avaliação de desempenho — uma linha por colaborador por ciclo.
+ *
+ * `notas` em JSON porque quais critérios servem pra um estagiário e pra um
+ * sócio ainda é pergunta em aberto, e critério novo não pode custar migration;
+ * a validação vive em `shared/avaliacao`. `media` é derivada e gravada assim
+ * mesmo — é por ela que a lista ordena e o histórico compara.
+ */
+export const rhAvaliacoes = mysqlTable(
+  "rh_avaliacoes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdAval").notNull(),
+    colaboradorId: int("colaboradorIdAval").notNull(),
+    /** Mês do ciclo (YYYY-MM). */
+    ciclo: varchar("cicloAval", { length: 7 }).notNull(),
+
+    notas: text("notasAval"),
+    media: decimal("mediaAval", { precision: 3, scale: 1 }),
+
+    comentario: varchar("comentarioAval", { length: 2000 }),
+
+    avaliadoPor: int("avaliadoPorAval").notNull(),
+    avaliadoEm: timestamp("avaliadoEmAval").defaultNow().notNull(),
+
+    createdAt: timestamp("createdAtAval").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAtAval").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    porColab: index("idx_aval_colab").on(t.colaboradorId, t.ciclo),
+    porEscritorio: index("idx_aval_esc").on(t.escritorioId, t.ciclo),
+  }),
+);
+
+export type RhAvaliacao = typeof rhAvaliacoes.$inferSelect;
+
+/**
+ * O plano combinado no fim da avaliação.
+ *
+ * Tabela própria porque cada item tem vida depois da conversa — é dado por
+ * cumprido semanas mais tarde, e dentro do JSON da avaliação marcar um item
+ * exigiria reescrever a avaliação inteira.
+ */
+export const rhAvaliacaoAcoes = mysqlTable(
+  "rh_avaliacao_acoes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    avaliacaoId: int("avaliacaoIdAcao").notNull(),
+    escritorioId: int("escritorioIdAcao").notNull(),
+    descricao: varchar("descricaoAcao", { length: 500 }).notNull(),
+    /** "YYYY-MM-DD". NULL = sem prazo combinado, e aí nunca fica atrasada. */
+    prazo: varchar("prazoAcao", { length: 10 }),
+    concluidoEm: timestamp("concluidoEmAcao"),
+    concluidoPor: int("concluidoPorAcao"),
+
+    createdAt: timestamp("createdAtAcao").defaultNow().notNull(),
+  },
+  (t) => ({
+    porAvaliacao: index("idx_acao_aval").on(t.avaliacaoId),
+    porEscritorio: index("idx_acao_esc").on(t.escritorioId),
+  }),
+);
+
+export type RhAvaliacaoAcao = typeof rhAvaliacaoAcoes.$inferSelect;
