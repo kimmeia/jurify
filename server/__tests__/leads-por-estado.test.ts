@@ -140,6 +140,33 @@ describe("agregarLeadsPorEstado", () => {
     expect(r.estados.reduce((s, e) => s + e.leads, 0)).toBe(r.comEstado);
   });
 
+  it("o total de fechados cobre também quem não tem estado identificado", () => {
+    // A tela mostra o total ao lado da coluna por estado. Se o total fosse só
+    // a soma dos estados, o lead ganho sem DDD reconhecível sumiria da conta e
+    // o leitor veria dois números diferentes pra mesma coisa.
+    const r = agregarLeadsPorEstado([
+      lead("5585999990001", true),
+      lead("5511999990002", true),
+      lead("5511999990003", false),
+      lead(null, true), // ganhou, mas não dá pra dizer de onde veio
+    ]);
+    expect(r.ganhos).toBe(3);
+    expect(r.estados.reduce((s, e) => s + e.ganhos, 0)).toBe(2);
+    expect(r.ganhos - r.estados.reduce((s, e) => s + e.ganhos, 0)).toBe(1);
+  });
+
+  it("fechados nunca passam dos leads do próprio estado", () => {
+    // Numerador e denominador saem da MESMA coorte. É o que impede a linha
+    // "12 de 8" que apareceria se o fechado viesse de outra janela de tempo.
+    const r = agregarLeadsPorEstado([
+      lead("5585999990001", true),
+      lead("5585999990002", true),
+      lead("5585999990003", false),
+    ]);
+    for (const e of r.estados) expect(e.ganhos).toBeLessThanOrEqual(e.leads);
+    expect(r.ganhos).toBeLessThanOrEqual(r.comEstado + r.semEstado);
+  });
+
   it("suprime conversão abaixo do piso", () => {
     const poucos = Array.from({ length: MINIMO_PARA_CONVERSAO - 1 }, (_, i) =>
       lead("5585999990" + String(i).padStart(3, "0"), i === 0));
@@ -168,6 +195,6 @@ describe("agregarLeadsPorEstado", () => {
   });
 
   it("período sem lead nenhum não quebra", () => {
-    expect(agregarLeadsPorEstado([])).toEqual({ estados: [], comEstado: 0, semEstado: 0 });
+    expect(agregarLeadsPorEstado([])).toEqual({ estados: [], ganhos: 0, comEstado: 0, semEstado: 0 });
   });
 });
