@@ -86,7 +86,7 @@ describe("robô auditor é read-only na fase 1", () => {
     "db.transaction(",
   ];
 
-  for (const arquivo of ["regras.ts", "executor.ts"]) {
+  for (const arquivo of ["regras.ts", "executor.ts", "cron-varredura.ts"]) {
     it(`${arquivo} não contém verbo de escrita no banco`, () => {
       const fonte = readFileSync(join(DIR, arquivo), "utf8");
       for (const verbo of VERBOS_ESCRITA) {
