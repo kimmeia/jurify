@@ -1599,7 +1599,7 @@ export default function AgentesIA() {
 
       {/* Agente Jurídico — agente especializado (redige peças fundamentadas no
           cliente/processo real). Vive aqui em Agentes IA, com tela própria. */}
-      <Link href="/agente-juridico">
+      <Link href="/jurisia?modo=peca">
         <a className="block group">
           <Card className="border-violet-200 bg-gradient-to-br from-violet-50 to-white hover:shadow-md transition-shadow cursor-pointer">
             <CardContent className="flex items-center gap-4 py-4">

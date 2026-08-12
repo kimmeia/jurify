@@ -24,6 +24,7 @@ import { montarPecaDocx } from "./docx";
 import { montarDossie, montarMovimentacao } from "./dossie";
 import { montarConteudoDocumentos, garantirConteudoDocs, resolverConteudoFonte, chunkTexto } from "./leitura-documento";
 import { montarSystemPromptAgente } from "./agente-conversa";
+import { formatarProvaParaPrompt, provaDoAcervo, recorteDoCaso } from "./prova-acervo";
 
 /** Resolve a chave OpenAI (embeddings sempre via OpenAI). null se não houver. */
 async function resolverChaveOpenAI(escritorioId: number): Promise<string | null> {
@@ -379,6 +380,15 @@ export const juridicoRouter = router({
         } catch { /* sem jurisprudência não impede a conversa */ }
       }
 
+      // 2b. Como o tribunal decide casos como este. O recorte sai do próprio
+      // processo (tribunal + classe) — sem processo escolhido não há recorte,
+      // e o agente segue como sempre foi.
+      let prova: Awaited<ReturnType<typeof provaDoAcervo>> = null;
+      if (dossie?.processoRef) {
+        const filtro = recorteDoCaso(dossie.processoRef);
+        if (filtro) prova = await provaDoAcervo(filtro);
+      }
+
       // 3. Timbre do escritório + advogado (assinatura).
       const [escRow] = await db
         .select({ nome: escritorios.nome, endereco: escritorios.endereco, cnpj: escritorios.cnpj, oab: escritorios.oab, telefone: escritorios.telefone, email: escritorios.email, instrucoes: escritorios.instrucoesAgenteJuridico })
@@ -395,6 +405,7 @@ export const juridicoRouter = router({
         movimentacao,
         documentos: docsCtx.texto || undefined,
         jurisprudencia,
+        acervo: prova ? formatarProvaParaPrompt(prova) : undefined,
       });
 
       const r = await conversarLLMEscritorio(esc.escritorio.id, { system, mensagens: input.mensagens, modelo });
@@ -407,7 +418,11 @@ export const juridicoRouter = router({
           documentos: (docsCtx as { lidos?: number }).lidos ?? 0,
           temDossie: !!dossie?.qualificacao,
           temProcesso: !!dossie?.processo,
+          acervo: prova ? prova.comResultado : 0,
         },
+        // O número vai separado do texto de propósito: quem o mostra é a tela,
+        // com o que saiu da contagem. O modelo tem ordem de não escrevê-lo.
+        prova,
       };
     }),
 

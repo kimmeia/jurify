@@ -482,10 +482,10 @@ function PainelRecorte({
 /**
  * Os três modos do assistente.
  *
- * "Redigir peça" ficou marcado como "em breve" enquanto o redator já rodava em
- * /agente-juridico, alcançável só por um card dentro de Automações. O selo
- * agora diz onde a peça mora, e o clique leva até lá — as duas bases ainda são
- * separadas, e isso é o que o modo explica antes de mandar o advogado embora.
+ * "Redigir peça" já rodava numa rota própria (/agente-juridico) enquanto aqui
+ * aparecia como "em breve". Agora é um modo como os outros: a rota antiga
+ * redireciona pra cá e o menu lateral não tem mais entrada separada — o
+ * advogado não precisa saber que existiam dois lugares.
  */
 export type Modo = "pesquisar" | "estrategia" | "peca";
 
@@ -974,7 +974,13 @@ function Resposta({
 export default function JurisIa() {
   const [conversaId, setConversaId] = useState<number | null>(null);
   const [pergunta, setPergunta] = useState("");
-  const [modo, setModo] = useState<Modo>("pesquisar");
+  // `?modo=peca` chega de links antigos pro redator e do card em Automações.
+  // Lido uma vez: trocar de modo depois é estado da tela, não navegação.
+  const [modo, setModo] = useState<Modo>(() => {
+    if (typeof window === "undefined") return "pesquisar";
+    const m = new URLSearchParams(window.location.search).get("modo");
+    return m === "peca" || m === "estrategia" ? m : "pesquisar";
+  });
   const fimRef = useRef<HTMLDivElement | null>(null);
 
   const utils = trpc.useUtils();
@@ -1150,7 +1156,7 @@ export default function JurisIa() {
       <SeletorModo modo={modo} onModo={setModo} />
 
       {modo === "peca" ? (
-        <RedatorPeca embutido />
+        <RedatorPeca />
       ) : (
       <div className="grid gap-3 lg:grid-cols-[210px_1fr] xl:grid-cols-[210px_1fr_300px]">
         <aside className="space-y-1.5">
