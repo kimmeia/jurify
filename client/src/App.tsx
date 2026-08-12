@@ -38,7 +38,6 @@ import Movimentacoes from "./pages/Movimentacoes";
 import JurisIa from "./pages/JurisIa";
 import Configuracoes from "./pages/Configuracoes";
 import ModelosContrato from "./pages/ModelosContrato";
-import AgenteJuridico from "./pages/AgenteJuridico";
 import Agendamento from "./pages/Agendamento";
 import Atendimento from "./pages/Atendimento";
 import AgenteChat from "./pages/AgenteChat";
@@ -287,10 +286,10 @@ function Router() {
           <ModelosContrato />
         </ClientArea>
       </Route>
+      {/* O redator não é módulo à parte — vive no modo "Redigir peça" do
+          JurisIA. Link antigo continua chegando lá. */}
       <Route path="/agente-juridico">
-        <ClientArea>
-          <AgenteJuridico />
-        </ClientArea>
+        <Redirect to="/jurisia?modo=peca" />
       </Route>
       <Route path="/agenda">
         <ClientArea>

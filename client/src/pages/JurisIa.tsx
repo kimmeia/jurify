@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
+import { RedatorPeca } from "./juridico/redator-peca";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -482,10 +482,10 @@ function PainelRecorte({
 /**
  * Os três modos do assistente.
  *
- * "Redigir peça" ficou marcado como "em breve" enquanto o redator já rodava em
- * /agente-juridico, alcançável só por um card dentro de Automações. O selo
- * agora diz onde a peça mora, e o clique leva até lá — as duas bases ainda são
- * separadas, e isso é o que o modo explica antes de mandar o advogado embora.
+ * "Redigir peça" já rodava numa rota própria (/agente-juridico) enquanto aqui
+ * aparecia como "em breve". Agora é um modo como os outros: a rota antiga
+ * redireciona pra cá e o menu lateral não tem mais entrada separada — o
+ * advogado não precisa saber que existiam dois lugares.
  */
 export type Modo = "pesquisar" | "estrategia" | "peca";
 
@@ -517,45 +517,6 @@ function SeletorModo({ modo, onModo }: { modo: Modo; onModo: (m: Modo) => void }
           </button>
         );
       })}
-    </div>
-  );
-}
-
-/**
- * Modo "Redigir peça" — ponte pro redator.
- *
- * Diz o que ele faz e, principalmente, o que ele NÃO faz: a minuta sai do
- * caso e da base do escritório, não da estatística do acervo. Vender uma peça
- * "fundamentada no acervo" antes da fusão seria prometer o que ainda não
- * existe.
- */
-function PainelPeca() {
-  return (
-    <div className="rounded-md border bg-card p-4">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white">
-          <Scale className="h-4.5 w-4.5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">A redação de peças fica no Agente Jurídico</p>
-          <p className="mt-1 text-[12.5px] leading-snug text-muted-foreground">
-            Você escolhe o cliente e o processo; ele lê a movimentação, os documentos anexados e a
-            base de fontes do escritório, e devolve a minuta pronta pra editar — com exportação em
-            .docx no timbre do escritório. Toda peça é minuta: revisão humana antes de protocolar.
-          </p>
-          <p className="mt-2 rounded border border-dashed px-2.5 py-1.5 text-[11.5px] leading-snug text-muted-foreground">
-            Ainda são duas bases separadas. A minuta se apoia no caso e nas fontes do escritório —
-            <strong className="font-semibold"> não</strong> na estatística do acervo público que você
-            vê em Pesquisar. Cruzar as duas é o próximo passo do módulo.
-          </p>
-          <Link href="/agente-juridico">
-            <a className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-violet-700">
-              <Scale className="h-3.5 w-3.5" />
-              Abrir o Agente Jurídico
-            </a>
-          </Link>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1013,7 +974,13 @@ function Resposta({
 export default function JurisIa() {
   const [conversaId, setConversaId] = useState<number | null>(null);
   const [pergunta, setPergunta] = useState("");
-  const [modo, setModo] = useState<Modo>("pesquisar");
+  // `?modo=peca` chega de links antigos pro redator e do card em Automações.
+  // Lido uma vez: trocar de modo depois é estado da tela, não navegação.
+  const [modo, setModo] = useState<Modo>(() => {
+    if (typeof window === "undefined") return "pesquisar";
+    const m = new URLSearchParams(window.location.search).get("modo");
+    return m === "peca" || m === "estrategia" ? m : "pesquisar";
+  });
   const fimRef = useRef<HTMLDivElement | null>(null);
 
   const utils = trpc.useUtils();
@@ -1184,6 +1151,13 @@ export default function JurisIa() {
         </div>
       )}
 
+      {/* O seletor é navegação entre modos, não parte do campo de pergunta —
+          por isso vive acima do workspace, e não dentro do composer. */}
+      <SeletorModo modo={modo} onModo={setModo} />
+
+      {modo === "peca" ? (
+        <RedatorPeca />
+      ) : (
       <div className="grid gap-3 lg:grid-cols-[210px_1fr] xl:grid-cols-[210px_1fr_300px]">
         <aside className="space-y-1.5">
           <Button
@@ -1293,8 +1267,6 @@ export default function JurisIa() {
           </div>
 
           <div className="border-t px-4 py-3">
-            <SeletorModo modo={modo} onModo={setModo} />
-            {modo === "peca" ? <PainelPeca /> : (<>
             <div className="flex items-center gap-2">
               <Input
                 value={pergunta}
@@ -1331,12 +1303,12 @@ export default function JurisIa() {
                 ? `Você usou as ${cota.limite} mensagens deste mês.`
                 : "Beta — acervo público do CNJ (DataJud). Confira as fontes antes de peticionar."}
             </p>
-            </>)}
           </div>
         </div>
 
         <PainelContexto acervo={acervo} ultima={ultimaResposta} />
       </div>
+      )}
     </div>
   );
 }

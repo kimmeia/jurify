@@ -27,6 +27,8 @@ export interface ContextoAgente {
   /** Conteúdo (texto/Vision) dos documentos do cliente, já orçado. */
   documentos?: string;
   jurisprudencia?: FonteAgente[];
+  /** Como o tribunal decide casos como este — já formatado (prova-acervo). */
+  acervo?: string;
 }
 
 export function montarSystemPromptAgente(ctx: ContextoAgente): string {
@@ -45,6 +47,22 @@ export function montarSystemPromptAgente(ctx: ContextoAgente): string {
       "- Ao redigir uma peça, use o PADRÃO FORENSE: endereçamento, nome da ação e títulos de seção em CAIXA ALTA; transcrição de jurisprudência entre « e »; TIMBRE do escritório no topo; e assinatura do advogado ao final.\n" +
       "- Toda peça é MINUTA — lembre que exige revisão e assinatura do advogado antes de protocolar. Não prometa resultado.\n" +
       "- Seja objetivo e técnico. Se faltar um dado essencial, PERGUNTE antes de redigir.",
+  );
+
+  // Âncoras de origem.
+  //
+  // Sem elas o advogado lê um parágrafo que mistura o que está nos autos, o
+  // que é lei e o que é comportamento do tribunal — e precisa conferir tudo
+  // com o mesmo esforço. Marcado, ele confere o que importa: [D] ele já
+  // conhece, [F] tem identificador pra checar, [A] é número contado no banco.
+  p.push(
+    "ÂNCORAS DE ORIGEM (obrigatório):\n" +
+      "Ao afirmar algo que veio de uma das fontes abaixo, encerre a frase com a marca correspondente:\n" +
+      "- [D] fato tirado dos DOCUMENTOS ou da MOVIMENTAÇÃO do processo (ex.: datas, endereços, valores);\n" +
+      "- [F] lei, súmula ou precedente da JURISPRUDÊNCIA fornecida;\n" +
+      "- [A] afirmação apoiada em COMO O TRIBUNAL VEM DECIDINDO (o recorte do acervo).\n" +
+      "Uma marca por afirmação, colada ao fim da frase, antes da pontuação. Raciocínio seu não leva marca. " +
+      "Não invente marca pra frase sem fonte — frase sem marca é leitura sua, e está tudo bem.",
   );
 
   p.push(
@@ -73,6 +91,8 @@ export function montarSystemPromptAgente(ctx: ContextoAgente): string {
   if (ctx.dossie?.fatosContexto) p.push(ctx.dossie.fatosContexto);
   if (ctx.movimentacao) p.push(`MOVIMENTAÇÃO PROCESSUAL (mais recente primeiro):\n${ctx.movimentacao}`);
   if (ctx.documentos) p.push(`CONTEÚDO DOS DOCUMENTOS DO CLIENTE (use como fatos; não invente além disto):\n${ctx.documentos}`);
+
+  if (ctx.acervo) p.push(ctx.acervo);
 
   if (ctx.jurisprudencia?.length) {
     p.push(
