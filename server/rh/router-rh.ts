@@ -26,6 +26,7 @@ import { and, eq } from "drizzle-orm";
 import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { calcularJornada, totalDoPeriodo, type DiaPontoBruto } from "../../shared/ponto";
 import {
+  expedienteDoDia,
   minutosPrevistos,
   normalizarJornada,
   pontualidade,
@@ -37,6 +38,7 @@ import {
   diasDoEscritorio,
   diasDoPeriodo,
   marcarPausa,
+  observandoDesde,
 } from "./ponto-repo";
 
 /** "2026-08" → { de: "2026-08-01", ate: "2026-08-31" }. */
@@ -93,6 +95,25 @@ function minutosLocais(instante: Date | null, fuso: string): number | null {
 }
 
 /**
+ * O expediente daquele dia começou depois de o ponto passar a registrar?
+ *
+ * Só quando a resposta é sim o atraso significa alguma coisa. Comparar a
+ * entrada com um horário anterior à existência do registro mede a hora do
+ * deploy, não a hora de chegada de ninguém.
+ */
+export function pontualidadeApuravel(
+  jornada: JornadaSemanal | null,
+  dia: string,
+  fuso: string,
+  desde: Date | null,
+): boolean {
+  if (!desde) return true;
+  const e = expedienteDoDia(jornada, dia);
+  if (!e) return true;
+  return instanteDe(dia, e.inicio, fuso) >= desde;
+}
+
+/**
  * O espelho de um colaborador: o que ele fez, contra o que foi contratado.
  *
  * Quem não tem jornada definida recebe `previsto: 0` e `atrasado: false` em
@@ -103,11 +124,15 @@ function montarEspelho(
   agora: Date,
   jornada: JornadaSemanal | null,
   fuso: string,
+  desde: Date | null = null,
 ) {
   const jornadas = linhas.map((l) => {
     const j = calcularJornada(l, agora);
     const previsto = minutosPrevistos(jornada, j.dia);
-    const p = pontualidade(jornada, j.dia, minutosLocais(j.entrada, fuso));
+    const apuravel = pontualidadeApuravel(jornada, j.dia, fuso, desde);
+    const p = apuravel
+      ? pontualidade(jornada, j.dia, minutosLocais(j.entrada, fuso))
+      : { atrasoMin: 0, atrasado: false };
     return {
       ...j,
       previstoMin: previsto,
@@ -116,6 +141,12 @@ function montarEspelho(
       saldoMin: j.minutos != null && previsto > 0 ? j.minutos - previsto : null,
       atrasoMin: p.atrasoMin,
       atrasado: p.atrasado,
+      avisos: apuravel
+        ? j.avisos
+        : [
+            ...j.avisos,
+            "O ponto passou a registrar depois do início do expediente deste dia — a hora de entrada não foi observada e o atraso não foi apurado.",
+          ],
     };
   });
 
@@ -144,9 +175,12 @@ export const rhRouter = router({
     .query(async ({ ctx, input }) => {
       const { esc, fuso } = await contexto(ctx.user.id);
       const { de, ate } = limitesDoMes(input.competencia);
-      const linhas = await diasDoPeriodo(esc.escritorio.id, esc.colaborador.id, de, ate);
+      const [linhas, desde] = await Promise.all([
+        diasDoPeriodo(esc.escritorio.id, esc.colaborador.id, de, ate),
+        observandoDesde(esc.escritorio.id),
+      ]);
       const jornada = normalizarJornada((esc.colaborador as { jornadaSemanal?: string | null }).jornadaSemanal);
-      return montarEspelho(linhas as unknown as DiaPontoBruto[], new Date(), jornada, fuso);
+      return montarEspelho(linhas as unknown as DiaPontoBruto[], new Date(), jornada, fuso, desde);
     }),
 
   /** O ponto da equipe. Exige enxergar além da própria linha. */
@@ -160,8 +194,9 @@ export const rhRouter = router({
       }
 
       const { de, ate } = limitesDoMes(input.competencia);
-      const [linhas, equipe] = await Promise.all([
+      const [linhas, desde, equipe] = await Promise.all([
         diasDoEscritorio(esc.escritorio.id, de, ate),
+        observandoDesde(esc.escritorio.id),
         (async () => {
           const db = await getDb();
           if (!db) return [];
@@ -199,6 +234,7 @@ export const rhRouter = router({
               agora,
               normalizarJornada(c.jornadaSemanal),
               fuso,
+              desde,
             );
             return {
               colaboradorId: c.id,

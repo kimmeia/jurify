@@ -235,7 +235,9 @@ function Total({
       <span className="text-[11.5px] text-muted-foreground">
         em {t.diasFechados} {t.diasFechados === 1 ? "dia fechado" : "dias fechados"}
       </span>
-      {t.previstoMin > 0 && (
+      {/* Sem dia fechado não há saldo apurado, e o "+0min" verde que aparecia
+          aqui lia como "está em dia" antes de o primeiro dia sequer terminar. */}
+      {t.diasFechados > 0 && t.previstoMin > 0 && (
         <span
           className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold tabular-nums ${
             t.saldoMin >= 0
