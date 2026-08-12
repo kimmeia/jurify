@@ -1,33 +1,44 @@
+/**
+ * Login por email e senha, contra staging, a cada 15 minutos.
+ *
+ * O login já foi um dialog aberto pela landing. Virou rota — `/login`, com
+ * layout split, pra campanha apontar direto pra URL — e este arquivo continuou
+ * esperando `getByRole("dialog")`. Ficou vermelho a cada rodada por horas sem
+ * que nada estivesse quebrado, e smoke sempre vermelho não avisa mais nada
+ * quando o login cair de verdade.
+ *
+ * Por isso os dois primeiros testes entram por caminhos diferentes de
+ * propósito: o primeiro clica no CTA da landing (é essa fiação que mudou em
+ * silêncio e derrubou o alarme), o segundo vai direto na rota. Se o CTA
+ * quebrar de novo, só um dos dois cai — e a mensagem diz qual metade quebrou.
+ */
+
 import { test, expect } from "@playwright/test";
 import { SEED_USERS, SEED_PASSWORD } from "./fixtures/users";
 
 test.describe("Login com email e senha", () => {
   test("dono consegue entrar e cair no dashboard", async ({ page }) => {
     await page.goto("/");
-    // Abre o dialog de auth via CTA "Entrar" da navbar.
+    // O CTA "Entrar" da navbar navega pra rota de login; não abre modal.
     await page.getByRole("button", { name: /^entrar$/i }).first().click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await expect(page).toHaveURL(/\/login\b/, { timeout: 10_000 });
 
-    // Tab "Entrar" já é default; clicar é idempotente.
-    await dialog.getByRole("tab", { name: /^entrar$/i }).click();
-    await dialog.getByLabel(/^e-?mail$/i).fill(SEED_USERS.dono.email);
-    await dialog.getByLabel(/^senha$/i).fill(SEED_PASSWORD);
-    await dialog.getByRole("button", { name: /^entrar$/i }).click();
+    await page.getByLabel(/^e-?mail$/i).fill(SEED_USERS.dono.email);
+    await page.getByLabel(/^senha$/i).fill(SEED_PASSWORD);
+    await page.getByRole("button", { name: /^entrar$/i }).click();
 
+    // Pós-sucesso a página manda pra "/" e o Home é quem decide o destino
+    // (admin → /admin, com assinatura → /dashboard, sem → /plans). Por isso a
+    // espera é generosa: são duas navegações, não uma.
     await expect(page).toHaveURL(/\/dashboard\b/, { timeout: 15_000 });
   });
 
   test("senha errada mostra mensagem genérica (não vaza email)", async ({ page }) => {
-    await page.goto("/");
-    await page.getByRole("button", { name: /^entrar$/i }).first().click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await page.goto("/login");
 
-    await dialog.getByRole("tab", { name: /^entrar$/i }).click();
-    await dialog.getByLabel(/^e-?mail$/i).fill(SEED_USERS.dono.email);
-    await dialog.getByLabel(/^senha$/i).fill("senha-errada-xpto");
-    await dialog.getByRole("button", { name: /^entrar$/i }).click();
+    await page.getByLabel(/^e-?mail$/i).fill(SEED_USERS.dono.email);
+    await page.getByLabel(/^senha$/i).fill("senha-errada-xpto");
+    await page.getByRole("button", { name: /^entrar$/i }).click();
 
     // Mensagem (toast do sonner ou inline) deve ser genérica. O sonner
     // renderiza via portal — usa getByText().waitFor() pra esperar
