@@ -1,23 +1,30 @@
 /**
- * JurisIA (beta) — pesquisa jurisprudencial no acervo público.
+ * JurisIA (beta) — uma conversa só.
  *
- * A tela tem uma hierarquia deliberada: a ESTATÍSTICA vem primeiro e o texto da
- * IA vem depois. É o inverso de um chat comum, e é de propósito — o número é
- * contado em SQL sobre o recorte inteiro, o texto é leitura de uma amostra. Quem
- * decide se pega a causa decide pelo número; o texto explica o que ele significa.
+ * Havia três abas — Pesquisar, Estratégia, Redigir peça — e o advogado tinha
+ * que saber qual delas responderia ANTES de perguntar. Escolher errado não
+ * dava resposta pior: dava recusa. Agora quem escolhe é o servidor, e ele
+ * consulta tudo que couber para a pergunta: acervo público, autos do cliente,
+ * documentos anexados, base de fontes da casa.
  *
- * Por isso também a resposta nunca traz percentual escrito: o servidor recusa o
- * turno se o modelo tentar medir o acervo (`contemNumeroInventado`). O único
- * número na tela é o do banco.
+ * A hierarquia visual continua invertida em relação a um chat comum, e é de
+ * propósito: o NÚMERO do acervo é contado em SQL sobre o recorte inteiro e
+ * aparece em painel próprio; o texto da IA é leitura de uma amostra e é
+ * proibido de reescrever o número. O único número do acervo na tela é o do
+ * banco.
  */
 
 import { useEffect, useRef, useState } from "react";
-import { RedatorPeca } from "./juridico/redator-peca";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Ancora } from "@/components/AncoraFonte";
+import { ComAncoras, LegendaAncoras } from "@/components/juridico/AncorasResposta";
+import { ConfigurarAgente } from "@/components/juridico/ConfigurarAgente";
+import { SeletorCaso, type CasoEscolhido } from "@/components/juridico/SeletorCaso";
+import { base64ToBlob, baixarBlob } from "@/pages/financeiro/helpers";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -41,18 +48,23 @@ import {
   ChevronDown,
   Clock,
   Database,
+  Download,
+  FileText,
   Gavel,
+  Layers,
+  Library,
   MoreVertical,
   Pencil,
   Trash2,
   Loader2,
   Plus,
   Scale,
-  Search,
+  Send,
   ShieldCheck,
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
+import { ehConversaUna, type ConversaUnaGravada, type ProvaGravada } from "@shared/jurisia-una";
 import type { ComposicaoAcervo } from "@shared/jurisia-acervo";
 import type { Comparacao } from "@shared/jurisia-estrategia";
 import type { ComposicaoNatureza } from "@shared/jurisia-grau";
@@ -480,43 +492,193 @@ function PainelRecorte({
 }
 
 /**
- * Os três modos do assistente.
+ * O que a IA consultou neste turno.
  *
- * "Redigir peça" já rodava numa rota própria (/agente-juridico) enquanto aqui
- * aparecia como "em breve". Agora é um modo como os outros: a rota antiga
- * redireciona pra cá e o menu lateral não tem mais entrada separada — o
- * advogado não precisa saber que existiam dois lugares.
+ * Um chip por fonte que ela conseguiu abrir, com a contagem. Serve pra separar
+ * "não encontrei nos documentos" de "não li documento nenhum" — duas frases
+ * parecidas cuja diferença decide se o advogado reenvía o arquivo ou muda a
+ * pergunta. Fonte que não entrou não vira chip vazio: some.
  */
-export type Modo = "pesquisar" | "estrategia" | "peca";
+function ChipsConsulta({ c }: { c: ConversaUnaGravada["consulta"] }) {
+  const chips: Array<{ chave: string; icone: typeof FileText; texto: string; realce?: boolean }> = [];
+  if (c.documentosLidos > 0) {
+    chips.push({
+      chave: "docs",
+      icone: FileText,
+      texto:
+        c.documentosTotal > c.documentosLidos
+          ? `leu ${c.documentosLidos} de ${c.documentosTotal} documentos`
+          : `leu ${c.documentosLidos} documento${c.documentosLidos > 1 ? "s" : ""}`,
+    });
+  }
+  if (c.movimentacoes > 0) {
+    chips.push({ chave: "mov", icone: Layers, texto: `${c.movimentacoes} movimentações dos autos` });
+  }
+  if (c.acervo > 0) {
+    chips.push({
+      chave: "acervo",
+      icone: Database,
+      texto: `mediu ${c.acervo.toLocaleString("pt-BR")} casos no acervo`,
+      realce: true,
+    });
+  }
+  if (c.fontesEscritorio > 0) {
+    chips.push({
+      chave: "fontes",
+      icone: ShieldCheck,
+      texto: `${c.fontesEscritorio} fontes do escritório`,
+    });
+  }
+  if (chips.length === 0) return null;
 
-const MODOS = [
-  { id: "pesquisar", rotulo: "Pesquisar", icone: Search },
-  { id: "estrategia", rotulo: "Estratégia", icone: BarChart3 },
-  { id: "peca", rotulo: "Redigir peça", icone: Pencil },
-] as const;
-
-function SeletorModo({ modo, onModo }: { modo: Modo; onModo: (m: Modo) => void }) {
   return (
-    <div className="mb-2.5 inline-flex gap-0.5 rounded-lg bg-muted/60 p-0.5">
-      {MODOS.map((m) => {
-        const Icone = m.icone;
-        const ativo = m.id === modo;
+    <div className="mb-1.5 flex flex-wrap gap-1.5">
+      {chips.map((ch) => {
+        const Icone = ch.icone;
         return (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => onModo(m.id as Modo)}
-            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11.5px] font-semibold ${
-              ativo
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+          <span
+            key={ch.chave}
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] ${
+              ch.realce
+                ? "border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300"
+                : "bg-muted text-muted-foreground"
             }`}
           >
-            <Icone className="h-3.5 w-3.5" />
-            {m.rotulo}
-          </button>
+            <Icone className="h-3 w-3 shrink-0" />
+            {ch.texto}
+          </span>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * A prova do acervo, abaixo da resposta.
+ *
+ * O número vive AQUI e não no texto: veio de contagem em SQL sobre o recorte
+ * inteiro, e o modelo tem ordem de não reescrevê-lo. Mesma hierarquia da
+ * pesquisa antiga — estatística primeiro, leitura depois.
+ */
+function PainelProva({ p }: { p: ProvaGravada }) {
+  return (
+    <div className="mt-2 rounded-xl border border-violet-200 bg-violet-50/60 p-3 dark:border-violet-900 dark:bg-violet-950/25">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[10px] font-extrabold uppercase tracking-[0.06em] text-violet-700 dark:text-violet-300">
+          Como este tribunal vem decidindo
+        </p>
+        <p className="text-[10.5px] text-violet-700/80 dark:text-violet-300/70">
+          {p.descricaoFiltro || p.rotulo}
+        </p>
+      </div>
+      <p className="mt-1 text-[11.5px] text-muted-foreground">
+        {p.comResultado.toLocaleString("pt-BR")} processos decididos ·{" "}
+        {p.jurisprudencia.toLocaleString("pt-BR")} em segunda instância
+      </p>
+      <div className="mt-2 space-y-1">
+        {p.fatias
+          .filter((f) => f.quantidade > 0)
+          .map((f) => (
+            <div key={f.resultado} className="grid grid-cols-[118px_1fr_auto] items-center gap-2">
+              <span className="truncate text-[11px] text-foreground/80">{f.rotulo}</span>
+              <span
+                className="h-2 overflow-hidden rounded-[2px]"
+                style={{ background: "var(--viz-trilho)" }}
+              >
+                <span
+                  className="block h-full rounded-r-[4px]"
+                  style={{
+                    background: COR[f.resultado as ResultadoProcesso] ?? "var(--viz-1)",
+                    width: `${f.percentual}%`,
+                    minWidth: "3px",
+                  }}
+                />
+              </span>
+              <span className="flex text-[11px] tabular-nums">
+                <span className="w-9 text-right font-bold">{f.percentual}%</span>
+                <span className="w-12 text-right text-muted-foreground">({f.quantidade})</span>
+              </span>
+            </div>
+          ))}
+      </div>
+      <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+        {p.amostraPequena
+          ? "Amostra pequena — com esse número de casos decididos isto é indício, não tese firmada."
+          : "Contado no banco sobre o recorte inteiro. É estatística do tribunal, não precedente citável."}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Uma resposta da conversa única.
+ *
+ * Texto livre, porque a mesma pergunta pode pedir análise, prazo ou minuta de
+ * dez páginas — e forçar tudo em JSON com afirmação e fonte foi o que fazia o
+ * redator viver noutra tela. O lastro não sumiu, mudou de lugar: as âncoras
+ * marcam a origem frase a frase, os chips dizem o que foi lido, e o número do
+ * acervo continua vindo do banco, em painel próprio.
+ */
+function RespostaUna({
+  r,
+  aoExportar,
+  exportando,
+}: {
+  r: ConversaUnaGravada;
+  aoExportar: (texto: string) => void;
+  exportando: boolean;
+}) {
+  return (
+    <div className="flex max-w-3xl gap-2.5">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-purple-700 text-white">
+        <Scale className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <ChipsConsulta c={r.consulta} />
+
+        {/* Checagem que falhou vira aviso visível, não descarte silencioso: a
+            resposta traz análise e minuta juntas, e jogar tudo fora por uma
+            frase perderia o trabalho inteiro sem dizer o porquê. */}
+        {r.avisos.map((a) => (
+          <p
+            key={a}
+            className="mb-1.5 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+          >
+            <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
+            {a}
+          </p>
+        ))}
+
+        <div className="whitespace-pre-wrap rounded-2xl bg-muted px-3.5 py-2.5 text-[12.5px] leading-relaxed">
+          <ComAncoras texto={r.texto} />
+        </div>
+        <LegendaAncoras texto={r.texto} />
+
+        {r.naoLidos.length > 0 && (
+          <div className="mt-1.5 rounded-lg border border-dashed px-2.5 py-1.5">
+            <p className="text-[10.5px] font-bold text-muted-foreground">
+              Documentos que ela não conseguiu ler
+            </p>
+            {r.naoLidos.map((n) => (
+              <p key={n} className="text-[10.5px] leading-snug text-muted-foreground">
+                · {n}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {r.prova && <PainelProva p={r.prova} />}
+        {r.prova?.comparacao && <div className="mt-2"><PainelComparacao c={r.prova.comparacao} /></div>}
+
+        <button
+          type="button"
+          className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-violet-600"
+          onClick={() => aoExportar(r.texto)}
+          disabled={exportando}
+        >
+          <Download className="h-3 w-3" /> Exportar como DOCX
+        </button>
+      </div>
     </div>
   );
 }
@@ -681,8 +843,8 @@ function PainelContexto({
       ) : (
         <div className="rounded-lg border border-dashed px-3 py-2.5">
           <p className="text-[10.5px] leading-relaxed text-muted-foreground">
-            Faça uma pergunta e aqui aparece o recorte que ela usou e os processos que sustentam a
-            resposta.
+            O que cada resposta consultou aparece nos selos acima dela, e o recorte medido no painel
+            logo abaixo do texto.
           </p>
         </div>
       )}
@@ -974,13 +1136,8 @@ function Resposta({
 export default function JurisIa() {
   const [conversaId, setConversaId] = useState<number | null>(null);
   const [pergunta, setPergunta] = useState("");
-  // `?modo=peca` chega de links antigos pro redator e do card em Automações.
-  // Lido uma vez: trocar de modo depois é estado da tela, não navegação.
-  const [modo, setModo] = useState<Modo>(() => {
-    if (typeof window === "undefined") return "pesquisar";
-    const m = new URLSearchParams(window.location.search).get("modo");
-    return m === "peca" || m === "estrategia" ? m : "pesquisar";
-  });
+  const [caso, setCaso] = useState<CasoEscolhido | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
   const fimRef = useRef<HTMLDivElement | null>(null);
 
   const utils = trpc.useUtils();
@@ -1000,53 +1157,81 @@ export default function JurisIa() {
       // A conversa aberta deixou de existir; sem isto a tela consulta um id
       // morto e mostra "não encontrada".
       if (vars.conversaId === conversaId) setConversaId(null);
-      toast.success("Pesquisa excluída");
+      toast.success("Conversa excluída");
     },
     onError: (e) => toast.error("Não deu pra excluir", { description: e.message }),
   });
 
-  const pesquisarMut = trpc.jurisia.pesquisar.useMutation({
+  const conversarMut = trpc.jurisia.conversar.useMutation({
     onSuccess: (r) => {
       setConversaId(r.conversaId);
       utils.jurisia.pesquisa.invalidate();
       utils.jurisia.pesquisas.invalidate();
       utils.jurisia.estado.invalidate();
-      if (r.semBase) {
-        toast.info("Nada no acervo para essa busca", {
-          description: "Não consumiu mensagem — escolha um dos tipos que já foram coletados.",
-        });
-      } else if (!r.ok) {
-        toast.warning("A resposta não passou na checagem", {
-          description:
-            "O modelo tentou afirmar algo sem processo que sustentasse, ou inventou estatística. Nada foi mostrado.",
-        });
-      }
+      if (r.erro) toast.error("A IA não respondeu", { description: r.erro });
     },
     onError: (e) => toast.error("JurisIA indisponível", { description: e.message }),
   });
 
+  const exportarMut = (trpc as any).juridico.exportarPecaDocx.useMutation({
+    onSuccess: (r: { filename: string; base64: string; mimeType: string }) => {
+      baixarBlob(base64ToBlob(r.base64, r.mimeType), r.filename, r.mimeType);
+      toast.success("DOCX exportado");
+    },
+    onError: (e: { message: string }) => toast.error("Não deu pra exportar", { description: e.message }),
+  });
+
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [data?.mensagens.length, pesquisarMut.isPending]);
+  }, [data?.mensagens.length, conversarMut.isPending]);
+
+  // O caso vem gravado na conversa: reabrir "Francisco Arnoldo — usucapião" e
+  // continuar perguntando sem os autos que ela usava responderia outra coisa
+  // com a mesma cara. Só sincroniza quando o id muda de fato — senão apagaria a
+  // escolha que o advogado acabou de fazer no meio da conversa.
+  const contatoGravado = data?.contatoId ?? null;
+  const processoGravado = data?.processoId ?? null;
+  useEffect(() => {
+    if (conversaId == null) return;
+    if (contatoGravado == null) return;
+    setCaso((atual) =>
+      atual?.contatoId === contatoGravado
+        ? atual
+        : { contatoId: contatoGravado, nome: "Carregando…", processoId: processoGravado },
+    );
+  }, [conversaId, contatoGravado, processoGravado]);
 
   const cota = estado?.cota;
   const mensagens = data?.mensagens ?? [];
 
-  // A última resposta com conteúdo — é dela que o painel da direita fala.
-  // Percorre de trás pra frente porque a conversa cresce pra baixo.
+  // A última resposta ESTRUTURADA — é dela que o painel lateral antigo fala.
+  // As conversas novas contam a própria história nos chips de cada turno.
   const ultimaResposta = (() => {
     for (let i = mensagens.length - 1; i >= 0; i--) {
       const m = mensagens[i];
-      if (m.papel === "assistente" && m.resposta) return m.resposta as PesquisaGravada;
+      if (m.papel === "assistente" && m.resposta && !ehConversaUna(m.resposta)) {
+        return m.resposta as PesquisaGravada;
+      }
     }
     return null;
   })();
 
-  const enviar = () => {
-    const q = pergunta.trim();
-    if (q.length < 3 || pesquisarMut.isPending) return;
+  const enviar = (texto?: string) => {
+    const q = (texto ?? pergunta).trim();
+    if (q.length < 3 || conversarMut.isPending) return;
     setPergunta("");
-    pesquisarMut.mutate({ conversaId, pergunta: q, modo: modo === "peca" ? "pesquisar" : modo });
+    conversarMut.mutate({
+      conversaId,
+      pergunta: q,
+      contatoId: caso?.contatoId ?? null,
+      processoId: caso?.processoId ?? null,
+    });
+  };
+
+  const novaConversa = () => {
+    setConversaId(null);
+    setPergunta("");
+    setCaso(null);
   };
 
   // Três bloqueios que parecem um só e não são. "Renove" pra quem nunca
@@ -1057,7 +1242,7 @@ export default function JurisIa() {
     const texto = acesso.motivo === "expirado"
       ? {
         titulo: "O contrato do JurisIA venceu",
-        corpo: "Suas pesquisas continuam salvas. Renovando, você volta de onde parou.",
+        corpo: "Suas conversas continuam salvas. Renovando, você volta de onde parou.",
       }
       : acesso.motivo === "suspenso"
         ? {
@@ -1067,7 +1252,7 @@ export default function JurisIa() {
         : {
           titulo: "JurisIA é contratado à parte",
           corpo:
-            "Pesquisa jurisprudencial sobre o acervo público: como um tipo de ação costuma terminar num tribunal, com os processos que sustentam a resposta.",
+            "Um assistente só: ele lê o processo e os documentos do cliente, mede como o tribunal decide casos como aquele no acervo público, e redige a peça no timbre do escritório.",
         };
     return (
       <div className="mx-auto max-w-md rounded-xl border bg-card px-4 py-10 text-center">
@@ -1082,11 +1267,11 @@ export default function JurisIa() {
   // "revisão de contrato bancário" num acervo só de execução fiscal é ensinar
   // o advogado a fazer exatamente a pergunta que falha.
   const tribunalTopo = acervo?.tribunais[0]?.tribunal;
-  const sugestoes = tribunalTopo
-    ? (acervo?.classes ?? [])
+  const sugestoes = caso
+    ? ["Analise a estratégia deste caso.", "Qual recurso é cabível agora?", "Redija a peça cabível."]
+    : (acervo?.classes ?? [])
       .slice(0, 3)
-      .map((c) => `${c.nome} no ${tribunalTopo}: como costuma terminar?`)
-    : [];
+      .map((c) => `${c.nome}${tribunalTopo ? ` no ${tribunalTopo}` : ""}: como costuma terminar?`);
 
   return (
     <div className="space-y-3">
@@ -1107,65 +1292,22 @@ export default function JurisIa() {
               : `${acervo.tribunais.length} tribunais`}
           </span>
         )}
-        {cota && (
-          <span className="ml-auto text-[10.5px] tabular-nums text-muted-foreground">
-            Você usou {cota.usadas} de {cota.limite} mensagens do mês
-          </span>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {cota && (
+            <span className="text-[10.5px] tabular-nums text-muted-foreground">
+              {cota.usadas} de {cota.limite} mensagens do mês
+            </span>
+          )}
+          <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setConfigOpen(true)}>
+            <Library className="h-3.5 w-3.5" />
+            Configurar
+          </Button>
+        </div>
       </div>
 
-      {/* A correção central: o advogado vê o que existe ANTES de perguntar.
-          Sem esta barra o módulo é adivinhação — digita, erra, e nunca
-          descobre que o acervo só tem execução fiscal. */}
-      {acervo && acervo.classes.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-card px-3.5 py-2.5">
-          <div className="shrink-0">
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
-              Você pode pesquisar
-            </p>
-            <p className="text-[12.5px] font-bold">
-              {acervo.total.toLocaleString("pt-BR")} processos
-              {acervo.tribunais.length === 1 ? ` do ${acervo.tribunais[0].tribunal}` : ""}
-            </p>
-          </div>
-          <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-            {acervo.classes.map((c) => (
-              <button
-                key={c.nome}
-                type="button"
-                onClick={() =>
-                  setPergunta(`${c.nome} no ${tribunalTopo ?? ""}: como costuma terminar?`.trim())
-                }
-                className="rounded-full border bg-card px-2.5 py-1 text-[11.5px] text-foreground/80 hover:bg-muted/60"
-              >
-                {c.nome}{" "}
-                <span className="font-bold tabular-nums">{c.quantidade.toLocaleString("pt-BR")}</span>
-              </button>
-            ))}
-            {acervo.classesRestantes > 0 && (
-              <span className="rounded-full border border-dashed px-2.5 py-1 text-[11.5px] text-muted-foreground">
-                + {acervo.classesRestantes} tipos
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* O seletor é navegação entre modos, não parte do campo de pergunta —
-          por isso vive acima do workspace, e não dentro do composer. */}
-      <SeletorModo modo={modo} onModo={setModo} />
-
-      {modo === "peca" ? (
-        <RedatorPeca />
-      ) : (
       <div className="grid gap-3 lg:grid-cols-[210px_1fr] xl:grid-cols-[210px_1fr_300px]">
         <aside className="space-y-1.5">
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full justify-start gap-1.5"
-            onClick={() => setConversaId(null)}
-          >
+          <Button size="sm" variant="outline" className="w-full justify-start gap-1.5" onClick={novaConversa}>
             <Plus className="h-3.5 w-3.5" />
             Novo trabalho
           </Button>
@@ -1173,7 +1315,7 @@ export default function JurisIa() {
             <LinhaPesquisa
               key={p.id}
               id={p.id}
-              titulo={p.titulo ?? "Pesquisa"}
+              titulo={p.titulo ?? "Conversa"}
               ativa={p.id === conversaId}
               onAbrir={() => setConversaId(p.id)}
               onRenomear={(titulo) => renomearMut.mutate({ conversaId: p.id, titulo })}
@@ -1184,66 +1326,75 @@ export default function JurisIa() {
         </aside>
 
         <div className="flex flex-col overflow-hidden rounded-xl border bg-card">
-          <div className="min-h-[320px] space-y-3.5 overflow-y-auto px-4 py-3.5">
+          <div className="min-h-[420px] space-y-3.5 overflow-y-auto px-4 py-3.5">
             {isLoading ? (
               <Skeleton className="h-24 w-full rounded-xl" />
             ) : mensagens.length === 0 ? (
-              <div className="py-6 text-center">
-                <Search className="mx-auto h-5 w-5 text-muted-foreground" />
-                {acervo && acervo.total === 0 ? (
-                  <p className="mx-auto mt-2 max-w-md text-[12.5px] text-muted-foreground">
-                    O acervo ainda está vazio. Rode uma varredura em Admin → JurisIA para coletar
-                    os processos de um tribunal — sem base coletada não há o que pesquisar.
+              <div className="mx-auto mt-8 max-w-xl text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-purple-700 text-white">
+                  <Scale className="h-6 w-6" />
+                </div>
+                <p className="text-[13.5px] font-semibold">Como posso ajudar?</p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+                  Uma conversa só. Ela lê o processo e os documentos do cliente, mede como o tribunal
+                  decide casos como esse e redige a peça — você não escolhe o modo, só pergunta.
+                </p>
+                {acervo && acervo.total === 0 && (
+                  <p className="mx-auto mt-2 max-w-md text-[11.5px] text-muted-foreground">
+                    O acervo público ainda está vazio: rode uma varredura em Admin → JurisIA pra ela
+                    também medir como o tribunal decide.
                   </p>
-                ) : (
-                  <>
-                    <p className="mx-auto mt-2 max-w-md text-[12.5px] text-muted-foreground">
-                      Pergunte como um tipo de ação costuma terminar. A distribuição vem do banco;
-                      a leitura vem com os processos que a sustentam.
-                    </p>
-                    <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-                      {sugestoes.map((s) => (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => setPergunta(s)}
-                          className="rounded-full border bg-card px-2.5 py-1 text-[11.5px] text-muted-foreground hover:bg-muted/50"
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  </>
                 )}
+                <div className="mt-4 flex flex-wrap justify-center gap-1.5">
+                  {sugestoes.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => enviar(s)}
+                      className="rounded-full bg-muted px-3 py-1.5 text-[11.5px] text-muted-foreground hover:bg-muted/70"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : (
               mensagens.map((m) => {
                 if (m.papel === "usuario") {
                   return (
                     <div key={m.id} className="flex justify-end">
-                      <p className="max-w-[80%] rounded-xl rounded-br-sm bg-violet-600 px-3.5 py-2.5 text-[12.5px] leading-snug text-white">
+                      <p className="max-w-[80%] whitespace-pre-wrap rounded-xl rounded-br-sm bg-violet-600 px-3.5 py-2.5 text-[12.5px] leading-snug text-white">
                         {m.conteudo}
                       </p>
                     </div>
                   );
                 }
+                if (ehConversaUna(m.resposta)) {
+                  return (
+                    <RespostaUna
+                      key={m.id}
+                      r={m.resposta}
+                      aoExportar={(texto) => exportarMut.mutate({ texto, nomeArquivo: "peca" })}
+                      exportando={exportarMut.isPending}
+                    />
+                  );
+                }
                 if (m.recusa || !m.resposta) {
                   return (
-                    <div
-                      key={m.id}
-                      className="rounded-xl rounded-bl-sm border border-dashed px-3.5 py-3"
-                    >
+                    <div key={m.id} className="rounded-xl rounded-bl-sm border border-dashed px-3.5 py-3">
                       <p className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
                         <ShieldCheck className="h-3.5 w-3.5" />
-                        Resposta descartada pela checagem
+                        {m.recusa ? "Este turno não produziu resposta" : "Resposta descartada pela checagem"}
                       </p>
                       <p className="mt-1 text-[11.5px] text-muted-foreground">
-                        Nada foi afirmado sem processo que sustentasse, e nenhum número saiu da IA.
-                        Pergunte de outro jeito.
+                        {m.recusa || "Nada foi afirmado sem fonte que sustentasse. Pergunte de outro jeito."}
                       </p>
                     </div>
                   );
                 }
+                // Pesquisas estruturadas gravadas antes da fusão: continuam
+                // sendo mostradas como foram respondidas. Histórico do cliente
+                // não muda de forma porque o produto mudou.
                 return (
                   <Resposta
                     key={m.id}
@@ -1257,18 +1408,19 @@ export default function JurisIa() {
               })
             )}
 
-            {pesquisarMut.isPending && (
+            {conversarMut.isPending && (
               <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Contando o recorte no acervo…
+                Lendo o caso e medindo o acervo…
               </div>
             )}
             <div ref={fimRef} />
           </div>
 
           <div className="border-t px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Input
+            <div className="flex items-end gap-2 rounded-2xl border px-3 py-2">
+              <Textarea
+                rows={1}
                 value={pergunta}
                 onChange={(ev) => setPergunta(ev.target.value)}
                 onKeyDown={(ev) => {
@@ -1277,38 +1429,38 @@ export default function JurisIa() {
                     enviar();
                   }
                 }}
-                placeholder={
-                  modo === "estrategia"
-                    ? "Ex.: vale a pena pegar uma busca e apreensão no TJCE?"
-                    : "Ex.: como o TJCE decide revisão de contrato bancário?"
-                }
-                className="h-9"
-                disabled={!cota?.pode || pesquisarMut.isPending}
+                placeholder="Pergunte, peça a peça, ou refine (ex.: “deixa mais enxuto”)…"
+                className="max-h-32 min-h-[24px] flex-1 resize-none border-0 p-0 text-[12.5px] shadow-none focus-visible:ring-0"
+                disabled={!cota?.pode || conversarMut.isPending}
               />
               <Button
-                size="sm"
-                className="h-9 shrink-0"
-                disabled={!cota?.pode || pergunta.trim().length < 3 || pesquisarMut.isPending}
-                onClick={enviar}
+                size="icon"
+                className="h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br from-violet-600 to-purple-700"
+                disabled={!cota?.pode || pergunta.trim().length < 3 || conversarMut.isPending}
+                onClick={() => enviar()}
               >
-                {pesquisarMut.isPending ? (
+                {conversarMut.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Search className="h-4 w-4" />
+                  <Send className="h-4 w-4" />
                 )}
               </Button>
             </div>
-            <p className="mt-1.5 text-[10px] text-muted-foreground">
+            <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
               {cota && !cota.pode
                 ? `Você usou as ${cota.limite} mensagens deste mês.`
-                : "Beta — acervo público do CNJ (DataJud). Confira as fontes antes de peticionar."}
+                : "Minuta gerada por IA — revisão e assinatura do advogado obrigatórias antes de protocolar."}
             </p>
           </div>
         </div>
 
-        <PainelContexto acervo={acervo} ultima={ultimaResposta} />
+        <aside className="hidden flex-col gap-2.5 xl:flex">
+          <SeletorCaso caso={caso} onCaso={setCaso} />
+          <PainelContexto acervo={acervo} ultima={ultimaResposta} />
+        </aside>
       </div>
-      )}
+
+      <ConfigurarAgente open={configOpen} onOpenChange={setConfigOpen} />
     </div>
   );
 }

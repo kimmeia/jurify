@@ -1,18 +1,22 @@
 /**
- * JurisIA (beta) — dois modos, duas bases, uma cota.
+ * JurisIA (beta) — duas entradas, uma cota.
  *
- * 1. CONVERSA DE PROCESSO (`conversa`/`perguntar`): responde sobre um caso do
- *    escritório, a partir das movimentações dele. O "caso com memória" não é
- *    criado por ninguém — nasce da primeira pergunta, porque o processo já
- *    está no banco.
+ * 1. CONVERSA DE PROCESSO (`conversa`/`perguntar`): o painel dentro do
+ *    processo monitorado. Responde sobre aquele caso a partir das
+ *    movimentações dele, e a conversa não é criada por ninguém — nasce da
+ *    primeira pergunta, porque o processo já está no banco.
  *
- * 2. PESQUISA JURISPRUDENCIAL (`pesquisa`/`pesquisar`): responde sobre o
- *    acervo público do DataJud, que é global e igual pra todos os escritórios.
+ * 2. CONVERSA ÚNICA (`pesquisas`/`pesquisa`/`conversar`): a tela do JurisIA.
+ *    Uma conversa que decide sozinha o que consultar — acervo público do
+ *    DataJud, autos e documentos do cliente, base de fontes da casa — em vez
+ *    de exigir que o advogado escolha o modo certo antes de perguntar.
  *
- * As duas bases NÃO se encontram, e é de propósito: o que o motor captura dos
- * autos de um escritório é sigilo do cliente dele, e o acervo público é o
- * produto vendido a todos. Na tabela, a separação é `monitoramentoId` NULL —
- * e cada consulta prova de que lado está antes de gravar.
+ * O que continua separado é o SIGILO, não o assunto: o acervo público é global
+ * e igual pra todos os escritórios; o que o motor captura dos autos de um
+ * escritório é do cliente dele. Toda leitura de caso passa por `escritorioId`,
+ * e nada do escritório entra no acervo. Na tabela, `monitoramentoId` NULL
+ * separa a conversa da tela do painel de um processo, e cada consulta prova de
+ * que lado está antes de gravar.
  */
 
 import { z } from "zod";
@@ -33,9 +37,9 @@ import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { avaliarCota, competenciaDe, type EstadoCota } from "../../shared/jurisia-cota";
 import type { AcessoJurisIA } from "../../shared/addon-jurisia";
 import type { EventoContexto } from "../../shared/jurisia-contexto";
-import type { PesquisaGravada } from "../../shared/jurisia-recorte";
+import type { ConversaUnaGravada } from "../../shared/jurisia-una";
 import { perguntarSobreProcesso } from "./perguntar";
-import { pesquisarNoAcervo } from "./pesquisar";
+import { MODELO_PADRAO, responderUna, TURNOS_NO_CONTEXTO } from "./conversa-una";
 import { composicaoDoAcervo } from "./buscar-acervo";
 import { createLogger } from "../_core/logger";
 
@@ -159,7 +163,12 @@ async function pesquisaDoEscritorio(
   conversaId: number,
 ) {
   const [conv] = await db
-    .select({ id: jurisiaConversas.id, titulo: jurisiaConversas.titulo })
+    .select({
+      id: jurisiaConversas.id,
+      titulo: jurisiaConversas.titulo,
+      contatoId: jurisiaConversas.contatoId,
+      processoId: jurisiaConversas.processoId,
+    })
     .from(jurisiaConversas)
     .where(and(
       eq(jurisiaConversas.id, conversaId),
@@ -325,7 +334,9 @@ export const jurisiaRouter = router({
     .input(z.object({ conversaId: z.number().int().positive().nullable() }))
     .query(async ({ ctx, input }) => {
       const { db, esc } = await contexto(ctx.user.id);
-      if (input.conversaId == null) return { titulo: null, mensagens: [] };
+      if (input.conversaId == null) {
+        return { titulo: null, contatoId: null, processoId: null, mensagens: [] };
+      }
 
       const conv = await pesquisaDoEscritorio(db, esc.escritorio.id, input.conversaId);
       if (!conv) throw new TRPCError({ code: "NOT_FOUND", message: "Pesquisa não encontrada." });
@@ -345,6 +356,10 @@ export const jurisiaRouter = router({
 
       return {
         titulo: conv.titulo,
+        // O caso volta junto: reabrir a conversa e continuar perguntando sem os
+        // autos que ela usava era responder outra coisa com a mesma cara.
+        contatoId: conv.contatoId,
+        processoId: conv.processoId,
         mensagens: mensagens.map((m) => ({
           id: m.id,
           papel: m.papel,
@@ -357,15 +372,25 @@ export const jurisiaRouter = router({
     }),
 
   /**
-   * Pergunta ao acervo público. Sem `conversaId`, a pesquisa nasce aqui —
-   * mesma ideia da conversa de processo: ninguém "cria" nada antes de ter o
-   * que perguntar.
+   * Um turno da conversa única.
+   *
+   * Uma procedure só, e é ela que decide o que consultar: o acervo público, os
+   * autos do cliente, os documentos anexados, a base de fontes do escritório —
+   * o que couber, sem o advogado ter que escolher o modo certo antes de
+   * perguntar. Sem `conversaId`, a conversa nasce aqui, como sempre foi: não
+   * existe "criar conversa" antes de ter o que perguntar.
+   *
+   * O caso vem da tela e é gravado na conversa. `contatoId: null` é escolha
+   * ("tirei o caso"), não omissão — por isso o que chega manda sobre o que
+   * estava gravado.
    */
-  pesquisar: protectedProcedure
+  conversar: protectedProcedure
     .input(z.object({
       conversaId: z.number().int().positive().nullish(),
-      pergunta: z.string().min(3).max(2000),
-      modo: z.enum(["pesquisar", "estrategia"]).default("pesquisar"),
+      pergunta: z.string().min(3).max(4000),
+      contatoId: z.number().int().positive().nullish(),
+      processoId: z.number().int().positive().nullish(),
+      modelo: z.string().max(64).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const { db, esc } = await contexto(ctx.user.id);
@@ -375,16 +400,27 @@ export const jurisiaRouter = router({
       const { cota, competencia, acesso } = await estadoCota(db, esc.escritorio.id, planSlug, fuso);
       if (!cota.pode) throw erroDeAcesso(cota, acesso);
 
+      const contatoId = input.contatoId ?? null;
+      const processoId = input.processoId ?? null;
+
       let conversaId = input.conversaId ?? null;
       if (conversaId != null) {
         const existente = await pesquisaDoEscritorio(db, esc.escritorio.id, conversaId);
         if (!existente) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Pesquisa não encontrada." });
+          throw new TRPCError({ code: "NOT_FOUND", message: "Conversa não encontrada." });
+        }
+        if (existente.contatoId !== contatoId || existente.processoId !== processoId) {
+          await db
+            .update(jurisiaConversas)
+            .set({ contatoId, processoId })
+            .where(eq(jurisiaConversas.id, conversaId));
         }
       } else {
         const [inserida] = await db.insert(jurisiaConversas).values({
           escritorioId: esc.escritorio.id,
           monitoramentoId: null,
+          contatoId,
+          processoId,
           titulo: input.pergunta.slice(0, 200),
           criadoPor: esc.colaborador?.id ?? null,
           ultimaMensagemAt: new Date(),
@@ -397,35 +433,34 @@ export const jurisiaRouter = router({
         .from(jurisiaMensagens)
         .where(eq(jurisiaMensagens.conversaId, conversaId))
         .orderBy(desc(jurisiaMensagens.id))
-        .limit(HISTORICO_TURNOS);
+        .limit(TURNOS_NO_CONTEXTO);
 
-      const resultado = await pesquisarNoAcervo({
+      const r = await responderUna(db, {
         escritorioId: esc.escritorio.id,
+        escritorioNome: esc.escritorio.nome,
+        advogado: (ctx.user as { name?: string | null }).name ?? null,
         pergunta: input.pergunta,
-        modo: input.modo,
         historico: anteriores.reverse().map((m) => ({ papel: m.papel, texto: m.conteudo })),
+        contatoId,
+        processoId,
+        modelo: input.modelo || MODELO_PADRAO,
       });
 
-      if (!resultado.ok) {
-        log.warn(
-          { escritorioId: esc.escritorio.id, conversaId, motivo: resultado.recusa },
-          "JurisIA recusou a resposta da pesquisa",
-        );
+      if (r.erro) {
+        log.warn({ escritorioId: esc.escritorio.id, conversaId, motivo: r.erro }, "JurisIA não respondeu");
       }
 
-      const gravada: PesquisaGravada | null = resultado.resposta
-        ? {
-          ...resultado.resposta,
-          fontesDetalhe: resultado.fontes,
-          estatistica: resultado.estatistica,
-          perfil: resultado.perfil,
-          comparacao: resultado.comparacao,
-          descricaoFiltro: resultado.descricaoFiltro,
-          natureza: resultado.natureza,
-          avisoNatureza: resultado.avisoNatureza,
-          tendencia: resultado.tendencia,
-        }
-        : null;
+      const gravada: ConversaUnaGravada | null = r.erro
+        ? null
+        : {
+          tipo: "una",
+          texto: r.texto,
+          prova: r.prova,
+          consulta: r.consulta,
+          naoLidos: r.naoLidos,
+          avisos: r.avisos,
+          caso: r.caso,
+        };
 
       await db.insert(jurisiaMensagens).values({
         conversaId,
@@ -438,21 +473,24 @@ export const jurisiaRouter = router({
         conversaId,
         escritorioId: esc.escritorio.id,
         papel: "assistente",
-        conteudo: resultado.resposta?.conclusao ?? "",
+        conteudo: r.texto,
         respostaJson: gravada ? JSON.stringify(gravada) : null,
-        recusa: resultado.recusa,
+        recusa: r.erro,
       });
 
-      await db
-        .update(jurisiaConversas)
-        .set({ ultimaMensagemAt: new Date() })
-        .where(eq(jurisiaConversas.id, conversaId));
+      // Título da conversa nova ganha o nome do cliente assim que ele é
+      // conhecido — a lista lateral com quatro "Como prosseguir nesse caso?"
+      // não distingue nada.
+      const patch: { ultimaMensagemAt: Date; titulo?: string } = { ultimaMensagemAt: new Date() };
+      if (input.conversaId == null && r.caso?.nome) {
+        patch.titulo = `${r.caso.nome} — ${input.pergunta.slice(0, 80)}`.slice(0, 200);
+      }
+      await db.update(jurisiaConversas).set(patch).where(eq(jurisiaConversas.id, conversaId));
 
-      // Busca que volta vazia não é cobrada. O caminho `semBase` nem chega ao
-      // modelo de resposta — só ao interpretador, que é barato — e cobrar uma
-      // mensagem cheia por uma pergunta que não teve resposta é o tipo de
-      // conta que o cliente confere e não perdoa.
-      const cobrou = !resultado.semBase;
+      // Turno que não produziu resposta não é cobrado: a falha foi nossa (ou do
+      // provedor), e cobrar por ela é a conta que o cliente confere e não
+      // perdoa.
+      const cobrou = !r.erro;
       if (cobrou) {
         await db
           .insert(jurisiaUso)
@@ -462,21 +500,7 @@ export const jurisiaRouter = router({
 
       const { cota: cotaDepois } = await estadoCota(db, esc.escritorio.id, planSlug, fuso);
 
-      return {
-        ok: resultado.ok,
-        conversaId,
-        resposta: gravada,
-        recusa: resultado.recusa,
-        estatistica: resultado.estatistica,
-        perfil: resultado.perfil,
-        descricaoFiltro: resultado.descricaoFiltro,
-        natureza: resultado.natureza,
-        avisoNatureza: resultado.avisoNatureza,
-        tendencia: resultado.tendencia,
-        semBase: resultado.semBase,
-        cobrou,
-        cota: cotaDepois,
-      };
+      return { conversaId, resposta: gravada, erro: r.erro, cobrou, cota: cotaDepois };
     }),
 
   perguntar: protectedProcedure

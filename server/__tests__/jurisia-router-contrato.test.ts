@@ -25,11 +25,11 @@ describe("router jurisia", () => {
       "jurisia.acervo",
       "jurisia.casosRecentes",
       "jurisia.conversa",
+      "jurisia.conversar",
       "jurisia.estado",
       "jurisia.excluirPesquisa",
       "jurisia.perguntar",
       "jurisia.pesquisa",
-      "jurisia.pesquisar",
       "jurisia.pesquisas",
       "jurisia.renomearPesquisa",
     ]);
@@ -41,7 +41,7 @@ describe("router jurisia", () => {
     const p = defs();
     const mutations = [
       "jurisia.perguntar",
-      "jurisia.pesquisar",
+      "jurisia.conversar",
       "jurisia.renomearPesquisa",
       "jurisia.excluirPesquisa",
     ];
