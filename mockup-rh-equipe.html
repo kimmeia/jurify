@@ -82,6 +82,12 @@
   .jor .sal.neg { color:var(--alerta); }
   .t2 { height:7px; border-radius:3px; background:var(--viz-trilho); overflow:hidden; margin-top:6px; }
   .t2 i { display:block; height:100%; border-radius:0 3px 3px 0; }
+  .t2 { display:flex; }
+  .jor .ab { font-size:10.5px; color:var(--acento-forte); font-weight:700; }
+  .aus { display:inline-flex; align-items:center; gap:4px; border-radius:6px; padding:1px 6px;
+         font-size:9.5px; font-weight:700; margin-top:3px; }
+  .aus.jus { background:var(--acento-bg-2); color:var(--acento-forte); border:1px solid #ddd6fe; }
+  .aus.inj { background:var(--alerta-bg); color:var(--alerta-forte); border:1px solid var(--alerta-borda); }
 
   .des .top { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
   .des .pct { font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums; }
@@ -157,7 +163,7 @@
       <div class="tab-cab">
         <div>
           <div class="t">Equipe</div>
-          <div class="c">6 pessoas ativas · jornada de 8h, seg a sex</div>
+          <div class="c">7 pessoas · 6 dias úteis fechados no período · jornada padrão 8h</div>
         </div>
         <div class="micro">Ordenado por saldo do mês</div>
       </div>
@@ -181,8 +187,8 @@
           <div><div class="st">Trabalhando</div><div class="hr">entrou 08:02</div></div>
         </div>
         <div class="jor">
-          <div class="top"><div class="hh">62h10 <span>/ 64h</span></div><div class="sal neg">−1h50</div></div>
-          <div class="t2"><i style="width:97%; background:var(--viz-1)"></i></div>
+          <div class="top"><div class="hh">46h10 <span>/ 48h</span></div><div class="sal neg">−1h50</div></div>
+          <div class="t2"><i style="width:96%; background:var(--viz-1)"></i></div>
         </div>
         <div class="des">
           <div class="top"><div class="pct">44,3%</div><div class="lb">da meta</div></div>
@@ -205,7 +211,7 @@
           <div><div class="st">Em almoço</div><div class="hr">saiu 12:04 · volta 13:04</div></div>
         </div>
         <div class="jor">
-          <div class="top"><div class="hh">66h30 <span>/ 64h</span></div><div class="sal pos">+2h30</div></div>
+          <div class="top"><div class="hh">50h30 <span>/ 48h</span></div><div class="sal pos">+2h30</div></div>
           <div class="t2"><i style="width:100%; background:var(--viz-1)"></i></div>
         </div>
         <div class="des">
@@ -229,7 +235,7 @@
           <div><div class="st">Trabalhando</div><div class="hr">entrou 07:58</div></div>
         </div>
         <div class="jor">
-          <div class="top"><div class="hh">64h00 <span>/ 64h</span></div><div class="sal pos">0h00</div></div>
+          <div class="top"><div class="hh">48h00 <span>/ 48h</span></div><div class="sal pos">0h00</div></div>
           <div class="t2"><i style="width:100%; background:var(--viz-1)"></i></div>
         </div>
         <div class="des">
@@ -249,12 +255,12 @@
           <div><div class="nm">Thiago Bezerra Lopes</div><div class="fn">SDR · Comercial</div></div>
         </div>
         <div class="hoje">
-          <span class="dot" style="background:var(--fantasma)"></span>
-          <div><div class="st">Não bateu ponto</div><div class="hr">último acesso 09:41</div></div>
+          <span class="dot" style="background:var(--ok)"></span>
+          <div><div class="st">Trabalhando</div><div class="hr">entrou 08:20</div><div class="aus inj">1 falta injustificada</div></div>
         </div>
         <div class="jor">
-          <div class="top"><div class="hh">54h20 <span>/ 64h</span></div><div class="sal neg">−9h40</div></div>
-          <div class="t2"><i style="width:85%; background:var(--viz-2)"></i></div>
+          <div class="top"><div class="hh">31h51 <span>/ 40h</span></div><div class="sal neg">−8h09</div></div>
+          <div class="t2"><i style="width:80%; background:var(--viz-2)"></i></div>
         </div>
         <div class="des">
           <div class="top"><div class="pct">31,0%</div><div class="lb">da meta</div></div>
@@ -269,6 +275,30 @@
       <!-- 5 -->
       <div class="grade linha">
         <div class="pes">
+          <div class="av" style="background:#8b5cf6">VD</div>
+          <div><div class="nm">Vanessa Duarte Rocha</div><div class="fn">Advogada · Operacional</div></div>
+        </div>
+        <div class="hoje">
+          <span class="dot" style="background:var(--acento)"></span>
+          <div><div class="st">Falta abonada</div><div class="hr">atestado médico · 1 dia</div><div class="aus jus">justificada</div></div>
+        </div>
+        <div class="jor">
+          <div class="top"><div class="hh">40h00 <span class="ab">+8h ab.</span> <span>/ 48h</span></div><div class="sal pos">0h00</div></div>
+          <div class="t2"><i style="width:83%; background:var(--viz-1)"></i><i style="width:17%; background:#c4b5fd"></i></div>
+        </div>
+        <div class="des">
+          <div class="top"><div class="pct">81%</div><div class="lb">tarefas no prazo</div></div>
+          <div class="t2"><i style="width:81%; background:var(--viz-3)"></i></div>
+        </div>
+        <div class="aval">
+          <div class="nota bom"><div class="v">4,0</div><div class="m">DE 5</div></div>
+          <div class="q">há 2 meses</div>
+        </div>
+      </div>
+
+      <!-- 6 -->
+      <div class="grade linha">
+        <div class="pes">
           <div class="av" style="background:#e87ba4">JV</div>
           <div><div class="nm">Juliana Viana Correia</div><div class="fn">Atendente · Suporte</div></div>
         </div>
@@ -277,7 +307,7 @@
           <div><div class="st">Trabalhando</div><div class="hr">entrou 08:15</div></div>
         </div>
         <div class="jor">
-          <div class="top"><div class="hh">63h05 <span>/ 64h</span></div><div class="sal neg">−0h55</div></div>
+          <div class="top"><div class="hh">47h05 <span>/ 48h</span></div><div class="sal neg">−0h55</div></div>
           <div class="t2"><i style="width:98%; background:var(--viz-1)"></i></div>
         </div>
         <div class="des">
@@ -301,8 +331,8 @@
           <div><div class="st">Encerrou</div><div class="hr">08:00 → 14:03</div></div>
         </div>
         <div class="jor">
-          <div class="top"><div class="hh">41h30 <span>/ 48h</span></div><div class="sal neg">−6h30</div></div>
-          <div class="t2"><i style="width:86%; background:var(--viz-2)"></i></div>
+          <div class="top"><div class="hh">29h30 <span>/ 36h</span></div><div class="sal neg">−6h30</div></div>
+          <div class="t2"><i style="width:82%; background:var(--viz-2)"></i></div>
         </div>
         <div class="des">
           <div class="top"><div class="pct">74%</div><div class="lb">tarefas no prazo</div></div>
@@ -365,15 +395,17 @@
       <div class="card agora">
         <div class="micro">Agora · 11 de agosto, 14:52</div>
         <div class="resumo-ag">
-          <div><div class="n" style="color:var(--ok)">3</div><div class="l">trabalhando</div></div>
+          <div><div class="n" style="color:var(--ok)">4</div><div class="l">trabalhando</div></div>
           <div><div class="n" style="color:#a16207">1</div><div class="l">em almoço</div></div>
-          <div><div class="n" style="color:var(--mudo)">2</div><div class="l">fora</div></div>
+          <div><div class="n" style="color:var(--mudo)">3</div><div class="l">fora</div></div>
         </div>
         <div style="margin-top:11px; padding-top:9px; border-top:1px solid var(--hairline);">
           <div class="ag-row"><span class="dot" style="background:var(--ok)"></span><span class="nm">Milena Mello</span><span class="hr">6h50</span></div>
           <div class="ag-row"><span class="dot" style="background:var(--ok)"></span><span class="nm">Cláudia Serpa</span><span class="hr">6h54</span></div>
           <div class="ag-row"><span class="dot" style="background:var(--ok)"></span><span class="nm">Juliana Viana</span><span class="hr">6h37</span></div>
+          <div class="ag-row"><span class="dot" style="background:var(--ok)"></span><span class="nm">Thiago Bezerra</span><span class="hr">6h32</span></div>
           <div class="ag-row"><span class="dot" style="background:var(--viz-4)"></span><span class="nm">Rodrigo Alencar</span><span class="hr">almoço</span></div>
+          <div class="ag-row"><span class="dot" style="background:var(--acento)"></span><span class="nm">Vanessa Duarte</span><span class="hr">atestado</span></div>
         </div>
       </div>
 
@@ -381,8 +413,8 @@
         <div class="micro" style="color:#a16207">Batida × acesso ao sistema</div>
         <div class="dv-row">
           <div>
-            <div class="nm">Thiago Bezerra</div>
-            <div class="de">Sem batida hoje, mas acessou às 09:41</div>
+            <div class="nm">Thiago Bezerra · 10 ago</div>
+            <div class="de">Bateu entrada, nunca a saída · último acesso 18:12</div>
           </div>
           <div class="gap">?</div>
         </div>

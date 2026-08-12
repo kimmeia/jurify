@@ -64,8 +64,32 @@
           font-size:10.5px; font-weight:600; }
   .flag.av { background:#fffbeb; color:#a16207; border:1px solid #fde68a; }
   .flag.er { background:var(--alerta-bg); color:var(--alerta-forte); border:1px solid var(--alerta-borda); }
+  .eg.r.aus { background:var(--acento-bg); }
+  .eg.r.aus-inj { background:var(--alerta-bg); }
+  .eg .mot { grid-column:2 / 6; font-size:12px; font-weight:600; display:flex; align-items:center; gap:7px; }
+  .eg .mot .lab { color:var(--acento-forte); }
+  .eg .mot .lab.inj { color:var(--alerta-forte); }
+  .eg .mot .anexo { display:inline-flex; align-items:center; gap:4px; border:1px solid #ddd6fe;
+                    background:#fff; border-radius:6px; padding:1px 7px; font-size:10.5px; color:var(--acento-forte); }
+  .eg .just { display:inline-flex; align-items:center; gap:5px; border:1px solid var(--acento);
+              color:var(--acento); background:#fff; border-radius:7px; padding:3px 9px;
+              font-size:10.5px; font-weight:700; }
   .eg.tt { padding:10px 15px; border-top:1px solid var(--borda); background:var(--hairline-2);
            border-radius:0 0 13px 13px; }
+
+  /* ausências */
+  .aus-card { flex:0 0 auto; padding:13px 15px; }
+  .tipos { display:grid; grid-template-columns:repeat(3, 1fr); gap:7px; margin-top:10px; }
+  .tp-item { display:flex; align-items:center; gap:7px; border:1px solid var(--borda); border-radius:9px;
+             padding:7px 10px; font-size:11.8px; font-weight:600; color:var(--corpo); background:var(--hairline-2); }
+  .tp-item.on { border-color:#ddd6fe; background:var(--acento-bg); color:var(--acento-forte); }
+  .tp-item.on.inj { border-color:var(--alerta-borda); background:var(--alerta-bg); color:var(--alerta-forte); }
+  .pt { width:7px; height:7px; border-radius:50%; flex:0 0 auto; }
+  .pt.jus { background:var(--acento); } .pt.inj { background:var(--alerta); } .pt.neu { background:var(--fraco); }
+  .tp-item .ef { margin-left:auto; font-size:9.5px; font-weight:700; color:var(--fraco);
+                 text-transform:uppercase; letter-spacing:.04em; }
+  .tp-item.on .ef { color:inherit; opacity:.7; }
+  .rod-aus { font-size:11px; color:var(--mudo); line-height:1.5; margin-top:9px; }
 
   /* desempenho da função */
   .func { flex:0 0 auto; padding:13px 15px; }
@@ -185,10 +209,17 @@
           <div class="tot">7h44</div><div class="sal neg">−0h16</div>
           <div><span class="flag av">entrada 1h12 após o previsto</span></div>
         </div>
-        <div class="eg r">
+        <div class="eg r aus">
           <div class="d"><b>05</b> qua</div>
-          <div class="h4">08:00</div><div class="h4">12:00</div><div class="h4">13:00</div><div class="h4">18:01</div>
-          <div class="tot">9h01</div><div class="sal pos">+1h01</div><div></div>
+          <div class="mot">
+            <span class="lab">Atestado médico</span>
+            <span class="anexo">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z" stroke="#5b21b6" stroke-width="2" stroke-linejoin="round"/></svg>
+              atestado-05-08.pdf
+            </span>
+          </div>
+          <div class="tot" style="color:var(--acento-forte)">8h00 ab.</div><div class="sal zero">0h00</div>
+          <div style="font-size:11px; color:var(--mudo);">abona a jornada · Milena Mello, 05 ago</div>
         </div>
         <div class="eg r">
           <div class="d"><b>06</b> qui</div>
@@ -196,32 +227,56 @@
           <div class="tot">7h11</div><div class="sal neg">−0h49</div>
           <div><span class="flag av">almoço de 1h32</span></div>
         </div>
-        <div class="eg r">
+        <div class="eg r aus-inj">
           <div class="d"><b>07</b> sex</div>
-          <div class="h4">08:02</div><div class="h4">12:04</div><div class="h4">13:01</div><div class="h4">18:05</div>
-          <div class="tot">9h06</div><div class="sal pos">+1h06</div><div></div>
+          <div class="mot">
+            <span class="lab inj">Falta injustificada</span>
+            <span style="font-weight:500; color:var(--corpo); font-size:11.5px;">sem aviso e sem documento</span>
+          </div>
+          <div class="tot">0h00</div><div class="sal neg">−8h00</div>
+          <div style="font-size:11px; color:var(--mudo);">desconta DSR · Rafael Costa, 07 ago</div>
         </div>
         <div class="eg r">
           <div class="d"><b>10</b> seg</div>
           <div class="h4">09:31</div><div class="h4">12:15</div><div class="h4">13:20</div><div class="h4 vazio">—</div>
           <div class="tot">—</div><div class="sal zero">—</div>
-          <div><span class="flag er">sem batida de saída</span></div>
+          <div style="display:flex; align-items:center; gap:8px;"><span class="flag er">sem batida de saída</span><span class="just">+ Justificar dia</span></div>
         </div>
         <div class="eg r">
-          <div class="d"><b>11</b> ter</div>
-          <div class="h4 vazio">—</div><div class="h4 vazio">—</div><div class="h4 vazio">—</div><div class="h4 vazio">—</div>
+          <div class="d"><b>11</b> ter <span style="color:var(--acento); font-weight:700;">hoje</span></div>
+          <div class="h4">08:20</div><div class="h4">12:06</div><div class="h4">13:02</div><div class="h4 vazio">em curso</div>
           <div class="tot">—</div><div class="sal zero">—</div>
-          <div><span class="flag er">não bateu · acessou 09:41</span></div>
+          <div></div>
         </div>
 
         <div class="eg tt">
-          <div class="d" style="font-weight:700">7 dias úteis</div>
+          <div class="d" style="font-weight:700">5 dias fechados</div>
           <div></div><div></div><div></div>
-          <div class="micro" style="text-align:right; padding-right:4px;">no mês</div>
-          <div class="tot">54h20</div>
-          <div class="sal neg">−9h40</div>
-          <div style="font-size:11px; color:var(--mudo);">2 dias precisam de ajuste antes de fechar</div>
+          <div class="micro" style="text-align:right; padding-right:4px;">no período</div>
+          <div class="tot">31h51</div>
+          <div class="sal neg">−8h09</div>
+          <div style="font-size:11px; color:var(--mudo);">1 atestado abonado · 1 falta injustificada · 1 dia sem saída, aguardando justificativa</div>
         </div>
+      </div>
+
+      <div class="card aus-card">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div class="micro">Ausências no período</div>
+          <div class="micro" style="color:var(--acento)">+ Registrar ausência</div>
+        </div>
+        <div class="tipos">
+          <div class="tp-item on"><span class="pt jus"></span>Atestado médico<span class="ef">abona</span></div>
+          <div class="tp-item"><span class="pt jus"></span>Falta justificada<span class="ef">abona</span></div>
+          <div class="tp-item on inj"><span class="pt inj"></span>Falta injustificada<span class="ef">desconta</span></div>
+          <div class="tp-item"><span class="pt jus"></span>Férias<span class="ef">abona</span></div>
+          <div class="tp-item"><span class="pt jus"></span>Folga / compensação<span class="ef">usa banco</span></div>
+          <div class="tp-item"><span class="pt neu"></span>Trabalho externo<span class="ef">conta 8h</span></div>
+        </div>
+        <p class="rod-aus">
+          O tipo decide o efeito no saldo — não é só rótulo. Abonada não gera hora negativa;
+          injustificada gera e sinaliza o reflexo no descanso semanal. Anexo é obrigatório em
+          atestado. Quem registrou e quando fica gravado.
+        </p>
       </div>
 
       <div class="card func">
