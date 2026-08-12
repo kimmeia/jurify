@@ -61,7 +61,16 @@ function corBarra(n: number): string {
   return CORES_BARRA[0]!;
 }
 
-export function BlocoLeadsPorEstado({ dados }: { dados: LeadsPorEstado }) {
+export function BlocoLeadsPorEstado({
+  dados,
+  selecionada,
+  onSelecionar,
+}: {
+  dados: LeadsPorEstado;
+  /** UF que está filtrando o resto do relatório. */
+  selecionada?: string | null;
+  onSelecionar?: (uf: string) => void;
+}) {
   const total = dados.comEstado + dados.semEstado;
   if (total === 0) {
     return (
@@ -107,7 +116,9 @@ export function BlocoLeadsPorEstado({ dados }: { dados: LeadsPorEstado }) {
           )}
         </div>
         <span className="rounded-full border bg-muted/40 px-2.5 py-1 text-[10.5px] text-muted-foreground">
-          Leads criados no período
+          {selecionada
+            ? `Este bloco continua mostrando o período inteiro — é ele que aplica o filtro`
+            : "Leads criados no período"}
         </span>
       </div>
 
@@ -119,16 +130,30 @@ export function BlocoLeadsPorEstado({ dados }: { dados: LeadsPorEstado }) {
           >
             {GRADE.map(([linha, coluna, uf]) => {
               const n = porUf.get(uf)?.leads ?? 0;
+              const ativa = selecionada === uf;
+              // Estado sem lead nenhum não filtra: o clique levaria a um
+              // relatório inteiro zerado e a única saída seria adivinhar como
+              // voltar.
+              const clicavel = n > 0 && !!onSelecionar;
               return (
-                <div
+                <button
                   key={uf}
-                  title={`${uf}: ${n} ${n === 1 ? "lead" : "leads"}`}
+                  type="button"
+                  disabled={!clicavel}
+                  onClick={clicavel ? () => onSelecionar!(uf) : undefined}
+                  title={
+                    clicavel
+                      ? `${uf}: ${n} ${n === 1 ? "lead" : "leads"} — clique pra filtrar o relatório`
+                      : `${uf}: nenhum lead no período`
+                  }
                   style={{ gridRow: linha, gridColumn: coluna }}
-                  className={`flex flex-col items-center justify-center rounded-md py-1.5 ${faixaDe(n)}`}
+                  className={`flex flex-col items-center justify-center rounded-md py-1.5 transition ${faixaDe(n)} ${
+                    clicavel ? "cursor-pointer hover:brightness-95" : "cursor-default"
+                  } ${ativa ? "ring-2 ring-violet-600 ring-offset-1 ring-offset-background" : ""}`}
                 >
                   <span className="text-[10.5px] font-extrabold leading-none">{uf}</span>
                   <span className="mt-0.5 text-[10.5px] leading-none tabular-nums">{n}</span>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -166,9 +191,15 @@ export function BlocoLeadsPorEstado({ dados }: { dados: LeadsPorEstado }) {
 
           <div className="max-h-[300px] overflow-y-auto">
             {dados.estados.map((e) => (
-              <div
+              <button
                 key={e.uf}
-                className="grid grid-cols-[30px_1fr_44px_74px] items-center gap-2 border-b border-border/40 py-[7px]"
+                type="button"
+                disabled={!onSelecionar}
+                onClick={onSelecionar ? () => onSelecionar(e.uf) : undefined}
+                title={onSelecionar ? `Filtrar o relatório por ${e.uf}` : undefined}
+                className={`grid w-full grid-cols-[30px_1fr_44px_74px] items-center gap-2 border-b border-border/40 py-[7px] text-left ${
+                  onSelecionar ? "cursor-pointer hover:bg-muted/40" : ""
+                } ${selecionada === e.uf ? "bg-violet-50 dark:bg-violet-950/40" : ""}`}
               >
                 <span className="text-[11.5px] font-extrabold">{e.uf}</span>
                 <span className="block h-2 overflow-hidden rounded-[2px] bg-muted">
@@ -190,7 +221,7 @@ export function BlocoLeadsPorEstado({ dados }: { dados: LeadsPorEstado }) {
                     —
                   </span>
                 )}
-              </div>
+              </button>
             ))}
           </div>
 

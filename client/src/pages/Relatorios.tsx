@@ -27,7 +27,7 @@ import {
   LayoutGrid, Calculator, Wallet, FileText, Loader2,
   TrendingDown, Hourglass, Repeat,
   CalendarCheck, XCircle, Users,
-  PhoneOutgoing, PhoneIncoming,
+  PhoneOutgoing, PhoneIncoming, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RelatoriosTab as DreFinanceiroTab } from "./financeiro/Relatorios";
@@ -311,6 +311,9 @@ function AbaAtendimento() {
   const [setorId, setSetorId] = useState<number | null>(null);
   const [atendenteId, setAtendenteId] = useState<number | null>(null);
   const [canalId, setCanalId] = useState<number | null>(null);
+  // Estado escolhido no mapa. Mora aqui, e não no contexto compartilhado,
+  // porque só esta aba tem de onde tirá-lo.
+  const [uf, setUf] = useState<string | null>(null);
 
   const { data: setoresList } = trpc.configuracoes.listarSetores.useQuery(undefined, { retry: false });
   const { data: colabsList } = trpc.configuracoes.listarColaboradoresParaFiltro.useQuery(
@@ -333,6 +336,7 @@ function AbaAtendimento() {
       setorId: setorId ?? undefined,
       atendenteId: atendenteId ?? undefined,
       canalId: canalId ?? undefined,
+      uf: uf ?? undefined,
       comparar,
     },
     { refetchInterval: 60_000 },
@@ -350,6 +354,7 @@ function AbaAtendimento() {
           setorId: setorId ?? undefined,
           atendenteId: atendenteId ?? undefined,
           canalId: canalId ?? undefined,
+          uf: uf ?? undefined,
         }}
         pronto={!!data}
       />
@@ -396,6 +401,17 @@ function AbaAtendimento() {
             })),
           ]}
         />
+        {uf && (
+          <button
+            type="button"
+            onClick={() => setUf(null)}
+            title="Voltar a ver todos os estados"
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-2.5 text-xs font-semibold text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300"
+          >
+            Estado: {uf}
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </BarraFiltro>
 
       {isLoading ? (
@@ -403,7 +419,7 @@ function AbaAtendimento() {
       ) : !data ? (
         <Empty />
       ) : (
-        <AbaAtendimentoConteudo data={data} />
+        <AbaAtendimentoConteudo data={data} uf={uf} onUf={setUf} />
       )}
     </div>
   );
@@ -418,7 +434,15 @@ function fmtTempoResposta(seg: number): string {
   return `${(min / 60).toFixed(1).replace(".", ",")} h`;
 }
 
-function AbaAtendimentoConteudo({ data }: { data: any }) {
+function AbaAtendimentoConteudo({
+  data,
+  uf,
+  onUf,
+}: {
+  data: any;
+  uf: string | null;
+  onUf: (uf: string | null) => void;
+}) {
   const ant = data.anterior as any | null;
   const d = (atual: number | null, chave: string, menorEhMelhor = false) =>
     ant ? calcularDelta(atual, ant[chave], menorEhMelhor) : undefined;
@@ -501,7 +525,13 @@ function AbaAtendimentoConteudo({ data }: { data: any }) {
         />
       </div>
 
-      {data.leadsPorEstado && <BlocoLeadsPorEstado dados={data.leadsPorEstado} />}
+      {data.leadsPorEstado && (
+        <BlocoLeadsPorEstado
+          dados={data.leadsPorEstado}
+          selecionada={uf}
+          onSelecionar={(sigla) => onUf(sigla === uf ? null : sigla)}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
         <CardRel
