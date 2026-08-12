@@ -583,7 +583,7 @@ function AbaAtendimentoConteudo({
           className="lg:col-span-3"
           icone={<TrendingDown className="h-4 w-4 text-muted-foreground" />}
           titulo="Motivos de perda"
-          aviso={`${data.leadsPerdidos.toLocaleString("pt-BR")} leads perdidos`}
+          aviso={`${data.leadsPerdidos.toLocaleString("pt-BR")} oportunidades perdidas`}
         >
           {(data.motivosPerda || []).length === 0 ? (
             <p className="px-4 pb-4 text-xs text-muted-foreground">
@@ -645,7 +645,7 @@ function AbaAtendimentoConteudo({
               <TableRow className="hover:bg-transparent">
                 <TableHead className="text-[10px] uppercase tracking-wide">Atendente</TableHead>
                 <TableHead className="text-[10px] uppercase tracking-wide text-center">Atend.</TableHead>
-                <TableHead className="text-[10px] uppercase tracking-wide text-center">Leads</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-wide text-center">Oportunidades</TableHead>
                 <TableHead className="text-[10px] uppercase tracking-wide text-center">Ganhos</TableHead>
                 <TableHead className="text-[10px] uppercase tracking-wide text-center">Perdidos</TableHead>
                 <TableHead className="text-[10px] uppercase tracking-wide text-center">Em aberto</TableHead>
@@ -837,12 +837,17 @@ const CORES_CANAL = [
  *    sobrepõem o `dias` global quando aplicado.
  *
  * Definições importantes da aba:
- *  - "Contratos fechados" = leads movidos pra etapa **Ganho** no pipeline
- *    (`etapaFunil = 'fechado_ganho'`) dentro do período.
- *  - "Taxa de conversão" = contratos fechados ÷ total de leads.
+ *  - "Contratos fechados" = oportunidades movidas pra etapa **Ganho** no
+ *    pipeline (`etapaFunil = 'fechado_ganho'`) dentro do período.
+ *  - "Taxa de conversão" = contratos fechados ÷ total de oportunidades.
+ *
+ * "Oportunidade" é o nome do que a tabela `leads` guarda: uma NEGOCIAÇÃO, não
+ * uma pessoa. A aba "Leads" em Clientes conta pessoas na fila, e as duas
+ * contagens nunca batem — quem volta com um segundo caso entra de novo aqui e
+ * some de lá ao virar cliente. A palavra separada é o que impede a soma.
  *  - "Contatos por origem" só conta canais de captação ativa
  *    (whatsapp, instagram, facebook, manual). Asaas é cobrança de
- *    cliente já existente — não é lead novo.
+ *    cliente já existente — não é captação nova.
  */
 // ───────────────────── Dashboard Comercial (estilo Looker) ─────────────────────
 
@@ -1605,7 +1610,7 @@ function DashboardComercial() {
                       pago: { label: "Pago integral", cor: "bg-emerald-100 text-emerald-700" },
                       parcial: { label: "Parcial", cor: "bg-amber-100 text-amber-700" },
                       aguardando: { label: "Aguardando", cor: "bg-gray-100 text-gray-700" },
-                      so_pago: { label: "Pago s/ lead", cor: "bg-blue-100 text-blue-700" },
+                      so_pago: { label: "Pago s/ oportunidade", cor: "bg-blue-100 text-blue-700" },
                     };
                     const s = statusInfo[it.status] || statusInfo.aguardando;
                     return (
