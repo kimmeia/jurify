@@ -19,32 +19,26 @@
 
 import { Database, Info, TriangleAlert } from "lucide-react";
 import { MINIMO_PARA_CONVERSAO, type LeadsPorEstado } from "@shared/leads-uf";
+import { CENTROS_UF, PATHS_UF, VIEWBOX_BRASIL } from "./mapa-brasil";
 
-/** Posição de cada UF na grade — Norte em cima, Sul embaixo, litoral à direita. */
-const GRADE: Array<[linha: number, coluna: number, uf: string]> = [
-  [1, 3, "RR"], [1, 4, "AP"],
-  [2, 2, "AM"], [2, 3, "PA"], [2, 4, "MA"], [2, 5, "CE"], [2, 6, "RN"],
-  [3, 1, "AC"], [3, 3, "TO"], [3, 4, "PI"], [3, 5, "PE"], [3, 6, "PB"],
-  [4, 1, "RO"], [4, 2, "MT"], [4, 4, "BA"], [4, 5, "AL"], [4, 6, "SE"],
-  [5, 1, "MS"], [5, 2, "GO"], [5, 3, "DF"], [5, 4, "MG"], [5, 5, "ES"],
-  [6, 2, "PR"], [6, 3, "SP"], [6, 4, "RJ"],
-  [7, 1, "RS"], [7, 2, "SC"],
+/**
+ * Rampa sequencial por volume. Faixa FIXA, não relativa ao maior do período:
+ * senão o mesmo número de leads muda de cor quando o mês muda, e comparar
+ * dois meses passa a depender do mês.
+ *
+ * Em hex, e não em classe do Tailwind, porque quem pinta é atributo de SVG.
+ */
+const FAIXAS: Array<{ ate: number; preenche: string; texto: string }> = [
+  { ate: 0, preenche: "var(--muted)", texto: "var(--muted-foreground)" },
+  { ate: 4, preenche: "#ede9fe", texto: "#6d28d9" },
+  { ate: 9, preenche: "#ddd6fe", texto: "#5b21b6" },
+  { ate: 19, preenche: "#c4b5fd", texto: "#4c1d95" },
+  { ate: 49, preenche: "#a78bfa", texto: "#2e1065" },
+  { ate: Infinity, preenche: "#7c3aed", texto: "#ffffff" },
 ];
 
-/** Rampa sequencial na família do acento. Faixa fixa, não relativa ao maior:
- *  senão o mesmo volume muda de cor quando o período muda, e a comparação
- *  entre dois meses passa a depender do mês. */
-const FAIXAS: Array<{ ate: number; classe: string }> = [
-  { ate: 0, classe: "bg-muted/60 text-muted-foreground/50 border border-border" },
-  { ate: 4, classe: "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300" },
-  { ate: 9, classe: "bg-violet-200 text-violet-800 dark:bg-violet-900/70 dark:text-violet-200" },
-  { ate: 19, classe: "bg-violet-300 text-violet-900 dark:bg-violet-800 dark:text-violet-50" },
-  { ate: 49, classe: "bg-violet-400 text-violet-950 dark:bg-violet-700 dark:text-white" },
-  { ate: Infinity, classe: "bg-violet-600 text-white font-bold" },
-];
-
-function faixaDe(n: number): string {
-  return (FAIXAS.find((f) => n <= f.ate) ?? FAIXAS[FAIXAS.length - 1]!).classe;
+function faixaDe(n: number) {
+  return FAIXAS.find((f) => n <= f.ate) ?? FAIXAS[FAIXAS.length - 1]!;
 }
 
 const CORES_BARRA = [
@@ -122,41 +116,59 @@ export function BlocoLeadsPorEstado({
         </span>
       </div>
 
-      <div className="mt-3 grid gap-5 px-4 lg:grid-cols-[minmax(0,320px)_1fr]">
+      <div className="mt-3 grid gap-5 px-4 lg:grid-cols-[minmax(0,400px)_1fr]">
         <div>
-          <div
-            className="grid gap-1"
-            style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }}
+          {/* Mapa geográfico de verdade. A ressalva honesta é que a ÁREA do
+              estado não tem relação com o volume — o Amazonas ocupa um quinto
+              do desenho com zero lead e o Distrito Federal quase some mesmo
+              quando rende. Quem responde "quanto" é a lista ao lado; o mapa
+              responde "onde no país", que é o que o contorno tem de útil. */}
+          <svg
+            viewBox={VIEWBOX_BRASIL}
+            className="block h-auto w-full max-h-[360px]"
+            role="img"
+            aria-label="Leads por estado"
           >
-            {GRADE.map(([linha, coluna, uf]) => {
+            {Object.entries(PATHS_UF).map(([uf, d]) => {
               const n = porUf.get(uf)?.leads ?? 0;
               const ativa = selecionada === uf;
-              // Estado sem lead nenhum não filtra: o clique levaria a um
-              // relatório inteiro zerado e a única saída seria adivinhar como
-              // voltar.
               const clicavel = n > 0 && !!onSelecionar;
               return (
-                <button
+                <path
                   key={uf}
-                  type="button"
-                  disabled={!clicavel}
+                  d={d}
+                  fill={faixaDe(n).preenche}
+                  stroke={ativa ? "#5b21b6" : "var(--background)"}
+                  strokeWidth={ativa ? 2.6 : 1.3}
+                  className={clicavel ? "cursor-pointer" : ""}
                   onClick={clicavel ? () => onSelecionar!(uf) : undefined}
-                  title={
-                    clicavel
-                      ? `${uf}: ${n} ${n === 1 ? "lead" : "leads"} — clique pra filtrar o relatório`
-                      : `${uf}: nenhum lead no período`
-                  }
-                  style={{ gridRow: linha, gridColumn: coluna }}
-                  className={`flex flex-col items-center justify-center rounded-md py-1.5 transition ${faixaDe(n)} ${
-                    clicavel ? "cursor-pointer hover:brightness-95" : "cursor-default"
-                  } ${ativa ? "ring-2 ring-violet-600 ring-offset-1 ring-offset-background" : ""}`}
                 >
-                  <span className="text-[10.5px] font-extrabold leading-none">{uf}</span>
-                  <span className="mt-0.5 text-[10.5px] leading-none tabular-nums">{n}</span>
-                </button>
+                  <title>
+                    {n > 0
+                      ? `${uf}: ${n} ${n === 1 ? "lead" : "leads"}${onSelecionar ? " — clique pra filtrar" : ""}`
+                      : `${uf}: nenhum lead no período`}
+                  </title>
+                </path>
               );
             })}
-          </div>
+            {/* Só estado COM lead ganha rótulo: 27 siglas num mapa deste
+                tamanho vira mancha de texto sobre o desenho. */}
+            {dados.estados.map((e) => {
+              const c = CENTROS_UF[e.uf];
+              if (!c) return null;
+              const cor = faixaDe(e.leads).texto;
+              return (
+                <g key={e.uf} className="pointer-events-none">
+                  <text x={c[0]} y={c[1] - 2} fontSize={19} fontWeight={800} fill={cor} textAnchor="middle">
+                    {e.uf}
+                  </text>
+                  <text x={c[0]} y={c[1] + 16} fontSize={17.5} fontWeight={700} fill={cor} textAnchor="middle">
+                    {e.leads}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
 
           <div className="mt-2.5 flex items-center gap-2">
             <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
@@ -164,14 +176,18 @@ export function BlocoLeadsPorEstado({
             </span>
             <div className="flex items-center gap-0.5">
               {FAIXAS.map((f) => (
-                <span key={f.ate} className={`h-2 w-5 rounded-[2px] ${f.classe}`} />
+                <span
+                  key={f.ate}
+                  className="h-2 w-5 rounded-[2px] border border-border"
+                  style={{ background: f.preenche }}
+                />
               ))}
             </div>
             <span className="text-[10px] text-muted-foreground">0 · 1–4 · 5–9 · 10–19 · 20–49 · 50+</span>
           </div>
           <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
-            Cada estado ocupa o mesmo quadrado. Num mapa de verdade Roraima é doze vezes o Rio e
-            pintaria a tela com zero lead dentro.
+            A área do estado no mapa não tem relação com o volume — o Amazonas é enorme e pode
+            estar zerado. Quem responde “quanto” é a lista ao lado.
           </p>
         </div>
 
