@@ -466,6 +466,11 @@ function AbaAtendimentoConteudo({ data }: { data: any }) {
 
   return (
     <div className="space-y-3">
+      {/* Quatro KPIs, na ordem em que a pergunta é feita: quanto entrou, quão
+          rápido foi atendido, quanto virou contrato, e de que tamanho. Msgs
+          enviadas/recebidas e "Conversa → Lead" saíram — eram volume de
+          tráfego e um derivado que ninguém usava pra decidir, e sete cartões
+          na primeira dobra fazem os quatro que importam sumirem no meio. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiRel
           label="Atendimentos"
@@ -474,26 +479,11 @@ function AbaAtendimentoConteudo({ data }: { data: any }) {
           anterior={nAnt("totalConversas", (v) => v.toLocaleString("pt-BR"))}
         />
         <KpiRel
-          label="Msgs recebidas"
-          valor={data.mensagensRecebidas.toLocaleString("pt-BR")}
-          delta={d(data.mensagensRecebidas, "mensagensRecebidas")}
-          anterior={nAnt("mensagensRecebidas", (v) => v.toLocaleString("pt-BR"))}
-        />
-        <KpiRel
-          label="Msgs enviadas"
-          valor={data.mensagensEnviadas.toLocaleString("pt-BR")}
-          delta={d(data.mensagensEnviadas, "mensagensEnviadas")}
-          anterior={nAnt("mensagensEnviadas", (v) => v.toLocaleString("pt-BR"))}
-        />
-        <KpiRel
           label="Tempo p/ 1ª resposta"
           valor={fmtTempoResposta(data.segMedioPriResp)}
           delta={d(data.segMedioPriResp, "segMedioPriResp", true)}
           anterior={nAnt("segMedioPriResp", fmtTempoResposta)}
         />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <KpiRel
           label="Taxa de conversão"
           valor={data.taxaConversao !== null ? `${data.taxaConversao}%` : "—"}
@@ -508,12 +498,6 @@ function AbaAtendimentoConteudo({ data }: { data: any }) {
           valor={data.ticketMedio !== null ? formatBRL(data.ticketMedio) : "—"}
           delta={d(data.ticketMedio, "ticketMedio")}
           anterior={nAnt("ticketMedio", formatBRL) ?? "Valor médio dos contratos fechados"}
-        />
-        <KpiRel
-          label="Conversa → Lead"
-          valor={data.conversaParaLead !== null ? `${data.conversaParaLead}%` : "—"}
-          delta={dp(data.conversaParaLead, "conversaParaLead")}
-          anterior={nAnt("conversaParaLead", (v) => `${v}%`) ?? "Conversas que geraram lead"}
         />
       </div>
 

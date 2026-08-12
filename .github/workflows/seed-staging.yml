@@ -1,0 +1,75 @@
+name: Seed staging (one-shot)
+
+# Cria as contas de teste do smoke no banco de STAGING.
+#
+# Por que existe: `scripts/seed-staging.ts` só rodava dentro do Tests CI,
+# contra o MySQL efêmero do próprio job. O smoke agendado, que roda contra o
+# staging de verdade, tentava logar com uma conta que só existia naquele banco
+# descartável — e ficava vermelho para sempre, sem que nada estivesse quebrado.
+# Smoke sempre vermelho não avisa mais nada no dia em que o login cair.
+#
+# Uso:
+#  1. Crie dois secrets no repositório:
+#       SEED_DATABASE_URL — connection string do MySQL de staging
+#                           (MYSQL_PUBLIC_URL do Railway, com TCP Proxy ligado)
+#       SMOKE_PASSWORD    — senha das contas de teste. Gere uma forte e
+#                           aleatória; ela NÃO pode ser a de fábrica, que está
+#                           publicada no repositório.
+#  2. Actions → "Seed staging (one-shot)" → "Run workflow", confirmando SEED.
+#  3. Depois de rodar, desligue o TCP Proxy e apague SEED_DATABASE_URL.
+#     SMOKE_PASSWORD fica — o smoke agendado precisa dela pra logar.
+#
+# É idempotente: pode rodar de novo pra girar a senha das contas.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Digite SEED para confirmar (vai criar/atualizar as contas de teste no banco apontado por SEED_DATABASE_URL)'
+        required: true
+        type: string
+
+jobs:
+  seed:
+    name: seed-staging.ts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validar confirmação
+        if: ${{ inputs.confirm != 'SEED' }}
+        run: |
+          echo "❌ Confirmação inválida. Você digitou: '${{ inputs.confirm }}'"
+          echo "Esperado: SEED"
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Seed
+        env:
+          DATABASE_URL: ${{ secrets.SEED_DATABASE_URL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          # O script tem guard-rail próprio contra produção; declarar o
+          # ambiente aqui é o que ATIVA a exigência do SMOKE_PASSWORD.
+          JURIFY_AMBIENTE: staging
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "❌ Secret SEED_DATABASE_URL não está definido."
+            exit 1
+          fi
+          if [ -z "$SMOKE_PASSWORD" ]; then
+            echo "❌ Secret SMOKE_PASSWORD não está definido."
+            echo "   A senha de fábrica está publicada no repositório e não serve pra ambiente vivo."
+            exit 1
+          fi
+          pnpm tsx scripts/seed-staging.ts
+          echo "✅ Contas de teste prontas. Desligue o TCP Proxy e apague SEED_DATABASE_URL."

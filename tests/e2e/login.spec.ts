@@ -27,6 +27,23 @@ test.describe("Login com email e senha", () => {
     await page.getByLabel(/^senha$/i).fill(SEED_PASSWORD);
     await page.getByRole("button", { name: /^entrar$/i }).click();
 
+    // Credencial recusada mostra a MESMA mensagem genérica de senha errada —
+    // é o desenho, pra não vazar se o email existe. O efeito colateral é que
+    // "conta de seed ausente neste ambiente" chegava aqui como "continua em
+    // /login", que não diz o que fazer. Checar a mensagem antes transforma o
+    // alarme mudo em instrução.
+    const recusado = await page
+      .getByText(/incorretos|inv[aá]lid/i)
+      .first()
+      .isVisible({ timeout: 3000 })
+      .catch(() => false);
+    if (recusado) {
+      throw new Error(
+        "Login recusado com as credenciais de seed. Ou as contas não existem neste ambiente " +
+          '(Actions → "Seed staging (one-shot)"), ou SMOKE_PASSWORD não é a senha que foi gravada.',
+      );
+    }
+
     // Pós-sucesso a página manda pra "/" e o Home é quem decide o destino
     // (admin → /admin, com assinatura → /dashboard, sem → /plans). Por isso a
     // espera é generosa: são duas navegações, não uma.
