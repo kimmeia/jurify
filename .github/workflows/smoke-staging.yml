@@ -16,6 +16,10 @@ jobs:
       # Configurar em Repo Settings > Secrets > Actions:
       #   STAGING_BASE_URL = https://staging.jurify.com.br (ou Railway URL)
       PLAYWRIGHT_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
+      # A senha das contas de teste, a MESMA que o workflow "Seed staging"
+      # gravou. Sem ela o robô tenta a senha de fábrica, que só vale no banco
+      # descartável da CI, e o login falha sem dizer por quê.
+      SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
