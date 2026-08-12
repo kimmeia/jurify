@@ -117,8 +117,12 @@ export async function gerarAtendimentoPdf(args: {
   setorLabel: string;
   atendenteLabel: string;
   canalLabel: string;
+  /** UF que filtrou o relatório, ou "Todos". O papel tem que dizer o recorte
+   *  que ele representa — PDF filtrado sem dizer que é filtrado vira número
+   *  errado circulando fora da tela. */
+  ufLabel?: string;
 }): Promise<Buffer> {
-  const { data, nomeEscritorio, setorLabel, atendenteLabel, canalLabel } = args;
+  const { data, nomeEscritorio, setorLabel, atendenteLabel, canalLabel, ufLabel } = args;
 
   return new Promise((resolve, reject) => {
     try {
@@ -258,7 +262,8 @@ export async function gerarAtendimentoPdf(args: {
       meta("Setor", setorLabel, L + colMeta, yMeta + 7);
       meta("Atendente", atendenteLabel, L + colMeta * 2, yMeta + 7);
       meta("Canal", canalLabel, L + 10, yMeta + 30);
-      meta("Emitido em", emitido, L + colMeta, yMeta + 30);
+      meta("Estado", ufLabel || "Todos", L + colMeta, yMeta + 30);
+      meta("Emitido em", emitido, L + colMeta * 2, yMeta + 30);
       doc.y = yMeta + 62;
 
       // ── 1) OPERAÇÃO ────────────────────────────────────────────────────────
