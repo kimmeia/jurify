@@ -2,11 +2,15 @@
  * Contas seed pro robô E2E. Devem existir no banco antes dos testes
  * rodarem — criadas por `scripts/seed-staging.ts`.
  *
- * Senha padronizada pra simplicidade. NÃO USAR em produção (seed
- * recusa rodar lá).
+ * A senha tem que sair da MESMA fonte que o seed usa, senão o robô tenta
+ * entrar com uma e a conta foi criada com outra. O valor de fábrica serve pro
+ * banco descartável da CI; contra staging, `SMOKE_PASSWORD` vem de secret —
+ * senha publicada no repositório não pode virar credencial de ambiente vivo.
+ *
+ * NÃO USAR em produção: o seed recusa rodar lá.
  */
 
-export const SEED_PASSWORD = "Smoke123!";
+export const SEED_PASSWORD = process.env.SMOKE_PASSWORD || "Smoke123!";
 
 export const SEED_USERS = {
   admin: {

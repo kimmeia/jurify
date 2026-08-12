@@ -24,7 +24,16 @@ import {
   subscriptions,
 } from "../drizzle/schema";
 
-const SENHA_PADRAO = "Smoke123!";
+/**
+ * A senha das contas de teste.
+ *
+ * O valor de fábrica só serve pro banco descartável da CI, que nasce e morre
+ * dentro do job. Semear um ambiente vivo com uma senha publicada no
+ * repositório é plantar credencial conhecida — por isso, em staging, a senha
+ * vem de `SMOKE_PASSWORD` e o script recusa rodar sem ela.
+ */
+const SENHA_CI = "Smoke123!";
+const SENHA_PADRAO = process.env.SMOKE_PASSWORD || SENHA_CI;
 
 const SEEDS = [
   { email: "admin-smoke@juridflow.com.br",  name: "Admin Smoke",   role: "admin" as const, cargo: null },
@@ -52,7 +61,14 @@ async function seed() {
   if (ambiente === "production" && !forcado) {
     throw new Error("Seed bloqueado em produção. Use JURIFY_SEED_FORCE=1 se for muito necessário.");
   }
+  if (ambiente === "staging" && !process.env.SMOKE_PASSWORD) {
+    throw new Error(
+      "SMOKE_PASSWORD não definida. Em staging a senha das contas de teste vem de secret: " +
+        "a senha de fábrica está publicada no repositório e não pode virar credencial de ambiente vivo.",
+    );
+  }
   console.log(`[seed] Ambiente: ${ambiente || "(não definido)"}`);
+  console.log(`[seed] Senha das contas: ${process.env.SMOKE_PASSWORD ? "de SMOKE_PASSWORD" : "de fábrica (só CI)"}`);
 
   const db = await getDb();
   if (!db) throw new Error("Database indisponível.");
@@ -66,7 +82,14 @@ async function seed() {
     const [existing] = await db.select().from(users).where(eq(users.email, s.email)).limit(1);
     if (existing) {
       userIds[s.email] = existing.id;
-      console.log(`[seed] user existente: ${s.email} (id=${existing.id})`);
+      // A senha é reescrita a cada execução, e não só na criação. Sem isso,
+      // girar o secret não teria efeito nenhum: as contas continuariam com o
+      // hash antigo e o smoke seguiria barrado no login sem nenhuma pista.
+      await db
+        .update(users)
+        .set({ passwordHash, emailVerificado: true, emailVerificadoEm: new Date() })
+        .where(eq(users.id, existing.id));
+      console.log(`[seed] user existente: ${s.email} (id=${existing.id}) — senha reescrita`);
       continue;
     }
     const [inserido] = await db.insert(users).values({
@@ -188,7 +211,7 @@ async function seed() {
     console.log(`[seed] cliente criado: ${c.nome}`);
   }
 
-  console.log(`\n[seed] OK. Senha padrão de todos os users: "${SENHA_PADRAO}"`);
+  console.log(`\n[seed] OK. ${SEEDS.length} contas prontas.`);
 }
 
 seed()

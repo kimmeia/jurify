@@ -272,14 +272,6 @@ export async function gerarAtendimentoPdf(args: {
           delta: calcularDelta(data.totalConversas, ant?.totalConversas), bd: C.violetBd, color: C.dark,
         },
         {
-          label: "Msgs recebidas", value: formatMilhar(data.mensagensRecebidas),
-          delta: calcularDelta(data.mensagensRecebidas, ant?.mensagensRecebidas), bd: C.line, color: C.dark,
-        },
-        {
-          label: "Msgs enviadas", value: formatMilhar(data.mensagensEnviadas),
-          delta: calcularDelta(data.mensagensEnviadas, ant?.mensagensEnviadas), bd: C.line, color: C.dark,
-        },
-        {
           label: "Tempo p/ 1ª resposta", value: formatTempo(data.segMedioPriResp),
           delta: calcularDelta(data.segMedioPriResp, ant?.segMedioPriResp, true),
           bd: C.amberBd, color: C.dark,
@@ -297,10 +289,6 @@ export async function gerarAtendimentoPdf(args: {
           label: "Ticket médio",
           value: data.ticketMedio != null ? formatBRL(data.ticketMedio) : "—",
           delta: calcularDelta(data.ticketMedio, ant?.ticketMedio), bd: C.line, color: C.dark,
-        },
-        {
-          label: "Conversa → Lead", value: taxaStr(data.conversaParaLead),
-          delta: calcularDeltaPontos(data.conversaParaLead, ant?.conversaParaLead), bd: C.line, color: C.dark,
         },
         {
           label: "Ganhos × perdidos",
