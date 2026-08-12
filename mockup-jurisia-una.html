@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href=".claude/skills/mockup-juridflow/assets/fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+    --viz-1:#2a78d6; --viz-2:#eb6834; --viz-3:#1baf7a; --viz-4:#eda100; --viz-5:#e87ba4;
+    --viz-trilho:#e8edf3;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:22px 30px; height:100%; display:flex; flex-direction:column; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em;
+        display:flex; align-items:center; gap:9px; }
+  .selo-beta { font-size:9.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
+               background:var(--acento); color:#fff; border-radius:999px; padding:3px 8px; }
+  .sub { margin-top:3px; font-size:13px; color:var(--mudo); }
+  .topo-dir { display:flex; align-items:center; gap:9px; }
+  .cota { text-align:right; }
+  .cota .n { font-size:12.5px; font-weight:700; color:var(--corpo); }
+  .cota .l { font-size:11px; color:var(--fraco); margin-top:1px; }
+  .btn-out { height:36px; border:1px solid var(--borda); background:var(--surface); border-radius:9px;
+             padding:0 13px; display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; color:var(--corpo); }
+  .btn-primary { background:var(--acento); color:#fff; font-weight:600; font-size:13px;
+                 border-radius:9px; padding:10px 15px; display:flex; align-items:center; gap:7px;
+                 box-shadow:0 8px 18px -8px #7c3aed88; }
+
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  .corpo { flex:1 1 auto; min-height:0; display:flex; gap:13px; margin-top:14px; }
+  .col-esq { width:214px; flex:0 0 auto; display:flex; flex-direction:column; gap:10px; }
+  .col-meio { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:10px; }
+  .col-dir { width:310px; flex:0 0 auto; display:flex; flex-direction:column; gap:10px; }
+
+  /* esquerda */
+  .btn-novo { border:1px solid var(--borda); background:var(--surface); border-radius:9px; height:36px;
+              display:flex; align-items:center; justify-content:center; gap:7px;
+              font-size:12.5px; font-weight:600; color:var(--corpo); }
+  .trabalhos { padding:10px; flex:1 1 auto; min-height:0; }
+  .trab { padding:8px 9px; border-radius:8px; margin-top:5px; }
+  .trab.on { background:var(--acento-bg-2); border:1px solid #ddd6fe; }
+  .trab .t { font-size:12px; font-weight:600; color:var(--tinta-2); line-height:1.3; }
+  .trab .m { font-size:10px; color:var(--fraco); margin-top:2px; }
+  .trab.on .m { color:var(--acento-forte); font-weight:600; }
+
+  /* thread */
+  .thread { flex:1 1 auto; min-height:0; padding:14px 16px; display:flex; flex-direction:column; gap:11px; }
+  .fala { display:flex; gap:9px; align-items:flex-start; }
+  .av { width:26px; height:26px; border-radius:50%; flex:0 0 auto; color:#fff;
+        font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .bolha { border-radius:12px; padding:9px 13px; font-size:13px; line-height:1.5; }
+  .bolha.eu { background:var(--acento); color:#fff; }
+  .bolha.ia { background:var(--hairline); color:var(--corpo); border:1px solid var(--borda); }
+  .fala.eu { justify-content:flex-end; }
+
+  /* a linha de trabalho: o que ela fez antes de responder */
+  .fez { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:6px; }
+  .passo { display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:3px 9px;
+           font-size:10.5px; font-weight:600; border:1px solid var(--borda); background:var(--surface); color:var(--corpo-2); }
+  .passo.acervo { border-color:#ddd6fe; background:var(--acento-bg-2); color:var(--acento-forte); }
+  .passo.doc { border-color:var(--borda); background:var(--hairline); }
+  .passo.fonte { border-color:#fde68a; background:#fffbeb; color:#a16207; }
+  .passo.falhou { border-color:var(--alerta-borda); background:var(--alerta-bg); color:var(--alerta-forte); }
+
+  .anc { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px;
+         border-radius:4px; font-size:9px; font-weight:800; vertical-align:2px; margin:0 1px; }
+  .anc.a { background:var(--acento-bg-2); color:var(--acento-forte); border:1px solid #ddd6fe; }
+  .anc.d { background:var(--hairline); color:var(--corpo-2); border:1px solid var(--borda); }
+  .anc.f { background:#fffbeb; color:#a16207; border:1px solid #fde68a; }
+
+  /* prova do acervo */
+  .prova { margin-top:8px; border:1px solid #ddd6fe; background:var(--acento-bg); border-radius:10px; padding:9px 11px; }
+  .prova .cab { display:flex; align-items:baseline; justify-content:space-between; gap:9px; }
+  .prova .e { font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--acento-forte); }
+  .prova .q { font-size:10.5px; color:var(--acento-forte); font-weight:600; }
+  .bl { display:grid; grid-template-columns:110px 1fr auto; align-items:center; gap:8px; margin-top:5px; }
+  .bl .r { font-size:11px; color:var(--corpo-2); }
+  .bl .t2 { height:7px; border-radius:2px; background:var(--viz-trilho); overflow:hidden; }
+  .bl .t2 i { display:block; height:100%; border-radius:0 3px 3px 0; }
+  .bl .v { font-size:11px; font-variant-numeric:tabular-nums; display:flex; }
+  .bl .v .p { width:30px; text-align:right; font-weight:700; color:var(--corpo); }
+  .bl .v .q2 { width:42px; text-align:right; color:var(--fraco); }
+
+  /* minuta anexada à resposta */
+  .minuta { margin-top:8px; border:1px solid var(--borda); background:var(--surface); border-radius:10px; overflow:hidden; }
+  .minuta .cab { padding:9px 12px; border-bottom:1px solid var(--hairline); display:flex;
+                 align-items:center; justify-content:space-between; gap:9px; }
+  .minuta .tt { font-size:12.8px; font-weight:700; color:var(--tinta-2); }
+  .minuta .mt { font-size:10.5px; color:var(--fraco); margin-top:1px; }
+  .acoes { display:flex; gap:6px; }
+  .btn-sm { border:1px solid var(--borda); border-radius:7px; padding:4px 9px;
+            font-size:11px; font-weight:600; color:var(--corpo); display:flex; align-items:center; gap:5px; }
+  .btn-sm.ac { background:var(--acento); border-color:var(--acento); color:#fff; }
+  .sec { padding:6px 12px; display:flex; gap:9px; border-bottom:1px solid var(--hairline-2); }
+  .sec:last-child { border-bottom:0; }
+  .sec .n { font-size:10.5px; font-weight:800; color:var(--fantasma); width:18px; flex:0 0 auto; padding-top:1px; }
+  .sec .s { font-size:12px; font-weight:700; color:var(--tinta-2); }
+  .sec .c { font-size:11.5px; color:var(--corpo); line-height:1.4; margin-top:1px; }
+
+  /* composer */
+  .composer { flex:0 0 auto; padding:11px 13px; }
+  .campo { display:flex; gap:9px; align-items:center; }
+  .campo .inp { flex:1; height:38px; border:1px solid var(--borda); border-radius:9px; padding:0 12px;
+                display:flex; align-items:center; font-size:13px; color:var(--fraco); }
+  .campo .env { width:38px; height:38px; border-radius:9px; background:var(--acento);
+                display:flex; align-items:center; justify-content:center; }
+  .sug { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:9px; }
+  .sug span { border:1px solid var(--borda); background:var(--hairline-2); border-radius:999px;
+              padding:5px 11px; font-size:11.5px; color:var(--corpo-2); }
+  .rod { margin-top:7px; font-size:10.5px; color:var(--fraco); }
+
+  /* direita */
+  .caso { padding:12px 13px; flex:0 0 auto; border-color:#ddd6fe; background:var(--acento-bg); }
+  .caso .nm { font-size:13.5px; font-weight:700; color:var(--acento-forte); line-height:1.25; }
+  .caso .pr { font-size:11px; color:var(--corpo); margin-top:4px; line-height:1.4; }
+  .caso .tr { font-size:10.5px; color:var(--acento-forte); font-weight:700; }
+
+  .fontes { padding:12px 13px; flex:0 0 auto; }
+  .f-row { display:flex; align-items:flex-start; gap:8px; padding:7px 0; border-bottom:1px solid var(--hairline-2); }
+  .f-row:last-child { border-bottom:0; }
+  .f-row .ic { width:22px; height:22px; border-radius:6px; display:flex; align-items:center;
+               justify-content:center; flex:0 0 auto; }
+  .f-row .nm { font-size:12px; font-weight:600; color:var(--tinta-2); flex:1; min-width:0; }
+  .f-row .st { font-size:11px; font-weight:800; flex:0 0 auto; align-self:flex-start; padding-top:1px; }
+  .st.ok { color:var(--ok); } .st.ruim { color:var(--alerta); } .st.neu { color:var(--fraco); }
+  .f-row .sub2 { display:block; font-size:10px; font-weight:500; color:var(--fraco); margin-top:2px; line-height:1.3; }
+
+  .aviso { padding:11px 12px; flex:0 0 auto; border-color:var(--alerta-borda); background:var(--alerta-bg); }
+  .aviso .t { font-size:11.5px; font-weight:700; color:var(--alerta-forte); display:flex; align-items:center; gap:6px; }
+  .aviso .c { font-size:11px; color:#7f1d1d; line-height:1.5; margin-top:5px; }
+  .aviso .btn { margin-top:8px; display:inline-flex; align-items:center; gap:6px; background:#fff;
+                border:1px solid var(--alerta-borda); border-radius:7px; padding:5px 10px;
+                font-size:11px; font-weight:700; color:var(--alerta-forte); }
+
+  .nota-fim { padding:11px 12px; flex:1 1 auto; border-style:dashed; }
+  .nota-fim .t { font-size:11.5px; font-weight:700; color:var(--corpo); display:flex; align-items:center; gap:6px; }
+  .nota-fim .c { font-size:11px; color:var(--mudo); line-height:1.5; margin-top:5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topo">
+    <div>
+      <div class="h1">JurisIA <span class="selo-beta">beta</span></div>
+      <div class="sub">Uma conversa só. Ela decide o que buscar — acervo, autos, base do escritório — e responde.</div>
+    </div>
+    <div class="topo-dir">
+      <div class="cota">
+        <div class="n">128 de 900</div>
+        <div class="l">mensagens de agosto</div>
+      </div>
+      <div class="btn-out">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 5.5A2 2 0 016 4h5v16H6a2 2 0 01-2-2v-12zM20 5.5A2 2 0 0018 4h-5v16h5a2 2 0 002-2v-12z" stroke="#334155" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        Configurar
+      </div>
+      <div class="btn-primary">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+        Novo trabalho
+      </div>
+    </div>
+  </div>
+
+  <div class="corpo">
+    <!-- ─── esquerda ─── -->
+    <div class="col-esq">
+      <div class="card trabalhos">
+        <div class="micro">Trabalhos</div>
+        <div class="trab on">
+          <div class="t">Francisco Arnoldo — usucapião</div>
+          <div class="m">agora</div>
+        </div>
+        <div class="trab">
+          <div class="t">Vale a pena a revisional da Cláudia?</div>
+          <div class="m">ontem</div>
+        </div>
+        <div class="trab">
+          <div class="t">Como o TJCE decide execução fiscal</div>
+          <div class="m">6 ago</div>
+        </div>
+        <div class="trab">
+          <div class="t">Apelação — Espólio de Raimundo</div>
+          <div class="m">4 ago</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── meio ─── -->
+    <div class="col-meio">
+      <div class="card thread">
+
+        <div class="fala eu">
+          <div class="bolha eu">Como prosseguir nesse caso?</div>
+          <div class="av" style="background:var(--tinta)">RC</div>
+        </div>
+
+        <div class="fala">
+          <div class="av" style="background:var(--acento)">IA</div>
+          <div style="flex:1; min-width:0;">
+            <div class="fez">
+              <span class="passo doc">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z" stroke="#475569" stroke-width="2" stroke-linejoin="round"/></svg>
+                leu 11 documentos
+              </span>
+              <span class="passo doc">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="#475569" stroke-width="2.2" stroke-linecap="round"/></svg>
+                18 movimentações + teor da sentença
+              </span>
+              <span class="passo acervo">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="6" rx="8" ry="3" stroke="#5b21b6" stroke-width="2"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6" stroke="#5b21b6" stroke-width="2"/></svg>
+                mediu 3.252 casos no acervo
+              </span>
+              <span class="passo fonte">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.4-3 8.3-7 9.4-4-1.1-7-5-7-9.4V6l7-3z" stroke="#a16207" stroke-width="1.9" stroke-linejoin="round"/></svg>
+                6 fontes do escritório
+              </span>
+            </div>
+
+            <div class="bolha ia">
+              A sentença julgou improcedente por falta de prova da posse mansa no período
+              <span class="anc d">D</span>. As escrituras que você anexou cobrem de 2009 a 2021, e há recibo de
+              IPTU no intervalo que a sentença deu por vazio <span class="anc d">D</span> — é isso que sustenta a
+              apelação, e o prazo é de 15 dias da intimação, que saiu dia 04 <span class="anc f">F</span>.
+              <br><br>
+              No recorte deste tribunal, usucapião reformada em segunda instância aparece com frequência
+              relevante quando o vício é prova documental e não mérito da posse <span class="anc a">A</span>.
+              Montei a apelação em cima disso.
+            </div>
+
+            <div class="prova">
+              <div class="cab">
+                <div class="e">Como o TJCE vem decidindo <span class="anc a" style="margin-left:3px;">A</span></div>
+                <div class="q">Procedimento Comum Cível · usucapião</div>
+              </div>
+              <div class="bl">
+                <div class="r">Procedente</div>
+                <div class="t2"><i style="width:44%; background:var(--viz-1)"></i></div>
+                <div class="v"><span class="p">44%</span><span class="q2">(1.431)</span></div>
+              </div>
+              <div class="bl">
+                <div class="r">Improcedente</div>
+                <div class="t2"><i style="width:31%; background:var(--viz-3)"></i></div>
+                <div class="v"><span class="p">31%</span><span class="q2">(1.008)</span></div>
+              </div>
+              <div class="bl">
+                <div class="r">Extinto sem mérito</div>
+                <div class="t2"><i style="width:18%; background:var(--viz-5)"></i></div>
+                <div class="v"><span class="p">18%</span><span class="q2">(585)</span></div>
+              </div>
+              <p style="margin-top:7px; font-size:10px; color:var(--mudo); line-height:1.4;">
+                Contado no banco sobre o recorte inteiro. Estatística do tribunal, não precedente citável.
+              </p>
+            </div>
+
+            <div class="minuta">
+              <div class="cab">
+                <div>
+                  <div class="tt">Apelação Cível — usucapião extraordinária</div>
+                  <div class="mt">Minuta · 4 seções · gerada agora · prazo até 25/08</div>
+                </div>
+                <div class="acoes">
+                  <div class="btn-sm">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10-10a2.8 2.8 0 10-4-4L4 16v4z" stroke="#334155" stroke-width="2" stroke-linejoin="round"/></svg>
+                    Editar
+                  </div>
+                  <div class="btn-sm ac">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    .docx
+                  </div>
+                </div>
+              </div>
+              <div class="sec"><div class="n">I</div><div><div class="s">Da tempestividade</div><div class="c">Intimação em 04/08; prazo de 15 dias do art. 1.003, §5º do CPC <span class="anc f">F</span>.</div></div></div>
+              <div class="sec"><div class="n">II</div><div><div class="s">Do error in judicando — prova da posse</div><div class="c">Escrituras de 2009 a 2021 e IPTU do intervalo tido por vazio <span class="anc d">D</span>.</div></div></div>
+              <div class="sec"><div class="n">III</div><div><div class="s">Do prequestionamento</div><div class="c">Arts. 1.238 e 1.243 do Código Civil <span class="anc f">F</span>.</div></div></div>
+              <div class="sec"><div class="n">IV</div><div><div class="s">Dos pedidos</div><div class="c">Reforma da sentença e procedência da usucapião; subsidiariamente, anulação para produção de prova.</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card composer">
+        <div class="sug">
+          <span>Analise a estratégia deste caso</span>
+          <span>Como o tribunal decide isso?</span>
+          <span>Redija a apelação</span>
+          <span>Deixa mais enxuto</span>
+        </div>
+        <div class="campo">
+          <div class="inp">Pergunte, peça a peça, ou refine…</div>
+          <div class="env">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12h15M13 6l6 6-6 6" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+        <div class="rod">Minuta gerada por IA — revisão e assinatura do advogado obrigatórias antes de protocolar.</div>
+      </div>
+    </div>
+
+    <!-- ─── direita ─── -->
+    <div class="col-dir">
+      <div class="card caso">
+        <div class="micro" style="color:var(--acento-forte)">Caso em análise</div>
+        <div class="nm" style="margin-top:6px;">Francisco Arnoldo Lima do Nascimento</div>
+        <div class="pr">
+          <span class="tr">TJCE</span> · Procedimento Comum Cível<br>
+          0812345-67.2023.8.06.0001 · <span style="color:var(--acento-forte); font-weight:700;">trocar</span>
+        </div>
+      </div>
+
+      <div class="card fontes">
+        <div class="micro">O que ela consultou</div>
+        <div class="f-row">
+          <span class="ic" style="background:var(--hairline); border:1px solid var(--borda)">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z" stroke="#475569" stroke-width="2" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="nm">Documentos do cliente<span class="sub2">escrituras, recibos, certidões</span></span>
+          <span class="st ok">11 / 11</span>
+        </div>
+        <div class="f-row">
+          <span class="ic" style="background:var(--hairline); border:1px solid var(--borda)">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="#475569" stroke-width="2.2" stroke-linecap="round"/></svg>
+          </span>
+          <span class="nm">Autos do processo<span class="sub2">movimentações + teor das decisões</span></span>
+          <span class="st ok">18</span>
+        </div>
+        <div class="f-row">
+          <span class="ic" style="background:var(--acento-bg-2); border:1px solid #ddd6fe">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="6" rx="8" ry="3" stroke="#5b21b6" stroke-width="2"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6" stroke="#5b21b6" stroke-width="2"/></svg>
+          </span>
+          <span class="nm">Acervo público<span class="sub2">TJCE · Proc. Comum Cível</span></span>
+          <span class="st ok">3.252</span>
+        </div>
+        <div class="f-row">
+          <span class="ic" style="background:#fffbeb; border:1px solid #fde68a">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.4-3 8.3-7 9.4-4-1.1-7-5-7-9.4V6l7-3z" stroke="#a16207" stroke-width="1.9" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="nm">Base do escritório<span class="sub2">súmulas, teses, modelos</span></span>
+          <span class="st ok">6</span>
+        </div>
+      </div>
+
+      <div class="card aviso">
+        <div class="t">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 4l9 16H3l9-16z" stroke="#b91c1c" stroke-width="1.9" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="#b91c1c" stroke-width="2" stroke-linecap="round"/></svg>
+          Estado alternativo — 3 arquivos não lidos
+        </div>
+        <div class="c">
+          <b>CamScanner_18-06.pdf</b> e mais 2: PDF escaneado não é lido pelo modelo OpenAI.
+          Troque pra um modelo Claude ou reenvie como imagem.
+        </div>
+        <div class="btn">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 0113.7-5.7L20 8M20 4v4h-4M20 12a8 8 0 01-13.7 5.7L4 16M4 20v-4h4" stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Trocar modelo e reler
+        </div>
+      </div>
+
+      <div class="card nota-fim">
+        <div class="t">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.4-3 8.3-7 9.4-4-1.1-7-5-7-9.4V6l7-3z" stroke="#334155" stroke-width="1.9" stroke-linejoin="round"/></svg>
+          O que não mudou
+        </div>
+        <div class="c">
+          O número continua vindo do banco — a IA não escreve percentual. Sentença de 1º grau não vira
+          fundamento, e nada do acervo é citado como precedente. Sumiu o seletor de modo, não as regras.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
