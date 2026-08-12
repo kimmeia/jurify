@@ -35,6 +35,7 @@ import {
   LogOut,
   ShieldCheck,
   CreditCard,
+  Clock,
   Lock,
   FileSearch,
   Gavel,
@@ -131,6 +132,7 @@ const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
       // aparecia pra qualquer um com Processos e entregava "não está no seu
       // plano" depois do clique.
       { id: "jurisia", rotulo: "JurisIA", rota: "/jurisia", icone: Gavel, ver: (c) => c("processos"), ocultaPor: "jurisia", selo: "beta" },
+      { id: "ponto", rotulo: "Ponto", rota: "/ponto", icone: Clock, ver: (c) => c("equipe") },
       { id: "calculos", rotulo: "Cálculos", rota: "/calculos", icone: Calculator, ver: (c) => c("calculos"), ocultaPor: "calculos" },
       { id: "modelos", rotulo: "Modelos", rota: "/modelos-contrato", icone: FileText, ver: (c) => c("modelos") },
       // Fusão de SmartFlow (Fluxos) + Agentes IA: aparece com qualquer um dos

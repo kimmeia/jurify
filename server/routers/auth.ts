@@ -148,10 +148,37 @@ export const authRouter = router({
   /** Retorna o usuário autenticado atualmente, ou null. */
   me: publicProcedure.query((opts) => opts.ctx.user),
 
-  /** Encerra a sessão limpando o cookie. */
-  logout: publicProcedure.mutation(({ ctx }) => {
+  /**
+   * Encerra a sessão limpando o cookie.
+   *
+   * Registra a saída do ponto no caminho — é a ÚNICA marcação de saída que é
+   * fato batido, e não uma dedução da última atividade. Vale a pena tentar
+   * mesmo sabendo que quase ninguém clica aqui: quem clica merece o registro
+   * exato.
+   *
+   * Best-effort e depois de limpar o cookie: falha no ponto não pode impedir
+   * alguém de sair da própria conta.
+   */
+  logout: publicProcedure.mutation(async ({ ctx }) => {
     const cookieOptions = getSessionCookieOptions(ctx.req);
     ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+
+    const userId = ctx.user?.id;
+    if (userId) {
+      try {
+        const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
+        const esc = await getEscritorioPorUsuario(userId);
+        if (esc?.colaborador) {
+          const { marcarSaida } = await import("../rh/ponto-repo");
+          const { FUSO_HORARIO_PADRAO } = await import("../../shared/escritorio-types");
+          await marcarSaida({
+            escritorioId: esc.escritorio.id,
+            colaboradorId: esc.colaborador.id,
+            fusoHorario: esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO,
+          });
+        }
+      } catch { /* sair da conta nunca depende do ponto */ }
+    }
     return { success: true } as const;
   }),
 

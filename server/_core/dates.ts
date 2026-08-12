@@ -59,3 +59,20 @@ export function inicioDiasAtrasEmTz(fusoHorario: string, dias: number): Date {
   const { inicio } = diaAtualEmTz(fusoHorario);
   return new Date(inicio.getTime() - dias * 24 * 60 * 60 * 1000);
 }
+
+/**
+ * O dia civil de um instante no fuso do escritório ("YYYY-MM-DD").
+ *
+ * O "dia" do ponto é o dia de quem trabalha, não o dia UTC: às 21h em
+ * Fortaleza já é o dia seguinte em UTC, e o expediente de terça apareceria na
+ * quarta no espelho.
+ */
+export function diaCivilEmTz(instante: Date, fusoHorario: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: fusoHorario,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(instante);
+}
+
