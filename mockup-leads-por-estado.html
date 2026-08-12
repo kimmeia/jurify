@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href=".claude/skills/mockup-juridflow/assets/fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+    /* rampa sequencial do mapa — mesma família do acento */
+    --m0:#f1f5f9; --m1:#ede9fe; --m2:#ddd6fe; --m3:#c4b5fd; --m4:#a78bfa; --m5:#7c3aed;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:26px 30px; height:100%; display:flex; flex-direction:column; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .btn-out { height:38px; border:1px solid var(--borda); background:var(--surface); border-radius:10px;
+             padding:0 15px; display:flex; align-items:center; gap:8px;
+             font-size:13px; font-weight:600; color:var(--corpo); }
+
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  /* ── barra de filtros ── */
+  .barra { flex:0 0 auto; margin-top:15px; display:flex; align-items:center; gap:9px; }
+  .select { height:40px; border:1px solid var(--borda); background:var(--surface); border-radius:9px;
+            padding:0 12px; display:flex; align-items:center; gap:9px;
+            font-size:13px; font-weight:500; color:var(--corpo); }
+  .select .cap { color:var(--fraco); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+  .select.on { border:1.5px solid var(--acento); background:var(--acento-bg); color:var(--acento-forte); font-weight:600; }
+
+  /* ── abas ── */
+  .abas { flex:0 0 auto; margin-top:13px; display:flex; gap:4px; background:var(--hairline);
+          padding:3px; border-radius:9px; align-self:flex-start; }
+  .abas span { padding:7px 15px; font-size:12.5px; font-weight:600; color:var(--mudo); border-radius:7px; }
+  .abas span.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+
+  /* ── KPIs ── */
+  .kpis { flex:0 0 auto; margin-top:13px; display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .kpi { padding:12px 14px; }
+  .kpi .v { font-size:22px; font-weight:800; letter-spacing:-.02em; margin-top:5px; }
+  .kpi .d { margin-top:3px; font-size:10.5px; color:var(--mudo); }
+  .up { color:var(--ok); font-weight:700; }
+  .down { color:var(--alerta); font-weight:700; }
+
+  /* ── bloco novo ── */
+  .bloco { flex:1 1 auto; margin-top:13px; padding:15px 16px 14px; display:flex; flex-direction:column; min-height:0; }
+  .bl-topo { flex:0 0 auto; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+  .selo { background:var(--acento); color:#fff; font-size:9px; font-weight:800; letter-spacing:.08em;
+          padding:3px 7px; border-radius:5px; margin-left:8px; vertical-align:2px; }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:19px; letter-spacing:-.01em; margin-top:4px; }
+  .h2 small { font-family:'Inter'; font-size:13px; font-weight:500; color:var(--mudo); margin-left:6px; }
+  .lead-txt { margin-top:3px; font-size:12.5px; color:var(--corpo); }
+
+  .corpo { flex:1 1 auto; margin-top:13px; display:grid; grid-template-columns:520px 1fr; gap:22px; min-height:0; }
+
+  /* ── mapa em grade ── */
+  .mapa { display:grid; grid-template-columns:repeat(6,74px); grid-auto-rows:52px; gap:6px; }
+  .uf { border-radius:9px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+        gap:1px; border:1px solid transparent; }
+  .uf .s { font-size:12.5px; font-weight:800; letter-spacing:.02em; }
+  .uf .n { font-size:12px; font-weight:600; }
+  .uf.z { background:var(--m0); border-color:#e8edf3; }
+  .uf.z .s { color:var(--fantasma); } .uf.z .n { color:var(--fantasma); font-weight:500; }
+  .uf.b1 { background:var(--m1); } .uf.b1 .s,.uf.b1 .n { color:#6d28d9; }
+  .uf.b2 { background:var(--m2); } .uf.b2 .s,.uf.b2 .n { color:#5b21b6; }
+  .uf.b3 { background:var(--m3); } .uf.b3 .s,.uf.b3 .n { color:#4c1d95; }
+  .uf.b4 { background:var(--m4); } .uf.b4 .s,.uf.b4 .n { color:#2e1065; }
+  .uf.b5 { background:var(--m5); box-shadow:0 8px 18px -8px #7c3aed88; }
+  .uf.b5 .s,.uf.b5 .n { color:#fff; }
+  .uf.b5 .n { font-weight:800; font-size:13px; }
+
+  .legenda { margin-top:12px; }
+  .legenda .l1 { display:flex; align-items:center; gap:9px; }
+  .escala { display:flex; align-items:center; gap:3px; }
+  .escala i { width:26px; height:9px; border-radius:2px; display:block; }
+  .leg-txt { font-size:10.5px; color:var(--mudo); }
+
+  /* ── ranking ── */
+  .rk { display:flex; flex-direction:column; min-height:0; }
+  .rk-cab { display:grid; grid-template-columns:32px 1fr 50px 80px; gap:10px; align-items:center;
+            padding-bottom:6px; border-bottom:1px solid var(--hairline); }
+  .rk-cab span { font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .rk-cab .r { text-align:right; }
+  .linha { display:grid; grid-template-columns:32px 1fr 50px 80px; gap:10px; align-items:center; height:30px;
+           border-bottom:1px solid var(--hairline-2); }
+  .linha .sig { font-size:12px; font-weight:800; color:var(--tinta-2); }
+  .trilho { height:9px; background:var(--hairline); border-radius:3px; overflow:hidden; }
+  .trilho i { display:block; height:100%; border-radius:0 3px 3px 0; }
+  .qtd { text-align:right; font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .conv { text-align:right; font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--corpo-2); }
+  .conv b { color:var(--tinta); font-weight:700; }
+  .conv.na { color:var(--fantasma); font-weight:600; }
+  .rk-nota { margin-top:9px; display:flex; gap:7px; align-items:flex-start;
+             background:var(--hairline); border-radius:9px; padding:8px 10px; }
+  .rk-nota p { font-size:10.5px; line-height:1.45; color:var(--corpo-2); }
+
+  /* ── procedência ── */
+  .proc { flex:0 0 auto; margin-top:12px; border-top:1px solid var(--borda); padding-top:11px;
+          display:grid; grid-template-columns:1fr 470px; gap:22px; align-items:center; }
+  .proc-barra { margin-top:7px; display:flex; height:11px; border-radius:4px; overflow:hidden; gap:2px; }
+  .proc-barra i { display:block; height:100%; }
+  .proc-leg { margin-top:8px; display:flex; gap:16px; flex-wrap:wrap; }
+  .pl { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--corpo-2); }
+  .pl b { color:var(--tinta); font-weight:700; font-variant-numeric:tabular-nums; }
+  .pl .pt { width:9px; height:9px; border-radius:2px; }
+  .ressalva { background:var(--acento-bg-2); border:1px solid #ddd6fe; border-radius:10px; padding:9px 11px;
+              display:flex; gap:8px; align-items:flex-start; }
+  .ressalva p { font-size:10.5px; line-height:1.5; color:var(--corpo); }
+  .ressalva b { color:var(--acento-forte); font-weight:700; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">Relatórios</div>
+        <div class="sub">Atendimento · 1 a 31 de agosto de 2026 · comparado com julho</div>
+      </div>
+      <div class="btn-out">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="#334155" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Exportar PDF
+      </div>
+    </div>
+
+    <div class="barra">
+      <div class="select on">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="#5b21b6" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" stroke="#5b21b6" stroke-width="2" stroke-linecap="round"/></svg>
+        Agosto de 2026
+      </div>
+      <div class="select"><span class="cap">Setor</span> Todos</div>
+      <div class="select"><span class="cap">Atendente</span> Todos</div>
+      <div class="select"><span class="cap">Canal</span> Todos</div>
+    </div>
+
+    <div class="abas">
+      <span class="on">Atendimento</span>
+      <span>Comercial</span>
+      <span>Produção</span>
+      <span>Agenda</span>
+      <span>Financeiro</span>
+    </div>
+
+    <div class="kpis">
+      <div class="card kpi">
+        <div class="micro">Atendimentos</div>
+        <div class="v">418</div>
+        <div class="d"><span class="up">+12%</span> · 373 no período anterior</div>
+      </div>
+      <div class="card kpi">
+        <div class="micro">Leads gerados</div>
+        <div class="v">342</div>
+        <div class="d"><span class="up">+9%</span> · 82% das conversas viraram lead</div>
+      </div>
+      <div class="card kpi">
+        <div class="micro">Taxa de conversão</div>
+        <div class="v">19%</div>
+        <div class="d"><span class="down">−2 p.p.</span> · 62 fechados de 328 leads</div>
+      </div>
+      <div class="card kpi">
+        <div class="micro">Tempo p/ 1ª resposta</div>
+        <div class="v">4min 12s</div>
+        <div class="d"><span class="up">−38s</span> · 4min 50s no período anterior</div>
+      </div>
+    </div>
+
+    <div class="card bloco">
+      <div class="bl-topo">
+        <div>
+          <div class="micro">De onde vêm os leads<span class="selo">NOVO</span></div>
+          <div class="h2">328 leads em 14 estados <small>14 sem estado identificável</small></div>
+          <div class="lead-txt">
+            O Ceará concentra <b>64%</b> — quase 2 em cada 3. Fora dele, São Paulo já é o segundo maior
+            volume do mês, e converte metade do que o Ceará converte.
+          </div>
+        </div>
+        <div class="select"><span class="cap">Base</span> Leads criados no período</div>
+      </div>
+
+      <div class="corpo">
+
+        <div>
+          <div class="mapa">
+            <!-- r1 -->
+            <div class="uf z" style="grid-column:3"><span class="s">RR</span><span class="n">0</span></div>
+            <div class="uf z" style="grid-column:4"><span class="s">AP</span><span class="n">0</span></div>
+            <!-- r2 -->
+            <div class="uf b1" style="grid-column:2"><span class="s">AM</span><span class="n">3</span></div>
+            <div class="uf b1" style="grid-column:3"><span class="s">PA</span><span class="n">3</span></div>
+            <div class="uf b2" style="grid-column:4"><span class="s">MA</span><span class="n">5</span></div>
+            <div class="uf b5" style="grid-column:5"><span class="s">CE</span><span class="n">211</span></div>
+            <div class="uf b3" style="grid-column:6"><span class="s">RN</span><span class="n">10</span></div>
+            <!-- r3 -->
+            <div class="uf z" style="grid-column:1"><span class="s">AC</span><span class="n">0</span></div>
+            <div class="uf z" style="grid-column:3"><span class="s">TO</span><span class="n">0</span></div>
+            <div class="uf b2" style="grid-column:4"><span class="s">PI</span><span class="n">7</span></div>
+            <div class="uf b3" style="grid-column:5"><span class="s">PE</span><span class="n">12</span></div>
+            <div class="uf b2" style="grid-column:6"><span class="s">PB</span><span class="n">8</span></div>
+            <!-- r4 -->
+            <div class="uf z" style="grid-column:1"><span class="s">RO</span><span class="n">0</span></div>
+            <div class="uf z" style="grid-column:2"><span class="s">MT</span><span class="n">0</span></div>
+            <div class="uf b2" style="grid-column:4"><span class="s">BA</span><span class="n">6</span></div>
+            <div class="uf z" style="grid-column:5"><span class="s">AL</span><span class="n">0</span></div>
+            <div class="uf z" style="grid-column:6"><span class="s">SE</span><span class="n">0</span></div>
+            <!-- r5 -->
+            <div class="uf z" style="grid-column:1"><span class="s">MS</span><span class="n">0</span></div>
+            <div class="uf b1" style="grid-column:2"><span class="s">GO</span><span class="n">3</span></div>
+            <div class="uf b1" style="grid-column:3"><span class="s">DF</span><span class="n">4</span></div>
+            <div class="uf b1" style="grid-column:4"><span class="s">MG</span><span class="n">4</span></div>
+            <div class="uf z" style="grid-column:5"><span class="s">ES</span><span class="n">0</span></div>
+            <!-- r6 -->
+            <div class="uf z" style="grid-column:2"><span class="s">PR</span><span class="n">0</span></div>
+            <div class="uf b4" style="grid-column:3"><span class="s">SP</span><span class="n">34</span></div>
+            <div class="uf b3" style="grid-column:4"><span class="s">RJ</span><span class="n">18</span></div>
+            <!-- r7 -->
+            <div class="uf z" style="grid-column:1"><span class="s">RS</span><span class="n">0</span></div>
+            <div class="uf z" style="grid-column:2"><span class="s">SC</span><span class="n">0</span></div>
+          </div>
+
+          <div class="legenda">
+            <div class="l1">
+              <span class="micro" style="letter-spacing:.05em">Leads</span>
+              <div class="escala">
+                <i style="background:var(--m0);border:1px solid #e8edf3"></i>
+                <i style="background:var(--m1)"></i>
+                <i style="background:var(--m2)"></i>
+                <i style="background:var(--m3)"></i>
+                <i style="background:var(--m4)"></i>
+                <i style="background:var(--m5)"></i>
+              </div>
+              <span class="leg-txt">0 · 1&ndash;4 · 5&ndash;9 · 10&ndash;19 · 20&ndash;49 · 50+</span>
+            </div>
+            <p class="leg-txt" style="margin-top:7px; color:var(--fraco); line-height:1.5">
+              Cada estado ocupa o mesmo quadrado. No mapa de verdade Roraima é 12 vezes o Rio e
+              pintaria a tela inteira com zero lead dentro.
+            </p>
+          </div>
+        </div>
+
+        <div class="rk">
+          <div class="rk-cab">
+            <span>UF</span><span>Volume</span><span class="r">Leads</span><span class="r">Conversão</span>
+          </div>
+
+          <div class="linha">
+            <span class="sig">CE</span>
+            <div class="trilho"><i style="width:100%;background:var(--m5)"></i></div>
+            <span class="qtd">211</span>
+            <span class="conv"><b>22%</b> · 47</span>
+          </div>
+          <div class="linha">
+            <span class="sig">SP</span>
+            <div class="trilho"><i style="width:16%;background:var(--m4)"></i></div>
+            <span class="qtd">34</span>
+            <span class="conv"><b>12%</b> · 4</span>
+          </div>
+          <div class="linha">
+            <span class="sig">RJ</span>
+            <div class="trilho"><i style="width:8.5%;background:var(--m3)"></i></div>
+            <span class="qtd">18</span>
+            <span class="conv"><b>11%</b> · 2</span>
+          </div>
+          <div class="linha">
+            <span class="sig">PE</span>
+            <div class="trilho"><i style="width:5.7%;background:var(--m3)"></i></div>
+            <span class="qtd">12</span>
+            <span class="conv"><b>17%</b> · 2</span>
+          </div>
+          <div class="linha">
+            <span class="sig">RN</span>
+            <div class="trilho"><i style="width:4.7%;background:var(--m3)"></i></div>
+            <span class="qtd">10</span>
+            <span class="conv"><b>20%</b> · 2</span>
+          </div>
+          <div class="linha">
+            <span class="sig">PB</span>
+            <div class="trilho"><i style="width:3.8%;background:var(--m2)"></i></div>
+            <span class="qtd">8</span>
+            <span class="conv na">—</span>
+          </div>
+          <div class="linha">
+            <span class="sig">PI</span>
+            <div class="trilho"><i style="width:3.3%;background:var(--m2)"></i></div>
+            <span class="qtd">7</span>
+            <span class="conv na">—</span>
+          </div>
+          <div class="linha">
+            <span class="sig">BA</span>
+            <div class="trilho"><i style="width:2.8%;background:var(--m2)"></i></div>
+            <span class="qtd">6</span>
+            <span class="conv na">—</span>
+          </div>
+          <div class="linha">
+            <span class="sig">MA</span>
+            <div class="trilho"><i style="width:2.4%;background:var(--m2)"></i></div>
+            <span class="qtd">5</span>
+            <span class="conv na">—</span>
+          </div>
+          <div class="linha">
+            <span class="sig">DF</span>
+            <div class="trilho"><i style="width:1.9%;background:var(--m1)"></i></div>
+            <span class="qtd">4</span>
+            <span class="conv na">—</span>
+          </div>
+          <div class="linha">
+            <span class="sig">MG</span>
+            <div class="trilho"><i style="width:1.9%;background:var(--m1)"></i></div>
+            <span class="qtd">4</span>
+            <span class="conv na">—</span>
+          </div>
+          <div class="linha">
+            <span class="sig">AM</span>
+            <div class="trilho"><i style="width:1.4%;background:var(--m1)"></i></div>
+            <span class="qtd">3</span>
+            <span class="conv na">—</span>
+          </div>
+          <div class="linha">
+            <span class="sig">PA</span>
+            <div class="trilho"><i style="width:1.4%;background:var(--m1)"></i></div>
+            <span class="qtd">3</span>
+            <span class="conv na">—</span>
+          </div>
+          <div class="linha" style="border-bottom:none">
+            <span class="sig">GO</span>
+            <div class="trilho"><i style="width:1.4%;background:var(--m1)"></i></div>
+            <span class="qtd">3</span>
+            <span class="conv na">—</span>
+          </div>
+
+          <div class="rk-nota">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;margin-top:1px"><circle cx="12" cy="12" r="9" stroke="#475569" stroke-width="2"/><path d="M12 11v6M12 7.5v.5" stroke="#475569" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <p>Conversão só aparece a partir de <b>10 leads</b>. Abaixo disso um fechamento a mais move o
+              percentual em dezenas de pontos, e o número diria mais sobre o acaso que sobre o estado.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="proc">
+        <div>
+          <div class="micro">De onde saiu o estado de cada lead</div>
+          <div class="proc-barra">
+            <i style="width:15.2%;background:var(--acento)"></i>
+            <i style="width:80.7%;background:var(--m3)"></i>
+            <i style="width:4.1%;background:var(--borda)"></i>
+          </div>
+          <div class="proc-leg">
+            <span class="pl"><span class="pt" style="background:var(--acento)"></span><b>52</b> endereço confirmado no cadastro</span>
+            <span class="pl"><span class="pt" style="background:var(--m3)"></span><b>276</b> deduzidos pelo DDD do telefone</span>
+            <span class="pl"><span class="pt" style="background:var(--borda)"></span><b>14</b> sem telefone e sem endereço</span>
+          </div>
+        </div>
+
+        <div class="ressalva">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;margin-top:1px"><path d="M12 3l9 16H3l9-16z" stroke="#5b21b6" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 16.5v.5" stroke="#5b21b6" stroke-width="2.2" stroke-linecap="round"/></svg>
+          <p><b>O DDD diz onde a linha foi habilitada, não onde a pessoa mora hoje.</b>
+            Quem mudou de estado e manteve o número aparece na origem antiga. Só as
+            52 barras violeta escuras vêm de endereço que alguém confirmou no cadastro —
+            o resto é a melhor aproximação que o dado permite, e está marcado como tal.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

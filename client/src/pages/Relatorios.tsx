@@ -44,6 +44,7 @@ import {
   KpiRel, PastilhaTaxa, ProvedorRelatorios, TituloSecao, calcularDelta,
   calcularDeltaPontos, useRelatorios,
 } from "./relatorios/casca";
+import { BlocoLeadsPorEstado } from "./relatorios/leads-por-estado";
 import { AcoesRelatorio } from "./relatorios/acoes";
 
 // ───────────────────────── helpers ─────────────────────────
@@ -515,6 +516,8 @@ function AbaAtendimentoConteudo({ data }: { data: any }) {
           anterior={nAnt("conversaParaLead", (v) => `${v}%`) ?? "Conversas que geraram lead"}
         />
       </div>
+
+      {data.leadsPorEstado && <BlocoLeadsPorEstado dados={data.leadsPorEstado} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
         <CardRel

@@ -41,6 +41,7 @@ import {
   dataHojeBR,
   FUSO_HORARIO_PADRAO,
 } from "../../shared/escritorio-types";
+import { agregarLeadsPorEstado } from "../../shared/leads-uf";
 import { gerarComercialPdf, type DetalheAtendentePdf } from "./relatorios-comercial-pdf";
 import { gerarAgendaPdf } from "./relatorios-agenda-pdf";
 import { gerarAtendimentoPdf } from "./relatorios-atendimento-pdf";
@@ -786,6 +787,35 @@ export const relatoriosRouter = router({
         .groupBy(sql`DATE(${leads.fechadoEm})`).orderBy(sql`DATE(${leads.fechadoEm})`),
     ]);
 
+    // ─── De onde vêm os leads ───────────────────────────────────────────
+    //
+    // Puxa uf + telefone de cada lead do período e agrega em memória. O CASE
+    // de 67 ramos que faria isso em SQL viveria longe do teste e envelheceria
+    // a cada código novo da Anatel; o volume aqui é o de um mês de um
+    // escritório, e a regra é uma função pura em `shared/leads-uf`.
+    //
+    // O `escritorioId` do contato entra na condição de join junto com o do
+    // lead: os dois sempre batem por construção, e é exatamente por isso que
+    // a checagem é barata — ela só custa alguma coisa no dia em que parar de
+    // bater.
+    const leadsComContato = await joinCanalLead(
+      db.select({
+        uf: contatos.uf,
+        telefone: contatos.telefone,
+        etapa: leads.etapaFunil,
+      })
+        .from(leads)
+        .innerJoin(
+          contatos,
+          and(eq(leads.contatoId, contatos.id), eq(contatos.escritorioId, eid)),
+        )
+    ).where(baseLeadCriacao(dataInicio, dataFim));
+
+    const leadsPorEstado = agregarLeadsPorEstado(
+      (leadsComContato as Array<{ uf: string | null; telefone: string | null; etapa: string }>)
+        .map((l) => ({ uf: l.uf, telefone: l.telefone, ganho: l.etapa === "fechado_ganho" })),
+    );
+
     // ─── Funil: hidrata todas as etapas mesmo zeradas pra UI ────────────
     const ETAPAS_ORDEM: Array<"novo" | "qualificado" | "proposta" | "negociacao" | "fechado_ganho" | "fechado_perdido"> = [
       "novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido",
@@ -941,6 +971,16 @@ export const relatoriosRouter = router({
       leadsPerdidos,
       valorPerdido,
       leadsPerdidosAnt,
+      /**
+       * Leads do período por UF, com a procedência de cada atribuição.
+       *
+       * A conversão aqui é ganhos ÷ leads DO ESTADO — base diferente do
+       * `taxaConversao` acima, que é ganhos ÷ atendimentos. Os dois números
+       * não batem de propósito, e a tela diz isso: já custou suporte um painel
+       * mostrar 10 e o relatório ao lado mostrar 9 sem ninguém explicar a
+       * diferença de unidade.
+       */
+      leadsPorEstado,
       /** Espelho dos agregados de operação no período anterior — `null`
        *  quando a tela não pediu comparação. */
       anterior,
