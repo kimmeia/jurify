@@ -125,10 +125,17 @@ export function validarGrafo(
   // Nodes = gatilho + passos.
   const todosNodes = [gatilhoNodeId, ...passos.map((p) => p.nodeId)];
 
-  // Nós que PAUSAM o fluxo (aguardar resposta) — tornam um ciclo seguro.
+  // Nós que PAUSAM o fluxo esperando o cliente — tornam um ciclo seguro.
+  // `whatsapp_pergunta_opcoes` também espera (o clique no botão/lista), então
+  // um loop que passa por ele NÃO gira sozinho.
   const nodesDeEspera = new Set(
     passos
-      .filter((p) => p.tipo === "whatsapp_aguardar_resposta" || p.tipo === "ia_atendente")
+      .filter(
+        (p) =>
+          p.tipo === "whatsapp_aguardar_resposta" ||
+          p.tipo === "whatsapp_pergunta_opcoes" ||
+          p.tipo === "ia_atendente",
+      )
       .map((p) => p.nodeId),
   );
 
@@ -153,6 +160,47 @@ export function validarGrafo(
   if (condicionaisSemSaida.length > 0) {
     erros.push(
       `${condicionaisSemSaida.length} condicional(is) sem saída conectada — conecte pelo menos uma condição ou o fallback.`,
+    );
+  }
+
+  // ── Saída pra atendimento humano (política do WhatsApp: bot precisa de
+  // rota de escalação) — AVISOS, nunca bloqueiam o save. ──────────────────
+
+  const temFerramentaTransferir = (p: PassoValidar): boolean => {
+    const f = (p.config as { ferramentas?: unknown }).ferramentas;
+    return Array.isArray(f) && f.includes("transferir");
+  };
+
+  // Atendente IA com a ferramenta "transferir" marcada mas a saída solta:
+  // o engine pausa o bot mesmo assim (fallback), mas o autor provavelmente
+  // esperava rotear pra algum lugar — avisa a configuração incompleta.
+  const iaTransferirSolto = passos.filter(
+    (p) =>
+      p.tipo === "ia_atendente" &&
+      temFerramentaTransferir(p) &&
+      !edges.some((e) => e.source === p.nodeId && e.sourceHandle === "transferir"),
+  );
+  if (iaTransferirSolto.length > 0) {
+    avisos.push(
+      "Atendente IA com a ferramenta \"transferir\" marcada, mas com a saída \"transferir\" desconectada. Quando a IA transferir, o bot pausa a conversa mesmo assim — mas conecte a saída a um bloco \"Transferir p/ humano\" pra controlar a mensagem enviada ao cliente.",
+    );
+  }
+
+  // Fluxo CONVERSACIONAL (segura o cliente numa conversa) sem NENHUM caminho
+  // pra humano: nem bloco "Transferir p/ humano", nem Atendente IA com a
+  // ferramenta. Fluxo só de aviso/notificação não conversa — não avisa.
+  const ehConversacional = passos.some(
+    (p) =>
+      p.tipo === "ia_atendente" ||
+      p.tipo === "whatsapp_aguardar_resposta" ||
+      p.tipo === "whatsapp_pergunta_opcoes",
+  );
+  const temSaidaHumana = passos.some(
+    (p) => p.tipo === "transferir" || (p.tipo === "ia_atendente" && temFerramentaTransferir(p)),
+  );
+  if (ehConversacional && !temSaidaHumana) {
+    avisos.push(
+      "Este fluxo conversa com o cliente mas não tem saída para atendimento humano. A política do WhatsApp exige que o cliente consiga escalar pra uma pessoa — adicione um bloco \"Transferir p/ humano\" ou habilite a ferramenta \"transferir\" no Atendente IA (cliente preso no bot gera denúncia e derruba a qualidade do número).",
     );
   }
 

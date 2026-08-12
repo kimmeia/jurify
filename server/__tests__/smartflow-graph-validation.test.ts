@@ -146,6 +146,24 @@ describe("validarGrafo", () => {
     expect(r.erros).toEqual([]);
   });
 
+  it("PERMITE ciclo que passa por 'Pergunta com opções' (espera o clique)", () => {
+    // pergunta → cond; cond volta pra pergunta (fallback). O pergunta_opcoes
+    // pausa esperando o botão, então o ciclo NÃO gira sozinho.
+    const passos: PassoValidar[] = [
+      { nodeId: "perg", clienteId: "perg", tipo: "whatsapp_pergunta_opcoes", config: {}, temProximoSe: true },
+      { nodeId: "cond", clienteId: "cond", tipo: "condicional", config: {}, temProximoSe: true },
+      passo("fim", "fim"),
+    ];
+    const edges: EdgeValidar[] = [
+      { source: "gat", target: "perg" },
+      { source: "perg", target: "cond", sourceHandle: "opcao_a" },
+      { source: "cond", target: "perg", sourceHandle: "fallback" }, // loop com espera = ok
+      { source: "cond", target: "fim", sourceHandle: "cond_ok" },
+    ];
+    const r = validarGrafo("gat", passos, edges);
+    expect(r.erros).toEqual([]);
+  });
+
   it("BLOQUEIA ciclo sem espera mesmo tendo um aguardar em OUTRO ramo", () => {
     // p1 → p2 → p1 (sem espera) é inseguro, independente de existir um wait solto.
     const passos: PassoValidar[] = [
@@ -176,5 +194,98 @@ describe("validarGrafo", () => {
     const r = validarGrafo("gat", passos, edges);
     expect(r.erros.length).toBeGreaterThanOrEqual(2);
     expect(r.avisos).toEqual([]);
+  });
+});
+
+describe("validarGrafo — saída pra atendimento humano (avisos, não bloqueiam)", () => {
+  const iaAtendente = (nodeId: string, ferramentas?: string[]): PassoValidar => ({
+    nodeId,
+    clienteId: nodeId,
+    tipo: "ia_atendente",
+    config: ferramentas ? { ferramentas } : {},
+    temProximoSe: false,
+  });
+
+  it("AVISA — fluxo conversacional sem nenhuma saída pra humano", () => {
+    const passos: PassoValidar[] = [iaAtendente("ia", ["agendar", "encerrar"])];
+    const edges: EdgeValidar[] = [{ source: "gat", target: "ia" }];
+    const r = validarGrafo("gat", passos, edges);
+    expect(r.erros).toEqual([]);
+    expect(r.avisos.some((a) => a.includes("saída para atendimento humano"))).toBe(true);
+  });
+
+  it("AVISA — aguardar resposta sem transferir em lugar nenhum", () => {
+    const passos: PassoValidar[] = [
+      passo("p1", "c1"),
+      { nodeId: "wait", clienteId: "wait", tipo: "whatsapp_aguardar_resposta", config: {}, temProximoSe: false },
+    ];
+    const edges: EdgeValidar[] = [
+      { source: "gat", target: "p1" },
+      { source: "p1", target: "wait" },
+    ];
+    const r = validarGrafo("gat", passos, edges);
+    expect(r.avisos.some((a) => a.includes("saída para atendimento humano"))).toBe(true);
+  });
+
+  it("NÃO avisa — fluxo só de notificação (sem passo conversacional)", () => {
+    const passos = [passo("p1", "c1"), passo("p2", "c2")];
+    const edges: EdgeValidar[] = [
+      { source: "gat", target: "p1" },
+      { source: "p1", target: "p2" },
+    ];
+    const r = validarGrafo("gat", passos, edges);
+    expect(r.avisos).toEqual([]);
+  });
+
+  it("NÃO avisa — tem bloco 'Transferir p/ humano' no fluxo", () => {
+    const passos: PassoValidar[] = [
+      { nodeId: "perg", clienteId: "perg", tipo: "whatsapp_pergunta_opcoes", config: {}, temProximoSe: true },
+      { nodeId: "transf", clienteId: "transf", tipo: "transferir", config: {}, temProximoSe: false },
+    ];
+    const edges: EdgeValidar[] = [
+      { source: "gat", target: "perg" },
+      { source: "perg", target: "transf", sourceHandle: "opcao_humano" },
+    ];
+    const r = validarGrafo("gat", passos, edges);
+    expect(r.avisos).toEqual([]);
+  });
+
+  it("NÃO avisa 'sem saída' — Atendente IA com ferramenta transferir CONECTADA", () => {
+    const passos: PassoValidar[] = [
+      iaAtendente("ia", ["transferir"]),
+      { nodeId: "transf", clienteId: "transf", tipo: "transferir", config: {}, temProximoSe: false },
+    ];
+    const edges: EdgeValidar[] = [
+      { source: "gat", target: "ia" },
+      { source: "ia", target: "transf", sourceHandle: "transferir" },
+    ];
+    const r = validarGrafo("gat", passos, edges);
+    expect(r.avisos).toEqual([]);
+  });
+
+  it("AVISA — Atendente IA com ferramenta transferir marcada mas saída desconectada", () => {
+    const passos: PassoValidar[] = [iaAtendente("ia", ["transferir"])];
+    const edges: EdgeValidar[] = [{ source: "gat", target: "ia" }];
+    const r = validarGrafo("gat", passos, edges);
+    expect(r.erros).toEqual([]);
+    expect(r.avisos.some((a) => a.includes("desconectada"))).toBe(true);
+    // Tem a ferramenta → o aviso "sem saída pra humano" NÃO deve duplicar.
+    expect(r.avisos.some((a) => a.includes("saída para atendimento humano"))).toBe(false);
+  });
+
+  it("saída transferir conectada em OUTRO nó não silencia o aviso do nó solto", () => {
+    const passos: PassoValidar[] = [
+      iaAtendente("ia1", ["transferir"]),
+      iaAtendente("ia2", ["transferir"]),
+      { nodeId: "transf", clienteId: "transf", tipo: "transferir", config: {}, temProximoSe: false },
+    ];
+    const edges: EdgeValidar[] = [
+      { source: "gat", target: "ia1" },
+      { source: "ia1", target: "ia2", sourceHandle: "encerrar" },
+      { source: "ia2", target: "transf", sourceHandle: "transferir" },
+      // ia1 tem a ferramenta mas a saída "transferir" dele está solta.
+    ];
+    const r = validarGrafo("gat", passos, edges);
+    expect(r.avisos.some((a) => a.includes("desconectada"))).toBe(true);
   });
 });

@@ -1690,6 +1690,37 @@ describe("SmartFlow Engine", () => {
       expect(r.contexto.aguardandoMensagem).toBeFalsy();
     });
 
+    it("FALLBACK: transferir SEM saída conectada → marca transferir no contexto (bot pausa)", async () => {
+      // A IA decidiu transferir mas o autor não conectou a saída "transferir".
+      // Sem o fallback o fluxo terminava sem pausar o bot e a próxima mensagem
+      // religava a IA — "vou te transferir" em loop, sem nunca chegar num humano.
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Vou te passar pra um atendente!", acao: "transferir" });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const r = await executarCenario([noAtendente(["agendar", "transferir"], { agendar: "a" })], { ...ctxBase, mensagem: "quero falar com humano" }, exec);
+      expect(r.respostas).toContain("Vou te passar pra um atendente!");
+      expect(r.contexto.transferir).toBe(true); // dispatcher marca em_atendimento
+      expect(r.contexto.acaoAtendente).toBe("transferir");
+    });
+
+    it("transferir COM saída conectada → roteia normal, sem flag do fallback", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Transferindo!", acao: "transferir" });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const passos: Passo[] = [
+        noAtendente(["transferir"], { transferir: "t" }),
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "t", config: { template: "RAMO DO AUTOR" } },
+      ];
+      const r = await executarCenario(passos, { ...ctxBase }, exec);
+      expect(r.respostas).toContain("RAMO DO AUTOR"); // saída do autor manda
+      expect(r.contexto.transferir).toBeFalsy(); // quem decide é o ramo conectado
+    });
+
+    it("outras ações sem saída conectada NÃO ganham o fallback (só transferir)", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Agendando!", acao: "agendar" });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const r = await executarCenario([noAtendente(["agendar"], {})], { ...ctxBase }, exec);
+      expect(r.contexto.transferir).toBeFalsy();
+    });
+
     it("ação CUSTOMIZADA → roteia pela saída do nome custom (encadeia etapas)", async () => {
       const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Tenho seus dados!", acao: "dados_ok" });
       const exec = criarMockExecutores({ conversarComAgente });

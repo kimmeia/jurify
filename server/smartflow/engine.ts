@@ -1154,10 +1154,21 @@ async function handleIaAtendente(
     // Ação escolhida (e habilitada — builtin ou custom) → envia a resposta e sai pela saída.
     if (acao && ferramentasTodas.includes(acao)) {
       const enviadas = novoCtx.mensagensEnviadas || [];
+      // Fallback de segurança: a IA decidiu transferir mas a saída "transferir"
+      // não está conectada — sem isto o fluxo terminaria SEM pausar o bot e a
+      // próxima mensagem religaria a IA ("vou te transferir" em loop, nunca
+      // chega num humano). Marca transferir no contexto: o dispatcher pausa a
+      // conversa (em_atendimento) no fim da execução, conectado ou não.
+      const transferirSemSaida = acao === "transferir" && !passo.proximoSe?.["transferir"];
       return {
         sucesso: true,
         resposta: resposta || undefined,
-        contexto: { ...novoCtx, mensagensEnviadas: resposta ? [...enviadas, resposta] : enviadas, acaoAtendente: acao },
+        contexto: {
+          ...novoCtx,
+          mensagensEnviadas: resposta ? [...enviadas, resposta] : enviadas,
+          acaoAtendente: acao,
+          ...(transferirSemSaida ? { transferir: true } : {}),
+        },
         proximoRamoId: acao,
       };
     }

@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ambar:#d97706; --ciano:#0891b2;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:24px 30px; height:100%; display:flex; flex-direction:column; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .sub b { color:var(--corpo); font-weight:600; }
+  .topo-dir { display:flex; align-items:center; gap:10px; }
+  .btn-ghost { border:1px solid var(--borda); background:var(--surface); border-radius:10px;
+               padding:10px 15px; font-size:13px; font-weight:600; color:var(--corpo);
+               display:flex; align-items:center; gap:7px; }
+  .btn-primary { background:var(--acento); color:#fff; font-weight:600; font-size:13.5px;
+                 border-radius:10px; padding:11px 18px; display:flex; align-items:center; gap:8px;
+                 box-shadow:0 8px 18px -8px #7c3aed88; }
+
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  /* ── tiles ── */
+  .tiles { margin-top:15px; display:grid; grid-template-columns:repeat(5,1fr); gap:11px; flex:0 0 auto; }
+  .tile { padding:11px 14px; }
+  .tile .n { font-family:'Poppins'; font-weight:700; font-size:23px; line-height:1.1; letter-spacing:-.01em; }
+  .tile .n small { font-size:12.5px; font-weight:600; color:var(--mudo); font-family:'Inter'; margin-left:3px; }
+  .tile .l { margin-top:3px; font-size:11.5px; font-weight:600; color:var(--mudo); }
+  .tile.viol .n { color:var(--acento); }
+  .tile.amb .n { color:var(--ambar); }
+  .tile.ok .n { color:var(--ok); }
+
+  /* ── filtros ── */
+  .filtros { margin-top:12px; padding:11px 14px; display:flex; align-items:center; gap:9px; flex:0 0 auto; }
+  .busca { position:relative; width:290px; }
+  .busca input { width:100%; height:36px; border:1px solid var(--borda); border-radius:9px;
+                 padding:0 12px 0 34px; font-family:'Inter'; font-size:13px; color:var(--tinta); outline:none; }
+  .busca input::placeholder { color:var(--fraco); }
+  .busca svg { position:absolute; left:11px; top:50%; transform:translateY(-50%); }
+  .select { height:36px; border:1px solid var(--borda); background:var(--surface); border-radius:9px;
+            padding:0 11px; display:flex; align-items:center; gap:8px;
+            font-size:12.5px; font-weight:500; color:var(--corpo); }
+  .select .cap { color:var(--fraco); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+  .select.on { border:1.5px solid var(--acento); background:var(--acento-bg); color:var(--acento-forte); font-weight:600; }
+  .select.on .cap { color:var(--acento-claro); }
+  .views { display:flex; gap:4px; background:var(--hairline); padding:3px; border-radius:9px; margin-left:auto; }
+  .views span { padding:6px 13px; font-size:12px; font-weight:600; color:var(--mudo); border-radius:7px; }
+  .views span.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+
+  /* ── corpo ── */
+  .corpo { margin-top:12px; flex:1; display:grid; grid-template-columns:452px 1fr; gap:12px; overflow:hidden; }
+  .col { display:flex; flex-direction:column; overflow:hidden; }
+  .col-top { padding:11px 14px; border-bottom:1px solid var(--hairline); display:flex; align-items:center; justify-content:space-between; flex:0 0 auto; }
+  .col-top .t { font-family:'Poppins'; font-weight:700; font-size:14.5px; }
+
+  /* lista de achados */
+  .lista { flex:1; overflow:hidden; }
+  .item { padding:10px 14px; border-bottom:1px solid var(--hairline-2); display:flex; gap:10px; align-items:flex-start; }
+  .item.sel { background:var(--acento-bg-2); box-shadow:inset 3px 0 0 var(--acento); }
+  .sev { width:8px; height:8px; border-radius:50%; margin-top:5px; flex:0 0 auto; }
+  .sev.critico { background:var(--alerta); }
+  .sev.alto { background:var(--ambar); }
+  .sev.medio { background:var(--ciano); }
+  .sev.baixo { background:var(--fantasma); }
+  .item .meio { flex:1; min-width:0; }
+  .item .tit { font-size:13px; font-weight:600; color:var(--tinta); line-height:1.3; }
+  .item.sel .tit { font-weight:700; }
+  .item .met { margin-top:3px; font-size:11px; color:var(--fraco); font-weight:500;
+               white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item .met b { color:var(--mudo); font-weight:700; font-family:'Inter'; }
+  .est { flex:0 0 auto; border-radius:999px; padding:3.5px 9px; font-size:10px; font-weight:700;
+         letter-spacing:.02em; white-space:nowrap; margin-top:1px; }
+  .est.pronta { background:var(--acento-bg); color:var(--acento-forte); border:1px solid #ddd6fe; }
+  .est.decisao { background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
+  .est.reporta { background:var(--alerta-bg); color:var(--alerta-forte); border:1px solid var(--alerta-borda); }
+  .est.auto { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
+  .est.shadow { background:var(--hairline); color:var(--mudo); border:1px solid var(--borda); }
+
+  /* detalhe */
+  .det { flex:1; padding:15px 18px; overflow:hidden; display:flex; flex-direction:column; }
+  .det-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex:0 0 auto; }
+  .pill-sev { display:inline-flex; align-items:center; gap:6px; background:var(--alerta-bg); border:1px solid var(--alerta-borda);
+              color:var(--alerta-forte); border-radius:999px; padding:3px 10px; font-size:10.5px; font-weight:800; letter-spacing:.05em; }
+  .det-tit { margin-top:7px; font-family:'Poppins'; font-weight:700; font-size:18.5px; letter-spacing:-.01em; }
+  .det-met { margin-top:4px; font-size:11.5px; color:var(--mudo); font-weight:500; }
+  .det-met code { font-family:'Inter'; background:var(--hairline); border-radius:5px; padding:1.5px 6px;
+                  font-size:11px; font-weight:700; color:var(--corpo); }
+  .nivel { border:1px solid #ddd6fe; background:var(--acento-bg); border-radius:11px; padding:8px 12px; text-align:right; flex:0 0 auto; }
+  .nivel .a { font-size:12.5px; font-weight:800; color:var(--acento-forte); }
+  .nivel .b { margin-top:2px; font-size:10.5px; color:var(--acento-claro); font-weight:600; max-width:190px; }
+
+  .bloco { margin-top:13px; flex:0 0 auto; }
+  .bloco .micro { margin-bottom:5px; }
+  .bloco p { font-size:12.8px; color:var(--corpo); line-height:1.5; }
+  .bloco p b { color:var(--tinta); font-weight:700; }
+  .bloco code { font-family:'Inter'; background:var(--hairline); border-radius:5px; padding:1px 5px;
+                font-size:11.5px; font-weight:700; color:var(--corpo); }
+  .causa { background:var(--hairline-2); border:1px solid var(--borda); border-left:3px solid var(--ciano);
+           border-radius:9px; padding:10px 13px; }
+
+  /* diff */
+  .diff { margin-top:5px; border:1px solid var(--borda); border-radius:10px; overflow:hidden; }
+  .diff-h, .diff-r { display:grid; grid-template-columns:1fr 118px 128px 132px; align-items:center; }
+  .diff-h { background:var(--hairline-2); border-bottom:1px solid var(--borda); padding:7px 13px; }
+  .diff-h div { font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--fraco); }
+  .diff-h div:not(:first-child), .diff-r div:not(:first-child) { text-align:right; }
+  .diff-r { padding:8px 13px; border-bottom:1px solid var(--hairline-2); }
+  .diff-r:last-child { border-bottom:0; }
+  .diff-r .esc { font-size:12.5px; font-weight:600; color:var(--tinta-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .diff-r .esc span { color:var(--fraco); font-weight:600; font-size:11px; }
+  .diff-r .v { font-size:12.5px; font-weight:600; color:var(--mudo); font-variant-numeric:tabular-nums; }
+  .diff-r .v.antes { text-decoration:line-through; color:var(--fantasma); }
+  .diff-r .v.fonte { color:var(--corpo); font-weight:700; }
+  .diff-r .v.depois { color:var(--tinta); font-weight:800; }
+  .diff-r .v.depois .d { font-size:11px; font-weight:700; margin-left:6px; color:var(--ok); }
+  .diff-r .v.depois .d.neg { color:var(--alerta); }
+
+  /* checagens cruzadas */
+  .checks { margin-top:5px; display:grid; grid-template-columns:1fr 1fr; gap:6px 18px; }
+  .chk { display:flex; align-items:flex-start; gap:7px; font-size:12.3px; color:var(--corpo); line-height:1.35; }
+  .chk svg { flex:0 0 auto; margin-top:2px; }
+  .chk b { color:var(--tinta); font-weight:700; }
+
+  /* freios */
+  .freios { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; flex:0 0 auto; }
+  .freio { border:1px solid var(--borda); background:var(--surface); border-radius:9px; padding:7px 11px;
+           display:flex; align-items:center; gap:7px; }
+  .freio .fl { font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--fraco); }
+  .freio .fv { font-size:12px; font-weight:700; color:var(--corpo); }
+  .freio.ok { border-color:#a7f3d0; background:#ecfdf5; }
+  .freio.ok .fl { color:#34d399; }
+  .freio.ok .fv { color:#047857; }
+
+  .acoes { margin-top:auto; padding-top:14px; border-top:1px solid var(--hairline); display:flex; align-items:center; gap:10px; flex:0 0 auto; }
+  .acoes .nota { margin-left:auto; font-size:11.5px; color:var(--fraco); font-weight:500; text-align:right; line-height:1.4; }
+
+  /* histórico */
+  .hist { margin-top:12px; flex:0 0 auto; padding:0; }
+  .hist-top { padding:9px 15px; border-bottom:1px solid var(--hairline); display:flex; align-items:center; gap:10px; }
+  .hist-top .t { font-family:'Poppins'; font-weight:700; font-size:13.5px; }
+  .hist-top .tudo { margin-left:auto; font-size:11.5px; font-weight:700; color:var(--acento); }
+  .hlin { display:grid; grid-template-columns:74px 92px 1fr 128px 168px 96px; align-items:center;
+          padding:8px 15px; border-bottom:1px solid var(--hairline-2); }
+  .hlin:last-child { border-bottom:0; }
+  .hlin .hora { font-size:11.5px; font-weight:700; color:var(--mudo); font-variant-numeric:tabular-nums; }
+  .hlin .rid { font-size:11px; font-weight:700; color:var(--corpo); background:var(--hairline);
+               border-radius:5px; padding:2px 7px; justify-self:start; }
+  .hlin .desc { font-size:12.5px; font-weight:500; color:var(--tinta-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hlin .qtd { font-size:11.5px; font-weight:600; color:var(--mudo); text-align:right; }
+  .hlin .quem { font-size:11.5px; font-weight:600; color:var(--mudo); display:flex; align-items:center; gap:7px; justify-content:flex-end; }
+  .hlin .quem .av { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+                    color:#fff; font-size:8.5px; font-weight:800; flex:0 0 auto; }
+  .desfazer { justify-self:end; border:1px solid var(--borda); border-radius:8px; padding:5px 12px;
+              font-size:11.5px; font-weight:700; color:var(--corpo); display:flex; align-items:center; gap:6px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">Robô auditor</div>
+        <div class="sub"><b>23 invariantes</b> vigiando o banco · última varredura há <b>12 min</b> · próxima às 15h00</div>
+      </div>
+      <div class="topo-dir">
+        <div class="btn-ghost">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="#334155" stroke-width="2.2" stroke-linecap="round"/></svg>
+          Regras
+        </div>
+        <div class="btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Rodar varredura agora
+        </div>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <div class="card tile">
+        <div class="n">9</div>
+        <div class="l">Achados na última varredura</div>
+      </div>
+      <div class="card tile viol">
+        <div class="n">2</div>
+        <div class="l">Correção pronta pra aplicar</div>
+      </div>
+      <div class="card tile amb">
+        <div class="n">2</div>
+        <div class="l">Aguardando sua decisão</div>
+      </div>
+      <div class="card tile ok">
+        <div class="n">5 <small>linhas</small></div>
+        <div class="l">Auto-corrigidas hoje</div>
+      </div>
+      <div class="card tile">
+        <div class="n">2 <small>de 23</small></div>
+        <div class="l">Regras ainda em shadow mode</div>
+      </div>
+    </div>
+
+    <div class="card filtros">
+      <div class="busca">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#94a3b8" stroke-width="2.2"/><path d="m20 20-3.5-3.5" stroke="#94a3b8" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <input placeholder="Buscar por regra, tabela ou escritório">
+      </div>
+      <div class="select"><span class="cap">Severidade</span> Todas</div>
+      <div class="select"><span class="cap">Domínio</span> Todos</div>
+      <div class="select on"><span class="cap">Estado</span> Aberto
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="#5b21b6" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="select"><span class="cap">Ambiente</span> Produção</div>
+      <div class="views"><span class="on">Achados</span><span>Regras</span><span>Log de ações</span></div>
+    </div>
+
+    <div class="corpo">
+
+      <!-- ─── lista ─── -->
+      <div class="card col">
+        <div class="col-top">
+          <div class="t">Achados</div>
+          <div class="micro">Ordenado por severidade</div>
+        </div>
+        <div class="lista">
+          <div class="item sel">
+            <div class="sev critico"></div>
+            <div class="meio">
+              <div class="tit">Saldo de créditos diverge do extrato</div>
+              <div class="met">CRED-01 · <b>3</b> escritórios · escritorio_creditos</div>
+            </div>
+            <div class="est pronta">CORREÇÃO PRONTA</div>
+          </div>
+          <div class="item">
+            <div class="sev critico"></div>
+            <div class="meio">
+              <div class="tit">Processo vinculado a cliente de outro escritório</div>
+              <div class="met">TEN-02 · <b>2</b> linhas · cliente_processos</div>
+            </div>
+            <div class="est reporta">SÓ REPORTA</div>
+          </div>
+          <div class="item">
+            <div class="sev alto"></div>
+            <div class="meio">
+              <div class="tit">Cobrança paga sem webhook correspondente</div>
+              <div class="met">FIN-04 · <b>3</b> linhas · asaas_cobrancas</div>
+            </div>
+            <div class="est decisao">AGUARDA DECISÃO</div>
+          </div>
+          <div class="item">
+            <div class="sev alto"></div>
+            <div class="meio">
+              <div class="tit">Fechamento de comissão ≠ soma dos itens</div>
+              <div class="met">COM-01 · <b>1</b> linha · comissoes_fechadas</div>
+            </div>
+            <div class="est reporta">SÓ REPORTA</div>
+          </div>
+          <div class="item">
+            <div class="sev medio"></div>
+            <div class="meio">
+              <div class="tit">Monitoramento ativo com credencial removida</div>
+              <div class="met">MON-03 · <b>6</b> linhas · motor_monitoramentos</div>
+            </div>
+            <div class="est pronta">CORREÇÃO PRONTA</div>
+          </div>
+          <div class="item">
+            <div class="sev medio"></div>
+            <div class="meio">
+              <div class="tit">Convite marcado como enviado, com erro</div>
+              <div class="met">INT-02 · <b>4</b> linhas · convites_colaborador</div>
+            </div>
+            <div class="est auto">CORRIGIDO 09:12</div>
+          </div>
+          <div class="item">
+            <div class="sev medio"></div>
+            <div class="meio">
+              <div class="tit">Execução do SmartFlow travada há +48h</div>
+              <div class="met">FLW-05 · <b>2</b> linhas · smartflow_execucoes</div>
+            </div>
+            <div class="est shadow">SHADOW 12/14d</div>
+          </div>
+          <div class="item">
+            <div class="sev baixo"></div>
+            <div class="meio">
+              <div class="tit">Card do Kanban com responsável desligado</div>
+              <div class="met">KAN-01 · <b>11</b> linhas · kanban_cards</div>
+            </div>
+            <div class="est shadow">SHADOW 5/14d</div>
+          </div>
+          <div class="item">
+            <div class="sev baixo"></div>
+            <div class="meio">
+              <div class="tit">Importação OFX com FITID duplicado</div>
+              <div class="met">OFX-02 · <b>1</b> linha · ofx_importacoes_fitid</div>
+            </div>
+            <div class="est decisao">AGUARDA DECISÃO</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── detalhe ─── -->
+      <div class="card col">
+        <div class="det">
+          <div class="det-head">
+            <div>
+              <div class="pill-sev">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 8v5m0 3.5v.2M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.4h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="#b91c1c" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                CRÍTICO
+              </div>
+              <div class="det-tit">Saldo de créditos diverge do extrato</div>
+              <div class="det-met">Regra <code>CRED-01</code> · domínio Financeiro · detectada às 14h48 · 3 escritórios afetados</div>
+            </div>
+            <div class="nivel">
+              <div class="a">Nível A — auto-corrigível</div>
+              <div class="b">O saldo é cache; o extrato é a fonte da verdade</div>
+            </div>
+          </div>
+
+          <div class="bloco">
+            <div class="micro">A invariante afirma</div>
+            <p><code>escritorio_creditos.saldo</code> deve ser sempre igual à soma de <code>escritorio_transacoes</code> do mesmo escritório. Divergência significa saldo desatualizado, nunca extrato errado.</p>
+          </div>
+
+          <div class="bloco">
+            <div class="micro">Causa provável</div>
+            <div class="causa">
+              <p>As 3 divergências têm transação gravada entre <b>11/08 14h02 e 14h51</b> — a janela em que <code>jurisia.consumir</code> passou a gravar a transação e falhar antes de atualizar o saldo (deploy de 11/08 13h58). Foram 47 transações no período; <b>3 não refletiram no saldo</b>. O robô abriu <b>PR #412</b> com o teste de regressão — o dado é corrigível aqui, o bug de código não.</p>
+            </div>
+          </div>
+
+          <div class="bloco">
+            <div class="micro">Correção proposta — recalcular saldo a partir do extrato</div>
+            <div class="diff">
+              <div class="diff-h">
+                <div>Escritório</div><div>Saldo atual</div><div>Soma do extrato</div><div>Depois</div>
+              </div>
+              <div class="diff-r">
+                <div class="esc">Advocacia Bezerra &amp; Lima <span>#42</span></div>
+                <div class="v antes">1.250</div>
+                <div class="v fonte">1.190</div>
+                <div class="v depois">1.190<span class="d neg">−60</span></div>
+              </div>
+              <div class="diff-r">
+                <div class="esc">Escritório Marina Tavares <span>#118</span></div>
+                <div class="v antes">380</div>
+                <div class="v fonte">365</div>
+                <div class="v depois">365<span class="d neg">−15</span></div>
+              </div>
+              <div class="diff-r">
+                <div class="esc">Nogueira Sociedade de Advogados <span>#7</span></div>
+                <div class="v antes">2.400</div>
+                <div class="v fonte">2.480</div>
+                <div class="v depois">2.480<span class="d">+80</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bloco">
+            <div class="micro">Checagens cruzadas antes de propor</div>
+            <div class="checks">
+              <div class="chk">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="#059669" stroke-width="1.8"/><path d="m8 12.3 2.7 2.7L16 9.6" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span>Nenhuma das 3 transações foi <b>estornada</b> depois</span>
+              </div>
+              <div class="chk">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="#059669" stroke-width="1.8"/><path d="m8 12.3 2.7 2.7L16 9.6" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span>Consumo em <b>jurisia_uso</b> bate com as 47 transações</span>
+              </div>
+              <div class="chk">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="#059669" stroke-width="1.8"/><path d="m8 12.3 2.7 2.7L16 9.6" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span>Nenhuma <b>compra de créditos</b> pendente na janela</span>
+              </div>
+              <div class="chk">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="#059669" stroke-width="1.8"/><path d="m8 12.3 2.7 2.7L16 9.6" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span>Os 3 escritórios seguem <b>ativos</b> e sem suspensão</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="freios">
+            <div class="freio ok"><span class="fl">Shadow mode</span><span class="fv">14 dias sem falso positivo</span></div>
+            <div class="freio ok"><span class="fl">Backup</span><span class="fv">há 2h</span></div>
+            <div class="freio ok"><span class="fl">Volume</span><span class="fv">3 de 50 linhas</span></div>
+            <div class="freio ok"><span class="fl">Reversível</span><span class="fv">sim</span></div>
+            <div class="freio"><span class="fl">Dry-run</span><span class="fv">rodado 14h48</span></div>
+          </div>
+
+          <div class="acoes">
+            <div class="btn-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="m5 13 4.5 4.5L19 7" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Aplicar correção nas 3 linhas
+            </div>
+            <div class="btn-ghost">Ver SQL</div>
+            <div class="btn-ghost">Ignorar por 7 dias</div>
+            <div class="nota">Grava em <b>audit_log</b> com antes/depois.<br>Desfazer disponível por 30 dias.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── histórico ─── -->
+    <div class="card hist">
+      <div class="hist-top">
+        <div class="t">Correções recentes</div>
+        <div class="micro">Toda escrita do robô fica registrada e é reversível</div>
+        <div class="tudo">Ver histórico completo →</div>
+      </div>
+      <div class="hlin">
+        <div class="hora">09:12</div>
+        <div class="rid">INT-02</div>
+        <div class="desc">Convites com erro de e-mail voltaram para “falha no envio”</div>
+        <div class="qtd">4 linhas</div>
+        <div class="quem"><span class="av" style="background:#0f172a">RB</span> Robô · automática</div>
+        <div class="desfazer">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4" stroke="#334155" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Desfazer
+        </div>
+      </div>
+      <div class="hlin">
+        <div class="hora">08:40</div>
+        <div class="rid">CRED-01</div>
+        <div class="desc">Saldo de créditos recalculado a partir do extrato — Sampaio Advogados #63</div>
+        <div class="qtd">1 linha</div>
+        <div class="quem"><span class="av" style="background:#0f172a">RB</span> Robô · automática</div>
+        <div class="desfazer">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4" stroke="#334155" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Desfazer
+        </div>
+      </div>
+      <div class="hlin">
+        <div class="hora">ontem</div>
+        <div class="rid">FIN-04</div>
+        <div class="desc">Cobranças sem webhook reconciliadas com o extrato do Asaas</div>
+        <div class="qtd">2 linhas</div>
+        <div class="quem"><span class="av" style="background:#7c3aed">RR</span> Rafael Rocha · aplicou</div>
+        <div class="desfazer">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4" stroke="#334155" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Desfazer
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

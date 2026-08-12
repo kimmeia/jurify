@@ -14,6 +14,17 @@ vi.mock("../escritorio/db-canais", () => ({
   obterAutoReplyCanal: vi.fn(),
 }));
 
+// Stub do DB pro `pegarStatusConversa` (guard do bot pausado). `selectRows`
+// controla o status devolvido; [] = conversa sem status (guard deixa passar).
+const dbStub = {
+  selectRows: [] as any[],
+  select: vi.fn(() => dbStub),
+  from: vi.fn(() => dbStub),
+  where: vi.fn(() => dbStub),
+  limit: vi.fn(async () => dbStub.selectRows),
+};
+vi.mock("../db", () => ({ getDb: async () => dbStub }));
+
 vi.mock("../escritorio/db-crm", () => ({
   enviarMensagem: vi.fn().mockResolvedValue(999),
   atualizarStatusMensagem: vi.fn(),
@@ -36,6 +47,29 @@ import { enviarMensagem as salvarMensagem } from "../escritorio/db-crm";
 describe("enviarAutoReply (fallback quando SmartFlow não responde)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dbStub.selectRows = [];
+  });
+
+  it("NÃO envia quando a conversa está em_atendimento (humano assumiu — bot calado)", async () => {
+    // O dispatcher devolve `executou: false` tanto pra "sem cenário" quanto
+    // pra "bot pausado" — sem o guard, o auto-reply atropelava o atendente
+    // a cada mensagem do cliente.
+    dbStub.selectRows = [{ status: "em_atendimento" }];
+    vi.mocked(obterAutoReplyCanal).mockResolvedValue("Em breve retornamos.");
+
+    await enviarAutoReply(1, 42, "5511999999999@s.whatsapp.net");
+
+    expect(salvarMensagem).not.toHaveBeenCalled();
+    expect(obterAutoReplyCanal).not.toHaveBeenCalled();
+  });
+
+  it("envia normalmente quando a conversa está aguardando (bot ativo)", async () => {
+    dbStub.selectRows = [{ status: "aguardando" }];
+    vi.mocked(obterAutoReplyCanal).mockResolvedValue("Em breve retornamos.");
+
+    await enviarAutoReply(1, 42, "5511999999999@s.whatsapp.net");
+
+    expect(salvarMensagem).toHaveBeenCalledTimes(1);
   });
 
   it("envia o texto fixo quando o canal tem auto-reply configurado", async () => {
