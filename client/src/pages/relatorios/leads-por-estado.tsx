@@ -1,5 +1,10 @@
 /**
- * De onde vêm os leads.
+ * De onde vêm as oportunidades.
+ *
+ * "Oportunidade" e não "lead" porque a linha contada aqui é uma NEGOCIAÇÃO,
+ * não uma pessoa: quem volta com um segundo caso entra de novo. A aba "Leads"
+ * em Clientes conta pessoas na fila e por isso nunca vai dar o mesmo número —
+ * a palavra separada é o que impede o leitor de somar as duas.
  *
  * Duas decisões de desenho que não são estéticas.
  *
@@ -72,7 +77,7 @@ export function BlocoLeadsPorEstado({
     return (
       <div className="rounded-xl border bg-card px-4 py-6 text-center">
         <p className="text-xs text-muted-foreground">
-          Nenhum lead criado no período — sem lead não há de onde ele veio.
+          Nenhuma oportunidade criada no período — sem ela não há de onde veio.
         </p>
       </div>
     );
@@ -92,11 +97,11 @@ export function BlocoLeadsPorEstado({
         <div>
           <div className="flex items-center gap-2">
             <Database className="h-4 w-4 text-violet-600" />
-            <h3 className="text-sm font-semibold">De onde vêm os leads</h3>
+            <h3 className="text-sm font-semibold">De onde vêm as oportunidades</h3>
           </div>
           <p className="mt-1 text-[13px] font-bold">
             {dados.comEstado.toLocaleString("pt-BR")}{" "}
-            {dados.comEstado === 1 ? "lead" : "leads"} em {dados.estados.length}{" "}
+            {dados.comEstado === 1 ? "oportunidade" : "oportunidades"} em {dados.estados.length}{" "}
             {dados.estados.length === 1 ? "estado" : "estados"}
             {dados.semEstado > 0 && (
               <span className="ml-1.5 text-[11.5px] font-medium text-muted-foreground">
@@ -106,8 +111,8 @@ export function BlocoLeadsPorEstado({
           </p>
           {lider && fatiaLider > 0 && (
             <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-              {lider.uf} concentra <b className="text-foreground">{fatiaLider}%</b> dos leads com
-              estado identificado.
+              {lider.uf} concentra <b className="text-foreground">{fatiaLider}%</b> das
+              oportunidades com estado identificado.
             </p>
           )}
           <p className="mt-0.5 text-[11.5px] text-muted-foreground">
@@ -119,7 +124,7 @@ export function BlocoLeadsPorEstado({
         <span className="rounded-full border bg-muted/40 px-2.5 py-1 text-[10.5px] text-muted-foreground">
           {selecionada
             ? `Este bloco continua mostrando o período inteiro — é ele que aplica o filtro`
-            : "Leads criados no período"}
+            : "Oportunidades criadas no período"}
         </span>
       </div>
 
@@ -134,7 +139,7 @@ export function BlocoLeadsPorEstado({
             viewBox={VIEWBOX_BRASIL}
             className="block h-auto w-full max-h-[360px]"
             role="img"
-            aria-label="Leads por estado"
+            aria-label="Oportunidades por estado"
           >
             {Object.entries(PATHS_UF).map(([uf, d]) => {
               const n = porUf.get(uf)?.leads ?? 0;
@@ -152,8 +157,8 @@ export function BlocoLeadsPorEstado({
                 >
                   <title>
                     {n > 0
-                      ? `${uf}: ${n} ${n === 1 ? "lead" : "leads"}${onSelecionar ? " — clique pra filtrar" : ""}`
-                      : `${uf}: nenhum lead no período`}
+                      ? `${uf}: ${n} ${n === 1 ? "oportunidade" : "oportunidades"}${onSelecionar ? " — clique pra filtrar" : ""}`
+                      : `${uf}: nenhuma oportunidade no período`}
                   </title>
                 </path>
               );
@@ -179,7 +184,7 @@ export function BlocoLeadsPorEstado({
 
           <div className="mt-2.5 flex items-center gap-2">
             <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
-              Leads
+              Oportunidades
             </span>
             <div className="flex items-center gap-0.5">
               {FAIXAS.map((f) => (
@@ -200,7 +205,7 @@ export function BlocoLeadsPorEstado({
 
         <div>
           <div className="grid grid-cols-[30px_1fr_44px_74px] items-center gap-2 border-b pb-1.5">
-            {["UF", "Volume", "Leads", "Já fecharam"].map((h, i) => (
+            {["UF", "Volume", "Oportun.", "Já fecharam"].map((h, i) => (
               <span
                 key={h}
                 className={`text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground ${
@@ -236,8 +241,8 @@ export function BlocoLeadsPorEstado({
                   className="text-right text-[11px] tabular-nums text-muted-foreground"
                   title={
                     e.conversao !== null
-                      ? `${e.ganhos} dos ${e.leads} leads de ${e.uf} já fecharam — ${e.conversao}%`
-                      : `${e.ganhos} dos ${e.leads} leads de ${e.uf} já fecharam`
+                      ? `${e.ganhos} das ${e.leads} oportunidades de ${e.uf} já fecharam — ${e.conversao}%`
+                      : `${e.ganhos} das ${e.leads} oportunidades de ${e.uf} já fecharam`
                   }
                 >
                   <b className={e.ganhos > 0 ? "text-foreground" : ""}>{e.ganhos}</b> de {e.leads}
@@ -249,10 +254,10 @@ export function BlocoLeadsPorEstado({
           <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-muted/60 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-muted-foreground">
             <Info className="mt-px h-3.5 w-3.5 shrink-0" />
             <span>
-              “Já fecharam” conta, <b className="text-foreground">dos leads que entraram neste
-              período</b>, quantos fecharam contrato até hoje — inclusive os que fecharam depois do
-              fim do período. Por isso ele ainda pode subir: um lead de agosto que fechar em
-              dezembro passa a contar em agosto. É pergunta diferente da do KPI “Taxa de conversão”
+              “Já fecharam” conta, <b className="text-foreground">das oportunidades que entraram
+              neste período</b>, quantas fecharam contrato até hoje — inclusive os que fecharam depois do
+              fim do período. Por isso ele ainda pode subir: uma oportunidade de agosto que fechar
+              em dezembro passa a contar em agosto. É pergunta diferente da do KPI “Taxa de conversão”
               lá em cima, que conta o que <b className="text-foreground">fechou dentro do
               período</b> — os dois nunca vão dar o mesmo número, e nenhum dos dois está errado.
             </span>
@@ -287,7 +292,7 @@ export function BlocoLeadsPorEstado({
             </b>{" "}
             Quem mudou de estado e manteve o número aparece na origem antiga. O endereço do cadastro
             não entra nesta conta de propósito: só cliente qualificado tem endereço preenchido, e
-            misturar os dois mediria clientes numa barra que diz leads.
+            misturar os dois mediria clientes numa barra que diz oportunidades.
           </span>
         </p>
       </div>

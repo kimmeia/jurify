@@ -55,7 +55,7 @@ function gerado(): RelatorioGerado {
     destaques: [
       { rotulo: "Atendimentos", valor: "1.284", variacao: "+12%" },
       { rotulo: "Taxa de conversão", valor: "27%", variacao: "-4 p.p." },
-      { rotulo: "Leads ganhos", valor: "90" },
+      { rotulo: "Oportunidades ganhas", valor: "90" },
     ],
   };
 }
@@ -81,7 +81,7 @@ describe("montarEmailRelatorio", () => {
     expect(html).toContain("Atendimentos");
     expect(html).toContain("1.284");
     expect(texto).toContain("Atendimentos: 1.284 (+12%)");
-    expect(texto).toContain("Leads ganhos: 90");
+    expect(texto).toContain("Oportunidades ganhas: 90");
   });
 
   it("colore a variação por sinal, não por rótulo", () => {
