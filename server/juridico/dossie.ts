@@ -92,6 +92,8 @@ export interface Dossie {
   processo?: string;
   /** CNJ do processo escolhido — usado pra ler a movimentação processual. */
   cnj?: string;
+  /** Tribunal e classe crus — o recorte do acervo é derivado daqui. */
+  processoRef?: { tribunal?: string | null; classe?: string | null };
   /** Anotações do processo, como contexto factual adicional. */
   fatosContexto?: string;
   /** Arquivos do cliente — pra seleção/leitura (texto vem na etapa Vision). */
@@ -181,6 +183,7 @@ export async function montarDossie(
   if (proc) {
     dossie.processo = montarResumoProcesso(proc);
     dossie.cnj = proc.numeroCnj || undefined;
+    dossie.processoRef = { tribunal: proc.tribunal, classe: proc.classe };
     const anots = await db
       .select({ conteudo: clienteProcessoAnotacoes.conteudo })
       .from(clienteProcessoAnotacoes)

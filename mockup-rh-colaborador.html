@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href=".claude/skills/mockup-juridflow/assets/fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+    --viz-1:#2a78d6; --viz-2:#eb6834; --viz-3:#1baf7a; --viz-4:#eda100; --viz-5:#e87ba4;
+    --viz-trilho:#e8edf3;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:22px 30px; height:100%; display:flex; flex-direction:column; }
+
+  .voltar { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
+            color:var(--acento); margin-bottom:9px; }
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .ident { display:flex; align-items:center; gap:13px; }
+  .av-g { width:52px; height:52px; border-radius:50%; background:#10b981; color:#fff;
+          font-size:18px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:25px; letter-spacing:-.01em; }
+  .sub { margin-top:2px; font-size:12.5px; color:var(--mudo); display:flex; align-items:center; gap:8px; }
+  .chip { border:1px solid var(--borda); background:var(--surface); border-radius:999px;
+          padding:2px 9px; font-size:11px; font-weight:600; color:var(--corpo-2); }
+  .topo-dir { display:flex; align-items:center; gap:9px; }
+  .btn-out { height:38px; border:1px solid var(--borda); background:var(--surface); border-radius:9px;
+             padding:0 14px; display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:var(--corpo); }
+  .btn-primary { background:var(--acento); color:#fff; font-weight:600; font-size:13.5px;
+                 border-radius:10px; padding:11px 18px; display:flex; align-items:center; gap:8px;
+                 box-shadow:0 8px 18px -8px #7c3aed88; }
+
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  .corpo { flex:1 1 auto; min-height:0; display:flex; gap:14px; margin-top:15px; }
+  .col-a { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:12px; }
+  .col-b { width:392px; flex:0 0 auto; display:flex; flex-direction:column; gap:12px; }
+
+  /* espelho de ponto */
+  .esp { flex:0 0 auto; }
+  .esp-cab { padding:12px 15px 9px; display:flex; align-items:center; justify-content:space-between; }
+  .esp-cab .t { font-family:'Poppins'; font-weight:700; font-size:16px; }
+  .esp-cab .c { font-size:11.5px; color:var(--mudo); margin-top:2px; }
+  .eg { display:grid; grid-template-columns:112px 78px 78px 78px 78px 78px 82px 1fr; gap:9px;
+        padding:0 15px; align-items:center; }
+  .eg.h { padding-bottom:7px; border-bottom:1px solid var(--hairline); }
+  .eg.r { padding-top:7px; padding-bottom:7px; border-bottom:1px solid var(--hairline-2); }
+  .eg.r:last-child { border-bottom:0; }
+  .eg .d { font-size:12px; color:var(--corpo); }
+  .eg .d b { font-weight:700; color:var(--tinta-2); }
+  .eg .h4 { font-size:12.3px; font-variant-numeric:tabular-nums; color:var(--tinta-2); font-weight:600; }
+  .eg .h4.vazio { color:var(--fantasma); font-weight:500; }
+  .eg .tot { font-size:12.3px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .eg .sal { font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .sal.pos { color:var(--ok); } .sal.neg { color:var(--alerta); } .sal.zero { color:var(--fraco); }
+  .flag { display:inline-flex; align-items:center; gap:5px; border-radius:6px; padding:2px 7px;
+          font-size:10.5px; font-weight:600; }
+  .flag.av { background:#fffbeb; color:#a16207; border:1px solid #fde68a; }
+  .flag.er { background:var(--alerta-bg); color:var(--alerta-forte); border:1px solid var(--alerta-borda); }
+  .eg.r.aus { background:var(--acento-bg); }
+  .eg.r.aus-inj { background:var(--alerta-bg); }
+  .eg .mot { grid-column:2 / 6; font-size:12px; font-weight:600; display:flex; align-items:center; gap:7px; }
+  .eg .mot .lab { color:var(--acento-forte); }
+  .eg .mot .lab.inj { color:var(--alerta-forte); }
+  .eg .mot .anexo { display:inline-flex; align-items:center; gap:4px; border:1px solid #ddd6fe;
+                    background:#fff; border-radius:6px; padding:1px 7px; font-size:10.5px; color:var(--acento-forte); }
+  .eg .just { display:inline-flex; align-items:center; gap:5px; border:1px solid var(--acento);
+              color:var(--acento); background:#fff; border-radius:7px; padding:3px 9px;
+              font-size:10.5px; font-weight:700; }
+  .eg.tt { padding:10px 15px; border-top:1px solid var(--borda); background:var(--hairline-2);
+           border-radius:0 0 13px 13px; }
+
+  /* ausências */
+  .aus-card { flex:0 0 auto; padding:13px 15px; }
+  .tipos { display:grid; grid-template-columns:repeat(3, 1fr); gap:7px; margin-top:10px; }
+  .tp-item { display:flex; align-items:center; gap:7px; border:1px solid var(--borda); border-radius:9px;
+             padding:7px 10px; font-size:11.8px; font-weight:600; color:var(--corpo); background:var(--hairline-2); }
+  .tp-item.on { border-color:#ddd6fe; background:var(--acento-bg); color:var(--acento-forte); }
+  .tp-item.on.inj { border-color:var(--alerta-borda); background:var(--alerta-bg); color:var(--alerta-forte); }
+  .pt { width:7px; height:7px; border-radius:50%; flex:0 0 auto; }
+  .pt.jus { background:var(--acento); } .pt.inj { background:var(--alerta); } .pt.neu { background:var(--fraco); }
+  .tp-item .ef { margin-left:auto; font-size:9.5px; font-weight:700; color:var(--fraco);
+                 text-transform:uppercase; letter-spacing:.04em; }
+  .tp-item.on .ef { color:inherit; opacity:.7; }
+  .rod-aus { font-size:11px; color:var(--mudo); line-height:1.5; margin-top:9px; }
+
+  /* desempenho da função */
+  .func { flex:0 0 auto; padding:13px 15px; }
+  .fg { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-top:10px; }
+  .fc { border:1px solid var(--borda); background:var(--hairline-2); border-radius:10px; padding:10px 11px; }
+  .fc .n { font-size:20px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  .fc .l { font-size:10.5px; color:var(--mudo); margin-top:4px; line-height:1.3; }
+  .fc .m { font-size:10px; margin-top:5px; font-weight:700; }
+  .fc .m.pos { color:var(--ok); } .fc .m.neg { color:var(--alerta); }
+
+  /* conduta */
+  .cond { flex:1 1 auto; padding:12px 15px; min-height:0; }
+  .cd { display:grid; grid-template-columns:70px 1fr; gap:11px; padding:8px 0;
+        border-bottom:1px solid var(--hairline-2); }
+  .cd:last-child { border-bottom:0; }
+  .cd .dt { font-size:11px; color:var(--fraco); font-variant-numeric:tabular-nums; }
+  .cd .tp { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+  .cd .tp.ad { color:#a16207; } .cd .tp.ob { color:var(--mudo); } .cd .tp.el { color:#047857; }
+  .cd .tx { font-size:12px; color:var(--corpo); line-height:1.45; margin-top:2px; }
+
+  /* avaliação */
+  .avali { padding:14px 15px; flex:0 0 auto; }
+  .nota-g { display:flex; align-items:center; gap:13px; }
+  .bola { width:62px; height:62px; border-radius:50%; flex:0 0 auto; display:flex; flex-direction:column;
+          align-items:center; justify-content:center; border:2px solid var(--alerta-borda); background:var(--alerta-bg); }
+  .bola .v { font-family:'Poppins'; font-size:22px; font-weight:800; line-height:1; color:var(--alerta-forte); }
+  .bola .m { font-size:8.5px; font-weight:700; color:#ef9a9a; margin-top:2px; }
+  .nota-g .txt { font-size:12px; color:var(--corpo); line-height:1.45; }
+  .nota-g .txt b { color:var(--tinta); }
+
+  .crit { display:grid; grid-template-columns:150px 1fr 30px; gap:10px; align-items:center; margin-top:9px; }
+  .crit .r { font-size:11.8px; color:var(--corpo); }
+  .crit .t3 { height:7px; border-radius:3px; background:var(--viz-trilho); overflow:hidden; }
+  .crit .t3 i { display:block; height:100%; border-radius:0 3px 3px 0; }
+  .crit .v { font-size:11.5px; font-weight:700; text-align:right; font-variant-numeric:tabular-nums; color:var(--corpo); }
+
+  .hist { padding:13px 15px; flex:0 0 auto; }
+  .h-row { display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:center;
+           padding:7px 0; border-bottom:1px solid var(--hairline-2); }
+  .h-row:last-child { border-bottom:0; }
+  .h-row .c1 { font-size:12px; color:var(--corpo); }
+  .h-row .c1 span { display:block; font-size:10.5px; color:var(--fraco); margin-top:1px; }
+  .h-row .n { font-size:13px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .h-row .dl { font-size:11px; font-weight:700; width:38px; text-align:right; font-variant-numeric:tabular-nums; }
+
+  .plano { padding:12px 14px; flex:1 1 auto; border-color:#ddd6fe; background:var(--acento-bg); }
+  .plano .t { font-size:12px; font-weight:700; color:var(--acento-forte); display:flex; align-items:center; gap:6px; }
+  .plano .c { font-size:11.5px; color:var(--corpo); line-height:1.5; margin-top:6px; }
+  .plano li { margin-left:15px; margin-top:4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div>
+    <div class="voltar">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 6l-6 6 6 6" stroke="#7c3aed" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      RH · Equipe
+    </div>
+  </div>
+
+  <div class="topo">
+    <div class="ident">
+      <div class="av-g">TB</div>
+      <div>
+        <div class="h1">Thiago Bezerra Lopes</div>
+        <div class="sub">
+          <span>SDR · Comercial</span>
+          <span class="chip">Jornada 8h · seg a sex</span>
+          <span class="chip">Admitido em 03/02/2025</span>
+        </div>
+      </div>
+    </div>
+    <div class="topo-dir">
+      <div class="btn-out">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#334155" stroke-width="2.3" stroke-linecap="round"/></svg>
+        Registrar conduta
+      </div>
+      <div class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 11l2.5 2.5L16 8M12 3l7 3v6c0 4.4-3 8.3-7 9.4-4-1.1-7-5-7-9.4V6l7-3z" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Avaliar agora
+      </div>
+    </div>
+  </div>
+
+  <div class="corpo">
+    <!-- ─── esquerda ─── -->
+    <div class="col-a">
+      <div class="card esp">
+        <div class="esp-cab">
+          <div>
+            <div class="t">Espelho de ponto</div>
+            <div class="c">01 a 11 de agosto de 2026 · hora do servidor, registrada pelo colaborador</div>
+          </div>
+          <div class="micro">Exportar CSV</div>
+        </div>
+
+        <div class="eg h">
+          <div class="micro">Dia</div>
+          <div class="micro">Entrada</div>
+          <div class="micro">Almoço</div>
+          <div class="micro">Volta</div>
+          <div class="micro">Saída</div>
+          <div class="micro">Total</div>
+          <div class="micro">Saldo</div>
+          <div class="micro">Conferência</div>
+        </div>
+
+        <div class="eg r">
+          <div class="d"><b>03</b> seg</div>
+          <div class="h4">08:04</div><div class="h4">12:01</div><div class="h4">13:03</div><div class="h4">18:02</div>
+          <div class="tot">8h56</div><div class="sal pos">+0h56</div><div></div>
+        </div>
+        <div class="eg r">
+          <div class="d"><b>04</b> ter</div>
+          <div class="h4">09:12</div><div class="h4">12:10</div><div class="h4">13:14</div><div class="h4">18:00</div>
+          <div class="tot">7h44</div><div class="sal neg">−0h16</div>
+          <div><span class="flag av">entrada 1h12 após o previsto</span></div>
+        </div>
+        <div class="eg r aus">
+          <div class="d"><b>05</b> qua</div>
+          <div class="mot">
+            <span class="lab">Atestado médico</span>
+            <span class="anexo">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z" stroke="#5b21b6" stroke-width="2" stroke-linejoin="round"/></svg>
+              atestado-05-08.pdf
+            </span>
+          </div>
+          <div class="tot" style="color:var(--acento-forte)">8h00 ab.</div><div class="sal zero">0h00</div>
+          <div style="font-size:11px; color:var(--mudo);">abona a jornada · Milena Mello, 05 ago</div>
+        </div>
+        <div class="eg r">
+          <div class="d"><b>06</b> qui</div>
+          <div class="h4">08:47</div><div class="h4">12:20</div><div class="h4">13:52</div><div class="h4">17:30</div>
+          <div class="tot">7h11</div><div class="sal neg">−0h49</div>
+          <div><span class="flag av">almoço de 1h32</span></div>
+        </div>
+        <div class="eg r aus-inj">
+          <div class="d"><b>07</b> sex</div>
+          <div class="mot">
+            <span class="lab inj">Falta injustificada</span>
+            <span style="font-weight:500; color:var(--corpo); font-size:11.5px;">sem aviso e sem documento</span>
+          </div>
+          <div class="tot">0h00</div><div class="sal neg">−8h00</div>
+          <div style="font-size:11px; color:var(--mudo);">desconta DSR · Rafael Costa, 07 ago</div>
+        </div>
+        <div class="eg r">
+          <div class="d"><b>10</b> seg</div>
+          <div class="h4">09:31</div><div class="h4">12:15</div><div class="h4">13:20</div><div class="h4 vazio">—</div>
+          <div class="tot">—</div><div class="sal zero">—</div>
+          <div style="display:flex; align-items:center; gap:8px;"><span class="flag er">sem batida de saída</span><span class="just">+ Justificar dia</span></div>
+        </div>
+        <div class="eg r">
+          <div class="d"><b>11</b> ter <span style="color:var(--acento); font-weight:700;">hoje</span></div>
+          <div class="h4">08:20</div><div class="h4">12:06</div><div class="h4">13:02</div><div class="h4 vazio">em curso</div>
+          <div class="tot">—</div><div class="sal zero">—</div>
+          <div></div>
+        </div>
+
+        <div class="eg tt">
+          <div class="d" style="font-weight:700">5 dias fechados</div>
+          <div></div><div></div><div></div>
+          <div class="micro" style="text-align:right; padding-right:4px;">no período</div>
+          <div class="tot">31h51</div>
+          <div class="sal neg">−8h09</div>
+          <div style="font-size:11px; color:var(--mudo);">1 atestado abonado · 1 falta injustificada · 1 dia sem saída, aguardando justificativa</div>
+        </div>
+      </div>
+
+      <div class="card aus-card">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div class="micro">Ausências no período</div>
+          <div class="micro" style="color:var(--acento)">+ Registrar ausência</div>
+        </div>
+        <div class="tipos">
+          <div class="tp-item on"><span class="pt jus"></span>Atestado médico<span class="ef">abona</span></div>
+          <div class="tp-item"><span class="pt jus"></span>Falta justificada<span class="ef">abona</span></div>
+          <div class="tp-item on inj"><span class="pt inj"></span>Falta injustificada<span class="ef">desconta</span></div>
+          <div class="tp-item"><span class="pt jus"></span>Férias<span class="ef">abona</span></div>
+          <div class="tp-item"><span class="pt jus"></span>Folga / compensação<span class="ef">usa banco</span></div>
+          <div class="tp-item"><span class="pt neu"></span>Trabalho externo<span class="ef">conta 8h</span></div>
+        </div>
+        <p class="rod-aus">
+          O tipo decide o efeito no saldo — não é só rótulo. Abonada não gera hora negativa;
+          injustificada gera e sinaliza o reflexo no descanso semanal.
+          <b>Só gestor e dono registram ausência e anexam atestado</b> — o colaborador não lança
+          nem aprova. Quem registrou, quando e o anexo ficam gravados no dia.
+        </p>
+      </div>
+
+      <div class="card func">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div class="micro">Desempenho da função · SDR</div>
+          <div class="micro">01 a 11 de agosto · vem do CRM e da Agenda</div>
+        </div>
+        <div class="fg">
+          <div class="fc">
+            <div class="n">11</div>
+            <div class="l">agendamentos<br>realizados</div>
+            <div class="m neg">meta 30/mês · 37% do ritmo</div>
+          </div>
+          <div class="fc">
+            <div class="n">48</div>
+            <div class="l">leads<br>trabalhados</div>
+            <div class="m pos">+6 vs julho</div>
+          </div>
+          <div class="fc">
+            <div class="n">22,9%</div>
+            <div class="l">conversão<br>lead → agendamento</div>
+            <div class="m neg">média do setor: 31,4%</div>
+          </div>
+          <div class="fc">
+            <div class="n">1h47</div>
+            <div class="l">1ª resposta<br>(mediana)</div>
+            <div class="m neg">acordado: até 30min</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card cond">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div class="micro">Conduta desta pessoa</div>
+          <div class="micro">3 registros em 12 meses</div>
+        </div>
+        <div class="cd">
+          <div class="dt">08 ago</div>
+          <div>
+            <div class="tp ad">Advertência verbal</div>
+            <div class="tx">Terceiro atraso sem aviso no mês. Combinado: avisar no grupo até as 08h30 quando houver imprevisto. — Rafael Costa</div>
+          </div>
+        </div>
+        <div class="cd">
+          <div class="dt">22 mai</div>
+          <div>
+            <div class="tp ob">Observação</div>
+            <div class="tx">Pediu treinamento de objeção por telefone. Inscrito na trilha interna. — Milena Mello</div>
+          </div>
+        </div>
+        <div class="cd">
+          <div class="dt">14 mar</div>
+          <div>
+            <div class="tp el">Elogio</div>
+            <div class="tx">Melhor mês de agendamentos do setor desde a abertura. — Rafael Costa</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── direita ─── -->
+    <div class="col-b">
+      <div class="card avali">
+        <div class="micro">Última avaliação · ciclo de maio</div>
+        <div class="nota-g" style="margin-top:10px;">
+          <div class="bola"><div class="v">2,6</div><div class="m">DE 5,0</div></div>
+          <div class="txt">
+            Avaliado por <b>Milena Mello</b> em 12/05/2026.<br>
+            O ciclo seguinte venceu há <b>2 semanas</b> — a nota abaixo já não descreve o trimestre corrente.
+          </div>
+        </div>
+
+        <div style="margin-top:13px; padding-top:11px; border-top:1px solid var(--hairline);">
+          <div class="micro">Por critério</div>
+          <div class="crit">
+            <div class="r">Pontualidade</div>
+            <div class="t3"><i style="width:30%; background:var(--viz-5)"></i></div>
+            <div class="v">1,5</div>
+          </div>
+          <div class="crit">
+            <div class="r">Cumprimento de metas</div>
+            <div class="t3"><i style="width:40%; background:var(--viz-2)"></i></div>
+            <div class="v">2,0</div>
+          </div>
+          <div class="crit">
+            <div class="r">Qualidade técnica</div>
+            <div class="t3"><i style="width:60%; background:var(--viz-4)"></i></div>
+            <div class="v">3,0</div>
+          </div>
+          <div class="crit">
+            <div class="r">Comunicação</div>
+            <div class="t3"><i style="width:70%; background:var(--viz-1)"></i></div>
+            <div class="v">3,5</div>
+          </div>
+          <div class="crit">
+            <div class="r">Autonomia</div>
+            <div class="t3"><i style="width:60%; background:var(--viz-4)"></i></div>
+            <div class="v">3,0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card hist">
+        <div class="micro">Histórico de ciclos</div>
+        <div class="h-row">
+          <div class="c1">Maio de 2026<span>por Milena Mello</span></div>
+          <div class="n" style="color:var(--alerta-forte)">2,6</div>
+          <div class="dl" style="color:var(--alerta)">−0,8</div>
+        </div>
+        <div class="h-row">
+          <div class="c1">Fevereiro de 2026<span>por Rafael Costa</span></div>
+          <div class="n" style="color:#a16207">3,4</div>
+          <div class="dl" style="color:var(--alerta)">−0,4</div>
+        </div>
+        <div class="h-row">
+          <div class="c1">Novembro de 2025<span>por Rafael Costa</span></div>
+          <div class="n" style="color:#047857">3,8</div>
+          <div class="dl" style="color:var(--fraco)">—</div>
+        </div>
+      </div>
+
+      <div class="card plano">
+        <div class="t">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" stroke="#5b21b6" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="12" r="3.2" stroke="#5b21b6" stroke-width="1.9"/></svg>
+          Plano combinado no último ciclo
+        </div>
+        <div class="c">
+          <ul>
+            <li>Avisar imprevisto no grupo até as 08h30 — <b>não cumprido</b> (3 atrasos em agosto).</li>
+            <li>Trilha de objeção por telefone — concluída em junho.</li>
+            <li>Meta de 30 agendamentos/mês — 19 em julho, 11 até 11 de agosto.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

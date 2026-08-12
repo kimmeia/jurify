@@ -1,11 +1,16 @@
 /**
- * Agente Jurídico — módulo em CONVERSA. O advogado escolhe o caso (cliente +
- * processo); o agente lê a movimentação processual + documentos + jurisprudência
- * (base RAG) e responde com estratégia e peças no timbre do escritório, usando o
- * modelo de IA que o escritório configurou. Toda peça é minuta (revisão humana).
+ * Redator de peças — a conversa sobre um caso concreto.
+ *
+ * O advogado escolhe cliente + processo; o agente lê a movimentação, os
+ * documentos anexados e a base de fontes do escritório, e devolve estratégia
+ * ou minuta no timbre da casa. Toda peça é minuta: revisão humana antes de
+ * protocolar.
+ *
+ * Vive dentro do JurisIA, no modo "Redigir peça". A rota própria que ele tinha
+ * (/agente-juridico) virou redirect — dois lugares pra mesma coisa era o
+ * problema, não a solução.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Scale, Send, Download, ArrowLeft, Library, Plus, Trash2, FileText, Search } from "lucide-react";
+import { Loader2, Scale, Send, Download, Library, Plus, Trash2, FileText, Search } from "lucide-react";
 import { toast } from "sonner";
 import { base64ToBlob, baixarBlob } from "@/pages/financeiro/helpers";
 
@@ -24,7 +29,21 @@ const MODELOS = [
   { v: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (Anthropic)" },
 ];
 
-type Msg = { role: "user" | "assistant"; content: string; contexto?: { andamentos: number; precedentes: number; documentos?: number } };
+type Fatia = { resultado: string; rotulo: string; quantidade: number; percentual: number };
+type Prova = {
+  rotulo: string;
+  total: number;
+  comResultado: number;
+  fatias: Fatia[];
+  jurisprudencia: number;
+  amostraPequena: boolean;
+};
+type Msg = {
+  role: "user" | "assistant";
+  content: string;
+  contexto?: { andamentos: number; precedentes: number; documentos?: number; acervo?: number };
+  prova?: Prova | null;
+};
 
 const SUGESTOES = [
   "Analise a estratégia deste caso.",
@@ -33,7 +52,7 @@ const SUGESTOES = [
   "Gere a petição inicial.",
 ];
 
-export default function AgenteJuridico() {
+export function RedatorPeca() {
   const [cliente, setCliente] = useState<{ id: number; nome: string } | null>(null);
   const [processoId, setProcessoId] = useState<number | null>(null);
   const [buscaCliente, setBuscaCliente] = useState("");
@@ -59,7 +78,7 @@ export default function AgenteJuridico() {
   const conversarMut = (trpc as any).juridico.conversar.useMutation({
     onSuccess: (r: any) => {
       if (!r.resposta) { toast.error("Não deu pra responder", { description: r.erro }); return; }
-      setMsgs((m) => [...m, { role: "assistant", content: r.resposta, contexto: r.contexto }]);
+      setMsgs((m) => [...m, { role: "assistant", content: r.resposta, contexto: r.contexto, prova: r.prova ?? null }]);
     },
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
@@ -97,18 +116,12 @@ export default function AgenteJuridico() {
   function novaConversa() { setMsgs([]); setInput(""); }
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-56px)]">
+    <div className="flex h-[calc(100dvh-230px)] min-h-[500px] flex-col overflow-hidden rounded-xl border bg-card">
       {/* Top bar */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-background">
-        <Link href="/agentes-ia">
-          <a className="inline-flex items-center gap-1.5 text-sm font-medium text-violet-600 hover:bg-violet-50 rounded-lg px-2.5 py-1.5">
-            <ArrowLeft className="h-4 w-4" /> Agentes IA
-          </a>
-        </Link>
-        <h1 className="text-sm font-bold flex items-center gap-2">
-          <Scale className="h-4 w-4 text-violet-600" /> Agente Jurídico
-          <span className="text-[10px] font-bold text-white bg-gradient-to-br from-violet-600 to-purple-700 px-2 py-0.5 rounded-full">IA jurídica</span>
-        </h1>
+        <p className="text-[11.5px] text-muted-foreground">
+          Escolha o caso à esquerda — o agente lê o processo, os documentos e a base do escritório.
+        </p>
         <div className="flex-1" />
         <Button variant="outline" size="sm" onClick={() => setFontesOpen(true)}><Library className="h-4 w-4 mr-1.5" /> Configurar</Button>
         <Button variant="outline" size="sm" onClick={novaConversa}><Plus className="h-4 w-4 mr-1.5" /> Nova conversa</Button>
@@ -209,16 +222,19 @@ export default function AgenteJuridico() {
                   {m.role === "user" ? "🧑" : "⚖️"}
                 </div>
                 <div className="min-w-0">
-                  {m.role === "assistant" && m.contexto && (m.contexto.andamentos > 0 || m.contexto.precedentes > 0 || (m.contexto.documentos ?? 0) > 0) && (
+                  {m.role === "assistant" && m.contexto && (m.contexto.andamentos > 0 || m.contexto.precedentes > 0 || (m.contexto.documentos ?? 0) > 0 || (m.contexto.acervo ?? 0) > 0) && (
                     <div className="flex flex-wrap gap-1.5 mb-1.5">
                       {m.contexto.andamentos > 0 && <span className="text-[10.5px] bg-muted border rounded-full px-2 py-0.5">🔎 {m.contexto.andamentos} andamentos</span>}
                       {(m.contexto.documentos ?? 0) > 0 && <span className="text-[10.5px] bg-muted border rounded-full px-2 py-0.5">📄 {m.contexto.documentos} documentos</span>}
                       {m.contexto.precedentes > 0 && <span className="text-[10.5px] bg-muted border rounded-full px-2 py-0.5">⚖️ {m.contexto.precedentes} precedentes</span>}
+                      {(m.contexto.acervo ?? 0) > 0 && <span className="text-[10.5px] border rounded-full px-2 py-0.5 border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300">📊 {m.contexto.acervo} decididos no acervo</span>}
                     </div>
                   )}
                   <div className={"rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed " + (m.role === "user" ? "bg-violet-600 text-white" : "bg-muted")}>
-                    {m.content}
+                    {m.role === "assistant" ? <ComAncoras texto={m.content} /> : m.content}
                   </div>
+                  {m.role === "assistant" && <LegendaAncoras texto={m.content} />}
+                  {m.role === "assistant" && m.prova && <ProvaAcervo p={m.prova} />}
                   {m.role === "assistant" && (
                     <button
                       className="text-[11px] text-muted-foreground hover:text-violet-600 mt-1 inline-flex items-center gap-1"
@@ -260,6 +276,118 @@ export default function AgenteJuridico() {
       </div>
 
       <FontesDialog open={fontesOpen} onOpenChange={setFontesOpen} />
+    </div>
+  );
+}
+
+/** Cor e significado de cada âncora — a mesma tríade em texto, legenda e prova. */
+const ANCORA: Record<string, { rotulo: string; classe: string }> = {
+  D: { rotulo: "documento do caso", classe: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600" },
+  F: { rotulo: "fonte do escritório", classe: "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" },
+  A: { rotulo: "acervo público", classe: "bg-violet-50 text-violet-700 border-violet-300 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800" },
+};
+
+/**
+ * Troca `[D]`, `[F]` e `[A]` por selo.
+ *
+ * O agente marca a origem de cada afirmação no próprio texto. Sem virar selo
+ * aqui, o advogado leria colchetes soltos no meio da peça — e a marca, que
+ * existe pra reduzir conferência, viraria sujeira.
+ */
+function ComAncoras({ texto }: { texto: string }) {
+  const partes = texto.split(/(\[[DFA]\])/g);
+  return (
+    <>
+      {partes.map((p, i) => {
+        const m = /^\[([DFA])\]$/.exec(p);
+        if (!m) return <span key={i}>{p}</span>;
+        const a = ANCORA[m[1]!]!;
+        return (
+          <span
+            key={i}
+            title={a.rotulo}
+            className={`mx-0.5 inline-flex h-[15px] w-[15px] items-center justify-center rounded border align-[2px] text-[9px] font-extrabold ${a.classe}`}
+          >
+            {m[1]}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+/** Legenda com a contagem por origem. Só aparece quando há marca no texto. */
+function LegendaAncoras({ texto }: { texto: string }) {
+  const contagem: Record<string, number> = { D: 0, F: 0, A: 0 };
+  for (const m of texto.matchAll(/\[([DFA])\]/g)) contagem[m[1]!] = (contagem[m[1]!] ?? 0) + 1;
+  const usadas = Object.entries(contagem).filter(([, n]) => n > 0);
+  if (usadas.length === 0) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+      {usadas.map(([k, n]) => (
+        <span key={k} className="inline-flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
+          <span className={`inline-flex h-[15px] w-[15px] items-center justify-center rounded border text-[9px] font-extrabold ${ANCORA[k]!.classe}`}>
+            {k}
+          </span>
+          {ANCORA[k]!.rotulo} · {n}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const COR_FATIA: Record<string, string> = {
+  procedente: "var(--viz-1)",
+  parcial: "var(--viz-2)",
+  improcedente: "var(--viz-3)",
+  acordo: "var(--viz-4)",
+  extinto_sem_merito: "var(--viz-5)",
+};
+
+/**
+ * A prova do acervo, abaixo da resposta.
+ *
+ * O número vive AQUI e não no texto: veio de contagem em SQL sobre o recorte,
+ * e o modelo tem ordem de não reescrevê-lo. É a mesma hierarquia da Pesquisa —
+ * estatística primeiro, leitura depois.
+ */
+function ProvaAcervo({ p }: { p: Prova }) {
+  return (
+    <div className="mt-2 rounded-xl border border-violet-200 bg-violet-50/60 p-3 dark:border-violet-900 dark:bg-violet-950/25">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[10px] font-extrabold uppercase tracking-[0.06em] text-violet-700 dark:text-violet-300">
+          Como este tribunal vem decidindo
+        </p>
+        <p className="text-[10.5px] text-violet-700/80 dark:text-violet-300/70">{p.rotulo}</p>
+      </div>
+      <p className="mt-1 text-[11.5px] text-muted-foreground">
+        {p.comResultado.toLocaleString("pt-BR")} processos decididos · {p.jurisprudencia.toLocaleString("pt-BR")} em
+        segunda instância
+      </p>
+      <div className="mt-2 space-y-1">
+        {p.fatias
+          .filter((f) => f.quantidade > 0)
+          .map((f) => (
+            <div key={f.resultado} className="grid grid-cols-[118px_1fr_auto] items-center gap-2">
+              <span className="truncate text-[11px] text-foreground/80">{f.rotulo}</span>
+              <span className="h-2 overflow-hidden rounded-[2px]" style={{ background: "var(--viz-trilho)" }}>
+                <span
+                  className="block h-full rounded-r-[4px]"
+                  style={{ background: COR_FATIA[f.resultado] ?? "var(--viz-1)", width: `${f.percentual}%`, minWidth: "3px" }}
+                />
+              </span>
+              <span className="flex text-[11px] tabular-nums">
+                <span className="w-9 text-right font-bold">{f.percentual}%</span>
+                <span className="w-12 text-right text-muted-foreground">({f.quantidade})</span>
+              </span>
+            </div>
+          ))}
+      </div>
+      <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+        {p.amostraPequena
+          ? "Amostra pequena — com esse número de casos decididos isto é indício, não tese firmada."
+          : "Contado no banco sobre o recorte inteiro. É estatística do tribunal, não precedente citável."}
+      </p>
     </div>
   );
 }
