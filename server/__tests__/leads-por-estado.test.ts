@@ -91,40 +91,26 @@ describe("dddDoTelefone", () => {
 });
 
 describe("estadoDoLead", () => {
-  it("o cadastro ganha do DDD", () => {
-    // Mudou pra Fortaleza e manteve o número de São Paulo: quem sabe onde ele
-    // mora é o endereço que alguém confirmou, não a linha.
-    expect(estadoDoLead({ uf: "CE", telefone: "5511987654321" })).toEqual({
-      uf: "CE",
-      origem: "cadastro",
-    });
+  it("responde pelo DDD", () => {
+    expect(estadoDoLead({ telefone: "5585999990000" })).toBe("CE");
   });
 
-  it("sem cadastro, o DDD responde — e se declara dedução", () => {
-    expect(estadoDoLead({ telefone: "5585999990000" })).toEqual({ uf: "CE", origem: "ddd" });
+  it("IGNORA o endereço do cadastro, de propósito", () => {
+    // `uf` só é preenchido no formulário de qualificação, que na prática só é
+    // aberto quando o caso virou peça. Preferi-lo faria a contagem medir
+    // clientes qualificados numa barra que diz leads — e o recorte mudaria a
+    // cada qualificação feita, sem reconciliar com nada.
+    expect(estadoDoLead({ uf: "CE", telefone: "5511987654321" } as { telefone: string })).toBe("SP");
   });
 
-  it("normaliza a UF cadastrada", () => {
-    expect(estadoDoLead({ uf: " ce " })?.uf).toBe("CE");
-  });
-
-  it("UF cadastrada que não existe cai pro DDD em vez de virar estado", () => {
-    expect(estadoDoLead({ uf: "XX", telefone: "5585999990000" })).toEqual({
-      uf: "CE",
-      origem: "ddd",
-    });
-    expect(estadoDoLead({ uf: "Ceará", telefone: null })).toBeNull();
-  });
-
-  it("sem endereço e sem telefone, não há estado", () => {
+  it("sem telefone, não há estado", () => {
     expect(estadoDoLead({})).toBeNull();
-    expect(estadoDoLead({ uf: "", telefone: "" })).toBeNull();
+    expect(estadoDoLead({ telefone: "" })).toBeNull();
   });
 });
 
 describe("agregarLeadsPorEstado", () => {
-  const lead = (telefone: string | null, ganho = false, uf: string | null = null) =>
-    ({ uf, telefone, ganho });
+  const lead = (telefone: string | null, ganho = false) => ({ telefone, ganho });
 
   it("conta por estado e ordena do maior volume pro menor", () => {
     const r = agregarLeadsPorEstado([
@@ -138,17 +124,20 @@ describe("agregarLeadsPorEstado", () => {
     expect(r.semEstado).toBe(0);
   });
 
-  it("separa fato de dedução", () => {
+  it("a cobertura fecha com o total de leads do período", () => {
+    // Se a soma não bater com o KPI ao lado, o painel conta uma história e o
+    // KPI conta outra — é a divergência que o dono chamou de regra mais
+    // importante de relatórios.
     const r = agregarLeadsPorEstado([
-      lead("5511999990001", false, "CE"),
+      lead("5511999990001"),
       lead("5585999990002"),
       lead(null),
+      lead("5530999990003"), // DDD que a Anatel nunca emitiu
     ]);
-    expect(r.porOrigem).toEqual({ cadastro: 1, ddd: 1 });
-    expect(r.semEstado).toBe(1);
-    // A soma tem que fechar com o total de leads do período, senão o painel
-    // conta uma história e o KPI ao lado conta outra.
-    expect(r.comEstado + r.semEstado).toBe(3);
+    expect(r.comEstado).toBe(2);
+    expect(r.semEstado).toBe(2);
+    expect(r.comEstado + r.semEstado).toBe(4);
+    expect(r.estados.reduce((s, e) => s + e.leads, 0)).toBe(r.comEstado);
   });
 
   it("suprime conversão abaixo do piso", () => {
@@ -179,11 +168,6 @@ describe("agregarLeadsPorEstado", () => {
   });
 
   it("período sem lead nenhum não quebra", () => {
-    expect(agregarLeadsPorEstado([])).toEqual({
-      estados: [],
-      comEstado: 0,
-      semEstado: 0,
-      porOrigem: { cadastro: 0, ddd: 0 },
-    });
+    expect(agregarLeadsPorEstado([])).toEqual({ estados: [], comEstado: 0, semEstado: 0 });
   });
 });

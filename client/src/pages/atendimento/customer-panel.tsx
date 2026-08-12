@@ -43,7 +43,6 @@ import { toast } from "sonner";
 import { parseValorBR } from "@shared/valor-br";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
 import { MagicBrief } from "./magic-brief";
-import { ConfirmarEstado } from "./confirmar-estado";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -184,13 +183,6 @@ export function CustomerPanel({
           </div>
         </div>
 
-        <div className="mb-2">
-          <ConfirmarEstado
-            contatoId={contatoId}
-            estado={(contato as { estado?: { uf: string; origem: "cadastro" | "ddd" } | null }).estado ?? null}
-            onConfirmado={refetch}
-          />
-        </div>
 
         {/* Tags + contador resumido */}
         {contato.tags.length > 0 && (

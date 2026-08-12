@@ -273,7 +273,7 @@ async function resolverContatoIdsPorUf(args: {
 
   const ids: number[] = [];
   for (const [id, c] of vistos) {
-    if (estadoDoLead(c)?.uf === alvo) ids.push(id);
+    if (estadoDoLead(c) === alvo) ids.push(id);
   }
   return ids.length ? ids : [-1];
 }
@@ -897,7 +897,7 @@ export const relatoriosRouter = router({
 
     const leadsPorEstado = agregarLeadsPorEstado(
       (leadsComContato as Array<{ uf: string | null; telefone: string | null; etapa: string }>)
-        .map((l) => ({ uf: l.uf, telefone: l.telefone, ganho: l.etapa === "fechado_ganho" })),
+        .map((l) => ({ telefone: l.telefone, ganho: l.etapa === "fechado_ganho" })),
     );
 
     // ─── Funil: hidrata todas as etapas mesmo zeradas pra UI ────────────
