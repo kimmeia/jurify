@@ -58,6 +58,20 @@ import {
   ocorrenciasDoPeriodo,
   registrarOcorrencia,
 } from "./ocorrencias-repo";
+import {
+  mediaDasNotas,
+  normalizarNotas,
+  type AcaoCombinada,
+  type AvaliacaoGravada,
+} from "../../shared/avaliacao";
+import {
+  acoesDasAvaliacoes,
+  avaliacoesDoColaborador,
+  avaliacoesDoEscritorio,
+  decidirAcao,
+  excluirAvaliacao,
+  registrarAvaliacao,
+} from "./avaliacoes-repo";
 
 /** "2026-08" → { de: "2026-08-01", ate: "2026-08-31" }. */
 function limitesDoMes(competencia: string): { de: string; ate: string } {
@@ -260,6 +274,70 @@ function paraGravada(
   }));
 }
 
+/** Junta as avaliações com o plano combinado de cada uma. */
+function montarAvaliacoes(
+  linhas: Array<{
+    id: number;
+    colaboradorId: number;
+    ciclo: string;
+    notas: string | null;
+    media: string | null;
+    comentario: string | null;
+    avaliadoEm: Date | string | null;
+    avaliadoPorNome: string | null;
+  }>,
+  acoes: Array<{
+    id: number;
+    avaliacaoId: number;
+    descricao: string;
+    prazo: string | null;
+    concluidoEm: Date | string | null;
+  }>,
+): AvaliacaoGravada[] {
+  const porAvaliacao = new Map<number, AcaoCombinada[]>();
+  for (const a of acoes) {
+    const lista = porAvaliacao.get(a.avaliacaoId) ?? [];
+    lista.push({
+      id: a.id,
+      descricao: a.descricao,
+      prazo: a.prazo,
+      concluidoEm: toIsoString(a.concluidoEm) ?? null,
+    });
+    porAvaliacao.set(a.avaliacaoId, lista);
+  }
+
+  return linhas.map((l) => {
+    const notas = normalizarNotas(l.notas);
+    return {
+      id: l.id,
+      colaboradorId: l.colaboradorId,
+      ciclo: l.ciclo,
+      notas,
+      // A média é recalculada das notas em vez de lida da coluna: se um
+      // critério for aposentado, a coluna guardaria a média de uma régua que
+      // não existe mais, e a tela mostraria um número que não sai da soma
+      // dos critérios exibidos logo abaixo dele.
+      media: mediaDasNotas(notas),
+      comentario: l.comentario,
+      avaliadoPorNome: l.avaliadoPorNome,
+      avaliadoEm: toIsoString(l.avaliadoEm) ?? null,
+      acoes: porAvaliacao.get(l.id) ?? [],
+    };
+  });
+}
+
+/** Lê as avaliações de um escopo já resolvido, com as ações juntas. */
+async function lerAvaliacoes(
+  escritorioId: number,
+  colaboradorId: number | null,
+): Promise<AvaliacaoGravada[]> {
+  const linhas = colaboradorId == null
+    ? await avaliacoesDoEscritorio(escritorioId)
+    : await avaliacoesDoColaborador(escritorioId, colaboradorId);
+  const acoes = await acoesDasAvaliacoes(escritorioId, linhas.map((l) => l.id));
+  return montarAvaliacoes(linhas, acoes);
+}
+
 /**
  * O gate de escrita do RH.
  *
@@ -303,14 +381,21 @@ export const rhRouter = router({
         ocorrenciasDoPeriodo(esc.escritorio.id, esc.colaborador.id, de, ate),
       ]);
       const jornada = normalizarJornada((esc.colaborador as { jornadaSemanal?: string | null }).jornadaSemanal);
-      return montarEspelho(
-        linhas as unknown as DiaPontoBruto[],
-        new Date(),
-        jornada,
-        fuso,
-        desde,
-        paraGravada(ocorrencias),
-      );
+      // A avaliação do próprio colaborador não tem gate, pela mesma razão do
+      // espelho: é sobre ele, e sonegar a nota a quem foi avaliado é o avesso
+      // de uma avaliação.
+      const avaliacoes = await lerAvaliacoes(esc.escritorio.id, esc.colaborador.id);
+      return {
+        ...montarEspelho(
+          linhas as unknown as DiaPontoBruto[],
+          new Date(),
+          jornada,
+          fuso,
+          desde,
+          paraGravada(ocorrencias),
+        ),
+        avaliacoes,
+      };
     }),
 
   /** O ponto da equipe. Exige enxergar além da própria linha. */
@@ -361,6 +446,13 @@ export const rhRouter = router({
         ocorPorColab.set(o.colaboradorId, lista);
       }
 
+      const avalPorColab = new Map<number, AvaliacaoGravada[]>();
+      for (const a of await lerAvaliacoes(esc.escritorio.id, null)) {
+        const lista = avalPorColab.get(a.colaboradorId) ?? [];
+        lista.push(a);
+        avalPorColab.set(a.colaboradorId, lista);
+      }
+
       return {
         // Quem foi removido aparece MARCADO, não escondido: as horas que ele
         // trabalhou no mês existiram, e sumir com a linha faria o total da
@@ -379,6 +471,9 @@ export const rhRouter = router({
               colaboradorId: c.id,
               nome: c.nome || c.email || `#${c.id}`,
               removido: !c.ativo || !!c.removidoEm,
+              // Da mais recente pra mais antiga — a tela lê `[0]` como "a
+              // última" e o resto vira histórico.
+              avaliacoes: avalPorColab.get(c.id) ?? [],
               ...espelho,
             };
           })
@@ -554,6 +649,86 @@ export const rhRouter = router({
         gestorId: perm.colaboradorId,
         aprovar: input.aprovar,
       });
+      return { ok: true };
+    }),
+
+  /**
+   * Avalia um colaborador no ciclo. Gestor apenas.
+   *
+   * Exige pelo menos um critério com nota: avaliação sem nota nenhuma fecha o
+   * ciclo na tela — o colaborador deixa de aparecer como "vencida" — sem ter
+   * avaliado coisa alguma. Seria pior que não avaliar, porque cala o alarme.
+   */
+  avaliar: protectedProcedure
+    .input(z.object({
+      colaboradorId: z.number().int().positive(),
+      ciclo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Ciclo no formato AAAA-MM"),
+      notas: z.record(z.string(), z.number()),
+      comentario: z.string().trim().max(2000).optional(),
+      acoes: z.array(z.object({
+        descricao: z.string().trim().min(3).max(500),
+        prazo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      })).max(20).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { esc } = await contexto(ctx.user.id);
+      const perm = await exigirGestorDeEquipe(ctx.user.id);
+      await exigirColaboradorDoEscritorio(esc.escritorio.id, input.colaboradorId);
+
+      const notas = normalizarNotas(input.notas);
+      const media = mediaDasNotas(notas);
+      if (media == null) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Dê nota a pelo menos um critério.",
+        });
+      }
+
+      const id = await registrarAvaliacao({
+        escritorioId: esc.escritorio.id,
+        colaboradorId: input.colaboradorId,
+        ciclo: input.ciclo,
+        notasJson: JSON.stringify(notas),
+        media,
+        comentario: input.comentario?.trim() || null,
+        gestorId: perm.colaboradorId,
+        acoes: (input.acoes ?? []).map((a) => ({
+          descricao: a.descricao,
+          prazo: a.prazo ?? null,
+        })),
+      });
+      return { id, media };
+    }),
+
+  /** Dá uma ação combinada por cumprida (ou desfaz). Gestor apenas. */
+  decidirAcao: protectedProcedure
+    .input(z.object({
+      acaoId: z.number().int().positive(),
+      concluir: z.boolean(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { esc } = await contexto(ctx.user.id);
+      const perm = await exigirGestorDeEquipe(ctx.user.id);
+
+      const ok = await decidirAcao({
+        escritorioId: esc.escritorio.id,
+        acaoId: input.acaoId,
+        gestorId: perm.colaboradorId,
+        concluir: input.concluir,
+      });
+      if (!ok) throw new TRPCError({ code: "NOT_FOUND", message: "Ação não encontrada." });
+      return { ok: true };
+    }),
+
+  /** Apaga uma avaliação lançada por engano, com o plano dela. Gestor apenas. */
+  excluirAvaliacao: protectedProcedure
+    .input(z.object({ avaliacaoId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const { esc } = await contexto(ctx.user.id);
+      await exigirGestorDeEquipe(ctx.user.id);
+
+      const ok = await excluirAvaliacao(esc.escritorio.id, input.avaliacaoId);
+      if (!ok) throw new TRPCError({ code: "NOT_FOUND", message: "Avaliação não encontrada." });
       return { ok: true };
     }),
 

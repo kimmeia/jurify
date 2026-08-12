@@ -33,8 +33,11 @@ describe("router rh", () => {
     expect(nomes.sort()).toEqual([
       "rh.ajustarDia",
       "rh.anexarAtestado",
+      "rh.avaliar",
+      "rh.decidirAcao",
       "rh.decidirAtestado",
       "rh.espelhoEquipe",
+      "rh.excluirAvaliacao",
       "rh.excluirOcorrencia",
       "rh.meuEspelho",
       "rh.registrarOcorrencia",
@@ -54,7 +57,10 @@ describe("router rh", () => {
     expect(proc("rh.espelhoEquipe")._def.type).toBe("query");
     expect(proc("rh.registrarPausa")._def.type).toBe("mutation");
     expect(proc("rh.ajustarDia")._def.type).toBe("mutation");
-    for (const n of ["registrarOcorrencia", "anexarAtestado", "decidirAtestado", "excluirOcorrencia"]) {
+    for (const n of [
+      "registrarOcorrencia", "anexarAtestado", "decidirAtestado", "excluirOcorrencia",
+      "avaliar", "decidirAcao", "excluirAvaliacao",
+    ]) {
       expect(proc(`rh.${n}`)._def.type, n).toBe("mutation");
     }
   });
@@ -118,5 +124,27 @@ describe("validação de entrada", () => {
     expect(i.parse({ ocorrenciaId: 3, aprovar: true }).aprovar).toBe(true);
     expect(i.parse({ ocorrenciaId: 3, aprovar: false }).aprovar).toBe(false);
     expect(() => i.parse({ ocorrenciaId: 3 })).toThrow();
+  });
+
+  it("avaliação exige ciclo AAAA-MM válido", () => {
+    const i = input("rh.avaliar");
+    const base = { colaboradorId: 1, notas: { pontualidade: 4 } };
+    expect(i.parse({ ...base, ciclo: "2026-08" }).ciclo).toBe("2026-08");
+
+    // Mês 13 chegaria ao banco e a contagem do ciclo passaria a dar resultados
+    // que ninguém consegue conferir no calendário.
+    expect(() => i.parse({ ...base, ciclo: "2026-13" })).toThrow();
+    expect(() => i.parse({ ...base, ciclo: "2026-00" })).toThrow();
+    expect(() => i.parse({ ...base, ciclo: "08/2026" })).toThrow();
+    expect(() => i.parse({ ...base, ciclo: "2026-08-11" })).toThrow();
+  });
+
+  it("ação do plano precisa dizer o que foi combinado", () => {
+    const i = input("rh.avaliar");
+    const base = { colaboradorId: 1, ciclo: "2026-08", notas: { metas: 3 } };
+    expect(i.parse({ ...base, acoes: [{ descricao: "avisar no grupo até 08h30" }] }).acoes)
+      .toHaveLength(1);
+    expect(() => i.parse({ ...base, acoes: [{ descricao: "ok" }] })).toThrow();
+    expect(() => i.parse({ ...base, acoes: [{ descricao: "válida", prazo: "12/08" }] })).toThrow();
   });
 });
