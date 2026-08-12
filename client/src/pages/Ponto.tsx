@@ -30,6 +30,14 @@ import { Clock, Coffee, Pencil, TriangleAlert, Users } from "lucide-react";
 import { toast } from "sonner";
 import { formatarDuracao, type Jornada, type StatusDia } from "@shared/ponto";
 
+/** O que o servidor devolve: a jornada calculada + a comparação com o contrato. */
+type JornadaComparada = Jornada & {
+  previstoMin: number;
+  saldoMin: number | null;
+  atrasoMin: number;
+  atrasado: boolean;
+};
+
 const ROTULO_STATUS: Record<StatusDia, { texto: string; classe: string }> = {
   fechado: { texto: "", classe: "" },
   em_andamento: {
@@ -72,7 +80,7 @@ function LinhaJornada({
   j,
   aoAjustar,
 }: {
-  j: Jornada;
+  j: JornadaComparada;
   aoAjustar?: (j: Jornada) => void;
 }) {
   const marca = ROTULO_STATUS[j.status];
@@ -81,7 +89,17 @@ function LinhaJornada({
   return (
     <tr className="border-b last:border-b-0">
       <td className="py-2 pl-3 text-[12px] capitalize">{diaCurto(j.dia)}</td>
-      <td className="py-2 text-center text-[12px] tabular-nums">{hora(j.entrada)}</td>
+      <td className="py-2 text-center text-[12px] tabular-nums">
+        {hora(j.entrada)}
+        {j.atrasado && (
+          <span
+            className="ml-1 rounded bg-amber-100 px-1 py-px text-[9px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+            title={`${j.atrasoMin} minutos além do horário contratado`}
+          >
+            +{j.atrasoMin}min
+          </span>
+        )}
+      </td>
       <td
         className={`py-2 text-center text-[12px] tabular-nums ${deduzida ? "italic text-muted-foreground" : ""}`}
         title={deduzida ? "Saída não registrada — considerada a última atividade no sistema" : undefined}
@@ -98,6 +116,17 @@ function LinhaJornada({
       </td>
       <td className="py-2 text-center text-[12px] font-bold tabular-nums">
         {formatarDuracao(j.minutos)}
+        {j.saldoMin != null && j.saldoMin !== 0 && (
+          <span
+            className={`ml-1 text-[10px] font-semibold ${
+              j.saldoMin > 0 ? "text-emerald-600" : "text-rose-600"
+            }`}
+            title={`Previsto ${formatarDuracao(j.previstoMin)}`}
+          >
+            {j.saldoMin > 0 ? "+" : "−"}
+            {formatarDuracao(Math.abs(j.saldoMin))}
+          </span>
+        )}
       </td>
       <td className="py-2 pr-2 text-right">
         {marca.texto && (
@@ -126,7 +155,7 @@ function Tabela({
   jornadas,
   aoAjustar,
 }: {
-  jornadas: Jornada[];
+  jornadas: JornadaComparada[];
   aoAjustar?: (j: Jornada) => void;
 }) {
   const comRegistro = jornadas.filter((j) => j.status !== "sem_registro");
@@ -188,13 +217,42 @@ function Avisos({ jornadas }: { jornadas: Jornada[] }) {
   );
 }
 
-function Total({ t }: { t: { minutos: number; diasFechados: number; diasPendentes: number } }) {
+function Total({
+  t,
+}: {
+  t: {
+    minutos: number;
+    diasFechados: number;
+    diasPendentes: number;
+    previstoMin: number;
+    saldoMin: number;
+    diasAtrasados: number;
+  };
+}) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
       <span className="text-[20px] font-extrabold tabular-nums">{formatarDuracao(t.minutos)}</span>
       <span className="text-[11.5px] text-muted-foreground">
         em {t.diasFechados} {t.diasFechados === 1 ? "dia fechado" : "dias fechados"}
       </span>
+      {t.previstoMin > 0 && (
+        <span
+          className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold tabular-nums ${
+            t.saldoMin >= 0
+              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+              : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+          }`}
+          title="Realizado menos previsto, só nos dias já fechados"
+        >
+          {t.saldoMin >= 0 ? "+" : "−"}
+          {formatarDuracao(Math.abs(t.saldoMin))}
+        </span>
+      )}
+      {t.diasAtrasados > 0 && (
+        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          {t.diasAtrasados} {t.diasAtrasados === 1 ? "atraso" : "atrasos"}
+        </span>
+      )}
       {t.diasPendentes > 0 && (
         <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
           {t.diasPendentes} {t.diasPendentes === 1 ? "dia pendente" : "dias pendentes"} — fora do total

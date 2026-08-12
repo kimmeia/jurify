@@ -359,6 +359,13 @@ export const colaboradores = mysqlTable(
      * meta) no período selecionado. Null = sem meta configurada.
      */
     metaMensal: decimal("metaMensalCol", { precision: 12, scale: 2 }),
+    /**
+     * Jornada contratada, em JSON: `{ "1": { inicio, fim, intervaloMin }, ... }`
+     * com 0=domingo. Dia ausente é folga; NULL é colaborador sem jornada
+     * definida — e aí o ponto mostra as horas sem cobrar carga nenhuma.
+     * Formato e validação em `shared/jornada`.
+     */
+    jornadaSemanal: text("jornadaSemanalCol"),
     ativo: boolean("ativo").default(true).notNull(),
     /** Soft delete — timestamp da remoção. Junto com ativo=false marca
      *  como removido sem perder dados (cards/movimentações apontando

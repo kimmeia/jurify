@@ -41,6 +41,7 @@ import {
 import { checkPermission } from "./check-permission";
 import type { CargoColaborador } from "../../shared/escritorio-types";
 import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
+import { normalizarJornada } from "../../shared/jornada";
 import { CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS_VALIDOS } from "../../shared/escritorio-types";
 
 /**
@@ -350,6 +351,14 @@ export const configuracoesRouter = router({
       // null = sem limite de atendimentos simultâneos.
       maxAtendimentosSimultaneos: z.number().int().min(1).max(50).nullable().optional(),
       recebeLeadsAutomaticos: z.boolean().optional(),
+      /** Jornada contratada. Null limpa (volta a "sem jornada definida", que
+       *  faz o ponto mostrar horas sem cobrar carga). Formato em
+       *  `shared/jornada`; o que não valida é descartado lá, não aqui. */
+      jornadaSemanal: z.record(z.string(), z.object({
+        inicio: z.string(),
+        fim: z.string(),
+        intervaloMin: z.number().int().min(0).max(600),
+      })).nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const result = await getEscritorioPorUsuario(ctx.user.id);
@@ -359,8 +368,20 @@ export const configuracoesRouter = router({
         "Sem permissão para editar colaboradores.",
       );
 
-      const { colaboradorId, ...dados } = input;
-      await atualizarColaborador(colaboradorId, result.escritorio.id, dados);
+      const { colaboradorId, jornadaSemanal, ...dados } = input;
+      // A validação de horário mora no shared, junto de quem lê: guardar um
+      // JSON que a leitura vai descartar deixaria a tela dizendo "salvo" e o
+      // ponto tratando como sem jornada.
+      const jornada = jornadaSemanal === undefined
+        ? undefined
+        : jornadaSemanal === null
+          ? null
+          : normalizarJornada(jornadaSemanal);
+
+      await atualizarColaborador(colaboradorId, result.escritorio.id, {
+        ...dados,
+        ...(jornada === undefined ? {} : { jornadaSemanal: jornada ? JSON.stringify(jornada) : null }),
+      });
       return { success: true };
     }),
 

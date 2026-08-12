@@ -26,6 +26,13 @@ import { and, eq } from "drizzle-orm";
 import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { calcularJornada, totalDoPeriodo, type DiaPontoBruto } from "../../shared/ponto";
 import {
+  minutosPrevistos,
+  normalizarJornada,
+  pontualidade,
+  type JornadaSemanal,
+} from "../../shared/jornada";
+import { diaCivilEmTz } from "../_core/dates";
+import {
   ajustarDia,
   diasDoEscritorio,
   diasDoPeriodo,
@@ -72,9 +79,62 @@ async function contexto(userId: number) {
   return { esc, fuso: esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO };
 }
 
-function montarEspelho(linhas: DiaPontoBruto[], agora: Date) {
-  const jornadas = linhas.map((l) => calcularJornada(l, agora));
-  return { jornadas, total: totalDoPeriodo(jornadas) };
+/** Minutos desde a meia-noite LOCAL de um instante — a conta do atraso. */
+function minutosLocais(instante: Date | null, fuso: string): number | null {
+  if (!instante) return null;
+  const hhmm = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: fuso,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(instante);
+  const [h, m] = hhmm.split(":").map(Number);
+  return Number.isFinite(h) && Number.isFinite(m) ? h! * 60 + m! : null;
+}
+
+/**
+ * O espelho de um colaborador: o que ele fez, contra o que foi contratado.
+ *
+ * Quem não tem jornada definida recebe `previsto: 0` e `atrasado: false` em
+ * tudo — o ponto mostra as horas e não cobra carga que ninguém configurou.
+ */
+function montarEspelho(
+  linhas: DiaPontoBruto[],
+  agora: Date,
+  jornada: JornadaSemanal | null,
+  fuso: string,
+) {
+  const jornadas = linhas.map((l) => {
+    const j = calcularJornada(l, agora);
+    const previsto = minutosPrevistos(jornada, j.dia);
+    const p = pontualidade(jornada, j.dia, minutosLocais(j.entrada, fuso));
+    return {
+      ...j,
+      previstoMin: previsto,
+      // Saldo só existe quando os dois lados existem. Dia aberto ou sem
+      // jornada não vira "-8h" — seria cobrar uma falta que ninguém apurou.
+      saldoMin: j.minutos != null && previsto > 0 ? j.minutos - previsto : null,
+      atrasoMin: p.atrasoMin,
+      atrasado: p.atrasado,
+    };
+  });
+
+  const total = totalDoPeriodo(jornadas);
+  const previstoMin = jornadas.reduce((s, j) => s + j.previstoMin, 0);
+  return {
+    jornadas,
+    total: {
+      ...total,
+      previstoMin,
+      // O saldo do mês compara o realizado dos dias FECHADOS com o previsto
+      // desses mesmos dias: misturar previsto de dia pendente daria um
+      // vermelho que some quando o gestor lançar a saída.
+      saldoMin: jornadas
+        .filter((j) => j.saldoMin != null)
+        .reduce((s, j) => s + (j.saldoMin ?? 0), 0),
+      diasAtrasados: jornadas.filter((j) => j.atrasado).length,
+    },
+  };
 }
 
 export const rhRouter = router({
@@ -82,17 +142,18 @@ export const rhRouter = router({
   meuEspelho: protectedProcedure
     .input(z.object({ competencia: Competencia }))
     .query(async ({ ctx, input }) => {
-      const { esc } = await contexto(ctx.user.id);
+      const { esc, fuso } = await contexto(ctx.user.id);
       const { de, ate } = limitesDoMes(input.competencia);
       const linhas = await diasDoPeriodo(esc.escritorio.id, esc.colaborador.id, de, ate);
-      return montarEspelho(linhas as unknown as DiaPontoBruto[], new Date());
+      const jornada = normalizarJornada((esc.colaborador as { jornadaSemanal?: string | null }).jornadaSemanal);
+      return montarEspelho(linhas as unknown as DiaPontoBruto[], new Date(), jornada, fuso);
     }),
 
   /** O ponto da equipe. Exige enxergar além da própria linha. */
   espelhoEquipe: protectedProcedure
     .input(z.object({ competencia: Competencia }))
     .query(async ({ ctx, input }) => {
-      const { esc } = await contexto(ctx.user.id);
+      const { esc, fuso } = await contexto(ctx.user.id);
       const perm = await checkPermission(ctx.user.id, "equipe", "ver");
       if (!perm.allowed || !perm.verTodos) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso ao ponto da equipe." });
@@ -111,6 +172,7 @@ export const rhRouter = router({
               email: users.email,
               ativo: colaboradores.ativo,
               removidoEm: colaboradores.removidoEm,
+              jornadaSemanal: colaboradores.jornadaSemanal,
             })
             .from(colaboradores)
             .innerJoin(users, eq(colaboradores.userId, users.id))
@@ -132,7 +194,12 @@ export const rhRouter = router({
         // equipe não bater com a soma das pessoas.
         pessoas: equipe
           .map((c) => {
-            const { jornadas, total } = montarEspelho(porColab.get(c.id) ?? [], agora);
+            const { jornadas, total } = montarEspelho(
+              porColab.get(c.id) ?? [],
+              agora,
+              normalizarJornada(c.jornadaSemanal),
+              fuso,
+            );
             return {
               colaboradorId: c.id,
               nome: c.nome || c.email || `#${c.id}`,

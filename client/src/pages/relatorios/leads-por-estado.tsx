@@ -240,23 +240,19 @@ export function BlocoLeadsPorEstado({
       <div className="mt-3 grid gap-4 border-t px-4 py-3 lg:grid-cols-[1fr_minmax(0,420px)]">
         <div>
           <p className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
-            De onde saiu o estado de cada lead
+            Cobertura do dado
           </p>
           <div className="mt-1.5 flex h-2.5 gap-0.5 overflow-hidden rounded">
-            {dados.porOrigem.cadastro > 0 && (
-              <span className="bg-violet-600" style={{ width: `${pct(dados.porOrigem.cadastro)}%` }} />
-            )}
-            {dados.porOrigem.ddd > 0 && (
-              <span className="bg-violet-300 dark:bg-violet-800" style={{ width: `${pct(dados.porOrigem.ddd)}%` }} />
+            {dados.comEstado > 0 && (
+              <span className="bg-violet-500" style={{ width: `${pct(dados.comEstado)}%` }} />
             )}
             {dados.semEstado > 0 && (
               <span className="bg-muted" style={{ width: `${pct(dados.semEstado)}%` }} />
             )}
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-            <Legenda cor="bg-violet-600" n={dados.porOrigem.cadastro} texto="endereço confirmado no cadastro" />
-            <Legenda cor="bg-violet-300 dark:bg-violet-800" n={dados.porOrigem.ddd} texto="deduzidos pelo DDD do telefone" />
-            <Legenda cor="bg-muted border" n={dados.semEstado} texto="sem telefone e sem endereço" />
+            <Legenda cor="bg-violet-500" n={dados.comEstado} texto="com DDD reconhecido" />
+            <Legenda cor="bg-muted border" n={dados.semEstado} texto="sem telefone ou DDD inválido" />
           </div>
         </div>
 
@@ -266,9 +262,9 @@ export function BlocoLeadsPorEstado({
             <b className="text-violet-700 dark:text-violet-300">
               O DDD diz onde a linha foi habilitada, não onde a pessoa mora hoje.
             </b>{" "}
-            Quem mudou de estado e manteve o número aparece na origem antiga. Só o que está em
-            violeta escuro veio de endereço que alguém confirmou no cadastro — o resto é a melhor
-            aproximação que o dado permite, e está marcado como tal.
+            Quem mudou de estado e manteve o número aparece na origem antiga. O endereço do cadastro
+            não entra nesta conta de propósito: só cliente qualificado tem endereço preenchido, e
+            misturar os dois mediria clientes numa barra que diz leads.
           </span>
         </p>
       </div>

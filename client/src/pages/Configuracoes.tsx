@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { EditorJornada } from "./configuracoes/editor-jornada";
+import { normalizarJornada, type JornadaSemanal } from "@shared/jornada";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -191,6 +193,7 @@ export default function Configuracoes() {
   const [editColabMaxAtend, setEditColabMaxAtend] = useState<number | null>(5); // null = sem limite
   const [editColabRecebeLeads, setEditColabRecebeLeads] = useState<boolean>(false);
   const [editColabMetaMensal, setEditColabMetaMensal] = useState<string>("");
+  const [editColabJornada, setEditColabJornada] = useState<JornadaSemanal | null>(null);
   const [diagColabId, setDiagColabId] = useState<number | null>(null);
   const { data: diagData, isFetching: diagLoading } = trpc.permissoes.diagnosticarColaborador.useQuery(
     diagColabId ? { colaboradorId: diagColabId } : (undefined as any),
@@ -321,6 +324,7 @@ export default function Configuracoes() {
     setEditColabMaxAtend(c.maxAtendimentosSimultaneos ?? null);
     setEditColabRecebeLeads(!!c.recebeLeadsAutomaticos);
     setEditColabMetaMensal(c.metaMensal != null ? String(c.metaMensal) : "");
+    setEditColabJornada(normalizarJornada(c.jornadaSemanal));
   }
 
   if (isLoading) {
@@ -1400,6 +1404,10 @@ export default function Configuracoes() {
                   </div>
                 );
               })()}
+
+              <div className="border-t pt-3">
+                <EditorJornada valor={editColabJornada} onChange={setEditColabJornada} />
+              </div>
             </div>
           )}
           <DialogFooter>
@@ -1419,6 +1427,7 @@ export default function Configuracoes() {
                   maxAtendimentosSimultaneos: editColabMaxAtend,
                   recebeLeadsAutomaticos: editColabRecebeLeads,
                   metaMensal: metaParsed != null && Number.isFinite(metaParsed) ? metaParsed : null,
+                  jornadaSemanal: editColabJornada,
                 });
               }}
               disabled={atualizarColabMut.isPending}
