@@ -289,7 +289,7 @@ function Router() {
       {/* O redator não é módulo à parte — vive no modo "Redigir peça" do
           JurisIA. Link antigo continua chegando lá. */}
       <Route path="/agente-juridico">
-        <Redirect to="/jurisia?modo=peca" />
+        <Redirect to="/jurisia" />
       </Route>
       <Route path="/agenda">
         <ClientArea>

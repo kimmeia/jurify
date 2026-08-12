@@ -1599,7 +1599,7 @@ export default function AgentesIA() {
 
       {/* Agente Jurídico — agente especializado (redige peças fundamentadas no
           cliente/processo real). Vive aqui em Agentes IA, com tela própria. */}
-      <Link href="/jurisia?modo=peca">
+      <Link href="/jurisia">
         <a className="block group">
           <Card className="border-violet-200 bg-gradient-to-br from-violet-50 to-white hover:shadow-md transition-shadow cursor-pointer">
             <CardContent className="flex items-center gap-4 py-4">
@@ -1609,10 +1609,10 @@ export default function AgentesIA() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <p className="font-semibold">Agente Jurídico</p>
-                  <Badge className="bg-violet-600 text-white text-[10px]">Redator de peças</Badge>
+                  <Badge className="bg-violet-600 text-white text-[10px]">Uma conversa só</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Seleciona o cliente e o processo, usa a base jurídica e redige a peça no padrão forense — com citações verificadas. Você revisa e assina.
+                  Lê o processo e os documentos do cliente, mede como o tribunal decide casos como aquele e redige a peça no padrão forense. Você revisa e assina.
                 </p>
               </div>
               <ArrowRight className="h-5 w-5 text-violet-600 shrink-0 group-hover:translate-x-0.5 transition-transform" />

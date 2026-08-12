@@ -3836,6 +3836,10 @@ export const jurisiaConversas = mysqlTable(
      *  que não pertence a processo nenhum. O UNIQUE abaixo continua válido
      *  porque NULL é distinto de NULL num índice único do MySQL. */
     monitoramentoId: int("monitoramentoIdJurisConv"),
+    /** Caso do escritório em análise nesta conversa (contatos.id / cliente_processos.id).
+     *  NULL nos dois = pergunta sem caso escolhido, que continua valendo. */
+    contatoId: int("contatoIdJurisConv"),
+    processoId: int("processoIdJurisConv"),
     titulo: varchar("tituloJurisConv", { length: 200 }),
     criadoPor: int("criadoPorJurisConv"),
     ultimaMensagemAt: timestamp("ultimaMensagemAtJurisConv"),

@@ -234,13 +234,16 @@ export async function garantirConteudoDocs(
   escritorioId: number,
   contatoId: number,
   modelo: string,
-  maxDocs = 8,
-): Promise<{ texto: string; lidos: number; notas: string[] }> {
-  const arquivos = await db
+  maxDocs = 20,
+): Promise<{ texto: string; lidos: number; total: number; notas: string[]; ignorados: number }> {
+  const todos = await db
     .select({ id: clienteArquivos.id, nome: clienteArquivos.nome, url: clienteArquivos.url, conteudo: clienteArquivos.conteudo })
     .from(clienteArquivos)
-    .where(and(eq(clienteArquivos.escritorioId, escritorioId), eq(clienteArquivos.contatoId, contatoId)))
-    .limit(maxDocs);
+    .where(and(eq(clienteArquivos.escritorioId, escritorioId), eq(clienteArquivos.contatoId, contatoId)));
+  // O corte existe (cada leitura custa Vision), mas quantos ficaram de fora
+  // precisa subir junto: cortar 12 documentos em silêncio é o que fazia o
+  // agente responder "não tenho acesso aos autos" sem ninguém saber por quê.
+  const arquivos = todos.slice(0, maxDocs);
 
   const comTexto: Array<{ nome: string; conteudo: string }> = [];
   const notas: string[] = [];
@@ -261,7 +264,13 @@ export async function garantirConteudoDocs(
       notas.push(`${a.nome}: ${r.nota || "não lido"}`);
     }
   }
-  return { texto: particionarContexto(comTexto, 12000, 4000), lidos: comTexto.length, notas };
+  return {
+    texto: particionarContexto(comTexto, 12000, 4000),
+    lidos: comTexto.length,
+    total: todos.length,
+    ignorados: Math.max(0, todos.length - arquivos.length),
+    notas,
+  };
 }
 
 /** Lê o conteúdo de UM documento (por url): extração ou Vision. */
