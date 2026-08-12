@@ -40,6 +40,7 @@ import {
 } from "./db-canais";
 import { checkPermission } from "./check-permission";
 import type { CargoColaborador } from "../../shared/escritorio-types";
+import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS_VALIDOS } from "../../shared/escritorio-types";
 
 /**
@@ -185,12 +186,26 @@ export const configuracoesRouter = router({
     };
   }),
 
-  /** Heartbeat — registra atividade do colaborador (chamar a cada 5min no frontend) */
+  /**
+   * Heartbeat — registra atividade do colaborador (chamar a cada 5min no frontend).
+   *
+   * É também o que alimenta o ponto digital. Pendurar o ponto num sinal que já
+   * existia é o que o torna confiável sem pedir disciplina de ninguém: a
+   * entrada é o primeiro heartbeat do dia e a atividade é cada um dos
+   * seguintes, sem tela nova e sem ninguém lembrar de bater cartão.
+   */
   heartbeat: protectedProcedure.mutation(async ({ ctx }) => {
     const result = await getEscritorioPorUsuario(ctx.user.id);
     if (!result) return { ok: false };
     const { registrarAtividadeColaborador } = await import("./db-crm");
     await registrarAtividadeColaborador(result.colaborador.id);
+
+    const { marcarPresenca } = await import("../rh/ponto-repo");
+    await marcarPresenca({
+      escritorioId: result.escritorio.id,
+      colaboradorId: result.colaborador.id,
+      fusoHorario: result.escritorio.fusoHorario || FUSO_HORARIO_PADRAO,
+    });
     return { ok: true };
   }),
 

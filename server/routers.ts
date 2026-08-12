@@ -19,6 +19,7 @@ import { calculosDiversosRouter } from "./calculos/router-calculos-diversos";
 import { notificacoesRouter } from "./processos/router-notificacoes";
 import { movimentacoesRouter, resumoDiarioRouter } from "./processos/router-movimentacoes";
 import { jurisiaRouter } from "./jurisia/router-jurisia";
+import { rhRouter } from "./rh/router-rh";
 
 import { cofreCredenciaisRouter } from "./escritorio/router-cofre-credenciais";
 
@@ -104,6 +105,7 @@ export const appRouter = router({
 
   // JurisIA (beta) — perguntas sobre um processo do acervo
   jurisia: jurisiaRouter,
+  rh: rhRouter,
 
   // Web Push (PWA) — notificação com o app fechado
   push: pushRouter,
