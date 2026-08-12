@@ -423,6 +423,7 @@ export const rhRouter = router({
               email: users.email,
               ativo: colaboradores.ativo,
               removidoEm: colaboradores.removidoEm,
+              cargo: colaboradores.cargo,
               jornadaSemanal: colaboradores.jornadaSemanal,
             })
             .from(colaboradores)
@@ -471,6 +472,10 @@ export const rhRouter = router({
               colaboradorId: c.id,
               nome: c.nome || c.email || `#${c.id}`,
               removido: !c.ativo || !!c.removidoEm,
+              // A ficha mostra cargo e jornada no cabeçalho; vêm daqui pra não
+              // exigir uma segunda consulta que poderia divergir desta.
+              cargo: c.cargo,
+              jornadaSemanal: c.jornadaSemanal,
               // Da mais recente pra mais antiga — a tela lê `[0]` como "a
               // última" e o resto vira histórico.
               avaliacoes: avalPorColab.get(c.id) ?? [],

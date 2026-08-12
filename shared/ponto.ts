@@ -71,6 +71,8 @@ export interface Jornada {
    *  quando não dá pra afirmar. */
   minutos: number | null;
   minutosPausa: number;
+  /** Saiu pro almoço e ainda não voltou a marcar. */
+  pausaAberta: boolean;
   status: StatusDia;
   /** O que o gestor precisa saber sobre este dia, em português. */
   avisos: string[];
@@ -106,6 +108,7 @@ export function calcularJornada(bruto: DiaPontoBruto, agora: Date): Jornada {
     saidaOrigem: null,
     minutos: null,
     minutosPausa: 0,
+    pausaAberta: false,
     status: "sem_registro",
     avisos: [],
   };
@@ -123,7 +126,13 @@ export function calcularJornada(bruto: DiaPontoBruto, agora: Date): Jornada {
     avisos.push("Retorno da pausa anterior ao início — intervalo ignorado.");
   }
 
-  const base = { dia: bruto.dia, entrada, entradaOrigem: bruto.entradaOrigem ?? null, minutosPausa };
+  const base = {
+    dia: bruto.dia,
+    entrada,
+    entradaOrigem: bruto.entradaOrigem ?? null,
+    minutosPausa,
+    pausaAberta: !!pausaInicio && !pausaFim,
+  };
 
   // Saída batida ou corrigida pelo gestor: é fato.
   if (saidaRegistrada) {

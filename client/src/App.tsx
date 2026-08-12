@@ -38,6 +38,7 @@ import Processos from "./pages/Processos";
 import Movimentacoes from "./pages/Movimentacoes";
 import JurisIa from "./pages/JurisIa";
 import Ponto from "./pages/Ponto";
+import FichaColaborador from "./pages/ponto/ficha";
 import Configuracoes from "./pages/Configuracoes";
 import ModelosContrato from "./pages/ModelosContrato";
 import Agendamento from "./pages/Agendamento";
@@ -266,6 +267,11 @@ function Router() {
       <Route path="/ponto">
         <ClientArea>
           <Ponto />
+        </ClientArea>
+      </Route>
+      <Route path="/ponto/:id">
+        <ClientArea>
+          <FichaColaborador />
         </ClientArea>
       </Route>
       <Route path="/jurisia">
