@@ -55,6 +55,7 @@ import {
   garantirCategoriaCobrancaServicosAsaas,
 } from "./asaas-despesas-auto";
 import { checkPermission } from "../escritorio/check-permission";
+import { contatosVisiveisFinanceiro } from "../escritorio/contatos-visiveis-financeiro";
 import { exigirDonoOuAdmin } from "../escritorio/router-backup";
 import { createLogger } from "../_core/logger";
 import { dataHojeBR, FUSO_HORARIO_PADRAO, chavesMesesAteHojeNoFuso } from "../../shared/escritorio-types";
@@ -64,32 +65,6 @@ import {
   decidirResolverPar,
   type Decision,
 } from "./financeiro-duplicidade-rules";
-
-/** Helper: retorna IDs dos contatos visíveis ao colaborador atual.
- *  Se ele tem verTodos no módulo "financeiro" → null (sem filtro).
- *  Se só verProprios → array de contatoIds onde responsavelId = colabId.
- *  Se não tem nenhum acesso → array vazio (nada visível).
- */
-async function contatosVisiveisFinanceiro(
-  userId: number,
-  escritorioId: number,
-): Promise<number[] | null> {
-  const perm = await checkPermission(userId, "financeiro", "ver");
-  if (perm.verTodos) return null;
-  if (!perm.verProprios) return [];
-
-  const db = await getDb();
-  if (!db) return [];
-
-  const rows = await db
-    .select({ id: contatos.id })
-    .from(contatos)
-    .where(and(
-      eq(contatos.escritorioId, escritorioId),
-      eq(contatos.responsavelId, perm.colaboradorId),
-    ));
-  return rows.map((r) => r.id);
-}
 
 /** Busca + agrega clientes vinculados respeitando visibilidade e busca textual.
  *  Compartilhado entre listarClientesVinculados (tela) e exportarClientesPdf. */
