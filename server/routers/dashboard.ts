@@ -40,7 +40,13 @@ import {
   resolverPeriodoNoFuso,
 } from "../../shared/escritorio-types";
 import { contarConversasPorStatus } from "../escritorio/db-crm";
-import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
+import {
+  STATUS_PAGO_ASAAS,
+  STATUS_PENDENTE_ASAAS,
+  STATUS_VENCIDO_ASAAS,
+} from "../_core/asaas-status";
+import { contatosVisiveisFinanceiro } from "../escritorio/contatos-visiveis-financeiro";
+import { contarMovimentacoesNaoLidas } from "../processos/contador-movimentacoes";
 import { buildFiltroComissaoSQL } from "../escritorio/router-financeiro";
 import { inArray } from "drizzle-orm";
 import {
@@ -397,18 +403,15 @@ export const dashboardRouter = router({
         dataHora: string;
       }> = [];
 
-      // Não lidas = notificações de tipo "movimentacao" ainda não lidas
-      const movsNaoLidasRows = await db
-        .select({ id: notificacoes.id })
-        .from(notificacoes)
-        .where(
-          and(
-            eq(notificacoes.userId, ctx.user.id),
-            eq(notificacoes.tipo, "movimentacao"),
-            eq(notificacoes.lida, false),
-          ),
-        );
-      const movimentacoesNaoLidas = movsNaoLidasRows.length;
+      // Mesma contagem do badge do menu (`movimentacoes.contador`). Antes
+      // este card contava `notificacoes` do usuário logado: como a
+      // notificação só nasce para quem cadastrou o monitoramento, quem não
+      // cadastrou nada via badge 10 e card 0 na mesma tela — e "marcar como
+      // lida", que só toca em `eventos_processo`, zerava um e não o outro.
+      const permProcessos = await checkPermission(ctx.user.id, "processos", "ver");
+      const movimentacoesNaoLidas = permProcessos.allowed
+        ? await contarMovimentacoesNaoLidas(escritorioId)
+        : 0;
 
       // Notificações não lidas
       const notifsNaoLidas = await db
@@ -1275,16 +1278,31 @@ export const dashboardRouter = router({
         resolverPeriodoNoFuso(new Date(), tz, input);
       const hojeStr = dataHojeBR(tz);
 
+      // Só clientes que ESTE usuário pode ver no financeiro. Sem isso o
+      // painel somava o escritório inteiro para quem tem dashboard.verTodos
+      // mas financeiro.verProprios — a mesma pessoa via um caixa em
+      // /financeiro e outro, maior, aqui.
+      const visiveis = await contatosVisiveisFinanceiro(ctx.user.id, eid);
+      if (visiveis !== null && visiveis.length === 0) return ZERO;
+      const escopo = visiveis === null
+        ? [eq(asaasCobrancas.escritorioId, eid)]
+        : [eq(asaasCobrancas.escritorioId, eid), inArray(asaasCobrancas.contatoId, visiveis)];
+
       // KPIs agregados em SQL — mesmo padrão do `asaas.kpis`. Filtros:
       //   - recebido: status pago + dataPagamento no range
-      //   - pendente: PENDING + venc >= hoje + venc no range
-      //   - vencido: (OVERDUE OR PENDING+venc<hoje) + venc no range
+      //   - pendente: pendente + venc >= hoje + venc no range
+      //   - vencido: (vencido OR pendente+venc<hoje) + venc no range
       //   - recebidoComVencimentoNoPeriodo: pago + venc no range
       //     (usado pra calcular % inadimplência por valor)
+      //
+      // Status vêm das constantes compartilhadas, não de lista literal: a
+      // lista escrita à mão aqui ignorava DUNNING_RECEIVED (cliente que paga
+      // após negativação), então dinheiro que /financeiro e o DRE contavam
+      // sumia deste painel — e nem aparecia em "vencido", sumia inteiro.
       const valorDec = sql`CAST(${asaasCobrancas.valor} AS DECIMAL(20,2))`;
-      const ehPago = sql`${asaasCobrancas.status} IN ('RECEIVED','CONFIRMED','RECEIVED_IN_CASH')`;
-      const ehPending = sql`${asaasCobrancas.status} = 'PENDING'`;
-      const ehOverdue = sql`${asaasCobrancas.status} = 'OVERDUE'`;
+      const ehPago = inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]);
+      const ehPending = inArray(asaasCobrancas.status, STATUS_PENDENTE_ASAAS as unknown as string[]);
+      const ehOverdue = inArray(asaasCobrancas.status, STATUS_VENCIDO_ASAAS as unknown as string[]);
       const inRangePag = sql`${asaasCobrancas.dataPagamento} >= ${dataInicioStr}
         AND ${asaasCobrancas.dataPagamento} <= ${dataFimStr}`;
       const inRangeVenc = sql`${asaasCobrancas.vencimento} >= ${dataInicioStr}
@@ -1300,7 +1318,7 @@ export const dashboardRouter = router({
           recebidoComVenc: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
         })
         .from(asaasCobrancas)
-        .where(eq(asaasCobrancas.escritorioId, eid));
+        .where(and(...escopo));
 
       const recebido = Number(agg?.recebido ?? 0);
       const pendente = Number(agg?.pendente ?? 0);
@@ -1319,10 +1337,7 @@ export const dashboardRouter = router({
           totalClientes: sql<number>`COUNT(DISTINCT ${asaasCobrancas.contatoId})`,
         })
         .from(asaasCobrancas)
-        .where(and(
-          eq(asaasCobrancas.escritorioId, eid),
-          inRangeVenc,
-        ));
+        .where(and(...escopo, inRangeVenc));
 
       const [aggInadimplentes] = await db
         .select({
@@ -1330,7 +1345,7 @@ export const dashboardRouter = router({
         })
         .from(asaasCobrancas)
         .where(and(
-          eq(asaasCobrancas.escritorioId, eid),
+          ...escopo,
           inRangeVenc,
           or(ehOverdue, and(ehPending, pendingNoPassado))!,
         ));
@@ -1357,7 +1372,7 @@ export const dashboardRouter = router({
         .from(asaasCobrancas)
         .innerJoin(contatos, eq(asaasCobrancas.contatoId, contatos.id))
         .where(and(
-          eq(asaasCobrancas.escritorioId, eid),
+          ...escopo,
           or(ehOverdue, and(ehPending, pendingNoPassado))!,
         ))
         .groupBy(asaasCobrancas.contatoId, contatos.nome)
