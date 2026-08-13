@@ -11,6 +11,7 @@
  */
 
 import { z } from "zod";
+import { baldeDaEtapa, taxaDeConversao } from "../../shared/desempenho";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router, createCallerFactory, mergeRouters } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -847,8 +848,12 @@ export const relatoriosRouter = router({
       const t = Number(r.total);
       const v = Number(r.valor || 0);
       x.leadsTotal += t;
-      if (r.etapa === "fechado_ganho") { x.ganhos += t; x.valorFechado += v; }
-      else if (r.etapa === "fechado_perdido") { x.perdidos += t; }
+      // A classificação da etapa vem de `shared/desempenho`, a mesma que a
+      // ficha do RH usa: sem isso, o dia em que uma etapa nova entrar no funil
+      // ela cairia num balde aqui e noutro lá, para a mesma pessoa.
+      const balde = baldeDaEtapa(String(r.etapa));
+      if (balde === "ganhos") { x.ganhos += t; x.valorFechado += v; }
+      else if (balde === "perdidos") { x.perdidos += t; }
       else { x.emAberto += t; }
     }
     for (const r of atendPorAtend) {
@@ -863,9 +868,7 @@ export const relatoriosRouter = router({
         // que viraram contrato" — mais útil pro escritório que
         // ganhos/(ganhos+perdidos), que ignorava leads em aberto e dava
         // 100% pra quem só fechou um e não perdeu nenhum.
-        taxaConversao: a.atendimentos > 0
-          ? Math.round((a.ganhos / a.atendimentos) * 100)
-          : null,
+        taxaConversao: taxaDeConversao(a.ganhos, a.atendimentos),
       }))
       // Recomendação aprovada: ordena por valor fechado decrescente.
       .sort((a, b) => b.valorFechado - a.valorFechado);
