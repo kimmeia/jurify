@@ -38,10 +38,14 @@ import {
   reservarExecucao,
 } from "../escritorio/db-comissoes";
 import { createLogger } from "./logger";
+import { STATUS_PAGO_ASAAS } from "./asaas-status";
 
 const log = createLogger("cron-comissoes");
 
-const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
+/** Mesma definição de "pago" do caixa, do DRE e de `db-comissoes` — a lista
+ *  literal que morava aqui deixava DUNNING_RECEIVED de fora do fechamento
+ *  automático, gerando comissão menor que a simulada na tela. */
+const STATUS_PAGOS = STATUS_PAGO_ASAAS as unknown as string[];
 
 /** Retorna a hora atual no fuso `tz` como `{ ano, mes, dia, hora, minuto }`.
  *  Usa `Intl.DateTimeFormat` (sem libs externas). */

@@ -34,12 +34,23 @@ import {
   type MotivoExclusao,
 } from "../../shared/calculo-comissao";
 import { createLogger } from "../_core/logger";
+import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
 
 const log = createLogger("db-comissoes");
 
 const NOME_CATEGORIA_COMISSAO = "Comissões";
 
-const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
+/**
+ * O que conta como dinheiro recebido para efeito de comissão.
+ *
+ * Vem da constante compartilhada, não de lista própria: a lista local aqui
+ * omitia DUNNING_RECEIVED (cliente que paga depois de negativado), então a
+ * cobrança entrava no caixa e no DRE — que já usam a constante — e ficava
+ * de fora da base de comissão. O atendente perdia comissão sobre dinheiro
+ * que o escritório recebeu de verdade, e o próprio diagnóstico, que existe
+ * para explicar diferenças, também não listava a cobrança.
+ */
+const STATUS_PAGOS = STATUS_PAGO_ASAAS as unknown as string[];
 
 /**
  * Retorna mapa de cobranças que JÁ entraram em algum fechamento de
