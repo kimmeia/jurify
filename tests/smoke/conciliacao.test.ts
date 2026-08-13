@@ -31,8 +31,10 @@ import type { TrpcContext } from "../../server/_core/context";
 import { getDb } from "../../server/db";
 import {
   asaasCobrancas,
+  canaisIntegrados,
   colaboradores,
   contatos,
+  conversas,
   escritorios,
   eventosProcesso,
   notificacoes,
@@ -281,6 +283,126 @@ describe("conciliação: /financeiro x Painel Financeiro", () => {
   it("limpa o que semeou", async () => {
     if (!TEM_DB) return;
     await limpar(cenario.escritorioId);
+  }, 60_000);
+});
+
+describe("conciliação: pills do Inbox x lista de conversas", () => {
+  let escritorioId = 0;
+  let donoUserId = 0;
+
+  beforeAll(async () => {
+    if (!TEM_DB) return;
+    const db = (await getDb())!;
+    const marca = `inbox-${Date.now()}`;
+
+    const [donoIns] = await db.insert(users).values({
+      openId: `${marca}-dono`,
+      name: "Dono Inbox",
+      email: `${marca}-dono@jurify.test`,
+      loginMethod: "email",
+      role: "user",
+    });
+    donoUserId = (donoIns as { insertId: number }).insertId;
+
+    const [escIns] = await db.insert(escritorios).values({
+      nome: `Escritório ${marca}`,
+      ownerId: donoUserId,
+    });
+    escritorioId = (escIns as { insertId: number }).insertId;
+
+    await db.insert(colaboradores).values({
+      escritorioId,
+      userId: donoUserId,
+      cargo: "dono",
+      ativo: true,
+    });
+
+    const [canalIns] = await db.insert(canaisIntegrados).values({
+      escritorioId,
+      tipo: "whatsapp_api",
+      nome: "Canal de teste",
+    });
+    const canalId = (canalIns as { insertId: number }).insertId;
+
+    const nomes = ["Ana Beatriz Souza", "Carlos Menezes", "Ana Paula Ribeiro", "Diego Farias"];
+    const contatoIds: number[] = [];
+    for (const nome of nomes) {
+      const [ins] = await db.insert(contatos).values({ escritorioId, nome });
+      contatoIds.push((ins as { insertId: number }).insertId);
+    }
+
+    // Uma de cada status, mais uma arquivada — os quatro status existem e
+    // só três têm pill.
+    await db.insert(conversas).values([
+      { escritorioId, contatoId: contatoIds[0], canalId, status: "aguardando" },
+      { escritorioId, contatoId: contatoIds[1], canalId, status: "em_atendimento" },
+      { escritorioId, contatoId: contatoIds[2], canalId, status: "resolvido" },
+      { escritorioId, contatoId: contatoIds[3], canalId, status: "fechado" },
+      {
+        escritorioId,
+        contatoId: contatoIds[0],
+        canalId,
+        status: "aguardando",
+        arquivadaEm: new Date(),
+      },
+    ]);
+  }, 120_000);
+
+  it("o pill Todas conta o mesmo que a lista mostra", async () => {
+    if (!TEM_DB) return;
+
+    const caller = appRouter.createCaller(contextoDe(donoUserId));
+    const counts = await caller.crm.contarConversas();
+    const lista = await caller.crm.listarConversas({ limite: 300 });
+
+    // 4 ativas; a arquivada fica fora das duas vistas.
+    expect(lista.length).toBe(4);
+    expect(counts.todos, "pill Todas discorda da lista").toBe(lista.length);
+  }, 60_000);
+
+  it("Todas é a soma dos status, inclusive o que não tem pill", async () => {
+    if (!TEM_DB) return;
+
+    // "fechado" entra em Todas (a lista sem filtro mostra) mas não tem pill.
+    // Devolver a contagem dele é o que permite conferir a soma em vez de
+    // aceitar uma diferença silenciosa.
+    const caller = appRouter.createCaller(contextoDe(donoUserId));
+    const c = await caller.crm.contarConversas();
+
+    expect(c.aguardando + c.em_atendimento + c.resolvido + c.fechado).toBe(c.todos);
+  }, 60_000);
+
+  it("com busca ativa, os pills descrevem o mesmo conjunto da lista", async () => {
+    if (!TEM_DB) return;
+
+    // Este é o defeito: `busca` ia pra lista e não ia pros contadores, então
+    // procurar "Ana" deixava a lista com 2 conversas e o pill "Todas" com o
+    // escritório inteiro.
+    const caller = appRouter.createCaller(contextoDe(donoUserId));
+    const counts = await caller.crm.contarConversas({ busca: "Ana" });
+    const lista = await caller.crm.listarConversas({ busca: "Ana", limite: 300 });
+
+    expect(lista.length).toBeGreaterThan(0);
+    expect(counts.todos, "pills ignoraram a busca que a lista aplicou").toBe(lista.length);
+  }, 60_000);
+
+  it("na pasta Arquivadas, os pills contam as arquivadas", async () => {
+    if (!TEM_DB) return;
+
+    const caller = appRouter.createCaller(contextoDe(donoUserId));
+    const counts = await caller.crm.contarConversas({ arquivadas: true });
+    const lista = await caller.crm.listarConversas({ arquivadas: true, limite: 300 });
+
+    expect(lista.length).toBe(1);
+    expect(counts.todos, "pills ignoraram a pasta Arquivadas").toBe(lista.length);
+  }, 60_000);
+
+  it("limpa o que semeou", async () => {
+    if (!TEM_DB) return;
+    const db = (await getDb())!;
+    await db.delete(conversas).where(eq(conversas.escritorioId, escritorioId));
+    await db.delete(canaisIntegrados).where(eq(canaisIntegrados.escritorioId, escritorioId));
+    await limpar(escritorioId);
   }, 60_000);
 });
 
