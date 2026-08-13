@@ -10,7 +10,8 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { escapeLikePattern } from "../_core/sql-helpers";
 import { getDb } from "../db";
 import { tarefas, colaboradores, users, contatos } from "../../drizzle/schema";
-import { eq, and, desc, or, sql, gte, lte, like, inArray } from "drizzle-orm";
+import { eq, and, desc, or, sql, gte, isNotNull, lt, lte, like, inArray } from "drizzle-orm";
+import { corteAtrasoDoEscritorio } from "./prazo-atrasado";
 import { checkPermission } from "./check-permission";
 import { TRPCError } from "@trpc/server";
 import { toIsoString } from "../_core/dates";
@@ -238,6 +239,8 @@ export const tarefasRouter = router({
         )!]
       : [];
 
+    const corteDeAtraso = await corteAtrasoDoEscritorio(eid);
+
     const [pend] = await db.select({ count: sql<number>`COUNT(*)` }).from(tarefas)
       .where(and(
         eq(tarefas.escritorioId, eid),
@@ -249,7 +252,11 @@ export const tarefasRouter = router({
       .where(and(
         eq(tarefas.escritorioId, eid),
         or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
-        sql`dataVencimento < NOW() AND dataVencimento IS NOT NULL`,
+        // `NOW()` era o relógio do banco, em UTC: perto da virada o dia do
+        // contador não era o dia do escritório. E comparava hora, não dia,
+        // divergindo do badge da Agenda. Corte único em prazo-atrasado.ts.
+        lt(tarefas.dataVencimento, corteDeAtraso),
+        isNotNull(tarefas.dataVencimento),
         ...ownFilter,
       ));
 

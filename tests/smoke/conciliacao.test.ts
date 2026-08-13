@@ -37,9 +37,12 @@ import {
   conversas,
   escritorios,
   eventosProcesso,
+  mensagens,
   notificacoes,
+  tarefas,
   users,
 } from "../../drizzle/schema";
+import { corteAtraso } from "../../server/escritorio/prazo-atrasado";
 
 const TEM_DB = !!process.env.DATABASE_URL;
 
@@ -286,6 +289,76 @@ describe("conciliação: /financeiro x Painel Financeiro", () => {
   }, 60_000);
 });
 
+describe("conciliação: as quatro telas que contam atrasados", () => {
+  let escritorioId = 0;
+  let donoUserId = 0;
+
+  beforeAll(async () => {
+    if (!TEM_DB) return;
+    const db = (await getDb())!;
+    const marca = `atr-${Date.now()}`;
+
+    const [donoIns] = await db.insert(users).values({
+      openId: `${marca}-dono`,
+      name: "Dono Atraso",
+      email: `${marca}-dono@jurify.test`,
+      loginMethod: "email",
+      role: "user",
+    });
+    donoUserId = (donoIns as { insertId: number }).insertId;
+
+    const [escIns] = await db.insert(escritorios).values({
+      nome: `Escritório ${marca}`,
+      ownerId: donoUserId,
+      fusoHorario: "America/Sao_Paulo",
+    });
+    escritorioId = (escIns as { insertId: number }).insertId;
+
+    await db.insert(colaboradores).values({
+      escritorioId,
+      userId: donoUserId,
+      cargo: "dono",
+      ativo: true,
+    });
+
+    const corte = corteAtraso("America/Sao_Paulo");
+    const ontem = new Date(corte.getTime() - 3 * 60 * 60 * 1000);
+    // Os dois casos-armadilha do mockup: meia-noite de hoje e hoje às 9h.
+    const meiaNoiteDeHoje = new Date(corte.getTime());
+    const hojeAs9 = new Date(corte.getTime() + 9 * 60 * 60 * 1000);
+
+    await db.insert(tarefas).values([
+      { escritorioId, titulo: "Vencida ontem", status: "pendente", dataVencimento: ontem, criadoPor: donoUserId },
+      { escritorioId, titulo: "Vence hoje à meia-noite", status: "pendente", dataVencimento: meiaNoiteDeHoje, criadoPor: donoUserId },
+      { escritorioId, titulo: "Vence hoje às 9h", status: "pendente", dataVencimento: hojeAs9, criadoPor: donoUserId },
+    ]);
+  }, 120_000);
+
+  it("só a de ontem conta como atrasada, nas duas telas", async () => {
+    if (!TEM_DB) return;
+
+    // Antes: badge contava 3 (usava `<=` e pegava a de meia-noite), o Painel
+    // Operacional contava 2 depois das 9h (comparava a hora), e o Painel
+    // Geral contava 1. Três números para a mesma pergunta.
+    const caller = appRouter.createCaller(contextoDe(donoUserId));
+
+    const contadores = await caller.tarefas.contadores();
+    const badge = await caller.agenda.contadores();
+
+    expect(contadores.vencidas, "contador de Tarefas conta a de hoje como atrasada").toBe(1);
+    expect(badge.atrasadosCount, "badge da Agenda diverge do contador de Tarefas").toBe(
+      contadores.vencidas,
+    );
+  }, 60_000);
+
+  it("limpa o que semeou", async () => {
+    if (!TEM_DB) return;
+    const db = (await getDb())!;
+    await db.delete(tarefas).where(eq(tarefas.escritorioId, escritorioId));
+    await limpar(escritorioId);
+  }, 60_000);
+});
+
 describe("conciliação: pills do Inbox x lista de conversas", () => {
   let escritorioId = 0;
   let donoUserId = 0;
@@ -397,9 +470,67 @@ describe("conciliação: pills do Inbox x lista de conversas", () => {
     expect(counts.todos, "pills ignoraram a pasta Arquivadas").toBe(lista.length);
   }, 60_000);
 
+  it("o relatório separa conversa nova de conversa atendida", async () => {
+    if (!TEM_DB) return;
+
+    // As duas leituras medem coisas diferentes e as duas ficam. O que o
+    // robô trava é que cada uma tenha nome próprio e bata com a sua fonte:
+    // "atendidas" é o mesmo conjunto que o Inbox conta.
+    const db = (await getDb())!;
+    const caller = appRouter.createCaller(contextoDe(donoUserId));
+
+    // Uma conversa antiga que voltou a receber mensagem hoje: entra em
+    // "atendidas" e fica fora de "novas".
+    const [contatoAntigo] = await db.insert(contatos).values({
+      escritorioId,
+      nome: "Cliente recorrente",
+    });
+    const contatoAntigoId = (contatoAntigo as { insertId: number }).insertId;
+    const [canal] = await db
+      .select({ id: canaisIntegrados.id })
+      .from(canaisIntegrados)
+      .where(eq(canaisIntegrados.escritorioId, escritorioId))
+      .limit(1);
+
+    const anoPassado = new Date(Date.now() - 400 * 86_400_000);
+    const [convAntiga] = await db.insert(conversas).values({
+      escritorioId,
+      contatoId: contatoAntigoId,
+      canalId: canal!.id,
+      status: "em_atendimento",
+      createdAt: anoPassado,
+    });
+    const convAntigaId = (convAntiga as { insertId: number }).insertId;
+    await db.insert(mensagens).values({
+      conversaId: convAntigaId,
+      direcao: "entrada",
+      tipo: "texto",
+      conteudo: "Voltei a precisar de ajuda",
+    });
+
+    const hoje = new Date().toISOString().slice(0, 10);
+    const rel = await caller.relatorios.atendimento({ dataInicio: hoje, dataFim: hoje });
+
+    // Só a recorrente tem mensagem hoje; as 5 do cenário nasceram hoje sem
+    // mensagem nenhuma. Os dois conjuntos são disjuntos aqui, que é
+    // exatamente o ponto: são perguntas diferentes.
+    expect(rel.conversasAtendidas, "conversa recorrente não entrou em atendidas").toBe(1);
+    expect(
+      rel.totalConversas,
+      "conversa aberta ano passado não pode contar como nova",
+    ).toBe(5);
+  }, 60_000);
+
   it("limpa o que semeou", async () => {
     if (!TEM_DB) return;
     const db = (await getDb())!;
+    const convs = await db
+      .select({ id: conversas.id })
+      .from(conversas)
+      .where(eq(conversas.escritorioId, escritorioId));
+    if (convs.length > 0) {
+      await db.delete(mensagens).where(inArray(mensagens.conversaId, convs.map((c) => c.id)));
+    }
     await db.delete(conversas).where(eq(conversas.escritorioId, escritorioId));
     await db.delete(canaisIntegrados).where(eq(canaisIntegrados.escritorioId, escritorioId));
     await limpar(escritorioId);

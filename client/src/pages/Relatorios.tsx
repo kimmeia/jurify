@@ -496,11 +496,16 @@ function AbaAtendimentoConteudo({
           tráfego e um derivado que ninguém usava pra decidir, e sete cartões
           na primeira dobra fazem os quatro que importam sumirem no meio. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Dois números, dois nomes. O card conta conversa ABERTA no período;
+            a linha de apoio conta conversa com mensagem no período, que é o
+            que o Inbox mostra. Cliente recorrente que volta a escrever só
+            entra na segunda — chamar as duas de "Atendimentos" era o que
+            fazia as telas parecerem discordar. */}
         <KpiRel
-          label="Atendimentos"
+          label="Conversas novas"
           valor={data.totalConversas.toLocaleString("pt-BR")}
           delta={d(data.totalConversas, "totalConversas")}
-          anterior={nAnt("totalConversas", (v) => v.toLocaleString("pt-BR"))}
+          anterior={`${data.conversasAtendidas.toLocaleString("pt-BR")} atendidas no período`}
         />
         <KpiRel
           label="Tempo p/ 1ª resposta"
