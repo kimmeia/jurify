@@ -64,6 +64,8 @@ import {
   type AcaoCombinada,
   type AvaliacaoGravada,
 } from "../../shared/avaliacao";
+import { desempenhoDoPeriodo } from "./desempenho-repo";
+import { DESEMPENHO_VAZIO } from "../../shared/desempenho";
 import {
   acoesDasAvaliacoes,
   avaliacoesDoColaborador,
@@ -423,6 +425,7 @@ export const rhRouter = router({
               email: users.email,
               ativo: colaboradores.ativo,
               removidoEm: colaboradores.removidoEm,
+              cargo: colaboradores.cargo,
               jornadaSemanal: colaboradores.jornadaSemanal,
             })
             .from(colaboradores)
@@ -445,6 +448,15 @@ export const rhRouter = router({
         lista.push(o);
         ocorPorColab.set(o.colaboradorId, lista);
       }
+
+      // O desempenho cobre o mês inteiro da competência, com as MESMAS janelas
+      // do relatório de Atendimento — a regra de como as linhas viram números
+      // mora em `shared/desempenho`, então a ficha e o relatório não divergem.
+      const desempenho = await desempenhoDoPeriodo(
+        esc.escritorio.id,
+        new Date(`${de}T00:00:00.000Z`),
+        new Date(`${ate}T23:59:59.999Z`),
+      );
 
       const avalPorColab = new Map<number, AvaliacaoGravada[]>();
       for (const a of await lerAvaliacoes(esc.escritorio.id, null)) {
@@ -471,9 +483,14 @@ export const rhRouter = router({
               colaboradorId: c.id,
               nome: c.nome || c.email || `#${c.id}`,
               removido: !c.ativo || !!c.removidoEm,
+              // A ficha mostra cargo e jornada no cabeçalho; vêm daqui pra não
+              // exigir uma segunda consulta que poderia divergir desta.
+              cargo: c.cargo,
+              jornadaSemanal: c.jornadaSemanal,
               // Da mais recente pra mais antiga — a tela lê `[0]` como "a
               // última" e o resto vira histórico.
               avaliacoes: avalPorColab.get(c.id) ?? [],
+              desempenho: desempenho.get(c.id) ?? DESEMPENHO_VAZIO,
               ...espelho,
             };
           })
