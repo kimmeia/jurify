@@ -17,6 +17,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, gte, inArray, or, sql, like } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
+import { contarMovimentacoesNaoLidas } from "./contador-movimentacoes";
 import { getDb } from "../db";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
@@ -576,23 +577,9 @@ export const movimentacoesRouter = router({
     const perm = await checkPermission(ctx.user.id, "processos", "ver");
     if (!perm.allowed) return { naoLidas: 0 };
 
-    const db = await getDb();
-    if (!db) return { naoLidas: 0 };
-
-    const desde = new Date(Date.now() - 30 * 86_400_000);
-    const [row] = await db
-      .select({ n: sql<number>`COUNT(*)` })
-      .from(eventosProcesso)
-      .where(
-        and(
-          eq(eventosProcesso.escritorioId, perm.escritorioId),
-          eq(eventosProcesso.tipo, "movimentacao"),
-          eq(eventosProcesso.lido, false),
-          gte(eventosProcesso.dataEvento, desde),
-        ),
-      );
-
-    return { naoLidas: Number(row?.n ?? 0) };
+    // Contagem compartilhada com o card do Painel Geral — os dois respondem
+    // "quantas movimentações novas eu tenho?" e discordavam.
+    return { naoLidas: await contarMovimentacoesNaoLidas(perm.escritorioId) };
   }),
 
   /** Marca uma ou várias como lidas — é o "ok, li" da central. */
