@@ -25,7 +25,7 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { appRouter } from "../../server/routers";
 import type { TrpcContext } from "../../server/_core/context";
 import { getDb } from "../../server/db";
@@ -34,6 +34,8 @@ import {
   colaboradores,
   contatos,
   escritorios,
+  eventosProcesso,
+  notificacoes,
   users,
 } from "../../drizzle/schema";
 
@@ -279,5 +281,118 @@ describe("conciliação: /financeiro x Painel Financeiro", () => {
   it("limpa o que semeou", async () => {
     if (!TEM_DB) return;
     await limpar(cenario.escritorioId);
+  }, 60_000);
+});
+
+describe("conciliação: badge de movimentações x card do Painel", () => {
+  let escritorioId = 0;
+  let donoUserId = 0;
+  let outroUserId = 0;
+  let eventoIds: number[] = [];
+
+  beforeAll(async () => {
+    if (!TEM_DB) return;
+    const db = (await getDb())!;
+    const marca = `mov-${Date.now()}`;
+
+    const [donoIns] = await db.insert(users).values({
+      openId: `${marca}-dono`,
+      name: "Dono Mov",
+      email: `${marca}-dono@jurify.test`,
+      loginMethod: "email",
+      role: "user",
+    });
+    donoUserId = (donoIns as { insertId: number }).insertId;
+
+    const [outroIns] = await db.insert(users).values({
+      openId: `${marca}-outro`,
+      name: "Gestor Mov",
+      email: `${marca}-outro@jurify.test`,
+      loginMethod: "email",
+      role: "user",
+    });
+    outroUserId = (outroIns as { insertId: number }).insertId;
+
+    const [escIns] = await db.insert(escritorios).values({
+      nome: `Escritório ${marca}`,
+      ownerId: donoUserId,
+    });
+    escritorioId = (escIns as { insertId: number }).insertId;
+
+    await db.insert(colaboradores).values([
+      { escritorioId, userId: donoUserId, cargo: "dono", ativo: true },
+      { escritorioId, userId: outroUserId, cargo: "gestor", ativo: true },
+    ]);
+
+    // Três movimentações do escritório, nenhuma notificação para ninguém —
+    // é o estado real de quem não cadastrou o monitoramento.
+    const agora = new Date();
+    for (let i = 0; i < 3; i++) {
+      const [ins] = await db.insert(eventosProcesso).values({
+        escritorioId,
+        dataEvento: agora,
+        fonte: "pje",
+        tipo: "movimentacao",
+        conteudo: `Movimentação de teste ${i}`,
+        hashDedup: `${marca}-${i}`,
+        lido: false,
+      });
+      eventoIds.push(Number((ins as { insertId: number }).insertId));
+    }
+
+    // Uma notificação para o dono, imitando quem cadastrou o monitoramento.
+    // Sem ela o teste do "marcar como lida" passava até com o bug: os dois
+    // lados davam zero por falta de dado, não por concordarem.
+    await db.insert(notificacoes).values({
+      userId: donoUserId,
+      titulo: "Nova movimentação",
+      mensagem: "Movimentação de teste",
+      tipo: "movimentacao",
+      lida: false,
+    });
+  }, 120_000);
+
+  it("badge e card mostram o mesmo número para quem não cadastrou o monitoramento", async () => {
+    if (!TEM_DB) return;
+
+    // O gestor não criou nenhum monitoramento, então não tem notificação
+    // nenhuma. Antes da correção: badge 3, card 0, na mesma tela.
+    const caller = appRouter.createCaller(contextoDe(outroUserId));
+
+    const badge = await caller.movimentacoes.contador();
+    const painel = await caller.dashboard.resumoEscritorio();
+
+    expect(badge.naoLidas).toBe(3);
+    expect(
+      painel?.processos.movimentacoesNaoLidas,
+      "card do Painel discorda do badge do menu",
+    ).toBe(badge.naoLidas);
+  }, 60_000);
+
+  it("marcar como lida derruba os dois juntos", async () => {
+    if (!TEM_DB) return;
+
+    // O defeito mais teimoso era este: "marcar como lida" só tocava em
+    // `eventos_processo`, então o badge zerava e o card ficava travado no
+    // número antigo para sempre.
+    const caller = appRouter.createCaller(contextoDe(donoUserId));
+    await caller.movimentacoes.marcarLidas({ eventoIds });
+
+    const badge = await caller.movimentacoes.contador();
+    const painel = await caller.dashboard.resumoEscritorio();
+
+    expect(badge.naoLidas).toBe(0);
+    expect(
+      painel?.processos.movimentacoesNaoLidas,
+      "card do Painel não acompanhou o marcar-como-lida",
+    ).toBe(0);
+  }, 60_000);
+
+  it("limpa o que semeou", async () => {
+    if (!TEM_DB) return;
+    const db = (await getDb())!;
+    await db.delete(eventosProcesso).where(eq(eventosProcesso.escritorioId, escritorioId));
+    await db.delete(notificacoes).where(inArray(notificacoes.userId, [donoUserId, outroUserId]));
+    await limpar(escritorioId);
   }, 60_000);
 });

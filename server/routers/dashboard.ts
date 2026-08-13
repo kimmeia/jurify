@@ -46,6 +46,7 @@ import {
   STATUS_VENCIDO_ASAAS,
 } from "../_core/asaas-status";
 import { contatosVisiveisFinanceiro } from "../escritorio/contatos-visiveis-financeiro";
+import { contarMovimentacoesNaoLidas } from "../processos/contador-movimentacoes";
 import { buildFiltroComissaoSQL } from "../escritorio/router-financeiro";
 import { inArray } from "drizzle-orm";
 import {
@@ -402,18 +403,15 @@ export const dashboardRouter = router({
         dataHora: string;
       }> = [];
 
-      // Não lidas = notificações de tipo "movimentacao" ainda não lidas
-      const movsNaoLidasRows = await db
-        .select({ id: notificacoes.id })
-        .from(notificacoes)
-        .where(
-          and(
-            eq(notificacoes.userId, ctx.user.id),
-            eq(notificacoes.tipo, "movimentacao"),
-            eq(notificacoes.lida, false),
-          ),
-        );
-      const movimentacoesNaoLidas = movsNaoLidasRows.length;
+      // Mesma contagem do badge do menu (`movimentacoes.contador`). Antes
+      // este card contava `notificacoes` do usuário logado: como a
+      // notificação só nasce para quem cadastrou o monitoramento, quem não
+      // cadastrou nada via badge 10 e card 0 na mesma tela — e "marcar como
+      // lida", que só toca em `eventos_processo`, zerava um e não o outro.
+      const permProcessos = await checkPermission(ctx.user.id, "processos", "ver");
+      const movimentacoesNaoLidas = permProcessos.allowed
+        ? await contarMovimentacoesNaoLidas(escritorioId)
+        : 0;
 
       // Notificações não lidas
       const notifsNaoLidas = await db
