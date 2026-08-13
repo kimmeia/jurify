@@ -1083,6 +1083,12 @@ export async function listarLeads(escritorioId: number, etapa?: string) {
       canalTelefone: canaisIntegrados.telefone,
       etapaFunil: leads.etapaFunil, valorEstimado: leads.valorEstimado,
       origemLead: leads.origemLead, probabilidade: leads.probabilidade,
+      // Estes dois faltavam, e a ausência não era só cosmética: o painel do
+      // Pipeline hidrata a caixa de notas com `lead.observacoes`, e sem a
+      // coluna aqui ela nascia vazia e o botão Salvar mandava "" de volta —
+      // apagando a observação de quem só queria mudar a etapa.
+      observacoes: leads.observacoes,
+      motivoPerda: leads.motivoPerda,
       dataFechamentoPrevisto: leads.dataFechamentoPrevisto,
       createdAt: leads.createdAt,
       updatedAt: leads.updatedAt,

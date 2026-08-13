@@ -88,9 +88,11 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     conversaId = await buscarConversaExistente(escritorioId, contatoId, canalId, msg.chatId);
   }
   if (!conversaId) {
-    // Stickiness CROSS-CONVERSA: se o contato JÁ tem responsável (atribuído
-    // antes), a nova conversa nasce com ele — cliente que volta cai com a
-    // mesma pessoa. Sem responsável prévio, a conversa nasce SEM atendente —
+    // Stickiness CROSS-CONVERSA: se o contato JÁ tem responsável ATIVO
+    // (atribuído antes), a nova conversa nasce com ele — cliente que volta cai
+    // com a mesma pessoa. Responsável que saiu do escritório não conta: a
+    // conversa nasceria numa caixa que ninguém abre.
+    // Sem responsável prévio, a conversa nasce SEM atendente —
     // quem decide é o SmartFlow (bloco Distribuir p/ setor, com o filtro de
     // setor que o usuário definiu). A distribuição legacy (distribuirLead)
     // não filtrava por setor, então jogava em qualquer atendente ativo —
@@ -615,20 +617,40 @@ async function buscarConversaPorChatId(escritorioId: number, canalId: number, ch
   return row?.id ?? null;
 }
 
-/** Lê responsavelId do contato — usado pra "stickiness" de atendimento.
- *  Se um cliente já foi atendido por alguém antes, próximas conversas
- *  caem no mesmo atendente.
+/**
+ * Lê responsavelId do contato — usado pra "stickiness" de atendimento.
+ * Se um cliente já foi atendido por alguém antes, próximas conversas caem no
+ * mesmo atendente.
+ *
+ * Só devolve quem AINDA está ativo. A remoção de colaborador é soft-delete e
+ * não limpa `contatos.responsavelId` de propósito (o histórico de quem
+ * atendeu quem tem que sobreviver à saída da pessoa) — mas herdar esse id
+ * numa conversa NOVA entregava o cliente a quem não trabalha mais aqui.
+ * Como a conversa nascia já com atendente, o rodízio nunca era consultado:
+ * a mensagem ficava parada numa caixa que ninguém abre, e o relatório
+ * mostrava atendimento em agosto de alguém que saiu em julho.
+ *
+ * Sem responsável ativo, devolve null e a conversa nasce sem atendente — que
+ * é o caminho que passa pelo SmartFlow e pelo rodízio, os dois já filtrando
+ * por ativo. Mesma regra que o resolvedor de responsável da agenda aplica.
  */
 async function pegarResponsavelDoContato(contatoId: number): Promise<number | null> {
   if (!contatoId) return null;
   try {
     const { getDb } = await import("../db");
-    const { contatos } = await import("../../drizzle/schema");
-    const { eq } = await import("drizzle-orm");
+    const { contatos, colaboradores } = await import("../../drizzle/schema");
+    const { and, eq } = await import("drizzle-orm");
     const db = await getDb();
     if (!db) return null;
-    const [row] = await db.select({ responsavelId: contatos.responsavelId })
-      .from(contatos).where(eq(contatos.id, contatoId)).limit(1);
+    const [row] = await db
+      .select({ responsavelId: contatos.responsavelId })
+      .from(contatos)
+      .innerJoin(
+        colaboradores,
+        and(eq(colaboradores.id, contatos.responsavelId), eq(colaboradores.ativo, true)),
+      )
+      .where(eq(contatos.id, contatoId))
+      .limit(1);
     return row?.responsavelId ?? null;
   } catch {
     return null;

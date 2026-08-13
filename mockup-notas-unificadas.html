@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --ambar:#b45309; --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:22px 28px; height:100%; display:flex; flex-direction:column; gap:12px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13px; color:var(--mudo); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:15px; }
+
+  /* ── palco ── */
+  .palco { flex:1 1 auto; display:grid; grid-template-columns:1fr 92px 1fr; gap:0; min-height:0; }
+  .painel { display:flex; flex-direction:column; overflow:hidden; }
+  .painel-cab { display:flex; align-items:center; justify-content:space-between; gap:8px;
+                padding:11px 15px; border-bottom:1px solid var(--borda); }
+  .onde { font-size:11px; color:var(--mudo); }
+  .onde b { color:var(--tinta); }
+  .selo { border-radius:999px; padding:3px 9px; font-size:9.5px; font-weight:700;
+          text-transform:uppercase; letter-spacing:.04em; }
+  .s-lead { background:var(--acento-bg); color:var(--acento-forte); border:1px solid #ddd6fe; }
+  .s-360 { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+
+  /* ficha resumida do lead, no topo do painel esquerdo */
+  .ficha { display:flex; align-items:center; gap:10px; padding:11px 15px; border-bottom:1px solid var(--hairline); }
+  .av { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+        color:#fff; font-size:12px; font-weight:700; flex:0 0 auto; }
+  .nome { font-size:14px; font-weight:700; }
+  .meta { font-size:11px; color:var(--mudo); margin-top:1px; }
+  .val { margin-left:auto; text-align:right; }
+  .val b { display:block; font-size:14px; font-weight:700; color:var(--ok); }
+  .val span { font-size:10px; color:var(--fraco); }
+
+  /* composer */
+  .compor { padding:11px 15px; border-bottom:1px solid var(--hairline); background:var(--hairline-2); }
+  .txt { border:1px solid var(--borda); background:var(--surface); border-radius:9px; padding:9px 11px;
+         font-size:12px; color:var(--fraco); min-height:52px; }
+  .compor-pe { display:flex; align-items:center; justify-content:space-between; margin-top:8px; }
+  .dica { font-size:10px; color:var(--fraco); }
+  .btn { background:var(--acento); color:#fff; font-weight:600; font-size:12px; border-radius:8px;
+         padding:8px 14px; display:inline-flex; align-items:center; gap:6px;
+         box-shadow:0 8px 16px -8px #7c3aed88; }
+
+  /* feed de notas */
+  .feed { flex:1 1 auto; overflow:hidden; padding:4px 15px 0; }
+  .nota { padding:10px 0; border-bottom:1px solid var(--hairline); }
+  .nota:last-child { border-bottom:0; }
+  .nota-cab { display:flex; align-items:center; gap:7px; }
+  .av-mini { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+             color:#fff; font-size:8px; font-weight:700; flex:0 0 auto; }
+  .autor { font-size:11.5px; font-weight:700; }
+  .quando { font-size:10px; color:var(--fraco); }
+  .lixo { margin-left:auto; color:var(--fantasma); }
+  .nota-txt { margin-top:4px; font-size:12px; line-height:1.55; color:var(--corpo); }
+  .nota.resgate { background:var(--ambar-bg); border:1px solid var(--ambar-borda); border-radius:10px;
+                  padding:9px 11px; margin:8px 0; }
+  .tag-resgate { background:#fde68a; color:#92400e; border-radius:999px; padding:2px 7px;
+                 font-size:8.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+
+  /* conector */
+  .meio { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; }
+  .linha-v { flex:1; width:2px; background:linear-gradient(#e2e8f0,#c4b5fd,#e2e8f0); }
+  .cola { background:var(--acento); color:#fff; border-radius:999px; padding:7px 11px;
+          font-size:10px; font-weight:700; text-align:center; line-height:1.3;
+          box-shadow:0 10px 20px -8px #7c3aed99; }
+
+  /* rodapé de regras */
+  .regras { flex:0 0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:0; overflow:hidden; }
+  .regra { padding:12px 15px; border-right:1px solid var(--borda); }
+  .regra:last-child { border-right:0; }
+  .regra .ic { width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center;
+               background:var(--acento-bg); margin-bottom:7px; }
+  .regra h4 { font-size:12.5px; font-weight:700; }
+  .regra p { margin-top:3px; font-size:11px; line-height:1.5; color:var(--corpo-2); }
+  .regra b { color:var(--tinta); }
+
+  /* faixa do bug */
+  .bug { flex:0 0 auto; display:flex; align-items:center; gap:12px; padding:10px 15px;
+         border-radius:12px; background:var(--alerta-bg); border:1px solid var(--alerta-borda); }
+  .bug .t { font-size:12.5px; font-weight:700; color:var(--alerta-forte); }
+  .bug .d { font-size:11px; line-height:1.5; color:#7f1d1d; margin-top:2px; }
+  .bug .d b { color:#450a0a; }
+  .passos { margin-left:auto; display:flex; align-items:center; gap:7px; flex:0 0 auto; }
+  .passo { background:var(--surface); border:1px solid var(--alerta-borda); border-radius:8px;
+           padding:5px 9px; font-size:10px; font-weight:600; color:#7f1d1d; }
+  .seta { color:#fca5a5; font-weight:700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topo">
+    <div>
+      <div class="h1">As notas do cliente, num lugar só</div>
+      <div class="sub">O que você escreve no card do Pipeline passa a ser a mesma nota que aparece no 360 do Atendimento.</div>
+    </div>
+    <div style="text-align:right">
+      <div class="micro">Exemplo</div>
+      <div style="font-size:13px;font-weight:600;margin-top:2px">Raimundo Nonato Ferreira</div>
+      <div style="font-size:11px;color:var(--mudo)">1 negociação aberta · cliente desde 2024</div>
+    </div>
+  </div>
+
+  <!-- PALCO -->
+  <div class="palco">
+    <!-- ESQUERDA: card do pipeline -->
+    <div class="card painel">
+      <div class="painel-cab">
+        <div class="onde">Atendimento › Pipeline › <b>card aberto</b></div>
+        <span class="selo s-lead">onde você escreveu</span>
+      </div>
+
+      <div class="ficha">
+        <div class="av" style="background:#7c3aed">RF</div>
+        <div>
+          <div class="nome">Raimundo Nonato Ferreira</div>
+          <div class="meta">88 9211-1413 · Novo · Milena Mello</div>
+        </div>
+        <div class="val"><b>R$ 2.000,00</b><span>valor estimado</span></div>
+      </div>
+
+      <div class="compor">
+        <div class="micro" style="margin-bottom:6px">Nova nota sobre o cliente</div>
+        <div class="txt">Escreva o contexto, o próximo passo, a objeção…</div>
+        <div class="compor-pe">
+          <span class="dica">Fica no cliente, não na negociação.</span>
+          <span class="btn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>
+            Adicionar nota
+          </span>
+        </div>
+      </div>
+
+      <div class="feed">
+        <div class="nota resgate">
+          <div class="nota-cab">
+            <span class="tag-resgate">recuperada</span>
+            <span class="quando">escrita em 12/08, estava invisível</span>
+          </div>
+          <div class="nota-txt">Trabalhou 3 anos sem registro na Transportadora Vale Verde. Tem CTPS assinada só no primeiro ano e duas testemunhas.</div>
+        </div>
+
+        <div class="nota">
+          <div class="nota-cab">
+            <div class="av-mini" style="background:#7c3aed">MM</div>
+            <span class="autor">Milena Mello</span>
+            <span class="quando">11/08 · 09:15</span>
+            <svg class="lixo" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="nota-txt">Ligou pedindo prazo. Só consegue pagar a entrada depois do dia 20.</div>
+        </div>
+
+        <div class="nota">
+          <div class="nota-cab">
+            <div class="av-mini" style="background:#0891b2">ER</div>
+            <span class="autor">Eduardo Ramalho</span>
+            <span class="quando">08/08 · 16:40</span>
+            <svg class="lixo" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="nota-txt">Primeiro contato pelo WhatsApp. Indicação da irmã, que é cliente desde 2024.</div>
+        </div>
+
+        <div class="nota">
+          <div class="nota-cab">
+            <div class="av-mini" style="background:#7c3aed">MM</div>
+            <span class="autor">Milena Mello</span>
+            <span class="quando">05/08 · 11:20</span>
+            <svg class="lixo" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="nota-txt">Proposta enviada pelo WhatsApp. Pediu pra conversar com a esposa antes de assinar.</div>
+        </div>
+
+        <div class="nota">
+          <div class="nota-cab">
+            <div class="av-mini" style="background:#0891b2">ER</div>
+            <span class="autor">Eduardo Ramalho</span>
+            <span class="quando">02/08 · 08:55</span>
+            <svg class="lixo" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="nota-txt">Prefere ser chamado de Nonato. Não atende número desconhecido — só WhatsApp.</div>
+        </div>
+
+        <div class="nota">
+          <div class="nota-cab">
+            <div class="av-mini" style="background:#7c3aed">MM</div>
+            <span class="autor">Milena Mello</span>
+            <span class="quando">28/07 · 15:10</span>
+            <svg class="lixo" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="nota-txt">Trouxe holerites de 2021 a 2023. Faltam os de 2020, vai procurar em casa.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONECTOR -->
+    <div class="meio">
+      <div class="linha-v"></div>
+      <div class="cola">a MESMA<br>lista</div>
+      <div class="linha-v"></div>
+    </div>
+
+    <!-- DIREITA: 360 -->
+    <div class="card painel">
+      <div class="painel-cab">
+        <div class="onde">Atendimento › conversa › <b>360 do cliente</b></div>
+        <span class="selo s-360">onde você procurou</span>
+      </div>
+
+      <div class="ficha">
+        <div class="av" style="background:#7c3aed">RF</div>
+        <div>
+          <div class="nome">Raimundo Nonato Ferreira</div>
+          <div class="meta">Cliente · 2 processos · 1 negociação aberta</div>
+        </div>
+        <div class="val"><b>6</b><span>anotações</span></div>
+      </div>
+
+      <div class="compor">
+        <div class="micro" style="margin-bottom:6px">Nova nota sobre o cliente</div>
+        <div class="txt">Escreva o contexto, o próximo passo, a objeção…</div>
+        <div class="compor-pe">
+          <span class="dica">O mesmo campo, do outro lado.</span>
+          <span class="btn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>
+            Adicionar nota
+          </span>
+        </div>
+      </div>
+
+      <div class="feed">
+        <div class="nota resgate">
+          <div class="nota-cab">
+            <span class="tag-resgate">recuperada</span>
+            <span class="quando">escrita em 12/08, estava invisível</span>
+          </div>
+          <div class="nota-txt">Trabalhou 3 anos sem registro na Transportadora Vale Verde. Tem CTPS assinada só no primeiro ano e duas testemunhas.</div>
+        </div>
+
+        <div class="nota">
+          <div class="nota-cab">
+            <div class="av-mini" style="background:#7c3aed">MM</div>
+            <span class="autor">Milena Mello</span>
+            <span class="quando">11/08 · 09:15</span>
+            <svg class="lixo" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="nota-txt">Ligou pedindo prazo. Só consegue pagar a entrada depois do dia 20.</div>
+        </div>
+
+        <div class="nota">
+          <div class="nota-cab">
+            <div class="av-mini" style="background:#0891b2">ER</div>
+            <span class="autor">Eduardo Ramalho</span>
+            <span class="quando">08/08 · 16:40</span>
+            <svg class="lixo" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="nota-txt">Primeiro contato pelo WhatsApp. Indicação da irmã, que é cliente desde 2024.</div>
+        </div>
+
+        <div class="nota">
+          <div class="nota-cab">
+            <div class="av-mini" style="background:#7c3aed">MM</div>
+            <span class="autor">Milena Mello</span>
+            <span class="quando">05/08 · 11:20</span>
+            <svg class="lixo" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="nota-txt">Proposta enviada pelo WhatsApp. Pediu pra conversar com a esposa antes de assinar.</div>
+        </div>
+
+        <div class="nota">
+          <div class="nota-cab">
+            <div class="av-mini" style="background:#0891b2">ER</div>
+            <span class="autor">Eduardo Ramalho</span>
+            <span class="quando">02/08 · 08:55</span>
+            <svg class="lixo" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="nota-txt">Prefere ser chamado de Nonato. Não atende número desconhecido — só WhatsApp.</div>
+        </div>
+
+        <div class="nota">
+          <div class="nota-cab">
+            <div class="av-mini" style="background:#7c3aed">MM</div>
+            <span class="autor">Milena Mello</span>
+            <span class="quando">28/07 · 15:10</span>
+            <svg class="lixo" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="nota-txt">Trouxe holerites de 2021 a 2023. Faltam os de 2020, vai procurar em casa.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- O QUE ACONTECEU COM O SEU TEXTO -->
+  <div class="bug">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto"><path d="M12 8v5M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div>
+      <div class="t">O texto que você digitou não se perdeu — ele está no banco, invisível.</div>
+      <div class="d">Salvar sempre funcionou. Quem falhava era a <b>leitura</b>: a consulta que enche o Pipeline nunca trouxe o campo de volta, então ao reabrir o card a caixa aparecia vazia. Por isso o aviso “Lead atualizado” aparecia e o texto sumia só depois.</div>
+    </div>
+    <div class="passos">
+      <span class="passo">você escreve</span><span class="seta">→</span>
+      <span class="passo">grava ✓</span><span class="seta">→</span>
+      <span class="passo">reabre</span><span class="seta">→</span>
+      <span class="passo" style="background:#fee2e2">volta vazio ✗</span>
+    </div>
+  </div>
+
+  <!-- REGRAS -->
+  <div class="card regras">
+    <div class="regra">
+      <div class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.9" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <h4>A nota é do cliente</h4>
+      <p>Não da negociação. Se o Raimundo voltar com um segundo caso, <b>as mesmas notas aparecem lá</b> — é a história da pessoa.</p>
+    </div>
+    <div class="regra">
+      <div class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 6v6l4 2" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="#7c3aed" stroke-width="2"/></svg></div>
+      <h4>Tem autor e hora</h4>
+      <p>Hoje o sistema já grava quem escreveu, mas <b>não mostra</b>. Passa a mostrar — nota sem dono não serve para cobrar nem para defender.</p>
+    </div>
+    <div class="regra">
+      <div class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <h4>Não se edita, se apaga</h4>
+      <p>Cada nota é um registro datado. Quem escreveu pode apagar a sua; dono e gestor apagam qualquer uma. <b>Corrigir é escrever outra.</b></p>
+    </div>
+    <div class="regra">
+      <div class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-6.2-8.6" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/><path d="M22 4 12 14.01l-3-3" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <h4>O texto antigo é resgatado</h4>
+      <p>O que ficou preso no campo velho vira a primeira nota do cliente, <b>marcada como recuperada</b> e com a data original.</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

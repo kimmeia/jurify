@@ -3312,7 +3312,12 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
     if (!lead) return;
     mutEdit.mutate({
       id: lead.id,
-      observacoes: notas,
+      // Só vai o que mudou. Mandar as notas incondicionalmente transformou uma
+      // regressão de LEITURA em perda de dado: enquanto a consulta do Pipeline
+      // não trazia a coluna, `notas` nascia vazio e o salvar gravava NULL por
+      // cima do texto de quem só queria mexer na etapa. Com a comparação, o
+      // pior caso de um campo que não chega volta a ser "não edita".
+      ...(notas !== (lead.observacoes ?? "") ? { observacoes: notas } : {}),
       valorEstimado: valorEdit || undefined,
       probabilidade: probEdit,
       responsavelId: respEdit ?? undefined,

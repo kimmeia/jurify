@@ -131,6 +131,10 @@ export function cicloPorExtenso(ciclo: string): string {
 
 /** O que o servidor devolve: a jornada calculada + a comparação com o contrato. */
 export type JornadaComparada = Jornada & {
+  /** Horas antes de descontar o intervalo presumido. */
+  minutosBrutos: number | null;
+  /** Intervalo do contrato descontado porque ninguém bateu a pausa. */
+  intervaloPresumidoMin: number;
   previstoMin: number;
   saldoMin: number | null;
   atrasoMin: number;
@@ -239,7 +243,21 @@ export function LinhaJornada({
         )}
       </td>
       <td className="py-2 text-center text-[12px] tabular-nums text-muted-foreground">
-        {j.minutosPausa > 0 ? formatarDuracao(j.minutosPausa) : "—"}
+        {j.minutosPausa > 0 ? (
+          formatarDuracao(j.minutosPausa)
+        ) : j.intervaloPresumidoMin > 0 ? (
+          <span
+            className="italic"
+            title={`Ninguém bateu a pausa. Descontado o intervalo do contrato (${formatarDuracao(j.intervaloPresumidoMin)}) das ${formatarDuracao(j.minutosBrutos)} entre entrada e saída.`}
+          >
+            {formatarDuracao(j.intervaloPresumidoMin)}
+            <span className="ml-1 rounded bg-muted px-1 py-px text-[9px] font-bold uppercase not-italic">
+              presumido
+            </span>
+          </span>
+        ) : (
+          "—"
+        )}
       </td>
       <td className="py-2 text-center text-[12px] font-bold tabular-nums">
         {formatarDuracao(j.minutos)}
