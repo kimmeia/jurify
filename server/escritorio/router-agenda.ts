@@ -777,8 +777,17 @@ export const agendaRouter = router({
       // a ele desde o início e não some quando outra pessoa cria.
       let responsavelId = input.responsavelId;
       if (!responsavelId && input.contatoId) {
+        // Herda o responsável do cliente, mas só se ele ainda estiver aqui: a
+        // remoção de colaborador é soft-delete e deixa `contatos.responsavelId`
+        // apontando pro removido de propósito — o histórico de quem atendeu
+        // quem tem que sobreviver à saída da pessoa. Herdar sem checar criava
+        // compromisso novo no nome de quem saiu, numa agenda que ninguém abre.
         const [c] = await db.select({ responsavelId: contatos.responsavelId })
           .from(contatos)
+          .innerJoin(
+            colaboradores,
+            and(eq(colaboradores.id, contatos.responsavelId), eq(colaboradores.ativo, true)),
+          )
           .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, perm.escritorioId)))
           .limit(1);
         if (c?.responsavelId) responsavelId = c.responsavelId;
@@ -827,8 +836,17 @@ export const agendaRouter = router({
       // Se vinculada a cliente e sem responsável explícito, herda do cliente
       let responsavelId = input.responsavelId;
       if (!responsavelId && input.contatoId) {
+        // Herda o responsável do cliente, mas só se ele ainda estiver aqui: a
+        // remoção de colaborador é soft-delete e deixa `contatos.responsavelId`
+        // apontando pro removido de propósito — o histórico de quem atendeu
+        // quem tem que sobreviver à saída da pessoa. Herdar sem checar criava
+        // compromisso novo no nome de quem saiu, numa agenda que ninguém abre.
         const [c] = await db.select({ responsavelId: contatos.responsavelId })
           .from(contatos)
+          .innerJoin(
+            colaboradores,
+            and(eq(colaboradores.id, contatos.responsavelId), eq(colaboradores.ativo, true)),
+          )
           .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, perm.escritorioId)))
           .limit(1);
         if (c?.responsavelId) responsavelId = c.responsavelId;
