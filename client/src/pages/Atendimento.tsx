@@ -551,7 +551,18 @@ export default function Atendimento() {
     onSuccess: (r) => { toast.success(`${r.arquivadas} conversa(s) arquivada(s).`); rC(); rArq(); },
     onError: (e: any) => toast.error(e.message),
   });
-  const { data: countsData } = trpc.crm.contarConversas.useQuery(filtrosBackend, { refetchInterval: 5000 });
+  // Os pills contam o MESMO conjunto que a lista: busca e pasta Arquivadas
+  // vão junto. Sem isso, buscar um nome deixava a lista com 1 conversa e o
+  // pill "Todas" com o escritório inteiro.
+  const { data: countsData } = trpc.crm.contarConversas.useQuery(
+    mostrarArquivadas
+      ? { arquivadas: true, ...(inboxBuscaDebounced ? { busca: inboxBuscaDebounced } : {}) }
+      : {
+          ...(filtrosBackend ?? {}),
+          ...(inboxBuscaDebounced ? { busca: inboxBuscaDebounced } : {}),
+        },
+    { refetchInterval: 5000 },
+  );
   // Listas pros dropdowns de filtro. listarAtendentes já é usado no detalhe;
   // listarSetores entra novo no escopo principal pra alimentar o filtro.
   const { data: atendentesPrincipal } = trpc.crm.listarAtendentes.useQuery();

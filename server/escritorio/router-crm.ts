@@ -271,10 +271,15 @@ export const crmRouter = router({
       dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
       somenteNovos: z.boolean().optional(),
+      // Mesmo motivo do canalId acima: sem estes dois campos o zod os
+      // descartava e os pills contavam um conjunto diferente do que a
+      // lista mostrava quando havia busca ou pasta Arquivadas aberta.
+      busca: z.string().optional(),
+      arquivadas: z.boolean().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
-      if (!perm.allowed) return { todos: 0, aguardando: 0, em_atendimento: 0, resolvido: 0 };
+      if (!perm.allowed) return { todos: 0, aguardando: 0, em_atendimento: 0, resolvido: 0, fechado: 0 };
       const filtros: any = { ...(input ?? {}) };
       if (!perm.verTodos && perm.verProprios) {
         filtros.atendenteId = perm.colaboradorId;
