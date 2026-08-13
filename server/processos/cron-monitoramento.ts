@@ -771,26 +771,30 @@ export async function cobrarMonitoramentosMensais(): Promise<void> {
     // Cobra
     if (cr) {
       const novoSaldo = saldo - custo;
-      await db
-        .update(motorCreditos)
-        .set({
-          saldo: novoSaldo,
-          totalConsumido: cr.totalConsumido + custo,
-        })
-        .where(eq(motorCreditos.id, cr.id));
+      // Saldo e extrato juntos: cobrar sem registrar (ou registrar sem
+      // cobrar) deixa o escritório com um saldo que o extrato não explica.
+      await db.transaction(async (tx) => {
+        await tx
+          .update(motorCreditos)
+          .set({
+            saldo: novoSaldo,
+            totalConsumido: cr.totalConsumido + custo,
+          })
+          .where(eq(motorCreditos.id, cr.id));
 
-      await db.insert(motorTransacoes).values({
-        escritorioId: mon.escritorioId,
-        tipo: "consumo",
-        quantidade: custo,
-        saldoAnterior: saldo,
-        saldoDepois: novoSaldo,
-        operacao:
-          mon.tipoMonitoramento === "novas_acoes"
-            ? "monitorar_pessoa_mes"
-            : "monitorar_processo_mes",
-        detalhes: `Mensalidade ${mon.apelido ?? mon.searchKey}`,
-        userId: mon.criadoPor,
+        await tx.insert(motorTransacoes).values({
+          escritorioId: mon.escritorioId,
+          tipo: "consumo",
+          quantidade: custo,
+          saldoAnterior: saldo,
+          saldoDepois: novoSaldo,
+          operacao:
+            mon.tipoMonitoramento === "novas_acoes"
+              ? "monitorar_pessoa_mes"
+              : "monitorar_processo_mes",
+          detalhes: `Mensalidade ${mon.apelido ?? mon.searchKey}`,
+          userId: mon.criadoPor,
+        });
       });
 
       await db
