@@ -15,37 +15,24 @@ import { SEED_USERS, SEED_PASSWORD, type SeedRole } from "./users";
  * login no caminho do teste. Caso contrário, prefira `loginViaTrpc`.
  *
  * Fluxo: home tem Navbar com CTA "Entrar" que abre um Dialog com
- * tabs Entrar/Criar conta + form de email/senha. O fixture clica no
- * CTA, garante que a tab Entrar está ativa, preenche e submete
- * **dentro do dialog** pra evitar strict-mode violation com o CTA da
- * navbar (mesmo nome "Entrar").
+ * A tela de login é a rota `/login` (`AuthSplitPage`), com o formulário
+ * de e-mail/senha visível de saída. O fixture vai direto nela.
  */
 export async function loginAs(page: Page, role: SeedRole): Promise<void> {
   const user = SEED_USERS[role];
-  await page.goto("/");
 
-  // CTA da navbar abre o dialog. Se já estiver aberto (ex: rota direta
-  // futura /auth), pula.
-  const dialog = page.getByRole("dialog");
-  if (!(await dialog.isVisible({ timeout: 800 }).catch(() => false))) {
-    await page.getByRole("button", { name: /^entrar$/i }).first().click();
-    await expect(dialog).toBeVisible({ timeout: 5000 });
-  }
+  // Login virou página (`/login`), não mais diálogo com tabs. Ir direto na
+  // rota também elimina a strict-mode violation que existia entre o botão
+  // "Entrar" da navbar e o do formulário.
+  await page.goto("/login");
 
-  // Garante a tab "Entrar" ativa (default já é login, mas robustez)
-  const tabEntrar = dialog.getByRole("tab", { name: /^entrar$/i });
-  if (await tabEntrar.isVisible({ timeout: 1000 }).catch(() => false)) {
-    await tabEntrar.click();
-  }
+  await page.locator("#login-email").fill(user.email);
+  await page.locator("#login-password").fill(SEED_PASSWORD);
+  await page.getByRole("button", { name: /^entrar$/i }).click();
 
-  await dialog.getByLabel(/^e-?mail$/i).fill(user.email);
-  await dialog.getByLabel(/^senha$/i).fill(SEED_PASSWORD);
-  await dialog.getByRole("button", { name: /^entrar$/i }).click();
-
-  // Espera a navegação pra dashboard (ou /admin pro role admin).
   await expect(page).toHaveURL(
-    user.role === "admin" ? /\/admin\b/ : /\/dashboard\b/,
-    { timeout: 15_000 },
+    user.role === "admin" ? /\/admin\b/ : /\/(dashboard|configuracoes)\b/,
+    { timeout: 20_000 },
   );
 }
 

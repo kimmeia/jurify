@@ -9,23 +9,59 @@
 
 import { expect, type Page } from "@playwright/test";
 
+/**
+ * Ruído que NÃO é defeito do app — request cancelada pelo próprio browser.
+ *
+ * Acontece o tempo todo em SPA: componente desmonta e aborta o fetch em
+ * voo, navegação corta polling, HMR derruba conexão. O console registra
+ * como "error" mesmo sem nada quebrado.
+ *
+ * Esta lista é a diferença entre um listener que o time usa e um que fica
+ * `fixme` — foi por acusar isso que o auto-teste da Camada 1 ficou
+ * suspenso desde 12/05. Cada padrão novo aqui precisa de justificativa:
+ * a régua é "o browser cancelou", não "esse erro incomoda".
+ *
+ * Erro de JS de verdade (`pageerror`) nunca é filtrado.
+ */
+const RUIDO_DE_REDE = [
+  "net::ERR_CONNECTION_RESET",
+  "net::ERR_ABORTED",
+  "net::ERR_NETWORK_CHANGED",
+  "net::ERR_INTERNET_DISCONNECTED",
+];
+
+function ehRuido(texto: string): boolean {
+  return RUIDO_DE_REDE.some((p) => texto.includes(p));
+}
+
 export interface ConsoleErrorMonitor {
   errors: string[];
+  /** O que foi filtrado — visível pra ninguém confundir filtro com ausência. */
+  ignorados: string[];
   expectNone(): void;
 }
 
 export function watchConsoleErrors(page: Page): ConsoleErrorMonitor {
   const errors: string[] = [];
+  const ignorados: string[] = [];
   page.on("console", (msg) => {
-    if (msg.type() === "error") errors.push(msg.text());
+    if (msg.type() !== "error") return;
+    const texto = msg.text();
+    if (ehRuido(texto)) ignorados.push(texto);
+    else errors.push(texto);
   });
+  // Exceção não capturada é sempre defeito, sem exceção de filtro.
   page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
   return {
     errors,
+    ignorados,
     expectNone() {
       expect(
         errors,
-        `Erros JS no console detectados:\n${errors.join("\n")}`,
+        `Erros JS no console detectados:\n${errors.join("\n")}` +
+          (ignorados.length > 0
+            ? `\n(${ignorados.length} ruído(s) de rede ignorado(s))`
+            : ""),
       ).toEqual([]);
     },
   };
@@ -49,6 +85,11 @@ export function watchNetwork5xx(page: Page): NetworkMonitor {
     }
   });
   page.on("requestfailed", (req) => {
+    // Request cancelada não é falha do servidor: navegar durante um fetch
+    // em voo, ou desmontar componente com polling ativo, dispara isto sem
+    // nada estar quebrado. 5xx de verdade chega pelo listener de response.
+    const erro = req.failure()?.errorText ?? "";
+    if (ehRuido(erro)) return;
     failures.push({ url: req.url(), status: 0 });
   });
   return {

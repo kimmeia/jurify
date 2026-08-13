@@ -31,7 +31,16 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        // Ambiente que já tem Chromium instalado fora do cache do
+        // Playwright (container de CI/sandbox com browser pré-instalado)
+        // aponta CHROMIUM_PATH e roda sem baixar nada. Sem a variável, o
+        // comportamento é o padrão — o browser do cache do Playwright.
+        ...(process.env.CHROMIUM_PATH
+          ? { launchOptions: { executablePath: process.env.CHROMIUM_PATH } }
+          : {}),
+      },
     },
   ],
   // Quando rodando local, sobe o app automaticamente. Em CI, o workflow

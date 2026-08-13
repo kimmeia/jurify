@@ -14,6 +14,7 @@
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { and, desc, eq, gte, or, isNull } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -119,7 +120,15 @@ interface EscInfo {
 /** Resolve o escritório do usuário (lança erro legível se ausente). */
 async function getEsc(userId: number): Promise<EscInfo> {
   const esc = await getEscritorioPorUsuario(userId);
-  if (!esc) throw new Error("Escritório não encontrado.");
+  // `TRPCError` tipado, não `Error` cru: erro sem código conhecido vira
+  // INTERNAL_SERVER_ERROR (ver EXPECTED_CODES em `_core/trpc.ts`), ou seja
+  // 500 pro client e evento no Sentry. Mas usuário logado ainda sem
+  // escritório é estado legítimo — quem confirmou o e-mail e não criou o
+  // escritório passa por aqui. Isso enchia o painel de erros de 5xx que
+  // não eram falha de servidor nenhuma.
+  if (!esc) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
+  }
   return { escritorioId: esc.escritorio.id, colaboradorId: esc.colaborador.id };
 }
 
