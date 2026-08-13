@@ -35,6 +35,7 @@ import {
   kanbanCards,
   kanbanColunas,
   kanbanFunis,
+  leads,
   motorMonitoramentos,
   smartflowExecucoes,
 } from "../../drizzle/schema";
@@ -54,6 +55,7 @@ const TABELAS = [
   "kanban_cards",
   "kanban_colunas",
   "kanban_funis",
+  "leads",
   "colaboradores",
   "smartflow_execucoes",
   "convites_colaborador",
@@ -235,6 +237,21 @@ async function semear() {
     { ...baseCard, titulo: "Card sem responsável", arquivado: false },
   ]);
   esperado["KAN-01"] = [cardRuim.id];
+
+  // LEA-01 — lead fechado sem data de fechamento. A regra guarda a
+  // unificação dos painéis, que passaram a recortar fechamento por
+  // `fechadoEm`: lead sem a coluna preenchida sumiria de todo relatório.
+  const [leadRuim] = await db
+    .insert(leads)
+    .values({ escritorioId: escA.id, contatoId: contatoA.id, etapaFunil: "fechado_ganho" })
+    .$returningId();
+  await db.insert(leads).values([
+    // Fechado com data — saudável.
+    { escritorioId: escA.id, contatoId: contatoA.id, etapaFunil: "fechado_ganho", fechadoEm: ONTEM },
+    // Em aberto sem data — o normal, não é violação.
+    { escritorioId: escA.id, contatoId: contatoA.id, etapaFunil: "novo" },
+  ]);
+  esperado["LEA-01"] = [leadRuim.id];
 }
 
 describe("robô auditor contra banco real", () => {

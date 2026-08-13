@@ -583,6 +583,27 @@ export const relatoriosRouter = router({
     for (const r of msgRows) msgsDirecao[r.direcao as string] = Number(r.total);
     const totalConversas = Object.values(conversasPorStatus).reduce((a, b) => a + b, 0);
 
+    // Duas leituras de "conversas no período", e as duas são úteis:
+    //   totalConversas      — conversas ABERTAS no período (entrada de gente nova)
+    //   conversasAtendidas  — conversas com MENSAGEM no período (trabalho da equipe)
+    // O Inbox mostra a segunda; este relatório mostrava só a primeira com o
+    // rótulo "Atendimentos", e as duas telas discordavam sem explicação.
+    // Cliente recorrente que volta a escrever entra na segunda e não na
+    // primeira — por isso elas não podem ser unificadas, só nomeadas.
+    const [atendidasRow] = await db
+      .select({ total: sql<number>`COUNT(DISTINCT ${conversas.id})` })
+      .from(conversas)
+      .innerJoin(mensagens, eq(mensagens.conversaId, conversas.id))
+      .where(and(
+        eq(conversas.escritorioId, eid),
+        gte(mensagens.createdAt, dataInicio),
+        lte(mensagens.createdAt, dataFim),
+        ...filtroAtendConv,
+        ...filtroCanal,
+        ...filtroUfConv,
+      ));
+    const conversasAtendidas = Number(atendidasRow?.total ?? 0);
+
     // ─── Leads: funil, agregados, por dia, motivos de perda ────────────
     // Canal filtra via join com conversas (NULL → fora se filtroCanal ativo).
     const joinCanalLead = (q: any) => input?.canalId
@@ -1095,6 +1116,7 @@ export const relatoriosRouter = router({
       // KPIs Operação (mantém compat com nomes antigos)
       conversasPorStatus,
       totalConversas,
+      conversasAtendidas,
       mensagensEnviadas: msgsDirecao["saida"] || 0,
       mensagensRecebidas: msgsDirecao["entrada"] || 0,
       totalMensagens: (msgsDirecao["saida"] || 0) + (msgsDirecao["entrada"] || 0),
@@ -1554,8 +1576,8 @@ export const relatoriosRouter = router({
         .where(and(
           eq(leads.escritorioId, eid),
           eq(leads.etapaFunil, "fechado_ganho"),
-          gte(leads.createdAt, dataInicio),
-          lte(leads.createdAt, dataFim),
+          gte(leads.fechadoEm, dataInicio),
+          lte(leads.fechadoEm, dataFim),
         ));
       const contatosFechadosAnt = db
         .select({ id: leads.contatoId })
@@ -1563,8 +1585,8 @@ export const relatoriosRouter = router({
         .where(and(
           eq(leads.escritorioId, eid),
           eq(leads.etapaFunil, "fechado_ganho"),
-          gte(leads.createdAt, dataInicioAnterior),
-          lte(leads.createdAt, dataFimAnterior),
+          gte(leads.fechadoEm, dataInicioAnterior),
+          lte(leads.fechadoEm, dataFimAnterior),
         ));
 
       const [agg] = await db
@@ -1638,8 +1660,8 @@ export const relatoriosRouter = router({
           eq(leads.escritorioId, eid),
           eq(leads.etapaFunil, "fechado_ganho"),
           inArray(leads.responsavelId, idsAtendentes),
-          gte(leads.createdAt, dataInicio),
-          lte(leads.createdAt, dataFim),
+          gte(leads.fechadoEm, dataInicio),
+          lte(leads.fechadoEm, dataFim),
         ));
       const [contratosFechadosAntAgg] = await db
         .select({ total: sql<number>`COUNT(*)` })
@@ -1648,8 +1670,8 @@ export const relatoriosRouter = router({
           eq(leads.escritorioId, eid),
           eq(leads.etapaFunil, "fechado_ganho"),
           inArray(leads.responsavelId, idsAtendentes),
-          gte(leads.createdAt, dataInicioAnterior),
-          lte(leads.createdAt, dataFimAnterior),
+          gte(leads.fechadoEm, dataInicioAnterior),
+          lte(leads.fechadoEm, dataFimAnterior),
         ));
       const contratosFechados = Number(contratosFechadosAtualAgg?.total || 0);
       const clientesFechados = Number(contratosFechadosAtualAgg?.clientes || 0);
@@ -1703,8 +1725,8 @@ export const relatoriosRouter = router({
           eq(leads.escritorioId, eid),
           inArray(leads.responsavelId, idsAtendentes),
           eq(leads.etapaFunil, "fechado_ganho"),
-          gte(leads.createdAt, dataInicio),
-          lte(leads.createdAt, dataFim),
+          gte(leads.fechadoEm, dataInicio),
+          lte(leads.fechadoEm, dataFim),
         ))
         .groupBy(leads.responsavelId);
 
@@ -1889,8 +1911,8 @@ export const relatoriosRouter = router({
           eq(leads.escritorioId, eid),
           eq(leads.etapaFunil, "fechado_ganho"),
           inArray(leads.responsavelId, idsAtendentes),
-          gte(leads.createdAt, dataInicio),
-          lte(leads.createdAt, dataFim),
+          gte(leads.fechadoEm, dataInicio),
+          lte(leads.fechadoEm, dataFim),
           sql`${leads.origemLead} IS NOT NULL AND ${leads.origemLead} != ''`,
         ));
 
@@ -2018,8 +2040,8 @@ export const relatoriosRouter = router({
           eq(leads.escritorioId, eid),
           eq(leads.responsavelId, input.atendenteId),
           eq(leads.etapaFunil, "fechado_ganho"),
-          gte(leads.createdAt, dataInicio),
-          lte(leads.createdAt, dataFim),
+          gte(leads.fechadoEm, dataInicio),
+          lte(leads.fechadoEm, dataFim),
         ))
         .groupBy(leads.contatoId);
 
@@ -2032,8 +2054,8 @@ export const relatoriosRouter = router({
         .where(and(
           eq(leads.escritorioId, eid),
           eq(leads.etapaFunil, "fechado_ganho"),
-          gte(leads.createdAt, dataInicio),
-          lte(leads.createdAt, dataFim),
+          gte(leads.fechadoEm, dataInicio),
+          lte(leads.fechadoEm, dataFim),
         ));
 
       // ── Cobranças pagas COMISSIONÁVEIS de clientes fechados no período ─────

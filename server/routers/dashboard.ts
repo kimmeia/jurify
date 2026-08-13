@@ -47,6 +47,7 @@ import {
 } from "../_core/asaas-status";
 import { contatosVisiveisFinanceiro } from "../escritorio/contatos-visiveis-financeiro";
 import { contarMovimentacoesNaoLidas } from "../processos/contador-movimentacoes";
+import { corteAtraso } from "../escritorio/prazo-atrasado";
 import { buildFiltroComissaoSQL } from "../escritorio/router-financeiro";
 import { inArray } from "drizzle-orm";
 import {
@@ -1083,8 +1084,8 @@ export const dashboardRouter = router({
         .where(and(
           eq(leads.escritorioId, eid),
           eq(leads.etapaFunil, "fechado_ganho"),
-          gte(leads.createdAt, dataInicio),
-          lte(leads.createdAt, dataFim),
+          gte(leads.fechadoEm, dataInicio),
+          lte(leads.fechadoEm, dataFim),
         ));
 
       // 1) Leads fechados por atendente (etapaFunil=fechado_ganho)
@@ -1098,8 +1099,8 @@ export const dashboardRouter = router({
           eq(leads.escritorioId, eid),
           inArray(leads.responsavelId, idsAtendentes),
           eq(leads.etapaFunil, "fechado_ganho"),
-          gte(leads.createdAt, dataInicio),
-          lte(leads.createdAt, dataFim),
+          gte(leads.fechadoEm, dataInicio),
+          lte(leads.fechadoEm, dataFim),
         ))
         .groupBy(leads.responsavelId);
 
@@ -1442,7 +1443,11 @@ export const dashboardRouter = router({
       const { dataInicio, dataFim, dataInicioStr, dataFimStr } =
         resolverPeriodoNoFuso(new Date(), tz, input);
 
-      const agora = new Date();
+      // Corte único de atraso: a meia-noite de hoje no fuso do escritório.
+      // Antes era `new Date()` — a hora exata —, então uma tarefa marcada
+      // para hoje às 9h virava "atrasada" às 9h01 aqui e continuava no prazo
+      // no badge da Agenda e no Painel Geral. Ver prazo-atrasado.ts.
+      const agora = corteAtraso(tz);
       // Estratégia de período pra evitar "estagiário olhando dia 2 do mês
       // não vê tarefa antiga ainda pendente":
       //

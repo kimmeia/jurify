@@ -13,7 +13,7 @@
  * Toda consulta aqui é SELECT. Não importe nada que escreva neste arquivo.
  */
 
-import { and, eq, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import {
   asaasCobrancas,
   clienteProcessos,
@@ -26,6 +26,7 @@ import {
   escritorioCreditos,
   escritorioTransacoes,
   kanbanCards,
+  leads,
   motorMonitoramentos,
   smartflowExecucoes,
 } from "../../../drizzle/schema";
@@ -466,6 +467,59 @@ export const REGRAS: Regra[] = [
           removidoPor: l.removidoPor,
           cargo: l.cargo,
           userId: l.userId,
+        },
+      }));
+    },
+  },
+
+  {
+    id: "LEA-01",
+    titulo: "Lead fechado sem data de fechamento",
+    severidade: "alto",
+    dominio: "comissoes",
+    nivel: "B",
+    tabela: "leads",
+    invariante:
+      "Lead em etapa fechada (ganho ou perdido) precisa ter fechadoEm. " +
+      "Todo relatório de fechamento recorta o período por essa coluna — sem " +
+      "ela o negócio existe no funil e não aparece em mês nenhum.",
+    correcaoPrevista:
+      "Preencher com a data de criação do lead, que é o que a migration de " +
+      "backfill usou. Escolher data de fechamento retroativa mexe em base de " +
+      "comissão, então passa por decisão humana.",
+    shadow: true,
+    async detectar(db, limite) {
+      // Guarda a unificação: os painéis e relatórios de fechamento passaram
+      // a recortar por fechadoEm. Se algum caminho novo de escrita esquecer
+      // de preencher a coluna, o lead sumiria dos números em silêncio — em
+      // vez disso, aparece aqui.
+      const linhas = await db
+        .select({
+          id: leads.id,
+          escritorioId: leads.escritorioId,
+          etapaFunil: leads.etapaFunil,
+          responsavelId: leads.responsavelId,
+          valorEstimado: leads.valorEstimado,
+          createdAt: leads.createdAt,
+        })
+        .from(leads)
+        .where(
+          and(
+            inArray(leads.etapaFunil, ["fechado_ganho", "fechado_perdido"]),
+            isNull(leads.fechadoEm),
+          ),
+        )
+        .limit(limite);
+
+      return linhas.map((l) => ({
+        escritorioId: l.escritorioId,
+        alvoId: l.id,
+        descricao: `Lead ${l.id} está em "${l.etapaFunil}" sem data de fechamento`,
+        valores: {
+          etapaFunil: l.etapaFunil,
+          responsavelId: l.responsavelId,
+          valorEstimado: l.valorEstimado,
+          criadoEm: l.createdAt?.toISOString() ?? null,
         },
       }));
     },
