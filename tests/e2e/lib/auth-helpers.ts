@@ -13,25 +13,25 @@ import { expect, type Page } from "@playwright/test";
 import { seedTestEscritorio, TEST_PASSWORD } from "./seed-escritorio";
 import type { TestEscritorio, TestRole, TestUser } from "./types";
 
+/**
+ * O login deixou de ser diálogo e virou página própria (`/login`,
+ * `AuthSplitPage` com `hideTabs`). Os helpers continuavam procurando
+ * `getByRole("dialog")` e a tab "Entrar", então falhavam no `beforeEach`
+ * de metade dos specs — que ficaram `fixme` em vez de consertados.
+ *
+ * Aqui vamos direto na rota: sem CTA de navbar, sem tab, sem
+ * strict-mode violation entre o botão do topo e o do formulário.
+ */
 export async function loginAs(page: Page, user: TestUser): Promise<void> {
-  await page.goto("/");
+  await page.goto("/login");
 
-  const dialog = page.getByRole("dialog");
-  if (!(await dialog.isVisible({ timeout: 800 }).catch(() => false))) {
-    await page.getByRole("button", { name: /^entrar$/i }).first().click();
-    await expect(dialog).toBeVisible({ timeout: 5000 });
-  }
+  await page.locator("#login-email").fill(user.email);
+  await page.locator("#login-password").fill(TEST_PASSWORD);
+  await page.getByRole("button", { name: /^entrar$/i }).click();
 
-  const tabEntrar = dialog.getByRole("tab", { name: /^entrar$/i });
-  if (await tabEntrar.isVisible({ timeout: 1000 }).catch(() => false)) {
-    await tabEntrar.click();
-  }
-
-  await dialog.getByLabel(/^e-?mail$/i).fill(user.email);
-  await dialog.getByLabel(/^senha$/i).fill(TEST_PASSWORD);
-  await dialog.getByRole("button", { name: /^entrar$/i }).click();
-
-  await expect(page).toHaveURL(/\/dashboard\b/, { timeout: 15_000 });
+  // Pós-login o destino é decidido em duas navegações (Home.tsx), então
+  // esperar por /dashboard direto é corrida. Basta ter saído do /login.
+  await expect(page).not.toHaveURL(/\/login\b/, { timeout: 20_000 });
 }
 
 export interface SeedAndLoginResult {

@@ -64,6 +64,12 @@ export async function seedTestEscritorio(
       passwordHash,
       loginMethod: "email",
       role: "user",
+      // Sem isto o login para em "Confirme seu email antes de entrar" e
+      // todo teste que usa `loginAs` morre no beforeEach. O escritório
+      // semeado representa uma conta JÁ ativa; o fluxo de confirmação tem
+      // spec próprio (`signup.spec.ts`). Mesma decisão do seed-staging.
+      emailVerificado: true,
+      emailVerificadoEm: new Date(),
     });
     const id = (insertion as { insertId: number }).insertId;
     created[cargo] = { id, email, name, cargo };

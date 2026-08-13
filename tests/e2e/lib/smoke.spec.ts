@@ -20,23 +20,17 @@ import {
   TEST_CARGOS,
 } from "./index";
 
-test.describe.fixme("Camada 1 — Fundação E2E", () => {
-  // Marcado fixme: os 3 testes abaixo passam isoladamente em ambiente
-  // controlado, mas falham consistente no CI desde 12/05 (introdução
-  // dessa infra). Causas conhecidas:
-  //  1. `watchConsoleErrors.expectNone()` pega ruído natural do dashboard
-  //     (Sentry init warnings, fallbacks de polling sem credenciais).
-  //  2. `watchNetwork5xx.expectNone()` pega 5xx das queries de background
-  //     do dashboard (notificações, asaas.status quando integração não
-  //     existe no CI, etc).
-  //  3. Os helpers da Camada 1 continuam disponíveis pra serem
-  //     importados por outros specs (`from "../lib"`); só o auto-test
-  //     dos próprios helpers fica suspenso até decisão de relaxar os
-  //     listeners ou criar um perfil "ci-friendly" deles.
-  //
-  // Padrão segue o já documentado no repo: testes E2E que dependem de
-  // selectors variáveis ou ambiente externo ficam fixme até validação
-  // manual em staging.
+test.describe("Camada 1 — Fundação E2E", () => {
+  // Ficou `fixme` de 12/05 até 14/08. Eram três defeitos reais, não
+  // ruído inevitável:
+  //   1. `loginAs` procurava um diálogo de login que virou página (/login);
+  //   2. o seed criava usuário sem `emailVerificado`, e a tela parava em
+  //      "Confirme seu email antes de entrar";
+  //   3. os listeners acusavam request cancelada pelo browser
+  //      (ERR_CONNECTION_RESET) como se fosse erro de JS.
+  // Os três estão corrigidos e o filtro de ruído está documentado em
+  // `page-helpers.ts`. Se voltar a falhar, é regressão — não relaxe o
+  // listener sem entender o que ele pegou.
   test("seedAndLogin('dono') cria escritório isolado e loga no dashboard", async ({ page }) => {
     const consoleMonitor = watchConsoleErrors(page);
     const networkMonitor = watchNetwork5xx(page);
