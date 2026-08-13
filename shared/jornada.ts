@@ -192,3 +192,32 @@ export function jornadaPadrao(): JornadaSemanal {
   const e: ExpedienteDoDia = { inicio: "08:00", fim: "18:00", intervaloMin: 60 };
   return { 1: { ...e }, 2: { ...e }, 3: { ...e }, 4: { ...e }, 5: { ...e } };
 }
+
+/**
+ * O intervalo que se PRESUME ter acontecido quando ninguém bateu a pausa.
+ *
+ * Existe pra fechar uma assimetria que premiava o esquecimento: o previsto já
+ * nasce com o intervalo descontado (12:00–18:00 com 1h de almoço são 5h de
+ * trabalho), mas o realizado só descontava a pausa REGISTRADA. Quem entrava
+ * meio-dia, saía 17h40 e não clicava em "sair pro almoço" aparecia com +40min
+ * de saldo — por uma hora de almoço que tirou e não marcou. Todo dia, pra
+ * todo mundo que esquece o botão.
+ *
+ * Duas guardas:
+ *
+ *  - pausa registrada manda. Ela é fato observado; presumir por cima seria
+ *    descontar o almoço duas vezes;
+ *  - só presume se a pessoa ficou MAIS tempo que o próprio intervalo. Quem
+ *    trabalhou quarenta minutos não tirou uma hora de almoço no meio, e
+ *    descontar zeraria o dia dela.
+ */
+export function intervaloPresumido(
+  minutosTrabalhados: number | null,
+  minutosPausaRegistrada: number,
+  intervaloContratado: number,
+): number {
+  if (minutosPausaRegistrada > 0) return 0;
+  if (intervaloContratado <= 0) return 0;
+  if (minutosTrabalhados == null || minutosTrabalhados <= intervaloContratado) return 0;
+  return intervaloContratado;
+}

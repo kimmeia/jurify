@@ -27,6 +27,7 @@ import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { calcularJornada, totalDoPeriodo, type DiaPontoBruto } from "../../shared/ponto";
 import {
   expedienteDoDia,
+  intervaloPresumido,
   minutosPrevistos,
   normalizarJornada,
   pontualidade,
@@ -197,8 +198,36 @@ function montarEspelho(
         ? pontualidade(jornada, j.dia, minutosLocais(j.entrada, fuso))
         : { atrasoMin: 0, atrasado: false };
 
+      // O intervalo do contrato PRESUMIDO, quando ninguém bateu a pausa.
+      //
+      // Sem isto o espelho premia quem esquece de marcar o almoço: o previsto
+      // já vem com o intervalo descontado (12h–18h com 1h de almoço = 5h), mas
+      // o realizado só desconta a pausa que foi REGISTRADA. Quem entrou 12h e
+      // saiu 17h40 sem clicar em "sair pro almoço" aparecia com +40min de
+      // saldo por uma hora de almoço que ele tirou e não marcou — todo dia,
+      // pra todo mundo. Presumir é a mesma escolha da saída deduzida: quando o
+      // sistema não observou, ele assume o combinado e DIZ que assumiu, em vez
+      // de fingir que o intervalo não existiu.
+      //
+      // Só presume quando a pessoa ficou tempo suficiente pra ter almoçado —
+      // quem trabalhou 40 minutos não tirou uma hora de intervalo.
+      const expediente = expedienteDoDia(jornada, j.dia);
+      const intervaloContratado = expediente?.intervaloMin ?? 0;
+      const intervaloPresumidoMin = intervaloPresumido(
+        j.minutos,
+        j.minutosPausa,
+        intervaloContratado,
+      );
+      const minutosLiquidos =
+        j.minutos != null ? Math.max(j.minutos - intervaloPresumidoMin, 0) : null;
+
       return {
         ...j,
+        // `minutos` é o LÍQUIDO — é ele que a tabela mostra, que o total soma e
+        // que o saldo compara. O bruto fica ao lado pra quem quiser conferir.
+        minutos: minutosLiquidos,
+        minutosBrutos: j.minutos,
+        intervaloPresumidoMin,
         previstoMin: previsto,
         // Saldo só existe quando os dois lados existem. Dia aberto ou sem
         // jornada não vira "-8h" — seria cobrar uma falta que ninguém apurou.
@@ -208,8 +237,8 @@ function montarEspelho(
           falta === "abonada" || falta === "aguardando"
             ? null
             : falta === "descontada"
-              ? previsto > 0 ? (j.minutos ?? 0) - previsto : null
-              : j.minutos != null && previsto > 0 ? j.minutos - previsto : null,
+              ? previsto > 0 ? (minutosLiquidos ?? 0) - previsto : null
+              : minutosLiquidos != null && previsto > 0 ? minutosLiquidos - previsto : null,
         atrasoMin: p.atrasoMin,
         atrasado: p.atrasado,
         ocorrencias: doDia,
