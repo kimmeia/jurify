@@ -573,8 +573,14 @@ export async function contarConversasPorStatus(escritorioId: number, filtros?: {
   dataInicio?: string;
   dataFim?: string;
   somenteNovos?: boolean;
-}): Promise<{ todos: number; aguardando: number; em_atendimento: number; resolvido: number }> {
-  const zero = { todos: 0, aguardando: 0, em_atendimento: 0, resolvido: 0 };
+  // `busca` e `arquivadas` faltavam aqui, e o Inbox passa os dois pra lista.
+  // Com busca ativa, ou com a pasta Arquivadas aberta, os pills descreviam
+  // um conjunto e a lista mostrava outro — mesmo defeito que já tinha
+  // acontecido com `canalId`.
+  arquivadas?: boolean;
+  busca?: string;
+}): Promise<{ todos: number; aguardando: number; em_atendimento: number; resolvido: number; fechado: number }> {
+  const zero = { todos: 0, aguardando: 0, em_atendimento: 0, resolvido: 0, fechado: 0 };
   const db = await getDb();
   if (!db) return zero;
   const base = await condicoesConversa(db, escritorioId, filtros);
@@ -596,6 +602,10 @@ export async function contarConversasPorStatus(escritorioId: number, filtros?: {
     if (r.status === "aguardando") out.aguardando = n;
     else if (r.status === "em_atendimento") out.em_atendimento = n;
     else if (r.status === "resolvido") out.resolvido = n;
+    // `fechado` não tem pill, mas entra em "Todas" (a lista sem filtro de
+    // status mostra essas conversas). Devolvido pra que a soma dos rótulos
+    // possa ser conferida contra o total em vez de divergir em silêncio.
+    else if (r.status === "fechado") out.fechado = n;
   }
   return out;
 }
