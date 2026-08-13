@@ -16,7 +16,7 @@ import { getDb } from "../db";
 import { toIsoString } from "../_core/dates";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { agendamentos, agendamentoLembretes, agendamentoAnexos, tarefas, contatos, users, colaboradores, escritorios, setores } from "../../drizzle/schema";
-import { eq, and, desc, gte, lte, or, like, asc, inArray } from "drizzle-orm";
+import { eq, and, desc, gte, lt, lte, or, like, asc, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { criarNotificacao } from "../processos/router-notificacoes";
 import { checkPermission } from "./check-permission";
@@ -710,10 +710,12 @@ export const agendaRouter = router({
         ...tOwn,
       ));
 
+    // `lt`, não `lte`: o dia inteiro é do usuário, então compromisso marcado
+    // para a meia-noite de hoje ainda está no prazo. Ver prazo-atrasado.ts.
     const agAtrasados = await db.select({ id: agendamentos.id }).from(agendamentos)
       .where(and(
         eq(agendamentos.escritorioId, escritorioId),
-        lte(agendamentos.dataInicio, hojeInicio),
+        lt(agendamentos.dataInicio, hojeInicio),
         or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento")),
         ...agOwn,
       ));
@@ -721,7 +723,7 @@ export const agendaRouter = router({
     const tAtrasados = await db.select({ id: tarefas.id }).from(tarefas)
       .where(and(
         eq(tarefas.escritorioId, escritorioId),
-        lte(tarefas.dataVencimento, hojeInicio),
+        lt(tarefas.dataVencimento, hojeInicio),
         or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
         ...tOwn,
       ));

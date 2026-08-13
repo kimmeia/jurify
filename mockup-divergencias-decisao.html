@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-borda:#ddd6fe;
+    --alerta:#dc2626; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ambar:#d97706; --ciano:#0891b2;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:22px 30px; height:100%; display:flex; flex-direction:column; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; margin-bottom:14px; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); max-width:760px; line-height:1.45; }
+  .sub b { color:var(--corpo); font-weight:600; }
+  .legenda { display:flex; align-items:center; gap:9px; border:1px solid var(--borda); background:var(--surface);
+             border-radius:11px; padding:9px 13px; }
+  .legenda .t { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .legenda .v { font-size:12.5px; font-weight:600; color:var(--corpo); }
+
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; padding:13px 15px;
+          display:flex; flex-direction:column; overflow:hidden; }
+  .lista { flex:1; display:grid; grid-template-rows:repeat(3,1fr); gap:12px; overflow:hidden; }
+
+  .head { display:flex; align-items:center; gap:11px; flex:0 0 auto; }
+  .num-bola { width:24px; height:24px; border-radius:50%; background:var(--tinta); color:#fff;
+              display:flex; align-items:center; justify-content:center;
+              font-size:12px; font-weight:800; flex:0 0 auto; }
+  .head .t { font-family:'Poppins'; font-weight:700; font-size:16px; letter-spacing:-.005em; }
+  .head .onde { font-size:11.5px; color:var(--fraco); font-weight:500; }
+  .pend { margin-left:auto; border:1px solid #fde68a; background:#fffbeb; color:#b45309;
+          border-radius:999px; padding:4px 11px; font-size:10.5px; font-weight:700; letter-spacing:.03em; white-space:nowrap; }
+
+  .duo { margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:11px; flex:0 0 auto; }
+  .def { border:1px solid var(--borda); border-radius:11px; padding:10px 13px; display:flex; align-items:flex-start; gap:13px; }
+  .def.rec { border-color:var(--acento-borda); background:var(--acento-bg); }
+  .def .esq { flex:1; min-width:0; }
+  .def .lbl { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .def.rec .lbl { color:var(--acento-claro); }
+  .def .regra { margin-top:3px; font-size:13px; font-weight:600; color:var(--tinta); line-height:1.3; }
+  .def .fonte { margin-top:5px; display:inline-block; font-size:11px; font-weight:700; color:var(--corpo);
+                background:var(--hairline); border-radius:5px; padding:2px 7px; }
+  .def.rec .fonte { background:#f5f3ff; color:var(--acento-forte); }
+  .def .onde2 { margin-top:5px; font-size:11px; color:var(--mudo); font-weight:500; line-height:1.35; }
+  .def .dir { text-align:right; flex:0 0 auto; }
+  .def .n { font-family:'Poppins'; font-weight:700; font-size:27px; line-height:1; letter-spacing:-.01em; }
+  .def.rec .n { color:var(--acento); }
+  .def .u { margin-top:2px; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--fraco); }
+
+  .caso { margin-top:10px; background:var(--hairline-2); border:1px solid var(--borda); border-left:3px solid var(--ciano);
+          border-radius:9px; padding:9px 12px; display:flex; align-items:center; gap:11px; flex:0 0 auto; }
+  .caso .mk { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); white-space:nowrap; }
+  .caso p { font-size:12.5px; color:var(--corpo); line-height:1.4; }
+  .caso p b { color:var(--tinta); font-weight:700; }
+
+  .opcoes { margin-top:auto; padding-top:10px; display:flex; align-items:center; gap:9px; flex:0 0 auto; }
+  .op { border:1px solid var(--borda); background:var(--surface); border-radius:9px; padding:7px 13px;
+        font-size:12.5px; font-weight:600; color:var(--corpo); display:flex; align-items:center; gap:8px; }
+  .op .rd { width:13px; height:13px; border-radius:50%; border:1.7px solid var(--fantasma); flex:0 0 auto; }
+  .op.rec { border:1.5px solid var(--acento); background:var(--acento-bg); color:var(--acento-forte); font-weight:700; }
+  .op.rec .rd { border-color:var(--acento); background:var(--acento); box-shadow:inset 0 0 0 2.5px #fff; }
+  .op .tag { font-size:10px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--acento-claro); }
+  .opcoes .nota { margin-left:auto; font-size:11.5px; color:var(--fraco); font-weight:500; }
+  .opcoes .nota b { color:var(--mudo); font-weight:700; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">Três números que dependem de você</div>
+        <div class="sub">
+          Nos casos abaixo as duas leituras estão <b>tecnicamente certas</b> — o que falta é decidir qual é a
+          verdade do escritório. Escolha uma e eu corrijo os dois lados e travo com teste de conciliação.
+        </div>
+      </div>
+      <div class="legenda">
+        <span class="t">Dados de</span>
+        <span class="v">Maio/2026 · escritório inteiro</span>
+      </div>
+    </div>
+
+    <div class="lista">
+
+      <!-- ───────────── 1 ───────────── -->
+      <div class="card">
+        <div class="head">
+          <div class="num-bola">1</div>
+          <div>
+            <div class="t">Quantos negócios fechei no mês</div>
+            <div class="onde">Painel Geral · Painel Comercial · Relatório Comercial</div>
+          </div>
+          <div class="pend">AGUARDANDO DECISÃO</div>
+        </div>
+
+        <div class="duo">
+          <div class="def rec">
+            <div class="esq">
+              <div class="lbl">Leitura A</div>
+              <div class="regra">Conta pela data em que o negócio foi fechado</div>
+              <span class="fonte">leads.fechadoEm</span>
+              <div class="onde2">Hoje é o que o <b>Painel Geral</b> mostra</div>
+            </div>
+            <div class="dir">
+              <div class="n">12</div>
+              <div class="u">fechados</div>
+            </div>
+          </div>
+          <div class="def">
+            <div class="esq">
+              <div class="lbl">Leitura B</div>
+              <div class="regra">Conta pela data em que o lead entrou</div>
+              <span class="fonte">leads.createdAt</span>
+              <div class="onde2">Hoje é o que o <b>Painel Comercial</b> mostra</div>
+            </div>
+            <div class="dir">
+              <div class="n">7</div>
+              <div class="u">fechados</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="caso">
+          <span class="mk">O caso que separa</span>
+          <p>
+            <b>Construtora Alfa</b> — lead entrou em <b>28/04</b>, contrato assinado em <b>05/05</b>.
+            Em A ele conta no fechamento de maio; em B ele conta em abril, no mês em que chegou.
+            Os 5 de diferença são todos assim: negócio de mês anterior fechado agora.
+          </p>
+        </div>
+
+        <div class="opcoes">
+          <div class="op rec"><span class="rd"></span>Vale a data do fechamento<span class="tag">recomendo</span></div>
+          <div class="op"><span class="rd"></span>Vale a data de entrada do lead</div>
+          <div class="op"><span class="rd"></span>Manter as duas, com rótulos diferentes</div>
+          <div class="nota">Comissão e meta usam <b>fechadoEm</b> hoje</div>
+        </div>
+      </div>
+
+      <!-- ───────────── 2 ───────────── -->
+      <div class="card">
+        <div class="head">
+          <div class="num-bola">2</div>
+          <div>
+            <div class="t">O que conta como atrasado</div>
+            <div class="onde">Badge da Agenda · Painel Geral · Painel Operacional · contador de Tarefas</div>
+          </div>
+          <div class="pend">AGUARDANDO DECISÃO</div>
+        </div>
+
+        <div class="duo">
+          <div class="def rec">
+            <div class="esq">
+              <div class="lbl">Leitura A</div>
+              <div class="regra">O dia todo é seu — só atrasa depois que o dia vira</div>
+              <span class="fonte">vencimento &lt; hoje</span>
+              <div class="onde2">Hoje é o que o <b>Painel Geral</b> mostra</div>
+            </div>
+            <div class="dir">
+              <div class="n">8</div>
+              <div class="u">atrasados</div>
+            </div>
+          </div>
+          <div class="def">
+            <div class="esq">
+              <div class="lbl">Leitura B</div>
+              <div class="regra">Passou da hora marcada, já atrasou</div>
+              <span class="fonte">vencimento &lt; agora</span>
+              <div class="onde2">Hoje é o que o <b>Painel Operacional</b> e o contador de <b>Tarefas</b> mostram</div>
+            </div>
+            <div class="dir">
+              <div class="n">11</div>
+              <div class="u">atrasados</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="caso">
+          <span class="mk">O caso que separa</span>
+          <p>
+            <b>Protocolar contestação Alfa</b>, marcada para <b>hoje às 9h</b>. Agora são 15h.
+            Em A ela ainda está no prazo até a virada do dia; em B já entrou como atrasada às 9h01.
+            Existe ainda um terceiro número: o <b>badge da Agenda</b> usa <b>≤ hoje</b> e mostra
+            <b>9</b>, porque inclui o compromisso marcado para a meia-noite de hoje.
+          </p>
+        </div>
+
+        <div class="opcoes">
+          <div class="op rec"><span class="rd"></span>Atrasa quando o dia vira<span class="tag">recomendo</span></div>
+          <div class="op"><span class="rd"></span>Atrasa na hora marcada</div>
+          <div class="op"><span class="rd"></span>Depende: tarefa por dia, audiência por hora</div>
+          <div class="nota">Hoje são <b>4 definições</b> em 4 telas</div>
+        </div>
+      </div>
+
+      <!-- ───────────── 3 ───────────── -->
+      <div class="card">
+        <div class="head">
+          <div class="num-bola">3</div>
+          <div>
+            <div class="t">Quantas conversas houve no período</div>
+            <div class="onde">Inbox do Atendimento · Relatório de Atendimento</div>
+          </div>
+          <div class="pend">AGUARDANDO DECISÃO</div>
+        </div>
+
+        <div class="duo">
+          <div class="def rec">
+            <div class="esq">
+              <div class="lbl">Leitura A</div>
+              <div class="regra">Conversa que teve mensagem no período</div>
+              <span class="fonte">mensagens.createdAt</span>
+              <div class="onde2">Hoje é o que o <b>Inbox</b> mostra — é o trabalho que a equipe teve</div>
+            </div>
+            <div class="dir">
+              <div class="n">184</div>
+              <div class="u">conversas</div>
+            </div>
+          </div>
+          <div class="def">
+            <div class="esq">
+              <div class="lbl">Leitura B</div>
+              <div class="regra">Conversa que nasceu no período</div>
+              <span class="fonte">conversas.createdAt</span>
+              <div class="onde2">Hoje é o que o <b>Relatório</b> mostra — é a entrada de gente nova</div>
+            </div>
+            <div class="dir">
+              <div class="n">96</div>
+              <div class="u">conversas</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="caso">
+          <span class="mk">O caso que separa</span>
+          <p>
+            <b>Marina Tavares</b> abriu conversa em <b>janeiro</b> e voltou a escrever em <b>12/05</b>.
+            Em A ela conta como conversa de maio, porque a equipe atendeu em maio; em B não conta,
+            porque não é cliente nova. Os 88 de diferença são clientes recorrentes.
+          </p>
+        </div>
+
+        <div class="opcoes">
+          <div class="op rec"><span class="rd"></span>Vale a atividade no período<span class="tag">recomendo</span></div>
+          <div class="op"><span class="rd"></span>Vale a data de abertura</div>
+          <div class="op"><span class="rd"></span>Manter as duas, com rótulos diferentes</div>
+          <div class="nota">Mudar o relatório muda o <b>histórico</b> que ele já mostrou</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

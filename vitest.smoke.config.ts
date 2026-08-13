@@ -27,5 +27,9 @@ export default defineConfig({
     environment: "node",
     include: ["tests/smoke/**/*.test.ts"],
     testTimeout: 120_000,
+    // Um banco, vários arquivos: rodando em paralelo, o seed de um apaga o
+    // cenário do outro no meio da asserção. Cada arquivo passava sozinho e
+    // a suíte inteira falhava — o tipo de falha que só aparece no CI.
+    fileParallelism: false,
   },
 });
