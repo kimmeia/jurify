@@ -28,6 +28,16 @@ const RUIDO_DE_REDE = [
   "net::ERR_ABORTED",
   "net::ERR_NETWORK_CHANGED",
   "net::ERR_INTERNET_DISCONNECTED",
+  // Como o `fetch` abortado aparece pro código do client: o wrapper de
+  // tRPC loga "Failed to fetch" no console. Medido: o robô de jornada
+  // acusava isso só na PRIMEIRA e na ÚLTIMA rota da varredura — as duas
+  // pontas onde ele navega (ou encerra) com query em voo. Some no meio da
+  // lista, onde nada é interrompido. Reproduziu igual em dev e em build
+  // de produção, o que descartou o Vite.
+  //
+  // Queda real de servidor não passa despercebida por causa disto: ela
+  // aparece como 5xx ou requestfailed não-abortado no `watchNetwork5xx`.
+  "Failed to fetch",
 ];
 
 function ehRuido(texto: string): boolean {

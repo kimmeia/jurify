@@ -1233,6 +1233,40 @@ async function ensureCanalAutoReplyColumn(connection: mysql.Connection): Promise
   }
 }
 
+/**
+ * Colunas e índices que o código exige e que nenhuma migration de arquivo
+ * cria — rename de `users.stripeCustomerId` → `asaasCustomerId`, campos de
+ * bloqueio, etc.
+ *
+ * Roda DUAS vezes por execução, e isso não é redundância:
+ *
+ *   - antes das migrations, porque migrations antigas assumem que essas
+ *     colunas já existem em banco que veio de versão anterior;
+ *   - DEPOIS delas, porque em banco NOVO a tabela `users` só passa a
+ *     existir durante as migrations. Rodando só antes, cada `ensure*`
+ *     desistia com "Tabela 'users' ainda não existe" e o banco terminava
+ *     sem `asaasCustomerId`, `bloqueado` e `motivoBloqueio` — schema que o
+ *     código não consegue nem gravar um usuário.
+ *
+ * Produção nunca sentiu porque lá a tabela já existia quando isto passou a
+ * rodar; quem sentia era ambiente novo (staging recriado, restore de
+ * backup, dev que clona o repo). Quem descobriu foi o robô de jornada, ao
+ * tentar semear um escritório em banco criado do zero.
+ *
+ * Toda função aqui é idempotente (checa antes de alterar e engole "já
+ * existe"), então a segunda passada é barata quando não há o que fazer.
+ */
+async function garantirSchemaEssencial(connection: mysql.Connection): Promise<void> {
+  await ensureAuthColumns(connection);
+  await ensureContatoColumns(connection);
+  await ensureAsaasBillingColumns(connection);
+  await ensureAsaasIdempotency(connection);
+  await ensureColaboradoresUnique(connection);
+  await ensureClienteControlSchema(connection);
+  await ensureJuditMonitoramentoColumns(connection);
+  await ensureCanalAutoReplyColumn(connection);
+}
+
 export async function runMigrations(): Promise<void> {
   const url = process.env.DATABASE_URL;
   if (!url) {
@@ -1253,14 +1287,7 @@ export async function runMigrations(): Promise<void> {
   try {
     // ─── 1. Garantia hardcoded de schema essencial ──────────────────────────
     // Roda SEMPRE, independente das migrations baseadas em arquivo.
-    await ensureAuthColumns(connection);
-    await ensureContatoColumns(connection);
-    await ensureAsaasBillingColumns(connection);
-    await ensureAsaasIdempotency(connection);
-    await ensureColaboradoresUnique(connection);
-    await ensureClienteControlSchema(connection);
-    await ensureJuditMonitoramentoColumns(connection);
-    await ensureCanalAutoReplyColumn(connection);
+    await garantirSchemaEssencial(connection);
 
     // Atualizar enum tipoCanal para incluir calcom e chatgpt
     try {
@@ -1542,6 +1569,11 @@ export async function runMigrations(): Promise<void> {
         log.info({ file, warnings }, "Migration aplicada com sucesso");
       }
     }
+
+    // Segunda passada: em banco novo, `users` e companhia só passaram a
+    // existir agora. Sem isto o banco fica sem as colunas que só o bloco
+    // hardcoded adiciona, e o primeiro INSERT de usuário falha.
+    await garantirSchemaEssencial(connection);
 
     log.info(
       { aplicadas, puladas, comErro, total: files.length },
