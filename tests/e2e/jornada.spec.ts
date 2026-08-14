@@ -59,16 +59,18 @@ test.describe("Robô de jornada — todas as rotas do app logado", () => {
   /**
    * Sob demanda, não a cada PR: `ROBO_JORNADA=1 pnpm test:e2e`.
    *
-   * Dois motivos. O previsto desde o plano (`docs/test-automation-plan.md`
-   * §7): varredura de rotas é job agendado, não porteiro de merge — são
-   * ~5 min e ela responde "como está o app", não "esse diff quebrou algo".
+   * Motivo é o previsto no plano (`docs/test-automation-plan.md` §7):
+   * varredura de rotas é job agendado, não porteiro de merge — são ~4,5
+   * min e ela responde "como está o app", não "esse diff quebrou algo".
    *
-   * E um motivo honesto: na primeira execução real ele reportou 26 erros
-   * em `/processos` ("Failed to fetch") sem erro correspondente no log do
-   * servidor. Pode ser o app, pode ser o ambiente onde rodei (banco
-   * montado por `drizzle-kit push` em vez das migrations, dev server sob
-   * carga). Enquanto isso não estiver separado, ele não vira gate — teste
-   * que falha por motivo não compreendido ensina o time a ignorar teste.
+   * As 19 rotas passam. Os "Failed to fetch" que ele acusava na primeira
+   * versão eram artefato da própria medição: navegar para a rota seguinte
+   * (ou encerrar o teste) aborta as queries em voo, e o client de tRPC
+   * loga o abort como erro. Apareciam só na PRIMEIRA e na ÚLTIMA rota,
+   * nunca no meio, e reproduziam igual contra build de produção — o que
+   * descartou o servidor de dev. Estão filtrados como ruído de rede em
+   * `page-helpers.ts`, com queda real de servidor ainda coberta pelo
+   * monitor de 5xx.
    */
   test.skip(
     !process.env.ROBO_JORNADA,
