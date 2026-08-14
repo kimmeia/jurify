@@ -54,6 +54,7 @@ import { agenteChatRouter } from "./integracoes/router-agente-chat";
 import { adminIntegracoesRouter } from "./integracoes/router-admin-integracoes";
 import { adminErrosRouter } from "./admin/router-admin-erros";
 import { adminBackupRouter } from "./admin/router-admin-backup";
+import { adminManutencaoRouter } from "./admin/router-admin-manutencao";
 import { adminEmailLogRouter } from "./admin/router-admin-email-log";
 import { adminTribunaisRouter } from "./admin/router-admin-tribunais";
 import { adminRoboAuditorRouter } from "./admin/router-admin-auditoria-robo";
@@ -152,6 +153,7 @@ export const appRouter = router({
   adminIntegracoes: adminIntegracoesRouter,
   adminErros: adminErrosRouter,
   adminBackup: adminBackupRouter,
+  adminManutencao: adminManutencaoRouter,
   adminEmailLog: adminEmailLogRouter,
   adminTribunais: adminTribunaisRouter,
   adminRoboAuditor: adminRoboAuditorRouter,
