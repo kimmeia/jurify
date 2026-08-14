@@ -13,6 +13,9 @@
  * sem exceção de JS, sem 5xx, e sem spinner que nunca sai. É o tipo de
  * defeito que aparece pro usuário antes de aparecer em qualquer métrica.
  *
+ * Roda sob demanda — `ROBO_JORNADA=1 pnpm test:e2e`. O porquê está no
+ * guard logo abaixo, junto com o que ainda falta pra ele virar gate.
+ *
  * Pré-requisitos: app no ar (`pnpm dev` ou PLAYWRIGHT_BASE_URL) e
  * DATABASE_URL — o robô semeia o próprio escritório e apaga no fim.
  */
