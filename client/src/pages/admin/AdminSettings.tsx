@@ -10,10 +10,11 @@ import {
   Settings, Heart, Server, CreditCard, Shield, Globe, Clock,
   CheckCircle2, XCircle, AlertTriangle, Cpu, HardDrive,
   MessageSquare, Users, Building2, Radio, Bot, UserCheck,
-  Radar, KeyRound, Coins, Activity, Plug, Database, HeartPulse,
+  Radar, KeyRound, Coins, Activity, Plug, Database, HeartPulse, Wrench,
 } from "lucide-react";
 import AdminIntegrations from "./AdminIntegrations";
 import AdminBackups from "./AdminBackups";
+import AdminManutencao from "./AdminManutencao";
 
 function HealthIcon({ status }: { status: string }) {
   if (status === "ok") return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
@@ -101,6 +102,9 @@ export default function AdminSettings() {
             </TabsTrigger>
             <TabsTrigger value="planos" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
               <CreditCard className="h-3.5 w-3.5" /> Planos
+            </TabsTrigger>
+            <TabsTrigger value="manutencao" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+              <Wrench className="h-3.5 w-3.5" /> Manutenção
             </TabsTrigger>
           </TabsList>
         </div>
@@ -274,6 +278,10 @@ export default function AdminSettings() {
 
         <TabsContent value="integracoes" className="mt-4">
           <AdminIntegrations />
+        </TabsContent>
+
+        <TabsContent value="manutencao" className="mt-4">
+          <AdminManutencao />
         </TabsContent>
 
         <TabsContent value="backups" className="mt-4">
