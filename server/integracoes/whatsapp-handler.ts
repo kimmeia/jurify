@@ -130,6 +130,32 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
   // sem resposta por a conversa estar na pasta Arquivadas.
   await desarquivarSeArquivada(conversaId);
 
+  // Contabiliza o EPISÓDIO: entra no atendimento aberto, ou abre outro quando
+  // o anterior foi resolvido ou morreu de silêncio. É o que separa "cliente
+  // que voltou" de "conversa antiga" — a conversa é reaproveitada pra sempre,
+  // o atendimento não. Não lança: contabilidade não derruba recebimento.
+  {
+    const { registrarMensagemNoEpisodio } = await import("../atendimento/episodios");
+    const { getDb: pegarDb } = await import("../db");
+    const dbEp = await pegarDb();
+    let atendenteAtual: number | null = null;
+    if (dbEp) {
+      const { conversas: convTbl } = await import("../../drizzle/schema");
+      const { eq: igual } = await import("drizzle-orm");
+      const [c] = await dbEp.select({ atendenteId: convTbl.atendenteId })
+        .from(convTbl).where(igual(convTbl.id, conversaId)).limit(1);
+      atendenteAtual = c?.atendenteId ?? null;
+    }
+    await registrarMensagemNoEpisodio({
+      escritorioId,
+      conversaId,
+      contatoId,
+      atendenteId: atendenteAtual,
+      em: new Date(),
+      daEquipe: false,
+    });
+  }
+
   // Evento `system` do WhatsApp (ex: cliente trocou de número): fica registrado
   // na timeline como nota, mas NÃO é mensagem do cliente — não muda status, não
   // vira toast "nova mensagem", não cria lead e não dispara SmartFlow/auto-reply.

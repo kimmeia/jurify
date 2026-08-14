@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --ambar:#b45309; --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+    --ciano:#0891b2; --ciano-bg:#ecfeff; --ciano-borda:#a5f3fc;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:20px 26px; height:100%; display:flex; flex-direction:column; gap:11px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:25px; letter-spacing:-.01em; }
+  .sub { margin-top:2px; font-size:12.5px; color:var(--mudo); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:15px; }
+  .cab { display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+         padding:10px 16px; border-bottom:1px solid var(--borda); }
+
+  /* ── linha do tempo ── */
+  .tl { flex:0 0 auto; }
+  .tl-corpo { padding:14px 16px 16px; }
+  .fio { position:relative; height:5px; background:var(--hairline); border-radius:3px; margin:0 0 4px; }
+  .ep { position:absolute; top:0; height:5px; border-radius:3px; }
+  .ep-1 { left:2%; width:22%; background:var(--ciano); }
+  .ep-2 { left:70%; width:26%; background:var(--acento); }
+  .gap { position:absolute; left:24%; width:46%; top:-7px; text-align:center;
+         font-size:10px; color:var(--fraco); font-weight:600; }
+  .caixas { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:22px; }
+  .cx { border:1px solid var(--borda); border-radius:12px; padding:11px 13px; }
+  .cx-1 { border-color:var(--ciano-borda); background:var(--ciano-bg); }
+  .cx-2 { border-color:#ddd6fe; background:var(--acento-bg); }
+  .cx-cab { display:flex; align-items:center; gap:8px; }
+  .pin { border-radius:999px; padding:2px 8px; font-size:9px; font-weight:700;
+         text-transform:uppercase; letter-spacing:.04em; color:#fff; }
+  .p1 { background:var(--ciano); } .p2 { background:var(--acento); }
+  .cx-quando { font-size:11px; font-weight:700; color:var(--corpo); }
+  .cx-tit { margin-top:5px; font-size:13.5px; font-weight:700; }
+  .cx-lin { margin-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:11px; color:var(--corpo-2); }
+  .cx-lin b { color:var(--tinta); }
+  .msg { margin-top:8px; background:var(--surface); border:1px solid var(--borda); border-radius:9px;
+         padding:7px 10px; font-size:11.5px; color:var(--corpo); font-style:italic; }
+
+  /* ── antes / depois ── */
+  .comp { flex:1 1 auto; display:grid; grid-template-columns:1fr 1fr; gap:11px; min-height:0; }
+  .painel { display:flex; flex-direction:column; overflow:hidden; }
+  .tag { border-radius:999px; padding:3px 9px; font-size:9px; font-weight:700;
+         text-transform:uppercase; letter-spacing:.04em; }
+  .t-hoje { background:var(--alerta-bg); color:var(--alerta-forte); border:1px solid var(--alerta-borda); }
+  .t-novo { background:var(--ok-bg); color:#047857; border:1px solid var(--ok-borda); }
+  .filtro { display:flex; align-items:center; gap:7px; padding:8px 16px; background:var(--hairline-2);
+            border-bottom:1px solid var(--hairline); font-size:10.5px; color:var(--mudo); }
+  .filtro b { color:var(--tinta); }
+  .tabela { padding:2px 16px 0; }
+  .lin { display:grid; grid-template-columns:1fr 92px 60px; align-items:center; gap:8px;
+         padding:8px 0; border-bottom:1px solid var(--hairline); font-size:12px; }
+  .lin:last-child { border-bottom:0; }
+  .lin .q { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
+  .th { font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+        color:var(--fraco); border-bottom:1px solid var(--borda); padding-bottom:5px; }
+  .nada { color:var(--fraco); font-style:italic; }
+  .veredito { margin:auto 16px 12px; border-radius:10px; padding:9px 11px; font-size:11px; line-height:1.5; }
+  .v-ruim { background:var(--alerta-bg); border:1px solid var(--alerta-borda); color:#7f1d1d; }
+  .v-bom { background:var(--ok-bg); border:1px solid var(--ok-borda); color:#065f46; }
+  .veredito b { font-weight:700; }
+
+  /* ── decisão ── */
+  .dec { flex:0 0 auto; }
+  .opts { display:grid; grid-template-columns:repeat(3,1fr); }
+  .opt { padding:11px 15px 12px; border-right:1px solid var(--borda); }
+  .opt:last-child { border-right:0; }
+  .opt-cab { display:flex; align-items:center; gap:7px; }
+  .num { width:19px; height:19px; border-radius:6px; background:var(--hairline); color:var(--corpo);
+         font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .opt.rec .num { background:var(--acento); color:#fff; }
+  .opt h4 { font-size:12.5px; font-weight:700; }
+  .opt p { margin-top:4px; font-size:10.5px; line-height:1.5; color:var(--corpo-2); }
+  .opt p b { color:var(--tinta); }
+  .rec-selo { margin-left:auto; background:var(--acento); color:#fff; border-radius:999px;
+              padding:2px 8px; font-size:8.5px; font-weight:700; letter-spacing:.04em; }
+  .contra { margin-top:6px; font-size:10px; color:var(--alerta-forte); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topo">
+    <div>
+      <div class="h1">Atendimento vira episódio</div>
+      <div class="sub">A conversa continua sendo o fio com a pessoa. O atendimento passa a ser o recorte de trabalho — com início, fim e dono.</div>
+    </div>
+    <div style="text-align:right">
+      <div class="micro">Exemplo</div>
+      <div style="font-size:13px;font-weight:600;margin-top:2px">Raimundo Nonato Ferreira</div>
+      <div style="font-size:11px;color:var(--mudo)">2 atendimentos · 2 atendentes · 1 conversa</div>
+    </div>
+  </div>
+
+  <!-- LINHA DO TEMPO -->
+  <div class="card tl">
+    <div class="cab">
+      <div class="h2">Uma conversa, dois atendimentos</div>
+      <span class="micro">a linha cinza é a conversa · os trechos coloridos são os atendimentos</span>
+    </div>
+    <div class="tl-corpo">
+      <div class="fio">
+        <div class="ep ep-1"></div>
+        <div class="ep ep-2"></div>
+        <div class="gap">5 meses sem falar</div>
+      </div>
+
+      <div class="caixas">
+        <div class="cx cx-1">
+          <div class="cx-cab">
+            <span class="pin p1">Atendimento 1</span>
+            <span class="cx-quando">12/03 09:14 → 18/03 16:20 · encerrado</span>
+          </div>
+          <div class="cx-tit">Eduardo Ramalho · SDR</div>
+          <div class="cx-lin">
+            <span><b>14</b> mensagens</span>
+            <span>1ª resposta em <b>6min</b></span>
+            <span>fechou: <b>virou cliente</b></span>
+          </div>
+          <div class="msg">“Bom dia! Trabalhei 3 anos sem registro e queria saber se dá pra entrar com alguma coisa.”</div>
+        </div>
+
+        <div class="cx cx-2">
+          <div class="cx-cab">
+            <span class="pin p2">Atendimento 2</span>
+            <span class="cx-quando">12/08 10:02 → em andamento</span>
+          </div>
+          <div class="cx-tit">Milena Mello · Verificação processual</div>
+          <div class="cx-lin">
+            <span><b>6</b> mensagens</span>
+            <span>1ª resposta em <b>21min</b></span>
+            <span>ainda <b>aberto</b></span>
+          </div>
+          <div class="msg">“Doutora, bom dia. Saiu alguma coisa no meu processo? Faz um tempo que não tenho notícia.”</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANTES / DEPOIS -->
+  <div class="comp">
+    <div class="card painel">
+      <div class="cab">
+        <div class="h2">Relatório hoje</div>
+        <span class="tag t-hoje">conta conversas</span>
+      </div>
+      <div class="filtro">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2.5" stroke="#64748b" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" stroke="#64748b" stroke-width="2" stroke-linecap="round"/></svg>
+        Comercial Manhã · <b>01/08 a 13/08</b>
+      </div>
+      <div class="tabela">
+        <div class="lin th"><span>Atendente</span><span class="q">Atendimentos</span><span class="q">Raimundo</span></div>
+        <div class="lin"><span>Pablo Sousa · SDR</span><span class="q">15</span><span class="q nada">—</span></div>
+        <div class="lin"><span>Eduardo Ramalho · SDR</span><span class="q">12</span><span class="q nada">—</span></div>
+        <div class="lin"><span>Josefa Siqueira · Atendente</span><span class="q">11</span><span class="q nada">—</span></div>
+        <div class="lin"><span>Milena Mello · Verificação</span><span class="q">9</span><span class="q nada">—</span></div>
+        <div class="lin"><span>Reginaldo Alves · Atendente</span><span class="q">8</span><span class="q nada">—</span></div>
+        <div class="lin" style="border-top:1px solid var(--borda);font-weight:700">
+          <span>Total do período</span>
+          <span class="q">55</span>
+          <span class="q nada">—</span>
+        </div>
+      </div>
+      <div class="veredito v-ruim">
+        O Raimundo <b>não aparece</b>: a conversa dele foi criada em março, e é essa a data que o
+        relatório usa. O trabalho de agosto some — e com ele todo cliente que voltou.<br>
+        E o número de cada pessoa é do <b>dono atual</b> da conversa, não de quem atendeu: o campo
+        de atendente é um só e é sobrescrito na transferência.
+      </div>
+    </div>
+
+    <div class="card painel" style="border-color:#a7f3d0">
+      <div class="cab">
+        <div class="h2">Relatório com episódio</div>
+        <span class="tag t-novo">conta atendimentos</span>
+      </div>
+      <div class="filtro">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2.5" stroke="#64748b" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" stroke="#64748b" stroke-width="2" stroke-linecap="round"/></svg>
+        Comercial Manhã · <b>01/08 a 13/08</b>
+      </div>
+      <div class="tabela">
+        <div class="lin th"><span>Atendente</span><span class="q">Atendimentos</span><span class="q">Raimundo</span></div>
+        <div class="lin"><span>Milena Mello · Verificação</span><span class="q">23</span><span class="q" style="color:var(--ok)">✓ 1</span></div>
+        <div class="lin"><span>Eduardo Ramalho · SDR</span><span class="q">18</span><span class="q nada">—</span></div>
+        <div class="lin"><span>Pablo Sousa · SDR</span><span class="q">17</span><span class="q nada">—</span></div>
+        <div class="lin"><span>Josefa Siqueira · Atendente</span><span class="q">8</span><span class="q nada">—</span></div>
+        <div class="lin"><span>Reginaldo Alves · Atendente</span><span class="q">5</span><span class="q nada">—</span></div>
+        <div class="lin" style="border-top:1px solid var(--borda);font-weight:700">
+          <span>Total do período</span>
+          <span class="q">71</span>
+          <span class="q" style="color:var(--ok)">✓ 1</span>
+        </div>
+      </div>
+      <div class="veredito v-bom">
+        O atendimento 2 <b>começou em 12/08</b>, então conta em agosto — no nome da Milena, que o
+        abriu. O do Eduardo fica <b>congelado em março</b>. Ninguém reescreve o passado de ninguém.<br>
+        <b>71 contra 55</b>: os 16 a mais são os clientes que <b>voltaram</b> no período. E as
+        linhas mudam de tamanho porque cada uma passa a contar quem <b>abriu</b>, não quem está
+        com a conversa hoje.
+      </div>
+    </div>
+  </div>
+
+  <!-- A DECISÃO -->
+  <div class="card dec">
+    <div class="cab">
+      <div class="h2">A decisão é sua: o que ENCERRA um atendimento?</div>
+      <span class="micro">é o que define onde um episódio acaba e o outro começa — e portanto o que vai ser contado</span>
+    </div>
+    <div class="opts">
+      <div class="opt">
+        <div class="opt-cab"><span class="num">1</span><h4>Só quando alguém resolve</h4></div>
+        <p>O atendente clica em <b>Resolver</b> e o episódio fecha ali. Preciso, porque quem estava na conversa é quem diz que acabou.</p>
+        <p class="contra">✗ Depende de disciplina. Quem esquece deixa o episódio aberto pra sempre, e o próximo contato entra nele.</p>
+      </div>
+      <div class="opt">
+        <div class="opt-cab"><span class="num">2</span><h4>Sozinho, após N dias em silêncio</h4></div>
+        <p>Sem mensagem nova por <b>N dias</b>, o episódio fecha. Não depende de ninguém lembrar de nada.</p>
+        <p class="contra">✗ Você precisa escolher o N — e ele muda a conta. Com 7 dias, um cliente que sumiu duas semanas abre episódio novo; com 30, não.</p>
+      </div>
+      <div class="opt rec">
+        <div class="opt-cab"><span class="num">3</span><h4>Os dois juntos</h4><span class="rec-selo">RECOMENDO</span></div>
+        <p>Resolver fecha na hora. O silêncio é a <b>rede</b> pra quem esqueceu de resolver.</p>
+        <p>No caso do Raimundo os dois funcionam: o Eduardo resolveu em março, e os 5 meses de silêncio garantiriam a separação mesmo se ele não tivesse resolvido.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

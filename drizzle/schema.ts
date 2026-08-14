@@ -4246,3 +4246,47 @@ export const roboAuditorVarreduras = mysqlTable(
 );
 
 export type RoboAuditorVarredura = typeof roboAuditorVarreduras.$inferSelect;
+
+/**
+ * Atendimento como EPISÓDIO — o recorte de trabalho dentro da conversa.
+ *
+ * A conversa é o fio contínuo com a pessoa; o atendimento tem início, fim e
+ * dono próprios. Os dois campos de atendente são o ponto: `atendenteAbriu`
+ * fica congelado (responde "quem iniciou") e `atendenteAtual` muda na
+ * transferência, sem reescrever o passado de ninguém.
+ */
+export const atendimentos = mysqlTable(
+  "atendimentos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdAtd").notNull(),
+    conversaId: int("conversaIdAtd").notNull(),
+    /** Redundante com a conversa: todo relatório recorta por pessoa. */
+    contatoId: int("contatoIdAtd").notNull(),
+
+    abertoEm: timestamp("abertoEmAtd").defaultNow().notNull(),
+    fechadoEm: timestamp("fechadoEmAtd"),
+    motivoFechamento: mysqlEnum("motivoFechamentoAtd", ["resolvido", "silencio", "manual"]),
+
+    /** Congelado. É o que responde "quem iniciou atendimento no período". */
+    atendenteAbriu: int("atendenteAbriuAtd"),
+    /** Muda na transferência. */
+    atendenteAtual: int("atendenteAtualAtd"),
+
+    /** O relógio da regra do silêncio. */
+    ultimaMensagemEm: timestamp("ultimaMensagemEmAtd"),
+    /** Primeira resposta do escritório NESTE episódio. */
+    primeiraRespostaEm: timestamp("primeiraRespostaEmAtd"),
+
+    createdAt: timestamp("createdAtAtd").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAtAtd").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    porConversa: index("idx_atd_conversa").on(t.conversaId, t.fechadoEm),
+    porEscritorio: index("idx_atd_esc_aberto").on(t.escritorioId, t.abertoEm),
+    porContato: index("idx_atd_contato").on(t.contatoId),
+    porAbriu: index("idx_atd_abriu").on(t.atendenteAbriu, t.abertoEm),
+  }),
+);
+
+export type Atendimento = typeof atendimentos.$inferSelect;
