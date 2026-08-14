@@ -29,6 +29,9 @@ interface Resultado {
   conversasComMaisDeUm: number;
   conversasVazias: number;
   restantes: number;
+  historicoRecuperado: number;
+  episodiosAnteriores: number;
+  aberturasCorrigidas: number;
   completo: boolean;
 }
 
@@ -76,6 +79,10 @@ export default function AdminManutencao() {
   const feito = s ? s.totalConversas - s.conversasSemEpisodio : 0;
   const pct = s && s.totalConversas > 0 ? Math.round((feito / s.totalConversas) * 100) : 0;
   const pendente = (s?.conversasSemEpisodio ?? 0) > 0;
+  // A operação é retomável e idempotente, e a segunda fase (recuperar o começo
+  // de conversas que já tinham episódio) só roda depois da primeira acabar —
+  // travar o botão em 100% deixaria essa parte inalcançável.
+  const podeRodar = (s?.totalConversas ?? 0) > 0;
 
   return (
     <div className="space-y-6">
@@ -115,7 +122,7 @@ export default function AdminManutencao() {
           )}
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => simular.mutate()} disabled={rodando || !pendente}>
+            <Button variant="outline" onClick={() => simular.mutate()} disabled={rodando || !podeRodar}>
               {simular.isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
@@ -126,7 +133,7 @@ export default function AdminManutencao() {
 
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button disabled={rodando || !pendente}>
+                <Button disabled={rodando || !podeRodar}>
                   {aplicar.isPending ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
@@ -187,6 +194,21 @@ export default function AdminManutencao() {
                     Essas {resultado.conversasComMaisDeUm.toLocaleString("pt-BR")} são clientes que
                     voltaram depois de um tempo. Cada volta era um atendimento que sumia da
                     contagem — e é o que passa a aparecer no relatório.
+                  </span>
+                </p>
+              )}
+
+              {resultado.historicoRecuperado > 0 && (
+                <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+                  <History className="h-3.5 w-3.5 mt-0.5 shrink-0 text-violet-500" />
+                  <span>
+                    {resultado.historicoRecuperado.toLocaleString("pt-BR")} conversas já tinham
+                    atendimento aberto quando o módulo subiu e estavam sem o começo:{" "}
+                    {resultado.episodiosAnteriores.toLocaleString("pt-BR")} atendimentos antigos{" "}
+                    {resultado.aplicado ? "recuperados" : "seriam recuperados"} e{" "}
+                    {resultado.aberturasCorrigidas.toLocaleString("pt-BR")} datas de abertura{" "}
+                    {resultado.aplicado ? "voltaram" : "voltariam"} pro dia em que a demanda
+                    começou, em vez do dia do deploy.
                   </span>
                 </p>
               )}

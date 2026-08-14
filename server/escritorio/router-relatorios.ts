@@ -22,7 +22,7 @@ import {
   kanbanCards, kanbanColunas, kanbanMovimentacoes, kanbanFunis,
   colaboradores, setores, asaasCobrancas, categoriasCobranca,
   comissoesFechadas, users, canaisIntegrados, chamadas,
-  relatoriosProgramados,
+  relatoriosProgramados, atendimentos,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -604,6 +604,46 @@ export const relatoriosRouter = router({
       ));
     const conversasAtendidas = Number(atendidasRow?.total ?? 0);
 
+    // ─── Atendimentos INICIADOS no período ──────────────────────────────
+    // A pergunta que nenhuma das duas leituras acima responde: quem abriu
+    // atendimento nesta janela. A conversa nasce uma vez e é reaproveitada pra
+    // sempre, então cliente que voltou em agosto continuava contando como
+    // março; o episódio recorta o trabalho e tem dono próprio, congelado no
+    // que ABRIU — transferência não reescreve o passado dele.
+    const baseAtd = (di: Date, df: Date) => and(
+      eq(atendimentos.escritorioId, eid),
+      gte(atendimentos.abertoEm, di),
+      lte(atendimentos.abertoEm, df),
+      ...(colaboradorIds ? [inArray(atendimentos.atendenteAbriu, colaboradorIds)] : []),
+      ...(contatoIdsUf ? [inArray(atendimentos.contatoId, contatoIdsUf)] : []),
+    );
+    // Canal não está no episódio: vive na conversa. Sai por subquery pra não
+    // transformar todas as contagens num JOIN.
+    const filtroCanalAtd = input?.canalId
+      ? [inArray(
+          atendimentos.conversaId,
+          db.select({ id: conversas.id }).from(conversas).where(and(
+            eq(conversas.escritorioId, eid),
+            eq(conversas.canalId, input.canalId),
+          )),
+        )]
+      : [];
+
+    const [iniciadosRow, atdPorDiaRows] = await Promise.all([
+      db.select({ total: sql<number>`COUNT(*)` })
+        .from(atendimentos)
+        .where(and(baseAtd(dataInicio, dataFim), ...filtroCanalAtd)),
+      db.select({
+        dia: sql<string>`DATE(${atendimentos.abertoEm})`,
+        total: sql<number>`COUNT(*)`,
+      })
+        .from(atendimentos)
+        .where(and(baseAtd(dataInicio, dataFim), ...filtroCanalAtd))
+        .groupBy(sql`DATE(${atendimentos.abertoEm})`)
+        .orderBy(sql`DATE(${atendimentos.abertoEm})`),
+    ]);
+    const atendimentosIniciados = Number(iniciadosRow[0]?.total ?? 0);
+
     // ─── Leads: funil, agregados, por dia, motivos de perda ────────────
     // Canal filtra via join com conversas (NULL → fora se filtroCanal ativo).
     const joinCanalLead = (q: any) => input?.canalId
@@ -764,13 +804,17 @@ export const relatoriosRouter = router({
         filtroColabIdsArr ? inArray(leads.responsavelId, filtroColabIdsArr) : sql`1=1`,
       ))
         .groupBy(leads.responsavelId, leads.etapaFunil),
+      // Por quem ABRIU o atendimento, não pelo dono atual da conversa: com
+      // `conversas.atendenteId` o histórico inteiro migrava pro último
+      // atendente no dia em que alguém encostava na conversa, e o SDR que
+      // trabalhou o lead em março perdia o registro.
       db.select({
-        colabId: conversas.atendenteId,
+        colabId: atendimentos.atendenteAbriu,
         atendimentos: sql<number>`COUNT(*)`,
       })
-        .from(conversas)
-        .where(baseConv)
-        .groupBy(conversas.atendenteId),
+        .from(atendimentos)
+        .where(and(baseAtd(dataInicio, dataFim), ...filtroCanalAtd))
+        .groupBy(atendimentos.atendenteAbriu),
     ]);
 
     // Lista master de colaboradores (nome + email) pra hidratar a tabela.
@@ -993,7 +1037,7 @@ export const relatoriosRouter = router({
     // Só os agregados que a tela compara — sem funil, tabelas nem séries.
     const anterior = input?.comparar
       ? await (async () => {
-          const [convsAntRows, msgsAntRows, priRespAntRow, chamAntRows, convsComLeadAnt] =
+          const [convsAntRows, msgsAntRows, priRespAntRow, chamAntRows, convsComLeadAnt, atdAntRows] =
             await Promise.all([
               db.select({ total: sql<number>`COUNT(*)` }).from(conversas).where(and(
                 eq(conversas.escritorioId, eid),
@@ -1041,6 +1085,9 @@ export const relatoriosRouter = router({
                 ...(input?.canalId ? [eq(chamadas.canalId, input.canalId)] : []),
               )).groupBy(chamadas.direcao, chamadas.status),
               contarConvsComLead(dataInicioAnt, dataFimAnt),
+              db.select({ total: sql<number>`COUNT(*)` })
+                .from(atendimentos)
+                .where(and(baseAtd(dataInicioAnt, dataFimAnt), ...filtroCanalAtd)),
             ]);
 
           const totalConversasAnt = Number(convsAntRows[0]?.total || 0);
@@ -1053,6 +1100,7 @@ export const relatoriosRouter = router({
               dataFim: dataFimAnt.toISOString().slice(0, 10),
             },
             totalConversas: totalConversasAnt,
+            atendimentosIniciados: Number(atdAntRows[0]?.total || 0),
             mensagensRecebidas: msgsAnt["entrada"] || 0,
             mensagensEnviadas: msgsAnt["saida"] || 0,
             segMedioPriResp: Number(
@@ -1117,6 +1165,8 @@ export const relatoriosRouter = router({
       conversasPorStatus,
       totalConversas,
       conversasAtendidas,
+      atendimentosIniciados,
+      atendimentosPorDia: atdPorDiaRows.map((r) => ({ dia: String(r.dia), total: Number(r.total) })),
       mensagensEnviadas: msgsDirecao["saida"] || 0,
       mensagensRecebidas: msgsDirecao["entrada"] || 0,
       totalMensagens: (msgsDirecao["saida"] || 0) + (msgsDirecao["entrada"] || 0),
@@ -2783,6 +2833,7 @@ export const relatoriosPdfRouter = router({
         data: {
           periodo: data.periodo,
           totalConversas: data.totalConversas,
+          atendimentosIniciados: data.atendimentosIniciados,
           mensagensRecebidas: data.mensagensRecebidas,
           mensagensEnviadas: data.mensagensEnviadas,
           segMedioPriResp: data.segMedioPriResp,
@@ -2793,6 +2844,7 @@ export const relatoriosPdfRouter = router({
           leadsPerdidos: data.leadsPerdidos,
           anterior: data.anterior,
           conversasPorDia: data.conversasPorDia,
+          atendimentosPorDia: data.atendimentosPorDia,
           porCanal: data.porCanal.map((c) => ({ nome: c.nome, total: c.total })),
           motivosPerda: data.motivosPerda,
           tabelaAtendentes: data.tabelaAtendentes,
