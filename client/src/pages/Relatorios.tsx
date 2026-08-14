@@ -496,16 +496,19 @@ function AbaAtendimentoConteudo({
           tráfego e um derivado que ninguém usava pra decidir, e sete cartões
           na primeira dobra fazem os quatro que importam sumirem no meio. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Dois números, dois nomes. O card conta conversa ABERTA no período;
-            a linha de apoio conta conversa com mensagem no período, que é o
-            que o Inbox mostra. Cliente recorrente que volta a escrever só
-            entra na segunda — chamar as duas de "Atendimentos" era o que
-            fazia as telas parecerem discordar. */}
+        {/* Três leituras, três nomes, e é de propósito que o card mostra a
+            primeira: ela é a única que responde "quem iniciou atendimento
+            neste período". A conversa nasce uma vez e é reaproveitada pra
+            sempre, então cliente que voltou depois de meses não abre conversa
+            nova e sumia daqui; o atendimento é o recorte de trabalho, e a
+            volta dele conta. As outras duas continuam à vista porque medem
+            coisas diferentes — gente nova chegando, e conversa que teve
+            atividade (que é o que o Inbox lista). */}
         <KpiRel
-          label="Conversas novas"
-          valor={data.totalConversas.toLocaleString("pt-BR")}
-          delta={d(data.totalConversas, "totalConversas")}
-          anterior={`${data.conversasAtendidas.toLocaleString("pt-BR")} atendidas no período`}
+          label="Atendimentos iniciados"
+          valor={data.atendimentosIniciados.toLocaleString("pt-BR")}
+          delta={d(data.atendimentosIniciados, "atendimentosIniciados")}
+          anterior={`${data.totalConversas.toLocaleString("pt-BR")} de gente nova · ${data.conversasAtendidas.toLocaleString("pt-BR")} conversas com atividade`}
         />
         <KpiRel
           label="Tempo p/ 1ª resposta"
@@ -519,7 +522,7 @@ function AbaAtendimentoConteudo({
           delta={dp(data.taxaConversao, "taxaConversao")}
           anterior={
             nAnt("taxaConversao", (v) => `${v}%`)
-            ?? `${data.leadsGanhos} ganhos de ${data.totalConversas} atendimentos`
+            ?? `${data.leadsGanhos} ganhos de ${data.totalConversas} conversas novas`
           }
         />
         <KpiRel

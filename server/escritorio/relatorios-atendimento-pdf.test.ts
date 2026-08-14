@@ -18,6 +18,9 @@ function dadosCompletos(): AtendimentoPdfData {
   return {
     periodo: { dataInicio: "2026-07-01", dataFim: "2026-07-30" },
     totalConversas: 1284,
+    // Maior que as conversas novas de propósito: cliente que volta abre
+    // atendimento sem abrir conversa.
+    atendimentosIniciados: 1409,
     mensagensRecebidas: 9417,
     mensagensEnviadas: 7902,
     segMedioPriResp: 840,
@@ -28,6 +31,7 @@ function dadosCompletos(): AtendimentoPdfData {
     leadsPerdidos: 183,
     anterior: {
       totalConversas: 1147,
+      atendimentosIniciados: 1262,
       mensagensRecebidas: 8720,
       mensagensEnviadas: 8140,
       segMedioPriResp: 1080,
@@ -38,6 +42,10 @@ function dadosCompletos(): AtendimentoPdfData {
     conversasPorDia: Array.from({ length: 30 }, (_, i) => ({
       dia: `2026-07-${String(i + 1).padStart(2, "0")}`,
       total: 20 + ((i * 7) % 35),
+    })),
+    atendimentosPorDia: Array.from({ length: 30 }, (_, i) => ({
+      dia: `2026-07-${String(i + 1).padStart(2, "0")}`,
+      total: 24 + ((i * 5) % 38),
     })),
     porCanal: [
       { nome: "WhatsApp — Comercial", total: 742 },
@@ -99,6 +107,7 @@ describe("gerarAtendimentoPdf", () => {
   it("não quebra com escritório zerado", async () => {
     const data = dadosCompletos();
     data.totalConversas = 0;
+    data.atendimentosIniciados = 0;
     data.mensagensRecebidas = 0;
     data.mensagensEnviadas = 0;
     data.segMedioPriResp = 0;
@@ -109,6 +118,7 @@ describe("gerarAtendimentoPdf", () => {
     data.leadsPerdidos = 0;
     data.anterior = null;
     data.conversasPorDia = [];
+    data.atendimentosPorDia = [];
     data.porCanal = [];
     data.motivosPerda = [];
     data.tabelaAtendentes = [];
@@ -120,6 +130,7 @@ describe("gerarAtendimentoPdf", () => {
   it("não divide por zero com um único dia no gráfico", async () => {
     const data = dadosCompletos();
     data.conversasPorDia = [{ dia: "2026-07-15", total: 42 }];
+    data.atendimentosPorDia = [{ dia: "2026-07-15", total: 47 }];
     ehPdfValido(await gerarAtendimentoPdf({ data, ...CABECALHO }));
   });
 

@@ -16,6 +16,7 @@ import {
 export type AtendimentoPdfData = {
   periodo: { dataInicio: string; dataFim: string };
   totalConversas: number;
+  atendimentosIniciados: number;
   mensagensRecebidas: number;
   mensagensEnviadas: number;
   segMedioPriResp: number;
@@ -26,6 +27,7 @@ export type AtendimentoPdfData = {
   leadsPerdidos: number;
   anterior: {
     totalConversas: number;
+    atendimentosIniciados: number;
     mensagensRecebidas: number;
     mensagensEnviadas: number;
     segMedioPriResp: number;
@@ -34,6 +36,7 @@ export type AtendimentoPdfData = {
     conversaParaLead: number | null;
   } | null;
   conversasPorDia: Array<{ dia: string; total: number }>;
+  atendimentosPorDia: Array<{ dia: string; total: number }>;
   porCanal: Array<{ nome: string; total: number }>;
   motivosPerda: Array<{ motivo: string; total: number }>;
   tabelaAtendentes: Array<{
@@ -273,8 +276,15 @@ export async function gerarAtendimentoPdf(args: {
       );
       kpiRow([
         {
-          label: "Atendimentos", value: formatMilhar(data.totalConversas),
-          delta: calcularDelta(data.totalConversas, ant?.totalConversas), bd: C.violetBd, color: C.dark,
+          // Atendimentos ABERTOS na janela, não conversas criadas nela: o
+          // cliente que voltou não abre conversa nova, e contava zero aqui.
+          label: "Atendimentos iniciados", value: formatMilhar(data.atendimentosIniciados),
+          delta: calcularDelta(data.atendimentosIniciados, ant?.atendimentosIniciados),
+          bd: C.violetBd, color: C.dark,
+        },
+        {
+          label: "Conversas novas", value: formatMilhar(data.totalConversas),
+          delta: calcularDelta(data.totalConversas, ant?.totalConversas), bd: C.line, color: C.dark,
         },
         {
           label: "Tempo p/ 1ª resposta", value: formatTempo(data.segMedioPriResp),
@@ -304,7 +314,10 @@ export async function gerarAtendimentoPdf(args: {
 
       // ── 3) VOLUME DIÁRIO ───────────────────────────────────────────────────
       sectionHeader("Volume diário", C.indigo, "Atendimentos iniciados por dia.");
-      if (data.conversasPorDia.length === 0) {
+      // O gráfico se chamava "atendimentos iniciados" e desenhava conversas
+      // criadas. Agora desenha o que o título diz.
+      const serieDiaria = data.atendimentosPorDia;
+      if (serieDiaria.length === 0) {
         doc.fillColor(C.muted).font("Helvetica-Oblique").fontSize(9)
           .text("Sem atendimentos no período.", L, doc.y);
         doc.moveDown(0.8);
@@ -312,18 +325,18 @@ export async function gerarAtendimentoPdf(args: {
         const chartH = 110, padL = 26, plotX = L + padL, plotW = W - padL;
         ensure(chartH + 28);
         const top = doc.y, base = top + chartH;
-        const maxV = Math.max(...data.conversasPorDia.map((s) => s.total), 1);
+        const maxV = Math.max(...serieDiaria.map((s) => s.total), 1);
         [0, 0.5, 1].forEach((f) => {
           const yy = base - chartH * f;
           hr(yy, "#eef2f6", 0.6);
           doc.fillColor(C.faint).font("Helvetica").fontSize(6.5)
             .text(String(Math.round(maxV * f)), L, yy - 3, { width: padL - 5, align: "right" });
         });
-        const n = data.conversasPorDia.length;
+        const n = serieDiaria.length;
         const slot = plotW / n;
         const bw = Math.min(24, slot * 0.66);
         const step = Math.max(1, Math.ceil(n / 12));
-        data.conversasPorDia.forEach((s, i) => {
+        serieDiaria.forEach((s, i) => {
           const cx = plotX + slot * i + (slot - bw) / 2;
           const hh = chartH * (s.total / maxV);
           if (s.total > 0) rrect(cx, base - hh, bw, hh, 1, C.violet);
