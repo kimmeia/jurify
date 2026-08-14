@@ -45,6 +45,11 @@ async function main() {
   console.log(`sem mensagem (ignoradas) .... ${r.conversasVazias}`);
   console.log(`episódios ${APLICAR ? "criados" : "que seriam criados"} .${APLICAR ? "........." : "..."} ${r.episodiosCriados}`);
   console.log(`conversas com mais de um .... ${r.conversasComMaisDeUm}`);
+  if (r.historicoRecuperado > 0) {
+    console.log(`começo recuperado ........... ${r.historicoRecuperado} conversas`);
+    console.log(`  episódios antigos ......... ${r.episodiosAnteriores}`);
+    console.log(`  aberturas corrigidas ...... ${r.aberturasCorrigidas}`);
+  }
   console.log("");
   console.log(
     r.conversasComMaisDeUm > 0

@@ -55,6 +55,44 @@ describe("rodar de novo não pode duplicar", () => {
   });
 });
 
+describe("o começo perdido das conversas ativas", () => {
+  it("candidata é a conversa cuja primeira mensagem antecede o primeiro episódio", () => {
+    // Conversa que recebeu mensagem depois do deploy ganhou episódio ao vivo
+    // começando naquele instante; a primeira fase pula ela pra não duplicar, e
+    // o passado dela nunca seria olhado.
+    expect(backfill).toContain("MIN(m.createdAtMsg) < MIN(a.abertoEmAtd)");
+  });
+
+  it("a correção se apaga sozinha na passada seguinte", () => {
+    // Recuperado o começo, as duas datas coincidem e o HAVING deixa de casar.
+    // Sem isso, cada clique repetiria o trabalho e empilharia episódios.
+    expect(backfill).toContain("HAVING");
+    expect(backfill).toMatch(/deixa de ser candidata|não volta na próxima passada/);
+  });
+
+  it("mexe só no episódio mais antigo da conversa", () => {
+    // Os posteriores são do caminho ao vivo e estão corretos.
+    expect(backfill).toContain("orderBy(asc(atendimentos.abertoEm), asc(atendimentos.id))");
+  });
+
+  it("sem correspondência entre episódio e mensagens, não mexe", () => {
+    expect(backfill).toContain("if (k < 0) continue;");
+  });
+
+  it("a segunda fase só começa depois de a primeira acabar", () => {
+    // Rodar as duas ao mesmo tempo faria a segunda ver como "sem começo"
+    // conversas que a primeira ainda nem tinha chegado a reconstruir.
+    expect(backfill).toContain("res.restantes === 0 && Date.now() - inicio <= orcamento");
+  });
+
+  it("o botão continua clicável com a primeira fase em 100%", () => {
+    // A segunda fase roda depois da primeira: travar o botão ao chegar em 100%
+    // deixaria essa parte inalcançável pela tela.
+    expect(tela).toContain("const podeRodar =");
+    expect(tela).not.toMatch(/disabled=\{rodando \|\| !pendente\}/);
+  });
+});
+
 describe("o que conta como atendimento", () => {
   it("mensagem de sistema não vira primeira resposta", () => {
     // Transferência grava mensagem de sistema. Contá-la como resposta faria o
