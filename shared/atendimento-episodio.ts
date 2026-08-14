@@ -151,3 +151,64 @@ export function fechamentoPorSilencio(ep: EpisodioParaRegra): Date | null {
  * lê `atendenteAbriuId`, que a transferência não toca.
  */
 export const TRANSFERENCIA_ABRE_EPISODIO = false;
+
+/** Uma mensagem, no mínimo que o corte do histórico precisa. */
+export interface MensagemParaCorte {
+  em: Date | string;
+  /** Saída = mensagem do escritório. */
+  daEquipe: boolean;
+  /** Colaborador que enviou, quando é saída. */
+  remetenteId?: number | null;
+}
+
+export interface EpisodioReconstruido {
+  abertoEm: Date;
+  ultimaMensagemEm: Date;
+  primeiraRespostaEm: Date | null;
+  /** Quem respondeu primeiro neste episódio — a atribuição real do passado. */
+  atendenteAbriu: number | null;
+}
+
+/**
+ * Reconstrói os episódios de uma conversa a partir das mensagens dela.
+ *
+ * Usa exatamente o mesmo limite do caminho ao vivo, e é por isso que mora
+ * aqui: régua duplicada entre o que roda agora e o que reconstrói o passado
+ * daria dois relatórios diferentes do mesmo mês.
+ *
+ * `atendenteAbriu` sai do REMETENTE da primeira resposta do episódio, não de
+ * `conversas.atendenteId`. O campo da conversa guarda só quem está com ela
+ * hoje — usá-lo no backfill carimbaria o histórico inteiro no nome do último
+ * atendente, que é justamente o defeito que o episódio veio corrigir. Quem
+ * respondeu está gravado em cada mensagem e não foi sobrescrito por ninguém.
+ */
+export function dividirEmEpisodios(mensagens: MensagemParaCorte[]): EpisodioReconstruido[] {
+  const ordenadas = mensagens
+    .map((m) => ({ ...m, ms: new Date(m.em).getTime() }))
+    .filter((m) => Number.isFinite(m.ms))
+    .sort((a, b) => a.ms - b.ms);
+  if (ordenadas.length === 0) return [];
+
+  const episodios: EpisodioReconstruido[] = [];
+  let atual: EpisodioReconstruido | null = null;
+  let anteriorMs = 0;
+
+  for (const m of ordenadas) {
+    if (!atual || m.ms - anteriorMs > SILENCIO_MS) {
+      atual = {
+        abertoEm: new Date(m.ms),
+        ultimaMensagemEm: new Date(m.ms),
+        primeiraRespostaEm: null,
+        atendenteAbriu: null,
+      };
+      episodios.push(atual);
+    }
+    atual.ultimaMensagemEm = new Date(m.ms);
+    if (m.daEquipe && atual.primeiraRespostaEm == null) {
+      atual.primeiraRespostaEm = new Date(m.ms);
+      atual.atendenteAbriu = m.remetenteId ?? null;
+    }
+    anteriorMs = m.ms;
+  }
+  return episodios;
+}

@@ -13,6 +13,7 @@
 import { describe, expect, it } from "vitest";
 import {
   abreNovoEpisodio,
+  dividirEmEpisodios,
   fechamentoPorSilencio,
   SILENCIO_DIAS,
   SILENCIO_MS,
@@ -130,5 +131,78 @@ describe("o limite", () => {
   it("é de duas semanas, em dias e em milissegundos coerentes", () => {
     expect(SILENCIO_DIAS).toBe(15);
     expect(SILENCIO_MS).toBe(15 * 24 * 60 * 60 * 1000);
+  });
+});
+
+describe("reconstrução do histórico", () => {
+  const msg = (iso: string, daEquipe = false, remetenteId: number | null = null) =>
+    ({ em: iso, daEquipe, remetenteId });
+
+  it("o caso do Raimundo vira DOIS episódios, com donos diferentes", () => {
+    const eps = dividirEmEpisodios([
+      msg("2026-03-12T09:14:00Z"),
+      msg("2026-03-12T09:20:00Z", true, 7),   // Eduardo responde
+      msg("2026-03-18T16:20:00Z"),
+      msg("2026-08-12T10:02:00Z"),            // volta 5 meses depois
+      msg("2026-08-12T10:23:00Z", true, 12),  // Milena responde
+    ]);
+
+    expect(eps).toHaveLength(2);
+    expect(eps[0]!.abertoEm.toISOString()).toBe("2026-03-12T09:14:00.000Z");
+    expect(eps[0]!.atendenteAbriu).toBe(7);
+    expect(eps[1]!.abertoEm.toISOString()).toBe("2026-08-12T10:02:00.000Z");
+    expect(eps[1]!.atendenteAbriu).toBe(12);
+  });
+
+  it("o dono sai de quem RESPONDEU, não do campo da conversa", () => {
+    // É o ponto todo do backfill: `conversas.atendenteId` guarda só quem está
+    // com ela hoje. Usá-lo carimbaria março no nome de quem chegou em agosto.
+    const eps = dividirEmEpisodios([
+      msg("2026-03-12T09:14:00Z"),
+      msg("2026-03-12T09:20:00Z", true, 7),
+    ]);
+    expect(eps[0]!.atendenteAbriu).toBe(7);
+  });
+
+  it("conversa contínua não é partida, por mais longa que seja", () => {
+    const eps = dividirEmEpisodios([
+      msg("2026-03-01T09:00:00Z"),
+      msg("2026-03-12T09:00:00Z"),
+      msg("2026-03-24T09:00:00Z"),
+      msg("2026-04-05T09:00:00Z"),
+    ]);
+    expect(eps).toHaveLength(1);
+    expect(eps[0]!.ultimaMensagemEm.toISOString()).toBe("2026-04-05T09:00:00.000Z");
+  });
+
+  it("a primeira resposta é a PRIMEIRA de cada episódio", () => {
+    const eps = dividirEmEpisodios([
+      msg("2026-03-12T09:14:00Z"),
+      msg("2026-03-12T09:20:00Z", true, 7),
+      msg("2026-03-12T11:00:00Z", true, 7),
+    ]);
+    expect(eps[0]!.primeiraRespostaEm?.toISOString()).toBe("2026-03-12T09:20:00.000Z");
+  });
+
+  it("episódio que ninguém respondeu fica sem dono", () => {
+    // Cliente mandou mensagem e ninguém voltou. Inventar um responsável aqui
+    // esconderia justamente o atendimento que não aconteceu.
+    const eps = dividirEmEpisodios([msg("2026-03-12T09:14:00Z")]);
+    expect(eps[0]!.atendenteAbriu).toBeNull();
+    expect(eps[0]!.primeiraRespostaEm).toBeNull();
+  });
+
+  it("ordena antes de cortar, e ignora data inválida", () => {
+    const eps = dividirEmEpisodios([
+      msg("2026-08-12T10:02:00Z"),
+      msg("data ruim"),
+      msg("2026-03-12T09:14:00Z"),
+    ]);
+    expect(eps).toHaveLength(2);
+    expect(eps[0]!.abertoEm.toISOString()).toBe("2026-03-12T09:14:00.000Z");
+  });
+
+  it("conversa sem mensagem não vira episódio nenhum", () => {
+    expect(dividirEmEpisodios([])).toEqual([]);
   });
 });
