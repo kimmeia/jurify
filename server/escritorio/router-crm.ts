@@ -330,6 +330,15 @@ export const crmRouter = router({
       if (!esc) throw new Error("Escritório não encontrado.");
       const { id, ...dados } = input;
       await atualizarConversa(id, esc.escritorio.id, dados);
+
+      // Resolver encerra o EPISÓDIO, não a conversa: a conversa segue viva
+      // como fio com a pessoa, e a próxima mensagem dela abre um atendimento
+      // novo em vez de ressuscitar este. É a decisão explícita de que o
+      // trabalho acabou — o silêncio só existe pra quem esquece de tomá-la.
+      if (dados.status === "resolvido" || dados.status === "fechado") {
+        const { fecharEpisodioDaConversa } = await import("../atendimento/episodios");
+        await fecharEpisodioDaConversa(id, "resolvido");
+      }
       return { success: true };
     }),
 
@@ -380,6 +389,35 @@ export const crmRouter = router({
 
       // Marcar conversa como em_atendimento se estava aguardando
       await atualizarConversa(input.conversaId, esc.escritorio.id, { status: "em_atendimento" });
+
+      // Resposta do escritório entra no episódio. É aqui que a 1ª resposta é
+      // marcada — POR EPISÓDIO, e não por conversa: medir o tempo de resposta
+      // de um cliente que voltou contra a primeira mensagem que ele mandou
+      // meses atrás dá um número que não descreve atendimento nenhum.
+      {
+        const { registrarMensagemNoEpisodio } = await import("../atendimento/episodios");
+        const { getDb: pegarDb } = await import("../db");
+        const { conversas: convTbl } = await import("../../drizzle/schema");
+        const { eq: igual } = await import("drizzle-orm");
+        const dbEp = await pegarDb();
+        if (dbEp) {
+          const [c] = await dbEp
+            .select({ contatoId: convTbl.contatoId, atendenteId: convTbl.atendenteId })
+            .from(convTbl)
+            .where(igual(convTbl.id, input.conversaId))
+            .limit(1);
+          if (c) {
+            await registrarMensagemNoEpisodio({
+              escritorioId: esc.escritorio.id,
+              conversaId: input.conversaId,
+              contatoId: c.contatoId,
+              atendenteId: c.atendenteId ?? esc.colaborador.id,
+              em: new Date(),
+              daEquipe: true,
+            });
+          }
+        }
+      }
 
       // Enviar via WhatsApp se a conversa for de um canal WhatsApp
       try {
@@ -869,6 +907,12 @@ export const crmRouter = router({
         atendenteId: input.novoAtendenteId,
         status: "em_atendimento",
       });
+
+      // O episódio troca de DONO, não de identidade: transferir é a mesma
+      // demanda mudando de mão. Quem abriu continua registrado, e é por isso
+      // que o SDR não perde o atendimento que ele trabalhou.
+      const { transferirEpisodioDaConversa } = await import("../atendimento/episodios");
+      await transferirEpisodioDaConversa(input.conversaId, input.novoAtendenteId);
 
       const paraNome = nomes.get(input.novoAtendenteId) ?? null;
       await enviarMensagem({
