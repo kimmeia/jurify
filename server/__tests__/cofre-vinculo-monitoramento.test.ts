@@ -62,20 +62,22 @@ describe("a remoção trata o vínculo", () => {
     expect(router).toContain("PAUSA_POR_REMOCAO");
   });
 
-  it("o destino sugerido é do mesmo sistema e está ativo", () => {
-    // Repontar um processo do TJCE pra credencial de outro tribunal daria
-    // falha de login com cara de senha errada.
+  it("o destino sugerido ATENDE os tribunais e está ativo", () => {
+    // Antes a regra era "mesmo texto no campo sistema", o que deixava a
+    // credencial nacional de fora como destino de uma de um estado só — o
+    // sistema concluía "não há destino" e pausava os processos com a solução
+    // ali do lado.
     const i = router.indexOf("async function calcularImpacto");
-    const trecho = router.slice(i, i + 1800);
-    expect(trecho).toContain("eq(cofreCredenciais.sistema, cred.sistema)");
+    const trecho = router.slice(i, i + 3000);
+    expect(trecho).toContain("sistemaAtendeTribunal(c.sistema, t)");
     expect(trecho).toContain('eq(cofreCredenciais.status, "ativa")');
     expect(trecho).toContain("ne(cofreCredenciais.id, credencialId)");
   });
 });
 
 describe("repontar", () => {
-  it("valida que a credencial de destino é do mesmo sistema", () => {
-    expect(router).toContain("origem.sistema !== destino.sistema");
+  it("recusa destino que não atende o tribunal daqueles processos", () => {
+    expect(router).toContain("não atende o tribunal desses processos");
   });
 
   it("não aceita destino removido", () => {
@@ -99,9 +101,9 @@ describe("repontar", () => {
     // processo federal — e ainda religaria monitoramento parado por outro
     // motivo.
     expect(router).toContain("if (!tribunalRequerCredencial(c.tribunal)) desvincular.push(c.id);");
-    // E o destino só serve o tribunal DELE: uma credencial do TJCE não abre
-    // processo do TJMG.
-    expect(router).toContain("c.tribunal === tribunalDestino");
+    // E o destino precisa atender aquele tribunal: uma credencial do TJCE não
+    // abre processo do TJMG, mas uma nacional abre os dois.
+    expect(router).toContain("sistemaAtendeTribunal(sistemaDestino, c.tribunal)");
   });
 
   it("escolher e executar são dois atos", () => {
