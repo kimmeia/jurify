@@ -40,7 +40,7 @@ import { ambienteSuportaTeste } from "../_core/ambiente";
 import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resumir-movimentacao";
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
-import { tribunalRequerCredencial } from "../processos/tribunais-pdpj";
+import { SISTEMA_PJE_NACIONAL, tribunalRequerCredencial } from "../processos/tribunais-pdpj";
 import { normalizarCnj, mascararCnj, validarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import {
   ehRequestMotorProprio,
@@ -263,7 +263,7 @@ export const processosRouter = router({
             and(
               eq(cofreCredenciais.id, input.credencialId),
               eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.sistema, sistemaCofre),
+              inArray(cofreCredenciais.sistema, [sistemaCofre, SISTEMA_PJE_NACIONAL]),
               eq(cofreCredenciais.status, "ativa"),
             ),
           )
@@ -285,7 +285,7 @@ export const processosRouter = router({
           .where(
             and(
               eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.sistema, sistemaCofre),
+              inArray(cofreCredenciais.sistema, [sistemaCofre, SISTEMA_PJE_NACIONAL]),
               eq(cofreCredenciais.status, "ativa"),
             ),
           )
@@ -304,7 +304,9 @@ export const processosRouter = router({
       }
 
       const credId = credencial[0].id;
-      const storageState = await recuperarSessao(credId, { tentarRelogin: true });
+      const storageState = await recuperarSessao(credId, tribunal.codigoTribunal, {
+        tentarRelogin: true,
+      });
       if (!storageState) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -738,7 +740,7 @@ export const processosRouter = router({
         });
       }
 
-      const storageState = await recuperarSessao(cred.id, { tentarRelogin: true });
+      const storageState = await recuperarSessao(cred.id, codigoTribunal, { tentarRelogin: true });
       if (!storageState) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -831,7 +833,7 @@ export const processosRouter = router({
             and(
               eq(cofreCredenciais.id, input.credencialId),
               eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.sistema, sistemaCofre),
+              inArray(cofreCredenciais.sistema, [sistemaCofre, SISTEMA_PJE_NACIONAL]),
               eq(cofreCredenciais.status, "ativa"),
             ),
           )
@@ -844,7 +846,7 @@ export const processosRouter = router({
           .where(
             and(
               eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.sistema, sistemaCofre),
+              inArray(cofreCredenciais.sistema, [sistemaCofre, SISTEMA_PJE_NACIONAL]),
               eq(cofreCredenciais.status, "ativa"),
             ),
           )
@@ -858,7 +860,9 @@ export const processosRouter = router({
       }
 
       const credId = credencial[0].id;
-      const storageState = await recuperarSessao(credId, { tentarRelogin: true });
+      const storageState = await recuperarSessao(credId, tribunal.codigoTribunal, {
+        tentarRelogin: true,
+      });
       if (!storageState) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -1776,7 +1780,7 @@ export const processosRouter = router({
         return { encontrado: false, mensagem: "Monitoramento sem credencial vinculada" };
       }
 
-      const sessao = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
+      const sessao = await recuperarSessao(mon.credencialId, mon.tribunal, { tentarRelogin: true });
       if (!sessao) {
         return {
           encontrado: false,
