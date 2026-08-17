@@ -78,6 +78,7 @@
     "input-otp": "^1.4.2",
     "ioredis": "^5.4.1",
     "jose": "6.1.0",
+    "jsqr": "^1.4.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.453.0",
     "mammoth": "^1.12.0",
