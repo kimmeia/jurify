@@ -38,7 +38,9 @@ async function paraBitmap(fonte: Blob): Promise<ImageBitmap | HTMLImageElement> 
  * preto e o branco. Print de tela em modo escuro sai com o QR invertido, e
  * sem essa passada ele simplesmente "não é lido" sem motivo aparente.
  */
-export async function lerQrDeImagem(fonte: Blob): Promise<LeituraQr | { ok: false; motivo: "sem_qr"; detalhe: string }> {
+export type ResultadoLeitura = LeituraQr | { ok: false; motivo: "sem_qr"; detalhe: string };
+
+export async function lerQrDeImagem(fonte: Blob): Promise<ResultadoLeitura> {
   let bitmap: ImageBitmap | HTMLImageElement;
   try {
     bitmap = await paraBitmap(fonte);

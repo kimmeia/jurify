@@ -36,6 +36,7 @@ export default function LeitorQr({ onLido, lido, aoLimpar }: Props) {
   const [lendo, setLendo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [arrastando, setArrastando] = useState(false);
+  const [escolher, setEscolher] = useState<QrLido[] | null>(null);
   const [mostrarTudo, setMostrarTudo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -44,13 +45,19 @@ export default function LeitorQr({ onLido, lido, aoLimpar }: Props) {
       if (!arquivo) return;
       setLendo(true);
       setErro(null);
+      setEscolher(null);
       try {
         const r = await lerQrDeImagem(arquivo);
-        if (r.ok) {
-          onLido(r.dados);
-        } else {
+        if (!r.ok) {
           setErro(r.detalhe);
+          return;
         }
+        const todas = [r.dados, ...(r.outras ?? [])];
+        // O QR de exportação do autenticador traz todas as contas marcadas.
+        // Pegar a primeira gravaria o 2FA do e-mail pessoal no login do
+        // tribunal — e o erro só apareceria no login, dias depois.
+        if (todas.length > 1) setEscolher(todas);
+        else onLido(r.dados);
       } catch {
         setErro("Não consegui ler essa imagem.");
       } finally {
@@ -73,6 +80,43 @@ export default function LeitorQr({ onLido, lido, aoLimpar }: Props) {
     window.addEventListener("paste", aoColar);
     return () => window.removeEventListener("paste", aoColar);
   }, [processar]);
+
+  if (escolher) {
+    return (
+      <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3 space-y-2 dark:border-violet-900 dark:bg-violet-950/20">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-[13px] font-semibold text-violet-800 dark:text-violet-300">
+              Esse QR tem {escolher.length} contas
+            </p>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              É o QR de transferência do autenticador — ele carrega tudo que você marcou. Escolha a
+              conta do tribunal.
+            </p>
+          </div>
+          <button type="button" onClick={() => setEscolher(null)} className="text-muted-foreground shrink-0">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="space-y-1 max-h-52 overflow-y-auto">
+          {escolher.map((c, i) => (
+            <button
+              key={`${c.secret}-${i}`}
+              type="button"
+              onClick={() => {
+                onLido(c);
+                setEscolher(null);
+              }}
+              className="w-full text-left rounded-lg border bg-background px-2.5 py-2 hover:border-violet-400 transition"
+            >
+              <p className="text-xs font-semibold truncate">{c.emissor ?? "Sem emissor"}</p>
+              {c.conta && <p className="text-[11px] text-muted-foreground truncate">{c.conta}</p>}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   if (lido) {
     return (
