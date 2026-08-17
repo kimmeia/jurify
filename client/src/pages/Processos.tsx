@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal } from "lucide-react";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal, Globe } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -3682,6 +3682,35 @@ function CofreTab() {
   // Reapontar move centenas de processos de uma vez. Executar isso no
   // `onChange` de um <select> seria a mesma classe de acidente que apaga uma
   // coluna inteira num clique: a escolha e a execução têm que ser dois atos.
+  // Trocar o alcance sem passar por remover-e-cadastrar-de-novo, que é a
+  // sequência que já parou 420 processos.
+  const [alcanceAlvo, setAlcanceAlvo] = useState<{ id: number; apelido: string; sistema: string } | null>(null);
+
+  // Quando estreitar o alcance pausa processo, o servidor recusa e devolve
+  // QUANTOS. Essa mensagem vira o aviso na tela, e só o segundo clique
+  // confirma — mandar `true` de saída faria o primeiro clique consentir com
+  // um número que ninguém viu.
+  const [alcancePendente, setAlcancePendente] = useState<{ sistema: string; aviso: string } | null>(null);
+
+  const alterarAlcance = (trpc.cofreCredenciais as any).alterarAlcance?.useMutation({
+    onSuccess: (r: any) => {
+      setAlcanceAlvo(null);
+      setAlcancePendente(null);
+      toast.success("Alcance alterado", {
+        description: r?.pausados ? `${r.pausados} processo(s) foram pausados.` : undefined,
+      });
+      refetch();
+      orfaos.refetch?.();
+    },
+    onError: (e: any, vars: any) => {
+      if (e?.data?.code === "PRECONDITION_FAILED" && !vars?.confirmarPausarMonitoramentos) {
+        setAlcancePendente({ sistema: vars.sistema, aviso: e.message });
+        return;
+      }
+      toast.error(e.message);
+    },
+  }) ?? { mutate: () => {}, isPending: false };
+
   const [repontarAlvo, setRepontarAlvo] = useState<
     { de: number | null; para: number; total: number; destino: string } | null
   >(null);
@@ -3979,6 +4008,24 @@ function CofreTab() {
                     <RefreshCcw className={`h-3 w-3 mr-1 ${validarMut.isPending ? "animate-spin" : ""}`} />
                     {c.status === "ativa" ? "Validar" : "Validar agora"}
                   </Button>
+                  {/* Trocar o alcance sem remover: a remoção mexe em vínculo,
+                      sessão e monitoramento, e não há razão pra passar por ela
+                      só pra mudar um campo. */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs rounded-lg"
+                    onClick={() =>
+                      setAlcanceAlvo({
+                        id: c.id,
+                        apelido: c.apelido || c.usernameMascarado || "credencial",
+                        sistema: c.sistema,
+                      })
+                    }
+                  >
+                    <Globe className="h-3 w-3 mr-1" />
+                    {c.sistema === SISTEMA_NACIONAL ? "Todos os PJe" : "Um tribunal"}
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -4262,6 +4309,73 @@ function CofreTab() {
           advogado logar pelo navegador — e este é o único momento em que dá
           pra ver o segredo. Fechar sem copiar deixa a conta dele acessível
           só pelo robô. */}
+      <AlertDialog
+        open={!!alcanceAlvo}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAlcanceAlvo(null);
+            setAlcancePendente(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Onde “{alcanceAlvo?.apelido}” vale</AlertDialogTitle>
+            <AlertDialogDescription className="leading-relaxed">
+              O login do PDPJ é nacional — o mesmo CPF/OAB entra em qualquer PJe. Trocar o alcance
+              não mexe na senha, no 2FA nem nos processos já vinculados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-1.5">
+            {[
+              { id: SISTEMA_NACIONAL, titulo: `Todos os PJe (${estadosPje.length} estados)`, desc: "Processo de qualquer estado usa essa credencial." },
+              { id: estadosPje[0]?.id ?? "pje_tjce", titulo: "Só um tribunal", desc: "Volta a valer num estado só — processos dos outros são pausados." },
+            ].map((o) => {
+              const atual = (o.id === SISTEMA_NACIONAL) === (alcanceAlvo?.sistema === SISTEMA_NACIONAL);
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  disabled={atual || alterarAlcance.isPending}
+                  onClick={() =>
+                    alcanceAlvo &&
+                    alterarAlcance.mutate({
+                      id: alcanceAlvo.id,
+                      sistema: o.id,
+                      confirmarPausarMonitoramentos: alcancePendente?.sistema === o.id,
+                    })
+                  }
+                  className={`w-full text-left rounded-lg border p-2.5 transition ${
+                    atual ? "border-violet-300 bg-violet-50/60 dark:bg-violet-950/20" : "hover:border-violet-300"
+                  } disabled:cursor-default`}
+                >
+                  <p className="text-xs font-semibold">
+                    {o.titulo} {atual && <span className="text-violet-600">· atual</span>}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">{o.desc}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          {alcancePendente && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-900 dark:bg-amber-950/20">
+              <p className="text-[11.5px] text-amber-900 leading-relaxed dark:text-amber-300">
+                {alcancePendente.aviso}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1.5">
+                Clique de novo na mesma opção para confirmar.
+              </p>
+            </div>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={alterarAlcance.isPending}>Fechar</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={!!repontarAlvo} onOpenChange={(open) => !open && setRepontarAlvo(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

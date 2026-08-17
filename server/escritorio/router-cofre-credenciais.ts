@@ -32,6 +32,7 @@ import { checkPermission } from "./check-permission";
 import { createLogger } from "../_core/logger";
 import {
   configPorSistema,
+  sistemaAtendeTribunal,
   getConfigTribunal,
   SISTEMA_PJE_NACIONAL,
   tribunalDoSistema,
@@ -177,27 +178,61 @@ async function calcularImpacto(db: Db, escritorioId: number, credencialId: numbe
       ),
     );
 
-  const [destino] = cred
+  // Quem pode assumir é quem ATENDE os tribunais desses processos — não quem
+  // tem o mesmo texto no campo `sistema`. Comparar a string deixava uma
+  // credencial nacional de fora como destino de uma credencial de um estado
+  // só, mesmo servindo aquele tribunal perfeitamente: o sistema concluía "não
+  // há destino" e pausava os processos com a solução ali do lado.
+  const tribunaisEmJogo = [
+    ...new Set(
+      (
+        await db
+          .select({ tribunal: motorMonitoramentos.tribunal })
+          .from(motorMonitoramentos)
+          .where(
+            and(
+              eq(motorMonitoramentos.escritorioId, escritorioId),
+              eq(motorMonitoramentos.credencialId, credencialId),
+            ),
+          )
+      ).map((m) => m.tribunal),
+    ),
+  ].filter((t) => tribunalRequerCredencial(t));
+
+  const candidatas = cred
     ? await db
-        .select({ id: cofreCredenciais.id, apelido: cofreCredenciais.apelido })
+        .select({
+          id: cofreCredenciais.id,
+          apelido: cofreCredenciais.apelido,
+          sistema: cofreCredenciais.sistema,
+        })
         .from(cofreCredenciais)
         .where(
           and(
             eq(cofreCredenciais.escritorioId, escritorioId),
-            eq(cofreCredenciais.sistema, cred.sistema),
             eq(cofreCredenciais.status, "ativa"),
             ne(cofreCredenciais.id, credencialId),
           ),
         )
         .orderBy(desc(cofreCredenciais.ultimoLoginSucessoEm))
-        .limit(1)
     : [];
+
+  // A melhor é a que cobre MAIS processos. Empate fica com a mais recente,
+  // que é a ordem que veio do banco.
+  const destino = candidatas
+    .map((c) => ({
+      c,
+      cobre: tribunaisEmJogo.filter((t) => sistemaAtendeTribunal(c.sistema, t)).length,
+    }))
+    .filter((x) => x.cobre > 0)
+    .sort((a, b) => b.cobre - a.cobre)[0]?.c;
 
   return {
     apelido: cred?.apelido ?? null,
     sistema: cred?.sistema ?? null,
     monitoramentos: Number(linha?.total ?? 0),
-    destinoSugerido: destino ?? null,
+    destinoSugerido: destino ? { id: destino.id, apelido: destino.apelido } : null,
+    sistemaDestino: destino?.sistema ?? null,
   };
 }
 
@@ -233,9 +268,9 @@ interface Alvos {
  * Duas exclusões, por motivos diferentes. Tribunal de consulta pública
  * (TRF-5) roda SEM cofre, e o vínculo nulo dele é proposital, não órfão —
  * amarrá-lo a uma OAB do TJCE seria inventar uma dependência que não existe.
- * E a credencial só serve o tribunal DELA: uma do TJCE não abre processo do
- * TJMG. Comparar o "sistema" das duas pontas não bastava, porque no caminho
- * `de = null` não existe ponta de origem pra comparar.
+ * E o destino precisa ATENDER o tribunal do processo: uma credencial do TJCE
+ * não abre processo do TJMG, mas uma de alcance nacional abre os dois. Por
+ * isso a pergunta é "atende?", e não "tem o mesmo texto no campo sistema?".
  */
 async function separarAlvos(
   db: Db,
@@ -260,7 +295,6 @@ async function separarAlvos(
       ),
     );
 
-  const tribunalDestino = configPorSistema(sistemaDestino)?.tribunal ?? null;
   const aceitos: Monitorado[] = [];
   const sobram: Monitorado[] = [];
   const desvincular: number[] = [];
@@ -270,7 +304,7 @@ async function separarAlvos(
     // apontando pra credencial removida, que é o próprio bug. Cada candidato
     // sai daqui em exatamente um dos três baldes.
     if (!tribunalRequerCredencial(c.tribunal)) desvincular.push(c.id);
-    else if (c.tribunal === tribunalDestino) aceitos.push(linha);
+    else if (sistemaAtendeTribunal(sistemaDestino, c.tribunal)) aceitos.push(linha);
     else sobram.push(linha);
   }
   return { aceitos, sobram, desvincular };
@@ -583,7 +617,7 @@ export const cofreCredenciaisRouter = router({
         db,
         escritorioId,
         input.id,
-        impacto.sistema ?? "",
+        impacto.sistemaDestino ?? "",
       );
       return { ...impacto, vaoMudar: aceitos.length, vaoPausar: sobram.length };
     }),
@@ -631,7 +665,7 @@ export const cofreCredenciaisRouter = router({
     // linha do painel não sumia e nada explicava por quê.
     const atendem = (tribunal: string) =>
       credenciais
-        .filter((c) => c.status === "ativa" && configPorSistema(c.sistema)?.tribunal === tribunal)
+        .filter((c) => c.status === "ativa" && sistemaAtendeTribunal(c.sistema, tribunal))
         .map((c) => ({ id: c.id, apelido: c.apelido }));
 
     return grupos
@@ -701,28 +735,16 @@ export const cofreCredenciaisRouter = router({
         });
       }
 
-      if (input.de != null) {
-        const [origem] = await db
-          .select({ sistema: cofreCredenciais.sistema })
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.id, input.de),
-              eq(cofreCredenciais.escritorioId, escritorioId),
-            ),
-          )
-          .limit(1);
-        if (origem && origem.sistema !== destino.sistema) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message:
-              `Sistemas diferentes: os processos são de ${origem.sistema} e a credencial ` +
-              `escolhida é de ${destino.sistema}.`,
-          });
-        }
-      }
-
       const { aceitos } = await separarAlvos(db, escritorioId, input.de, destino.sistema);
+      if (aceitos.length === 0) {
+        // Antes isto era uma comparação de textos entre os dois `sistema`, que
+        // recusava uma credencial nacional por não ser "igual" à de origem.
+        // O que importa é se ela atende o tribunal dos processos.
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `"${destino.apelido}" não atende o tribunal desses processos.`,
+        });
+      }
       let movidos = 0;
       await db.transaction(async (tx) => {
         movidos = await aplicarRepontar(tx, aceitos, destino.id);
@@ -732,6 +754,92 @@ export const cofreCredenciaisRouter = router({
         "[cofre] monitoramentos repontados",
       );
       return { movidos, destino: destino.apelido };
+    }),
+
+  /**
+   * Troca o alcance de uma credencial que já existe.
+   *
+   * Existe pra remover-e-cadastrar-de-novo deixar de ser o caminho. Essa
+   * sequência é a mesma que parou 420 processos: a remoção mexe em vínculo,
+   * sessão e monitoramento, e não há razão pra passar por ela só pra mudar um
+   * campo. Aqui a senha, o 2FA e os vínculos ficam exatamente onde estão.
+   */
+  alterarAlcance: protectedProcedure
+    .input(
+      z.object({
+        id: z.number().int().positive(),
+        sistema: z.enum(SISTEMAS_VALIDOS as readonly [SistemaCofre, ...SistemaCofre[]]),
+        /** Necessário quando estreitar o alcance deixa processo sem credencial. */
+        confirmarPausarMonitoramentos: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      await exigirAdminProcessos(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const escritorioId = await resolverEscritorioId(ctx.user.id);
+
+      const [cred] = await db
+        .select()
+        .from(cofreCredenciais)
+        .where(
+          and(eq(cofreCredenciais.id, input.id), eq(cofreCredenciais.escritorioId, escritorioId)),
+        )
+        .limit(1);
+      if (!cred) throw new TRPCError({ code: "NOT_FOUND", message: "Credencial não encontrada" });
+      if (cred.status === "removida") {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Credencial removida." });
+      }
+      if (cred.sistema === input.sistema) return { ok: true, pausados: 0, desvinculados: 0 };
+
+      // Ampliar (um estado → nacional) não tira nada de ninguém. Estreitar
+      // tira: os processos dos estados que saem do alcance ficam sem quem os
+      // atenda, e isso precisa ser dito antes, não descoberto depois.
+      const { sobram, desvincular } = await separarAlvos(db, escritorioId, input.id, input.sistema);
+
+      if (sobram.length > 0 && !input.confirmarPausarMonitoramentos) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            `${sobram.length} processo(s) monitorado(s) são de tribunais que esse alcance não ` +
+            `cobre e vão ser pausados. Confirme se é isso mesmo que você quer.`,
+        });
+      }
+
+      let pausados = 0;
+      let desvinculados = 0;
+      await db.transaction(async (tx) => {
+        pausados = await pausarSemCredencial(tx, sobram, cred.apelido);
+        desvinculados = await desvincularSemPausar(tx, desvincular);
+
+        await tx
+          .update(cofreCredenciais)
+          .set({ sistema: input.sistema })
+          .where(eq(cofreCredenciais.id, input.id));
+
+        // Sessão de tribunal que saiu do alcance não serve mais pra nada, e
+        // deixá-la guardada é manter cookie de portal que a credencial não
+        // atende mais.
+        const foraDoAlcance = tribunaisPjeDisponiveis().filter(
+          (t) => !sistemaAtendeTribunal(input.sistema, t),
+        );
+        if (foraDoAlcance.length > 0) {
+          await tx
+            .delete(cofreSessoes)
+            .where(
+              and(
+                eq(cofreSessoes.credencialId, input.id),
+                inArray(cofreSessoes.tribunal, foraDoAlcance),
+              ),
+            );
+        }
+      });
+
+      log.info(
+        { user: ctx.user.id, credencialId: input.id, de: cred.sistema, para: input.sistema, pausados },
+        "[cofre] alcance alterado",
+      );
+      return { ok: true, pausados, desvinculados };
     }),
 
   removerMinha: protectedProcedure
@@ -780,7 +888,7 @@ export const cofreCredenciaisRouter = router({
         db,
         escritorioId,
         input.id,
-        impacto.destinoSugerido ? existente.sistema : "",
+        impacto.sistemaDestino ?? "",
       );
 
       const vaoPausar = sobram;

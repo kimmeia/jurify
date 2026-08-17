@@ -141,6 +141,62 @@ describe("a lista de sistemas sai do motor", () => {
   });
 });
 
+describe("trocar o alcance sem remover", () => {
+  it("existe procedure pra isso", () => {
+    // Sem ela, o caminho pra tornar nacional uma credencial que já existe era
+    // remover e cadastrar de novo — a mesma sequência que parou 420 processos.
+    expect(router).toContain("alterarAlcance: protectedProcedure");
+  });
+
+  it("não passa perto de remover: só troca o campo", () => {
+    const i = router.indexOf("alterarAlcance: protectedProcedure");
+    const corpo = router.slice(i, i + 3600);
+    expect(corpo).toContain("set({ sistema: input.sistema })");
+    expect(corpo).not.toContain('status: "removida"');
+  });
+
+  it("estreitar o alcance avisa antes de pausar processo", () => {
+    const i = router.indexOf("alterarAlcance: protectedProcedure");
+    const corpo = router.slice(i, i + 3600);
+    expect(corpo).toContain("confirmarPausarMonitoramentos");
+    expect(corpo).toContain("PRECONDITION_FAILED");
+  });
+
+  it("apaga a sessão dos tribunais que saíram do alcance", () => {
+    // Cookie de portal que a credencial não atende mais não serve pra nada e
+    // não tem por que ficar guardado.
+    const i = router.indexOf("alterarAlcance: protectedProcedure");
+    expect(router.slice(i, i + 3600)).toContain("foraDoAlcance");
+  });
+
+  it("as escritas são uma transação só", () => {
+    const i = router.indexOf("alterarAlcance: protectedProcedure");
+    expect(router.slice(i, i + 3600)).toContain("await db.transaction(async (tx)");
+  });
+});
+
+describe("quem pode assumir os processos", () => {
+  it("a busca de destino pergunta se ATENDE, não se o texto é igual", () => {
+    // Comparar `sistema` literalmente deixava a credencial nacional de fora
+    // como destino de uma credencial de um estado só: o sistema concluía "não
+    // há destino" e pausava os processos com a solução ali do lado.
+    expect(router).toContain("sistemaAtendeTribunal(c.sistema, t)");
+    expect(router).not.toContain("eq(cofreCredenciais.sistema, cred.sistema)");
+  });
+
+  it("o corte por tribunal também", () => {
+    expect(router).toContain("sistemaAtendeTribunal(sistemaDestino, c.tribunal)");
+  });
+
+  it("o painel de órfãos oferece a nacional como destino", () => {
+    expect(router).toContain("sistemaAtendeTribunal(c.sistema, tribunal)");
+  });
+
+  it("escolhe o destino que cobre mais processos", () => {
+    expect(router).toContain("cobre: tribunaisEmJogo.filter");
+  });
+});
+
 describe("a tela", () => {
   it("deixa escolher entre um estado e todos", () => {
     expect(tela).toContain("Onde essa credencial vale");
@@ -161,5 +217,18 @@ describe("a tela", () => {
   it("dá pra testar um estado sem esperar aparecer processo dele", () => {
     expect(grade).toContain("onTestar");
     expect(tela).toContain("validar.mutate({ id: credencialId, tribunal })");
+  });
+
+  it("o alcance se troca pelo card, sem remover nada", () => {
+    expect(tela).toContain("setAlcanceAlvo");
+    expect(tela).toContain("alterarAlcance.mutate");
+  });
+
+  it("estreitar o alcance confirma em dois cliques, com o número na tela", () => {
+    // O servidor recusa e devolve QUANTOS processos param; essa mensagem vira
+    // o aviso, e só o segundo clique confirma. Mandar `true` de saída faria o
+    // primeiro clique consentir com um número que ninguém viu.
+    expect(tela).toContain("setAlcancePendente");
+    expect(tela).toContain("confirmarPausarMonitoramentos: alcancePendente?.sistema === o.id");
   });
 });
