@@ -3618,6 +3618,9 @@ function CofreTab() {
   const [showPassword, setShowPassword] = useState(false);
   const [show2fa, setShow2fa] = useState(false);
   const [removerTarget, setRemoverTarget] = useState<{ id: number; apelido: string } | null>(null);
+  // Secret que o robô teve que criar porque o tribunal exigiu 2FA na hora do
+  // login. Só existe nesta resposta — o cofre não devolve depois.
+  const [secretNovo, setSecretNovo] = useState<string | null>(null);
 
   const cadastrarMut = trpc.cofreCredenciais.cadastrarMinha.useMutation({
     onSuccess: (data: any) => {
@@ -3649,6 +3652,10 @@ function CofreTab() {
   // login ainda funciona (senha pode ter mudado, conta pode ter caído).
   const validarMut = trpc.cofreCredenciais.validarMinha?.useMutation({
     onSuccess: (data: any) => {
+      // Antes de qualquer toast: se o tribunal obrigou a configurar 2FA, este
+      // é o único instante em que o segredo da conta do advogado existe fora
+      // do banco. Toast some sozinho; isto não pode sumir sozinho.
+      if (data?.totpSecretNovo) setSecretNovo(data.totpSecretNovo);
       if (data?.status === "ativa") {
         toast.success("Credencial válida!", { description: data.mensagem || "Login confirmado." });
       } else if (data?.status === "erro") {
@@ -3929,6 +3936,49 @@ function CofreTab() {
             >
               {removerMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
               Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* O tribunal exigiu configurar 2FA e o robô configurou pra conseguir
+          entrar. Daqui pra frente o PJe vai pedir ESTE código também quando o
+          advogado logar pelo navegador — e este é o único momento em que dá
+          pra ver o segredo. Fechar sem copiar deixa a conta dele acessível
+          só pelo robô. */}
+      <AlertDialog open={!!secretNovo} onOpenChange={(open) => !open && setSecretNovo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>O tribunal exigiu configurar a verificação em duas etapas</AlertDialogTitle>
+            <AlertDialogDescription className="leading-relaxed">
+              Pra conseguir entrar, o robô configurou o 2FA desta conta no PJe. A partir
+              de agora o portal vai pedir um código de 6 dígitos também quando você logar
+              pelo navegador — e só quem tem a chave abaixo consegue gerar esse código.
+              <strong> Cadastre ela no seu app autenticador antes de fechar:</strong> ela
+              não aparece de novo em lugar nenhum.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="rounded-lg border bg-muted/40 p-3">
+            <p className="font-mono text-sm tracking-wider break-all select-all">{secretNovo}</p>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Google Authenticator, Authy ou 1Password → adicionar conta → inserir chave manualmente.
+          </p>
+
+          <AlertDialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (secretNovo) navigator.clipboard?.writeText(secretNovo);
+                toast.success("Chave copiada");
+              }}
+            >
+              <Copy className="h-4 w-4 mr-1" />
+              Copiar chave
+            </Button>
+            <AlertDialogAction onClick={() => setSecretNovo(null)}>
+              Já cadastrei no meu app
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

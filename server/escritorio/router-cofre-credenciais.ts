@@ -335,6 +335,18 @@ export const cofreCredenciaisRouter = router({
           ok: resultado.ok,
           mensagem: resultado.mensagem,
           latenciaMs: resultado.latenciaMs,
+          /**
+           * Devolvido UMA vez, e só quando o robô teve que configurar o 2FA
+           * do zero porque o tribunal exigiu.
+           *
+           * Devolver secret contraria a regra do cofre — nada sai depois de
+           * entrar. A exceção existe porque aqui o segredo não é do cofre: é
+           * da conta PJe do advogado, e a partir de agora é ele que o portal
+           * vai pedir em qualquer login pelo navegador. Guardar sem mostrar
+           * trancaria o advogado pra fora da própria conta, com a chave em
+           * poder de um robô. A tela mostra agora e nunca mais.
+           */
+          totpSecretNovo: resultado.totpSecretConfigurado ?? null,
         };
       }
 

@@ -1732,11 +1732,24 @@ export class PjeTjceScraper {
         const kbdCount = await page.locator("kbd").count().catch(() => 0);
         const codeCount = await page.locator("code").count().catch(() => 0);
         const linkCount = await page.locator("a").count().catch(() => 0);
+        // Contar só "inputs" não diz nada: o que decide é se o campo do
+        // formulário existe. Sem isto o diagnóstico anterior mandava 3000
+        // chars de navbar e nenhuma informação sobre o form.
+        const nomesInputs = await page
+          .locator("input")
+          .evaluateAll((els) =>
+            els.map((e) => {
+              const i = e as HTMLInputElement;
+              return `${i.name || i.id || "?"}:${i.type}${i.value ? `(${i.value.length}ch)` : ""}`;
+            }),
+          )
+          .catch(() => [] as string[]);
 
         throw new Error(
           "PDPJ_CONFIGURE_TOTP: detectei a tela de configuração de 2FA mas não " +
             `consegui capturar o secret base32 da página. ` +
-            `Diagnóstico: ${inputsCount} inputs, ${kbdCount} <kbd>, ${codeCount} <code>, ${linkCount} <a>. ` +
+            `Diagnóstico: ${inputsCount} inputs [${nomesInputs.join(", ")}], ` +
+            `${kbdCount} <kbd>, ${codeCount} <code>, ${linkCount} <a>. ` +
             `URL: ${page.url()}. ` +
             `HTML (primeiros 3000 chars, sem style/script/svg): ${htmlLimpo.slice(0, 3000)}`,
         );
@@ -1988,21 +2001,54 @@ export class PjeTjceScraper {
    * uppercase). Retorna null se nada parecer secret base32.
    */
   private async extrairSecretTotpDaTela(page: Page): Promise<string | null> {
-    // ESTRATÉGIA 0: forçar URL com mode=manual.
-    // O Keycloak do PDPJ-cloud TJCE aceita ?mode=manual na URL pra mostrar
-    // o secret em texto direto (sem precisar clicar link). Confirmado via
-    // screenshot do usuário em 07/05/2026:
-    // sso.cloud.pje.jus.br/.../required-action?...&mode=manual&execution=CONFIGURE_TOTP
+    // ESTRATÉGIA 0: o campo escondido do próprio formulário.
+    //
+    // O template do Keycloak (login-config-totp.ftl) posta o secret de volta
+    // num input hidden, e ele está lá NOS DOIS modos — o `mode` decide só se a
+    // tela desenha o QR ou o texto, não o que o form carrega. É a captura
+    // determinística: não depende de tema, idioma, nem de clicar link.
+    //
+    // Ela vem antes de qualquer navegação de propósito. Cada render da tela
+    // gera um secret NOVO no servidor, então recarregar pra "ver melhor"
+    // invalida o que estava valendo e troca um problema por outro.
+    try {
+      const escondido = page.locator("input[name='totpSecret'], input#totpSecret").first();
+      if ((await escondido.count()) > 0) {
+        const bruto = (await escondido.getAttribute("value").catch(() => null)) ?? "";
+        const limpo = bruto.replace(/\s+/g, "").toUpperCase();
+        if (/^[A-Z2-7]{16,128}$/.test(limpo)) return limpo;
+      }
+    } catch {
+      // segue pras estratégias de tela
+    }
+
+    // ESTRATÉGIA 0.1: trocar pra mode=manual, que mostra o secret em texto.
+    //
+    // Só serve de rede: se o hidden acima existir, nem chega aqui. A troca é
+    // por `searchParams.set` e não por concatenação — a URL da tela JÁ vem com
+    // `mode=qr`, e grudar `&mode=manual` no fim produz dois `mode` na mesma
+    // query. O Keycloak lê o primeiro, continua em QR, e a tentativa parecia
+    // ter funcionado sem nunca ter mudado nada.
     const urlAtual = page.url();
-    if (urlAtual.includes("CONFIGURE_TOTP") && !urlAtual.includes("mode=manual")) {
-      const sep = urlAtual.includes("?") ? "&" : "?";
+    if (urlAtual.includes("CONFIGURE_TOTP") && !/[?&]mode=manual\b/.test(urlAtual)) {
       try {
-        await page.goto(`${urlAtual}${sep}mode=manual`, {
+        const alvo = new URL(urlAtual);
+        alvo.searchParams.set("mode", "manual");
+        await page.goto(alvo.toString(), {
           waitUntil: "domcontentloaded",
           timeout: 10_000,
         });
         await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
         await page.waitForTimeout(400);
+
+        // O render novo trouxe outro secret: o hidden desta tela é o que vale.
+        const escondido = page.locator("input[name='totpSecret'], input#totpSecret").first();
+        if ((await escondido.count()) > 0) {
+          const limpo = ((await escondido.getAttribute("value").catch(() => null)) ?? "")
+            .replace(/\s+/g, "")
+            .toUpperCase();
+          if (/^[A-Z2-7]{16,128}$/.test(limpo)) return limpo;
+        }
       } catch {
         // ignora — segue tentando os selectors mesmo sem o redirect
       }
