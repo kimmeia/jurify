@@ -3618,6 +3618,34 @@ function CofreTab() {
   const [showPassword, setShowPassword] = useState(false);
   const [show2fa, setShow2fa] = useState(false);
   const [removerTarget, setRemoverTarget] = useState<{ id: number; apelido: string } | null>(null);
+  // Secret que o robô teve que criar porque o tribunal exigiu 2FA na hora do
+  // login. Só existe nesta resposta — o cofre não devolve depois.
+  const [secretNovo, setSecretNovo] = useState<string | null>(null);
+
+  // Quantos processos monitorados dependem da credencial que está prestes a
+  // sair, e quem pode assumir. Sem isto a remoção era um clique cego.
+  // staleTime 0: o padrão do app é 60s, e servir um impacto de um minuto
+  // atrás faria o diálogo prometer um destino que já não existe.
+  const impacto = (trpc.cofreCredenciais as any).impactoRemocao?.useQuery(
+    { id: removerTarget?.id ?? 0 },
+    { enabled: !!removerTarget, staleTime: 0, refetchOnMount: "always" },
+  ) ?? { data: undefined };
+  const orfaos = (trpc.cofreCredenciais as any).vinculosOrfaos?.useQuery() ?? { data: undefined };
+  // Reapontar move centenas de processos de uma vez. Executar isso no
+  // `onChange` de um <select> seria a mesma classe de acidente que apaga uma
+  // coluna inteira num clique: a escolha e a execução têm que ser dois atos.
+  const [repontarAlvo, setRepontarAlvo] = useState<
+    { de: number | null; para: number; total: number; destino: string } | null
+  >(null);
+
+  const repontarMut = (trpc.cofreCredenciais as any).repontarMonitoramentos?.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(`${r.movidos} processo(s) agora usam "${r.destino}"`);
+      orfaos.refetch?.();
+      refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  }) ?? { mutate: () => {}, isPending: false };
 
   const cadastrarMut = trpc.cofreCredenciais.cadastrarMinha.useMutation({
     onSuccess: (data: any) => {
@@ -3636,9 +3664,19 @@ function CofreTab() {
   });
 
   const removerMut = trpc.cofreCredenciais.removerMinha.useMutation({
-    onSuccess: () => {
-      toast.success("Credencial removida");
+    onSuccess: (r: any) => {
+      // O que aconteceu com os processos é a parte que importa da remoção —
+      // dizer só "credencial removida" escondia exatamente o efeito colateral
+      // que deixou 420 processos parados sem explicação.
+      toast.success("Credencial removida", {
+        description: r?.repontados
+          ? `${r.repontados} processo(s) passaram para "${r.destino}".`
+          : r?.pausados
+            ? `${r.pausados} processo(s) foram pausados — cadastre outra credencial e reaponte.`
+            : undefined,
+      });
       setRemoverTarget(null);
+      orfaos.refetch?.();
       refetch();
     },
     onError: (e: any) => toast.error(e.message),
@@ -3649,6 +3687,10 @@ function CofreTab() {
   // login ainda funciona (senha pode ter mudado, conta pode ter caído).
   const validarMut = trpc.cofreCredenciais.validarMinha?.useMutation({
     onSuccess: (data: any) => {
+      // Antes de qualquer toast: se o tribunal obrigou a configurar 2FA, este
+      // é o único instante em que o segredo da conta do advogado existe fora
+      // do banco. Toast some sozinho; isto não pode sumir sozinho.
+      if (data?.totpSecretNovo) setSecretNovo(data.totpSecretNovo);
       if (data?.status === "ativa") {
         toast.success("Credencial válida!", { description: data.mensagem || "Login confirmado." });
       } else if (data?.status === "erro") {
@@ -3662,6 +3704,8 @@ function CofreTab() {
   }) ?? { mutate: () => {}, isPending: false };
 
   const creds = credenciais || [];
+
+  const listaOrfaos: any[] = orfaos.data ?? [];
 
   return (
     <div className="space-y-4">
@@ -3696,6 +3740,83 @@ function CofreTab() {
         </div>
       </div>
 
+      {/* Processo monitorado guarda o ID da credencial. Quando ela é removida
+          ou cai, o vínculo continua apontando pra ela e o robô para — e até
+          aqui nenhuma tela mostrava esse vínculo, então o motivo da parada
+          ficava invisível. */}
+      {listaOrfaos.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-900">
+                Processos apontando para credencial que não pode atender
+              </p>
+              <p className="text-[11px] text-amber-900/80 leading-relaxed mt-0.5">
+                Eles continuam parados até serem reapontados para uma credencial ativa. Reapontar
+                não altera nada no processo — só troca qual login o robô usa.
+              </p>
+            </div>
+          </div>
+
+          {listaOrfaos.map((o: any) => (
+            <div
+              key={String(o.credencialId)}
+              className="flex items-center justify-between gap-3 flex-wrap rounded-xl bg-white border border-amber-200/70 p-3"
+            >
+              <div className="min-w-0 text-xs">
+                <p className="font-medium truncate">
+                  {o.total} processo(s) do {String(o.tribunal).toUpperCase()} →{" "}
+                  {o.apelido ? `"${o.apelido}"` : "sem credencial"}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {o.acao === "revalidar"
+                    ? `credencial ${o.status} — costuma voltar sozinha; tente "Validar" antes de mover`
+                    : o.status === "removida"
+                      ? "credencial removida do cofre"
+                      : "vínculo desfeito — escolha quem assume"}
+                </p>
+              </div>
+              {/* Duas pendências diferentes. Credencial caída volta sozinha no
+                  relogin, e oferecer "mover centenas de processos" ali empurra
+                  o dono pro conserto mais caro. Só quem perdeu o vínculo de
+                  verdade ganha o seletor. */}
+              {o.acao === "reapontar" && (
+                <div className="flex items-center gap-2">
+                  <select
+                    className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs"
+                    defaultValue=""
+                    onChange={(e) => {
+                      const para = Number(e.target.value);
+                      const destino = (o.destinos ?? []).find((c: any) => c.id === para);
+                      e.currentTarget.value = "";
+                      if (!para || !destino) return;
+                      setRepontarAlvo({
+                        de: o.credencialId,
+                        para,
+                        total: o.total,
+                        destino: destino.apelido,
+                      });
+                    }}
+                    disabled={repontarMut.isPending || (o.destinos ?? []).length === 0}
+                  >
+                    <option value="" disabled>
+                      {(o.destinos ?? []).length === 0
+                        ? `nenhuma credencial ativa do ${String(o.tribunal).toUpperCase()}`
+                        : "reapontar para…"}
+                    </option>
+                    {(o.destinos ?? []).map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.apelido}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       {isLoading ? (
         <Skeleton className="h-32 w-full" />
       ) : creds.length === 0 ? (
@@ -3759,10 +3880,21 @@ function CofreTab() {
                       2FA ativado
                     </div>
                   )}
+                  {/* Dois relógios, dois nomes. O card mostrava só o último
+                      SUCESSO sob o rótulo "última validação" — credencial que
+                      falhou hoje exibia a data do último acerto, semanas
+                      atrás, logo acima da mensagem de erro. Parecia que tinha
+                      validado bem naquele dia. */}
                   {c.ultimoLoginSucessoEm && (
                     <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                       <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                      <span>Última validação: {new Date(c.ultimoLoginSucessoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
+                      <span>Último acesso com sucesso: {new Date(c.ultimoLoginSucessoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
+                    </div>
+                  )}
+                  {c.ultimoLoginTentativaEm && c.ultimoLoginTentativaEm !== c.ultimoLoginSucessoEm && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                      <RefreshCcw className="h-3 w-3 text-slate-400" />
+                      <span>Última tentativa: {new Date(c.ultimoLoginTentativaEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
                     </div>
                   )}
                   {(c.ultimoErro || c.mensagemErro) && (
@@ -3912,23 +4044,131 @@ function CofreTab() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remover credencial "{removerTarget?.apelido}"?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Monitoramentos que dependem dela vão <strong>parar de funcionar</strong>.
-              Para voltar a operar você precisará cadastrar a credencial novamente.
+            <AlertDialogDescription className="leading-relaxed">
+              {impacto.data == null ? (
+                "Conferindo quais processos dependem dela…"
+              ) : impacto.data.monitoramentos === 0 ? (
+                "Nenhum processo monitorado depende desta credencial."
+              ) : impacto.data.destinoSugerido ? (
+                <>
+                  <strong>{impacto.data.monitoramentos} processo(s) monitorado(s)</strong> usam esta
+                  credencial.{" "}
+                  {impacto.data.vaoMudar > 0 && (
+                    <>
+                      {impacto.data.vaoMudar} passam para{" "}
+                      <strong>{impacto.data.destinoSugerido.apelido}</strong> e continuam rodando.
+                    </>
+                  )}{" "}
+                  {impacto.data.vaoPausar > 0 && (
+                    <>
+                      Os outros <strong>{impacto.data.vaoPausar}</strong> vão ser pausados — são de
+                      outro tribunal, que essa credencial não atende.
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <strong>{impacto.data.monitoramentos} processo(s) monitorado(s)</strong> dependem
+                  dela, e não há outra credencial ativa de {impacto.data.sistema} para assumir.
+                  Todos vão ser <strong>pausados</strong> até você cadastrar outra e reapontá-los.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={removerMut.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
+              disabled={removerMut.isPending || impacto.isLoading}
               onClick={(e) => {
                 e.preventDefault();
-                if (removerTarget) removerMut.mutate({ id: removerTarget.id });
+                if (removerTarget) {
+                  removerMut.mutate({
+                    id: removerTarget.id,
+                    // Só confirma se o impacto REALMENTE apareceu na tela.
+                    // Mandar `true` fixo anulava a trava do servidor: o
+                    // clique viraria consentimento a um número que a pessoa
+                    // pode nunca ter visto (query ainda carregando, ou falha).
+                    confirmarPausarMonitoramentos: impacto.data != null,
+                  });
+                }
               }}
-              disabled={removerMut.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {removerMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
               Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* O tribunal exigiu configurar 2FA e o robô configurou pra conseguir
+          entrar. Daqui pra frente o PJe vai pedir ESTE código também quando o
+          advogado logar pelo navegador — e este é o único momento em que dá
+          pra ver o segredo. Fechar sem copiar deixa a conta dele acessível
+          só pelo robô. */}
+      <AlertDialog open={!!repontarAlvo} onOpenChange={(open) => !open && setRepontarAlvo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Reapontar {repontarAlvo?.total} processo(s) para "{repontarAlvo?.destino}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="leading-relaxed">
+              Só muda qual login o robô usa para consultar esses processos. Nada é alterado no
+              processo em si, e nenhuma movimentação já registrada se perde. Os que estavam parados
+              por causa da credencial voltam a rodar na próxima varredura.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={repontarMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (!repontarAlvo) return;
+                repontarMut.mutate({ de: repontarAlvo.de, para: repontarAlvo.para });
+                setRepontarAlvo(null);
+              }}
+              disabled={repontarMut.isPending}
+            >
+              {repontarMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Reapontar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!secretNovo} onOpenChange={(open) => !open && setSecretNovo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>O tribunal exigiu configurar a verificação em duas etapas</AlertDialogTitle>
+            <AlertDialogDescription className="leading-relaxed">
+              Pra conseguir entrar, o robô configurou o 2FA desta conta no PJe. A partir
+              de agora o portal vai pedir um código de 6 dígitos também quando você logar
+              pelo navegador — e só quem tem a chave abaixo consegue gerar esse código.
+              <strong> Cadastre ela no seu app autenticador antes de fechar:</strong> ela
+              não aparece de novo em lugar nenhum.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="rounded-lg border bg-muted/40 p-3">
+            <p className="font-mono text-sm tracking-wider break-all select-all">{secretNovo}</p>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Google Authenticator, Authy ou 1Password → adicionar conta → inserir chave manualmente.
+          </p>
+
+          <AlertDialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (secretNovo) navigator.clipboard?.writeText(secretNovo);
+                toast.success("Chave copiada");
+              }}
+            >
+              <Copy className="h-4 w-4 mr-1" />
+              Copiar chave
+            </Button>
+            <AlertDialogAction onClick={() => setSecretNovo(null)}>
+              Já cadastrei no meu app
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
