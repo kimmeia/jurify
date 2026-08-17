@@ -32,6 +32,7 @@ import { checkPermission } from "./check-permission";
 import { createLogger } from "../_core/logger";
 import { configPorSistema, tribunalRequerCredencial } from "../processos/tribunais-pdpj";
 import { deveReligarMonitoramento } from "./cofre-helpers";
+import { classificarErroMonitor } from "../processos/diagnostico-monitoramento";
 import {
   COFRE_VALIDACOES,
   type CofreCredencialView,
@@ -111,6 +112,14 @@ async function rowParaView(
 }
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+/**
+ * O que se pode escrever dentro de uma transação.
+ *
+ * As funções de escrita recebem isto, e não o banco inteiro, porque todas elas
+ * fazem mais de um UPDATE: rodar fora de transação deixaria estados
+ * intermediários que ninguém escolheu.
+ */
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /**
  * Marca da pausa que NÓS causamos ao remover a credencial.
@@ -122,7 +131,11 @@ type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
  * credencial e depois cadastrasse outra encontraria os processos parados pra
  * sempre, sem nada indicando o que fazer.
  */
-const PAUSA_POR_REMOCAO = "Pausado: credencial removida do cofre";
+// O texto entra no `ultimoErro` do monitoramento, e é ele que
+// `classificarErroMonitor` lê pra dizer a causa na tela do processo. Sem as
+// palavras "sem credencial" o diagnóstico caía em "desconhecida" e o processo
+// parado não dizia por quê.
+const PAUSA_POR_REMOCAO = "Pausado: sem credencial — a do cofre foi removida";
 
 /**
  * Quantos monitoramentos dependem desta credencial, e quem poderia assumir.
@@ -182,11 +195,18 @@ async function calcularImpacto(db: Db, escritorioId: number, credencialId: numbe
  * próxima varredura e pareceria que repontar não fez nada. Erro de outra
  * natureza (CNJ inválido, por exemplo) fica onde está: apagá-lo seria mentir.
  */
+type Monitorado = { id: number; status: string; ultimoErro: string | null };
+
 interface Alvos {
   /** Podem ir pro destino: precisam de credencial e são do tribunal dele. */
-  aceitos: Array<{ id: number; status: string; ultimoErro: string | null }>;
-  /** Estavam presos na credencial mas o destino não atende o tribunal deles. */
-  sobram: number[];
+  aceitos: Monitorado[];
+  /** Presos na credencial, mas o destino não atende o tribunal deles. */
+  sobram: Monitorado[];
+  /**
+   * Tribunal de consulta pública amarrado a uma credencial que ele nunca
+   * precisou. Não vira pausa — só perde o vínculo, e segue rodando.
+   */
+  desvincular: number[];
 }
 
 /**
@@ -227,17 +247,19 @@ async function separarAlvos(
     );
 
   const tribunalDestino = configPorSistema(sistemaDestino)?.tribunal ?? null;
-  const aceitos: Alvos["aceitos"] = [];
-  const sobram: number[] = [];
+  const aceitos: Monitorado[] = [];
+  const sobram: Monitorado[] = [];
+  const desvincular: number[] = [];
   for (const c of candidatos) {
-    if (!tribunalRequerCredencial(c.tribunal)) continue;
-    if (c.tribunal === tribunalDestino) {
-      aceitos.push({ id: c.id, status: c.status, ultimoErro: c.ultimoErro });
-    } else {
-      sobram.push(c.id);
-    }
+    const linha = { id: c.id, status: c.status, ultimoErro: c.ultimoErro };
+    // Descartar em silêncio era pior que não filtrar: o vínculo continuava
+    // apontando pra credencial removida, que é o próprio bug. Cada candidato
+    // sai daqui em exatamente um dos três baldes.
+    if (!tribunalRequerCredencial(c.tribunal)) desvincular.push(c.id);
+    else if (c.tribunal === tribunalDestino) aceitos.push(linha);
+    else sobram.push(linha);
   }
-  return { aceitos, sobram };
+  return { aceitos, sobram, desvincular };
 }
 
 /**
@@ -248,7 +270,7 @@ async function separarAlvos(
  * próxima varredura e pareceria que reapontar não fez nada. Erro de outra
  * natureza (CNJ inválido, por exemplo) fica onde está: apagá-lo seria mentir.
  */
-async function aplicarRepontar(db: Db, aceitos: Alvos["aceitos"], para: number): Promise<number> {
+async function aplicarRepontar(db: Tx, aceitos: Alvos["aceitos"], para: number): Promise<number> {
   if (aceitos.length === 0) return 0;
 
   await db
@@ -276,18 +298,57 @@ async function aplicarRepontar(db: Db, aceitos: Alvos["aceitos"], para: number):
  * problema que este código veio consertar.
  */
 async function pausarSemCredencial(
-  db: Db,
-  ids: number[],
+  db: Tx,
+  alvos: Monitorado[],
   apelidoRemovido: string,
 ): Promise<number> {
+  if (alvos.length === 0) return 0;
+
+  // Quem JÁ estava pausado continua como estava. A pausa dele foi decisão do
+  // escritório, e sobrescrever o motivo faria o reapontar seguinte religar um
+  // processo que alguém desligou de propósito — voltando a consumir crédito
+  // sem ninguém ter pedido. Perde só o vínculo.
+  const jaPausados = alvos.filter((a) => a.status === "pausado").map((a) => a.id);
+  if (jaPausados.length > 0) {
+    await db
+      .update(motorMonitoramentos)
+      .set({ credencialId: null })
+      .where(inArray(motorMonitoramentos.id, jaPausados));
+  }
+
+  const motivo = `${PAUSA_POR_REMOCAO} ("${apelidoRemovido}"). Cadastre outra credencial e reaponte estes processos.`;
+  for (const a of alvos) {
+    if (a.status === "pausado") continue;
+    // Erro de outra natureza (CNJ inválido, por exemplo) não pode ser
+    // apagado: quando o processo voltar, o diagnóstico antigo ainda vale, e
+    // aqui é o único lugar onde ele existe.
+    const anterior = a.ultimoErro?.trim();
+    const outraNatureza =
+      anterior && classificarErroMonitor(anterior)?.causa !== "sessao_expirada" &&
+      classificarErroMonitor(anterior)?.causa !== "sem_credencial";
+    await db
+      .update(motorMonitoramentos)
+      .set({
+        credencialId: null,
+        status: "pausado",
+        ultimoErro: outraNatureza ? `${motivo} Erro anterior: ${anterior}`.slice(0, 1000) : motivo,
+      })
+      .where(eq(motorMonitoramentos.id, a.id));
+  }
+  return alvos.length;
+}
+
+/**
+ * Tira o vínculo sem pausar.
+ *
+ * Para tribunal de consulta pública, que roda sem cofre: o vínculo era
+ * acidente, e o processo continua funcionando exatamente igual sem ele.
+ */
+async function desvincularSemPausar(db: Tx, ids: number[]): Promise<number> {
   if (ids.length === 0) return 0;
   await db
     .update(motorMonitoramentos)
-    .set({
-      credencialId: null,
-      status: "pausado",
-      ultimoErro: `${PAUSA_POR_REMOCAO} ("${apelidoRemovido}"). Cadastre outra credencial e reaponte estes processos.`,
-    })
+    .set({ credencialId: null })
     .where(inArray(motorMonitoramentos.id, ids));
   return ids.length;
 }
@@ -451,19 +512,19 @@ export const cofreCredenciaisRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
     const escritorioId = await resolverEscritorioId(ctx.user.id);
 
+    // Sem `isNotNull`: o vínculo NULO é justamente o estado que a remoção
+    // cria quando não há outra credencial pra assumir. Filtrá-lo fora deixava
+    // esses processos invisíveis na única tela que existe pra consertá-los —
+    // e a mensagem da pausa mandava reapontar por um caminho que não existia.
     const grupos = await db
       .select({
         credencialId: motorMonitoramentos.credencialId,
+        tribunal: motorMonitoramentos.tribunal,
         total: sql<number>`COUNT(*)`,
       })
       .from(motorMonitoramentos)
-      .where(
-        and(
-          eq(motorMonitoramentos.escritorioId, escritorioId),
-          isNotNull(motorMonitoramentos.credencialId),
-        ),
-      )
-      .groupBy(motorMonitoramentos.credencialId);
+      .where(eq(motorMonitoramentos.escritorioId, escritorioId))
+      .groupBy(motorMonitoramentos.credencialId, motorMonitoramentos.tribunal);
 
     const credenciais = await db
       .select({
@@ -476,17 +537,36 @@ export const cofreCredenciaisRouter = router({
       .where(eq(cofreCredenciais.escritorioId, escritorioId));
 
     const porId = new Map(credenciais.map((c) => [c.id, c]));
+    // Quem serve cada tribunal. A tela oferecia todas as credenciais ativas,
+    // e escolher uma que não atende aquele tribunal movia zero processos: a
+    // linha do painel não sumia e nada explicava por quê.
+    const atendem = (tribunal: string) =>
+      credenciais
+        .filter((c) => c.status === "ativa" && configPorSistema(c.sistema)?.tribunal === tribunal)
+        .map((c) => ({ id: c.id, apelido: c.apelido }));
+
     return grupos
+      // Tribunal de consulta pública roda sem cofre: vínculo nulo ali é o
+      // normal, não uma pendência.
+      .filter((g) => tribunalRequerCredencial(g.tribunal))
       .map((g) => {
         const cred = g.credencialId != null ? porId.get(g.credencialId) : undefined;
+        const semVinculo = g.credencialId == null || !cred;
+        // Duas pendências diferentes, e tratá-las igual empurrava o dono a
+        // mover centenas de processos quando o conserto era clicar "Validar":
+        // credencial caída volta sozinha no relogin; credencial removida (ou
+        // vínculo nulo) exige escolher outra.
+        const acao: "reapontar" | "revalidar" =
+          semVinculo || cred?.status === "removida" ? "reapontar" : "revalidar";
         return {
           credencialId: g.credencialId,
+          tribunal: g.tribunal,
           total: Number(g.total),
           apelido: cred?.apelido ?? null,
           sistema: cred?.sistema ?? null,
           status: cred?.status ?? null,
-          // Sem credencial, removida ou caída: em qualquer um dos três o
-          // processo não roda até alguém repontar.
+          acao,
+          destinos: atendem(g.tribunal),
           saudavel: cred?.status === "ativa",
         };
       })
@@ -554,7 +634,10 @@ export const cofreCredenciaisRouter = router({
       }
 
       const { aceitos } = await separarAlvos(db, escritorioId, input.de, destino.sistema);
-      const movidos = await aplicarRepontar(db, aceitos, destino.id);
+      let movidos = 0;
+      await db.transaction(async (tx) => {
+        movidos = await aplicarRepontar(tx, aceitos, destino.id);
+      });
       log.info(
         { user: ctx.user.id, escritorioId, de: input.de, para: destino.id, movidos },
         "[cofre] monitoramentos repontados",
@@ -601,25 +684,17 @@ export const cofreCredenciaisRouter = router({
 
       // Tudo é decidido ANTES de qualquer escrita. Pedir confirmação depois de
       // já ter movido metade deixaria o banco num estado que ninguém escolheu.
-      const { aceitos, sobram } = impacto.destinoSugerido
-        ? await separarAlvos(db, escritorioId, input.id, existente.sistema)
-        : { aceitos: [], sobram: [] as number[] };
+      // Sem destino, o "sistemaDestino" não existe: passar string vazia faz
+      // `tribunalDestino` virar null e TODOS os que precisam de credencial
+      // caírem em `sobram`, que é exatamente o certo — vão todos pausar.
+      const { aceitos, sobram, desvincular } = await separarAlvos(
+        db,
+        escritorioId,
+        input.id,
+        impacto.destinoSugerido ? existente.sistema : "",
+      );
 
-      // Quem vai parar: os que nenhum destino atende, mais todos os vinculados
-      // quando não existe destino nenhum.
-      const vaoPausar = impacto.destinoSugerido
-        ? sobram
-        : (
-            await db
-              .select({ id: motorMonitoramentos.id })
-              .from(motorMonitoramentos)
-              .where(
-                and(
-                  eq(motorMonitoramentos.escritorioId, escritorioId),
-                  eq(motorMonitoramentos.credencialId, input.id),
-                ),
-              )
-          ).map((m) => m.id);
+      const vaoPausar = sobram;
 
       if (vaoPausar.length > 0 && !input.confirmarPausarMonitoramentos) {
         throw new TRPCError({
@@ -631,27 +706,38 @@ export const cofreCredenciaisRouter = router({
         });
       }
 
-      const repontados = await aplicarRepontar(db, aceitos, impacto.destinoSugerido?.id ?? 0);
-      const pausados = await pausarSemCredencial(db, vaoPausar, existente.apelido);
+      // Tudo numa transação. São quatro escritas, e morrer entre a terceira e
+      // a quarta deixaria os processos já desvinculados com a credencial ainda
+      // viva na lista — um estado que ninguém escolheu e que a tela não
+      // saberia explicar.
+      let repontados = 0;
+      let pausados = 0;
+      let desvinculados = 0;
+      await db.transaction(async (tx) => {
+        repontados = await aplicarRepontar(tx, aceitos, impacto.destinoSugerido?.id ?? 0);
+        pausados = await pausarSemCredencial(tx, vaoPausar, existente.apelido);
+        desvinculados = await desvincularSemPausar(tx, desvincular);
 
-      await db
-        .update(cofreCredenciais)
-        .set({ status: "removida" })
-        .where(eq(cofreCredenciais.id, input.id));
+        await tx
+          .update(cofreCredenciais)
+          .set({ status: "removida" })
+          .where(eq(cofreCredenciais.id, input.id));
 
-      // A sessão vive noutra tabela e o cookie dela continua válido por até
-      // 90 minutos. Deixá-la para trás mantém uma porta aberta pro tribunal
-      // com um login que o dono acabou de apagar.
-      await db.delete(cofreSessoes).where(eq(cofreSessoes.credencialId, input.id));
+        // A sessão vive noutra tabela e o cookie dela continua válido por até
+        // 90 minutos. Deixá-la para trás mantém uma porta aberta pro tribunal
+        // com um login que o dono acabou de apagar.
+        await tx.delete(cofreSessoes).where(eq(cofreSessoes.credencialId, input.id));
+      });
 
       log.info(
-        { user: ctx.user.id, escritorioId, credencialId: input.id, repontados, pausados },
+        { user: ctx.user.id, escritorioId, credencialId: input.id, repontados, pausados, desvinculados },
         "[cofre] credencial removida",
       );
       return {
         ok: true,
         repontados,
         pausados,
+        desvinculados,
         destino: impacto.destinoSugerido?.apelido ?? null,
       };
     }),

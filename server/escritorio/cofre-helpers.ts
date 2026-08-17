@@ -236,6 +236,15 @@ export async function salvarSessao(
   const db = await getDb();
   if (!db) return;
 
+  // Um login que já estava em voo quando o dono apagou a credencial chegaria
+  // aqui depois da remoção e gravaria a sessão de volta — cookie válido por
+  // 90 minutos de um login que não deveria mais existir. `recuperarSessao` se
+  // recusaria a entregá-lo, mas ele ficaria no banco sem dono.
+  if (await estaRemovida(credencialId)) {
+    log.warn({ credencialId }, "[cofre] sessão descartada: credencial removida durante o login");
+    return;
+  }
+
   const enc = encrypt(storageStateJson);
   const agora = new Date();
 

@@ -3624,9 +3624,11 @@ function CofreTab() {
 
   // Quantos processos monitorados dependem da credencial que está prestes a
   // sair, e quem pode assumir. Sem isto a remoção era um clique cego.
+  // staleTime 0: o padrão do app é 60s, e servir um impacto de um minuto
+  // atrás faria o diálogo prometer um destino que já não existe.
   const impacto = (trpc.cofreCredenciais as any).impactoRemocao?.useQuery(
     { id: removerTarget?.id ?? 0 },
-    { enabled: !!removerTarget },
+    { enabled: !!removerTarget, staleTime: 0, refetchOnMount: "always" },
   ) ?? { data: undefined };
   const orfaos = (trpc.cofreCredenciais as any).vinculosOrfaos?.useQuery() ?? { data: undefined };
   // Reapontar move centenas de processos de uma vez. Executar isso no
@@ -3704,7 +3706,6 @@ function CofreTab() {
   const creds = credenciais || [];
 
   const listaOrfaos: any[] = orfaos.data ?? [];
-  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
 
   return (
     <div className="space-y-4">
@@ -3765,45 +3766,53 @@ function CofreTab() {
             >
               <div className="min-w-0 text-xs">
                 <p className="font-medium truncate">
-                  {o.total} processo(s) →{" "}
-                  {o.apelido ? `"${o.apelido}"` : "credencial sem cadastro"}
+                  {o.total} processo(s) do {String(o.tribunal).toUpperCase()} →{" "}
+                  {o.apelido ? `"${o.apelido}"` : "sem credencial"}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                  {o.status === "removida"
-                    ? "credencial removida do cofre"
-                    : o.status
-                      ? `credencial ${o.status}`
-                      : "vínculo sem credencial"}
+                  {o.acao === "revalidar"
+                    ? `credencial ${o.status} — costuma voltar sozinha; tente "Validar" antes de mover`
+                    : o.status === "removida"
+                      ? "credencial removida do cofre"
+                      : "vínculo desfeito — escolha quem assume"}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <select
-                  className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs"
-                  defaultValue=""
-                  onChange={(e) => {
-                    const para = Number(e.target.value);
-                    const destino = credsAtivas.find((c: any) => c.id === para);
-                    e.currentTarget.value = "";
-                    if (!para || !destino) return;
-                    setRepontarAlvo({
-                      de: o.credencialId,
-                      para,
-                      total: o.total,
-                      destino: destino.apelido,
-                    });
-                  }}
-                  disabled={repontarMut.isPending || credsAtivas.length === 0}
-                >
-                  <option value="" disabled>
-                    {credsAtivas.length === 0 ? "nenhuma credencial ativa" : "reapontar para…"}
-                  </option>
-                  {credsAtivas.map((c: any) => (
-                    <option key={c.id} value={c.id}>
-                      {c.apelido}
+              {/* Duas pendências diferentes. Credencial caída volta sozinha no
+                  relogin, e oferecer "mover centenas de processos" ali empurra
+                  o dono pro conserto mais caro. Só quem perdeu o vínculo de
+                  verdade ganha o seletor. */}
+              {o.acao === "reapontar" && (
+                <div className="flex items-center gap-2">
+                  <select
+                    className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs"
+                    defaultValue=""
+                    onChange={(e) => {
+                      const para = Number(e.target.value);
+                      const destino = (o.destinos ?? []).find((c: any) => c.id === para);
+                      e.currentTarget.value = "";
+                      if (!para || !destino) return;
+                      setRepontarAlvo({
+                        de: o.credencialId,
+                        para,
+                        total: o.total,
+                        destino: destino.apelido,
+                      });
+                    }}
+                    disabled={repontarMut.isPending || (o.destinos ?? []).length === 0}
+                  >
+                    <option value="" disabled>
+                      {(o.destinos ?? []).length === 0
+                        ? `nenhuma credencial ativa do ${String(o.tribunal).toUpperCase()}`
+                        : "reapontar para…"}
                     </option>
-                  ))}
-                </select>
-              </div>
+                    {(o.destinos ?? []).map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.apelido}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -4069,19 +4078,20 @@ function CofreTab() {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={removerMut.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
+              disabled={removerMut.isPending || impacto.isLoading}
               onClick={(e) => {
                 e.preventDefault();
                 if (removerTarget) {
                   removerMut.mutate({
                     id: removerTarget.id,
-                    // O servidor recusa remover em silêncio quando isso pausa
-                    // processo. O usuário está vendo o número acima — este
-                    // clique é a resposta a ele.
-                    confirmarPausarMonitoramentos: true,
+                    // Só confirma se o impacto REALMENTE apareceu na tela.
+                    // Mandar `true` fixo anulava a trava do servidor: o
+                    // clique viraria consentimento a um número que a pessoa
+                    // pode nunca ter visto (query ainda carregando, ou falha).
+                    confirmarPausarMonitoramentos: impacto.data != null,
                   });
                 }
               }}
-              disabled={removerMut.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {removerMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}

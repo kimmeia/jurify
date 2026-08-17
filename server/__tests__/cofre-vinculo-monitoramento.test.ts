@@ -27,16 +27,16 @@ describe("a remoção trata o vínculo", () => {
 
   it("passa os processos pra outra credencial quando existe uma", () => {
     expect(router).toContain("impacto.destinoSugerido");
-    expect(router).toContain("aplicarRepontar(db, aceitos");
+    expect(router).toContain("aplicarRepontar(tx, aceitos");
   });
 
   it("decide tudo antes de escrever qualquer coisa", () => {
     // Pedir confirmação depois de já ter movido metade deixaria o banco num
     // estado que ninguém escolheu.
     const i = router.indexOf("removerMinha: protectedProcedure");
-    const corpo = router.slice(i, i + 3600);
+    const corpo = router.slice(i, i + 4200);
     const posThrow = corpo.indexOf("confirmarPausarMonitoramentos)");
-    const posEscrita = corpo.indexOf("aplicarRepontar(db, aceitos");
+    const posEscrita = corpo.indexOf("await db.transaction(async (tx)");
     expect(posThrow).toBeGreaterThan(0);
     expect(posEscrita).toBeGreaterThan(posThrow);
   });
@@ -98,7 +98,7 @@ describe("repontar", () => {
     // Reapontar "os que estão sem credencial" carimbaria uma OAB do TJCE em
     // processo federal — e ainda religaria monitoramento parado por outro
     // motivo.
-    expect(router).toContain("if (!tribunalRequerCredencial(c.tribunal)) continue;");
+    expect(router).toContain("if (!tribunalRequerCredencial(c.tribunal)) desvincular.push(c.id);");
     // E o destino só serve o tribunal DELE: uma credencial do TJCE não abre
     // processo do TJMG.
     expect(router).toContain("c.tribunal === tribunalDestino");
@@ -158,5 +158,77 @@ describe("credencial removida não volta sozinha", () => {
 
   it("remover apaga a sessão guardada", () => {
     expect(router).toContain("delete(cofreSessoes)");
+  });
+
+  it("login em voo não regrava a sessão depois da remoção", () => {
+    const i = helpers.indexOf("export async function salvarSessao");
+    expect(helpers.slice(i, i + 800)).toContain("estaRemovida(credencialId)");
+  });
+});
+
+describe("o que a revisão adversarial pegou", () => {
+  it("o painel enxerga o vínculo NULO, que é o estado que a remoção cria", () => {
+    // Era o pior defeito da primeira versão: a remoção zerava credencialId e
+    // o painel filtrava isNotNull. Os processos pausados sumiam da única tela
+    // que existe pra consertá-los, e a mensagem da pausa mandava reapontar
+    // por um caminho que não existia.
+    const i = router.indexOf("vinculosOrfaos: protectedProcedure");
+    const corpo = router.slice(i, i + 2600);
+    expect(corpo).not.toContain("isNotNull(motorMonitoramentos.credencialId)");
+    expect(corpo).toContain("semVinculo");
+  });
+
+  it("nenhum candidato é descartado em silêncio", () => {
+    // O `continue` deixava o monitoramento fora dos dois baldes, e o vínculo
+    // envenenado sobrevivia à remoção — o bug original de volta.
+    expect(router).toContain("desvincular.push(c.id)");
+    expect(router).toContain("desvincularSemPausar");
+  });
+
+  it("a tela só oferece credencial que atende aquele tribunal", () => {
+    expect(router).toContain("const atendem = (tribunal: string)");
+    expect(tela).toContain("(o.destinos ?? []).map");
+  });
+
+  it("credencial caída pede validação, não mudança em massa", () => {
+    expect(router).toContain('"reapontar" | "revalidar"');
+    expect(tela).toContain('o.acao === "reapontar" && (');
+  });
+
+  it("pausa deliberada do escritório não é reescrita nem religada depois", () => {
+    // Sobrescrever o motivo dela faria o reapontar seguinte religar um
+    // processo que alguém desligou de propósito — voltando a consumir crédito
+    // sem ninguém ter pedido.
+    expect(router).toContain('a.status === "pausado"');
+    expect(router).toContain("jaPausados");
+  });
+
+  it("erro de outra natureza sobrevive à pausa", () => {
+    expect(router).toContain("Erro anterior:");
+    expect(router).toContain("classificarErroMonitor(anterior)");
+  });
+
+  it("o motivo da pausa é diagnosticável pela tela do processo", () => {
+    // Sem as palavras "sem credencial", classificarErroMonitor devolvia
+    // "desconhecida" e o processo parado não dizia por quê.
+    expect(router).toContain("sem credencial");
+  });
+
+  it("as escritas da remoção são uma transação só", () => {
+    // São quatro. Morrer entre a terceira e a quarta deixaria os processos
+    // desvinculados com a credencial ainda viva na lista.
+    const i = router.indexOf("removerMinha: protectedProcedure");
+    expect(router.slice(i, i + 4200)).toContain("await db.transaction(async (tx) =>");
+  });
+
+  it("a confirmação da tela reflete um número que apareceu de verdade", () => {
+    // `true` fixo anulava a trava do servidor: o clique viraria consentimento
+    // a um número que a pessoa pode nunca ter visto.
+    expect(tela).toContain("confirmarPausarMonitoramentos: impacto.data != null");
+    expect(tela).not.toContain("confirmarPausarMonitoramentos: true");
+  });
+
+  it("o impacto não vem de cache velho", () => {
+    expect(tela).toContain('staleTime: 0, refetchOnMount: "always"');
   });
 });
