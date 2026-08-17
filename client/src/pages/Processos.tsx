@@ -3622,6 +3622,29 @@ function CofreTab() {
   // login. Só existe nesta resposta — o cofre não devolve depois.
   const [secretNovo, setSecretNovo] = useState<string | null>(null);
 
+  // Quantos processos monitorados dependem da credencial que está prestes a
+  // sair, e quem pode assumir. Sem isto a remoção era um clique cego.
+  const impacto = (trpc.cofreCredenciais as any).impactoRemocao?.useQuery(
+    { id: removerTarget?.id ?? 0 },
+    { enabled: !!removerTarget },
+  ) ?? { data: undefined };
+  const orfaos = (trpc.cofreCredenciais as any).vinculosOrfaos?.useQuery() ?? { data: undefined };
+  // Reapontar move centenas de processos de uma vez. Executar isso no
+  // `onChange` de um <select> seria a mesma classe de acidente que apaga uma
+  // coluna inteira num clique: a escolha e a execução têm que ser dois atos.
+  const [repontarAlvo, setRepontarAlvo] = useState<
+    { de: number | null; para: number; total: number; destino: string } | null
+  >(null);
+
+  const repontarMut = (trpc.cofreCredenciais as any).repontarMonitoramentos?.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(`${r.movidos} processo(s) agora usam "${r.destino}"`);
+      orfaos.refetch?.();
+      refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  }) ?? { mutate: () => {}, isPending: false };
+
   const cadastrarMut = trpc.cofreCredenciais.cadastrarMinha.useMutation({
     onSuccess: (data: any) => {
       if (data.status === "ativa") {
@@ -3639,9 +3662,19 @@ function CofreTab() {
   });
 
   const removerMut = trpc.cofreCredenciais.removerMinha.useMutation({
-    onSuccess: () => {
-      toast.success("Credencial removida");
+    onSuccess: (r: any) => {
+      // O que aconteceu com os processos é a parte que importa da remoção —
+      // dizer só "credencial removida" escondia exatamente o efeito colateral
+      // que deixou 420 processos parados sem explicação.
+      toast.success("Credencial removida", {
+        description: r?.repontados
+          ? `${r.repontados} processo(s) passaram para "${r.destino}".`
+          : r?.pausados
+            ? `${r.pausados} processo(s) foram pausados — cadastre outra credencial e reaponte.`
+            : undefined,
+      });
       setRemoverTarget(null);
+      orfaos.refetch?.();
       refetch();
     },
     onError: (e: any) => toast.error(e.message),
@@ -3669,6 +3702,9 @@ function CofreTab() {
   }) ?? { mutate: () => {}, isPending: false };
 
   const creds = credenciais || [];
+
+  const listaOrfaos: any[] = orfaos.data ?? [];
+  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
 
   return (
     <div className="space-y-4">
@@ -3703,6 +3739,75 @@ function CofreTab() {
         </div>
       </div>
 
+      {/* Processo monitorado guarda o ID da credencial. Quando ela é removida
+          ou cai, o vínculo continua apontando pra ela e o robô para — e até
+          aqui nenhuma tela mostrava esse vínculo, então o motivo da parada
+          ficava invisível. */}
+      {listaOrfaos.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-900">
+                Processos apontando para credencial que não pode atender
+              </p>
+              <p className="text-[11px] text-amber-900/80 leading-relaxed mt-0.5">
+                Eles continuam parados até serem reapontados para uma credencial ativa. Reapontar
+                não altera nada no processo — só troca qual login o robô usa.
+              </p>
+            </div>
+          </div>
+
+          {listaOrfaos.map((o: any) => (
+            <div
+              key={String(o.credencialId)}
+              className="flex items-center justify-between gap-3 flex-wrap rounded-xl bg-white border border-amber-200/70 p-3"
+            >
+              <div className="min-w-0 text-xs">
+                <p className="font-medium truncate">
+                  {o.total} processo(s) →{" "}
+                  {o.apelido ? `"${o.apelido}"` : "credencial sem cadastro"}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {o.status === "removida"
+                    ? "credencial removida do cofre"
+                    : o.status
+                      ? `credencial ${o.status}`
+                      : "vínculo sem credencial"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const para = Number(e.target.value);
+                    const destino = credsAtivas.find((c: any) => c.id === para);
+                    e.currentTarget.value = "";
+                    if (!para || !destino) return;
+                    setRepontarAlvo({
+                      de: o.credencialId,
+                      para,
+                      total: o.total,
+                      destino: destino.apelido,
+                    });
+                  }}
+                  disabled={repontarMut.isPending || credsAtivas.length === 0}
+                >
+                  <option value="" disabled>
+                    {credsAtivas.length === 0 ? "nenhuma credencial ativa" : "reapontar para…"}
+                  </option>
+                  {credsAtivas.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.apelido}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {isLoading ? (
         <Skeleton className="h-32 w-full" />
       ) : creds.length === 0 ? (
@@ -3766,10 +3871,21 @@ function CofreTab() {
                       2FA ativado
                     </div>
                   )}
+                  {/* Dois relógios, dois nomes. O card mostrava só o último
+                      SUCESSO sob o rótulo "última validação" — credencial que
+                      falhou hoje exibia a data do último acerto, semanas
+                      atrás, logo acima da mensagem de erro. Parecia que tinha
+                      validado bem naquele dia. */}
                   {c.ultimoLoginSucessoEm && (
                     <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                       <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                      <span>Última validação: {new Date(c.ultimoLoginSucessoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
+                      <span>Último acesso com sucesso: {new Date(c.ultimoLoginSucessoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
+                    </div>
+                  )}
+                  {c.ultimoLoginTentativaEm && c.ultimoLoginTentativaEm !== c.ultimoLoginSucessoEm && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                      <RefreshCcw className="h-3 w-3 text-slate-400" />
+                      <span>Última tentativa: {new Date(c.ultimoLoginTentativaEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
                     </div>
                   )}
                   {(c.ultimoErro || c.mensagemErro) && (
@@ -3919,9 +4035,35 @@ function CofreTab() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remover credencial "{removerTarget?.apelido}"?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Monitoramentos que dependem dela vão <strong>parar de funcionar</strong>.
-              Para voltar a operar você precisará cadastrar a credencial novamente.
+            <AlertDialogDescription className="leading-relaxed">
+              {impacto.data == null ? (
+                "Conferindo quais processos dependem dela…"
+              ) : impacto.data.monitoramentos === 0 ? (
+                "Nenhum processo monitorado depende desta credencial."
+              ) : impacto.data.destinoSugerido ? (
+                <>
+                  <strong>{impacto.data.monitoramentos} processo(s) monitorado(s)</strong> usam esta
+                  credencial.{" "}
+                  {impacto.data.vaoMudar > 0 && (
+                    <>
+                      {impacto.data.vaoMudar} passam para{" "}
+                      <strong>{impacto.data.destinoSugerido.apelido}</strong> e continuam rodando.
+                    </>
+                  )}{" "}
+                  {impacto.data.vaoPausar > 0 && (
+                    <>
+                      Os outros <strong>{impacto.data.vaoPausar}</strong> vão ser pausados — são de
+                      outro tribunal, que essa credencial não atende.
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <strong>{impacto.data.monitoramentos} processo(s) monitorado(s)</strong> dependem
+                  dela, e não há outra credencial ativa de {impacto.data.sistema} para assumir.
+                  Todos vão ser <strong>pausados</strong> até você cadastrar outra e reapontá-los.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -3929,7 +4071,15 @@ function CofreTab() {
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
-                if (removerTarget) removerMut.mutate({ id: removerTarget.id });
+                if (removerTarget) {
+                  removerMut.mutate({
+                    id: removerTarget.id,
+                    // O servidor recusa remover em silêncio quando isso pausa
+                    // processo. O usuário está vendo o número acima — este
+                    // clique é a resposta a ele.
+                    confirmarPausarMonitoramentos: true,
+                  });
+                }
               }}
               disabled={removerMut.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -3946,6 +4096,36 @@ function CofreTab() {
           advogado logar pelo navegador — e este é o único momento em que dá
           pra ver o segredo. Fechar sem copiar deixa a conta dele acessível
           só pelo robô. */}
+      <AlertDialog open={!!repontarAlvo} onOpenChange={(open) => !open && setRepontarAlvo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Reapontar {repontarAlvo?.total} processo(s) para "{repontarAlvo?.destino}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="leading-relaxed">
+              Só muda qual login o robô usa para consultar esses processos. Nada é alterado no
+              processo em si, e nenhuma movimentação já registrada se perde. Os que estavam parados
+              por causa da credencial voltam a rodar na próxima varredura.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={repontarMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (!repontarAlvo) return;
+                repontarMut.mutate({ de: repontarAlvo.de, para: repontarAlvo.para });
+                setRepontarAlvo(null);
+              }}
+              disabled={repontarMut.isPending}
+            >
+              {repontarMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Reapontar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={!!secretNovo} onOpenChange={(open) => !open && setSecretNovo(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

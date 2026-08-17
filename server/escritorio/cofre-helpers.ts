@@ -14,7 +14,7 @@
  * que vão usar imediatamente e descartar.
  */
 
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { authenticator } from "otplib";
 import { decrypt, encrypt } from "./crypto-utils";
 import { getDb } from "../db";
@@ -117,6 +117,24 @@ export function deveReligarMonitoramento(m: {
   return c?.causa === "sessao_expirada" || c?.causa === "sem_credencial";
 }
 
+/**
+ * A credencial foi apagada pelo dono?
+ *
+ * Consultado antes de qualquer escrita automática. O soft delete existe pra
+ * preservar auditoria, mas isso só funciona se nada além do próprio usuário
+ * puder tirar a linha desse estado.
+ */
+export async function estaRemovida(credencialId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const [row] = await db
+    .select({ status: cofreCredenciais.status })
+    .from(cofreCredenciais)
+    .where(eq(cofreCredenciais.id, credencialId))
+    .limit(1);
+  return row?.status === "removida";
+}
+
 async function religarMonitoramentosDaCredencial(credencialId: number): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
@@ -157,6 +175,14 @@ export async function atualizarStatusAposLogin(
   if (!db) return;
   const agora = new Date();
 
+  // `removida` é decisão do usuário, e nenhuma rotina automática pode
+  // desfazê-la de raspão. Sem este filtro, uma tentativa de login numa
+  // credencial apagada trocava o status por "ativa"/"erro" e ela VOLTAVA pra
+  // lista do cofre — foi assim que uma credencial removida reapareceu sozinha
+  // em produção, arrastando junto os monitoramentos que ainda apontavam pra
+  // ela.
+  const naoRemovida = and(eq(cofreCredenciais.id, id), ne(cofreCredenciais.status, "removida"));
+
   if (resultado.ok) {
     await db
       .update(cofreCredenciais)
@@ -166,10 +192,13 @@ export async function atualizarStatusAposLogin(
         ultimoLoginTentativaEm: agora,
         ultimoErro: null,
       })
-      .where(eq(cofreCredenciais.id, id));
+      .where(naoRemovida);
 
     // Auto-cura: sem isto o painel seguia mostrando "credencial expirada"
-    // nos processos mesmo depois da revalidação dar certo.
+    // nos processos mesmo depois da revalidação dar certo. Religar
+    // monitoramento de credencial removida seria pior que não religar: eles
+    // voltariam a rodar apontando pra uma credencial que o dono apagou.
+    if (await estaRemovida(id)) return;
     const religados = await religarMonitoramentosDaCredencial(id);
     log.info(
       { credencialId: id, monitoramentosReligados: religados },
@@ -183,7 +212,7 @@ export async function atualizarStatusAposLogin(
         ultimoLoginTentativaEm: agora,
         ultimoErro: resultado.mensagemErro?.slice(0, 1000) ?? "Falha desconhecida no login",
       })
-      .where(eq(cofreCredenciais.id, id));
+      .where(naoRemovida);
     log.warn(
       { credencialId: id, erro: resultado.mensagemErro?.slice(0, 200) },
       "[cofre] login falhou — credencial marcada como erro",
@@ -251,6 +280,16 @@ export async function recuperarSessao(
 ): Promise<string | null> {
   const db = await getDb();
   if (!db) return null;
+
+  // A sessão sobrevive à remoção da credencial: são tabelas separadas, e o
+  // cookie continua válido por até 90 minutos. Sem esta checagem, o sistema
+  // seguia entrando no portal do tribunal com um login que o dono apagou —
+  // o bloqueio no relogin não alcançava esse caso, porque sessão viva nem
+  // chega a tentar relogin.
+  if (await estaRemovida(credencialId)) {
+    log.warn({ credencialId }, "[cofre] sessão negada: credencial removida");
+    return null;
+  }
 
   const [row] = await db
     .select()
@@ -321,6 +360,18 @@ async function tentarReloginAutomaticoImpl(credencialId: number): Promise<string
     .where(eq(cofreCredenciais.id, credencialId))
     .limit(1);
   if (!cred) return null;
+
+  // Credencial apagada não faz login. Não é só higiene de status: seria o
+  // sistema entrando no portal do tribunal com um login que o dono mandou
+  // apagar. Quem chegou aqui foi um monitoramento que ficou apontando pra ela
+  // — o conserto é repontar o monitoramento, não ressuscitar a credencial.
+  if (cred.status === "removida") {
+    log.warn(
+      { credencialId },
+      "[cofre] relogin ignorado: credencial removida — monitoramento ainda aponta pra ela",
+    );
+    return null;
+  }
 
   // Login usa o portal do estado da credencial (config por sistema). Só PJe-TJ
   // PDPJ tem adapter; outros sistemas (e-SAJ, e-Proc, TRT) → sem relogin auto.
@@ -411,6 +462,11 @@ export async function marcarCredencialExpirada(
     .where(eq(cofreCredenciais.id, credencialId))
     .limit(1);
 
+  // Credencial apagada não expira: ela já não existe pro usuário. Marcar
+  // "expirada" aqui tirava a linha de `removida` e a fazia reaparecer no
+  // cofre — e ainda notificava o dono sobre uma credencial que ele apagou.
+  if (!anterior || anterior.status === "removida") return;
+
   await db
     .update(cofreCredenciais)
     .set({
@@ -418,7 +474,10 @@ export async function marcarCredencialExpirada(
       ultimoLoginTentativaEm: new Date(),
       ultimoErro: motivo.slice(0, 1000),
     })
-    .where(eq(cofreCredenciais.id, credencialId));
+    // Repetido no WHERE, e não só na checagem acima: o login demora dezenas de
+    // segundos, e nesse intervalo o dono pode ter apagado a credencial. Quem
+    // decide é o banco no instante da escrita.
+    .where(and(eq(cofreCredenciais.id, credencialId), ne(cofreCredenciais.status, "removida")));
   log.warn({ credencialId, motivo: motivo.slice(0, 200) }, "[cofre] credencial marcada como expirada");
 
   if (anterior && (anterior.status === "ativa" || anterior.status === "validando")) {
