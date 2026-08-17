@@ -25,12 +25,19 @@ import { TRPCError } from "@trpc/server";
 import { eq, and, desc, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { cofreCredenciais, cofreSessoes, motorMonitoramentos } from "../../drizzle/schema";
+import { cofreCredencialTribunais, cofreCredenciais, cofreSessoes, motorMonitoramentos } from "../../drizzle/schema";
 import { encrypt, maskToken } from "./crypto-utils";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { checkPermission } from "./check-permission";
 import { createLogger } from "../_core/logger";
-import { configPorSistema, tribunalRequerCredencial } from "../processos/tribunais-pdpj";
+import {
+  configPorSistema,
+  getConfigTribunal,
+  SISTEMA_PJE_NACIONAL,
+  tribunalDoSistema,
+  tribunaisPjeDisponiveis,
+  tribunalRequerCredencial,
+} from "../processos/tribunais-pdpj";
 import { deveReligarMonitoramento } from "./cofre-helpers";
 import { classificarErroMonitor } from "../processos/diagnostico-monitoramento";
 import {
@@ -62,14 +69,21 @@ async function exigirAdminProcessos(userId: number): Promise<void> {
 
 const log = createLogger("cofre-credenciais");
 
+/**
+ * O que o cadastro aceita.
+ *
+ * Antes eram 26 ids, incluindo e-SAJ, e-Proc e TRT — nenhum deles com adapter.
+ * O cofre guardava a senha de um advogado criptografada pra um sistema que
+ * nunca ia conseguir usá-la: segredo parado no banco sem propósito, e uma
+ * credencial que só falharia no dia em que alguém dependesse dela.
+ *
+ * Agora sai do registro do motor. Ligar um sistema novo é ligá-lo no motor.
+ */
 const SISTEMAS_VALIDOS: readonly SistemaCofre[] = [
-  "pje_tjce", "pje_tjrj", "pje_tjmg", "pje_tjdft", "pje_tjpe", "pje_tjes",
-  "pje_tjpr", "pje_tjrs", "pje_tjgo", "pje_*",
-  "esaj_tjsp", "esaj_tjsc", "esaj_tjba", "esaj_tjam", "esaj_tjac",
-  "esaj_tjto", "esaj_tjms", "esaj_tjal", "esaj_*",
-  "pje_restrito_trt1", "pje_restrito_trt2", "pje_restrito_trt7",
-  "pje_restrito_trt15", "pje_restrito_*",
-  "eproc_trf2", "eproc_trf4", "eproc_*",
+  SISTEMA_PJE_NACIONAL as SistemaCofre,
+  ...tribunaisPjeDisponiveis().map(
+    (t) => `pje_${t === "tjdf" ? "tjdft" : t}` as SistemaCofre,
+  ),
 ] as const;
 
 async function resolverEscritorioId(userId: number): Promise<number> {
@@ -401,19 +415,94 @@ export const cofreCredenciaisRouter = router({
   }),
 
   /**
-   * Lista os sistemas de tribunal disponíveis pra cadastro no cofre.
-   * Hoje só `pje_tjce` tem adapter de login automatizado; outros aparecem
-   * como "em desenvolvimento" pra setar expectativa correta no dropdown.
+   * Sistemas oferecidos no cadastro.
+   *
+   * Derivada do registro do motor, e não escrita à mão: a lista fixa divergiu
+   * — prometia E-SAJ TJSP e TRT-7, que não têm adapter, enquanto escondia 9
+   * estados que o motor já atendia. Ligar um estado novo continua sendo uma
+   * linha no registro, e a tela acompanha sozinha.
    */
   listarMinhasSistemasSuportados: protectedProcedure.query(() => {
+    const estados = tribunaisPjeDisponiveis();
     return [
-      { id: "pje_tjce", label: "PJe TJCE — 1º grau (disponível)", disponivel: true },
-      { id: "esaj_tjsp", label: "E-SAJ TJSP — em desenvolvimento", disponivel: false },
-      { id: "pje_tjrj", label: "PJe TJRJ — em desenvolvimento", disponivel: false },
-      { id: "pje_tjmg", label: "PJe TJMG — em desenvolvimento", disponivel: false },
-      { id: "pje_restrito_trt7", label: "PJe TRT-7 — em desenvolvimento", disponivel: false },
+      {
+        id: SISTEMA_PJE_NACIONAL,
+        label: `PJe — todos os estados (${estados.length})`,
+        disponivel: true,
+        nacional: true,
+      },
+      ...estados.map((t: string) => ({
+        id: `pje_${t === "tjdf" ? "tjdft" : t}`,
+        label: `PJe ${t.toUpperCase()} — 1º grau`,
+        disponivel: true,
+        nacional: false,
+      })),
     ];
   }),
+
+  /**
+   * Situação da credencial em cada PJe.
+   *
+   * Devolve TODOS os estados que o motor atende, e não só os já testados: o
+   * "não testado" é a informação principal aqui. Dos 12, só o TJCE foi
+   * validado com login real — os outros têm a URL derivada do padrão do TJCE
+   * e podem exigir ajuste, como o TJDF já exigiu.
+   */
+  tribunaisDaCredencial: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ input, ctx }) => {
+      await exigirAdminProcessos(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const escritorioId = await resolverEscritorioId(ctx.user.id);
+
+      const [cred] = await db
+        .select({ sistema: cofreCredenciais.sistema })
+        .from(cofreCredenciais)
+        .where(
+          and(eq(cofreCredenciais.id, input.id), eq(cofreCredenciais.escritorioId, escritorioId)),
+        )
+        .limit(1);
+      if (!cred) throw new TRPCError({ code: "NOT_FOUND", message: "Credencial não encontrada" });
+
+      const registros = await db
+        .select()
+        .from(cofreCredencialTribunais)
+        .where(eq(cofreCredencialTribunais.credencialId, input.id));
+      const porTribunal = new Map(registros.map((r) => [r.tribunal, r]));
+
+      const proprio = tribunalDoSistema(cred.sistema);
+      const alcance = proprio ? [proprio] : tribunaisPjeDisponiveis();
+
+      const processos = await db
+        .select({
+          tribunal: motorMonitoramentos.tribunal,
+          total: sql<number>`COUNT(*)`,
+        })
+        .from(motorMonitoramentos)
+        .where(
+          and(
+            eq(motorMonitoramentos.escritorioId, escritorioId),
+            eq(motorMonitoramentos.credencialId, input.id),
+          ),
+        )
+        .groupBy(motorMonitoramentos.tribunal);
+      const contagem = new Map(processos.map((p) => [p.tribunal, Number(p.total)]));
+
+      return {
+        nacional: proprio == null,
+        tribunais: alcance.map((t) => {
+          const r = porTribunal.get(t);
+          return {
+            tribunal: t,
+            status: r?.status ?? ("nao_testado" as const),
+            ultimoErro: r?.ultimoErro ?? null,
+            ultimoSucessoEm: r?.ultimoSucessoEm?.toISOString() ?? null,
+            processos: contagem.get(t) ?? 0,
+          };
+        }),
+      };
+    }),
 
   /** Cadastra credencial pessoal. */
   cadastrarMinha: protectedProcedure
@@ -744,7 +833,13 @@ export const cofreCredenciaisRouter = router({
 
   /** Validar credencial — login real no tribunal. Apenas admin de processos (dono/gestor). */
   validarMinha: protectedProcedure
-    .input(z.object({ id: z.number().int().positive() }))
+    .input(
+      z.object({
+        id: z.number().int().positive(),
+        /** Em qual PJe testar. Obrigatório na prática pra credencial nacional. */
+        tribunal: z.string().max(16).optional(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       await exigirAdminProcessos(ctx.user.id);
       const db = await getDb();
@@ -763,7 +858,7 @@ export const cofreCredenciaisRouter = router({
         .limit(1);
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Credencial não encontrada" });
 
-      const { buscarCredencialDecriptada, atualizarStatusAposLogin, salvarSessao } =
+      const { buscarCredencialDecriptada, atualizarStatusAposLogin, salvarSessao, registrarTribunal } =
         await import("./cofre-helpers");
       const cred = await buscarCredencialDecriptada(input.id);
       if (!cred) {
@@ -778,7 +873,12 @@ export const cofreCredenciaisRouter = router({
         "[cofre] validando credencial via login real",
       );
 
-      const cfgTribunal = configPorSistema(cred.sistema);
+      // Qual portal testar. Credencial de alcance nacional não nomeia estado,
+      // então quem chama escolhe — e o padrão é o TJCE, único validado até
+      // aqui. Testar "a credencial" sem dizer onde não significa nada quando
+      // ela vale em doze lugares.
+      const tribunalAlvo = input.tribunal ?? tribunalDoSistema(cred.sistema) ?? "tjce";
+      const cfgTribunal = getConfigTribunal(tribunalAlvo);
       if (cfgTribunal) {
         const { PjeTjceScraper } = await import(
           "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/pje-tjce"
@@ -805,20 +905,26 @@ export const cofreCredenciaisRouter = router({
             .where(eq(cofreCredenciais.id, input.id));
         }
 
-        await atualizarStatusAposLogin(input.id, {
+        const motivoErro = resultado.ok
+          ? null
+          : `${resultado.mensagem}${resultado.detalhes ? ` (${resultado.detalhes})` : ""}`;
+
+        await atualizarStatusAposLogin(input.id, { ok: resultado.ok, mensagemErro: motivoErro });
+        // O resultado é DAQUELE tribunal. Sem registrar por estado, uma falha
+        // em MG faria o CE — que funciona — aparecer quebrado junto.
+        await registrarTribunal(input.id, tribunalAlvo, {
           ok: resultado.ok,
-          mensagemErro: resultado.ok
-            ? null
-            : `${resultado.mensagem}${resultado.detalhes ? ` (${resultado.detalhes})` : ""}`,
+          motivo: motivoErro ?? undefined,
         });
 
         if (resultado.ok && resultado.storageStateJson) {
           const expira = new Date(Date.now() + 90 * 60 * 1000);
-          await salvarSessao(input.id, resultado.storageStateJson, expira);
+          await salvarSessao(input.id, tribunalAlvo, resultado.storageStateJson, expira);
         }
 
         return {
           ok: resultado.ok,
+          tribunal: tribunalAlvo,
           mensagem: resultado.mensagem,
           latenciaMs: resultado.latenciaMs,
           /**

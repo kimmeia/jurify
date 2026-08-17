@@ -219,7 +219,8 @@ describe("processos.consultarDocumento — sucesso", () => {
       credencialId: 5,
     });
 
-    // 2º arg `{ tentarRelogin: true }` faz auto-recovery se sessão caiu.
-    expect(recuperarSessao).toHaveBeenCalledWith(5, { tentarRelogin: true });
+    // O tribunal vai junto: uma credencial do PDPJ vale em vários estados, e
+    // a sessão é por portal. Sem ele, o cookie do CE seria mandado pro MG.
+    expect(recuperarSessao).toHaveBeenCalledWith(5, "tjce", { tentarRelogin: true });
   });
 });
