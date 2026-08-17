@@ -79,4 +79,31 @@ describe("robustez da leitura", () => {
   it("a falha explica a saída manual", () => {
     expect(leitor).toContain("Colar o código");
   });
+
+  it("a falha mostra o começo do que foi lido", () => {
+    // "O QR lido não é de 2FA" sozinho manda a pessoa adivinhar qual dos QRs
+    // da tela ela pegou. Foi o que aconteceu na primeira tentativa real.
+    const otp = ler("shared/otpauth.ts");
+    expect(otp).toContain("Ele começa com");
+  });
+});
+
+describe("QR de transferência do autenticador", () => {
+  it("é reconhecido — é o QR que a pessoa tem à mão", () => {
+    // O portal só mostra o QR dele no momento de configurar o 2FA. Depois
+    // disso o caminho é o app autenticador, e o QR de lá é outro formato.
+    const otp = ler("shared/otpauth.ts");
+    expect(otp).toContain("lerMigracao");
+  });
+
+  it("com mais de uma conta, a tela pergunta qual", () => {
+    // Escolher sozinho gravaria o 2FA do e-mail pessoal no login do tribunal,
+    // e o erro só apareceria dias depois, na hora de entrar.
+    expect(leitor).toContain("setEscolher(todas)");
+    expect(leitor).toContain("Escolha a\n              conta do tribunal");
+  });
+
+  it("com uma conta só, entra direto", () => {
+    expect(leitor).toContain("else onLido(r.dados)");
+  });
 });
