@@ -15,6 +15,8 @@
  * explicando por quê.
  */
 
+import { lerMigracao } from "./otpauth-migration";
+
 /** Padrões do TOTP, e o que a geração do cofre assume. */
 export const TOTP_PADRAO = { algoritmo: "SHA1", digitos: 6, periodo: 30 } as const;
 
@@ -32,10 +34,20 @@ export type MotivoRecusa =
   | "nao_e_totp"
   | "sem_secret"
   | "secret_invalido"
-  | "fora_do_padrao";
+  | "fora_do_padrao"
+  | "exportacao_vazia";
 
 export type LeituraQr =
-  | { ok: true; dados: QrTotp }
+  | {
+      ok: true;
+      dados: QrTotp;
+      /**
+       * Outras contas achadas no MESMO QR. O de exportação do autenticador
+       * traz o cofre inteiro da pessoa, e escolher por ela gravaria o 2FA de
+       * um serviço no login de outro.
+       */
+      outras?: QrTotp[];
+    }
   | { ok: false; motivo: MotivoRecusa; detalhe: string };
 
 const BASE32 = /^[A-Z2-7]+=*$/;
@@ -76,12 +88,42 @@ export function lerOtpauth(texto: string): LeituraQr {
   // (http, ws, file…) tem tratamento diferente entre motores, e o rótulo
   // costuma trazer `:` e espaço codificados — terreno onde essas diferenças
   // aparecem.
+  // Exportação do app autenticador. É o QR que a pessoa TEM à mão: o portal
+  // só mostra o dele no momento de configurar, então depois disso o caminho
+  // natural é abrir o autenticador e exportar.
+  const exportadas = lerMigracao(cru);
+  if (exportadas) {
+    const uteis = exportadas.filter((c) => c.compativel);
+    if (uteis.length === 0) {
+      const incompativel = exportadas.find((c) => !c.compativel);
+      return {
+        ok: false,
+        motivo: incompativel ? "fora_do_padrao" : "exportacao_vazia",
+        detalhe: incompativel
+          ? `A conta nesse QR usa ${incompativel.motivoIncompativel}, fora do padrão que o cofre gera.`
+          : "Esse QR de exportação não trouxe nenhuma conta de código por tempo.",
+      };
+    }
+    const [primeira, ...resto] = uteis;
+    return {
+      ok: true,
+      dados: { secret: primeira!.secret, emissor: primeira!.emissor, conta: primeira!.conta },
+      outras: resto.map((c) => ({ secret: c.secret, emissor: c.emissor, conta: c.conta })),
+    };
+  }
+
   const m = /^otpauth:\/\/([a-z]+)\/([^?]*)(?:\?(.*))?$/i.exec(cru);
   if (!m) {
+    // O começo do que foi lido vai junto: sem isso, "não é de 2FA" manda a
+    // pessoa adivinhar qual dos QRs da tela ela pegou. Só o começo — o
+    // conteúdo pode ser o próprio segredo.
+    const amostra = cru.slice(0, 40).replace(/\s+/g, " ");
     return {
       ok: false,
       motivo: "nao_e_otpauth",
-      detalhe: "O QR lido não é de verificação em duas etapas.",
+      detalhe: amostra
+        ? `O QR lido não é de verificação em duas etapas. Ele começa com "${amostra}${cru.length > 40 ? "…" : ""}".`
+        : "O QR lido veio vazio.",
     };
   }
 
