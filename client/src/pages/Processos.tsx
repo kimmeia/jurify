@@ -41,6 +41,7 @@ import {
 import { ImportarAdvboxDialog } from "./processos/ImportarAdvboxDialog";
 import { JurisIaPainel } from "./processos/JurisIaPainel";
 import { Upload } from "lucide-react";
+import LeitorQr from "@/components/LeitorQr";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 
@@ -3608,6 +3609,8 @@ function CofreTab() {
   const { data: sistemas } = trpc.cofreCredenciais.listarMinhasSistemasSuportados?.useQuery() ?? { data: undefined };
 
   const [novoOpen, setNovoOpen] = useState(false);
+  const [modo2fa, setModo2fa] = useState<"codigo" | "qr">("codigo");
+  const [qrLido, setQrLido] = useState<{ secret: string; emissor: string | null; conta: string | null } | null>(null);
   const [form, setForm] = useState({
     apelido: "",
     sistema: "pje_tjce",
@@ -3658,6 +3661,10 @@ function CofreTab() {
       }
       setNovoOpen(false);
       setForm({ apelido: "", sistema: "pje_tjce", username: "", password: "", totpSecret: "" });
+      // O QR lido some junto com o formulário: deixá-lo pendurado faria o
+      // próximo cadastro abrir já mostrando o código de outra credencial.
+      setQrLido(null);
+      setModo2fa("codigo");
       refetch();
     },
     onError: (e: any) => toast.error("Erro ao cadastrar", { description: e.message }),
@@ -3938,7 +3945,19 @@ function CofreTab() {
       )}
 
       {/* Dialog de cadastro */}
-      <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
+      {/* Fechar sem cadastrar também limpa o QR: o código lido é de uma conta
+          específica, e reaproveitá-lo no cadastro seguinte gravaria o 2FA de
+          um advogado no login de outro. */}
+      <Dialog
+        open={novoOpen}
+        onOpenChange={(v) => {
+          setNovoOpen(v);
+          if (!v) {
+            setQrLido(null);
+            setModo2fa("codigo");
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Cadastrar credencial</DialogTitle>
@@ -3996,26 +4015,63 @@ function CofreTab() {
               </div>
             </div>
             <div>
-              <Label>Secret do 2FA (opcional)</Label>
-              <div className="relative">
-                <Input
-                  type={show2fa ? "text" : "password"}
-                  placeholder="Se o tribunal exige autenticador"
-                  value={form.totpSecret}
-                  onChange={(e) => setForm({ ...form, totpSecret: e.target.value })}
-                  className="pr-8 font-mono"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShow2fa(!show2fa)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-                >
-                  {show2fa ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                </button>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <Label>Verificação em duas etapas (2FA)</Label>
+                {/* Duas portas para o MESMO campo. O modo de digitar continua
+                    inteiro: o print do QR falha com frequência (recorte
+                    cortado, foto do monitor), e sem a saída manual a pessoa
+                    fica sem caminho. */}
+                <div className="inline-flex gap-0.5 bg-muted p-0.5 rounded-lg">
+                  {(["codigo", "qr"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setModo2fa(m)}
+                      className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition ${
+                        modo2fa === m ? "bg-background shadow-sm text-violet-700" : "text-muted-foreground"
+                      }`}
+                    >
+                      {m === "codigo" ? "Colar o código" : "Ler do print do QR"}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                Cole o secret base32 do app autenticador (Google Authenticator, etc). Opcional.
-              </p>
+
+              {modo2fa === "codigo" ? (
+                <>
+                  <div className="relative">
+                    <Input
+                      type={show2fa ? "text" : "password"}
+                      placeholder="Se o tribunal exige autenticador"
+                      value={form.totpSecret}
+                      onChange={(e) => setForm({ ...form, totpSecret: e.target.value })}
+                      className="pr-8 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShow2fa(!show2fa)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    >
+                      {show2fa ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Cole o secret base32 do app autenticador (Google Authenticator, etc). Opcional.
+                  </p>
+                </>
+              ) : (
+                <LeitorQr
+                  onLido={(r) => {
+                    setForm((f) => ({ ...f, totpSecret: r.secret }));
+                    setQrLido(r);
+                  }}
+                  lido={qrLido}
+                  aoLimpar={() => {
+                    setQrLido(null);
+                    setForm((f) => ({ ...f, totpSecret: "" }));
+                  }}
+                />
+              )}
             </div>
           </div>
           <DialogFooter>
