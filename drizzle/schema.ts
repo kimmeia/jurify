@@ -3350,9 +3350,46 @@ export const cofreSessoes = mysqlTable("cofre_sessoes", {
   /** Estimativa baseada em TTL típico do tribunal (geralmente 24-72h) */
   expiraEmEstimado: timestamp("expiraEmEstimado"),
   ultimoUsoEm: timestamp("ultimoUsoEm"),
+  /**
+   * De qual PJe é esta sessão.
+   *
+   * Uma credencial do PDPJ vale em todos os estados, mas cada portal tem
+   * cookies próprios. Sem esta coluna, a sessão de um estado sobrescrevia a
+   * do outro e o tribunal passava a ver login atrás de login da mesma conta.
+   *
+   * NULL = sessão anterior à separação, tratada como inutilizável.
+   */
+  tribunal: varchar("tribunalSessao", { length: 16 }),
 });
 
 export type CofreSessao = typeof cofreSessoes.$inferSelect;
+
+/**
+ * Situação de uma credencial em UM tribunal.
+ *
+ * Dos estados que o motor conhece, só o TJCE foi validado com login real —
+ * os outros têm a URL derivada do padrão. Guardar o resultado por tribunal é
+ * o que permite a tela dizer "não testado" em vez de prometer que funciona.
+ */
+export const cofreCredencialTribunais = mysqlTable(
+  "cofre_credencial_tribunais",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    credencialId: int("credencialIdCT").notNull(),
+    tribunal: varchar("tribunalCT", { length: 16 }).notNull(),
+    status: mysqlEnum("statusCT", ["nao_testado", "ativa", "erro"]).default("nao_testado").notNull(),
+    ultimoErro: text("ultimoErroCT"),
+    ultimoSucessoEm: timestamp("ultimoSucessoEmCT"),
+    ultimaTentativaEm: timestamp("ultimaTentativaEmCT"),
+    createdAt: timestamp("createdAtCT").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAtCT").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    porCredencial: uniqueIndex("uq_cofre_cred_tribunal").on(t.credencialId, t.tribunal),
+  }),
+);
+
+export type CofreCredencialTribunal = typeof cofreCredencialTribunais.$inferSelect;
 export type InsertCofreSessao = typeof cofreSessoes.$inferInsert;
 
 /**

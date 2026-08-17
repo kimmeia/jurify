@@ -100,6 +100,35 @@ const ALIAS_SISTEMA_PARA_TRIBUNAL: Record<string, string> = {
   tjdft: "tjdf",
 };
 
+/**
+ * Sistema que vale em QUALQUER PJe.
+ *
+ * O login do PDPJ é nacional — o mesmo CPF/OAB entra em todos os estados. Sem
+ * este valor, monitorar processo de outro estado exigia cadastrar a mesma
+ * pessoa de novo, e a mesma senha acabava guardada uma vez por tribunal.
+ */
+export const SISTEMA_PJE_NACIONAL = "pje_*";
+
+/** Um sistema do cofre atende este tribunal? */
+export function sistemaAtendeTribunal(sistema: string, tribunal: string): boolean {
+  if (sistema === SISTEMA_PJE_NACIONAL) return tribunal in REGISTRO;
+  return configPorSistema(sistema)?.tribunal === tribunal;
+}
+
+/**
+ * Tribunal que um sistema nomeia. `null` pro alcance nacional, que não nomeia
+ * nenhum — quem chama precisa dizer qual estado quer.
+ */
+export function tribunalDoSistema(sistema: string): string | null {
+  if (sistema === SISTEMA_PJE_NACIONAL) return null;
+  return configPorSistema(sistema)?.tribunal ?? null;
+}
+
+/** Estados que o motor atende, na ordem do registro. */
+export function tribunaisPjeDisponiveis(): string[] {
+  return Object.keys(REGISTRO);
+}
+
 export function configPorSistema(sistema: string): TribunalPdpjConfig | null {
   const m = /^pje_(tj[a-z]+)$/.exec(sistema);
   if (!m) return null;

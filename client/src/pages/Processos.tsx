@@ -42,6 +42,10 @@ import { ImportarAdvboxDialog } from "./processos/ImportarAdvboxDialog";
 import { JurisIaPainel } from "./processos/JurisIaPainel";
 import { Upload } from "lucide-react";
 import LeitorQr from "@/components/LeitorQr";
+import GradeTribunais from "@/components/GradeTribunais";
+
+/** Sistema do cofre que vale em qualquer PJe. Espelha SISTEMA_PJE_NACIONAL do servidor. */
+const SISTEMA_NACIONAL = "pje_*";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 
@@ -3604,9 +3608,50 @@ function NovasAcoesTab() {
 // TAB: COFRE DE CREDENCIAIS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * A grade de estados de uma credencial nacional.
+ *
+ * Componente próprio porque cada credencial busca a sua — e porque testar um
+ * estado é um login real, que demora dezenas de segundos e não pode bloquear
+ * a lista inteira.
+ */
+function GradeDaCredencial({ credencialId }: { credencialId: number }) {
+  const q = (trpc.cofreCredenciais as any).tribunaisDaCredencial?.useQuery({ id: credencialId }) ?? {
+    data: undefined,
+  };
+  const [testando, setTestando] = useState<string | null>(null);
+
+  const validar = (trpc.cofreCredenciais as any).validarMinha?.useMutation({
+    onSuccess: (r: any) => {
+      setTestando(null);
+      q.refetch?.();
+      if (r?.ok) toast.success(`${String(r.tribunal ?? "").toUpperCase()}: login funcionou`);
+      else toast.error(`${String(r?.tribunal ?? "").toUpperCase()}: ${r?.mensagem ?? "login falhou"}`);
+    },
+    onError: (e: any) => {
+      setTestando(null);
+      toast.error(e.message);
+    },
+  }) ?? { mutate: () => {} };
+
+  if (!q.data) return null;
+  return (
+    <GradeTribunais
+      tribunais={q.data.tribunais}
+      testando={testando}
+      onTestar={(tribunal) => {
+        setTestando(tribunal);
+        validar.mutate({ id: credencialId, tribunal });
+      }}
+    />
+  );
+}
+
 function CofreTab() {
   const { data: credenciais, refetch, isLoading } = trpc.cofreCredenciais.listarMinhas.useQuery();
   const { data: sistemas } = trpc.cofreCredenciais.listarMinhasSistemasSuportados?.useQuery() ?? { data: undefined };
+  const estadosPje = ((sistemas ?? []) as any[]).filter((s) => !s.nacional);
+  const nacionalDisponivel = ((sistemas ?? []) as any[]).some((s) => s.nacional);
 
   const [novoOpen, setNovoOpen] = useState(false);
   const [modo2fa, setModo2fa] = useState<"codigo" | "qr">("codigo");
@@ -3904,6 +3949,11 @@ function CofreTab() {
                       <span>Última tentativa: {new Date(c.ultimoLoginTentativaEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
                     </div>
                   )}
+                  {c.sistema === SISTEMA_NACIONAL && (
+                    <div className="pt-2 mt-1 border-t">
+                      <GradeDaCredencial credencialId={c.id} />
+                    </div>
+                  )}
                   {(c.ultimoErro || c.mensagemErro) && (
                     <div className={`text-[10px] rounded-lg p-2 ${
                       c.status === "erro" || c.status === "expirada"
@@ -3975,18 +4025,68 @@ function CofreTab() {
                 onChange={(e) => setForm({ ...form, apelido: e.target.value })}
               />
             </div>
-            <div>
-              <Label>Tribunal/Sistema *</Label>
-              <Select value={form.sistema} onValueChange={(v) => setForm({ ...form, sistema: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent className="max-h-64">
-                  {(sistemas || []).map((s: any) => (
-                    <SelectItem key={s.id} value={s.id} disabled={s.disponivel === false}>
-                      {s.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* O login do PDPJ é nacional: o mesmo CPF/OAB entra em qualquer
+                PJe. Sem essa escolha, monitorar processo de outro estado
+                exigia cadastrar a mesma pessoa de novo — e a mesma senha
+                acabava guardada uma vez por tribunal. */}
+            <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-3 space-y-2 dark:border-violet-900 dark:bg-violet-950/20">
+              <Label>Onde essa credencial vale</Label>
+              {[
+                {
+                  id: "um",
+                  titulo: "Só um tribunal",
+                  desc: "Um cadastro por estado.",
+                },
+                {
+                  id: "todos",
+                  titulo: `Todos os PJe${nacionalDisponivel ? ` — ${estadosPje.length} estados` : ""}`,
+                  desc: "Mesmo login do PDPJ em qualquer tribunal com PJe. Um cadastro só.",
+                },
+              ].map((o) => {
+                const ativo = (o.id === "todos") === (form.sistema === SISTEMA_NACIONAL);
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        sistema: o.id === "todos" ? SISTEMA_NACIONAL : (estadosPje[0]?.id ?? "pje_tjce"),
+                      })
+                    }
+                    className={`w-full text-left rounded-lg border p-2.5 transition ${
+                      ativo ? "border-violet-300 bg-background shadow-sm" : "border-transparent"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span
+                        className={`h-3.5 w-3.5 rounded-full border-2 mt-0.5 shrink-0 ${
+                          ativo ? "border-violet-600 bg-violet-600 ring-2 ring-inset ring-background" : "border-slate-300"
+                        }`}
+                      />
+                      <div className="min-w-0">
+                        <p className={`text-xs font-semibold ${ativo ? "text-violet-700 dark:text-violet-300" : ""}`}>
+                          {o.titulo}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">{o.desc}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+
+              {form.sistema !== SISTEMA_NACIONAL && (
+                <Select value={form.sistema} onValueChange={(v) => setForm({ ...form, sistema: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-64">
+                    {estadosPje.map((s: any) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div>
               <Label>CPF ou OAB *</Label>

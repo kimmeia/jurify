@@ -292,7 +292,7 @@ export async function pollarUmMonitoramentoMovs(
         return { ok: false, detectadas: 0, erro: "Credencial não vinculada" };
       }
 
-      const sessao = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
+      const sessao = await recuperarSessao(mon.credencialId, mon.tribunal, { tentarRelogin: true });
       if (!sessao) {
         await db
           .update(motorMonitoramentos)
@@ -320,7 +320,7 @@ export async function pollarUmMonitoramentoMovs(
       // não dispara nesse caso e o monitoramento falha com "Sessão expirada" sem
       // refazer login. Relogin é dedupado por credencial (cofre-helpers).
       if (!resultado.ok && resultado.categoriaErro === "sessao_expirada") {
-        const sessaoNova = await recuperarSessao(mon.credencialId, {
+        const sessaoNova = await recuperarSessao(mon.credencialId, mon.tribunal, {
           tentarRelogin: true,
           forcarRelogin: true,
         });
@@ -367,7 +367,7 @@ export async function pollarUmMonitoramentoMovs(
     const cfg2grau = requerCred ? getConfigTribunal(mon.tribunal, 2) : null;
     if (deteccaoGrau.subiu && cfg2grau && mon.credencialId) {
       try {
-        const sessao2 = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
+        const sessao2 = await recuperarSessao(mon.credencialId, mon.tribunal, { tentarRelogin: true });
         if (sessao2) {
           const r2 = await consultarTjce(mon.searchKey, sessao2, cfg2grau, { teorMaximo });
           if (r2.ok && r2.movimentacoes.length > 0) {
@@ -849,7 +849,7 @@ export async function pollarUmMonitoramentoNovasAcoes(
       return { ok: false, detectadas: 0, erro: "Credencial não vinculada" };
     }
 
-    const sessao = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
+    const sessao = await recuperarSessao(mon.credencialId, mon.tribunal, { tentarRelogin: true });
     if (!sessao) {
       await db
         .update(motorMonitoramentos)
@@ -873,7 +873,7 @@ export async function pollarUmMonitoramentoNovasAcoes(
     // Sessão morta no ponto de uso: força relogin e tenta de novo uma vez
     // (mesmo motivo do poll de movimentações). Relogin dedupado por credencial.
     if (!resultado.ok && resultado.categoriaErro === "sessao_expirada") {
-      const sessaoNova = await recuperarSessao(mon.credencialId, {
+      const sessaoNova = await recuperarSessao(mon.credencialId, mon.tribunal, {
         tentarRelogin: true,
         forcarRelogin: true,
       });

@@ -492,6 +492,7 @@ export const movimentacoesRouter = router({
           ev: eventosProcesso,
           apelido: motorMonitoramentos.apelido,
           credencialId: motorMonitoramentos.credencialId,
+          tribunal: motorMonitoramentos.tribunal,
         })
         .from(eventosProcesso)
         .leftJoin(motorMonitoramentos, eq(motorMonitoramentos.id, eventosProcesso.monitoramentoId))
@@ -512,7 +513,7 @@ export const movimentacoesRouter = router({
       }
 
       const { recuperarSessao } = await import("../escritorio/cofre-helpers");
-      const sessao = await recuperarSessao(row.credencialId, { tentarRelogin: true });
+      const sessao = await recuperarSessao(row.credencialId, row.tribunal ?? "", { tentarRelogin: true });
       if (!sessao) {
         return { ok: false as const, motivo: "Sessão do tribunal expirada — revalide a credencial no cofre." };
       }
