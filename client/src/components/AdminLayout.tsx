@@ -41,6 +41,7 @@ import {
   Zap,
   Lightbulb,
   Stethoscope,
+  Route,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Redirect } from "wouter";
@@ -182,6 +183,7 @@ function AdminSidebarContent({
     { icon: BarChart3, label: "Relatórios", path: "/admin/reports" },
     { icon: ScrollText, label: "Auditoria", path: "/admin/auditoria" },
     { icon: Stethoscope, label: "Robô auditor", path: "/admin/robo-auditor" },
+    { icon: Route, label: "Robô de jornada", path: "/admin/robo-jornada" },
     { icon: Bug, label: "Erros", path: "/admin/erros" },
     { icon: Radar, label: "Tribunais", path: "/admin/tribunais" },
     { icon: Bot, label: "JurisIA", path: "/admin/jurisia" },
