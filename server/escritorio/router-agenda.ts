@@ -20,6 +20,7 @@ import { eq, and, desc, gte, lt, lte, or, like, asc, inArray } from "drizzle-orm
 import { TRPCError } from "@trpc/server";
 import { criarNotificacao } from "../processos/router-notificacoes";
 import { checkPermission } from "./check-permission";
+import { validarResponsavel } from "./atribuicao-responsavel";
 import {
   listarBloqueios,
   criarBloqueio,
@@ -106,44 +107,6 @@ async function requireEscritorio(userId: number) {
   const result = await getEscritorioPorUsuario(userId);
   if (!result) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Escritório não encontrado." });
   return result;
-}
-
-/**
- * O responsável escolhido é gente deste escritório e ainda está aqui?
- *
- * `responsavelId` chega do cliente, e nada no schema amarra a coluna a um
- * colaborador — dá pra apontar pra qualquer id. Além do vazamento entre
- * escritórios, atribuir a alguém que já saiu joga o evento numa agenda que
- * ninguém abre.
- */
-async function exigirColaboradorAtivo(db: any, escritorioId: number, colaboradorId: number) {
-  const [c] = await db
-    .select({ id: colaboradores.id })
-    .from(colaboradores)
-    .where(and(
-      eq(colaboradores.id, colaboradorId),
-      eq(colaboradores.escritorioId, escritorioId),
-      eq(colaboradores.ativo, true),
-    ))
-    .limit(1);
-  if (!c) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Responsável não encontrado na equipe." });
-  }
-}
-
-/**
- * Passar trabalho pra outra pessoa é ato de coordenação: exige enxergar a
- * agenda do escritório inteiro. Quem só vê a própria linha cria e mantém
- * pra si — o campo existe, mas não despacha tarefa pra quem não escolheu
- * recebê-la.
- */
-function exigirPoderDeAtribuir(perm: { verTodos: boolean; colaboradorId: number }, responsavelId: number) {
-  if (!perm.verTodos && responsavelId !== perm.colaboradorId) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Só quem enxerga a agenda de todos pode atribuir a outra pessoa.",
-    });
-  }
 }
 
 const CORES_TIPO: Record<string, string> = {
@@ -811,10 +774,7 @@ export const agendaRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      if (input.responsavelId != null) {
-        exigirPoderDeAtribuir(perm, input.responsavelId);
-        await exigirColaboradorAtivo(db, perm.escritorioId, input.responsavelId);
-      }
+      await validarResponsavel(db, perm, input.responsavelId);
 
       // Se o compromisso é vinculado a um cliente, e o usuário não definiu
       // explicitamente um responsável, atribui automaticamente ao
@@ -878,10 +838,7 @@ export const agendaRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      if (input.responsavelId != null) {
-        exigirPoderDeAtribuir(perm, input.responsavelId);
-        await exigirColaboradorAtivo(db, perm.escritorioId, input.responsavelId);
-      }
+      await validarResponsavel(db, perm, input.responsavelId);
 
       // Se vinculada a cliente e sem responsável explícito, herda do cliente
       let responsavelId = input.responsavelId;
@@ -1034,10 +991,7 @@ export const agendaRouter = router({
         }
       }
 
-      if (input.responsavelId != null) {
-        exigirPoderDeAtribuir(perm, input.responsavelId);
-        await exigirColaboradorAtivo(db, perm.escritorioId, input.responsavelId);
-      }
+      await validarResponsavel(db, perm, input.responsavelId);
 
       if (input.fonte === "compromisso") {
         const updates: Record<string, unknown> = {};

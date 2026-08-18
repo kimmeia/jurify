@@ -40,6 +40,7 @@ import {
   type PoloIdentificado,
 } from "./polo-matcher";
 import { montarCapaNovaAcao, type CapaNovaAcao } from "../../shared/nova-acao-capa";
+import { lerDocumentoNoRotulo } from "../../shared/documento-no-rotulo";
 import { extrairAnoCnj } from "./cnj-parser";
 import { hashEvento as hashEventoNorm } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import {
@@ -102,6 +103,11 @@ let pollNovasAcoesRodando = false;
  * distinção: sem_documento é um fato do movimento (rotina não tem documento e
  * nunca vai ter), pendente é "ainda não tentamos" — só o segundo justifica um
  * botão de "buscar o documento".
+ *
+ * A ausência de URL não prova ausência de documento. Os links da timeline do
+ * PJe são `javascript:void(0)` (JSF), então `documentoUrl` vem null mesmo
+ * quando a peça existe — e o rótulo diz o número dela. Quando o rótulo
+ * entrega o id, o movimento é `pendente`, não `sem_documento`.
  */
 function camposTeor(mov: {
   texto: string;
@@ -111,8 +117,9 @@ function camposTeor(mov: {
   teorStatus?: string;
   teorErro?: string | null;
 }) {
+  const noRotulo = lerDocumentoNoRotulo(mov.texto);
   const status = (mov.teorStatus ??
-    (mov.documentoUrl ? "pendente" : "sem_documento")) as
+    (mov.documentoUrl || noRotulo ? "pendente" : "sem_documento")) as
     | "pendente"
     | "ok"
     | "sem_documento"
@@ -126,6 +133,8 @@ function camposTeor(mov: {
     teorTentativas: mov.teorStatus ? 1 : 0,
     teorErro: mov.teorErro?.slice(0, 255) ?? null,
     teorObtidoEm: mov.teor ? new Date() : null,
+    documentoIdTribunal: noRotulo?.id ?? null,
+    documentoTipo: noRotulo?.tipo ?? null,
   };
 }
 
