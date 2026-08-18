@@ -188,3 +188,50 @@ describe("arquivo da página não é documento", () => {
     expect(m).toContain("ps.status = 'pendente'");
   });
 });
+
+describe("clicar no documento, em vez de adivinhar o endereço", () => {
+  // Quatro rotas conhecidas do PJe foram tentadas contra o tribunal de
+  // verdade. Todas carregaram alguma página; em nenhuma o documento chegou a
+  // ser pedido — o diagnóstico voltou com "o navegador viu:
+  // application/javascript /js/modernizr.custom.js" e mais nada. O link da
+  // timeline é `javascript:void(0)`, então o endereço só existe depois que o
+  // JSF é acionado. Chutar uma quinta rota seria mais do mesmo.
+
+  it("existe o caminho pelo clique", () => {
+    expect(adapter).toContain("private async baixarTeorPorClique(");
+    expect(adapter).toContain("#divTimeLine a:has-text(");
+  });
+
+  it("escuta também a aba nova", () => {
+    // O PJe costuma abrir o documento em outra aba; ouvindo só a página atual,
+    // a resposta que interessa acontece fora do rádio.
+    const i = adapter.indexOf("private async baixarTeorPorClique(");
+    expect(adapter.slice(i, i + 2600)).toContain('context.on("page"');
+  });
+
+  it("movimentação sem url entra na fila, se o rótulo tem o id", () => {
+    // Era o filtro que deixava a maioria das decisões de fora: no PJe o link
+    // é javascript:void(0), então quase nenhuma tem url.
+    const i = adapter.indexOf("private async baixarTeores(");
+    const corpo = adapter.slice(i, i + 2200);
+    expect(corpo).toContain("m.documentoUrl || lerDocumentoNoRotulo(m.texto)?.id");
+    expect(corpo, "filtrar por url exclui justamente as decisões").not.toContain(
+      ".filter((m) => m.documentoUrl && deveBuscarTeor(m.texto))",
+    );
+  });
+
+  it("o clique acontece com a página do processo ainda aberta", () => {
+    // Depois da varredura o contexto fecha, e aí só sobraria adivinhar
+    // endereço — que é o que não funciona.
+    expect(adapter).toContain("await this.baixarTeores(context, movimentacoes, opts?.teorMaximo ?? 0, page)");
+  });
+
+  it("falha no clique vira status, não exceção", () => {
+    // A consulta em si (movimentações + capa) vale mesmo sem o documento;
+    // quebrar tudo por causa de um PDF seria péssima troca.
+    const i = adapter.indexOf("const r = await this.baixarTeorPorClique(");
+    const corpo = adapter.slice(i, i + 700);
+    expect(corpo).toContain("classificarFalhaTeor(new Error(r.erro))");
+    expect(corpo).toContain("mov.teorStatus = status");
+  });
+});

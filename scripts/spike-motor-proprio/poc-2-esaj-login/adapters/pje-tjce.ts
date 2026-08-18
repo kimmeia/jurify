@@ -676,7 +676,7 @@ export class PjeTjceScraper {
 
       const capa = await this.extrairCapa(page, cnjMascarado);
       const movimentacoes = await this.extrairMovimentacoes(page);
-      await this.baixarTeores(context, movimentacoes, opts?.teorMaximo ?? 0);
+      await this.baixarTeores(context, movimentacoes, opts?.teorMaximo ?? 0, page);
 
       // Validação básica: se não pegou nada, é provável que extração
       // falhou (selectors errados ou página não é a de detalhe)
@@ -1405,25 +1405,124 @@ export class PjeTjceScraper {
    * consulta em si (movimentações + capa) tem valor mesmo sem o documento, e
    * quebrar tudo por causa de um PDF sigiloso seria uma péssima troca.
    */
+  /**
+   * Abre o documento clicando nele na timeline, como o advogado faz.
+   *
+   * Adivinhar a URL não funciona. Foram quatro rotas conhecidas do PJe
+   * tentadas contra o tribunal de verdade: todas carregaram alguma página, e
+   * em nenhuma o documento chegou a ser pedido — o diagnóstico mostrou só os
+   * scripts da própria tela. O link da timeline é `javascript:void(0)`, então
+   * o endereço não existe até o JSF ser acionado.
+   *
+   * Por isso o clique. Ele dispara o mesmo AJAX que dispararia pro humano, e
+   * o endereço aparece na rede. Os bytes vêm depois por requisição direta,
+   * porque `response.body()` de PDF em iframe devolve o HTML do visualizador
+   * do Chromium em vez do arquivo.
+   */
+  private async baixarTeorPorClique(
+    page: Page,
+    context: BrowserContext,
+    idDocumento: string,
+  ): Promise<{ ok: true; texto: string } | { ok: false; erro: string }> {
+    const enderecos: string[] = [];
+    const anotar = (r: import("@playwright/test").Response) => {
+      const h = r.headers();
+      const tipo = (h["content-type"] ?? "").toLowerCase();
+      if (r.ok() && !enderecos.includes(r.url()) && podeSerDocumento(tipo, h)) {
+        enderecos.push(r.url());
+      }
+    };
+    page.on("response", anotar);
+    // O PJe costuma abrir o documento em aba nova; sem escutar o contexto
+    // inteiro, a resposta que interessa acontece fora do rádio.
+    context.on("page", (nova) => nova.on("response", anotar));
+
+    try {
+      const alvo = page
+        .locator(`#divTimeLine a:has-text("${idDocumento}"), #divTimeLine [onclick*="${idDocumento}"]`)
+        .first();
+      if ((await alvo.count()) === 0) {
+        return { ok: false, erro: `não achei o documento ${idDocumento} na timeline` };
+      }
+
+      await alvo.scrollIntoViewIfNeeded({ timeout: 5_000 }).catch(() => {});
+      await alvo.click({ timeout: 10_000 });
+      await page.waitForLoadState("networkidle", { timeout: TIMEOUT_NAV_MS }).catch(() => {});
+      await page.waitForTimeout(1_500);
+
+      const { textoDoDocumento } = await import("../../../../server/processos/teor-documento");
+      for (const endereco of enderecos) {
+        const resp = await context.request
+          .get(endereco, { timeout: TIMEOUT_NAV_MS, maxRedirects: 5 })
+          .catch(() => null);
+        if (!resp || !resp.ok()) continue;
+        const corpo = await resp.body().catch(() => Buffer.alloc(0));
+        if (corpo.length === 0 || corpo.length > MAX_BYTES_TEOR) continue;
+        try {
+          return { ok: true, texto: await textoDoDocumento(corpo, resp.headers()["content-type"] ?? null) };
+        } catch {
+          /* não era a peça — segue */
+        }
+      }
+      return { ok: false, erro: "cliquei no documento e nada veio como arquivo" };
+    } catch (err) {
+      return { ok: false, erro: err instanceof Error ? err.message : String(err) };
+    } finally {
+      page.off("response", anotar);
+    }
+  }
+
   private async baixarTeores(
     context: BrowserContext,
     movs: MovimentacaoProcesso[],
     teorMaximo: number,
+    page?: Page,
   ): Promise<void> {
     if (teorMaximo <= 0) return;
 
     const { deveBuscarTeor, textoDoDocumento, classificarFalhaTeor } = await import(
       "../../../../server/processos/teor-documento"
     );
+    const { lerDocumentoNoRotulo } = await import("../../../../shared/documento-no-rotulo");
 
     // Da mais nova pra mais antiga: se o teto cortar, que corte o histórico.
+    //
+    // Movimentação SEM url entra na fila também, desde que o rótulo traga o id
+    // da peça. No PJe o link é `javascript:void(0)` e a maioria das decisões
+    // cai nesse caso — filtrar por url deixava justamente elas de fora, e o
+    // sistema anunciava "não tem documento" com o id impresso na tela.
     const candidatas = movs
-      .filter((m) => m.documentoUrl && deveBuscarTeor(m.texto))
+      .filter((m) => deveBuscarTeor(m.texto))
+      .filter((m) => m.documentoUrl || lerDocumentoNoRotulo(m.texto)?.id)
       .sort((a, b) => (a.data < b.data ? 1 : -1))
       .slice(0, teorMaximo);
 
     for (const [i, mov] of candidatas.entries()) {
       if (i > 0) await new Promise((r) => setTimeout(r, PAUSA_ENTRE_TEORES_MS));
+
+      // Sem url, o caminho é clicar na timeline — e a página certa é esta, que
+      // já está aberta. Depois da varredura ela fecha, e aí só sobraria
+      // adivinhar endereço, que não funciona.
+      if (!mov.documentoUrl) {
+        const id = lerDocumentoNoRotulo(mov.texto)?.id;
+        if (!id || !page) {
+          mov.teorStatus = "pendente";
+          continue;
+        }
+        const r = await this.baixarTeorPorClique(page, context, id);
+        if (r.ok) {
+          mov.teor = r.texto;
+          mov.teorStatus = "ok";
+          mov.teorErro = null;
+        } else {
+          const { status, motivo } = classificarFalhaTeor(new Error(r.erro));
+          mov.teor = null;
+          mov.teorStatus = status;
+          mov.teorErro = motivo;
+        }
+        continue;
+      }
+
       try {
         const resp = await context.request.get(mov.documentoUrl!, {
           timeout: TIMEOUT_NAV_MS,
