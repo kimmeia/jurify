@@ -50,11 +50,20 @@ export async function fecharVarredura(runId: string, r: ResultadoJornada): Promi
       rotasComAchado: r.rotasComAchado,
       escritorioLimpo: r.escritorioLimpo,
       erro: r.erro?.slice(0, 500) ?? null,
-      // Só as rotas com problema entram no detalhe: guardar as 19 sempre
-      // encheria a coluna de linha verde que ninguém lê.
       detalheJson: JSON.stringify({
+        // Problema vai inteiro; o resto vira só tempo. Guardar as 19 com
+        // texto encheria a coluna de linha verde que ninguém lê, mas o tempo
+        // de cada uma é justamente o que diz se a varredura foi de verdade.
         rotas: r.rotas.filter((x) => !x.ok),
         totalRotas: r.rotas.length,
+        tempos: r.rotas.map((x) => ({
+          r: x.rota,
+          ms: x.ms,
+          dcl: x.diagnostico.montadoNoDCL ? 1 : 0,
+          mm: x.diagnostico.msMontagem,
+          me: x.diagnostico.msSpinner,
+          esq: x.diagnostico.viuEsqueleto ? 1 : 0,
+        })),
       }),
     })
     .where(eq(jornadaVarreduras.runId, runId));
@@ -93,6 +102,19 @@ export interface VarreduraResumida {
   escritorioLimpo: boolean;
   erro: string | null;
   rotasComProblema: Array<{ rota: string; problemas: string[] }>;
+  /**
+   * O tempo de cada tela. É o que responde "a varredura conferiu alguma coisa
+   * ou passou batido?" — verde rápido demais e verde de verdade são
+   * indistinguíveis sem isto.
+   */
+  tempos: Array<{
+    rota: string;
+    ms: number;
+    montadoNoDCL: boolean;
+    msMontagem: number;
+    msSpinner: number;
+    viuEsqueleto: boolean;
+  }>;
 }
 
 export async function listarVarreduras(limite = 10): Promise<VarreduraResumida[]> {
@@ -106,6 +128,7 @@ export async function listarVarreduras(limite = 10): Promise<VarreduraResumida[]
 
   return linhas.map((l) => {
     let rotasComProblema: VarreduraResumida["rotasComProblema"] = [];
+    let tempos: VarreduraResumida["tempos"] = [];
     try {
       // JSON quebrado de alguma versão anterior não pode derrubar a listagem
       // inteira — a execução aconteceu, e o resumo em coluna continua válido.
@@ -114,6 +137,16 @@ export async function listarVarreduras(limite = 10): Promise<VarreduraResumida[]
         rotasComProblema = d.rotas.map((r: any) => ({
           rota: String(r?.rota ?? ""),
           problemas: Array.isArray(r?.problemas) ? r.problemas.map(String) : [],
+        }));
+      }
+      if (Array.isArray(d?.tempos)) {
+        tempos = d.tempos.map((t: any) => ({
+          rota: String(t?.r ?? ""),
+          ms: Number(t?.ms ?? 0),
+          montadoNoDCL: t?.dcl === 1,
+          msMontagem: Number(t?.mm ?? 0),
+          msSpinner: Number(t?.me ?? 0),
+          viuEsqueleto: t?.esq === 1,
         }));
       }
     } catch {
@@ -133,6 +166,7 @@ export async function listarVarreduras(limite = 10): Promise<VarreduraResumida[]
       escritorioLimpo: l.escritorioLimpo,
       erro: l.erro,
       rotasComProblema,
+      tempos,
     };
   });
 }
