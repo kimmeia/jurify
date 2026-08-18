@@ -155,7 +155,7 @@ describe("baixar pelo id quando não há link", () => {
 
   it("o baixarTeor aceita evento sem URL, desde que tenha id", () => {
     const i = router.indexOf("baixarTeor: protectedProcedure");
-    const corpo = router.slice(i, i + 4000);
+    const corpo = router.slice(i, i + 6000);
     // O id vem do campo gravado na coleta OU do rótulo, derivado na leitura:
     // movimentação anterior ao extrator não tem o campo, mas tem o rótulo.
     expect(corpo).toContain("const documentoId = documentoIdDoEvento(row.ev)");
