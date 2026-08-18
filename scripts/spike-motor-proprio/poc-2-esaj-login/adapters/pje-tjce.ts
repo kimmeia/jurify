@@ -208,9 +208,14 @@ function podeSerDocumento(tipo: string, headers: Record<string, string>): boolea
     "text/javascript",
     "application/json",
     "image/",
-    "font/",
     "video/",
     "audio/",
+    // Fonte tem meia dúzia de tipos e o tribunal usa vários. Foi uma delas
+    // que virou "teor" — e a IA, sem texto pra ler, inventou um prazo.
+    "font/",
+    "font-woff",
+    "x-font",
+    "application/vnd.ms-fontobject",
   ].some((t) => tipo.startsWith(t) || tipo.includes(t));
 }
 

@@ -248,6 +248,58 @@ export function classificarFalhaTeor(erro: unknown): { status: TeorStatus; motiv
  * tribunal mente no header (acontece), cai no sniff do magic number do PDF.
  */
 /**
+ * Arquivos que a página carrega junto e nunca são a peça.
+ *
+ * Reconhecidos pelos primeiros bytes, não pelo `content-type`: o servidor do
+ * tribunal serve fonte como `application/font-woff2`, `font/woff2` ou sem
+ * tipo nenhum, e o filtro por nome sempre deixa uma variante de fora.
+ *
+ * A fonte da tela virou "teor" na primeira execução em que o robô achou o
+ * documento — e a IA, sem texto de verdade pra ler, resumiu o rótulo e
+ * inventou um prazo de 15 dias. É o motivo desta lista existir.
+ */
+const ASSINATURAS_DE_ARQUIVO: Array<[string, string]> = [
+  ["wOF2", "fonte WOFF2"],
+  ["wOFF", "fonte WOFF"],
+  ["OTTO", "fonte OpenType"],
+  ["\u0000\u0001\u0000\u0000", "fonte TrueType"],
+  ["true", "fonte TrueType"],
+  ["\u0089PNG", "imagem PNG"],
+  ["GIF8", "imagem GIF"],
+  ["\u00ff\u00d8\u00ff", "imagem JPEG"],
+  ["PK\u0003\u0004", "arquivo compactado"],
+  ["RIFF", "mídia RIFF"],
+];
+
+/** Nome do formato quando o conteúdo não é documento, ou `null`. */
+export function assinaturaDeArquivo(corpo: Buffer): string | null {
+  const inicio = corpo.subarray(0, 8).toString("latin1");
+  for (const [magica, nome] of ASSINATURAS_DE_ARQUIVO) {
+    if (inicio.startsWith(magica)) return nome;
+  }
+  return null;
+}
+
+/**
+ * Rede de segurança: texto que na verdade é binário mal decodificado.
+ *
+ * Qualquer coisa lida como UTF-8 vira string — inclusive um PNG. O resultado
+ * passa em checagem de tamanho, entra como teor e a IA resume o que puder.
+ * Caractere de substituição e caractere de controle são a marca disso, e peça
+ * judicial não tem nenhum.
+ */
+export function pareceBinario(texto: string): boolean {
+  if (!texto) return false;
+  const amostra = texto.slice(0, 4000);
+  let suspeitos = 0;
+  for (const c of amostra) {
+    const code = c.codePointAt(0)!;
+    if (c === "\uFFFD" || (code < 32 && c !== "\n" && c !== "\r" && c !== "\t")) suspeitos++;
+  }
+  return suspeitos / amostra.length > 0.03;
+}
+
+/**
  * Marcas de que o que voltou é a TELA do sistema, não o documento.
  *
  * O PJe serve o documento dentro de um visualizador JSF. Pedir a URL por
@@ -288,6 +340,9 @@ export async function textoDoDocumento(
 ): Promise<string> {
   if (!corpo || corpo.length === 0) throw new Error("documento vazio");
 
+  const arquivo = assinaturaDeArquivo(corpo);
+  if (arquivo) throw new Error(`isso é ${arquivo}, não um documento`);
+
   const ct = (contentType ?? "").toLowerCase();
   const ehPdf = ct.includes("pdf") || corpo.subarray(0, 5).toString("latin1") === "%PDF-";
 
@@ -312,11 +367,18 @@ export async function textoDoDocumento(
   if (ct.includes("text/")) {
     const texto = normalizarTeor(corpo.toString("utf-8"));
     if (!texto) throw new Error("documento sem texto");
+    if (pareceBinario(texto)) throw new Error("conteúdo binário disfarçado de texto");
     return truncarTeor(texto);
   }
 
   log.warn({ contentType }, "content-type de documento não reconhecido — tentando como HTML");
   const fallback = extrairTextoDeHtml(corpo.toString("utf-8"));
   if (fallback.length < 40) throw new Error(`formato não suportado (${ct || "desconhecido"})`);
+  // Binário lido como UTF-8 sempre passa do piso de tamanho — vira mojibake
+  // longo. Sem esta checagem, este ramo aceita qualquer arquivo.
+  if (pareceBinario(fallback)) throw new Error(`formato não suportado (${ct || "desconhecido"})`);
+  if (pareceCascaDeAplicacao(fallback)) {
+    throw new Error("o tribunal devolveu a tela do visualizador, não o documento");
+  }
   return truncarTeor(fallback);
 }
