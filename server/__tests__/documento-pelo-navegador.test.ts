@@ -28,6 +28,11 @@ import { join } from "path";
 import PDFDocument from "pdfkit";
 import { describe, expect, it } from "vitest";
 import { extrairTextoDocumento } from "../_core/agente-doc-extracao";
+import {
+  assinaturaDeArquivo,
+  pareceBinario,
+  textoDoDocumento,
+} from "../processos/teor-documento";
 
 const raiz = join(__dirname, "..", "..");
 const ler = (p: string) => readFileSync(join(raiz, p), "utf8");
@@ -129,5 +134,57 @@ describe("achar o documento dentro do visualizador", () => {
   it("o botão de buscar usa o navegador, não a requisição solta", () => {
     expect(router).toContain("abrirDocumentoNoNavegador(url, sessao)");
     expect(router).toContain("[teor] visualizador abriu mas nenhuma resposta trouxe o documento");
+  });
+});
+
+describe("arquivo da página não é documento", () => {
+  // A primeira vez que o robô achou "o documento", o que ele trouxe foi a
+  // fonte da tela. Sem texto de verdade pra ler, a IA resumiu o rótulo e
+  // fixou um prazo de 15 dias que ninguém escreveu — prazo inventado em
+  // escritório de advocacia é o pior resultado possível deste sistema.
+  const woff2 = Buffer.concat([Buffer.from("wOF2"), Buffer.alloc(400, 0x42)]);
+
+  it("reconhece a fonte pelos primeiros bytes", () => {
+    expect(assinaturaDeArquivo(woff2)).toContain("WOFF2");
+  });
+
+  it("recusa a fonte mesmo quando o tipo mente", async () => {
+    // O tribunal serve fonte como octet-stream, font/woff2 ou sem tipo — o
+    // cabeçalho não é confiável, os bytes são.
+    for (const ct of ["application/pdf", "application/octet-stream", null]) {
+      await expect(textoDoDocumento(woff2, ct)).rejects.toThrow(/fonte/i);
+    }
+  });
+
+  it("pega binário que escapou das assinaturas conhecidas", async () => {
+    // Rede de segurança: qualquer coisa lida como UTF-8 vira string e passa
+    // no piso de tamanho. Caractere de controle é a marca, e peça judicial
+    // não tem nenhum.
+    const lixo = Buffer.alloc(600);
+    for (let i = 0; i < lixo.length; i++) lixo[i] = i % 7 === 0 ? 0x41 : i % 256;
+    await expect(textoDoDocumento(lixo, "application/octet-stream")).rejects.toThrow();
+  });
+
+  it("decisão servida como HTML continua passando", async () => {
+    // O PJe serve muita peça como HTML; barrar binário não pode barrar isso.
+    const decisao = Buffer.from(
+      "<html><body><p>Vistos. DEFIRO parcialmente a tutela provisória, " +
+        "determinando a apresentação dos documentos em 15 dias.</p></body></html>",
+      "utf-8",
+    );
+    await expect(textoDoDocumento(decisao, "text/html")).resolves.toContain("DEFIRO");
+  });
+
+  it("texto de verdade não é confundido com binário", () => {
+    expect(pareceBinario("Vistos. Julgo procedente o pedido. Intime-se.")).toBe(false);
+    expect(pareceBinario("acentuação, cedilha ç e travessão — tudo normal")).toBe(false);
+  });
+
+  it("a limpeza tira o teor e o prazo que saiu dele", () => {
+    const m = ler("drizzle/0196_teor_binario.sql");
+    expect(m).toContain("teor LIKE 'wOF2%'");
+    expect(m).toContain("resumo_ia = NULL");
+    expect(m).toContain("DELETE ps FROM prazos_sugeridos ps");
+    expect(m).toContain("ps.status = 'pendente'");
   });
 });
