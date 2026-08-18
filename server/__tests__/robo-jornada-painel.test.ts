@@ -26,6 +26,7 @@ import {
   MARCA_ERROR_BOUNDARY,
   PAUSA_POS_RENDER_MS,
   ROTAS_JORNADA,
+  SELETOR_ESQUELETO,
   TIMEOUT_EXECUCAO_MS,
 } from "../admin/jornada/rotas";
 import { ehRotaProibida } from "../admin/jornada/lista-negra";
@@ -100,8 +101,11 @@ describe("o executor", () => {
     expect(executor).toContain('document.getElementById("root")?.childElementCount ?? 0) > 0');
     expect(executor).toContain("TIMEOUT_MONTAGEM_MS");
 
-    const posMontagem = executor.indexOf("childElementCount");
-    const posSpinner = executor.indexOf("progressbar");
+    // Medido dentro de `conferirRota`: o import cita o seletor lá em cima e
+    // enganaria a comparação.
+    const corpo = executor.slice(executor.indexOf("async function conferirRota"));
+    const posMontagem = corpo.indexOf("TIMEOUT_MONTAGEM_MS");
+    const posSpinner = corpo.indexOf("TIMEOUT_SPINNER_MS");
     expect(posMontagem).toBeGreaterThan(0);
     expect(
       posSpinner,
@@ -132,6 +136,23 @@ describe("o executor", () => {
     // aí cai. Sem a pausa o erro seria contado na rota seguinte.
     expect(executor).toContain("await page.waitForTimeout(PAUSA_POS_RENDER_MS)");
     expect(PAUSA_POS_RENDER_MS).toBeGreaterThanOrEqual(1_000);
+  });
+
+  it("procura o esqueleto que o app realmente usa", () => {
+    // O seletor original era `[role="progressbar"], .animate-spin`. Metade
+    // dele não existia: `role="progressbar"` não aparece em nenhum arquivo do
+    // client, e as 38 telas com `<Skeleton>` do shadcn ficavam invisíveis pro
+    // robô. Tela presa em esqueleto pra sempre passava como saudável.
+    expect(SELETOR_ESQUELETO).toContain('[data-slot="skeleton"]');
+    expect(SELETOR_ESQUELETO).toContain(".animate-spin");
+    expect(ler("client/src/components/ui/skeleton.tsx")).toContain('data-slot="skeleton"');
+  });
+
+  it("não espera enfeite pulsante sumir", () => {
+    // `.animate-pulse` sozinho é carregamento E decoração — bolinha de alerta,
+    // badge de prazo vencido. Esperar todos sumirem nunca terminaria em
+    // Processos, e cada tela viraria achado falso.
+    expect(SELETOR_ESQUELETO).not.toMatch(/(^|[\s,])\.animate-pulse([\s,]|$)/);
   });
 
   it("os listeners são anexados antes do primeiro goto", () => {
@@ -231,8 +252,17 @@ describe("o histórico", () => {
   });
 
   it("só as rotas com problema entram no detalhe", () => {
-    // Guardar as 19 sempre encheria a coluna de linha verde que ninguém lê.
+    // Guardar as 19 com texto encheria a coluna de linha verde que ninguém lê.
     expect(historico).toContain("r.rotas.filter((x) => !x.ok)");
+  });
+
+  it("o tempo de TODAS as telas é guardado, inclusive das que passaram", () => {
+    // É o único jeito de distinguir "a tela abriu rápido" de "a conferência
+    // não conferiu nada" — as duas dão verde. Uma varredura em que todo mundo
+    // monta em 0ms e ninguém mostra esqueleto é um resultado sobre o robô.
+    expect(historico).toContain("tempos: r.rotas.map(");
+    expect(executor).toContain("montadoNoDCL");
+    expect(executor).toContain("viuEsqueleto");
   });
 
   it("JSON quebrado não derruba a listagem", () => {
@@ -268,6 +298,20 @@ describe("o painel", () => {
   it("mostra quando o escritório de teste sobrou", () => {
     expect(painel).toContain("sobrou no banco");
     expect(painel).toContain("ROB-01");
+  });
+
+  it("execução em andamento não é lida como resultado", () => {
+    // A linha nasce zerada antes de a execução terminar. Mostrar esses zeros
+    // nos cartões anuncia "0 telas" e "sobrou no banco" em vermelho sobre uma
+    // varredura que mal começou — susto por nada.
+    expect(painel).toContain('varreduras.find((v) => v.status === "rodando")');
+    expect(painel).toContain('varreduras.find((v) => v.status !== "rodando")');
+    expect(painel).not.toContain("varreduras[0]");
+  });
+
+  it("mostra o tempo de cada tela", () => {
+    expect(painel).toContain("Quanto cada tela levou");
+    expect(painel).toContain("mostraram esqueleto");
   });
 
   it("o botão não some quando já há execução — fica desabilitado", () => {
