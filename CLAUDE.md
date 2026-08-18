@@ -98,6 +98,28 @@ Caso clássico: validação inicial passou → integração quebrou depois → p
 - `/uploads` é servido com auth de sessão + checagem de escritório
   (exceção pública: `/uploads/pareceres/` — capability-URL por design).
 
+## Pendências ativas (18/08/2026)
+
+Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
+
+1. **Robô de jornada varre em 32s** — dono já disse que está errado. A
+   instrumentação (tempos por tela + "X de 19 mostraram esqueleto") já grava;
+   olhar a primeira medição real e agir.
+2. **Política de privacidade sem OpenAI/Anthropic** — o sistema manda teor de
+   decisão e conversa de WhatsApp pra IA; LGPD exige listar operadores.
+   Texto é jurídico: dono revisa antes de publicar.
+3. **HMAC da Meta em modo brando** — sem App Secret cadastrado, o webhook
+   aceita com warning. Endurecer em produção.
+4. **Conferências do robô de jornada** só rodam pelo Playwright — ligar no
+   executor do painel. Depois: cron de staging de hora em hora.
+5. **CSP desligado** no Helmet; **body-parser 3GB em memória** (OOM) — sai
+   junto com a migração S3.
+
+Corrigidos na auditoria (não re-flagrar): lembretes cross-tenant, canais Meta
+sem gate, financeiro no customer360 sem permissão, SSRF no webhook do
+SmartFlow, deletarColuna sem gate/satélites, credencial "ativa" recusando o
+que o motor usa, casca do PJe virando teor (2 variantes + fonte binária).
+
 ## Pendências represadas (decisão do dono)
 
 Coisas conscientemente adiadas. **Não reabrir sozinho** — só trazer de volta
