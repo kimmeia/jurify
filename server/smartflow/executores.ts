@@ -279,6 +279,49 @@ async function persistirEnvioTemplate(
 /**
  * Cria executores reais para um escritório específico.
  */
+
+/**
+ * A URL que um passo de webhook pode chamar.
+ *
+ * Quem monta o fluxo é gente do escritório, mas o engine roda com a rede do
+ * SERVIDOR — endereço interno que o autor do fluxo nem alcançaria do
+ * navegador dele vira alcançável por aqui. Por isso a lista é de destino
+ * proibido, não de confiança no autor.
+ *
+ * Não protege contra DNS que resolve pra IP privado depois do check (DNS
+ * rebinding) — proteção completa exigiria resolver e conectar no IP validado.
+ * Cobre o caso prático: URL interna digitada direto.
+ */
+export function validarUrlDeWebhook(url: string): URL {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    throw new Error("URL do webhook inválida");
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") {
+    throw new Error("Webhook só aceita http(s)");
+  }
+  const host = u.hostname.toLowerCase();
+  const proibidos = [
+    "localhost", "0.0.0.0", "127.0.0.1", "::1", "[::1]",
+    "metadata.google.internal", "169.254.169.254",
+  ];
+  if (proibidos.includes(host) || host.endsWith(".internal") || host.endsWith(".local")) {
+    throw new Error("Webhook não pode apontar pra endereço interno");
+  }
+  // IP literal em faixa privada (10/8, 172.16/12, 192.168/16, 169.254/16, 127/8)
+  const m = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    const privado =
+      a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) || (a === 169 && b === 254) || a === 0;
+    if (privado) throw new Error("Webhook não pode apontar pra endereço interno");
+  }
+  return u;
+}
+
 export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemAnexa): SmartflowExecutores {
   return {
     async chamarIA(prompt: string, mensagem: string, contatoId?: number, conversaId?: number): Promise<string> {
@@ -1477,13 +1520,35 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
     },
 
     async chamarWebhook(url: string, dados: any): Promise<any> {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(dados),
-      });
-      if (!res.ok) throw new Error(`Webhook retornou ${res.status}`);
-      return res.json();
+      // O corpo carrega o contexto do fluxo — nome, telefone e dados de
+      // pagamento do cliente. Sem validação, a URL podia apontar pra dentro
+      // da própria infra (localhost, IP de metadado, serviço interno do
+      // Railway) e o engine viraria um proxy autenticado — SSRF clássico, com
+      // dado de cliente no payload de brinde.
+      const destino = validarUrlDeWebhook(url);
+
+      // Sem timeout, um endpoint pendurado segurava o passo (e a conversa)
+      // pra sempre.
+      const controle = new AbortController();
+      const teto = setTimeout(() => controle.abort(), 10_000);
+      try {
+        const res = await fetch(destino.toString(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(dados),
+          signal: controle.signal,
+          redirect: "error",
+        });
+        if (!res.ok) throw new Error(`Webhook retornou ${res.status}`);
+        const tamanho = Number(res.headers.get("content-length") ?? 0);
+        if (tamanho > 1_000_000) throw new Error("resposta do webhook grande demais");
+        return await res.json();
+      } catch (err) {
+        if (controle.signal.aborted) throw new Error("Webhook não respondeu em 10s");
+        throw err;
+      } finally {
+        clearTimeout(teto);
+      }
     },
 
     async buscarCobrancasAbertas(params): Promise<string> {
