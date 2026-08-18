@@ -1467,6 +1467,13 @@ export const tarefas = mysqlTable("tarefas", {
   descricao: text("descricaoTarefa"),
   status: mysqlEnum("statusTarefa", ["pendente", "em_andamento", "concluida", "cancelada"]).default("pendente").notNull(),
   prioridade: mysqlEnum("prioridadeTarefa", ["baixa", "normal", "alta", "urgente"]).default("normal").notNull(),
+  /**
+   * O par de datas de um prazo: `dataInicial` é quando se começa (ou quando a
+   * contagem se inicia) e `dataVencimento` é a data FATAL, o limite que não se
+   * move. Só a segunda existia, então quem criava tarefa a partir de uma
+   * movimentação tinha que escolher qual das duas gravar.
+   */
+  dataInicial: timestamp("dataInicial"),
   dataVencimento: timestamp("dataVencimento"),
   concluidaAt: timestamp("concluidaAt"),
   createdAt: timestamp("createdAtTarefa").defaultNow().notNull(),
@@ -3466,6 +3473,14 @@ export const eventosProcesso = mysqlTable(
     teorTentativas: int("teorTentativas").default(0).notNull(),
     teorErro: varchar("teorErro", { length: 255 }),
     teorObtidoEm: timestamp("teorObtidoEm"),
+    /**
+     * Id e tipo da peça, lidos do próprio rótulo do movimento
+     * ("… 226277277 - Despacho"). É o que permite dizer que o documento
+     * EXISTE quando o link da timeline não é seguível por HTTP, e é o ponto
+     * de partida do download sob demanda.
+     */
+    documentoIdTribunal: varchar("documentoIdTribunal", { length: 32 }),
+    documentoTipo: varchar("documentoTipo", { length: 64 }),
     /** Análise IA estruturada — ver `AnaliseMovimentacao` em resumir-movimentacao.ts. */
     analiseJson: text("analiseJson"),
     lido: boolean("lido").default(false).notNull(),

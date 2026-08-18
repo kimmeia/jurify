@@ -65,6 +65,18 @@ export const agendamentoRouter = router({
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado. Configure seu escritório primeiro.");
 
+      // `responsavelId` é um int livre vindo do cliente: sem isto dá pra
+      // apontar pra colaborador de outro escritório, ou despachar prazo pra
+      // um colega sem ter o poder de coordenar.
+      const { checkPermission } = await import("./check-permission");
+      const { validarResponsavel } = await import("./atribuicao-responsavel");
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (input.responsavelId != null && db) {
+        const perm = await checkPermission(ctx.user.id, "agenda", "criar");
+        await validarResponsavel(db, perm, input.responsavelId);
+      }
+
       const id = await criarAgendamento({
         escritorioId: esc.escritorio.id,
         criadoPorId: esc.colaborador.id,

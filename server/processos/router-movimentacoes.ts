@@ -363,6 +363,9 @@ export const movimentacoesRouter = router({
         teorErro: row.ev.teorErro,
         teorUrl: row.ev.teorUrl,
         teorNome: row.ev.teorNome,
+        /** Peça identificada no rótulo do movimento, mesmo sem link seguível. */
+        documentoId: row.ev.documentoIdTribunal,
+        documentoTipo: row.ev.documentoTipo,
         /** Trecho literal a grifar dentro do teor, quando bate de fato. */
         trechoGrifado: citacao && row.ev.teor ? localizarTrecho(row.ev.teor, citacao) : null,
         cnj: row.ev.cnjAfetado,
@@ -502,7 +505,7 @@ export const movimentacoesRouter = router({
       if (!row || row.ev.escritorioId !== perm.escritorioId) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Movimentação não encontrada" });
       }
-      if (!row.ev.teorUrl) {
+      if (!row.ev.teorUrl && !row.ev.documentoIdTribunal) {
         return { ok: false as const, motivo: "Esta movimentação não tem documento anexo no tribunal." };
       }
       if (!row.credencialId) {
@@ -520,7 +523,29 @@ export const movimentacoesRouter = router({
 
       const { baixarDocumentoAvulso } = await import("./adapters/pje-tjce");
       const { classificarFalhaTeor } = await import("./teor-documento");
-      const r = await baixarDocumentoAvulso(row.ev.teorUrl, sessao);
+
+      // Com URL, é o caminho direto. Sem ela — que é o caso comum, porque o
+      // link da timeline do PJe é `javascript:void(0)` — resta o id que veio
+      // no rótulo, e aí tentamos as rotas conhecidas do tribunal.
+      let r: { ok: true; texto: string } | { ok: false; erro: string };
+      let urlUsada = row.ev.teorUrl;
+      if (row.ev.teorUrl) {
+        r = await baixarDocumentoAvulso(row.ev.teorUrl, sessao);
+      } else {
+        const { getConfigTribunal } = await import("./tribunais-pdpj");
+        const cfg = getConfigTribunal(row.tribunal ?? "");
+        if (!cfg) {
+          return { ok: false as const, motivo: `Consulta de documento ainda não disponível para ${row.tribunal ?? "este tribunal"}.` };
+        }
+        const { baixarDocumentoPorId } = await import("./documento-por-id");
+        const porId = await baixarDocumentoPorId(
+          cfg.urlBusca,
+          row.ev.documentoIdTribunal!,
+          (url) => baixarDocumentoAvulso(url, sessao),
+        );
+        r = porId.ok ? { ok: true, texto: porId.texto } : { ok: false, erro: porId.erro };
+        if (porId.ok) urlUsada = porId.urlQueFuncionou;
+      }
 
       if (!r.ok) {
         const { status, motivo } = classificarFalhaTeor(new Error(r.erro));
@@ -543,6 +568,9 @@ export const movimentacoesRouter = router({
           teorErro: null,
           teorObtidoEm: new Date(),
           teorTentativas: row.ev.teorTentativas + 1,
+          // Guardar a rota que funcionou faz a próxima leitura ir direto, sem
+          // repetir a fila de candidatas.
+          teorUrl: urlUsada,
         })
         .where(eq(eventosProcesso.id, row.ev.id));
 
