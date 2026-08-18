@@ -180,6 +180,10 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
         utils.movimentacoes.central.invalidate();
       } else {
         toast.error("Não deu para baixar", { description: r.motivo });
+        // Recarrega também no fracasso: o motivo fica gravado no evento, e sem
+        // isto a tela fica idêntica depois do clique. O toast some em segundos
+        // e a impressão que sobra é a de que o botão não fez nada.
+        refetch();
       }
     },
     onError: (e) => toast.error("Falha ao baixar", { description: e.message }),
