@@ -51,6 +51,20 @@ describe("a casca do visualizador não passa por documento", () => {
     await expect(textoDoDocumento(html, "text/html")).rejects.toThrow(/visualizador/i);
   });
 
+  it("reconhece a página de ajuda do PJe — a segunda variante vista", () => {
+    // "Atalhos do sistema / alt+1 Menu de navegação / O Pje é um sistema de
+    // tramitação…" passou pela primeira lista e a IA carimbou a sentença como
+    // desfavorável ao cliente em cima dos atalhos de teclado.
+    const ajuda = [
+      "Atalhos do sistema",
+      "alt+1 Menu de navegação",
+      "alt+7 Auto-contraste",
+      "Processo Judicial Eletrônico",
+      "O Pje é um sistema de tramitação de processos judiciais",
+    ].join("\n");
+    expect(pareceCascaDeAplicacao(ajuda)).toBe(true);
+  });
+
   it("despacho curto de verdade continua passando", async () => {
     // A tentação seria exigir um tamanho mínimo. Despacho legítimo cabe em uma
     // linha, e um piso de caracteres jogaria fora justamente os mais diretos.

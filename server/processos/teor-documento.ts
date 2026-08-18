@@ -320,6 +320,13 @@ const CASCA_DE_APLICACAO = [
   "sua sessão expirou",
   "acesso negado",
   "erro inesperado",
+  // A página de ajuda/acessibilidade do PJe — segunda variante vista em
+  // produção. Virou "teor" e a IA carimbou a sentença como desfavorável ao
+  // cliente em cima dos atalhos de teclado do sistema.
+  "atalhos do sistema",
+  "menu de navegação",
+  "auto-contraste",
+  "o pje é um sistema de tramitação",
 ];
 
 /**
