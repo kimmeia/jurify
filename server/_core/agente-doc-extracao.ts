@@ -20,6 +20,35 @@ export interface ExtracaoResultado {
 }
 
 /**
+ * Segunda tentativa de ler um PDF, com a biblioteca que o resto do sistema já
+ * usa em produção (o scraper do PJe roda em cima dela).
+ *
+ * Devolve `null` em vez de lançar: aqui já se está no caminho de recuperação,
+ * e um erro daqui esconderia o motivo original.
+ */
+async function textoPdfComPdfjs(buffer: Buffer): Promise<string | null> {
+  try {
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const doc = await pdfjs.getDocument({
+      data: new Uint8Array(buffer),
+      useSystemFonts: true,
+      verbosity: 0,
+    }).promise;
+    const partes: string[] = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      partes.push(content.items.map((it: any) => it.str || "").join(" "));
+    }
+    const texto = partes.join("\n").trim();
+    return texto || null;
+  } catch (e: any) {
+    log.warn({ err: e?.message }, "pdfjs também não leu o PDF");
+    return null;
+  }
+}
+
+/**
  * Extrai texto de um Buffer baseado no mimeType. Retorna { texto, erro }
  * — texto é null em caso de falha, erro descreve o motivo pra mostrar na UI.
  */
@@ -45,14 +74,30 @@ export async function extrairTextoDocumento(
       return { texto: texto || null, erro: texto ? null : "Arquivo sem texto" };
     }
 
-    // PDF: usa pdf-parse
+    // PDF: pdf-parse primeiro, pdfjs quando ele desiste.
+    //
+    // `pdf-parse@1.1.4` quebra no Node 22+ com "bad XRef entry" numa fatia dos
+    // arquivos — e o tribunal está cheio deles. Sem a segunda tentativa, o
+    // documento chegava íntegro e a leitura falhava no último passo.
     if (mt === "application/pdf") {
-      const pdfParseModule = await import("pdf-parse");
-      const pdfParse = (pdfParseModule as any).default || pdfParseModule;
-      const data = await pdfParse(buffer);
-      const texto = (data?.text || "").trim();
-      if (!texto) return { texto: null, erro: "PDF sem texto extraível (possivelmente escaneado)" };
-      return { texto, erro: null };
+      let erroPdfParse: string | null = null;
+      try {
+        const pdfParseModule = await import("pdf-parse");
+        const pdfParse = (pdfParseModule as any).default || pdfParseModule;
+        const data = await pdfParse(buffer);
+        const texto = (data?.text || "").trim();
+        if (texto) return { texto, erro: null };
+        erroPdfParse = "sem texto";
+      } catch (e: any) {
+        erroPdfParse = String(e?.message || e).slice(0, 120);
+      }
+
+      const texto = await textoPdfComPdfjs(buffer);
+      if (texto) return { texto, erro: null };
+      return {
+        texto: null,
+        erro: `PDF sem texto extraível (possivelmente escaneado) [${erroPdfParse}]`,
+      };
     }
 
     // DOCX: usa mammoth
