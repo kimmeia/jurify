@@ -56,6 +56,15 @@ export const customer360Router = router({
       const escritorioId = esc.escritorio.id;
       const { contatoId } = input;
 
+      // O 360 é lido por quem atende, mas o bloco financeiro é dado do módulo
+      // Financeiro — cobranças e valores. Sem esta checagem, um colaborador
+      // sem financeiro.ver via tudo pelo Atendimento, e a permissão do módulo
+      // virava enfeite. Quem não pode ver recebe o bloco zerado com a marca
+      // `oculto`, pra UI explicar em vez de fingir que não há cobrança.
+      const { checkPermission } = await import("../escritorio/check-permission");
+      const permFin = await checkPermission(ctx.user.id, "financeiro", "ver");
+      const podeVerFinanceiro = permFin.allowed;
+
       try {
         // ─── Dados básicos do contato ─────────────────────────────────────
         const [contato] = await db
@@ -68,6 +77,7 @@ export const customer360Router = router({
 
         // ─── Financeiro (Asaas) ───────────────────────────────────────────
         let financeiro = {
+          oculto: !podeVerFinanceiro,
           vinculado: false,
           pendente: 0,
           vencido: 0,
@@ -83,7 +93,9 @@ export const customer360Router = router({
           ultimoPagamento: null as { valor: number; data: string } | null,
         };
         try {
-          const [vinculo] = await db
+          const [vinculo] = !podeVerFinanceiro
+            ? [undefined]
+            : await db
             .select()
             .from(asaasClientes)
             .where(
@@ -125,6 +137,7 @@ export const customer360Router = router({
             }
 
             financeiro = {
+              oculto: false,
               vinculado: true,
               pendente,
               vencido,

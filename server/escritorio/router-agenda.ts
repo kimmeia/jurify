@@ -1131,10 +1131,28 @@ export const agendaRouter = router({
       const db = await getDb();
       if (!db) return [];
 
+      // `agendamento_lembretes` não tem escritorioId — a tenancy vem do pai.
+      // O `removerLembrete` abaixo sempre fez este join; a listagem não fazia,
+      // e aceitava id de agendamento de qualquer escritório.
       const rows = await db
-        .select()
+        .select({
+          id: agendamentoLembretes.id,
+          agendamentoId: agendamentoLembretes.agendamentoId,
+          tipo: agendamentoLembretes.tipo,
+          minutosAntes: agendamentoLembretes.minutosAntes,
+          destinatarioIds: agendamentoLembretes.destinatarioIds,
+          canais: agendamentoLembretes.canais,
+          dispararEm: agendamentoLembretes.dispararEm,
+          enviado: agendamentoLembretes.enviado,
+        })
         .from(agendamentoLembretes)
-        .where(eq(agendamentoLembretes.agendamentoId, input.agendamentoId))
+        .innerJoin(agendamentos, eq(agendamentoLembretes.agendamentoId, agendamentos.id))
+        .where(
+          and(
+            eq(agendamentoLembretes.agendamentoId, input.agendamentoId),
+            eq(agendamentos.escritorioId, perm.escritorioId),
+          ),
+        )
         .orderBy(asc(agendamentoLembretes.minutosAntes));
 
       return rows;
