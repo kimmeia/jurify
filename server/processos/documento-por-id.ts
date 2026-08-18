@@ -84,9 +84,10 @@ export async function baixarDocumentoPorId(
   log.warn({ idDocumento, erros }, "[documento-por-id] nenhuma rota serviu");
   return {
     ok: false,
-    // A mensagem vai pra tela: quem lê precisa entender que o documento existe
-    // e o que falhou foi o caminho até ele.
-    erro: `O documento ${idDocumento} existe no tribunal, mas nenhuma das ${candidatas.length} rotas conhecidas o entregou (${erros[0] ?? "sem detalhe"}).`,
+    // A mensagem vai pra tela E pro banco, com teto de 200 caracteres. O que
+    // interessa depois dela é o diagnóstico do navegador, então aqui fica só o
+    // essencial: o documento existe, o caminho até ele é que falhou.
+    erro: `Documento ${idDocumento} existe, mas ${candidatas.length} rotas falharam: ${erros[0] ?? "sem detalhe"}`,
     tentadas: candidatas.length,
   };
 }

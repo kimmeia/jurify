@@ -149,7 +149,9 @@ describe("baixar pelo id quando não há link", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.erro).toContain("226277277");
-      expect(r.erro).toContain("existe no tribunal");
+      // A mensagem cabe em 200 caracteres no banco, e o que vem depois dela é
+      // o diagnóstico do navegador — por isso ela ficou curta.
+      expect(r.erro).toContain("existe, mas");
     }
   });
 
