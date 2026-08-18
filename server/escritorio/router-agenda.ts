@@ -108,6 +108,44 @@ async function requireEscritorio(userId: number) {
   return result;
 }
 
+/**
+ * O responsável escolhido é gente deste escritório e ainda está aqui?
+ *
+ * `responsavelId` chega do cliente, e nada no schema amarra a coluna a um
+ * colaborador — dá pra apontar pra qualquer id. Além do vazamento entre
+ * escritórios, atribuir a alguém que já saiu joga o evento numa agenda que
+ * ninguém abre.
+ */
+async function exigirColaboradorAtivo(db: any, escritorioId: number, colaboradorId: number) {
+  const [c] = await db
+    .select({ id: colaboradores.id })
+    .from(colaboradores)
+    .where(and(
+      eq(colaboradores.id, colaboradorId),
+      eq(colaboradores.escritorioId, escritorioId),
+      eq(colaboradores.ativo, true),
+    ))
+    .limit(1);
+  if (!c) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Responsável não encontrado na equipe." });
+  }
+}
+
+/**
+ * Passar trabalho pra outra pessoa é ato de coordenação: exige enxergar a
+ * agenda do escritório inteiro. Quem só vê a própria linha cria e mantém
+ * pra si — o campo existe, mas não despacha tarefa pra quem não escolheu
+ * recebê-la.
+ */
+function exigirPoderDeAtribuir(perm: { verTodos: boolean; colaboradorId: number }, responsavelId: number) {
+  if (!perm.verTodos && responsavelId !== perm.colaboradorId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Só quem enxerga a agenda de todos pode atribuir a outra pessoa.",
+    });
+  }
+}
+
 const CORES_TIPO: Record<string, string> = {
   prazo_processual: "#ef4444",
   audiencia: "#8b5cf6",
@@ -773,6 +811,11 @@ export const agendaRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      if (input.responsavelId != null) {
+        exigirPoderDeAtribuir(perm, input.responsavelId);
+        await exigirColaboradorAtivo(db, perm.escritorioId, input.responsavelId);
+      }
+
       // Se o compromisso é vinculado a um cliente, e o usuário não definiu
       // explicitamente um responsável, atribui automaticamente ao
       // responsável do próprio cliente — assim o agendamento "pertence"
@@ -834,6 +877,11 @@ export const agendaRouter = router({
       if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar tarefas." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      if (input.responsavelId != null) {
+        exigirPoderDeAtribuir(perm, input.responsavelId);
+        await exigirColaboradorAtivo(db, perm.escritorioId, input.responsavelId);
+      }
 
       // Se vinculada a cliente e sem responsável explícito, herda do cliente
       let responsavelId = input.responsavelId;
@@ -952,6 +1000,7 @@ export const agendaRouter = router({
       tipo: z.enum(["prazo_processual", "audiencia", "reuniao_comercial", "follow_up", "outro"]).optional(),
       local: z.string().max(512).nullable().optional(),
       prioridade: z.enum(["baixa", "normal", "alta", "critica", "urgente"]).optional(),
+      responsavelId: z.number().nullable().optional(),
       contatoId: z.number().nullable().optional(),
       contatoTelefone: z.string().max(64).nullable().optional(),
       processoId: z.number().nullable().optional(),
@@ -962,21 +1011,32 @@ export const agendaRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      // Ownership check pra quem só pode editar próprios
+      // Ownership check pra quem só pode editar próprios.
+      //
+      // Vale responsável OU criador, igual ao `excluir` logo abaixo. Só
+      // responsável abria um buraco alcançável hoje: vincular um cliente de
+      // outra pessoa passa o evento pra ela na hora da criação (herança que
+      // já existe), e quem acabou de escrever perdia o direito de corrigir o
+      // que escreveu — mas continuava podendo excluir.
       if (!perm.verTodos) {
         if (input.fonte === "compromisso") {
-          const [r] = await db.select({ responsavelId: agendamentos.responsavelId })
+          const [r] = await db.select({ responsavelId: agendamentos.responsavelId, criadoPorId: agendamentos.criadoPorId })
             .from(agendamentos).where(and(eq(agendamentos.id, input.id), eq(agendamentos.escritorioId, perm.escritorioId))).limit(1);
-          if (!r || r.responsavelId !== perm.colaboradorId) {
+          if (!r || (r.responsavelId !== perm.colaboradorId && r.criadoPorId !== perm.colaboradorId)) {
             throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode editar seus próprios compromissos." });
           }
         } else {
-          const [r] = await db.select({ responsavelId: tarefas.responsavelId })
+          const [r] = await db.select({ responsavelId: tarefas.responsavelId, criadoPor: tarefas.criadoPor })
             .from(tarefas).where(and(eq(tarefas.id, input.id), eq(tarefas.escritorioId, perm.escritorioId))).limit(1);
-          if (!r || r.responsavelId !== perm.colaboradorId) {
+          if (!r || (r.responsavelId !== perm.colaboradorId && r.criadoPor !== perm.colaboradorId)) {
             throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode editar suas próprias tarefas." });
           }
         }
+      }
+
+      if (input.responsavelId != null) {
+        exigirPoderDeAtribuir(perm, input.responsavelId);
+        await exigirColaboradorAtivo(db, perm.escritorioId, input.responsavelId);
       }
 
       if (input.fonte === "compromisso") {
@@ -991,6 +1051,7 @@ export const agendaRouter = router({
           updates.corHex = CORES_TIPO[input.tipo] || "#3b82f6";
         }
         if (input.local !== undefined) updates.local = input.local;
+        if (input.responsavelId !== undefined) updates.responsavelId = input.responsavelId;
         if (input.prioridade !== undefined && input.prioridade !== "urgente") updates.prioridade = input.prioridade;
         if (input.contatoId !== undefined) updates.contatoId = input.contatoId;
         if (input.contatoTelefone !== undefined) updates.contatoTelefone = input.contatoTelefone;
@@ -1003,6 +1064,7 @@ export const agendaRouter = router({
         if (input.titulo !== undefined) updates.titulo = input.titulo;
         if (input.descricao !== undefined) updates.descricao = input.descricao;
         if (input.dataInicio !== undefined) updates.dataVencimento = new Date(input.dataInicio);
+        if (input.responsavelId !== undefined) updates.responsavelId = input.responsavelId;
         if (input.prioridade !== undefined && input.prioridade !== "critica") updates.prioridade = input.prioridade;
         if (input.contatoId !== undefined) updates.contatoId = input.contatoId;
         if (input.processoId !== undefined) updates.processoId = input.processoId;
@@ -1249,6 +1311,10 @@ export const agendaRouter = router({
       id: r.id,
       nome: r.nome || r.email || `Colaborador #${r.id}`,
       cargo: r.cargo || null,
+      // Quem está pedindo a lista. O picker de responsável marca essa linha
+      // como "(você)" e a usa como padrão — sem isso a tela teria que
+      // adivinhar por nome, que colide quando há homônimo no escritório.
+      souEu: r.id === perm.colaboradorId,
     }));
   }),
 

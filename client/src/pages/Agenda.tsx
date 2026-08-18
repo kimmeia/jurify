@@ -2502,6 +2502,14 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
   const [processoLabel, setProcessoLabel] = useState<string>("");
   const [processoBusca, setProcessoBusca] = useState("");
   const [processoMenuOpen, setProcessoMenuOpen] = useState(false);
+  /**
+   * Três estados, e a diferença importa: `undefined` é "não mexi", e vale
+   * como você mesmo; `null` é "limpei de propósito", que devolve a decisão
+   * pro servidor (herda do responsável do cliente vinculado, regra que já
+   * existia); um número é a escolha explícita.
+   */
+  const [responsavelId, setResponsavelId] = useState<number | null | undefined>(undefined);
+  const [responsavelBusca, setResponsavelBusca] = useState("");
   // Lembretes: state local (só pra compromissos — tarefas não suportam)
   const [lembreteMinutos, setLembreteMinutos] = useState<number[]>([30]);
   const [lembreteCanais, setLembreteCanais] = useState<Array<"notificacao_app" | "email" | "whatsapp">>(["notificacao_app"]);
@@ -2533,6 +2541,8 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
       setContatoTelefone(eventoEdit.contatoTelefone || "");
       setProcessoId(eventoEdit.processoId ?? null);
       setProcessoLabel(eventoEdit.cnj || "");
+      setResponsavelId(eventoEdit.responsavelId ?? null);
+      setResponsavelBusca("");
       setAnexos([]); // será carregado da query listarAnexos abaixo
     } else {
       setTipoEvento("compromisso");
@@ -2540,6 +2550,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
       setTipo("reuniao_comercial"); setPrioridade("normal"); setLocal("");
       setContatoId(null); setContatoNome(""); setContatoBusca(""); setContatoTelefone("");
       setProcessoId(null); setProcessoLabel(""); setProcessoBusca("");
+      setResponsavelId(undefined); setResponsavelBusca("");
       setAnexos([]);
       setDestinatariosBusca("");
     }
@@ -2559,11 +2570,35 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
   );
 
   // Colaboradores pro picker de destinatários
+  // Serve ao picker de responsável (os dois tipos) e ao de destinatários de
+  // lembrete (só compromisso) — por isso não é mais condicionada ao tipo.
   const { data: colaboradoresData } = (trpc.agenda as any).listarColaboradores?.useQuery?.(
     undefined,
-    { enabled: open && tipoEvento === "compromisso", retry: false },
+    { enabled: open, retry: false },
   ) ?? { data: undefined };
-  const colaboradores = (colaboradoresData || []) as Array<{ id: number; nome: string; cargo: string | null }>;
+  const colaboradores = (colaboradoresData || []) as Array<{ id: number; nome: string; cargo: string | null; souEu?: boolean }>;
+  const eu = colaboradores.find((c) => c.souEu) ?? null;
+  const { data: minhasPermsDlg } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
+    undefined,
+    { retry: false, refetchOnWindowFocus: false },
+  ) ?? { data: null };
+  // Passar trabalho pra outro é ato de coordenação — mesma régua do servidor.
+  const podeAtribuirOutro =
+    minhasPermsDlg?.cargo === "Dono" || !!minhasPermsDlg?.permissoes?.agenda?.verTodos;
+  const responsavelEscolhido =
+    responsavelId === undefined ? eu : colaboradores.find((c) => c.id === responsavelId) ?? null;
+  /**
+   * Na criação, "não mexi" vale como você — mandar seu id explicitamente
+   * evita que a tarefa nasça sem dono. `null` (limpei) vira `undefined` e
+   * deixa o servidor herdar do cliente, que é a regra antiga.
+   * Na edição, `null` é ordem de limpar e vai como null.
+   */
+  const responsavelParaCriar = responsavelId === undefined ? eu?.id : responsavelId ?? undefined;
+  // Quem não pode atribuir não manda o campo. Mandar o valor que veio do
+  // evento faria o servidor recusar a edição inteira quando o responsável é
+  // outra pessoa — inclusive pra quem só quis corrigir o título do que criou.
+  const responsavelParaEditar =
+    !podeAtribuirOutro || responsavelId === undefined ? undefined : responsavelId;
 
   // Lembretes existentes (modo edit) — pra hidratar state
   const { data: lembretesExistentes } = (trpc.agenda as any).listarLembretes?.useQuery?.(
@@ -2665,6 +2700,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
     setTipo("reuniao_comercial"); setPrioridade("normal"); setLocal("");
     setContatoId(null); setContatoNome(""); setContatoBusca("");
     setProcessoId(null); setProcessoLabel(""); setProcessoBusca("");
+    setResponsavelId(undefined); setResponsavelBusca("");
     onOpenChange(false);
   };
 
@@ -2697,6 +2733,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
         tipo: tipoEvento === "compromisso" ? (tipo as any) : undefined,
         local: tipoEvento === "compromisso" ? (local || null) : undefined,
         prioridade: prioridade as any,
+        responsavelId: responsavelParaEditar,
         contatoId,
         contatoTelefone: contatoTelefone || null,
         processoId,
@@ -2713,6 +2750,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
         local: local || undefined,
         prioridade: prioridade as any,
         diaInteiro: !horaInicio,
+        responsavelId: responsavelParaCriar,
         contatoId: contatoId ?? undefined,
         contatoTelefone: contatoTelefone || undefined,
         processoId: processoId ?? undefined,
@@ -2723,6 +2761,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
         descricao: descricao || undefined,
         dataVencimento: dataInicio ? isoLocalParaUTC(dataInicio, "23:59") : undefined,
         prioridade: prioridade as any,
+        responsavelId: responsavelParaCriar,
         contatoId: contatoId ?? undefined,
         processoId: processoId ?? undefined,
       });
@@ -2839,6 +2878,91 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                 </Select>
               </div>
             )}
+          </div>
+
+          {/* RESPONSÁVEL — quem fica com o evento. Vale pros dois tipos. */}
+          <div>
+            <Label className="text-xs">Responsável</Label>
+            <div className="mt-1 rounded-xl border border-violet-300 bg-violet-50/60 p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                {responsavelEscolhido ? (
+                  <span className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full bg-violet-600 text-white text-[11.5px] font-semibold">
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white ring-1 ring-white/40 bg-gradient-to-br ${gradientAvatar(responsavelEscolhido.nome)}`}>
+                      {gerarIniciais(responsavelEscolhido.nome)}
+                    </span>
+                    <span className="truncate max-w-[190px]">{responsavelEscolhido.nome}</span>
+                    {responsavelEscolhido.souEu && (
+                      <span className="px-1.5 py-px rounded-full bg-white/20 text-[8.5px] font-bold tracking-wider">VOCÊ</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-[11.5px] text-muted-foreground italic">
+                    Sem responsável — vai pro dono do cliente, se você vincular um
+                  </span>
+                )}
+                {podeAtribuirOutro && responsavelId !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setResponsavelId(null)}
+                    className="text-[11px] font-semibold text-violet-700 hover:underline shrink-0"
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+
+              {podeAtribuirOutro ? (
+                <>
+                  <Input
+                    placeholder="Buscar colaborador por nome…"
+                    value={responsavelBusca}
+                    onChange={(e) => setResponsavelBusca(e.target.value)}
+                    className="h-8 text-xs bg-card rounded-lg mt-2"
+                  />
+                  {colaboradores.length === 0 ? (
+                    <p className="text-[10.5px] text-muted-foreground italic mt-1.5">Carregando colaboradores…</p>
+                  ) : (
+                    <div className="max-h-40 overflow-y-auto bg-card rounded-lg border border-violet-200/70 divide-y divide-slate-100 mt-1.5">
+                      {colaboradores
+                        .filter((c) => !responsavelBusca || c.nome.toLowerCase().includes(responsavelBusca.toLowerCase()))
+                        .map((col) => {
+                          const ativo = responsavelEscolhido?.id === col.id;
+                          return (
+                            <button
+                              type="button"
+                              key={col.id}
+                              onClick={() => setResponsavelId(col.id)}
+                              className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 text-left transition-colors ${
+                                ativo ? "bg-violet-50 hover:bg-violet-100" : "hover:bg-muted/50"
+                              }`}
+                            >
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)} ${ativo ? "ring-2 ring-violet-500 ring-offset-1" : ""}`}>
+                                {gerarIniciais(col.nome)}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-semibold truncate" title={col.nome}>
+                                  {col.nome}
+                                  {col.souEu && <span className="text-violet-600 font-normal"> (você)</span>}
+                                </p>
+                                {col.cargo && <p className="text-[9.5px] text-muted-foreground truncate">{col.cargo}</p>}
+                              </div>
+                              {ativo && <Check className="h-3.5 w-3.5 text-violet-600 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-violet-800/80 leading-relaxed mt-1.5">
+                    Vinculou um cliente e limpou o campo? O evento vai pro responsável daquele
+                    cliente — regra que já existe, agora visível antes de salvar.
+                  </p>
+                </>
+              ) : (
+                <p className="text-[10px] text-violet-800/80 leading-relaxed mt-1.5">
+                  Você cria para si. Atribuir a um colega é do gestor.
+                </p>
+              )}
+            </div>
           </div>
 
           {tipoEvento === "compromisso" && (
