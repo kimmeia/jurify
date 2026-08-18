@@ -91,6 +91,9 @@ const TEOR_FALHA: Record<
   { titulo: string; detalhe: string; podeBaixar: boolean; podeAnalisar: boolean }
 > = {
   sem_documento: {
+    // Só vale quando o rótulo TAMBÉM não traz número de peça. Quando traz, o
+    // texto é substituído abaixo — afirmar "não anexou peça nenhuma" com o
+    // número da peça escrito no próprio rótulo é dizer o oposto do que se vê.
     titulo: "Esta movimentação não tem documento",
     detalhe:
       "É um movimento de expediente — o tribunal não anexou peça nenhuma. O rótulo abaixo é tudo o que existe.",
@@ -192,7 +195,25 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
   const open = eventoId !== null;
   const prazo = data?.prazo;
   const prazoAberto = prazo && prazo.status === "pendente";
-  const falhaTeor = data && data.teorStatus !== "ok" ? TEOR_FALHA[data.teorStatus] : null;
+  const falhaTeorBase = data && data.teorStatus !== "ok" ? TEOR_FALHA[data.teorStatus] : null;
+  /**
+   * O rótulo do PJe escreve o número e o tipo da peça ("… 226277277 -
+   * Despacho"). Quando ele traz isso, o documento EXISTE — a ausência de link
+   * é limite nosso de captura, não fato do tribunal. Dizer "não anexou peça
+   * nenhuma" nesse caso é afirmar o contrário do que está escrito na tela.
+   */
+  const pecaIdentificada = data?.documentoId
+    ? `${data.documentoTipo ?? "Documento"} nº ${data.documentoId}`
+    : null;
+  const falhaTeor =
+    falhaTeorBase && pecaIdentificada
+      ? {
+          ...falhaTeorBase,
+          titulo: `${data!.documentoTipo ?? "Documento"} identificado, ainda não lido`,
+          detalhe: `O tribunal publicou este movimento com a peça ${pecaIdentificada}. Ela existe — só não foi aberta ainda.`,
+          podeBaixar: true,
+        }
+      : falhaTeorBase;
   // Só soma o que o juiz de fato concedeu — pedido negado com valor no texto
   // entraria como se fosse dinheiro a receber.
   const totalDeferido = (data?.itens ?? []).reduce(
@@ -339,16 +360,24 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                 <p className="text-[12.5px] text-amber-800 mt-1 leading-snug">
                   {falhaTeor?.detalhe}
                   {data.teorErro ? ` (${data.teorErro})` : ""}
-                  {" Sem o documento, a única coisa que sabemos é o rótulo publicado pelo tribunal:"}
+                  {pecaIdentificada
+                    ? " Até abrir, o que temos é o rótulo publicado pelo tribunal:"
+                    : " Sem o documento, a única coisa que sabemos é o rótulo publicado pelo tribunal:"}
                 </p>
                 <div className="mt-2.5 rounded-lg border border-amber-200 bg-card px-3 py-2">
                   <p className="text-[9.5px] font-bold uppercase tracking-wide text-amber-700">
                     Rótulo publicado pelo tribunal
                   </p>
                   <p className="text-[12.5px] text-foreground/90 mt-0.5">{data.rotulo}</p>
+                  {pecaIdentificada && (
+                    <p className="text-[11.5px] font-semibold text-amber-900 mt-1.5 flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5 shrink-0" />
+                      {pecaIdentificada}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 mt-3 flex-wrap">
-                  {falhaTeor?.podeBaixar && data.teorUrl && (
+                  {falhaTeor?.podeBaixar && (data.teorUrl || data.documentoId) && (
                     <>
                       <Button
                         size="sm"
@@ -712,13 +741,89 @@ function dataFallback(): string {
   return format(new Date(Date.now() + 5 * 86_400_000), "yyyy-MM-dd");
 }
 
+/**
+ * Quem pode ficar com o prazo/tarefa.
+ *
+ * Mesma régua da Agenda: passar trabalho pra outra pessoa exige "ver todos"
+ * em agenda. Quem não tem cria pra si, e o seletor não aparece.
+ */
+function useEquipe() {
+  const { data } = (trpc.agenda as any).listarColaboradores?.useQuery?.(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  }) ?? { data: undefined };
+  const { data: perms } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  }) ?? { data: null };
+  const colaboradores = (data || []) as Array<{ id: number; nome: string; cargo: string | null; souEu?: boolean }>;
+  return {
+    colaboradores,
+    eu: colaboradores.find((c) => c.souEu) ?? null,
+    podeAtribuirOutro: perms?.cargo === "Dono" || !!perms?.permissoes?.agenda?.verTodos,
+  };
+}
+
+/** O par de datas: hoje como início, o prazo calculado como fatal. */
+function hojeISO(): string {
+  return format(new Date(), "yyyy-MM-dd");
+}
+
+function CampoResponsavel({
+  valor,
+  onChange,
+}: {
+  valor: number | null;
+  onChange: (id: number) => void;
+}) {
+  const { colaboradores, eu, podeAtribuirOutro } = useEquipe();
+  const escolhido = colaboradores.find((c) => c.id === valor) ?? eu;
+
+  if (!podeAtribuirOutro) {
+    return (
+      <div className="space-y-1.5">
+        <Label>Responsável</Label>
+        <div className="h-9 px-3 rounded-md border bg-muted/40 flex items-center text-sm text-muted-foreground">
+          {escolhido?.nome ?? "Você"}
+          <span className="ml-auto text-[10.5px]">atribuir a um colega é do gestor</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Label>Responsável</Label>
+      <Select
+        value={String(escolhido?.id ?? "")}
+        onValueChange={(v) => onChange(Number(v))}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Escolher…" />
+        </SelectTrigger>
+        <SelectContent>
+          {colaboradores.map((c) => (
+            <SelectItem key={c.id} value={String(c.id)}>
+              {c.nome}
+              {c.souEu ? " (você)" : ""}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 function CriarPrazoDialog({ open, onClose, evento, onSuccess }: DialogProps) {
   const [titulo, setTitulo] = useState(
     evento.prazo?.titulo
       ? `${nomeCliente(evento)}: ${evento.prazo.titulo}`
       : `${nomeCliente(evento)}: ${evento.titulo.slice(0, 80)}`,
   );
-  const [dataLimite, setDataLimite] = useState(
+  const [descricao, setDescricao] = useState(evento.teor?.slice(0, 4000) || evento.rotulo);
+  const [responsavelId, setResponsavelId] = useState<number | null>(null);
+  const [dataInicial, setDataInicial] = useState(hojeISO());
+  const [dataFatal, setDataFatal] = useState(
     evento.prazo?.data ? format(new Date(evento.prazo.data), "yyyy-MM-dd") : dataFallback(),
   );
   const [prioridade, setPrioridade] = useState<"baixa" | "normal" | "alta" | "critica">(
@@ -748,16 +853,47 @@ function CriarPrazoDialog({ open, onClose, evento, onSuccess }: DialogProps) {
             <Label htmlFor="prazo-titulo">Título</Label>
             <Input id="prazo-titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} />
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="prazo-desc">Descrição</Label>
+            <Textarea
+              id="prazo-desc"
+              rows={4}
+              value={descricao}
+              onChange={(e) => setDescricao(e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Vem preenchida com o texto do documento. Editável.
+            </p>
+          </div>
+
+          <CampoResponsavel valor={responsavelId} onChange={setResponsavelId} />
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="prazo-data">Data limite</Label>
+              <Label htmlFor="prazo-inicial">Data inicial</Label>
               <Input
-                id="prazo-data"
+                id="prazo-inicial"
                 type="date"
-                value={dataLimite}
-                onChange={(e) => setDataLimite(e.target.value)}
+                value={dataInicial}
+                onChange={(e) => setDataInicial(e.target.value)}
               />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="prazo-fatal" className="flex items-center gap-1.5">
+                Data fatal
+                <span className="text-[9px] font-bold tracking-wider text-rose-600">NÃO SE MOVE</span>
+              </Label>
+              <Input
+                id="prazo-fatal"
+                type="date"
+                className="border-rose-300 focus-visible:ring-rose-300"
+                value={dataFatal}
+                onChange={(e) => setDataFatal(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="prazo-prio">Prioridade</Label>
               <Select value={prioridade} onValueChange={(v) => setPrioridade(v as typeof prioridade)}>
@@ -772,6 +908,7 @@ function CriarPrazoDialog({ open, onClose, evento, onSuccess }: DialogProps) {
                 </SelectContent>
               </Select>
             </div>
+            <div />
           </div>
           {evento.prazo?.motivo ? (
             <p className="text-[11px] text-muted-foreground leading-snug">
@@ -794,13 +931,18 @@ function CriarPrazoDialog({ open, onClose, evento, onSuccess }: DialogProps) {
               criarMut.mutate({
                 tipo: "prazo_processual",
                 titulo,
-                descricao: evento.teor?.slice(0, 4000) || evento.rotulo,
-                dataInicio: `${dataLimite}T09:00:00`,
+                descricao: descricao || undefined,
+                // O prazo passa a aparecer na agenda a partir da data inicial e
+                // carrega a fatal em `dataFim` — antes só existia uma data e
+                // ela ia pros dois papéis.
+                dataInicio: `${dataInicial}T09:00:00`,
+                dataFim: `${dataFatal}T23:59:59`,
                 diaInteiro: true,
                 prioridade,
+                responsavelId: responsavelId ?? undefined,
               })
             }
-            disabled={criarMut.isPending || !titulo.trim() || !dataLimite}
+            disabled={criarMut.isPending || !titulo.trim() || !dataFatal}
           >
             {criarMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
             Criar prazo
@@ -814,7 +956,9 @@ function CriarPrazoDialog({ open, onClose, evento, onSuccess }: DialogProps) {
 function CriarTarefaDialog({ open, onClose, evento, onSuccess }: DialogProps) {
   const [titulo, setTitulo] = useState(`${nomeCliente(evento)}: ${evento.titulo.slice(0, 80)}`);
   const [descricao, setDescricao] = useState(evento.teor?.slice(0, 4000) || evento.rotulo);
-  const [dataVencimento, setDataVencimento] = useState(
+  const [responsavelId, setResponsavelId] = useState<number | null>(null);
+  const [dataInicial, setDataInicial] = useState(hojeISO());
+  const [dataFatal, setDataFatal] = useState(
     evento.prazo?.data ? format(new Date(evento.prazo.data), "yyyy-MM-dd") : dataFallback(),
   );
   const [prioridade, setPrioridade] = useState<"baixa" | "normal" | "alta" | "urgente">("normal");
@@ -851,16 +995,34 @@ function CriarTarefaDialog({ open, onClose, evento, onSuccess }: DialogProps) {
               onChange={(e) => setDescricao(e.target.value)}
             />
           </div>
+          <CampoResponsavel valor={responsavelId} onChange={setResponsavelId} />
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="tarefa-data">Vencimento</Label>
+              <Label htmlFor="tarefa-inicial">Data inicial</Label>
               <Input
-                id="tarefa-data"
+                id="tarefa-inicial"
                 type="date"
-                value={dataVencimento}
-                onChange={(e) => setDataVencimento(e.target.value)}
+                value={dataInicial}
+                onChange={(e) => setDataInicial(e.target.value)}
               />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tarefa-fatal" className="flex items-center gap-1.5">
+                Data fatal
+                <span className="text-[9px] font-bold tracking-wider text-rose-600">NÃO SE MOVE</span>
+              </Label>
+              <Input
+                id="tarefa-fatal"
+                type="date"
+                className="border-rose-300 focus-visible:ring-rose-300"
+                value={dataFatal}
+                onChange={(e) => setDataFatal(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="tarefa-prio">Prioridade</Label>
               <Select value={prioridade} onValueChange={(v) => setPrioridade(v as typeof prioridade)}>
@@ -875,6 +1037,7 @@ function CriarTarefaDialog({ open, onClose, evento, onSuccess }: DialogProps) {
                 </SelectContent>
               </Select>
             </div>
+            <div />
           </div>
         </div>
 
@@ -887,8 +1050,10 @@ function CriarTarefaDialog({ open, onClose, evento, onSuccess }: DialogProps) {
               criarMut.mutate({
                 titulo,
                 descricao: descricao || undefined,
-                dataVencimento: dataVencimento ? `${dataVencimento}T23:59:59` : undefined,
+                dataInicial: dataInicial ? `${dataInicial}T00:00:00` : undefined,
+                dataVencimento: dataFatal ? `${dataFatal}T23:59:59` : undefined,
                 prioridade,
+                responsavelId: responsavelId ?? undefined,
               })
             }
             disabled={criarMut.isPending || !titulo.trim()}

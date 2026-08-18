@@ -30,6 +30,9 @@ const raiz = join(__dirname, "..", "..");
 const ler = (p: string) => readFileSync(join(raiz, p), "utf8");
 
 const router = ler("server/escritorio/router-agenda.ts");
+const regra = ler("server/escritorio/atribuicao-responsavel.ts");
+const routerAgendamento = ler("server/escritorio/router-agendamento.ts");
+const routerTarefas = ler("server/escritorio/router-tarefas.ts");
 const tela = ler("client/src/pages/Agenda.tsx");
 
 const trecho = (fonte: string, marca: string, tamanho = 3000) => {
@@ -54,25 +57,33 @@ describe("o servidor aceita reatribuir", () => {
 });
 
 describe("quem pode atribuir a outra pessoa", () => {
-  it("existe uma régua só, e ela exige verTodos", () => {
-    expect(router).toContain("function exigirPoderDeAtribuir");
-    const corpo = trecho(router, "function exigirPoderDeAtribuir", 500);
+  it("existe uma régua só, num arquivo só", () => {
+    // Copiar essas duas funções é exatamente como elas divergem — foi assim
+    // que `atualizar` passou a exigir ser o responsável enquanto `excluir`
+    // aceitava responsável OU criador.
+    const corpo = trecho(regra, "export function exigirPoderDeAtribuir", 500);
     expect(corpo).toContain("!perm.verTodos && responsavelId !== perm.colaboradorId");
     expect(corpo).toContain("FORBIDDEN");
+    expect(router).not.toContain("function exigirPoderDeAtribuir");
   });
 
-  it("vale nos três caminhos: criar compromisso, criar tarefa e editar", () => {
-    const usos = router.match(/exigirPoderDeAtribuir\(perm, input\.responsavelId\)/g);
+  it("vale nos três caminhos da Agenda: criar compromisso, criar tarefa e editar", () => {
+    const usos = router.match(/await validarResponsavel\(db, perm, input\.responsavelId\)/g);
     expect(usos).toHaveLength(3);
   });
 
+  it("vale também nos routers antigos, que aceitavam qualquer id", () => {
+    // `agendamento.criar` e `tarefas.criar` recebiam responsavelId sem
+    // checagem nenhuma. O diálogo da movimentação passou a mandar o campo —
+    // sem isto, seria um caminho aberto pra apontar pra outro escritório.
+    expect(routerAgendamento).toContain("validarResponsavel(db, perm, input.responsavelId)");
+    expect(routerTarefas).toContain("validarResponsavel(db, perm, input.responsavelId)");
+  });
+
   it("o responsável escolhido é da equipe e está ativo", () => {
-    // Sem esta checagem `responsavelId` é um número livre vindo do cliente:
-    // dá pra apontar pra colaborador de outro escritório.
-    const corpo = trecho(router, "async function exigirColaboradorAtivo", 700);
+    const corpo = trecho(regra, "export async function exigirColaboradorAtivo", 700);
     expect(corpo).toContain("eq(colaboradores.escritorioId, escritorioId)");
     expect(corpo).toContain("eq(colaboradores.ativo, true)");
-    expect(router.match(/await exigirColaboradorAtivo\(db, perm\.escritorioId, input\.responsavelId\)/g)).toHaveLength(3);
   });
 });
 
