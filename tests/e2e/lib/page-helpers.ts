@@ -8,6 +8,7 @@
  */
 
 import { expect, type Page } from "@playwright/test";
+import { ehAcaoProibida, ehRotaProibida } from "../../../server/admin/jornada/lista-negra";
 
 /**
  * Ruído que NÃO é defeito do app — request cancelada pelo próprio browser.
@@ -132,4 +133,46 @@ export async function expectNoOrphanLoading(
     null,
     { timeout },
   );
+}
+
+/**
+ * O clique do robô, com a lista negra na frente.
+ *
+ * O robô roda num escritório descartável, então em tese poderia clicar em
+ * tudo. Não confiamos nisso por duas razões: a parede que isola o escritório
+ * é a MESMA que o robô está lá pra auditar (se ela tiver furo, o clique
+ * destrutivo acontece do lado errado), e nem tudo que destrói respeita
+ * escritório — cancelar assinatura fala com o Asaas, gerar cobrança cria
+ * fatura de verdade.
+ *
+ * Falhar aqui é proposital e barulhento: um passo do robô tentando clicar em
+ * algo proibido é bug do passo, não acidente aceitável. Melhor a execução
+ * morrer do que descobrir depois o que foi clicado.
+ */
+export async function clicarSeguro(page: Page, nome: string | RegExp): Promise<void> {
+  const alvo = page.getByRole("button", { name: nome }).first();
+  const texto = (await alvo.textContent().catch(() => null)) ?? String(nome);
+  const rotulo = (await alvo.getAttribute("aria-label").catch(() => null)) ?? texto;
+
+  if (ehAcaoProibida(rotulo) || ehAcaoProibida(String(nome))) {
+    throw new Error(
+      `Lista negra: o robô tentou clicar em "${rotulo}". ` +
+        "Ação destrutiva, que cobra ou que manda mensagem não é clicada nem no escritório de teste.",
+    );
+  }
+
+  await alvo.click();
+}
+
+/**
+ * Navegação do robô, com a mesma régua.
+ *
+ * `/admin` é global: não tem `escritorioId` pra filtrar, então a parede
+ * principal simplesmente não existe lá dentro.
+ */
+export async function irSeguro(page: Page, rota: string): Promise<void> {
+  if (ehRotaProibida(rota)) {
+    throw new Error(`Lista negra: o robô tentou abrir "${rota}", que está fora do alcance dele.`);
+  }
+  await page.goto(rota, { waitUntil: "domcontentloaded" });
 }
