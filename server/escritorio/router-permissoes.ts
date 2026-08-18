@@ -48,6 +48,7 @@ const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
     financeiro: p(true, true, true, true, true),
     configuracoes: p(true, true, true, true, true),
     equipe: p(true, true, true, true, true),
+    ponto: p(true, true, true, true, true),
   },
   "Gestor": {
     dashboard: p(true, true, false, false, false),
@@ -65,6 +66,10 @@ const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
     financeiro: p(true, true, true, true, false),
     configuracoes: p(true, true, true, true, false),
     equipe: p(true, true, true, true, false),
+    // Fechado por padrão até o dono conceder. Ver `ponto` é ver a jornada,
+    // as faltas e as notas de avaliação de cada colega — não é consequência
+    // automática de gerenciar a equipe.
+    ponto: p(false, false, false, false, false),
   },
   "Atendente": {
     dashboard: p(true, true, false, false, false),
@@ -82,6 +87,7 @@ const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
     financeiro: p(false, false, false, false, false),
     configuracoes: p(false, false, false, false, false),
     equipe: p(false, true, false, false, false),
+    ponto: p(false, false, false, false, false),
   },
   "Estagiário": {
     dashboard: p(true, true, false, false, false),
@@ -99,6 +105,7 @@ const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
     financeiro: p(false, false, false, false, false),
     configuracoes: p(false, false, false, false, false),
     equipe: p(false, true, false, false, false),
+    ponto: p(false, false, false, false, false),
   },
   // SDR: atendente + acesso aos próprios dados em relatórios. Foco em
   // qualificar leads e gerenciar pipeline próprio.
@@ -118,6 +125,7 @@ const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
     financeiro: p(false, false, false, false, false),
     configuracoes: p(false, false, false, false, false),
     equipe: p(false, true, false, false, false),
+    ponto: p(false, false, false, false, false),
   },
 };
 
