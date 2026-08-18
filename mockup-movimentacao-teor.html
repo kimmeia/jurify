@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --duvida:#b45309; --duvida-bg:#fffbeb; --duvida-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:22px 30px; height:100%; display:flex; flex-direction:column; gap:13px; }
+
+  .topo { flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13px; color:var(--mudo); }
+  .micro { font-size:9.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--fraco); }
+
+  .colunas { flex:1 1 auto; min-height:0; display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+  .col { display:flex; flex-direction:column; gap:13px; min-width:0; }
+
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .dlg { background:var(--surface); border:1px solid var(--borda); border-radius:16px;
+         box-shadow:0 24px 50px -22px #0f172a3d; overflow:hidden; }
+
+  /* ── drawer ── */
+  .drw { padding:16px 18px 15px; }
+  .drw h2 { font-family:'Poppins'; font-weight:700; font-size:17px; line-height:1.3; letter-spacing:-.01em; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .chip { border-radius:999px; padding:3px 9px; font-size:10px; font-weight:700; letter-spacing:.02em;
+          border:1px solid var(--borda); background:var(--surface); color:var(--corpo-2); }
+  .chip.roxo { background:var(--acento-bg); color:var(--acento-forte); border-color:#ddd6fe; }
+  .chip.verde { background:var(--ok-bg); color:#047857; border-color:var(--ok-borda); }
+  .chip.ambar { background:var(--duvida-bg); color:var(--duvida); border-color:var(--duvida-borda); }
+  .linha-proc { margin-top:9px; font-size:11px; color:var(--mudo); }
+  .linha-proc b { color:var(--corpo); font-weight:600; }
+  .pt { color:var(--fantasma); }
+
+  /* teor */
+  .teor { margin-top:13px; border:1px solid var(--borda); border-radius:12px; overflow:hidden; }
+  .teor-topo { display:flex; align-items:center; justify-content:space-between; gap:8px;
+               padding:8px 12px; background:#fbfcfd; border-bottom:1px solid var(--hairline); }
+  .teor-corpo { padding:12px 14px; font-size:12.5px; line-height:1.62; color:var(--corpo); }
+  .teor-corpo p + p { margin-top:8px; }
+  .grifo { background:#ede9fe; color:#4c1d95; font-weight:600; border-radius:4px; padding:1px 4px; }
+  .assina { margin-top:9px; font-size:11px; color:var(--mudo); font-style:italic; }
+  .mais { padding:7px 14px; border-top:1px solid var(--hairline); font-size:11px;
+          color:var(--acento-forte); font-weight:600; background:#fdfdff; }
+
+  /* resumo */
+  .resumo { margin-top:12px; border:1px solid #ddd6fe; background:var(--acento-bg-2); border-radius:12px; padding:11px 13px; }
+  .resumo h3 { font-size:12.5px; font-weight:700; color:#4c1d95; margin-top:2px; }
+  .grade { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:9px; }
+  .cel { background:#fff; border:1px solid #ddd6fe; border-radius:9px; padding:7px 10px; }
+  .cel .k { font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#8b5cf6; }
+  .cel .v { font-size:12px; font-weight:600; color:var(--tinta); margin-top:2px; }
+  .cel .v small { font-weight:500; color:var(--mudo); font-size:10.5px; }
+
+  .acoes { display:flex; gap:8px; margin-top:13px; flex-wrap:wrap; }
+  .btn { height:33px; border-radius:9px; padding:0 13px; display:inline-flex; align-items:center; gap:6px;
+         font-size:12px; font-weight:600; border:1px solid var(--borda); background:var(--surface); color:var(--corpo); }
+  .btn.pri { background:var(--acento); border-color:var(--acento); color:#fff; box-shadow:0 10px 20px -11px #7c3aed99; }
+  .btn.ok { background:var(--ok-bg); border-color:var(--ok-borda); color:#047857; }
+
+  .rodape-drw { margin-top:12px; font-size:10px; color:var(--fraco); line-height:1.5; }
+
+  /* ── estado honesto ── */
+  .honesto { padding:12px 14px; }
+  .honesto .cab { display:flex; align-items:center; gap:8px; }
+  .honesto .cab b { font-size:12.5px; font-weight:700; color:var(--duvida); }
+  .honesto p { font-size:11.5px; color:#78350f; line-height:1.5; margin-top:6px; }
+  .honesto .id { display:inline-block; margin-top:8px; background:#fff; border:1px solid var(--duvida-borda);
+                 border-radius:8px; padding:6px 10px; font-size:11.5px; color:var(--tinta-2); }
+  .honesto .id b { font-weight:700; }
+
+  /* ── diálogo ── */
+  .dlg-topo { padding:14px 16px 11px; border-bottom:1px solid var(--hairline); }
+  .dlg-titulo { font-family:'Poppins'; font-weight:700; font-size:15.5px; }
+  .dlg-sub { font-size:11px; color:var(--mudo); margin-top:2px; }
+  .dlg-corpo { padding:12px 16px 13px; display:flex; flex-direction:column; gap:9px; }
+  .dlg-rod { display:flex; justify-content:flex-end; gap:9px; padding:10px 16px 13px; border-top:1px solid var(--hairline); }
+  .lbl { font-size:11px; font-weight:600; color:var(--corpo); margin-bottom:4px; display:block; }
+  .campo { height:34px; border:1px solid var(--borda); border-radius:9px; background:var(--surface);
+           padding:0 11px; display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--tinta); }
+  .campo.on { border:1.5px solid var(--acento); box-shadow:0 0 0 3px #7c3aed1f; }
+  .campo.fatal { border:1.5px solid #fca5a5; background:#fffafa; }
+  .dois { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  .area { height:56px; border:1px solid var(--borda); border-radius:9px; padding:8px 11px;
+          font-size:12px; color:var(--corpo); line-height:1.45; }
+  .hint { font-size:10px; color:var(--mudo); margin-top:4px; line-height:1.45; }
+  .hint b { color:var(--corpo); font-weight:600; }
+  .fatal-tag { font-size:9px; font-weight:700; color:#b91c1c; letter-spacing:.05em; }
+
+  .av { width:22px; height:22px; border-radius:50%; flex:0 0 auto; display:flex; align-items:center;
+        justify-content:center; color:#fff; font-size:8.5px; font-weight:700; }
+  .av-v { background:linear-gradient(135deg,#8b5cf6,#6366f1); }
+  .av-c { background:linear-gradient(135deg,#06b6d4,#0ea5e9); }
+
+  .nota { display:flex; align-items:flex-start; gap:10px; padding:11px 14px;
+          background:var(--acento-bg-2); border:1px solid #ddd6fe; border-radius:12px; }
+  .nota .txt { font-size:11.5px; color:#4c1d95; line-height:1.5; }
+  .nota .txt b { font-weight:700; }
+  .nota .txt p + p { margin-top:6px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div class="h1">O que o juiz escreveu</div>
+      <div class="sub">Teor da movimentação na tela, e o prazo saindo dele com data inicial, fatal e dono</div>
+    </div>
+
+    <div class="colunas">
+
+      <!-- ══ esquerda: o drawer com o conteúdo ══ -->
+      <div class="col">
+        <div class="card drw">
+          <h2>Proferido despacho de mero expediente.</h2>
+          <div class="chips">
+            <span class="chip roxo">📄 Despacho</span>
+            <span class="chip verde">Documento lido</span>
+            <span class="chip">Exige providência</span>
+          </div>
+          <div class="linha-proc">
+            Andressa Barbosa × Banco Meridional
+            <span class="pt">·</span> 0265948-20.2024.8.06.0001
+            <span class="pt">·</span> TJCE
+            <span class="pt">·</span> Intimação em <b>17/08/2026</b>
+          </div>
+
+          <div class="teor">
+            <div class="teor-topo">
+              <span class="micro">Teor do documento · Despacho nº 226277277</span>
+              <span class="micro" style="color:var(--mudo)">2 páginas</span>
+            </div>
+            <div class="teor-corpo">
+              <p>Vistos.</p>
+              <p>
+                Intime-se a parte autora para, <span class="grifo">no prazo de 15 (quinze) dias
+                úteis</span>, manifestar-se sobre a contestação e os documentos que a acompanham,
+                nos termos do art. 350 do Código de Processo Civil.
+              </p>
+              <p>
+                Após, com ou sem manifestação, venham os autos conclusos para deliberação quanto
+                ao saneamento e organização do processo.
+              </p>
+              <p>Expeça-se o necessário. Cumpra-se.</p>
+              <p class="assina">Fortaleza/CE, 15 de agosto de 2026. — Juiz de Direito da 12ª Vara Cível</p>
+            </div>
+            <div class="mais">Ver documento completo ↓</div>
+          </div>
+
+          <div class="resumo">
+            <span class="micro" style="color:#8b5cf6">Resumo por IA</span>
+            <h3>Réplica à contestação — manifestação da autora em 15 dias úteis</h3>
+            <div class="grade">
+              <div class="cel">
+                <div class="k">O que fazer</div>
+                <div class="v">Peticionar réplica<br><small>art. 350 do CPC</small></div>
+              </div>
+              <div class="cel">
+                <div class="k">Prazo fatal</div>
+                <div class="v">09/09/2026<br><small>15 dias úteis da intimação</small></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="acoes">
+            <div class="btn pri">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2.5" stroke="#fff" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+              Criar prazo
+            </div>
+            <div class="btn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01" stroke="#334155" stroke-width="2.2" stroke-linecap="round"/></svg>
+              Criar tarefa
+            </div>
+            <div class="btn ok">✓ Já resolvi</div>
+            <div class="btn">⬇ Baixar PDF</div>
+          </div>
+
+          <p class="rodape-drw">
+            Coletado do PJe em 17/08/2026. Resumo e prazo gerados por IA a partir do documento —
+            confira a íntegra antes de peticionar.
+          </p>
+        </div>
+      </div>
+
+      <!-- ══ direita: estado honesto + diálogo ══ -->
+      <div class="col">
+
+        <div class="card honesto" style="background:var(--duvida-bg);border-color:var(--duvida-borda)">
+          <div class="cab">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="#b45309" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <b>Quando o documento ainda não foi lido</b>
+          </div>
+          <p>
+            O rótulo do PJe traz o número e o tipo da peça. Isso já basta pra dizer que ela
+            <b>existe</b> — em vez de afirmar “o tribunal não anexou peça nenhuma”, que hoje é
+            conclusão do nosso limite de captura, não fato do tribunal.
+          </p>
+          <span class="id">
+            📄 <b>Sentença nº 226220878</b> — identificada no rótulo, ainda não lida
+          </span>
+          <div class="acoes" style="margin-top:10px">
+            <div class="btn" style="border-color:var(--duvida-borda);color:var(--duvida)">
+              Ler documento <span style="opacity:.7;font-weight:500">1 cred</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="dlg">
+          <div class="dlg-topo">
+            <div class="dlg-titulo">Criar prazo a partir da movimentação</div>
+            <div class="dlg-sub">0265948-20.2024.8.06.0001 · Andressa Barbosa × Banco Meridional</div>
+          </div>
+          <div class="dlg-corpo">
+            <div>
+              <span class="lbl">Título</span>
+              <div class="campo">Andressa Barbosa: réplica à contestação</div>
+            </div>
+
+            <div>
+              <span class="lbl">Descrição</span>
+              <div class="area">
+                Intime-se a parte autora para, no prazo de 15 dias úteis, manifestar-se sobre a
+                contestação e os documentos que a acompanham (art. 350 do CPC).
+              </div>
+              <p class="hint">Vem preenchida com o trecho do documento. Editável.</p>
+            </div>
+
+            <div>
+              <span class="lbl">Responsável</span>
+              <div class="campo on">
+                <span class="av av-c">MC</span>
+                Marina Callado Feitosa
+                <span style="margin-left:auto;color:#5b21b6;font-size:11px;font-weight:600">Trocar</span>
+              </div>
+            </div>
+
+            <div class="dois">
+              <div>
+                <span class="lbl">Data inicial</span>
+                <div class="campo">18/08/2026</div>
+              </div>
+              <div>
+                <span class="lbl">Data fatal <span class="fatal-tag">NÃO SE MOVE</span></span>
+                <div class="campo fatal">09/09/2026</div>
+              </div>
+            </div>
+
+            <div>
+              <span class="lbl">Prioridade</span>
+              <div class="campo">Alta</div>
+            </div>
+
+            <p class="hint">
+              <b>Como chegamos nesta data:</b> intimação em 17/08/2026, contagem iniciada no
+              primeiro dia útil seguinte, 15 dias úteis (art. 350 do CPC), descontados sábados,
+              domingos e o recesso forense. <b>Confira antes de peticionar.</b>
+            </p>
+          </div>
+          <div class="dlg-rod">
+            <div class="btn">Cancelar</div>
+            <div class="btn pri">Criar prazo</div>
+          </div>
+        </div>
+
+        <div class="nota">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;margin-top:1px"><circle cx="12" cy="12" r="9.2" stroke="#7c3aed" stroke-width="2.1"/><path d="M12 11v5.2M12 7.6h.01" stroke="#7c3aed" stroke-width="2.1" stroke-linecap="round"/></svg>
+          <div class="txt">
+            <p><b>Os mesmos quatro campos vão pro “Criar tarefa”</b>, que hoje já tem descrição
+            mas não tem responsável nem o par de datas.</p>
+            <p>Prazo guarda as duas datas sem mexer no banco. Tarefa só tem vencimento — a data
+            inicial exige uma coluna nova.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
