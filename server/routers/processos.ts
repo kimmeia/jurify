@@ -173,6 +173,73 @@ async function consumirCreditos(
   await consumirCreditosEscritorio(escritorioId, userId, custo, operacao, detalhes);
 }
 
+
+/**
+ * A credencial que serve pra trabalhar, dado o escritório e os sistemas aceitos.
+ *
+ * Existia copiada em cinco lugares deste arquivo, duas delas rotuladas "mesma
+ * lógica de X" — e foi assim que o conserto de um caminho deixou os outros
+ * recusando.
+ *
+ * O critério é `≠ removida`, o mesmo do `recuperarSessao`, que é quem de fato
+ * usa a credencial. `status` indica saúde, não existência: falha passageira no
+ * tribunal marca "erro"/"expirada" e a revalidação cura depois. Exigir "ativa"
+ * recusava justamente quem já tinha tudo configurado e cujo monitoramento
+ * estava rodando naquele instante.
+ *
+ * A ordem de `sistemas` é a preferência do chamador; empate se resolve pela
+ * saúde, porque começar por uma que precisa de relogin é só mais lento —
+ * recusá-la seria impedir o trabalho.
+ */
+const SAUDE_CREDENCIAL: Record<string, number> = {
+  ativa: 0,
+  validando: 1,
+  expirada: 2,
+  erro: 3,
+};
+
+async function escolherCredencial(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  escritorioId: number,
+  opcoes: { sistemas: string[]; credencialId?: number | null },
+): Promise<{
+  cred?: typeof cofreCredenciais.$inferSelect;
+  /** Sistemas presentes no cofre — pra mensagem distinguir "nenhuma" de "outra". */
+  sistemasNoCofre: string[];
+}> {
+  const utilizavel = ne(cofreCredenciais.status, "removida");
+
+  if (opcoes.credencialId) {
+    const [cred] = await db
+      .select()
+      .from(cofreCredenciais)
+      .where(
+        and(
+          eq(cofreCredenciais.id, opcoes.credencialId),
+          eq(cofreCredenciais.escritorioId, escritorioId),
+          inArray(cofreCredenciais.sistema, opcoes.sistemas),
+          utilizavel,
+        ),
+      )
+      .limit(1);
+    return { cred, sistemasNoCofre: [] };
+  }
+
+  const todas = await db
+    .select()
+    .from(cofreCredenciais)
+    .where(and(eq(cofreCredenciais.escritorioId, escritorioId), utilizavel));
+
+  const aceitas = todas.filter((c) => opcoes.sistemas.includes(c.sistema));
+  const peso = (c: (typeof aceitas)[number]) =>
+    opcoes.sistemas.indexOf(c.sistema) * 10 + (SAUDE_CREDENCIAL[c.status] ?? 4);
+
+  return {
+    cred: [...aceitas].sort((x, y) => peso(x) - peso(y))[0],
+    sistemasNoCofre: [...new Set(todas.map((c) => c.sistema))],
+  };
+}
+
 export const processosRouter = router({
   saldo: protectedProcedure.query(async ({ ctx }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -257,21 +324,12 @@ export const processosRouter = router({
       // Se `credencialId` foi informado, exige que ela seja do escritório,
       // compatível com o tribunal e ativa — caso contrário pega a primeira
       // ativa do sistema correto.
-      let credencial: typeof cofreCredenciais.$inferSelect[] = [];
+      const escolha = await escolherCredencial(db, esc.escritorio.id, {
+        sistemas: [sistemaCofre, SISTEMA_PJE_NACIONAL],
+        credencialId: input.credencialId,
+      });
+      let credencial: typeof cofreCredenciais.$inferSelect[] = escolha.cred ? [escolha.cred] : [];
       if (input.credencialId) {
-        credencial = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.id, input.credencialId),
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              inArray(cofreCredenciais.sistema, [sistemaCofre, SISTEMA_PJE_NACIONAL]),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          )
-          .limit(1);
-
         if (credencial.length === 0) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
@@ -282,18 +340,6 @@ export const processosRouter = router({
           });
         }
       } else {
-        credencial = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              inArray(cofreCredenciais.sistema, [sistemaCofre, SISTEMA_PJE_NACIONAL]),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          )
-          .limit(1);
-
         if (credencial.length === 0) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
@@ -691,37 +737,10 @@ export const processosRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-      // Resolve credencial: selecionada ou primeira ativa do escritório
-      // (preferindo pje_tjce, fallback esaj_tjce). Mesma lógica de
-      // `criarMonitoramentoNovasAcoes`.
-      let cred: typeof cofreCredenciais.$inferSelect | undefined;
-      if (input.credencialId) {
-        [cred] = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.id, input.credencialId),
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          )
-          .limit(1);
-      } else {
-        const todas = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          );
-        const suportadas = todas.filter(
-          (c) => c.sistema === "pje_tjce" || c.sistema === "esaj_tjce",
-        );
-        cred = suportadas.find((c) => c.sistema === "pje_tjce") ?? suportadas[0];
-      }
+      const { cred } = await escolherCredencial(db, esc.escritorio.id, {
+        sistemas: ["pje_tjce", "esaj_tjce"],
+        credencialId: input.credencialId,
+      });
 
       if (!cred) {
         throw new TRPCError({
@@ -826,34 +845,22 @@ export const processosRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-      // Mesma lógica de resolução de credencial de `consultarCNJ`.
-      let credencial: typeof cofreCredenciais.$inferSelect[] = [];
-      if (input.credencialId) {
-        credencial = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.id, input.credencialId),
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              inArray(cofreCredenciais.sistema, [sistemaCofre, SISTEMA_PJE_NACIONAL]),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          )
-          .limit(1);
-      }
-      if (credencial.length === 0) {
-        credencial = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              inArray(cofreCredenciais.sistema, [sistemaCofre, SISTEMA_PJE_NACIONAL]),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          )
-          .limit(1);
+      // Mesmo seletor do `consultarCNJ` — de fato o mesmo, agora, e não uma
+      // cópia com a nota dizendo que é igual.
+      const escolhido = await escolherCredencial(db, esc.escritorio.id, {
+        sistemas: [sistemaCofre, SISTEMA_PJE_NACIONAL],
+        credencialId: input.credencialId,
+      });
+      let credencial: typeof cofreCredenciais.$inferSelect[] = escolhido.cred
+        ? [escolhido.cred]
+        : [];
+      // Id informado que não serve não impede: cai pra escolha automática, que
+      // é o que o usuário espera de um campo opcional.
+      if (credencial.length === 0 && input.credencialId) {
+        const auto = await escolherCredencial(db, esc.escritorio.id, {
+          sistemas: [sistemaCofre, SISTEMA_PJE_NACIONAL],
+        });
+        if (auto.cred) credencial = [auto.cred];
       }
       if (credencial.length === 0) {
         throw new TRPCError({
@@ -1275,14 +1282,14 @@ export const processosRouter = router({
             and(
               eq(cofreCredenciais.id, input.credencialId),
               eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.status, "ativa"),
+              ne(cofreCredenciais.status, "removida"),
             ),
           )
           .limit(1);
         if (!cred) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
-            message: "Credencial não encontrada ou inativa. Cadastre/valide em /processos?tab=cofre.",
+            message: "Credencial não encontrada. Cadastre em /processos?tab=cofre.",
           });
         }
         credencialIdParaSalvar = input.credencialId;
@@ -1970,41 +1977,20 @@ export const processosRouter = router({
       // Confirma posse da credencial. Cofre é compartilhado pelo escritório:
       // qualquer membro (dono ou colaborador) usa as credenciais cadastradas
       // pelo escritório.
-      let cred: typeof cofreCredenciais.$inferSelect | undefined;
-      if (input.credencialId) {
-        [cred] = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.id, input.credencialId),
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          )
-          .limit(1);
-      } else {
-        // Auto-seleção: prefere pje_tjce, fallback esaj_tjce. Qualquer
-        // credencial ativa do escritório com sistema suportado.
-        const todas = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          );
-        const suportadas = todas.filter(
-          (c) => c.sistema === "pje_tjce" || c.sistema === "esaj_tjce",
-        );
-        cred = suportadas.find((c) => c.sistema === "pje_tjce") ?? suportadas[0];
-      }
+      const { cred, sistemasNoCofre } = await escolherCredencial(db, esc.escritorio.id, {
+        sistemas: ["pje_tjce", "esaj_tjce"],
+        credencialId: input.credencialId,
+      });
+
       if (!cred) {
+        // Diferencia "não tem nenhuma" de "tem, mas de outro tribunal" — são
+        // problemas diferentes, e a mensagem antiga mandava cadastrar de novo
+        // nos dois casos, inclusive pra quem já tinha cadastrado.
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message:
-            "Nenhuma credencial ativa de TJCE encontrada. Cadastre uma em Processos → Cofre antes de criar monitoramento.",
+          message: sistemasNoCofre.length
+            ? `O cofre tem credencial cadastrada, mas nenhuma de TJCE (encontrei: ${sistemasNoCofre.join(", ")}). Cadastre uma do TJCE em Processos → Cofre.`
+            : "Nenhuma credencial no cofre. Cadastre uma do TJCE em Processos → Cofre antes de criar monitoramento.",
         });
       }
 
