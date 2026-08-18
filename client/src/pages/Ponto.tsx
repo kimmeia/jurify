@@ -399,9 +399,25 @@ export default function Ponto() {
   const [lancando, setLancando] = useState<{ colaboradorId: number; nome: string } | null>(null);
   const [avaliando, setAvaliando] = useState<{ colaboradorId: number; nome: string } | null>(null);
 
+  // Ponto é a visão do gestor sobre a equipe. Quem não enxerga além da
+  // própria linha não entra — nem pelo menu, nem digitando a URL. O gate real
+  // sempre esteve no servidor (`espelhoEquipe` exige verTodos), mas a página
+  // caía num "meu ponto" pra quem não é gestor, e isso fazia o módulo parecer
+  // disponível pra todo mundo.
+  const { data: minhasPerms, isLoading: permsCarregando } =
+    trpc.permissoes?.minhasPermissoes?.useQuery?.(undefined, {
+      retry: false,
+      refetchOnWindowFocus: false,
+    }) || { data: null, isLoading: false };
+  const podeGerirEquipe =
+    minhasPerms?.cargo === "Dono" || !!minhasPerms?.permissoes?.equipe?.verTodos;
+
   const utils = trpc.useUtils();
-  const meu = trpc.rh.meuEspelho.useQuery({ competencia });
-  const equipe = trpc.rh.espelhoEquipe.useQuery({ competencia }, { retry: false });
+  const meu = trpc.rh.meuEspelho.useQuery({ competencia }, { enabled: podeGerirEquipe });
+  const equipe = trpc.rh.espelhoEquipe.useQuery(
+    { competencia },
+    { retry: false, enabled: podeGerirEquipe },
+  );
 
   const pausaMut = trpc.rh.registrarPausa.useMutation({
     onSuccess: () => {
@@ -428,6 +444,22 @@ export default function Ponto() {
     utils.rh.espelhoEquipe.invalidate();
     utils.rh.meuEspelho.invalidate();
   };
+
+  // Saída antecipada DEPOIS de todos os hooks: a contagem não pode mudar
+  // entre renders, senão o React derruba a tela.
+  if (!podeGerirEquipe) {
+    return (
+      <div className="max-w-lg mx-auto mt-16 rounded-2xl border bg-card p-6 text-center">
+        <Clock className="h-8 w-8 text-muted-foreground/50 mx-auto" />
+        <h1 className="text-base font-bold mt-3">Ponto é do gestor</h1>
+        <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
+          {permsCarregando
+            ? "Conferindo suas permissões…"
+            : "Este módulo mostra a jornada da equipe e fica com quem administra o time. Fale com o gestor do escritório se precisar de algo daqui."}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
