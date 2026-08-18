@@ -61,6 +61,7 @@ const DOMINIO_LABEL: Record<string, string> = {
   motor: "Motor próprio",
   smartflow: "SmartFlow",
   kanban: "Kanban",
+  agenda: "Agenda",
   permissoes: "Permissões",
   observabilidade: "Observabilidade",
 };

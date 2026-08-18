@@ -13,8 +13,9 @@
  * Toda consulta aqui é SELECT. Não importe nada que escreva neste arquivo.
  */
 
-import { and, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import {
+  agendamentos,
   asaasCobrancas,
   clienteProcessos,
   cofreCredenciais,
@@ -25,11 +26,15 @@ import {
   convitesColaborador,
   escritorioCreditos,
   escritorioTransacoes,
+  eventosProcesso,
   kanbanCards,
+  kanbanMovimentacoes,
   leads,
   motorMonitoramentos,
   smartflowExecucoes,
+  tarefas,
 } from "../../../drizzle/schema";
+import { lerDocumentoNoRotulo } from "../../../shared/documento-no-rotulo";
 import { ORDEM_SEVERIDADE, type Regra } from "./tipos";
 
 /**
@@ -43,6 +48,21 @@ const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
 const HORAS_EXECUCAO_ORFA = 48;
 
 /**
+ * Teto por lado da lista da Agenda sem janela de datas (`agenda.listar`).
+ * Acima disso a aba Eventos deixa de mostrar tudo — e o que some é sempre o
+ * extremo mais distante de hoje.
+ */
+const TETO_LISTA_AGENDA = 300;
+
+/**
+ * Quantos candidatos puxar antes de filtrar em JS na MOV-01. O rótulo só se
+ * lê com regex de verdade, e SQL só consegue estreitar; sem folga, a regra
+ * devolveria menos linhas do que existem por ter jogado fora as que não
+ * casaram no filtro grosso.
+ */
+const FOLGA_CANDIDATOS = 6;
+
+/**
  * Folga sobre o `retomarEm` vencido. O scheduler roda a cada 60s, então
  * retomada atrasada em horas significa que ele não está pegando aquela
  * linha — não que está ocupado.
@@ -50,6 +70,326 @@ const HORAS_EXECUCAO_ORFA = 48;
 const HORAS_RETOMADA_ATRASADA = 2;
 
 export const REGRAS: Regra[] = [
+  {
+    id: "AGD-01",
+    titulo: "Evento com responsável de outro escritório",
+    severidade: "critico",
+    dominio: "multi_tenant",
+    nivel: "C",
+    tabela: "agendamentos / tarefas",
+    invariante:
+      "O responsável de um compromisso ou tarefa tem que ser colaborador do " +
+      "MESMO escritório do evento. `responsavelId` é um int livre que chega " +
+      "do cliente e nada no schema o amarra a colaboradores.",
+    correcaoPrevista:
+      "Nenhuma automática. Escolher entre apagar o vínculo e reatribuir " +
+      "exige saber de quem era o trabalho — e chutar move evento entre " +
+      "escritórios.",
+    shadow: true,
+    async detectar(db, limite) {
+      const ags = await db
+        .select({
+          id: agendamentos.id,
+          escritorioId: agendamentos.escritorioId,
+          responsavelId: agendamentos.responsavelId,
+          titulo: agendamentos.titulo,
+          escritorioDoColaborador: colaboradores.escritorioId,
+        })
+        .from(agendamentos)
+        .leftJoin(colaboradores, eq(colaboradores.id, agendamentos.responsavelId))
+        .where(and(
+          isNotNull(agendamentos.responsavelId),
+          or(
+            isNull(colaboradores.id),
+            ne(colaboradores.escritorioId, agendamentos.escritorioId),
+          )!,
+        ))
+        .limit(limite);
+
+      const trs = await db
+        .select({
+          id: tarefas.id,
+          escritorioId: tarefas.escritorioId,
+          responsavelId: tarefas.responsavelId,
+          titulo: tarefas.titulo,
+          escritorioDoColaborador: colaboradores.escritorioId,
+        })
+        .from(tarefas)
+        .leftJoin(colaboradores, eq(colaboradores.id, tarefas.responsavelId))
+        .where(and(
+          isNotNull(tarefas.responsavelId),
+          or(
+            isNull(colaboradores.id),
+            ne(colaboradores.escritorioId, tarefas.escritorioId),
+          )!,
+        ))
+        .limit(limite);
+
+      return [
+        ...ags.map((l) => ({
+          escritorioId: l.escritorioId,
+          alvoId: l.id,
+          descricao: `Compromisso ${l.id} "${l.titulo}" aponta pro colaborador ${l.responsavelId}`,
+          valores: {
+            fonte: "compromisso",
+            responsavelId: l.responsavelId,
+            escritorioDoEvento: l.escritorioId,
+            escritorioDoColaborador: l.escritorioDoColaborador ?? "colaborador inexistente",
+          },
+        })),
+        ...trs.map((l) => ({
+          escritorioId: l.escritorioId,
+          alvoId: l.id,
+          descricao: `Tarefa ${l.id} "${l.titulo}" aponta pro colaborador ${l.responsavelId}`,
+          valores: {
+            fonte: "tarefa",
+            responsavelId: l.responsavelId,
+            escritorioDoEvento: l.escritorioId,
+            escritorioDoColaborador: l.escritorioDoColaborador ?? "colaborador inexistente",
+          },
+        })),
+      ].slice(0, limite);
+    },
+  },
+
+  {
+    id: "AGD-02",
+    titulo: "Prazo com data fatal antes da data inicial",
+    severidade: "medio",
+    dominio: "agenda",
+    nivel: "B",
+    tabela: "agendamentos / tarefas",
+    invariante:
+      "Num par de datas de prazo, a fatal não pode ser anterior à inicial. " +
+      "Invertidas, o evento nasce vencido antes de começar e cai no balde de " +
+      "atrasados no mesmo dia em que foi criado.",
+    correcaoPrevista:
+      "Trocar as duas de lugar é o palpite óbvio e é justamente o que não dá " +
+      "pra fazer sozinho: pode ser que a fatal esteja certa e a inicial " +
+      "digitada errada. Vira proposta.",
+    shadow: true,
+    async detectar(db, limite) {
+      const ags = await db
+        .select({
+          id: agendamentos.id,
+          escritorioId: agendamentos.escritorioId,
+          titulo: agendamentos.titulo,
+          dataInicio: agendamentos.dataInicio,
+          dataFim: agendamentos.dataFim,
+        })
+        .from(agendamentos)
+        .where(and(
+          isNotNull(agendamentos.dataFim),
+          lt(agendamentos.dataFim, agendamentos.dataInicio),
+        ))
+        .limit(limite);
+
+      const trs = await db
+        .select({
+          id: tarefas.id,
+          escritorioId: tarefas.escritorioId,
+          titulo: tarefas.titulo,
+          dataInicial: tarefas.dataInicial,
+          dataVencimento: tarefas.dataVencimento,
+        })
+        .from(tarefas)
+        .where(and(
+          isNotNull(tarefas.dataInicial),
+          isNotNull(tarefas.dataVencimento),
+          lt(tarefas.dataVencimento, tarefas.dataInicial),
+        ))
+        .limit(limite);
+
+      return [
+        ...ags.map((l) => ({
+          escritorioId: l.escritorioId,
+          alvoId: l.id,
+          descricao: `Compromisso ${l.id} "${l.titulo}" termina antes de começar`,
+          valores: {
+            fonte: "compromisso",
+            dataInicial: l.dataInicio?.toISOString() ?? null,
+            dataFatal: l.dataFim?.toISOString() ?? null,
+          },
+        })),
+        ...trs.map((l) => ({
+          escritorioId: l.escritorioId,
+          alvoId: l.id,
+          descricao: `Tarefa ${l.id} "${l.titulo}" vence antes de começar`,
+          valores: {
+            fonte: "tarefa",
+            dataInicial: l.dataInicial?.toISOString() ?? null,
+            dataFatal: l.dataVencimento?.toISOString() ?? null,
+          },
+        })),
+      ].slice(0, limite);
+    },
+  },
+
+  {
+    id: "AGD-03",
+    titulo: "Escritório com mais eventos abertos do que a lista mostra",
+    severidade: "alto",
+    dominio: "observabilidade",
+    nivel: "C",
+    tabela: "agendamentos / tarefas",
+    invariante:
+      "A aba Eventos da Agenda busca sem janela de datas e corta em " +
+      `${TETO_LISTA_AGENDA} por lado (próximos e passados). Acima disso ela ` +
+      "deixa de mostrar tudo, e some justamente o extremo mais distante de " +
+      "hoje — sem avisar ninguém.",
+    correcaoPrevista:
+      "Não é corrigível no banco: é sinal de que o teto precisa subir ou de " +
+      "que a lista precisa paginar. Serve pra decidir isso antes de alguém " +
+      "perder um prazo por ele não estar na tela.",
+    shadow: true,
+    async detectar(db, limite) {
+      const porAgendamento = await db
+        .select({
+          escritorioId: agendamentos.escritorioId,
+          total: sql<number>`COUNT(*)`.as("total"),
+        })
+        .from(agendamentos)
+        .where(or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento")))
+        .groupBy(agendamentos.escritorioId)
+        .having(sql`COUNT(*) > ${TETO_LISTA_AGENDA}`)
+        .limit(limite);
+
+      const porTarefa = await db
+        .select({
+          escritorioId: tarefas.escritorioId,
+          total: sql<number>`COUNT(*)`.as("total"),
+        })
+        .from(tarefas)
+        .where(or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")))
+        .groupBy(tarefas.escritorioId)
+        .having(sql`COUNT(*) > ${TETO_LISTA_AGENDA}`)
+        .limit(limite);
+
+      return [
+        ...porAgendamento.map((l) => ({
+          escritorioId: l.escritorioId,
+          alvoId: l.escritorioId,
+          descricao: `Escritório ${l.escritorioId}: ${Number(l.total)} compromissos abertos (teto ${TETO_LISTA_AGENDA})`,
+          valores: { fonte: "compromisso", abertos: Number(l.total), teto: TETO_LISTA_AGENDA },
+        })),
+        ...porTarefa.map((l) => ({
+          escritorioId: l.escritorioId,
+          alvoId: l.escritorioId,
+          descricao: `Escritório ${l.escritorioId}: ${Number(l.total)} tarefas abertas (teto ${TETO_LISTA_AGENDA})`,
+          valores: { fonte: "tarefa", abertos: Number(l.total), teto: TETO_LISTA_AGENDA },
+        })),
+      ].slice(0, limite);
+    },
+  },
+
+  {
+    id: "MOV-01",
+    titulo: "Movimentação dita “sem documento” com peça identificada no rótulo",
+    severidade: "alto",
+    dominio: "motor",
+    nivel: "B",
+    tabela: "eventos_processo",
+    invariante:
+      "`sem_documento` afirma que o tribunal não anexou peça nenhuma. Se o " +
+      "rótulo do próprio movimento traz número e tipo da peça " +
+      "(“… 226277277 - Despacho”), a afirmação é falsa: o documento existe e " +
+      "o que faltou foi caminho até ele.",
+    correcaoPrevista:
+      "Regravar o status como `pendente` e preencher documentoIdTribunal a " +
+      "partir do rótulo. É recálculo puro, mas fica em B enquanto a leitura " +
+      "do rótulo não tiver histórico contra os formatos reais do tribunal.",
+    shadow: true,
+    async detectar(db, limite) {
+      // Ordena do mais novo pro mais antigo de propósito: achado recente
+      // significa que a leitura do rótulo está falhando AGORA; achado só em
+      // linha velha é acervo de antes da correção.
+      const candidatos = await db
+        .select({
+          id: eventosProcesso.id,
+          escritorioId: eventosProcesso.escritorioId,
+          conteudo: eventosProcesso.conteudo,
+          cnj: eventosProcesso.cnjAfetado,
+          dataEvento: eventosProcesso.dataEvento,
+          documentoIdTribunal: eventosProcesso.documentoIdTribunal,
+        })
+        .from(eventosProcesso)
+        .where(and(
+          eq(eventosProcesso.tipo, "movimentacao"),
+          eq(eventosProcesso.teorStatus, "sem_documento"),
+          // Estreitamento grosso: sem pelo menos 6 dígitos seguidos não há
+          // id de peça possível. O julgamento final é do parser.
+          sql`${eventosProcesso.conteudo} REGEXP '[0-9]{6,12}'`,
+        ))
+        .orderBy(desc(eventosProcesso.dataEvento))
+        .limit(limite * FOLGA_CANDIDATOS);
+
+      const achados = [];
+      for (const c of candidatos) {
+        const doc = lerDocumentoNoRotulo(c.conteudo);
+        if (!doc) continue;
+        achados.push({
+          escritorioId: c.escritorioId,
+          alvoId: c.id,
+          descricao: `${c.cnj ?? "sem CNJ"}: ${doc.tipo ?? "Documento"} nº ${doc.id} existe, mas o evento diz que não há peça`,
+          valores: {
+            documentoId: doc.id,
+            documentoTipo: doc.tipo,
+            jaGravado: c.documentoIdTribunal,
+            dataEvento: c.dataEvento?.toISOString() ?? null,
+            rotulo: c.conteudo.slice(0, 160),
+          },
+        });
+        if (achados.length >= limite) break;
+      }
+      return achados;
+    },
+  },
+
+  {
+    id: "KAN-02",
+    titulo: "Histórico de movimentação apontando pra card que não existe mais",
+    severidade: "alto",
+    dominio: "kanban",
+    nivel: "C",
+    tabela: "kanban_movimentacoes",
+    invariante:
+      "`kanban_movimentacoes.cardId` não tem FK. Excluir uma coluna apaga os " +
+      "cards dela e deixa o histórico apontando pro vazio — que é a única " +
+      "prova de que aqueles cards existiram, e por onde passaram.",
+    correcaoPrevista:
+      "Nenhuma automática. Apagar o histórico destruiria a evidência; " +
+      "recriar o card exige decidir nome, coluna e responsável a partir de " +
+      "um rastro parcial. Serve pra reconstruir à mão o que foi perdido.",
+    shadow: true,
+    async detectar(db, limite) {
+      const orfaos = await db
+        .select({
+          cardId: kanbanMovimentacoes.cardId,
+          movimentos: sql<number>`COUNT(*)`.as("movimentos"),
+          ultimaEm: sql<string>`MAX(${kanbanMovimentacoes.createdAt})`.as("ultima_em"),
+          ultimaColuna: sql<number>`MAX(${kanbanMovimentacoes.colunaDestinoId})`.as("ultima_coluna"),
+        })
+        .from(kanbanMovimentacoes)
+        .leftJoin(kanbanCards, eq(kanbanCards.id, kanbanMovimentacoes.cardId))
+        .where(isNull(kanbanCards.id))
+        .groupBy(kanbanMovimentacoes.cardId)
+        .limit(limite);
+
+      return orfaos.map((l) => ({
+        // A tabela de movimentações não guarda escritório: o card levava essa
+        // informação, e ele é justamente o que sumiu.
+        escritorioId: null,
+        alvoId: l.cardId,
+        descricao: `Card ${l.cardId} não existe mais, mas deixou ${Number(l.movimentos)} movimento(s) no histórico`,
+        valores: {
+          movimentos: Number(l.movimentos),
+          ultimaMovimentacaoEm: l.ultimaEm ? String(l.ultimaEm) : null,
+          ultimaColunaDestino: Number(l.ultimaColuna),
+        },
+      }));
+    },
+  },
+
   {
     id: "CRED-01",
     titulo: "Saldo de créditos diverge do extrato",
