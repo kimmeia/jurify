@@ -25,6 +25,7 @@ export const MODULOS = [
   "financeiro",
   "configuracoes",
   "equipe",
+  "ponto",
 ] as const;
 
 export type Modulo = (typeof MODULOS)[number];
@@ -45,6 +46,7 @@ export const MODULOS_LABELS: Record<string, string> = {
   financeiro: "Financeiro",
   configuracoes: "Configurações",
   equipe: "Equipe",
+  ponto: "Ponto",
 };
 
 /**
@@ -56,4 +58,8 @@ export const MODULOS_LABELS: Record<string, string> = {
 export const MODULO_HERANCA: Record<string, string> = {
   modelos: "clientes",
   tarefas: "agenda",
+  // "ponto" fica FORA de propósito. Ele saiu de "equipe", então a herança
+  // seria o padrão — só que herdar devolveria o Ponto ao Gestor, que é
+  // exatamente o acesso que o dono pediu pra fechar. Aqui a ausência de linha
+  // significa "não tem", e o dono concede na matriz quando quiser.
 };

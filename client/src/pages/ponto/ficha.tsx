@@ -137,7 +137,7 @@ export default function FichaColaborador() {
   const id = Number(params?.id);
   const [ajustando, setAjustando] = useState<Jornada | null>(null);
 
-  // Mesma régua da tela de RH: quem não gerencia equipe não abre ficha de
+  // Mesma régua da tela de RH: sem o módulo Ponto não se abre ficha de
   // ninguém, e nem chega a pedir os dados. O servidor já barrava, mas a URL
   // direta rendia uma tela de erro em vez de um "isso não é seu".
   const { data: minhasPerms, isLoading: permsCarregando } =
@@ -145,13 +145,15 @@ export default function FichaColaborador() {
       retry: false,
       refetchOnWindowFocus: false,
     }) || { data: null, isLoading: false };
-  const podeGerirEquipe =
-    minhasPerms?.cargo === "Dono" || !!minhasPerms?.permissoes?.equipe?.verTodos;
+  const podeVerPonto =
+    minhasPerms?.cargo === "Dono" ||
+    !!minhasPerms?.permissoes?.ponto?.verTodos ||
+    !!minhasPerms?.permissoes?.ponto?.verProprios;
 
   const utils = trpc.useUtils();
   const equipe = trpc.rh.espelhoEquipe.useQuery(
     { competencia },
-    { retry: false, enabled: podeGerirEquipe },
+    { retry: false, enabled: podeVerPonto },
   );
 
   const pessoa = useMemo(
@@ -169,14 +171,14 @@ export default function FichaColaborador() {
     : "";
 
   // Depois de todos os hooks, sempre.
-  if (!podeGerirEquipe) {
+  if (!podeVerPonto) {
     return (
       <div className="max-w-lg mx-auto mt-16 rounded-2xl border bg-card p-6 text-center">
-        <h1 className="text-base font-bold">Ponto é do gestor</h1>
+        <h1 className="text-base font-bold">Ponto não está no seu acesso</h1>
         <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
           {permsCarregando
             ? "Conferindo suas permissões…"
-            : "A ficha de ponto de um colaborador fica com quem administra o time."}
+            : "A ficha de ponto de um colaborador só abre pra quem recebeu o módulo Ponto."}
         </p>
       </div>
     );

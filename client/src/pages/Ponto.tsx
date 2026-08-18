@@ -399,24 +399,25 @@ export default function Ponto() {
   const [lancando, setLancando] = useState<{ colaboradorId: number; nome: string } | null>(null);
   const [avaliando, setAvaliando] = useState<{ colaboradorId: number; nome: string } | null>(null);
 
-  // Ponto é a visão do gestor sobre a equipe. Quem não enxerga além da
-  // própria linha não entra — nem pelo menu, nem digitando a URL. O gate real
-  // sempre esteve no servidor (`espelhoEquipe` exige verTodos), mas a página
-  // caía num "meu ponto" pra quem não é gestor, e isso fazia o módulo parecer
-  // disponível pra todo mundo.
+  // Ponto tem módulo próprio na matriz de cargos e, por padrão, só o Dono o
+  // tem. Quem não recebeu não entra — nem pelo menu, nem digitando a URL. O
+  // gate real está no servidor; aqui a página evita cair num "meu ponto" que
+  // fazia o módulo parecer disponível pra todo mundo.
   const { data: minhasPerms, isLoading: permsCarregando } =
     trpc.permissoes?.minhasPermissoes?.useQuery?.(undefined, {
       retry: false,
       refetchOnWindowFocus: false,
     }) || { data: null, isLoading: false };
-  const podeGerirEquipe =
-    minhasPerms?.cargo === "Dono" || !!minhasPerms?.permissoes?.equipe?.verTodos;
+  const podeVerPonto =
+    minhasPerms?.cargo === "Dono" ||
+    !!minhasPerms?.permissoes?.ponto?.verTodos ||
+    !!minhasPerms?.permissoes?.ponto?.verProprios;
 
   const utils = trpc.useUtils();
-  const meu = trpc.rh.meuEspelho.useQuery({ competencia }, { enabled: podeGerirEquipe });
+  const meu = trpc.rh.meuEspelho.useQuery({ competencia }, { enabled: podeVerPonto });
   const equipe = trpc.rh.espelhoEquipe.useQuery(
     { competencia },
-    { retry: false, enabled: podeGerirEquipe },
+    { retry: false, enabled: podeVerPonto },
   );
 
   const pausaMut = trpc.rh.registrarPausa.useMutation({
@@ -447,15 +448,15 @@ export default function Ponto() {
 
   // Saída antecipada DEPOIS de todos os hooks: a contagem não pode mudar
   // entre renders, senão o React derruba a tela.
-  if (!podeGerirEquipe) {
+  if (!podeVerPonto) {
     return (
       <div className="max-w-lg mx-auto mt-16 rounded-2xl border bg-card p-6 text-center">
         <Clock className="h-8 w-8 text-muted-foreground/50 mx-auto" />
-        <h1 className="text-base font-bold mt-3">Ponto é do gestor</h1>
+        <h1 className="text-base font-bold mt-3">Ponto não está no seu acesso</h1>
         <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
           {permsCarregando
             ? "Conferindo suas permissões…"
-            : "Este módulo mostra a jornada da equipe e fica com quem administra o time. Fale com o gestor do escritório se precisar de algo daqui."}
+            : "Este módulo mostra a jornada, as faltas e as avaliações da equipe. Quem libera é o dono, em Configurações → Cargos."}
         </p>
       </div>
     );
