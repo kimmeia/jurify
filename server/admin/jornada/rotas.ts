@@ -69,5 +69,26 @@ export const PAUSA_POS_RENDER_MS = 1_200;
 /** O ErrorBoundary do app pinta isto quando engole uma exceção de render. */
 export const MARCA_ERROR_BOUNDARY = "An unexpected error occurred.";
 
+/**
+ * O que conta como "esta tela ainda está carregando".
+ *
+ * Cada peça está aqui por um motivo, e duas candidatas óbvias ficaram de fora:
+ *
+ * · `[data-slot="skeleton"]` — o `<Skeleton>` do shadcn, usado em 38 telas.
+ *   Existe só enquanto o dado não chegou, nunca é enfeite.
+ * · `.animate-spin` — o `<Loader2>`, o spinner da casa.
+ * · `.animate-pulse.bg-muted` — os dashboards montam o esqueleto na mão, com
+ *   essa dupla de classes em vez do componente.
+ *
+ * FORA: `[role="progressbar"]`, que não aparece em nenhum arquivo do client —
+ * era seletor morto, dando a impressão de cobertura que não existia.
+ *
+ * FORA: `.animate-pulse` sozinho. No app ele é tanto carregamento quanto
+ * enfeite permanente — bolinha de alerta, badge de prazo vencido, o widget de
+ * chamada em curso. Esperar todos sumirem nunca terminaria em Processos, e
+ * cada tela viraria um achado falso.
+ */
+export const SELETOR_ESQUELETO = '[data-slot="skeleton"], .animate-spin, .animate-pulse.bg-muted';
+
 /** Teto da execução inteira. Passou disso, algo travou e a sessão morre. */
 export const TIMEOUT_EXECUCAO_MS = 12 * 60_000;

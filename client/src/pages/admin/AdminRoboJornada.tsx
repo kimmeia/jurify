@@ -67,7 +67,14 @@ export default function AdminRoboJornada() {
 
   const emAndamento = historico.data?.emAndamento || catalogo.data?.emAndamento || rodandoLocal;
   const varreduras = historico.data?.varreduras ?? [];
-  const ultima = varreduras[0];
+
+  // A linha nasce antes da execução terminar, com tudo zerado. Mostrar esses
+  // zeros nos cartões diria "0 telas, escritório sobrou no banco" em vermelho
+  // sobre uma varredura que mal começou — susto por nada. O último resultado
+  // é a última linha que de fato terminou.
+  const emVoo = varreduras.find((v) => v.status === "rodando");
+  const ultima = varreduras.find((v) => v.status !== "rodando");
+  const anteriores = varreduras.filter((v) => v !== emVoo && v !== ultima);
 
   return (
     <div className="space-y-5">
@@ -118,6 +125,18 @@ export default function AdminRoboJornada() {
           </div>
         </CardContent>
       </Card>
+
+      {emVoo && (
+        <Card className="border-violet-300 bg-violet-50/60">
+          <CardContent className="pt-5 flex items-center gap-3">
+            <Loader2 className="h-4 w-4 animate-spin text-violet-600 shrink-0" />
+            <p className="text-[13px] text-violet-900">
+              Varredura em andamento desde <b>{quando(emVoo.iniciadoEm)}</b>. Os números abaixo são
+              da execução anterior até esta terminar.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Resumo da última */}
       {historico.isLoading ? (
@@ -220,6 +239,60 @@ export default function AdminRoboJornada() {
         </Card>
       )}
 
+      {/* Tempo por tela — o que separa "verde" de "verde de verdade" */}
+      {ultima && ultima.tempos.length > 0 && (
+        <Card>
+          <CardContent className="pt-5">
+            <p className="text-sm font-bold">Quanto cada tela levou</p>
+            <p className="text-xs text-muted-foreground mt-0.5 mb-3">
+              Uma varredura em que tudo passa instantaneamente e nenhuma tela mostra esqueleto não
+              é um resultado sobre o app — é um resultado sobre o robô.
+            </p>
+            <div className="flex flex-wrap gap-3 mb-3 text-[11.5px]">
+              <span className="rounded-md bg-muted px-2 py-1">
+                <b>{ultima.tempos.filter((t) => t.viuEsqueleto).length}</b> de {ultima.tempos.length}{" "}
+                mostraram esqueleto
+              </span>
+              <span className="rounded-md bg-muted px-2 py-1">
+                <b>{ultima.tempos.filter((t) => t.montadoNoDCL).length}</b> já estavam montadas
+                quando ele olhou
+              </span>
+              <span className="rounded-md bg-muted px-2 py-1">
+                mais lenta: <b>{Math.max(...ultima.tempos.map((t) => t.ms))}ms</b>
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11.5px]">
+                <thead className="text-muted-foreground">
+                  <tr className="text-left">
+                    <th className="font-semibold pb-1.5">tela</th>
+                    <th className="font-semibold pb-1.5 text-right tabular-nums">montar</th>
+                    <th className="font-semibold pb-1.5 text-right tabular-nums">esqueleto</th>
+                    <th className="font-semibold pb-1.5 text-right tabular-nums">total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {ultima.tempos.map((t) => (
+                    <tr key={t.rota}>
+                      <td className="py-1">
+                        <code>{t.rota}</code>
+                      </td>
+                      <td className="py-1 text-right tabular-nums text-muted-foreground">
+                        {t.msMontagem}ms
+                      </td>
+                      <td className="py-1 text-right tabular-nums text-muted-foreground">
+                        {t.viuEsqueleto ? `${t.msSpinner}ms` : "—"}
+                      </td>
+                      <td className="py-1 text-right tabular-nums font-semibold">{t.ms}ms</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Conferências declaradas — o que o robô confere além de "abriu" */}
       {catalogo.data && (
         <Card>
@@ -242,12 +315,12 @@ export default function AdminRoboJornada() {
       )}
 
       {/* Histórico */}
-      {varreduras.length > 1 && (
+      {anteriores.length > 0 && (
         <Card>
           <CardContent className="pt-5">
             <p className="text-sm font-bold mb-3">Execuções anteriores</p>
             <div className="divide-y">
-              {varreduras.slice(1).map((v) => (
+              {anteriores.map((v) => (
                 <div key={v.runId} className="flex items-center gap-3 py-2">
                   {v.status === "rodando" ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-600 shrink-0" />

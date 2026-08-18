@@ -24,6 +24,7 @@ import {
   MARCA_ERROR_BOUNDARY,
   PAUSA_POS_RENDER_MS,
   ROTAS_JORNADA,
+  SELETOR_ESQUELETO,
   TIMEOUT_EXECUCAO_MS,
   TIMEOUT_MONTAGEM_MS,
   TIMEOUT_ROTA_MS,
@@ -43,6 +44,29 @@ export interface AchadoRota {
   ms: number;
   /** Vazio quando `ok`. Um problema por linha, na ordem em que apareceu. */
   problemas: string[];
+  /**
+   * Quanto cada degrau custou, guardado mesmo quando a rota passa.
+   *
+   * Sem isto não dá pra distinguir "a tela abriu rápido" de "a conferência
+   * não conferiu nada" — as duas dão verde. Uma varredura inteira em que
+   * todo mundo monta em 0ms é um resultado sobre o robô, não sobre o app.
+   */
+  diagnostico: DiagnosticoRota;
+}
+
+export interface DiagnosticoRota {
+  /**
+   * O React já estava montado quando o `domcontentloaded` voltou?
+   *
+   * Numa SPA com `<script type="module">` o script é *deferred* e roda antes
+   * do evento, então o esperado é `true` — e aí esperar a montagem não custa
+   * nada, legitimamente. `false` significa que a espera fez trabalho.
+   */
+  montadoNoDCL: boolean;
+  msMontagem: number;
+  msSpinner: number;
+  /** Havia esqueleto na tela em algum momento? Nenhum spinner nunca é suspeito. */
+  viuEsqueleto: boolean;
 }
 
 export interface ResultadoJornada {
@@ -107,6 +131,13 @@ async function entrar(page: Page, baseUrl: string, email: string): Promise<void>
 
 const esperar = <T>(p: Promise<T>) => p.then(() => true).catch(() => false);
 
+const VAZIO: DiagnosticoRota = {
+  montadoNoDCL: false,
+  msMontagem: 0,
+  msSpinner: 0,
+  viuEsqueleto: false,
+};
+
 /**
  * Uma tela, do jeito que um humano olharia: esperar aparecer, e só então
  * julgar.
@@ -116,14 +147,31 @@ const esperar = <T>(p: Promise<T>) => p.then(() => true).catch(() => false);
  * varredura parar, por isso nada aqui lança — tudo vira linha no relatório e a
  * caminhada continua.
  */
-async function conferirRota(page: Page, baseUrl: string, rota: string): Promise<string[]> {
+async function conferirRota(
+  page: Page,
+  baseUrl: string,
+  rota: string,
+): Promise<{ problemas: string[]; diagnostico: DiagnosticoRota }> {
   const problemas: string[] = [];
 
   const abriu = await esperar(
     page.goto(`${baseUrl}${rota}`, { waitUntil: "domcontentloaded", timeout: TIMEOUT_ROTA_MS }),
   );
-  if (!abriu) return [`não carregou em ${TIMEOUT_ROTA_MS / 1000}s`];
+  if (!abriu) {
+    return { problemas: [`não carregou em ${TIMEOUT_ROTA_MS / 1000}s`], diagnostico: VAZIO };
+  }
 
+  const montadoJa = async () =>
+    page
+      .evaluate(() => (document.getElementById("root")?.childElementCount ?? 0) > 0)
+      .catch(() => false);
+
+  // Medido ANTES de esperar: numa SPA com script deferred o React já rodou
+  // quando o evento chega, e aí a espera passa de graça — legitimamente. O que
+  // não pode é não saber qual dos dois casos aconteceu.
+  const montadoNoDCL = await montadoJa();
+
+  const t1 = Date.now();
   // O app existir vem antes de qualquer julgamento sobre ele. `#root` vazio
   // depois deste tempo é tela branca — que é como uma quebra no primeiro
   // render aparece pra quem usa.
@@ -134,13 +182,25 @@ async function conferirRota(page: Page, baseUrl: string, rota: string): Promise<
       { timeout: TIMEOUT_MONTAGEM_MS },
     ),
   );
-  if (!montou) return [`tela em branco: o app não montou em ${TIMEOUT_MONTAGEM_MS / 1000}s`];
+  const msMontagem = Date.now() - t1;
+  if (!montou) {
+    return {
+      problemas: [`tela em branco: o app não montou em ${TIMEOUT_MONTAGEM_MS / 1000}s`],
+      diagnostico: { ...VAZIO, montadoNoDCL, msMontagem },
+    };
+  }
 
+  const viuEsqueleto = await page
+    .evaluate((sel) => !!document.querySelector(sel), SELETOR_ESQUELETO)
+    .catch(() => false);
+
+  const t2 = Date.now();
   const saiuDoEsqueleto = await esperar(
-    page.waitForFunction(() => !document.querySelector('[role="progressbar"], .animate-spin'), null, {
+    page.waitForFunction((sel) => !document.querySelector(sel), SELETOR_ESQUELETO, {
       timeout: TIMEOUT_SPINNER_MS,
     }),
   );
+  const msSpinner = Date.now() - t2;
   if (!saiuDoEsqueleto) problemas.push(`spinner não sumiu em ${TIMEOUT_SPINNER_MS / 1000}s`);
 
   // A tela pode cair depois de montar — o efeito roda, e aí quebra. Sem este
@@ -156,7 +216,7 @@ async function conferirRota(page: Page, baseUrl: string, rota: string): Promise<
   const onde = new URL(page.url()).pathname;
   if (onde.startsWith("/login")) problemas.push("caiu pro login: a sessão não sobreviveu");
 
-  return problemas;
+  return { problemas, diagnostico: { montadoNoDCL, msMontagem, msSpinner, viuEsqueleto } };
 }
 
 export async function rodarJornada(baseUrl: string): Promise<ResultadoJornada> {
@@ -201,12 +261,12 @@ export async function rodarJornada(baseUrl: string): Promise<ResultadoJornada> {
       const errosAntes = errosConsole.length;
       const falhasAntes = falhas5xx.length;
 
-      const problemas = await conferirRota(page, baseUrl, rota);
+      const { problemas, diagnostico } = await conferirRota(page, baseUrl, rota);
 
       problemas.push(...errosConsole.slice(errosAntes));
       problemas.push(...falhas5xx.slice(falhasAntes));
 
-      rotas.push({ rota, ok: problemas.length === 0, ms: Date.now() - t0, problemas });
+      rotas.push({ rota, ok: problemas.length === 0, ms: Date.now() - t0, problemas, diagnostico });
     }
 
     await context.close();
