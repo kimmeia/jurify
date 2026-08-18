@@ -22,7 +22,12 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
-import { ROTAS_JORNADA, TIMEOUT_EXECUCAO_MS } from "../admin/jornada/rotas";
+import {
+  MARCA_ERROR_BOUNDARY,
+  PAUSA_POS_RENDER_MS,
+  ROTAS_JORNADA,
+  TIMEOUT_EXECUCAO_MS,
+} from "../admin/jornada/rotas";
 import { ehRotaProibida } from "../admin/jornada/lista-negra";
 
 const raiz = join(__dirname, "..", "..");
@@ -76,8 +81,57 @@ describe("o executor", () => {
   it("uma rota que falha não interrompe a varredura", () => {
     // Falhar na primeira esconderia as outras dezoito, e o relatório útil é
     // "quais telas estão quebradas", não "a primeira que quebrou".
-    expect(executor).toContain(".then(() => true)\n        .catch(() => false)");
+    expect(executor).toContain("const esperar = <T>(p: Promise<T>) => p.then(() => true).catch(() => false)");
     expect(executor).toContain("problemas.push(");
+  });
+
+  it("espera o app montar antes de julgar a tela", () => {
+    // Este é O teste deste arquivo.
+    //
+    // A primeira execução real varreu 19 telas em 6 segundos e deu tudo
+    // limpo. Não estava limpo: `domcontentloaded` numa SPA volta com
+    // `<div id="root"></div>` e mais nada, o shell é igual em toda rota, e
+    // toda conferência feita nesse instante olha pra uma página vazia e
+    // aprova. Sem app não há spinner pra esperar, não há erro pra capturar,
+    // não há chamada de API pra dar 5xx.
+    //
+    // Reproduzido com navegador de verdade: a checagem passava em 52ms com o
+    // root vazio, e 2,5s depois a página lançava um React #310.
+    expect(executor).toContain('document.getElementById("root")?.childElementCount ?? 0) > 0');
+    expect(executor).toContain("TIMEOUT_MONTAGEM_MS");
+
+    const posMontagem = executor.indexOf("childElementCount");
+    const posSpinner = executor.indexOf("progressbar");
+    expect(posMontagem).toBeGreaterThan(0);
+    expect(
+      posSpinner,
+      "o spinner precisa ser conferido DEPOIS da montagem — antes dela não existe spinner nenhum",
+    ).toBeGreaterThan(posMontagem);
+  });
+
+  it("tela em branco é achado, não silêncio", () => {
+    expect(executor).toContain("tela em branco: o app não montou");
+  });
+
+  it("erro engolido pelo ErrorBoundary é achado", () => {
+    // Sem isto o robô vê uma tela que "montou" e aprova — mas o que montou foi
+    // a mensagem de desculpas, não o app.
+    expect(executor).toContain("MARCA_ERROR_BOUNDARY");
+    expect(executor).toContain("ErrorBoundary engoliu uma exceção de render");
+    expect(ler("client/src/components/ErrorBoundary.tsx")).toContain(MARCA_ERROR_BOUNDARY);
+  });
+
+  it("cair pro login no meio da caminhada é achado", () => {
+    // A tela de login abre perfeitamente bem — passaria como sucesso.
+    expect(executor).toContain('onde.startsWith("/login")');
+    expect(executor).toContain("a sessão não sobreviveu");
+  });
+
+  it("dá um respiro pro erro que só aparece depois de montar", () => {
+    // Erro de render não é síncrono com a montagem: monta, o efeito dispara, e
+    // aí cai. Sem a pausa o erro seria contado na rota seguinte.
+    expect(executor).toContain("await page.waitForTimeout(PAUSA_POS_RENDER_MS)");
+    expect(PAUSA_POS_RENDER_MS).toBeGreaterThanOrEqual(1_000);
   });
 
   it("os listeners são anexados antes do primeiro goto", () => {

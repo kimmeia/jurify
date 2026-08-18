@@ -21,8 +21,11 @@ import { chromium, type Browser, type Page } from "@playwright/test";
 import { createLogger } from "../../_core/logger";
 import { ehRotaProibida } from "./lista-negra";
 import {
+  MARCA_ERROR_BOUNDARY,
+  PAUSA_POS_RENDER_MS,
   ROTAS_JORNADA,
   TIMEOUT_EXECUCAO_MS,
+  TIMEOUT_MONTAGEM_MS,
   TIMEOUT_ROTA_MS,
   TIMEOUT_SPINNER_MS,
 } from "./rotas";
@@ -102,6 +105,60 @@ async function entrar(page: Page, baseUrl: string, email: string): Promise<void>
   await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: TIMEOUT_ROTA_MS });
 }
 
+const esperar = <T>(p: Promise<T>) => p.then(() => true).catch(() => false);
+
+/**
+ * Uma tela, do jeito que um humano olharia: esperar aparecer, e só então
+ * julgar.
+ *
+ * A ordem aqui é o produto inteiro deste arquivo, então vale dizer o porquê de
+ * cada degrau. Uma rota que não abre esconde as dezoito seguintes se a
+ * varredura parar, por isso nada aqui lança — tudo vira linha no relatório e a
+ * caminhada continua.
+ */
+async function conferirRota(page: Page, baseUrl: string, rota: string): Promise<string[]> {
+  const problemas: string[] = [];
+
+  const abriu = await esperar(
+    page.goto(`${baseUrl}${rota}`, { waitUntil: "domcontentloaded", timeout: TIMEOUT_ROTA_MS }),
+  );
+  if (!abriu) return [`não carregou em ${TIMEOUT_ROTA_MS / 1000}s`];
+
+  // O app existir vem antes de qualquer julgamento sobre ele. `#root` vazio
+  // depois deste tempo é tela branca — que é como uma quebra no primeiro
+  // render aparece pra quem usa.
+  const montou = await esperar(
+    page.waitForFunction(
+      () => (document.getElementById("root")?.childElementCount ?? 0) > 0,
+      null,
+      { timeout: TIMEOUT_MONTAGEM_MS },
+    ),
+  );
+  if (!montou) return [`tela em branco: o app não montou em ${TIMEOUT_MONTAGEM_MS / 1000}s`];
+
+  const saiuDoEsqueleto = await esperar(
+    page.waitForFunction(() => !document.querySelector('[role="progressbar"], .animate-spin'), null, {
+      timeout: TIMEOUT_SPINNER_MS,
+    }),
+  );
+  if (!saiuDoEsqueleto) problemas.push(`spinner não sumiu em ${TIMEOUT_SPINNER_MS / 1000}s`);
+
+  // A tela pode cair depois de montar — o efeito roda, e aí quebra. Sem este
+  // respiro o erro chegaria durante a rota seguinte e seria contado nela.
+  await page.waitForTimeout(PAUSA_POS_RENDER_MS);
+
+  if (await page.getByText(MARCA_ERROR_BOUNDARY).first().isVisible().catch(() => false)) {
+    problemas.push("ErrorBoundary engoliu uma exceção de render");
+  }
+
+  // Voltar pro login no meio da caminhada é sessão morrendo — e passaria
+  // despercebido, porque a tela de login abre perfeitamente bem.
+  const onde = new URL(page.url()).pathname;
+  if (onde.startsWith("/login")) problemas.push("caiu pro login: a sessão não sobreviveu");
+
+  return problemas;
+}
+
 export async function rodarJornada(baseUrl: string): Promise<ResultadoJornada> {
   if (rodando) throw new Error("Já existe uma varredura de jornada em andamento.");
   rodando = true;
@@ -143,31 +200,8 @@ export async function rodarJornada(baseUrl: string): Promise<ResultadoJornada> {
       const t0 = Date.now();
       const errosAntes = errosConsole.length;
       const falhasAntes = falhas5xx.length;
-      const problemas: string[] = [];
 
-      // Rota que não abre vira achado e a varredura segue: falhar na primeira
-      // esconderia as outras dezoito, e o relatório útil é "quais telas estão
-      // quebradas", não "a primeira que quebrou".
-      const abriu = await page
-        .goto(`${baseUrl}${rota}`, { waitUntil: "domcontentloaded", timeout: TIMEOUT_ROTA_MS })
-        .then(() => true)
-        .catch(() => false);
-
-      if (!abriu) {
-        problemas.push(`não carregou em ${TIMEOUT_ROTA_MS / 1000}s`);
-      } else {
-        const saiuDoEsqueleto = await page
-          .waitForFunction(
-            () => !document.querySelector('[role="progressbar"], .animate-spin'),
-            null,
-            { timeout: TIMEOUT_SPINNER_MS },
-          )
-          .then(() => true)
-          .catch(() => false);
-        if (!saiuDoEsqueleto) {
-          problemas.push(`spinner não sumiu em ${TIMEOUT_SPINNER_MS / 1000}s`);
-        }
-      }
+      const problemas = await conferirRota(page, baseUrl, rota);
 
       problemas.push(...errosConsole.slice(errosAntes));
       problemas.push(...falhas5xx.slice(falhasAntes));
