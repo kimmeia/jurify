@@ -1137,15 +1137,31 @@ export class PjeTjceScraper {
           documento: string | null;
         }> = [];
 
+        const poloDaTabela = (t: Element): "ativo" | "passivo" | "terceiro" | null => {
+          const txt = trim(t.textContent).slice(0, 200).toLowerCase();
+          if (txt.startsWith("polo ativo")) return "ativo";
+          if (txt.startsWith("polo passivo")) return "passivo";
+          if (txt.startsWith("outros") || txt.startsWith("terceiros")) return "terceiro";
+          return null;
+        };
+
+        // Chave de deduplicação: a mesma parte não pode entrar duas vezes.
+        const vistos = new Set<string>();
+
         const tabelas = Array.from(document.querySelectorAll("table"));
         for (const table of tabelas) {
-          const txtTabela = trim(table.textContent).slice(0, 200).toLowerCase();
-          let polo: "ativo" | "passivo" | "terceiro" | null = null;
-          if (txtTabela.startsWith("polo ativo")) polo = "ativo";
-          else if (txtTabela.startsWith("polo passivo")) polo = "passivo";
-          else if (txtTabela.startsWith("outros") || txtTabela.startsWith("terceiros"))
-            polo = "terceiro";
+          const polo = poloDaTabela(table);
           if (!polo) continue;
+
+          // Tabela que ENVOLVE outra tabela de polo é o container, não a
+          // lista. Ela começa com "polo ativo" porque esse é o primeiro
+          // texto lá dentro — e varrer os <tr> dela carimbaria "ativo" em
+          // todo mundo, inclusive em quem está no polo passivo. Era assim
+          // que o cliente processado aparecia como autor.
+          const aninhadaDePolo = Array.from(table.querySelectorAll("table")).some(
+            (t) => poloDaTabela(t) !== null,
+          );
+          if (aninhadaDePolo) continue;
 
           // Extrai partes: cada <tr> a partir da segunda (primeira é header
           // "Polo ativo/passivo")
@@ -1184,6 +1200,9 @@ export class PjeTjceScraper {
                 }
 
                 // Linha normal → nova parte
+                const chave = `${polo}|${linha.toLowerCase()}`;
+                if (vistos.has(chave)) continue;
+                vistos.add(chave);
                 out.push({
                   nome: linha,
                   polo,

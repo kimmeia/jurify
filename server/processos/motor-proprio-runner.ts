@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
 import { parseCnjTribunal } from "./cnj-parser";
 import type { ResultadoScraper } from "../../scripts/spike-motor-proprio/lib/types-spike";
+import { lerPolo, paraLadoJudit } from "../../shared/polo-parte";
 import { createLogger } from "../_core/logger";
 
 /**
@@ -449,9 +450,8 @@ export function obterResultadoMotorProprio(requestId: string): {
           : [],
         parties: capa.partes.map((p) => ({
           name: p.nome,
-          side: (p.polo === "passivo" ? "Passive" : "Active") as
-            | "Active"
-            | "Passive",
+          side: paraLadoJudit(p.polo),
+          polo: lerPolo(p.polo),
           person_type:
             p.tipo === "juridica"
               ? "Legal Entity"

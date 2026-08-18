@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal, Globe } from "lucide-react";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal, Globe, HelpCircle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -185,6 +185,22 @@ function MonitorHealthDot({
   );
 }
 
+/**
+ * O polo de uma parte, seja qual for a origem do payload.
+ *
+ * `polo` é o campo novo e é o que carrega a verdade — inclusive "terceiro" e
+ * "desconhecido", que o `side` legado não sabe expressar. O fallback existe
+ * pra resposta que já estava em memória quando o deploy subiu; nele um
+ * terceiro chega como "Unknown" e continua fora dos dois polos, que é onde
+ * ele deve estar.
+ */
+function poloDaParte(p: any): string {
+  if (typeof p?.polo === "string" && p.polo) return p.polo;
+  if (p?.side === "Passive") return "passivo";
+  if (p?.side === "Active") return "ativo";
+  return "desconhecido";
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CARD DE PROCESSO (resultado expandivel)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -209,8 +225,8 @@ function ProcessoCard({
   // `detalhe` (vindo de busca sob demanda) tem precedência sobre `response_data`
   // (vindo da listagem CPF/CNPJ que retorna só CNJs).
   const d = detalhe || processo.response_data || processo;
-  const ativos = (d.parties || []).filter((p: any) => p.side === "Active").slice(0, 5);
-  const passivos = (d.parties || []).filter((p: any) => p.side === "Passive").slice(0, 5);
+  const ativos = (d.parties || []).filter((p: any) => poloDaParte(p) === "ativo").slice(0, 5);
+  const passivos = (d.parties || []).filter((p: any) => poloDaParte(p) === "passivo").slice(0, 5);
   const movs = (d.steps || []).slice(0, 10);
   const advs: any[] = [];
   (d.parties || []).forEach((p: any) => { (p.lawyers || []).forEach((l: any) => { if (advs.length < 5) advs.push(l); }); });
@@ -1083,8 +1099,8 @@ function MonitoramentoCard({
   }
   const steps: any[] = processoData?.steps || [];
   const partes: any[] = processoData?.parties || [];
-  const ativos = partes.filter((p: any) => p.side === "Active").slice(0, 5);
-  const passivos = partes.filter((p: any) => p.side === "Passive").slice(0, 5);
+  const ativos = partes.filter((p: any) => poloDaParte(p) === "ativo").slice(0, 5);
+  const passivos = partes.filter((p: any) => poloDaParte(p) === "passivo").slice(0, 5);
 
   // ─── Capa cacheada pelo cron (capa_json / partes_json) ──────────────────
   // Sem custo: o cron já populou esses fields a cada sync. Frontend mostra
@@ -2605,6 +2621,87 @@ const RESOLUCAO_META: Record<string, { label: string; emoji: string; badge: stri
   falso: { label: "Falso positivo", emoji: "⊘", badge: "bg-rose-50 text-rose-600 border-rose-200", borda: "border-l-rose-300", verbo: "Descartado" },
 };
 
+type ParteDoCard = { nome: string; polo: string; documento: string | null };
+type CapaDoCard = {
+  classe: string | null;
+  assuntos: string[];
+  orgao: string | null;
+  valor: number | null;
+  dist: string | null;
+  partes: ParteDoCard[];
+  poloDoCliente: string;
+  /** Veio junto com a detecção (grátis) ou de uma consulta paga sob demanda? */
+  daDeteccao: boolean;
+};
+
+/**
+ * Onde o cliente está, quando o servidor não soube dizer.
+ *
+ * O cron grava `poloDoCliente` na capa; o caminho da consulta sob demanda
+ * não passa por esse cálculo. Documento bate primeiro — nome é fallback,
+ * e só com pedaço grande o bastante pra não casar "Ana" com "Ana Paula".
+ */
+function deduzirPoloDoCliente(
+  partes: ParteDoCard[],
+  searchKey?: string | null,
+  apelido?: string | null,
+): string {
+  const digitos = (s?: string | null) => (s ?? "").replace(/\D/g, "");
+  const chave = digitos(searchKey);
+  if (chave.length >= 11) {
+    const porDoc = partes.find((p) => digitos(p.documento) === chave);
+    if (porDoc) return porDoc.polo;
+  }
+  const alvo = (apelido ?? "").trim().toLowerCase();
+  if (alvo.length >= 5) {
+    const porNome = partes.find((p) => {
+      const n = p.nome.toLowerCase();
+      return n === alvo || n.includes(alvo) || alvo.includes(n);
+    });
+    if (porNome) return porNome.polo;
+  }
+  return "desconhecido";
+}
+
+/** Capa da detecção quando existe; senão a consulta sob demanda; senão nada. */
+function capaDoCard(a: any, detalhes: any): CapaDoCard | null {
+  if (a?.capa) {
+    return {
+      classe: a.capa.classe ?? null,
+      assuntos: a.capa.assuntos ?? [],
+      orgao: a.capa.orgaoJulgador ?? null,
+      valor: a.capa.valorCausa ?? null,
+      dist: a.capa.dataDistribuicao ?? null,
+      partes: a.capa.partes ?? [],
+      poloDoCliente: a.capa.poloDoCliente ?? "desconhecido",
+      daDeteccao: true,
+    };
+  }
+  if (!detalhes) return null;
+  const partes: ParteDoCard[] = (detalhes.parties ?? []).map((p: any) => ({
+    nome: p.name ?? "",
+    polo: poloDaParte(p),
+    documento: p.main_document ?? null,
+  }));
+  return {
+    classe: detalhes.classifications?.[0]?.name ?? null,
+    assuntos: (detalhes.subjects ?? []).map((s: any) => s?.name).filter(Boolean),
+    orgao: detalhes.courts?.[0]?.name ?? null,
+    valor: detalhes.amount ?? null,
+    dist: detalhes.distribution_date ?? null,
+    partes,
+    poloDoCliente: "desconhecido",
+    daDeteccao: false,
+  };
+}
+
+const SELO_POLO: Record<string, { texto: string; classe: string }> = {
+  passivo: { texto: "Seu cliente é RÉU", classe: "bg-rose-50 text-rose-700 border-rose-200" },
+  ativo: { texto: "Seu cliente é AUTOR", classe: "bg-blue-50 text-blue-700 border-blue-200" },
+  terceiro: { texto: "Seu cliente é TERCEIRO", classe: "bg-slate-100 text-slate-600 border-slate-200" },
+  desconhecido: { texto: "Polo não identificado", classe: "bg-amber-50 text-amber-700 border-amber-200" },
+};
+
 function NovasAcoesTab() {
   // Default `true`: a aba mostra só ações com `lido=false` (não-silenciadas).
   // Eventos silenciados (baseline da primeira execução, polo ativo, ajuizado
@@ -3196,14 +3293,28 @@ function NovasAcoesTab() {
           {acoes.map((a: any) => {
             const detalhes = detalhesPorAcaoId[a.id];
             const carregando = carregandoAcaoId === a.id;
-            const ativos = (detalhes?.parties || []).filter((p: any) => p.side === "Active").slice(0, 3);
-            const passivos = (detalhes?.parties || []).filter((p: any) => p.side === "Passive").slice(0, 3);
+            const capa = capaDoCard(a, detalhes);
+            const ativos = (capa?.partes ?? []).filter((p) => p.polo === "ativo").slice(0, 3);
+            const passivos = (capa?.partes ?? []).filter((p) => p.polo === "passivo").slice(0, 3);
+            const outras = (capa?.partes ?? [])
+              .filter((p) => p.polo !== "ativo" && p.polo !== "passivo")
+              .slice(0, 3);
             const advogados = (detalhes?.parties || [])
               .flatMap((p: any) => (p.lawyers || []).map((l: any) => l.name))
               .slice(0, 3);
-            const assunto = detalhes?.classifications?.[0]?.name || detalhes?.subjects?.[0]?.name;
-            const valor = detalhes?.amount;
-            const corte = detalhes?.courts?.[0]?.name;
+            // Classe é a natureza da ação; assunto é a matéria. Os dois juntos
+            // são o que responde "processo de quê?" — mostrar só um não responde.
+            const natureza = [capa?.classe, capa?.assuntos?.[0]].filter(Boolean).join(" · ");
+            const valor = capa?.valor ?? null;
+            const corte = capa?.orgao ?? null;
+            const poloCliente =
+              capa && capa.poloDoCliente !== "desconhecido"
+                ? capa.poloDoCliente
+                : deduzirPoloDoCliente(capa?.partes ?? [], a.clienteSearchKey, a.clienteApelido);
+            // Sem capa nenhuma não há o que afirmar: o selo só aparece quando
+            // alguém já leu o processo. `capaFalhou` é a leitura que foi
+            // tentada e não veio — essa merece o aviso âmbar.
+            const selo = capa ? SELO_POLO[poloCliente] ?? SELO_POLO.desconhecido : null;
             const clienteNome = a.clienteApelido || a.clienteSearchKey || "Cliente";
             const seed = clienteNome + (a.id || "");
             const iniciais = gerarIniciais(clienteNome);
@@ -3241,6 +3352,12 @@ function NovasAcoesTab() {
                         {resolvido && rMeta && (
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${rMeta.badge}`}>
                             {rMeta.emoji} {rMeta.label}
+                          </span>
+                        )}
+                        {selo && (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold border ${selo.classe}`}>
+                            {poloCliente === "desconhecido" ? <HelpCircle className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
+                            {selo.texto}
                           </span>
                         )}
                         {a.clienteSearchType && a.clienteSearchKey && (
@@ -3288,39 +3405,68 @@ function NovasAcoesTab() {
                               {formatBRL(valor)}
                             </span>
                           )}
-                          {detalhes?.distribution_date && (
+                          {capa?.dist && (
                             <span className="text-[10px] text-slate-500">
-                              Dist. {new Date(detalhes.distribution_date).toLocaleDateString("pt-BR")}
+                              Dist. {new Date(capa.dist).toLocaleDateString("pt-BR")}
                             </span>
                           )}
                         </div>
-                        {assunto && (
-                          <p className="text-xs text-slate-700 leading-snug">{assunto}</p>
+                        {natureza && (
+                          <div className="pt-2 mt-1 border-t border-slate-200/70">
+                            <p className="text-[9px] font-bold text-slate-400 mb-0.5 tracking-wider">NATUREZA DA AÇÃO</p>
+                            <p className="text-xs text-slate-700 leading-snug">{natureza}</p>
+                          </div>
                         )}
-                        {corte && (
-                          <p className="text-[10.5px] text-slate-500 flex items-center gap-1">
-                            <MapPin className="h-2.5 w-2.5" />
-                            {corte}
-                          </p>
-                        )}
-                        {detalhes && (ativos.length > 0 || passivos.length > 0) && (
+                        {(ativos.length > 0 || passivos.length > 0 || outras.length > 0) && (
                           <div className="grid grid-cols-2 gap-3 pt-2 mt-1 border-t border-slate-200/70">
                             {ativos.length > 0 && (
-                              <div>
+                              <div className="min-w-0">
                                 <p className="text-[9px] font-bold text-blue-700 mb-1 tracking-wider">POLO ATIVO</p>
-                                {ativos.map((p: any, i: number) => (
-                                  <p key={i} className="text-[11px] text-slate-700 truncate" title={p.name}>{p.name}</p>
+                                {ativos.map((p, i) => (
+                                  <p key={i} className="text-[11px] text-slate-700 truncate" title={p.nome}>{p.nome}</p>
                                 ))}
                               </div>
                             )}
                             {passivos.length > 0 && (
-                              <div>
+                              <div className="min-w-0">
                                 <p className="text-[9px] font-bold text-rose-700 mb-1 tracking-wider">POLO PASSIVO</p>
-                                {passivos.map((p: any, i: number) => (
-                                  <p key={i} className="text-[11px] text-slate-700 truncate" title={p.name}>{p.name}</p>
+                                {passivos.map((p, i) => (
+                                  <p key={i} className="text-[11px] text-slate-700 truncate" title={p.nome}>{p.nome}</p>
                                 ))}
                               </div>
                             )}
+                            {outras.length > 0 && (
+                              <div className="min-w-0">
+                                <p className="text-[9px] font-bold text-slate-500 mb-1 tracking-wider">OUTRAS PARTES</p>
+                                {outras.map((p, i) => (
+                                  <p key={i} className="text-[11px] text-slate-700 truncate" title={p.nome}>{p.nome}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {corte && (
+                          <p className="text-[10.5px] text-slate-500 flex items-center gap-1 pt-2 mt-1 border-t border-slate-200/70">
+                            <MapPin className="h-2.5 w-2.5" />
+                            {corte}
+                            {capa?.daDeteccao && (
+                              <span className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-semibold">
+                                <CheckCircle2 className="h-2.5 w-2.5" />
+                                Capa lida na detecção — sem crédito extra
+                              </span>
+                            )}
+                          </p>
+                        )}
+                        {a.capaFalhou && !detalhes && (
+                          <div className="pt-2 mt-1 border-t border-slate-200/70">
+                            <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 flex gap-2">
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-px" />
+                              <p className="text-[11px] text-amber-900 leading-relaxed">
+                                <b>O tribunal não devolveu a capa deste processo.</b>{" "}
+                                Não dá pra dizer se {a.clienteApelido || "o cliente"} é autor ou réu,
+                                e por isso o card veio pra cá em vez de ser silenciado.
+                              </p>
+                            </div>
                           </div>
                         )}
                         {advogados.length > 0 && (
@@ -3361,17 +3507,26 @@ function NovasAcoesTab() {
                         {!detalhes && (
                           <div className="pt-2 mt-1 border-t border-slate-200/70 flex items-center justify-between gap-2 flex-wrap">
                             <p className="text-[10.5px] text-slate-500 italic">
-                              Partes, advogados, assunto, valor e movimentações não carregados ainda.
+                              {capa?.daDeteccao
+                                ? "Movimentações e advogados não carregados ainda."
+                                : a.capaFalhou
+                                  ? "Uma nova consulta pode trazer a capa que faltou."
+                                  : "Partes, advogados, assunto, valor e movimentações não carregados ainda."}
                             </p>
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-7 text-[10.5px] rounded-lg border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 text-indigo-700"
+                              className={`h-7 text-[10.5px] rounded-lg bg-white ${a.capaFalhou && !capa ? "border-amber-300 hover:bg-amber-50 text-amber-700" : "border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300 text-indigo-700"}`}
                               disabled={carregando || carregandoAcaoId !== null}
                               onClick={() => carregarDetalhes(a.id, a.cnj, credencialIdDoMonitor(a.monitoramentoId))}
                             >
                               {carregando ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Search className="h-3 w-3 mr-1" />}
-                              Carregar detalhes <span className="ml-1 text-[9.5px] text-indigo-500">1 cred</span>
+                              {a.capaFalhou && !capa
+                                ? "Tentar de novo"
+                                : capa?.daDeteccao
+                                  ? "Ver movimentações"
+                                  : "Carregar detalhes"}
+                              <span className="ml-1 text-[9.5px] opacity-70">1 cred</span>
                             </Button>
                           </div>
                         )}
