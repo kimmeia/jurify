@@ -185,6 +185,36 @@ const MAX_BYTES_TEOR = 12 * 1024 * 1024;
  * vale reaproveitar estado entre chamadas de usuários diferentes.
  */
 /**
+ * Vale a pena buscar os bytes desta resposta?
+ *
+ * `application/pdf` seria o filtro óbvio, e foi o primeiro — mas o PJe entrega
+ * documento como `octet-stream`, às vezes sem tipo nenhum e só com
+ * `content-disposition: attachment`. Filtrar pelo tipo exato descartava
+ * justamente o arquivo certo, e o relatório dizia "nenhuma resposta trouxe o
+ * documento" com o documento tendo passado na frente.
+ *
+ * Então a pergunta vira a inversa: isto é claramente OUTRA coisa? Página,
+ * estilo, script, imagem e JSON do próprio JSF ficam de fora; o resto é
+ * candidato, e quem decide de fato é o `%PDF-` na hora de ler.
+ */
+function podeSerDocumento(tipo: string, headers: Record<string, string>): boolean {
+  if ((headers["content-disposition"] ?? "").toLowerCase().includes("attachment")) return true;
+  if (!tipo) return true;
+  return ![
+    "text/html",
+    "text/css",
+    "text/plain",
+    "application/javascript",
+    "text/javascript",
+    "application/json",
+    "image/",
+    "font/",
+    "video/",
+    "audio/",
+  ].some((t) => tipo.startsWith(t) || tipo.includes(t));
+}
+
+/**
  * Abre o documento num navegador de verdade, como quem clica.
  *
  * `baixarDocumentoAvulso` faz `context.request.get`: pedido HTTP com os
@@ -241,9 +271,10 @@ export async function abrirDocumentoNoNavegador(
     // caminho.
     const enderecos: string[] = [];
     page.on("response", (r) => {
-      const tipo = (r.headers()["content-type"] ?? "").toLowerCase();
+      const h = r.headers();
+      const tipo = (h["content-type"] ?? "").toLowerCase();
       vistas.push({ url: r.url(), status: r.status(), tipo: tipo.split(";")[0] });
-      if (r.ok() && tipo.includes("pdf") && !enderecos.includes(r.url())) {
+      if (r.ok() && !enderecos.includes(r.url()) && podeSerDocumento(tipo, h)) {
         enderecos.push(r.url());
       }
     });

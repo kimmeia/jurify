@@ -95,10 +95,26 @@ describe("achar o documento dentro do visualizador", () => {
     expect(adapter.slice(i, i + 4200)).toContain('waitForLoadState("networkidle"');
   });
 
-  it("reconhece o documento pelo tipo, não pelo endereço", () => {
-    // O PJe teve várias gerações de rota; o content-type é o que não muda.
-    const i = adapter.indexOf("export async function abrirDocumentoNoNavegador");
-    expect(adapter.slice(i, i + 4200)).toContain('tipo.includes("pdf")');
+  it("não exige `application/pdf` pra considerar candidato", () => {
+    // Foi o primeiro filtro, e descartava o arquivo certo: o PJe entrega
+    // documento como octet-stream, às vezes sem tipo e só com
+    // `content-disposition: attachment`. Contra o tribunal de verdade o
+    // relatório dizia "nenhuma resposta trouxe o documento" com o documento
+    // tendo passado na frente.
+    expect(adapter).toContain("function podeSerDocumento(");
+    expect(adapter).toContain('headers["content-disposition"]');
+    // A pergunta é a inversa: isto é claramente OUTRA coisa?
+    for (const t of ["text/html", "application/json", "image/"]) {
+      expect(adapter, t).toContain(`"${t}"`);
+    }
+  });
+
+  it("quem decide de fato é o conteúdo, não o cabeçalho", () => {
+    // `textoDoDocumento` reconhece PDF pelos bytes iniciais, então
+    // octet-stream que seja PDF passa e HTML disfarçado não.
+    expect(ler("server/processos/teor-documento.ts")).toContain(
+      'corpo.subarray(0, 5).toString("latin1") === "%PDF-"',
+    );
   });
 
   it("quando nada serve, guarda o que a aba Network mostraria", () => {

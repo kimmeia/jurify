@@ -132,6 +132,17 @@ export function classificarGrupo(params: {
 
 const log = createLogger("movimentacoes");
 
+/** Só o fim da URL: a mensagem cabe em 255 caracteres e o host se repete. */
+function caminhoCurto(url: string): string {
+  try {
+    const u = new URL(url);
+    const partes = u.pathname.split("/").filter(Boolean);
+    return `/${partes.slice(-2).join("/")}`;
+  } catch {
+    return url.slice(-40);
+  }
+}
+
 export const movimentacoesRouter = router({
   /**
    * Feed da central. Devolve as movimentações já agrupadas e com tudo que o
@@ -573,14 +584,30 @@ export const movimentacoesRouter = router({
 
         // Quando nenhuma rota serve, o que o navegador viu é o dado que falta
         // pra acertar a próxima — sem pedir pra ninguém abrir o DevTools.
+        //
+        // Vai pro log E pra mensagem que a tela mostra. Só no log ninguém lê:
+        // quem opera o sistema não abre terminal, e foi exatamente assim que
+        // este problema ficou invisível por tanto tempo.
         if (!porId.ok && vistas.length) {
-          const resumo = vistas
-            .filter((v) => v.status < 400)
-            .map((v) => `${v.status} ${v.tipo} ${v.url}`);
+          // O que não é página vem primeiro: numa tela JSF sobra html e script,
+          // e são justamente os que não interessam. O espaço da mensagem é
+          // curto e precisa carregar o que pode ser o documento.
+          const interessantes = vistas.filter((v) => v.status < 400 && v.tipo);
+          interessantes.sort(
+            (a, b) => Number(a.tipo.startsWith("text/")) - Number(b.tipo.startsWith("text/")),
+          );
+          const resumo = interessantes.map((v) => `${v.tipo} ${caminhoCurto(v.url)}`);
           log.warn(
-            { eventoId: row.ev.id, documentoId, vistas: resumo.slice(0, 40) },
+            { eventoId: row.ev.id, documentoId, vistas: vistas.slice(0, 40) },
             "[teor] visualizador abriu mas nenhuma resposta trouxe o documento",
           );
+          const unicos = [...new Set(resumo)].slice(0, 8);
+          if (unicos.length) {
+            r = {
+              ok: false,
+              erro: `${(r as { erro: string }).erro} · o navegador viu: ${unicos.join(", ")}`,
+            };
+          }
         }
       }
 
