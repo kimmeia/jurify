@@ -82,6 +82,7 @@ import { adminAgentesIaRouter } from "./routers/admin-agentes-ia";
 import { adminSmartflowRouter } from "./routers/admin-smartflow";
 import { smartflowRouter } from "./smartflow/router-smartflow";
 import { kanbanRouter } from "./escritorio/router-kanban";
+import { kanbanRestaurarRouter } from "./escritorio/router-kanban-restaurar";
 import { juridicoRouter } from "./juridico/router-juridico";
 import { pushRouter } from "./routers/push";
 
@@ -176,6 +177,7 @@ export const appRouter = router({
   adminSmartflow: adminSmartflowRouter,
   smartflow: smartflowRouter,
   kanban: kanbanRouter,
+  kanbanRestaurar: kanbanRestaurarRouter,
   juridico: juridicoRouter,
 });
 

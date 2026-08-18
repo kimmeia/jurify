@@ -209,23 +209,53 @@ export const kanbanRouter = router({
       return { success: true };
     }),
 
+  /**
+   * Apaga a coluna E todos os cards dela.
+   *
+   * É a operação mais destrutiva do módulo: leva junto um número arbitrário de
+   * cards, sem arquivar e sem desfazer. Já custou 82 cards de uma vez, quase
+   * todos de uma única coluna.
+   *
+   * Por isso o gate é `verTodos` (dono/gestor) e não a permissão de editar:
+   * quem pode mexer nos próprios cards não pode decidir pelos cards de todo
+   * mundo. E os satélites são limpos junto — o `deletarCard` ao lado sempre
+   * fez isso; aqui não fazia, e o histórico órfão que sobrava era a única
+   * pista de que os cards existiram (é o que a regra KAN-02 do auditor acusa).
+   */
   deletarColuna: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+      const perm = await checkPermission(ctx.user.id, "kanban", "excluir");
+      if (!perm.allowed || !perm.verTodos) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Só dono ou gestor pode excluir uma coluna inteira.",
+        });
+      }
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [col] = await db
-        .select({ id: kanbanColunas.id })
+        .select({ id: kanbanColunas.id, nome: kanbanColunas.nome })
         .from(kanbanColunas)
         .innerJoin(kanbanFunis, eq(kanbanColunas.funilId, kanbanFunis.id))
-        .where(and(eq(kanbanColunas.id, input.id), eq(kanbanFunis.escritorioId, esc.escritorio.id)))
+        .where(and(eq(kanbanColunas.id, input.id), eq(kanbanFunis.escritorioId, perm.escritorioId)))
         .limit(1);
       if (!col) throw new TRPCError({ code: "NOT_FOUND", message: "Coluna não encontrada." });
-      await db.delete(kanbanCards).where(eq(kanbanCards.colunaId, input.id));
+
+      const alvos = await db
+        .select({ id: kanbanCards.id })
+        .from(kanbanCards)
+        .where(and(eq(kanbanCards.colunaId, input.id), eq(kanbanCards.escritorioId, perm.escritorioId)));
+      const ids = alvos.map((c) => c.id);
+
+      if (ids.length) {
+        await db.delete(kanbanMovimentacoes).where(inArray(kanbanMovimentacoes.cardId, ids));
+        await db.delete(kanbanResponsavelLog).where(inArray(kanbanResponsavelLog.cardId, ids));
+        await db.delete(kanbanComentarios).where(inArray(kanbanComentarios.cardId, ids));
+        await db.delete(kanbanCards).where(inArray(kanbanCards.id, ids));
+      }
       await db.delete(kanbanColunas).where(eq(kanbanColunas.id, input.id));
-      return { success: true };
+      return { success: true, cardsExcluidos: ids.length, coluna: col.nome };
     }),
 
   // ─── CARDS ────────────────────────────────────────────────────────────────

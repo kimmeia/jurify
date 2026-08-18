@@ -15,7 +15,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  LayoutGrid, Plus, Trash2, Loader2, GripVertical, Calendar,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  LayoutGrid, Plus, Trash2, Loader2, GripVertical, Calendar, RotateCcw,
   User, AlertTriangle, Clock, ChevronLeft, Edit, Scale,
   ExternalLink, ArrowRight, Tag, X, Settings, Upload, CheckCircle2,
   Archive, FileDown, Search, Briefcase, MessageSquare, Paperclip, AlertCircle,
@@ -88,6 +92,7 @@ export default function Kanban() {
   // (evita race entre HTML5 DnD nativo e reconciliador do React, que
   // causava NotFoundError "insertBefore" em boards grandes).
   const [dragCardId, setDragCardId] = useState<number | null>(null);
+  const [colunaParaExcluir, setColunaParaExcluir] = useState<{ id: number; nome: string; cards: number } | null>(null);
   const [dragColunaId, setDragColunaId] = useState<number | null>(null);
   // Card sobre o qual o usuário está pairando o drag (pra mostrar indicador).
   const [dragOverCardId, setDragOverCardId] = useState<number | null>(null);
@@ -824,6 +829,17 @@ export default function Kanban() {
               Exportar PDF
               <ChevronDown className="h-3 w-3" />
             </button>
+
+            {/* Fica ao lado do exportar de propósito: é o mesmo arquivo, lido
+                na direção contrária. Quem precisa restaurar procura aqui. */}
+            <button
+              onClick={() => setLocation("/kanban/restaurar")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-white border-slate-200 text-slate-600 hover:border-slate-300 transition-all"
+              title="Recria cards que sumiram, a partir de um relatório exportado antes"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Restaurar cards
+            </button>
           </div>
 
           {buscaTexto.trim() && (
@@ -922,7 +938,7 @@ export default function Kanban() {
                     <Archive className="h-3 w-3" />
                   </Button>
                 )}
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => { if (confirm(`Excluir coluna "${col.nome}" e seus cards?`)) deletarColunaMut.mutate({ id: col.id }); }}>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => setColunaParaExcluir({ id: col.id, nome: col.nome, cards: col.cards?.length ?? 0 })}>
                   <Trash2 className="h-3 w-3" />
                 </Button>
               </div>
@@ -1503,6 +1519,64 @@ export default function Kanban() {
           })
         }
       />
+
+      {/* Excluir coluna leva os cards junto, sem arquivar e sem desfazer. O
+          diálogo diz o número antes, e oferece a saída que preserva tudo. */}
+      <AlertDialog
+        open={colunaParaExcluir != null}
+        onOpenChange={(o) => { if (!o) setColunaParaExcluir(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Excluir a coluna “{colunaParaExcluir?.nome}”?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2.5">
+                {(colunaParaExcluir?.cards ?? 0) > 0 ? (
+                  <p className="text-destructive font-semibold">
+                    Os {colunaParaExcluir?.cards} cards desta coluna serão apagados junto, com o
+                    histórico deles. Não dá para desfazer.
+                  </p>
+                ) : (
+                  <p>A coluna está vazia. Nenhum card será afetado.</p>
+                )}
+                {(colunaParaExcluir?.cards ?? 0) > 0 && (
+                  <p>
+                    Se a ideia é só tirar do quadro, <b>arquive</b> em vez de excluir: os cards
+                    saem da visão mas continuam consultáveis em “Mostrar arquivados”.
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            {(colunaParaExcluir?.cards ?? 0) > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const col = colunas.find((c: any) => c.id === colunaParaExcluir?.id);
+                  const ids = (col?.cards ?? []).map((c: any) => c.id);
+                  if (ids.length) arquivarLoteMut.mutate({ ids });
+                  setColunaParaExcluir(null);
+                }}
+              >
+                Arquivar os cards
+              </Button>
+            )}
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (colunaParaExcluir) deletarColunaMut.mutate({ id: colunaParaExcluir.id });
+                setColunaParaExcluir(null);
+              }}
+            >
+              Excluir mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
