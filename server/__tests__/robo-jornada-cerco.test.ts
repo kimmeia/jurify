@@ -41,7 +41,11 @@ const raiz = join(__dirname, "..", "..");
 const ler = (p: string) => readFileSync(join(raiz, p), "utf8");
 
 const email = ler("server/_core/email.ts");
-const seed = ler("tests/e2e/lib/seed-escritorio.ts");
+// A implementação mudou de casa: o servidor precisa dela (botão do painel,
+// cron), e produção importando de `tests/` quebraria no dia em que o build
+// podasse a pasta. `tests/e2e/lib/seed-escritorio.ts` virou reexport.
+const seed = ler("server/admin/jornada/escritorio-descartavel.ts");
+const shimSeed = ler("tests/e2e/lib/seed-escritorio.ts");
 const helpers = ler("tests/e2e/lib/page-helpers.ts");
 const specRotas = ler("tests/e2e/jornada.spec.ts");
 const specConf = ler("tests/e2e/jornada-conferencias.spec.ts");
@@ -201,6 +205,13 @@ describe("as constantes moram num lugar só", () => {
     expect(seed).toContain("DOMINIO_EMAIL_TESTE");
     expect(seed).not.toContain('const ESCRITORIO_PREFIX = "test-runner-"');
     expect(seed).not.toContain("@jurify.test`");
+  });
+
+  it("os specs continuam importando pelo caminho antigo", () => {
+    // Mover import de doze arquivos não melhora nada; o reexport é o preço
+    // barato de manter a mudança de casa invisível pra quem escreve teste.
+    expect(shimSeed).toContain("server/admin/jornada/escritorio-descartavel");
+    expect(shimSeed).toContain("seedTestEscritorio");
   });
 
   it("nome de escritório de teste é reconhecível pelos dois lados", () => {

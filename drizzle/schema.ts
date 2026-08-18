@@ -4300,6 +4300,45 @@ export const roboAuditorVarreduras = mysqlTable(
 export type RoboAuditorVarredura = typeof roboAuditorVarreduras.$inferSelect;
 
 /**
+ * Execuções do robô de jornada — o que navega o app como usuário.
+ *
+ * Ele já existia e rodava só por comando de terminal, então ninguém rodava e
+ * o achado morria no console de quem executou. Guardar cada execução é o que
+ * separa "roda quando alguém lembra" de "está de pé e eu sei quando foi a
+ * última vez".
+ */
+export const jornadaVarreduras = mysqlTable(
+  "jornada_varreduras",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    runId: varchar("runId", { length: 64 }).notNull(),
+    origem: mysqlEnum("origemJV", ["manual", "cron"]).default("manual").notNull(),
+    /** Onde rodou. Achado sem saber de qual ambiente veio não serve pra nada. */
+    baseUrl: varchar("baseUrlJV", { length: 255 }).notNull(),
+    /** `rodando` existe pra tela mostrar progresso: a execução leva minutos. */
+    status: mysqlEnum("statusJV", ["rodando", "concluida", "falhou"]).default("rodando").notNull(),
+    iniciadoEm: timestamp("iniciadoEmJV").defaultNow().notNull(),
+    terminadoEm: timestamp("terminadoEmJV"),
+    duracaoMs: int("duracaoMsJV"),
+    rotasVisitadas: int("rotasVisitadasJV").default(0).notNull(),
+    rotasComAchado: int("rotasComAchadoJV").default(0).notNull(),
+    conferenciasTotal: int("conferenciasTotalJV").default(0).notNull(),
+    conferenciasFalhas: int("conferenciasFalhasJV").default(0).notNull(),
+    /** Execução que termina sem limpar deixa dado de mentira no banco. */
+    escritorioLimpo: boolean("escritorioLimpoJV").default(false).notNull(),
+    erro: varchar("erroJV", { length: 500 }),
+    /** JSON: { rotas: [...], conferencias: [...] }. */
+    detalheJson: text("detalheJson"),
+    createdAt: timestamp("createdAtJV").defaultNow().notNull(),
+  },
+  (t) => ({
+    porInicio: index("idx_jornada_recentes").on(t.iniciadoEm),
+  }),
+);
+
+export type JornadaVarredura = typeof jornadaVarreduras.$inferSelect;
+
+/**
  * Atendimento como EPISÓDIO — o recorte de trabalho dentro da conversa.
  *
  * A conversa é o fio contínuo com a pessoa; o atendimento tem início, fim e
