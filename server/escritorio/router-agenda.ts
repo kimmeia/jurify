@@ -16,7 +16,7 @@ import { getDb } from "../db";
 import { toIsoString } from "../_core/dates";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { agendamentos, agendamentoLembretes, agendamentoAnexos, tarefas, contatos, users, colaboradores, escritorios, setores } from "../../drizzle/schema";
-import { eq, and, desc, gte, lt, lte, or, like, asc, inArray } from "drizzle-orm";
+import { eq, and, desc, gte, lt, lte, or, like, asc, inArray, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { criarNotificacao } from "../processos/router-notificacoes";
 import { checkPermission } from "./check-permission";
@@ -218,9 +218,24 @@ export const agendaRouter = router({
 
       // Teto de eventos: com intervalo de datas (calendário/Período) o resultado
       // já é limitado pelo período, então usa um teto alto pra não cortar dias
-      // de meses cheios (>200 eventos sumia do dia 22 em diante). Sem intervalo
-      // (lista aberta) mantém 200 como proteção contra acervo gigante.
+      // de meses cheios (>200 eventos sumia do dia 22 em diante).
       const limiteEventos = input?.dataInicio && input?.dataFim ? 3000 : 200;
+
+      /**
+       * Sem janela de datas — que é o caso da aba Eventos — o teto era
+       * aplicado sobre `ORDER BY data ASC`. Ou seja: sobravam os 200 MAIS
+       * ANTIGOS, e tudo que viesse depois era descartado em silêncio,
+       * inclusive o prazo que a pessoa tinha acabado de criar. O calendário
+       * passa janela, cai no teto alto e mostra — daí "entra no calendário,
+       * não aparece na lista".
+       *
+       * Agora o corte é feito pelos dois lados a partir de hoje: os próximos
+       * em ordem crescente e os passados em ordem decrescente. O que for
+       * cortado é arqueologia, nunca o que está por vir.
+       */
+      const semJanela = !(input?.dataInicio && input?.dataFim);
+      const inicioDeHoje = inicioDoDiaNoFuso(dataHojeBR(fusoHorario), fusoHorario);
+      const TETO_LADO = 300;
 
       // ─── COMPROMISSOS (agendamentos) ────────────────────────────────────
       if (input?.fonte !== "tarefa") {
@@ -263,10 +278,21 @@ export const agendaRouter = router({
           agConditions.push(or(like(agendamentos.titulo, b), like(agendamentos.descricao, b)));
         }
 
-        const ags = await db.select().from(agendamentos)
-          .where(and(...agConditions))
-          .orderBy(asc(agendamentos.dataInicio))
-          .limit(limiteEventos);
+        const ags = semJanela
+          ? [
+              ...(await db.select().from(agendamentos)
+                .where(and(...agConditions, gte(agendamentos.dataInicio, inicioDeHoje)))
+                .orderBy(asc(agendamentos.dataInicio))
+                .limit(TETO_LADO)),
+              ...(await db.select().from(agendamentos)
+                .where(and(...agConditions, lt(agendamentos.dataInicio, inicioDeHoje)))
+                .orderBy(desc(agendamentos.dataInicio))
+                .limit(TETO_LADO)),
+            ]
+          : await db.select().from(agendamentos)
+              .where(and(...agConditions))
+              .orderBy(asc(agendamentos.dataInicio))
+              .limit(limiteEventos);
 
         for (const ag of ags) {
           eventos.push({
@@ -336,10 +362,26 @@ export const agendaRouter = router({
           tConditions.push(or(like(tarefas.titulo, b), like(tarefas.descricao, b)));
         }
 
-        const trs = await db.select().from(tarefas)
-          .where(and(...tConditions))
-          .orderBy(asc(tarefas.dataVencimento))
-          .limit(limiteEventos);
+        const trs = semJanela
+          ? [
+              ...(await db.select().from(tarefas)
+                .where(and(
+                  ...tConditions,
+                  // Tarefa sem vencimento cai aqui de propósito: `lt`/`gte`
+                  // descartam NULL nos dois lados, e ela sumiria da lista.
+                  or(gte(tarefas.dataVencimento, inicioDeHoje), isNull(tarefas.dataVencimento)),
+                ))
+                .orderBy(asc(tarefas.dataVencimento))
+                .limit(TETO_LADO)),
+              ...(await db.select().from(tarefas)
+                .where(and(...tConditions, lt(tarefas.dataVencimento, inicioDeHoje)))
+                .orderBy(desc(tarefas.dataVencimento))
+                .limit(TETO_LADO)),
+            ]
+          : await db.select().from(tarefas)
+              .where(and(...tConditions))
+              .orderBy(asc(tarefas.dataVencimento))
+              .limit(limiteEventos);
 
         // Buscar nomes dos contatos vinculados
         const contatoIds = [...new Set(trs.filter(t => t.contatoId).map(t => t.contatoId!))];
