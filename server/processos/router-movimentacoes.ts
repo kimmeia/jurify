@@ -30,6 +30,8 @@ import {
 } from "../../drizzle/schema";
 import { diasUteisAte } from "./prazo-processual";
 import { localizarTrecho } from "./teor-documento";
+import type { TentativaDeDocumento } from "./adapters/pje-tjce";
+import { createLogger } from "../_core/logger";
 import {
   documentoIdDoEvento,
   documentoTipoDoEvento,
@@ -127,6 +129,8 @@ export function classificarGrupo(params: {
   if (params.relevancia === "rotina") return "rotina";
   return "relevante";
 }
+
+const log = createLogger("movimentacoes");
 
 export const movimentacoesRouter = router({
   /**
@@ -535,7 +539,9 @@ export const movimentacoesRouter = router({
         return { ok: false as const, motivo: "Sessão do tribunal expirada — revalide a credencial no cofre." };
       }
 
-      const { baixarDocumentoAvulso } = await import("./adapters/pje-tjce");
+      const { baixarDocumentoAvulso, abrirDocumentoNoNavegador } = await import(
+        "./adapters/pje-tjce"
+      );
       const { classificarFalhaTeor } = await import("./teor-documento");
 
       // Com URL, é o caminho direto. Sem ela — que é o caso comum, porque o
@@ -551,14 +557,31 @@ export const movimentacoesRouter = router({
         if (!cfg) {
           return { ok: false as const, motivo: `Consulta de documento ainda não disponível para ${row.tribunal ?? "este tribunal"}.` };
         }
+        // Navegador, não requisição. O PJe serve a peça dentro de um
+        // visualizador JSF: pedir a URL por HTTP volta a casca da tela, e foi
+        // assim que o menu do tribunal virou "teor" e a IA resumiu o menu.
         const { baixarDocumentoPorId } = await import("./documento-por-id");
-        const porId = await baixarDocumentoPorId(
-          cfg.urlBusca,
-          documentoId!,
-          (url) => baixarDocumentoAvulso(url, sessao),
-        );
+        const vistas: TentativaDeDocumento[] = [];
+        const porId = await baixarDocumentoPorId(cfg.urlBusca, documentoId!, async (url) => {
+          const res = await abrirDocumentoNoNavegador(url, sessao);
+          if (res.ok) return { ok: true, texto: res.texto };
+          vistas.push(...res.vistas);
+          return { ok: false, erro: res.erro };
+        });
         r = porId.ok ? { ok: true, texto: porId.texto } : { ok: false, erro: porId.erro };
         if (porId.ok) urlUsada = porId.urlQueFuncionou;
+
+        // Quando nenhuma rota serve, o que o navegador viu é o dado que falta
+        // pra acertar a próxima — sem pedir pra ninguém abrir o DevTools.
+        if (!porId.ok && vistas.length) {
+          const resumo = vistas
+            .filter((v) => v.status < 400)
+            .map((v) => `${v.status} ${v.tipo} ${v.url}`);
+          log.warn(
+            { eventoId: row.ev.id, documentoId, vistas: resumo.slice(0, 40) },
+            "[teor] visualizador abriu mas nenhuma resposta trouxe o documento",
+          );
+        }
       }
 
       if (!r.ok) {

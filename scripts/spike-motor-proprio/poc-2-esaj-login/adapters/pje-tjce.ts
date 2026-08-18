@@ -184,6 +184,133 @@ const MAX_BYTES_TEOR = 12 * 1024 * 1024;
  * Abre um contexto próprio e fecha no fim — é uma requisição isolada, não
  * vale reaproveitar estado entre chamadas de usuários diferentes.
  */
+/**
+ * Abre o documento num navegador de verdade, como quem clica.
+ *
+ * `baixarDocumentoAvulso` faz `context.request.get`: pedido HTTP com os
+ * cookies da sessão, sem página. No PJe isso volta 200 com a casca do
+ * visualizador — o JSF nunca roda e a peça, que chega depois por AJAX, nunca
+ * chega. Foi assim que o menu do tribunal virou "teor" e a IA resumiu.
+ *
+ * Aqui abre-se uma página, deixa-se o JSF executar, e o documento é
+ * reconhecido pelo que ele é: uma resposta PDF. Não importa em qual das rotas
+ * do PJe ele apareça, nem se veio por iframe, embed ou download — o filtro é
+ * o content-type, não o endereço.
+ *
+ * Quando nada serve, devolve o que a aba Network mostraria. É o dado que
+ * faltava pra acertar a rota sem pedir pra alguém abrir o DevTools.
+ */
+export interface TentativaDeDocumento {
+  url: string;
+  status: number;
+  tipo: string;
+}
+
+export async function abrirDocumentoNoNavegador(
+  url: string,
+  storageStateJson: string,
+): Promise<
+  | { ok: true; texto: string; urlQueFuncionou: string }
+  | { ok: false; erro: string; vistas: TentativaDeDocumento[] }
+> {
+  let context: BrowserContext | null = null;
+  const vistas: TentativaDeDocumento[] = [];
+  try {
+    const browser = await getBrowserPje();
+    context = await browser.newContext({
+      userAgent: USER_AGENT,
+      locale: "pt-BR",
+      timezoneId: "America/Fortaleza",
+      storageState: JSON.parse(storageStateJson),
+      acceptDownloads: true,
+    });
+    const page = await context.newPage();
+
+    // A "aba Network": toda resposta da navegação, com tipo e tamanho. O
+    // documento é a que vier como PDF — em qualquer URL.
+    // Só o ENDEREÇO é anotado aqui, nunca o corpo.
+    //
+    // Pedir `response.body()` de um PDF aberto em iframe devolve lixo: o
+    // visualizador embutido do Chromium intercepta a resposta e entrega o HTML
+    // dele no lugar dos bytes. Medido na bancada — servidor mandou 1294 bytes
+    // de PDF, `body()` devolveu 345 bytes começando em "<!doctyp".
+    //
+    // Daí a divisão de trabalho: o navegador serve pra DESCOBRIR onde o
+    // documento mora, que é justamente o que não se sabia, e a busca dos bytes
+    // vai por requisição direta, com os mesmos cookies e sem visualizador no
+    // caminho.
+    const enderecos: string[] = [];
+    page.on("response", (r) => {
+      const tipo = (r.headers()["content-type"] ?? "").toLowerCase();
+      vistas.push({ url: r.url(), status: r.status(), tipo: tipo.split(";")[0] });
+      if (r.ok() && tipo.includes("pdf") && !enderecos.includes(r.url())) {
+        enderecos.push(r.url());
+      }
+    });
+
+    // O visualizador às vezes dispara download em vez de renderizar.
+    const baixado = page
+      .waitForEvent("download", { timeout: TIMEOUT_NAV_MS })
+      .catch(() => null);
+
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: TIMEOUT_NAV_MS });
+    // `networkidle` é o que espera o AJAX do JSF terminar. Falhar aqui não é
+    // erro: pode ter carregado e ficado com polling aberto.
+    await page.waitForLoadState("networkidle", { timeout: TIMEOUT_NAV_MS }).catch(() => {});
+
+    const { textoDoDocumento } = await import("../../../../server/processos/teor-documento");
+
+    for (const endereco of enderecos) {
+      const resp = await context.request
+        .get(endereco, { timeout: TIMEOUT_NAV_MS, maxRedirects: 5 })
+        .catch(() => null);
+      if (!resp || !resp.ok()) continue;
+      const corpo = await resp.body().catch(() => Buffer.alloc(0));
+      if (corpo.length === 0 || corpo.length > MAX_BYTES_TEOR) continue;
+      try {
+        const texto = await textoDoDocumento(corpo, resp.headers()["content-type"] ?? null);
+        return { ok: true, texto, urlQueFuncionou: endereco };
+      } catch {
+        /* ilegível — segue pro próximo endereço */
+      }
+    }
+
+    const dl = await baixado;
+    if (dl) {
+      const caminho = await dl.path().catch(() => null);
+      if (caminho) {
+        const { readFile } = await import("fs/promises");
+        const corpo = await readFile(caminho);
+        if (corpo.length > 0 && corpo.length <= MAX_BYTES_TEOR) {
+          const texto = await textoDoDocumento(corpo, null);
+          return { ok: true, texto, urlQueFuncionou: dl.url() };
+        }
+      }
+    }
+
+    // Última chance: o documento pode ter sido renderizado como HTML dentro do
+    // visualizador. `textoDoDocumento` recusa a casca, então o que passar aqui
+    // é peça de verdade.
+    const html = await page.content();
+    try {
+      const texto = await textoDoDocumento(Buffer.from(html, "utf-8"), "text/html");
+      return { ok: true, texto, urlQueFuncionou: page.url() };
+    } catch {
+      /* era a casca mesmo */
+    }
+
+    return {
+      ok: false,
+      erro: "o visualizador abriu, mas nenhuma resposta trouxe o documento",
+      vistas,
+    };
+  } catch (err) {
+    return { ok: false, erro: err instanceof Error ? err.message : String(err), vistas };
+  } finally {
+    await context?.close().catch(() => {});
+  }
+}
+
 export async function baixarDocumentoAvulso(
   url: string,
   storageStateJson: string,
