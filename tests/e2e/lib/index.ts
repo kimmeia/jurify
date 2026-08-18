@@ -35,6 +35,8 @@ export {
   watchNetwork5xx,
   waitForToast,
   expectNoOrphanLoading,
+  clicarSeguro,
+  irSeguro,
 } from "./page-helpers";
 export type {
   ConsoleErrorMonitor,

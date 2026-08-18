@@ -13,10 +13,11 @@
  * Toda consulta aqui é SELECT. Não importe nada que escreva neste arquivo.
  */
 
-import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, like, lt, ne, or, sql } from "drizzle-orm";
 import {
   agendamentos,
   asaasCobrancas,
+  escritorios,
   clienteProcessos,
   cofreCredenciais,
   colaboradores,
@@ -35,6 +36,10 @@ import {
   tarefas,
 } from "../../../drizzle/schema";
 import { lerDocumentoNoRotulo } from "../../../shared/documento-no-rotulo";
+import {
+  IDADE_MAXIMA_ESCRITORIO_TESTE_MS,
+  PREFIXO_ESCRITORIO_TESTE,
+} from "../../../shared/escritorio-de-teste";
 import { ORDEM_SEVERIDADE, type Regra } from "./tipos";
 
 /**
@@ -70,6 +75,55 @@ const FOLGA_CANDIDATOS = 6;
 const HORAS_RETOMADA_ATRASADA = 2;
 
 export const REGRAS: Regra[] = [
+  {
+    id: "ROB-01",
+    titulo: "Escritório de teste que não foi apagado",
+    severidade: "alto",
+    dominio: "observabilidade",
+    nivel: "B",
+    tabela: "escritorios",
+    invariante:
+      "O robô de jornada cria um escritório descartável, roda, e apaga em " +
+      "segundos. Escritório com prefixo de teste vivo por mais de 24 h é " +
+      "execução interrompida no meio — dado de mentira ocupando o banco de " +
+      "produção, e a limpeza automática não deu conta.",
+    correcaoPrevista:
+      "Rodar o varredor de zumbis, que apaga pelo runId. Fica em B e não em " +
+      "A porque apagar escritório é irreversível: mesmo sendo de teste, " +
+      "quem confirma é gente.",
+    shadow: true,
+    async detectar(db, limite) {
+      // A limpeza não pode depender de alguém lembrar de conferir. Este é o
+      // alarme que torna a sobra visível sem ninguém procurar por ela.
+      const corte = new Date(Date.now() - IDADE_MAXIMA_ESCRITORIO_TESTE_MS);
+      const linhas = await db
+        .select({
+          id: escritorios.id,
+          nome: escritorios.nome,
+          criadoEm: escritorios.createdAt,
+        })
+        .from(escritorios)
+        .where(and(
+          like(escritorios.nome, `${PREFIXO_ESCRITORIO_TESTE}%`),
+          lt(escritorios.createdAt, corte),
+        ))
+        .limit(limite);
+
+      return linhas.map((l) => ({
+        escritorioId: l.id,
+        alvoId: l.id,
+        descricao: `${l.nome} está de pé desde ${l.criadoEm?.toLocaleDateString("pt-BR") ?? "data desconhecida"}`,
+        valores: {
+          nome: l.nome,
+          criadoEm: l.criadoEm?.toISOString() ?? null,
+          horasDeVida: l.criadoEm
+            ? Math.round((Date.now() - l.criadoEm.getTime()) / 3_600_000)
+            : null,
+        },
+      }));
+    },
+  },
+
   {
     id: "AGD-01",
     titulo: "Evento com responsável de outro escritório",
