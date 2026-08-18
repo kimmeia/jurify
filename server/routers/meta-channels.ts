@@ -22,6 +22,7 @@
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
+import { checkPermissionAdminOuMatriz } from "../escritorio/check-permission";
 import { getDb } from "../db";
 import { adminIntegracoes, canaisIntegrados } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -407,6 +408,24 @@ export async function desinscreverAppDaWaba(
 
 // ─── Router ────────────────────────────────────────────────────────────────
 
+
+/**
+ * Conectar, registrar ou reinscrever um canal é mexer na infraestrutura de
+ * comunicação do escritório inteiro — o WhatsApp é o canal por onde os
+ * clientes chegam. Nenhuma dessas mutations tinha gate: qualquer colaborador
+ * logado podia trocar o canal, refazer o registro do número ou reinscrever o
+ * webhook. O serviço vizinho (whatsapp-cloud-services) sempre exigiu gestão
+ * pra config; aqui é a mesma régua.
+ */
+async function exigirGestaoDeCanais(userId: number): Promise<void> {
+  const perm = await checkPermissionAdminOuMatriz(userId, "configuracoes", "editar");
+  if (!perm.allowed) {
+    throw new Error(
+      "Apenas donos, gestores ou cargos com permissão de configurações podem alterar os canais conectados.",
+    );
+  }
+}
+
 export const metaChannelsRouter = router({
   /**
    * Retorna os parâmetros públicos (não-sensíveis) que o frontend precisa
@@ -435,6 +454,7 @@ export const metaChannelsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await exigirGestaoDeCanais(ctx.user.id);
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
 
@@ -606,6 +626,7 @@ export const metaChannelsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await exigirGestaoDeCanais(ctx.user.id);
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
 
@@ -727,6 +748,7 @@ export const metaChannelsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await exigirGestaoDeCanais(ctx.user.id);
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
 
@@ -833,6 +855,7 @@ export const metaChannelsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await exigirGestaoDeCanais(ctx.user.id);
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
 
@@ -953,6 +976,7 @@ export const metaChannelsRouter = router({
   subscribeWebhooks: protectedProcedure
     .input(z.object({ canalId: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      await exigirGestaoDeCanais(ctx.user.id);
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
 
