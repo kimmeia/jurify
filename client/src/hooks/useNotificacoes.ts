@@ -4,12 +4,12 @@
  * Uso no AppLayout:
  *   const { naoLidas, limpar } = useNotificacoes(user?.id);
  * 
- * Conecta automaticamente ao SSE, exibe toast para cada notificação,
- * e mantém contador de não-lidas.
+ * Conecta automaticamente ao SSE e mantém a lista e o contador de não-lidas.
+ * Não exibe toast: o balão por mensagem recebida interrompia quem estava
+ * trabalhando, e o sino já guarda tudo.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { toast } from "sonner";
 
 export interface Notificacao {
   tipo: string;
@@ -18,18 +18,6 @@ export interface Notificacao {
   dados?: Record<string, any>;
   timestamp: string;
 }
-
-const ICONES_TIPO: Record<string, string> = {
-  nova_mensagem: "💬",
-  novo_lead: "🎯",
-  conversa_atribuida: "📋",
-  assinatura_concluida: "✅",
-  movimentacao_processo: "⚖️",
-  nova_acao: "🚨",
-  credencial_erro: "🔒",
-  credencial_recuperada: "🔓",
-  info: "ℹ️",
-};
 
 export function useNotificacoes(userId: number | undefined) {
   const [naoLidas, setNaoLidas] = useState(0);
@@ -63,20 +51,15 @@ export function useNotificacoes(userId: number | undefined) {
           data.dados?.kind === "sinalizacao_chamada";
 
         if (!ehSilencioso) {
+          // Sem toast, de propósito.
+          //
+          // Cada mensagem de WhatsApp virava um balão sobre a tela, e quem
+          // está lendo uma decisão ou conferindo um prazo é interrompido por
+          // algo que já está contado no sino. Nada se perde ao tirar: a
+          // notificação continua entrando na lista e no contador, que é onde
+          // ela é procurada quando interessa.
           setNotificacoes(prev => [data, ...prev].slice(0, 50));
           setNaoLidas(prev => prev + 1);
-
-          const icone = ICONES_TIPO[data.tipo] || "🔔";
-          toast(`${icone} ${data.titulo}`, {
-            description: data.mensagem,
-            duration: 5000,
-            action: data.tipo === "nova_mensagem" ? {
-              label: "Ver",
-              onClick: () => {
-                window.location.href = "/atendimento";
-              },
-            } : undefined,
-          });
         }
 
         // Window event pra outros componentes (ex: Processos) ouvirem
