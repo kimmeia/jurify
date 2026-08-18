@@ -1886,8 +1886,18 @@ function ListaView({
       else buckets.maisTarde.push(ev);
     }
 
+    // Dentro do mesmo dia, prazo vem antes de tarefa. Não é preciosismo de
+    // ordenação: prazo é o que TEM que sair até aquela data, tarefa é o que
+    // seria bom sair. Empatados por data, quem manda é a consequência de
+    // perder — e ela só existe de um lado.
+    const peso = (ev: any) =>
+      ev.tipo === "prazo_processual" ? 0 : ev.tipo === "audiencia" ? 1 : ev.fonte === "tarefa" ? 3 : 2;
     for (const key of Object.keys(buckets)) {
-      buckets[key].sort((a, b) => new Date(a.dataInicio).getTime() - new Date(b.dataInicio).getTime());
+      buckets[key].sort((a, b) => {
+        const dif = new Date(a.dataInicio).getTime() - new Date(b.dataInicio).getTime();
+        if (dif !== 0) return dif;
+        return peso(a) - peso(b);
+      });
     }
     return buckets;
   }, [eventosFiltrados]);
