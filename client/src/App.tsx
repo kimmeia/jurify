@@ -48,6 +48,7 @@ import AgenteChat from "./pages/AgenteChat";
 import SmartFlowEditor from "./pages/SmartFlowEditor";
 import Automacoes from "./pages/Automacoes";
 import Kanban from "./pages/Kanban";
+import RestaurarCards from "@/pages/kanban/RestaurarCards";
 import Clientes from "./pages/Clientes";
 import Acordos from "./pages/Acordos";
 import Relatorios from "./pages/Relatorios";
@@ -364,6 +365,11 @@ function Router() {
       <Route path="/kanban">
         <ClientArea>
           <Kanban />
+        </ClientArea>
+      </Route>
+      <Route path="/kanban/restaurar">
+        <ClientArea>
+          <RestaurarCards />
         </ClientArea>
       </Route>
       <Route path="/clientes">
