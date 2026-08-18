@@ -46,6 +46,7 @@ export type Dominio =
   | "motor"
   | "smartflow"
   | "kanban"
+  | "agenda"
   | "permissoes"
   | "observabilidade";
 
