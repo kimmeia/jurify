@@ -92,7 +92,7 @@ type ItemMenu = {
    * Roadmap não passa por permissão nenhuma. Uniformizar aqui esconderia
    * módulo de quem tem acesso.
    */
-  ver?: (canSee: (m: string) => boolean) => boolean;
+  ver?: (canSee: (m: string) => boolean, canManage: (m: string) => boolean) => boolean;
   /** Chave usada em `moduloOcultoNoMenu`, quando existe. */
   ocultaPor?: string;
   /** Ativo por prefixo (páginas com sub-rotas, como /automacoes/fluxos). */
@@ -132,7 +132,11 @@ const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
       // aparecia pra qualquer um com Processos e entregava "não está no seu
       // plano" depois do clique.
       { id: "jurisia", rotulo: "JurisIA", rota: "/jurisia", icone: Gavel, ver: (c) => c("processos"), ocultaPor: "jurisia", selo: "beta" },
-      { id: "ponto", rotulo: "Ponto", rota: "/ponto", icone: Clock, ver: (c) => c("equipe") },
+      // Ponto é a visão do gestor sobre a equipe: exige verTodos, não
+      // verProprios. Com `canSee` o item aparecia pra atendente, SDR e
+      // estagiário — o servidor barrava os dados, mas o módulo não devia
+      // sequer estar no menu deles.
+      { id: "ponto", rotulo: "Ponto", rota: "/ponto", icone: Clock, ver: (_c, m) => m("equipe") },
       { id: "calculos", rotulo: "Cálculos", rota: "/calculos", icone: Calculator, ver: (c) => c("calculos"), ocultaPor: "calculos" },
       { id: "modelos", rotulo: "Modelos", rota: "/modelos-contrato", icone: FileText, ver: (c) => c("modelos") },
       // Fusão de SmartFlow (Fluxos) + Agentes IA: aparece com qualquer um dos
@@ -281,6 +285,23 @@ function AppSidebarContent({
       refetchInterval: 5 * 60_000,
     },
   ) || { data: null };
+  /**
+   * Só quem enxerga ALÉM da própria linha.
+   *
+   * `canSee` aceita `verProprios`, que é o certo pra quase todo módulo — ver
+   * os próprios clientes é o trabalho de um atendente. Mas o Ponto não é
+   * assim: ele é a visão do gestor sobre a equipe, e `verProprios` em
+   * "equipe" (que quase todo cargo tem) fazia o item aparecer pra todo mundo.
+   */
+  const canManage = (modulo: string) => {
+    if (user?.role === "admin" || minhasPerms?.cargo === "Dono") return true;
+    // Enquanto carrega, ESCONDE. É o inverso do canSee, e de propósito:
+    // mostrar um módulo de gestão por meio segundo pra quem não tem acesso é
+    // pior que ele aparecer meio segundo depois pra quem tem.
+    if (!minhasPerms?.permissoes) return false;
+    return !!minhasPerms.permissoes[modulo]?.verTodos;
+  };
+
   const canSee = (modulo: string) => {
     // Dono e admin do sistema nunca são bloqueados
     if (user?.role === "admin" || minhasPerms?.cargo === "Dono") return true;
@@ -462,7 +483,9 @@ function AppSidebarContent({
           <SidebarContent className="gap-0 rolagem-menu">
             {GRUPOS_MENU.map((grupo) => {
               const visiveis = grupo.itens.filter(
-                (i) => !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) && (i.ver ? i.ver(canSee) : true),
+                (i) =>
+                  !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) &&
+                  (i.ver ? i.ver(canSee, canManage) : true),
               );
               if (visiveis.length === 0) return null;
               return (
