@@ -247,6 +247,41 @@ export function classificarFalhaTeor(erro: unknown): { status: TeorStatus; motiv
  * Converte o corpo baixado em texto. `contentType` decide o parser; quando o
  * tribunal mente no header (acontece), cai no sniff do magic number do PDF.
  */
+/**
+ * Marcas de que o que voltou é a TELA do sistema, não o documento.
+ *
+ * O PJe serve o documento dentro de um visualizador JSF. Pedir a URL por
+ * HTTP devolve 200 com a casca dessa tela — menu, nome de quem está logado,
+ * identificador do servidor — e o documento em si só chega depois, por AJAX.
+ *
+ * Isso já passou por uma checagem de "tem mais de 40 caracteres" e virou teor
+ * gravado. Pior: a IA resumiu o menu e escreveu quatro conclusões jurídicas
+ * confiantes sobre uma decisão que ela nunca leu. Texto errado dá pra
+ * perceber; resumo bem escrito de texto errado, não.
+ */
+const CASCA_DE_APLICACAO = [
+  "abrir menu",
+  "consulta documentos do processo",
+  "consulta processual",
+  "painel do usuário",
+  "javascript is disabled",
+  "sua sessão expirou",
+  "acesso negado",
+  "erro inesperado",
+];
+
+/**
+ * `true` quando o texto parece a interface do tribunal em vez de uma peça.
+ *
+ * Deliberadamente NÃO usa tamanho: despacho legítimo cabe em "Vistos.
+ * Intime-se. Cumpra-se." e seria descartado por qualquer piso de caracteres.
+ * O que separa é o vocabulário de navegação, que peça nenhuma tem.
+ */
+export function pareceCascaDeAplicacao(texto: string): boolean {
+  const t = normalizarParaBusca(texto);
+  return CASCA_DE_APLICACAO.some((marca) => t.includes(normalizarParaBusca(marca)));
+}
+
 export async function textoDoDocumento(
   corpo: Buffer,
   contentType: string | null,
@@ -266,6 +301,11 @@ export async function textoDoDocumento(
   if (ct.includes("html") || ct.includes("xml") || ct === "") {
     const texto = extrairTextoDeHtml(corpo.toString("utf-8"));
     if (texto.length < 40) throw new Error("HTML sem texto útil");
+    // A checagem só vale pra HTML: PDF é o formato da peça, e o visualizador
+    // do tribunal é que vem como página.
+    if (pareceCascaDeAplicacao(texto)) {
+      throw new Error("o tribunal devolveu a tela do visualizador, não o documento");
+    }
     return truncarTeor(texto);
   }
 

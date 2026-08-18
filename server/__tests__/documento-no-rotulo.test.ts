@@ -156,7 +156,10 @@ describe("baixar pelo id quando não há link", () => {
   it("o baixarTeor aceita evento sem URL, desde que tenha id", () => {
     const i = router.indexOf("baixarTeor: protectedProcedure");
     const corpo = router.slice(i, i + 4000);
-    expect(corpo).toContain("!row.ev.teorUrl && !row.ev.documentoIdTribunal");
+    // O id vem do campo gravado na coleta OU do rótulo, derivado na leitura:
+    // movimentação anterior ao extrator não tem o campo, mas tem o rótulo.
+    expect(corpo).toContain("const documentoId = documentoIdDoEvento(row.ev)");
+    expect(corpo).toContain("!row.ev.teorUrl && !documentoId");
     expect(corpo).toContain("baixarDocumentoPorId");
     // A rota que funcionou fica gravada pra próxima leitura ir direto.
     expect(corpo).toContain("teorUrl: urlUsada");
@@ -170,8 +173,11 @@ describe("a tela para de mentir", () => {
     expect(drawer).toContain("falhaTeor?.podeBaixar && (data.teorUrl || data.documentoId)");
   });
 
-  it("o detalhe devolve id e tipo", () => {
-    expect(router).toContain("documentoId: row.ev.documentoIdTribunal");
-    expect(router).toContain("documentoTipo: row.ev.documentoTipo");
+  it("o detalhe devolve id e tipo, derivados do rótulo quando faltam", () => {
+    // Gravar na coleta congelava a resposta: tudo que já existia quando o
+    // extrator entrou no ar ficou em "sem_documento" com o id escrito no
+    // próprio rótulo.
+    expect(router).toContain("documentoId: documentoIdDoEvento(row.ev)");
+    expect(router).toContain("documentoTipo: documentoTipoDoEvento(row.ev)");
   });
 });

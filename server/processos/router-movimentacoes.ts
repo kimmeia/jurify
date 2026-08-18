@@ -30,6 +30,11 @@ import {
 } from "../../drizzle/schema";
 import { diasUteisAte } from "./prazo-processual";
 import { localizarTrecho } from "./teor-documento";
+import {
+  documentoIdDoEvento,
+  documentoTipoDoEvento,
+  teorStatusDoEvento,
+} from "./documento-do-evento";
 import { parsearPartes, resumirPartes } from "./partes-processo";
 import { pontoUtil, type AnaliseMovimentacao } from "./resumir-movimentacao";
 
@@ -187,6 +192,9 @@ export const movimentacoesRouter = router({
           teor: eventosProcesso.teor,
           teorStatus: eventosProcesso.teorStatus,
           teorErro: eventosProcesso.teorErro,
+          teorUrl: eventosProcesso.teorUrl,
+          documentoIdTribunal: eventosProcesso.documentoIdTribunal,
+          documentoTipo: eventosProcesso.documentoTipo,
           cnjAfetado: eventosProcesso.cnjAfetado,
           lido: eventosProcesso.lido,
           monitoramentoId: eventosProcesso.monitoramentoId,
@@ -251,7 +259,9 @@ export const movimentacoesRouter = router({
           relevancia: r.relevancia,
           citacao: analise?.providencia.citacao ?? null,
           consequencia: analise?.providencia.consequencia ?? null,
-          teorStatus: r.teorStatus,
+          // Mesma derivação do detalhe: lista e drawer discordarem sobre
+          // "tem documento?" seria pior que os dois estarem errados juntos.
+          teorStatus: teorStatusDoEvento(r),
           teorErro: r.teorErro,
           temTeor: !!r.teor,
           prazo:
@@ -359,13 +369,16 @@ export const movimentacoesRouter = router({
         relevancia: row.ev.relevancia,
         providencia: analise?.providencia ?? null,
         teor: row.ev.teor,
-        teorStatus: row.ev.teorStatus,
+        // Derivados, não os valores congelados na coleta: movimentação
+        // anterior ao extrator de rótulo ficou marcada "sem documento" com o
+        // id escrito no próprio rótulo.
+        teorStatus: teorStatusDoEvento(row.ev),
         teorErro: row.ev.teorErro,
         teorUrl: row.ev.teorUrl,
         teorNome: row.ev.teorNome,
         /** Peça identificada no rótulo do movimento, mesmo sem link seguível. */
-        documentoId: row.ev.documentoIdTribunal,
-        documentoTipo: row.ev.documentoTipo,
+        documentoId: documentoIdDoEvento(row.ev),
+        documentoTipo: documentoTipoDoEvento(row.ev),
         /** Trecho literal a grifar dentro do teor, quando bate de fato. */
         trechoGrifado: citacao && row.ev.teor ? localizarTrecho(row.ev.teor, citacao) : null,
         cnj: row.ev.cnjAfetado,
@@ -505,7 +518,8 @@ export const movimentacoesRouter = router({
       if (!row || row.ev.escritorioId !== perm.escritorioId) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Movimentação não encontrada" });
       }
-      if (!row.ev.teorUrl && !row.ev.documentoIdTribunal) {
+      const documentoId = documentoIdDoEvento(row.ev);
+      if (!row.ev.teorUrl && !documentoId) {
         return { ok: false as const, motivo: "Esta movimentação não tem documento anexo no tribunal." };
       }
       if (!row.credencialId) {
@@ -540,7 +554,7 @@ export const movimentacoesRouter = router({
         const { baixarDocumentoPorId } = await import("./documento-por-id");
         const porId = await baixarDocumentoPorId(
           cfg.urlBusca,
-          row.ev.documentoIdTribunal!,
+          documentoId!,
           (url) => baixarDocumentoAvulso(url, sessao),
         );
         r = porId.ok ? { ok: true, texto: porId.texto } : { ok: false, erro: porId.erro };
