@@ -21,6 +21,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { ehRotaProibida } from "../../server/admin/jornada/lista-negra";
 import {
   seedAndLogin,
   teardownTestEscritorio,
@@ -76,6 +77,14 @@ test.describe("Robô de jornada — todas as rotas do app logado", () => {
     !process.env.ROBO_JORNADA,
     "Robô de jornada roda sob demanda: ROBO_JORNADA=1 pnpm test:e2e",
   );
+
+  test("nenhuma rota da varredura está na lista negra", () => {
+    // `/admin` é global: não tem escritorioId pra filtrar, então a parede que
+    // isola o robô simplesmente não existe lá dentro. Uma rota dessas
+    // entrando na lista por descuido não daria erro — daria acesso.
+    const proibidas = ROTAS.filter((r) => ehRotaProibida(r));
+    expect(proibidas, `rotas fora do alcance do robô: ${proibidas.join(", ")}`).toEqual([]);
+  });
 
   test("nenhuma rota quebra, devolve 5xx ou trava carregando", async ({ page }) => {
     const consoleMonitor = watchConsoleErrors(page);

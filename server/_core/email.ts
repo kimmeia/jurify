@@ -12,6 +12,7 @@
  */
 
 import { createLogger } from "./logger";
+import { ehEmailDeTeste } from "../../shared/escritorio-de-teste";
 const log = createLogger("email");
 
 const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || "https://juridflow.com.br";
@@ -149,6 +150,15 @@ export async function enviarEmail(options: EmailOptions): Promise<{ success: boo
     return { success: false, error: "Email options ausente." };
   }
   const tipo = options.tipo ?? "outro";
+  // O robô de jornada navega com contas @jurify.test. Toda integração de
+  // saída é por escritório e o dele nasce sem nenhuma — menos e-mail, que é
+  // global. Sem esta trava, um passo que clicasse em "reenviar convite"
+  // gastaria cota do Resend e produziria bounce de verdade.
+  if (ehEmailDeTeste(options.to)) {
+    log.info({ to: options.to, tipo }, "envio bloqueado: destinatário de escritório de teste");
+    return { success: false, error: "Destinatário de teste — envio bloqueado de propósito." };
+  }
+
   if (!options.to || typeof options.to !== "string" || !options.to.trim()) {
     log.error({ options }, "enviarEmail chamado sem 'to' válido");
     const erroMsg = "Destinatário (to) ausente.";

@@ -23,6 +23,12 @@ import {
   users,
 } from "../../../drizzle/schema";
 import {
+  DOMINIO_EMAIL_TESTE,
+  IDADE_MAXIMA_ESCRITORIO_TESTE_MS,
+  MARCA_REGISTRO_TESTE,
+  PREFIXO_ESCRITORIO_TESTE,
+} from "../../../shared/escritorio-de-teste";
+import {
   TEST_CARGOS,
   type TestEscritorio,
   type TestRole,
@@ -31,10 +37,16 @@ import {
 
 export const TEST_PASSWORD = "Smoke123!";
 
-const ESCRITORIO_PREFIX = "test-runner-";
+/**
+ * As constantes vivem em `shared/escritorio-de-teste.ts` porque quatro peças
+ * dependem delas: este semeador, o varredor de zumbis, o guarda de e-mail e
+ * a regra ROB-01 do auditor. Cada uma com a própria string seria uma
+ * renomeação de distância de um guarda parar de guardar em silêncio.
+ */
+const ESCRITORIO_PREFIX = PREFIXO_ESCRITORIO_TESTE;
 
 function emailFor(runId: string, cargo: TestRole): string {
-  return `${cargo}-${runId}@jurify.test`;
+  return `${cargo}-${runId}@${DOMINIO_EMAIL_TESTE}`;
 }
 
 function openIdFor(email: string): string {
@@ -80,7 +92,7 @@ export async function seedTestEscritorio(
   const escritorioNome = `${ESCRITORIO_PREFIX}${runId}`;
   const [escritorioInsert] = await db.insert(escritorios).values({
     nome: escritorioNome,
-    email: `escritorio-${runId}@jurify.test`,
+    email: `escritorio-${runId}@${DOMINIO_EMAIL_TESTE}`,
     ownerId: dono.id,
     maxColaboradores: 10,
   });
@@ -106,11 +118,11 @@ export async function seedTestEscritorio(
   });
 
   const clientesData = [
-    { nome: `[E2E] João ${runId}`, telefone: "(11) 91111-0001", email: `joao-${runId}@jurify.test` },
-    { nome: `[E2E] Maria ${runId}`, telefone: "(11) 92222-0002", email: `maria-${runId}@jurify.test` },
-    { nome: `[E2E] Pedro ${runId}`, telefone: "(11) 93333-0003", email: `pedro-${runId}@jurify.test` },
-    { nome: `[E2E] Ana ${runId}`, telefone: "(11) 94444-0004", email: `ana-${runId}@jurify.test` },
-    { nome: `[E2E] Carlos ${runId}`, telefone: "(11) 95555-0005", email: `carlos-${runId}@jurify.test` },
+    { nome: `${MARCA_REGISTRO_TESTE} João ${runId}`, telefone: "(11) 91111-0001", email: `joao-${runId}@${DOMINIO_EMAIL_TESTE}` },
+    { nome: `${MARCA_REGISTRO_TESTE} Maria ${runId}`, telefone: "(11) 92222-0002", email: `maria-${runId}@${DOMINIO_EMAIL_TESTE}` },
+    { nome: `${MARCA_REGISTRO_TESTE} Pedro ${runId}`, telefone: "(11) 93333-0003", email: `pedro-${runId}@${DOMINIO_EMAIL_TESTE}` },
+    { nome: `${MARCA_REGISTRO_TESTE} Ana ${runId}`, telefone: "(11) 94444-0004", email: `ana-${runId}@${DOMINIO_EMAIL_TESTE}` },
+    { nome: `${MARCA_REGISTRO_TESTE} Carlos ${runId}`, telefone: "(11) 95555-0005", email: `carlos-${runId}@${DOMINIO_EMAIL_TESTE}` },
   ];
   for (const c of clientesData) {
     await db.insert(contatos).values({
@@ -160,7 +172,7 @@ export async function teardownTestEscritorio(runId: string): Promise<void> {
 }
 
 export async function teardownStaleTestEscritorios(
-  maxAgeMs: number = 24 * 60 * 60 * 1000,
+  maxAgeMs: number = IDADE_MAXIMA_ESCRITORIO_TESTE_MS,
 ): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
