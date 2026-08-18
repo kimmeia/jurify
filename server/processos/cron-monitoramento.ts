@@ -39,6 +39,7 @@ import {
   identificarPoloDoCliente,
   type PoloIdentificado,
 } from "./polo-matcher";
+import { montarCapaNovaAcao, type CapaNovaAcao } from "../../shared/nova-acao-capa";
 import { extrairAnoCnj } from "./cnj-parser";
 import { hashEvento as hashEventoNorm } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import {
@@ -965,6 +966,7 @@ export async function pollarUmMonitoramentoNovasAcoes(
         let motivoSilencio: "polo_ativo" | "anterior_cadastro" | "cnj_antigo" | null = null;
         let dataDistribuicao: Date | null = null;
         let poloDoCliente: PoloIdentificado = "desconhecido";
+        let capaColetada: CapaNovaAcao | null = null;
 
         try {
           const detalhe = await consultarTjce(cnj, sessao, cfgTribunal);
@@ -977,6 +979,13 @@ export async function pollarUmMonitoramentoNovasAcoes(
             }
             const partes = Array.isArray(detalhe.capa.partes) ? detalhe.capa.partes : [];
             poloDoCliente = identificarPoloDoCliente(mon.apelido, mon.searchKey, partes);
+            // Este scrape é o único que acontece por CNJ novo. O que não for
+            // guardado aqui só volta pagando outra consulta.
+            capaColetada = montarCapaNovaAcao(
+              detalhe.capa,
+              poloDoCliente,
+              new Date().toISOString(),
+            );
           }
         } catch (err) {
           log.warn(
@@ -1037,6 +1046,8 @@ export async function pollarUmMonitoramentoNovasAcoes(
               cnj,
               dataDistribuicao: dataDistribuicao?.toISOString() ?? null,
               poloDoCliente,
+              capa: capaColetada,
+              capaFalhou: capaColetada === null,
               motivoSilencio,
               filtradoPorData: motivoSilencio === "anterior_cadastro",
               filtradoPorPolo: motivoSilencio === "polo_ativo",

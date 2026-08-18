@@ -121,7 +121,12 @@ export function identificarPoloDoCliente(
   // Prioridade: passivo > terceiro > ativo. Cliente aparecendo como
   // passivo (mesmo que também apareça como ativo, ex: reconvenção) é
   // alerta válido.
+  //
+  // "ativo" é afirmado, não assumido: é o único valor que faz o cron
+  // silenciar o alerta, e chegar nele por eliminação seria esconder um caso
+  // por falta de informação.
   if (polosEncontrados.has("passivo")) return "passivo";
   if (polosEncontrados.has("terceiro")) return "terceiro";
-  return "ativo";
+  if (polosEncontrados.has("ativo")) return "ativo";
+  return "desconhecido";
 }

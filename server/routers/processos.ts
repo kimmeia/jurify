@@ -35,6 +35,8 @@ import { decrypt as adminDecrypt } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { classificarErroMonitor } from "../processos/diagnostico-monitoramento";
 import { parsearPartes, resumirPartes } from "../processos/partes-processo";
+import { lerPolo, paraLadoJudit } from "../../shared/polo-parte";
+import { lerCapaNovaAcao, lerFalhaDeCapa } from "../../shared/nova-acao-capa";
 import { siglasSuportadas } from "../processos/tribunais-pdpj";
 import { ambienteSuportaTeste } from "../_core/ambiente";
 import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resumir-movimentacao";
@@ -145,7 +147,8 @@ function adaptarParaJuditShape(r: any, cnj: string) {
     instance: capa.grauTribunal ?? capa.instancia ?? 1,
     parties: partes.map((p) => ({
       name: p.nome ?? "",
-      side: (p.polo ?? "").toLowerCase().startsWith("ativ") ? "Active" : "Passive",
+      side: paraLadoJudit(p.polo),
+      polo: lerPolo(p.polo),
       main_document: p.documento ?? null,
       lawyers: p.advogados ?? [],
     })),
@@ -945,9 +948,8 @@ export const processosRouter = router({
               : [],
             parties: capa.partes.map((p) => ({
               name: p.nome,
-              side: (p.polo === "passivo" ? "Passive" : "Active") as
-                | "Active"
-                | "Passive",
+              side: paraLadoJudit(p.polo),
+              polo: lerPolo(p.polo),
               person_type:
                 p.tipo === "juridica"
                   ? "Legal Entity"
@@ -2131,6 +2133,7 @@ export const processosRouter = router({
           tribunal: motorMonitoramentos.tribunal,
           dataDistribuicao: eventosProcesso.dataEvento,
           conteudo: eventosProcesso.conteudo,
+          conteudoJson: eventosProcesso.conteudoJson,
           lido: eventosProcesso.lido,
           resolucao: eventosProcesso.resolucao,
           resolvidoEm: eventosProcesso.resolvidoEm,
@@ -2195,8 +2198,16 @@ export const processosRouter = router({
           ),
         );
       const naoLidas = Number(contagem?.total ?? 0);
+      // A capa vem do mesmo scrape que o cron já fez pra decidir se alerta.
+      // Card detectado antes desta mudança devolve `capa: null` e continua
+      // oferecendo o botão de carregar detalhes.
+      const acoesComCapa = acoesValidas.map(({ conteudoJson, ...a }) => ({
+        ...a,
+        capa: lerCapaNovaAcao(conteudoJson),
+        capaFalhou: lerFalhaDeCapa(conteudoJson),
+      }));
       return {
-        acoes: acoesValidas,
+        acoes: acoesComCapa,
         monitoramentos,
         totalNaoLidas: naoLidas,
         hasMore,
