@@ -668,11 +668,18 @@ export const movimentacoesRouter = router({
    */
   contador: protectedProcedure.query(async ({ ctx }) => {
     const perm = await checkPermission(ctx.user.id, "processos", "ver");
-    if (!perm.allowed) return { naoLidas: 0 };
+    if (!perm.allowed) return { naoLidas: 0, naoLidasSemana: 0 };
 
     // Contagem compartilhada com o card do Painel Geral — os dois respondem
     // "quantas movimentações novas eu tenho?" e discordavam.
-    return { naoLidas: await contarMovimentacoesNaoLidas(perm.escritorioId) };
+    // `naoLidasSemana` alimenta o seletor de período da central: o badge do
+    // menu conta 30 dias e a tela abria em 7 — cada um "certo" no seu
+    // período, e o usuário via 99 no menu com a tela jurando vazio.
+    const [naoLidas, naoLidasSemana] = await Promise.all([
+      contarMovimentacoesNaoLidas(perm.escritorioId),
+      contarMovimentacoesNaoLidas(perm.escritorioId, 7),
+    ]);
+    return { naoLidas, naoLidasSemana };
   }),
 
   /** Marca uma ou várias como lidas — é o "ok, li" da central. */

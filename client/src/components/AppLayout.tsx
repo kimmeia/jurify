@@ -108,7 +108,6 @@ const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
     titulo: "Dia a dia",
     itens: [
       { id: "dashboard", rotulo: "Dashboard", rota: "/dashboard", icone: LayoutDashboard, ver: (c) => c("dashboard") },
-      { id: "movimentacoes", rotulo: "Movimentações", rota: "/movimentacoes", icone: Gavel, ver: (c) => c("processos"), ocultaPor: "processos", tomBadge: "novidade" },
       { id: "agenda", rotulo: "Agenda", rota: "/agenda", icone: CalendarDays, ver: (c) => c("agenda"), ocultaPor: "agenda", tomBadge: "alerta" },
       { id: "atendimento", rotulo: "Atendimento", rota: "/atendimento", icone: Headphones, ver: (c) => c("atendimento"), ocultaPor: "atendimento", tomBadge: "novidade" },
     ],
@@ -117,7 +116,9 @@ const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
     titulo: "Carteira",
     itens: [
       { id: "clientes", rotulo: "Clientes", rota: "/clientes", icone: Users, ver: (c) => c("clientes") },
-      { id: "processos", rotulo: "Processos", rota: "/processos", icone: FileSearch, ver: (c) => c("processos"), ocultaPor: "processos" },
+      // A Central de Movimentações virou aba daqui — o contador de não lidas
+      // veio junto, senão o número sumia do menu com a página.
+      { id: "processos", rotulo: "Processos", rota: "/processos", icone: FileSearch, ver: (c) => c("processos"), ocultaPor: "processos", tomBadge: "novidade", prefixo: true },
       // Acordo é vinculado a cliente; o gate herda de "clientes" e o
       // verProprios filtra por responsável no backend.
       { id: "acordos", rotulo: "Acordos", rota: "/acordos", icone: Handshake, ver: (c) => c("clientes") },
@@ -401,7 +402,7 @@ function AppSidebarContent({
   }) ?? { data: null };
 
   const badges: Record<string, number> = {
-    movimentacoes: contMovs?.naoLidas ?? 0,
+    processos: contMovs?.naoLidas ?? 0,
     agenda: contAgenda?.atrasadosCount ?? 0,
     atendimento: contConversas?.aguardando ?? 0,
   };
