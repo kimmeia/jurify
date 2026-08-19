@@ -1859,7 +1859,8 @@ function SmartFlowEditorInner() {
     const atendente = criarNode("ia_atendente", 0, {
       ferramentas: ["agendar", "transferir"],
       roteiro:
-        "Seja acolhedor e humano. Pergunte o nome do cliente e sobre qual assunto ele precisa de ajuda. " +
+        "Seja acolhedor, em tom natural. Apresente-se como o assistente virtual do escritório. " +
+        "Pergunte o nome do cliente e sobre qual assunto ele precisa de ajuda. " +
         "Explique brevemente que a primeira conversa é sem compromisso. Tire as dúvidas dele com calma. " +
         'Quando ele confirmar que quer marcar um atendimento, use a ação "agendar". ' +
         'Se ele pedir para falar com uma pessoa, use a ação "transferir".',
