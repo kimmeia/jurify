@@ -34,6 +34,13 @@ autorização. A regra é "autorização → merge", não "merge incondicional".
 
 ## Padrões e convenções
 
+### Mockup antes de qualquer mudança (regra do dono, 19/08/2026)
+
+Toda e qualquer mudança — tela nova, ajuste de layout, correção que altere
+o que o usuário vê — nasce como **mockup HTML** (skill `mockup-juridflow`,
+PNG entregue pro dono) e só vira código depois do "aprovado" dele. O dono
+aprova olhando, não lendo.
+
 ### Comentários
 - Default: NÃO escrever. Só pra "WHY" não-óbvio (workaround, invariant escondido, surpresa pra um leitor futuro)
 - Não explicar WHAT (nomes de identificadores fazem isso)
@@ -108,8 +115,9 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
    virtual). Conta verificada, zero template rejeitado/recategorizado.
    Lembrete agendado (26/08, trigger `trig_01Tg9mU9aGhgVWKbC7ShfuHw`): se a
    semana rodou limpa, dono clica "solicitar uma análise" (prazo 17/11).
-   Aguardando decisão do dono: tela de evidência de conformidade (mockup
-   enviado) e botão "cliente autorizou WhatsApp" no cadastro do contato.
+   Em STAND-BY por decisão do dono (19/08): tela de evidência de
+   conformidade (mockup enviado) e botão "cliente autorizou WhatsApp" no
+   cadastro do contato — não implementar sem ele pedir.
    Relatório completo em `docs/auditoria-meta-whatsapp-2026-08-19.md`.
 1. **Robô de jornada varre em 32s** — dono já disse que está errado. A
    instrumentação (tempos por tela + "X de 19 mostraram esqueleto") já grava;
