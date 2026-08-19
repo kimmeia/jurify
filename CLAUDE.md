@@ -34,6 +34,14 @@ autorização. A regra é "autorização → merge", não "merge incondicional".
 
 ## Padrões e convenções
 
+### Mockup antes de qualquer mudança (regra do dono, 19/08/2026)
+
+Toda e qualquer mudança — tela nova, ajuste de layout, correção que altere
+o que o usuário vê — nasce como mockup (skill `mockup-juridflow`) e só vira
+código depois do "aprovado" dele. **A entrega é o ARQUIVO HTML auto-contido
+(fontes embutidas em base64), não PNG** — o dono abre no navegador dele.
+Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
+
 ### Comentários
 - Default: NÃO escrever. Só pra "WHY" não-óbvio (workaround, invariant escondido, surpresa pra um leitor futuro)
 - Não explicar WHAT (nomes de identificadores fazem isso)
@@ -98,10 +106,20 @@ Caso clássico: validação inicial passou → integração quebrou depois → p
 - `/uploads` é servido com auth de sessão + checagem de escritório
   (exceção pública: `/uploads/pareceres/` — capability-URL por design).
 
-## Pendências ativas (18/08/2026)
+## Pendências ativas (19/08/2026)
 
 Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
 
+0. **Aviso de spam da Meta (19/08)** — causas corrigidas e em produção no
+   mesmo dia (opt-out ampliado + alerta de intenção, opt-in exigido em envio
+   frio manual, executarManual sanitizado, bot se identifica como assistente
+   virtual). Conta verificada, zero template rejeitado/recategorizado.
+   Lembrete agendado (26/08, trigger `trig_01Tg9mU9aGhgVWKbC7ShfuHw`): se a
+   semana rodou limpa, dono clica "solicitar uma análise" (prazo 17/11).
+   Em STAND-BY por decisão do dono (19/08): tela de evidência de
+   conformidade (mockup enviado) e botão "cliente autorizou WhatsApp" no
+   cadastro do contato — não implementar sem ele pedir.
+   Relatório completo em `docs/auditoria-meta-whatsapp-2026-08-19.md`.
 1. **Robô de jornada varre em 32s** — dono já disse que está errado. A
    instrumentação (tempos por tela + "X de 19 mostraram esqueleto") já grava;
    olhar a primeira medição real e agir.

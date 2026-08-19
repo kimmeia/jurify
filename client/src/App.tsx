@@ -36,7 +36,6 @@ import Tributario from "./pages/calculos/Tributario";
 import Previdenciario from "./pages/calculos/Previdenciario";
 import CalculosDiversos from "./pages/calculos/CalculosDiversos";
 import Processos from "./pages/Processos";
-import Movimentacoes from "./pages/Movimentacoes";
 import JurisIa from "./pages/JurisIa";
 import Ponto from "./pages/Ponto";
 import FichaColaborador from "./pages/ponto/ficha";
@@ -266,9 +265,11 @@ function Router() {
           <Processos />
         </ClientArea>
       </Route>
+      {/* A central virou a aba default de /processos; a rota antiga segue
+          válida pra bookmarks e notificações já enviadas. */}
       <Route path="/movimentacoes">
         <ClientArea>
-          <Movimentacoes />
+          <Processos />
         </ClientArea>
       </Route>
       <Route path="/ponto">
