@@ -23,20 +23,59 @@ const log = createLogger("whatsapp-optout");
 
 // ─── Comandos na conversa ────────────────────────────────────────────────────
 
-const PALAVRAS_SAIR = new Set(["sair", "parar", "stop"]);
+// A política da Meta manda honrar "all requests... to opt out" — em qualquer
+// forma. O vocabulário estreito (sair/parar/stop) deixava "pare", "cancelar" e
+// "descadastrar" passarem direto pro bot, e a pessoa que já pediu pra sair e
+// continua recebendo é exatamente quem clica "denunciar spam" — o aviso que a
+// conta recebeu em 19/08. As frases entram normalizadas (sem acento).
+const PALAVRAS_SAIR = new Set([
+  "sair", "parar", "stop", "pare", "cancele", "cancelar",
+  "descadastrar", "descadastre", "remover", "unsubscribe",
+]);
+const FRASES_SAIR = [
+  "nao quero mais receber", "não quero mais receber",
+  "nao quero receber", "não quero receber",
+  "parar de receber", "quero sair", "quero cancelar",
+  "remova meu numero", "remova meu número",
+];
 const PALAVRAS_VOLTAR = new Set(["voltar"]);
 
 /**
  * Interpreta um texto de inbound como comando de opt-out/opt-in.
- * Match EXATO da palavra isolada (após trim/lowercase/pontuação final) —
+ * Palavra: match EXATO isolado (após trim/lowercase/pontuação final) —
  * "quero cancelar a consulta" ou "vou sair de casa" NÃO casam.
+ * Frase: só as formas inequívocas de descadastro, por igualdade após limpeza.
  */
 export function interpretarComandoOptOut(texto: string | null | undefined): "sair" | "voltar" | null {
   if (!texto) return null;
   const t = texto.trim().toLowerCase().replace(/[!.。…\s]+$/g, "");
   if (PALAVRAS_SAIR.has(t)) return "sair";
   if (PALAVRAS_VOLTAR.has(t)) return "voltar";
+  if (FRASES_SAIR.some((f) => t === f)) return "sair";
   return null;
+}
+
+/**
+ * Sinal FRACO de intenção de descadastro — não age sozinho, avisa o atendente.
+ *
+ * O comando exato descadastra na hora; isto aqui pega o "por favor não me
+ * mandem mais mensagens" no meio de uma frase. Automatizar sobre sinal fraco
+ * descadastraria "quero cancelar a audiência" — por isso vira alerta humano,
+ * nunca ação.
+ */
+export function pareceIntencaoDeOptOut(texto: string | null | undefined): boolean {
+  if (!texto) return false;
+  const t = texto
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (interpretarComandoOptOut(texto)) return false; // o comando exato já resolve
+  return [
+    "descadastr", "nao quero mais receber", "nao me mande", "nao me mandem",
+    "parem de mandar", "pare de mandar", "parem de me mandar",
+    "parar de mandar", "parar de receber", "nao mande mais", "nao mandem mais",
+    "remover meu numero", "tirar meu numero", "isso e spam", "denunciar spam",
+  ].some((m) => t.includes(m));
 }
 
 /** Texto de confirmação enviado UMA vez ao registrar o opt-out. */

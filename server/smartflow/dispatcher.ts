@@ -33,6 +33,7 @@ import {
   diasEntre,
   diasCalendarioAteVencimento,
   parseVencimento,
+  sanitizarContextoManual,
   slotTimestampChave,
   temHorarioConfigurado,
 } from "./dispatcher-helpers";
@@ -1495,14 +1496,16 @@ export async function dispararNovoLead(
 /**
  * Execução manual — chamada pelo botão "Executar agora" no frontend.
  * Diferente dos outros: precisa de cenarioId (não descobre por gatilho)
- * e aceita contexto arbitrário do usuário.
+ * e aceita contexto arbitrário do usuário — por isso o contexto passa por
+ * sanitização e o cenário roda sempre como disparo proativo (travas cheias).
  */
 export async function executarManual(
   escritorioId: number,
   cenarioId: number,
-  contextoInicial: SmartflowContexto = {},
+  contextoBruto: SmartflowContexto = {},
 ): Promise<{ executou: boolean; execId?: number; erro?: string; respostas: string[] }> {
   try {
+    const contextoInicial = sanitizarContextoManual(contextoBruto);
     const cenario = await carregarCenarioPorId(escritorioId, cenarioId);
     if (!cenario) return { executou: false, erro: "Cenário não encontrado", respostas: [] };
     if (!cenario.ativo) return { executou: false, erro: "Cenário está inativo", respostas: [] };
