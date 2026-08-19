@@ -1096,7 +1096,8 @@ export const crmRouter = router({
 
   /**
    * Zera o contador de não lidas da conversa — chamado quando o atendente
-   * a abre no inbox (e a cada mensagem que chega com ela aberta).
+   * a abre no inbox (e a cada mensagem que chega com ela aberta). Limpa
+   * também a marcação manual de "não lida": abrir é ler.
    */
   marcarConversaLida: protectedProcedure
     .input(z.object({ conversaId: z.number() }))
@@ -1107,7 +1108,29 @@ export const crmRouter = router({
       if (!db) throw new Error("DB indisponível");
 
       await db.update(conversas)
-        .set({ lidaPeloAtendenteEm: new Date() })
+        .set({ lidaPeloAtendenteEm: new Date(), marcadaNaoLidaEm: null })
+        .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)));
+
+      return { success: true };
+    }),
+
+  /**
+   * Marcação manual de "não lida" — devolve a conversa pro radar do inbox
+   * sem depender de mensagem nova (ex: abriu sem querer). Na lista ela
+   * ganha o destaque de não lida com bolinha sem número; se chegar mensagem
+   * de verdade, o contador numérico assume. Abrir a conversa limpa
+   * (marcarConversaLida).
+   */
+  marcarConversaNaoLida: protectedProcedure
+    .input(z.object({ conversaId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      await db.update(conversas)
+        .set({ marcadaNaoLidaEm: new Date() })
         .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)));
 
       return { success: true };
