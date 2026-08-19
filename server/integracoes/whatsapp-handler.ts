@@ -208,6 +208,27 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     } catch (e: any) {
       log.warn({ err: e?.message, contatoId }, "[OptOut] falha ao processar comando — mensagem segue fluxo normal");
     }
+
+    // Sinal FRACO de descadastro ("por favor não me mandem mais mensagens")
+    // não age sozinho — descadastrar por frase ambígua pegaria "quero
+    // cancelar a audiência". Mas também não pode passar em silêncio: quem já
+    // pediu pra sair e continua recebendo é quem denuncia spam. Vira alerta
+    // pro atendente decidir com um clique.
+    try {
+      const { pareceIntencaoDeOptOut } = await import("./whatsapp-optout");
+      if (pareceIntencaoDeOptOut(msg.conteudo)) {
+        const { emitirParaResponsaveisEMaster } = await import("../_core/sse-notifications");
+        const atendenteId = await pegarAtendenteDaConversa(conversaId);
+        emitirParaResponsaveisEMaster(escritorioId, atendenteId, {
+          tipo: "info",
+          titulo: "Possível pedido de descadastro",
+          mensagem: `${msg.nome || msg.telefone} escreveu algo que parece pedido pra parar de receber mensagens. Confira e, se for isso, marque o opt-out no contato.`,
+          dados: { conversaId, contatoId, kind: "possivel_optout" },
+        });
+      }
+    } catch {
+      /* alerta é best-effort — não pode derrubar o fluxo da mensagem */
+    }
   }
 
   // Marca aguardando — MAS preserva em_atendimento (atendente assumiu, mantém

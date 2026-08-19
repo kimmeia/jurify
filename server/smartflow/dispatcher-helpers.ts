@@ -11,6 +11,26 @@ import type {
   JanelaDisparo,
   TipoCanalMensagem,
 } from "../../shared/smartflow-types";
+import type { SmartflowContexto } from "./engine";
+
+/**
+ * Chaves de contexto que só o pipeline de mensagens pode afirmar. `canalId`
+ * presente classifica todo envio como "reply" — sem opt-out, sem opt-in, sem
+ * teto diário; `contatoId`/`conversaId` entram cru no guard de envio e na
+ * memória dos agentes IA (e a checagem de consentimento não é scoped por
+ * escritório). Vindo do JSON digitado no "Executar agora", isso é identidade
+ * forjada, não dado de teste. `__*` são marcas internas de retomada do engine.
+ */
+const CHAVES_DE_CONFIANCA = new Set(["canalId", "contatoId", "conversaId"]);
+
+export function sanitizarContextoManual(bruto: SmartflowContexto): SmartflowContexto {
+  const limpo: SmartflowContexto = {};
+  for (const [chave, valor] of Object.entries(bruto)) {
+    if (chave.startsWith("__") || CHAVES_DE_CONFIANCA.has(chave)) continue;
+    limpo[chave] = valor;
+  }
+  return limpo;
+}
 
 /**
  * Retorna `true` se o cenário (com gatilho `mensagem_canal`) aceita o canal
