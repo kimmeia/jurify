@@ -1147,7 +1147,13 @@ export default function Atendimento() {
                       (c as any).canalRestrito === true ||
                       ["erro", "banido", "desconectado"].includes(String((c as any).canalStatus || ""));
                     return (
-                      <div key={c.id} className="relative group/conv">
+                      // w-0 min-w-full: o viewport do ScrollArea embrulha o
+                      // conteúdo num display:table, e o min-content do texto
+                      // com truncate (nowrap) infla a coluna além do viewport —
+                      // hora/badge/kebab saíam do enquadramento. Zerar a
+                      // contribuição intrínseca (mesmo truque do wrapper do
+                      // Radix) prende a linha na largura da coluna.
+                      <div key={c.id} className="relative group/conv w-0 min-w-full">
                       <button
                         className={
                           "w-full text-left px-3 py-3 border-b transition-colors relative " +
