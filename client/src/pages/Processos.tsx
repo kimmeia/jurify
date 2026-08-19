@@ -21,7 +21,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal, Globe, HelpCircle } from "lucide-react";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal, Globe, HelpCircle, Mail } from "lucide-react";
+import { MovimentacoesCentral, ConfigResumoDiario } from "./Movimentacoes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -2112,7 +2113,15 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
  * 418 deles estavam quebrados. O número que manda passou a ser pastilha, no
  * mesmo padrão da Agenda e da central de movimentações.
  */
-function CabecalhoProcessos({ saldo }: { saldo: number }) {
+function CabecalhoProcessos({
+  saldo,
+  onConsultar,
+  onResumo,
+}: {
+  saldo: number;
+  onConsultar: () => void;
+  onResumo: () => void;
+}) {
   const { data: monsData } = trpc.processos.meusMonitoramentos.useQuery(
     { tipoMonitoramento: "movimentacoes" },
     { retry: false, refetchOnWindowFocus: false },
@@ -2147,10 +2156,20 @@ function CabecalhoProcessos({ saldo }: { saldo: number }) {
           )}
         </div>
       </div>
-      <div className="inline-flex items-center gap-2 rounded-[10px] border bg-card px-3 py-1.5 shrink-0">
-        <Coins className="h-4 w-4 text-amber-500" />
-        <span className="text-[13px] font-bold tabular-nums">{saldo}</span>
-        <span className="text-[11.5px] text-muted-foreground">créditos</span>
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="inline-flex items-center gap-2 rounded-[10px] border bg-card px-3 py-1.5">
+          <Coins className="h-4 w-4 text-amber-500" />
+          <span className="text-[13px] font-bold tabular-nums">{saldo}</span>
+          <span className="text-[11.5px] text-muted-foreground">créditos</span>
+        </div>
+        <Button size="sm" variant="outline" onClick={onConsultar}>
+          <Search className="h-4 w-4 mr-1.5" />
+          Consultar CNJ
+        </Button>
+        <Button size="sm" variant="outline" onClick={onResumo}>
+          <Mail className="h-4 w-4 mr-1.5" />
+          Resumo diário
+        </Button>
       </div>
     </div>
   );
@@ -2194,21 +2213,26 @@ function PastilhaProc({
 export default function Processos() {
   // Lê ?tab= da URL pra suportar deep-links (ex: vínculo de processo do
   // cliente redireciona pra /processos?tab=movimentacoes&cnj=...&abrirMonitor=1).
+  // "central" é a Central de Movimentações (o dia a dia); o valor histórico
+  // "movimentacoes" continua sendo o Monitoramento — deep-links antigos
+  // (vínculo de cliente, abrirMonitor) dependem dele.
   const tabInicial = (() => {
-    if (typeof window === "undefined") return "consultar";
+    if (typeof window === "undefined") return "central";
     const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "movimentacoes" || t === "novas-acoes" || t === "alertas" || t === "cofre"
+    return t === "movimentacoes" || t === "novas-acoes" || t === "alertas" || t === "cofre" || t === "central"
       ? t
-      : "consultar";
+      : "central";
   })();
   const [tab, setTab] = useState(tabInicial);
   const utils = trpc.useUtils();
+  const [consultarAberto, setConsultarAberto] = useState(false);
+  const [resumoAberto, setResumoAberto] = useState(false);
   // Compatibilidade com link antigo `?abrirMonitor=1` sem `?tab=`: força
   // ir pra movimentacoes pra que o MonitorarTab abra o modal.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const sp = new URLSearchParams(window.location.search);
-    if (sp.get("abrirMonitor") === "1" && tab === "consultar") setTab("movimentacoes");
+    if (sp.get("abrirMonitor") === "1" && tab === "central") setTab("movimentacoes");
   }, [tab]);
   const { data: saldoData } = trpc.processos.saldo.useQuery(undefined, { retry: false });
   const saldo = saldoData?.saldo ?? 0;
@@ -2246,7 +2270,11 @@ export default function Processos() {
 
   return (
     <div className="space-y-5">
-      <CabecalhoProcessos saldo={saldo} />
+      <CabecalhoProcessos
+        saldo={saldo}
+        onConsultar={() => setConsultarAberto(true)}
+        onResumo={() => setResumoAberto(true)}
+      />
 
       {saldo < 5 && (
         <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200/70 px-4 py-2.5">
@@ -2258,10 +2286,11 @@ export default function Processos() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="!bg-muted !border-0 !rounded-[10px] !p-[3px] !h-auto !inline-flex !w-auto gap-1 flex-wrap">
           <TabsTrigger
-            value="consultar"
+            value="central"
             className="gap-1.5 text-xs py-1.5 px-3 !rounded-lg !text-muted-foreground data-[state=active]:!bg-card data-[state=active]:!text-foreground data-[state=active]:!shadow-sm font-semibold"
           >
-            <Search className="h-3.5 w-3.5" />Consultar
+            <Gavel className="h-3.5 w-3.5" />Movimentações
+            <CentralBadge />
           </TabsTrigger>
           <TabsTrigger
             value="movimentacoes"
@@ -2294,7 +2323,7 @@ export default function Processos() {
           )}
         </TabsList>
 
-        <TabsContent value="consultar" className="mt-5"><ConsultarTab /></TabsContent>
+        <TabsContent value="central" className="mt-5"><MovimentacoesCentral /></TabsContent>
         <TabsContent value="movimentacoes" className="mt-5">
           <MonitorarTab onIrAoCofre={podeCofre ? () => setTab("cofre") : undefined} />
         </TabsContent>
@@ -2302,7 +2331,37 @@ export default function Processos() {
         <TabsContent value="alertas" className="mt-5"><AlertasTab /></TabsContent>
         {podeCofre && <TabsContent value="cofre" className="mt-5"><CofreTab /></TabsContent>}
       </Tabs>
+
+      {/* A consulta avulsa saiu da barra de abas: é tarefa ocasional, não
+          lugar onde se fica. Vira modal aberto pelo botão do cabeçalho. */}
+      <Dialog open={consultarAberto} onOpenChange={(v) => !v && setConsultarAberto(false)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Consultar processo</DialogTitle>
+            <DialogDescription>
+              Busca avulsa por CNJ, CPF ou CNPJ — sem colocar em monitoramento.
+            </DialogDescription>
+          </DialogHeader>
+          <ConsultarTab />
+        </DialogContent>
+      </Dialog>
+      <ConfigResumoDiario open={resumoAberto} onClose={() => setResumoAberto(false)} />
     </div>
+  );
+}
+
+/** Badge da aba Movimentações — mesma fonte do contador do menu lateral. */
+function CentralBadge() {
+  const { data } = trpc.movimentacoes.contador.useQuery(undefined, {
+    refetchInterval: 60000,
+    retry: false,
+  });
+  const n = data?.naoLidas ?? 0;
+  if (n <= 0) return null;
+  return (
+    <span className="ml-0.5 rounded-full bg-primary text-primary-foreground text-[9.5px] font-extrabold px-1.5 py-px tabular-nums">
+      {n > 99 ? "99+" : n}
+    </span>
   );
 }
 
