@@ -104,3 +104,70 @@ um a um), leitura dirigida dos módulos sensíveis.
 - Drizzle parametriza `sql\`\`` — sem injeção nos usos atuais.
 - Engine do SmartFlow: 26 tipos de bloco, todos com handler (sem bloco
   fantasma no editor); teto de 50 passos contra loop.
+
+## Adendo — conformidade Meta verificada caminho a caminho (2ª passada)
+
+A primeira passada registrou que os mecanismos existem. Esta responde a
+pergunta certa: **cada caminho de envio passa por eles?** Verificado no
+código, arquivo e linha.
+
+### O funil
+
+Todo envio converge pra `canal-envio.ts` (texto, interativo e template), e os
+três chamam `podeEnviar`/`podeDispararTemplate` do `whatsapp-envio-guard.ts`
+passando `contatoId` + `telefone`. O guard tem 5 travas: disjuntor de
+restrição da Meta (códigos 131031/368/131048), teto diário por tier
+(250/1k/10k/100k), rate de rajada, **opt-out** e **opt-in**.
+
+### Opt-out (política "respect all requests to opt out")
+
+- **Captura**: cliente responde SAIR/PARAR/STOP → `whatsapp-handler.ts:192`
+  grava `contatos.optOutWhatsapp` com data e origem, e **envia confirmação**.
+  VOLTAR desfaz, também com confirmação. Atendente pode marcar/desmarcar na
+  mão pelo CRM.
+- **Enforcement**: `podeEnviar` bloqueia QUALQUER envio `proativo` pra contato
+  em opt-out — e resolve o contato pelo telefone quando o caller não passou o
+  id, justamente pra ninguém "esquecer" (`whatsapp-envio-guard.ts:388-409`).
+  Resposta a conversa iniciada pelo cliente (proativo=false) não é afetada,
+  como a política permite.
+
+### Opt-in (mensagem iniciada pela empresa)
+
+- **Captura**: primeiro inbound do contato grava opt-in com origem
+  ("iniciou conversa") — `whatsapp-handler.ts:176`.
+- **Critério de consentimento** (`contatoTemConsentimento`): já mandou
+  mensagem OU é cliente Asaas (relação transacional — base pro template de
+  cobrança utility). `exigirOptin: true` no disparo frio do CRM e no template
+  automático do SmartFlow.
+- ⚠ **Item operacional fora do código**: a categoria do template (utility ×
+  marketing) é definida por quem cria o template no painel da Meta. Cobrança
+  em template marketing fura o racional do consentimento transacional —
+  orientar na UI de templates.
+
+### Janela de 24h
+
+- Envio manual de texto livre: bloqueado fora da janela com mensagem
+  orientando usar template (`router-crm.ts:499`).
+- Cobranças e disparos automáticos: saem por **template**, que é o caminho
+  correto fora da janela.
+
+### Matriz caminho × travas (verificada, não presumida)
+
+| Caminho de envio | passa pelo funil | opt-out | opt-in |
+|---|---|---|---|
+| CRM envio manual | ✔ (proativo=false qd resposta) | ✔ | ✔ no disparo frio |
+| CRM iniciar conversa (frio) | ✔ | ✔ | ✔ `exigirOptin` |
+| SmartFlow whatsapp_enviar / interativo / template | ✔ canal-envio | ✔ | ✔ template com `exigirOptin` |
+| Scheduler de cobranças | ✔ (canal no pré-loop; contatoId por cobrança) | ✔ | via relação Asaas |
+| Resumo diário (WhatsApp) | ✔ template | n/a (vai pro próprio dono) | n/a |
+| Chamada (Calling API) | ✔ guard próprio | ✔ | ✔ |
+| Lembretes de agenda por WhatsApp | **não envia** | — | — |
+
+### Bug de produto achado nesta passada
+
+**Lembrete por WhatsApp é oferecido na UI da Agenda e não existe no cron.**
+`Agenda.tsx:2487` lista o canal; `cron-disparar-lembretes.ts:168` loga
+"canal whatsapp não implementado" e segue. O usuário escolhe WhatsApp,
+confia, e nada sai — falha silenciosa da mesma família do "erro que só
+vive no response". Corrigir: ou implementar (via canal-envio, template,
+guard completo) ou remover a opção da UI até existir. → entra como P1.
