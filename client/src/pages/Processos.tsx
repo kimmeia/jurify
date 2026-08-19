@@ -937,11 +937,15 @@ function MonitoramentoCard({
   onPausar,
   onReativar,
   onDeletar,
+  onAtualizar,
+  atualizando,
 }: {
   mon: any;
   onPausar: () => void;
   onReativar: () => void;
   onDeletar: () => void;
+  onAtualizar?: () => void;
+  atualizando?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
   const [resumoIA, setResumoIA] = useState<string | null>(null);
@@ -1238,16 +1242,28 @@ function MonitoramentoCard({
           </div>
 
           <div className="shrink-0 text-right mr-1">
-            <p className="text-[11.5px] font-semibold text-foreground/70">
-              {mon.diagnostico
-                ? tempoRelativo ?? "—"
-                : mon.ultimaMovimentacao
-                  ? haQuantoTempoMon(mon.ultimaMovimentacao.dataEvento)
-                  : tempoRelativo ?? "—"}
-            </p>
-            <p className="text-[10px] text-muted-foreground">
-              {mon.diagnostico ? "parado" : "última mov."}
-            </p>
+            {atualizando ? (
+              <>
+                <p className="text-[11.5px] font-semibold text-blue-600 flex items-center justify-end gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  consultando…
+                </p>
+                <p className="text-[10px] text-muted-foreground">tribunal agora</p>
+              </>
+            ) : (
+              <>
+                <p className="text-[11.5px] font-semibold text-foreground/70">
+                  {mon.diagnostico
+                    ? tempoRelativo ?? "—"
+                    : mon.ultimaMovimentacao
+                      ? haQuantoTempoMon(mon.ultimaMovimentacao.dataEvento)
+                      : tempoRelativo ?? "—"}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {mon.diagnostico ? "parado" : "última mov."}
+                </p>
+              </>
+            )}
           </div>
 
           {/* Cinco controles coloridos por linha × centenas de linhas era o
@@ -1260,6 +1276,16 @@ function MonitoramentoCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
+                {onAtualizar && (
+                  <>
+                    <DropdownMenuItem disabled={atualizando} onClick={onAtualizar}>
+                      <RefreshCcw className="h-3.5 w-3.5 mr-2" />
+                      {atualizando ? "Atualizando…" : "Atualizar só este"}
+                      <span className="ml-auto text-[10px] text-muted-foreground">sem custo</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {searchType === "lawsuit_cnj" && (
                   <>
                     <DropdownMenuItem disabled={buscarCompletoMut.isPending} onClick={clickHistorico}>
@@ -1571,8 +1597,10 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
   const atualizarTodosMut = trpc.processos.atualizarTodosMonitoramentos.useMutation({
     onSuccess: (d: any) => {
       setAtualOperacaoId(d.operacaoId);
-      setAtualDrawerOpen(true);
-      toast.success(`Atualizando ${d.total} monitoramento(s)…`);
+      // Um processo só: o próprio card mostra "consultando…" — abrir o
+      // drawer de lote pra isso seria um modal na frente de um clique.
+      if (d.total > 1) setAtualDrawerOpen(true);
+      toast.success(d.total === 1 ? "Atualizando o processo…" : `Atualizando ${d.total} monitoramento(s)…`);
     },
     onError: (e: any) => {
       const msg = e?.message ?? "";
@@ -1669,6 +1697,20 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
     pausado: listaMons.filter((m: any) => (m.statusJudit || m.status) === "pausado" || (m.statusJudit || m.status) === "paused").length,
     erro: listaMons.filter((m: any) => (m.statusJudit || m.status) === "erro" || !!m.ultimoErro).length,
   };
+  // Mesmo predicado do chip "Parados" — o botão do aviso atualiza exatamente
+  // o que o chip conta, senão os números divergem e a confiança vai junto.
+  const idsParados = listaMons
+    .filter((m: any) => (m.statusJudit || m.status) === "erro" || !!m.ultimoErro)
+    .map((m: any) => m.id);
+  // Quais monitoramentos estão na operação em curso — pro card mostrar
+  // "consultando…" na hora, sem depender do drawer aberto.
+  const idsAtualizando = new Set<number>(
+    progresso?.status === "rodando"
+      ? (progresso.monitores as any[])
+          .filter((x) => x.status === "pendente" || x.status === "rodando")
+          .map((x) => x.monitoramentoId)
+      : [],
+  );
   // Normaliza string pra busca: trim, lowercase, remove acentos e
   // não-alfanuméricos. Faz CPF "123.456.789-00" bater com "12345678900".
   const normalizarBusca = (s: string) =>
@@ -1825,21 +1867,21 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
                 {principal.causa.acao}
               </Button>
             )}
-            {/* Fecha o ciclo: revalidar a credencial religa os monitoramentos,
-                mas os dados só chegam na próxima varredura — daqui o dono
-                força a releitura na hora. */}
+            {/* O aviso fala dos parados — o botão atualiza SÓ eles. Antes
+                rodava a carteira inteira (425) pra reconsultar 11, e o dono
+                apontou: pra tudo, já existe o "Atualizar" da barra. */}
             <Button
               size="sm"
-              variant="outline"
-              disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
-              onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: listaMons.map((m: any) => m.id) })}
+              disabled={atualizarTodosMut.isPending || progresso?.status === "rodando" || idsParados.length === 0}
+              onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: idsParados })}
+              title="Reconsulta apenas os processos parados. Sem custo de créditos."
             >
               {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
               ) : (
                 <RefreshCcw className="h-3.5 w-3.5 mr-1.5" />
               )}
-              Verificar agora
+              Atualizar só os {idsParados.length}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setFiltroStatus("erro")}>
               Ver os {principal.total}
@@ -1964,6 +2006,8 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
               onPausar={() => pausarMut.mutate({ id: m.id })}
               onReativar={() => reativarMut.mutate({ id: m.id })}
               onDeletar={() => setDeletarTarget({ id: m.id, nome: m.apelido || m.searchKey || "monitoramento" })}
+              onAtualizar={() => atualizarTodosMut.mutate({ monitoramentoIds: [m.id] })}
+              atualizando={idsAtualizando.has(m.id)}
             />
           ))}
         </div>
