@@ -37,9 +37,10 @@ autorização. A regra é "autorização → merge", não "merge incondicional".
 ### Mockup antes de qualquer mudança (regra do dono, 19/08/2026)
 
 Toda e qualquer mudança — tela nova, ajuste de layout, correção que altere
-o que o usuário vê — nasce como **mockup HTML** (skill `mockup-juridflow`,
-PNG entregue pro dono) e só vira código depois do "aprovado" dele. O dono
-aprova olhando, não lendo.
+o que o usuário vê — nasce como mockup (skill `mockup-juridflow`) e só vira
+código depois do "aprovado" dele. **A entrega é o ARQUIVO HTML auto-contido
+(fontes embutidas em base64), não PNG** — o dono abre no navegador dele.
+Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
 
 ### Comentários
 - Default: NÃO escrever. Só pra "WHY" não-óbvio (workaround, invariant escondido, surpresa pra um leitor futuro)
