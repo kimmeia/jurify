@@ -800,6 +800,13 @@ export const conversas = mysqlTable("conversas", {
    * destaque na lista). NULL = nunca aberta — todas as entradas contam.
    */
   lidaPeloAtendenteEm: timestamp("lidaPeloAtendenteEm"),
+  /**
+   * Marcação MANUAL de "não lida" (menu rápido da lista / menu da conversa).
+   * NULL = sem marcação. Na lista vira o destaque de não lida com bolinha sem
+   * número — o contador continua vindo de lidaPeloAtendenteEm × mensagens de
+   * entrada. Abrir a conversa limpa junto com o carimbo de leitura.
+   */
+  marcadaNaoLidaEm: timestamp("marcadaNaoLidaEmConv"),
   // Pasta Arquivadas: NULL = ativa. Arquivada sai das vistas padrão sem ser
   // apagada; mensagem nova do contato limpa o campo (desarquiva sozinha).
   arquivadaEm: timestamp("arquivadaEmConv"),
