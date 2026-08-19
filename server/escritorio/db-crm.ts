@@ -686,6 +686,7 @@ export async function listarConversas(escritorioId: number, filtros?: {
       chatIdExterno: conversas.chatIdExterno,
       ultimaMensagemAt: conversas.ultimaMensagemAt,
       ultimaMensagemPreview: conversas.ultimaMensagemPreview,
+      marcadaNaoLidaEm: conversas.marcadaNaoLidaEm,
       arquivadaEm: conversas.arquivadaEm,
       createdAt: conversas.createdAt,
     })
@@ -756,11 +757,12 @@ export async function listarConversas(escritorioId: number, filtros?: {
     }
   }
 
-  return rows.map((r) => ({
+  return rows.map(({ marcadaNaoLidaEm, ...r }) => ({
     ...r,
     atendenteNome: r.atendenteId ? atendenteMap[r.atendenteId] : undefined,
     temAtraso: contatosComAtraso.has(r.contatoId),
     naoLidas: naoLidasPorConversa.get(r.id) ?? 0,
+    marcadaNaoLida: marcadaNaoLidaEm != null,
     optOutWhatsappEm: toIsoString(r.optOutWhatsappEm) ?? undefined,
     ultimaMensagemAt: toIsoString(r.ultimaMensagemAt) ?? undefined,
     createdAt: toIsoString(r.createdAt) ?? "",

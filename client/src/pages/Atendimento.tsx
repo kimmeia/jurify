@@ -61,7 +61,7 @@ import { FilaChamadas } from "./atendimento/fila-chamadas";
 import { CartaoLigacao } from "./atendimento/cartao-ligacao";
 import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
-import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen, ChevronDown } from "lucide-react";
+import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen, ChevronDown, CircleDot } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 function timeAgo(d: string) { if (!d) return ""; const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "agora"; if (m < 60) return m + "min"; const h = Math.floor(m / 60); if (h < 24) return h + "h"; return Math.floor(h / 24) + "d"; }
@@ -547,6 +547,16 @@ export default function Atendimento() {
     onSuccess: () => { rC(); rArq(); },
     onError: (e: any) => toast.error(e.message),
   });
+  const marcarNaoLidaMut = trpc.crm.marcarConversaNaoLida.useMutation({
+    onSuccess: () => rC(),
+    onError: (e: any) => toast.error(e.message),
+  });
+  // Marcar a conversa ABERTA como não lida também a fecha: aberta, o
+  // "abrir = ler" desfaria a marcação em seguida.
+  const marcarNaoLida = (conversaId: number) => {
+    if (selId === conversaId) setSelId(null);
+    marcarNaoLidaMut.mutate({ conversaId });
+  };
   const arquivarBulkMut = trpc.crm.arquivarCanaisDesativados.useMutation({
     onSuccess: (r) => { toast.success(`${r.arquivadas} conversa(s) arquivada(s).`); rC(); rArq(); },
     onError: (e: any) => toast.error(e.message),
@@ -1125,6 +1135,10 @@ export default function Atendimento() {
                 ) : (
                   convs.map((c: any) => {
                     const naoLidas = Number(c.naoLidas || 0);
+                    // Marcação manual: mesmo destaque de mensagem nova, mas com
+                    // bolinha sem número. Mensagem real chegando, o contador assume.
+                    const marcadaNaoLida = (c as any).marcadaNaoLida === true;
+                    const destaqueNaoLida = naoLidas > 0 || marcadaNaoLida;
                     const selecionada = selId === c.id;
                     // Canal da conversa fora do ar (restrição Meta/banido/erro/
                     // desconectado) — sinaliza em vermelho pra ver o estrago de
@@ -1133,16 +1147,16 @@ export default function Atendimento() {
                       (c as any).canalRestrito === true ||
                       ["erro", "banido", "desconectado"].includes(String((c as any).canalStatus || ""));
                     return (
+                      <div key={c.id} className="relative group/conv">
                       <button
-                        key={c.id}
                         className={
                           "w-full text-left px-3 py-3 border-b transition-colors relative " +
                           (selecionada
                             ? "bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/30 dark:hover:bg-violet-950/40"
-                            : naoLidas > 0
-                              // Mensagem nova: card inteiro destacado até abrir
-                              // a conversa — preto translúcido (pedido do dono;
-                              // o violeta confundia com a selecionada)
+                            : destaqueNaoLida
+                              // Mensagem nova (ou marcação manual): card inteiro
+                              // destacado até abrir a conversa — preto translúcido
+                              // (pedido do dono; o violeta confundia com a selecionada)
                               ? "bg-black/[0.07] hover:bg-black/[0.10] dark:bg-white/10 dark:hover:bg-white/[0.14]"
                               : canalCaiu
                                 ? "bg-rose-50/70 hover:bg-rose-100/60 dark:bg-rose-950/20 dark:hover:bg-rose-950/30"
@@ -1152,7 +1166,7 @@ export default function Atendimento() {
                       >
                         {selecionada ? (
                           <span className="absolute left-0 top-3 bottom-3 w-1 bg-violet-600 rounded-r" aria-hidden />
-                        ) : naoLidas > 0 ? (
+                        ) : destaqueNaoLida ? (
                           <span className="absolute left-0 top-3 bottom-3 w-[3px] bg-slate-600 dark:bg-slate-300 rounded-r" aria-hidden />
                         ) : null}
                         <div className="flex items-start gap-2.5">
@@ -1193,7 +1207,7 @@ export default function Atendimento() {
                               <p
                                 className={
                                   "text-sm truncate " +
-                                  (naoLidas > 0 ? "font-bold text-foreground" : "font-medium")
+                                  (destaqueNaoLida ? "font-bold text-foreground" : "font-medium")
                                 }
                               >
                                 {c.contatoNome}
@@ -1201,7 +1215,7 @@ export default function Atendimento() {
                               <span
                                 className={
                                   "text-[10px] shrink-0 tabular-nums " +
-                                  (naoLidas > 0 ? "text-violet-600 font-bold" : "text-muted-foreground")
+                                  (destaqueNaoLida ? "text-violet-600 font-bold" : "text-muted-foreground")
                                 }
                               >
                                 {timeAgo(c.ultimaMensagemAt)}
@@ -1211,16 +1225,21 @@ export default function Atendimento() {
                               <p
                                 className={
                                   "text-xs truncate " +
-                                  (naoLidas > 0 ? "text-foreground/85 font-medium" : "text-muted-foreground")
+                                  (destaqueNaoLida ? "text-foreground/85 font-medium" : "text-muted-foreground")
                                 }
                               >
                                 {previewMensagem(c)}
                               </p>
-                              {naoLidas > 0 && (
+                              {naoLidas > 0 ? (
                                 <span className="shrink-0 inline-flex items-center justify-center min-w-[19px] h-[19px] px-1 rounded-full bg-emerald-500 text-white text-[10.5px] font-extrabold tabular-nums">
                                   {naoLidas > 99 ? "99+" : naoLidas}
                                 </span>
-                              )}
+                              ) : marcadaNaoLida ? (
+                                <span
+                                  className="shrink-0 w-[11px] h-[11px] rounded-full bg-emerald-500"
+                                  title="Marcada como não lida"
+                                />
+                              ) : null}
                             </div>
                             <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                               {(c as any).temAtraso ? (
@@ -1277,6 +1296,31 @@ export default function Atendimento() {
                           </div>
                         </div>
                       </button>
+                      {/* Menu rápido (hover): marcar não lida / arquivar sem
+                          precisar abrir a conversa. Fica fora do <button> da
+                          linha (irmão absoluto) — botão dentro de botão é
+                          HTML inválido e o clique abriria a conversa. */}
+                      {!mostrarArquivadas && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              aria-label="Ações rápidas da conversa"
+                              className="absolute right-1.5 top-1.5 h-6 w-6 rounded-md border bg-background shadow-sm items-center justify-center text-muted-foreground hover:text-foreground hidden group-hover/conv:flex data-[state=open]:flex"
+                            >
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem onClick={() => marcarNaoLida(c.id)}>
+                              <CircleDot className="h-4 w-4 mr-2" />Marcar como não lida
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => arquivarMut.mutate({ id: c.id, arquivar: true })}>
+                              <Archive className="h-4 w-4 mr-2" />Arquivar conversa
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                      </div>
                     );
                   })
                 )}
@@ -1315,6 +1359,10 @@ export default function Atendimento() {
                     rC();
                   }}
                   onTransferido={() => {
+                    setSelId(null);
+                    rC();
+                  }}
+                  onMarcadaNaoLida={() => {
                     setSelId(null);
                     rC();
                   }}
@@ -1396,7 +1444,7 @@ export default function Atendimento() {
   );
 }
 
-function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onTransferido, onAbrirLinhaTempo, onLigarWhatsApp, onVoltar }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onTransferido?: () => void; onAbrirLinhaTempo?: () => void; onLigarWhatsApp?: (info: { canalId: number; telefone: string; contatoId?: number; contatoNome?: string; conversaId: number }) => void; onVoltar?: () => void }) {
+function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onTransferido, onMarcadaNaoLida, onAbrirLinhaTempo, onLigarWhatsApp, onVoltar }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onTransferido?: () => void; onMarcadaNaoLida?: () => void; onAbrirLinhaTempo?: () => void; onLigarWhatsApp?: (info: { canalId: number; telefone: string; contatoId?: number; contatoNome?: string; conversaId: number }) => void; onVoltar?: () => void }) {
   const [msg, setMsg] = useState(""); const ref = useRef<HTMLDivElement>(null);
   // Mídia "pendente": foi anexada via template (ou upload manual no futuro)
   // mas ainda não foi enviada. Renderiza preview acima do composer e é
@@ -1531,6 +1579,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
     onError: (e: any) => toast.error(e.message),
   });
   const atualizar = trpc.crm.atualizarConversa.useMutation({ onSuccess: () => { onUpdate(); toast.success("Atualizado!"); } });
+  // Marcar não lida fecha a conversa junto (via onMarcadaNaoLida): aberta,
+  // o "abrir = ler" do effect acima desfaria a marcação em seguida.
+  const marcarNaoLidaMut = trpc.crm.marcarConversaNaoLida.useMutation({
+    onSuccess: () => onMarcadaNaoLida?.(),
+    onError: (e: any) => toast.error(e.message),
+  });
   const excluir = trpc.crm.excluirConversa.useMutation({ onSuccess: () => { toast.success("Conversa excluída."); onDeleted(); }, onError: (e: any) => toast.error(e.message) });
   // Auto-scroll só dispara em mudanças do LIVE (polling/envio), não quando
   // prependemos antigas — senão o "carregar mais" pulava pra fim e o usuário
@@ -1706,6 +1760,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <Archive className="h-4 w-4 mr-2" />Arquivar conversa
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setShowVincular(true)}><Link2 className="h-4 w-4 mr-2" />Vincular</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => marcarNaoLidaMut.mutate({ conversaId: cid })}><CircleDot className="h-4 w-4 mr-2" />Marcar como não lida</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-4 w-4 mr-2 text-emerald-600" />Resolver</DropdownMenuItem>
             <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-4 w-4 mr-2" />Fechar</DropdownMenuItem>
@@ -1854,6 +1909,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             <DropdownMenuItem onClick={() => setShowAddLead(true)}><TrendingUp className="h-4 w-4 mr-2" />Pipeline</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setShowAgendar(true)}><Calendar className="h-4 w-4 mr-2" />Agendar</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setShowVincular(true)}><Link2 className="h-4 w-4 mr-2" />Vincular</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => marcarNaoLidaMut.mutate({ conversaId: cid })}><CircleDot className="h-4 w-4 mr-2" />Marcar como não lida</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive"><Trash2 className="h-4 w-4 mr-2" />Excluir</DropdownMenuItem>
           </DropdownMenuContent>
