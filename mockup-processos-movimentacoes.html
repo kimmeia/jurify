@@ -17,26 +17,38 @@
   html,body { width:1600px; height:1050px; overflow:hidden; }
   body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); display:flex; }
 
-  /* ── sidebar (como o app real: escura) ── */
-  .side { flex:0 0 232px; background:#16132a; height:100%; padding:18px 14px; display:flex; flex-direction:column; gap:2px; }
-  .logo { font-family:'Poppins'; font-weight:700; font-size:17px; color:#fff; padding:0 10px 14px; display:flex; align-items:center; gap:8px; }
+  /* ── sidebar (fiel ao app: escura, mesmos grupos e itens) ── */
+  .side { flex:0 0 232px; background:#16132a; height:100%; padding:18px 14px 12px; display:flex; flex-direction:column; gap:2px; }
+  .logo { font-family:'Poppins'; font-weight:700; font-size:17px; color:#fff; padding:0 10px 12px; display:flex; align-items:center; gap:8px; }
   .logo .sino { margin-left:auto; position:relative; width:18px; height:18px; opacity:.85; }
   .logo .sino i { position:absolute; top:-6px; right:-8px; background:#f43f5e; color:#fff; font-style:normal;
                   font-size:8.5px; font-weight:800; border-radius:99px; padding:1px 4px; }
-  .sgrupo { font-size:9.5px; font-weight:800; letter-spacing:.09em; color:#ffffff59; padding:13px 10px 5px; }
-  .sitem { display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:8px;
+  .sgrupo { font-size:9.5px; font-weight:800; letter-spacing:.09em; color:#ffffff59; padding:11px 10px 4px; }
+  .sitem { display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:8px;
            font-size:12.5px; font-weight:500; color:#ffffffb8; }
   .sitem svg { opacity:.75; flex:0 0 auto; }
   .sitem.on { background:#ffffff14; color:#fff; font-weight:600; }
   .sitem .b { margin-left:auto; font-size:9.5px; font-weight:800; border-radius:99px; padding:1.5px 7px; }
   .b-nov { background:var(--acento); color:#fff; }
   .b-ale { background:#f43f5e; color:#fff; }
+  .b-beta { margin-left:auto; font-size:8.5px; font-weight:800; letter-spacing:.05em; border-radius:5px; padding:2px 6px; background:#fbbf24; color:#422006; }
+  .suser { margin-top:auto; border-top:1px solid #ffffff1c; padding:10px 6px 0; display:flex; align-items:center; gap:8px; }
+  .suser .avatar { width:26px; height:26px; border-radius:50%; background:#7c3aed; color:#fff; font-size:10px; font-weight:700;
+                   display:flex; align-items:center; justify-content:center; }
+  .suser .nome { font-size:11.5px; font-weight:600; color:#fff; line-height:1.2; }
+  .suser .cargo { font-size:9.5px; color:#ffffff77; }
+  .suser svg { margin-left:auto; opacity:.6; }
+  .suser svg + svg { margin-left:2px; }
 
   /* ── conteúdo ── */
-  .wrap { flex:1 1 auto; padding:24px 30px 20px; height:100%; display:flex; flex-direction:column; gap:12px; overflow:hidden; }
+  .wrap { flex:1 1 auto; padding:22px 30px 16px; height:100%; display:flex; flex-direction:column; gap:11px; overflow:hidden; }
   .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
   .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em; }
   .sub { margin-top:3px; font-size:13px; color:var(--mudo); }
+  .pastilhas { display:flex; gap:8px; margin-top:9px; }
+  .pastilha { display:inline-flex; align-items:baseline; gap:5px; border:1px solid var(--borda); background:var(--surface);
+              border-radius:99px; padding:4px 11px; font-size:11px; color:var(--mudo); }
+  .pastilha b { font-size:12.5px; color:var(--tinta); }
   .btn { height:38px; border:1px solid var(--borda); background:var(--surface); border-radius:9px;
          padding:0 15px; display:inline-flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:var(--corpo); }
   .btn-p { background:var(--acento); border-color:var(--acento); color:#fff; box-shadow:0 8px 18px -8px #7c3aed88; }
@@ -44,42 +56,44 @@
   .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
   .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
 
-  /* abas do módulo */
-  .abas { display:flex; gap:26px; border-bottom:1px solid var(--borda); flex:0 0 auto; }
-  .aba { padding:10px 2px 12px; font-size:13.5px; font-weight:600; color:var(--mudo);
-         display:flex; align-items:center; gap:8px; border-bottom:2.5px solid transparent; margin-bottom:-1px; }
-  .aba.on { color:var(--tinta); border-bottom-color:var(--acento); }
-  .aba .n { font-size:10px; font-weight:800; border-radius:99px; padding:2px 7px; background:var(--hairline); color:var(--mudo); }
+  /* abas — mesmo estilo segmentado do app (pílula cinza, ativa branca) */
+  .abas { flex:0 0 auto; display:inline-flex; gap:4px; background:var(--hairline); padding:3px; border-radius:10px; align-self:flex-start; }
+  .aba { padding:7px 13px; font-size:12px; font-weight:600; color:var(--mudo); border-radius:8px;
+         display:flex; align-items:center; gap:7px; }
+  .aba.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+  .aba .n { font-size:9.5px; font-weight:800; border-radius:99px; padding:1.5px 6px; background:#e2e8f0; color:var(--mudo); }
   .aba.on .n { background:var(--acento); color:#fff; }
+  .selo-nova { font-size:8.5px; font-weight:800; letter-spacing:.05em; border-radius:5px; padding:2px 5px;
+               background:var(--acento); color:#fff; }
 
   /* tiles */
   .tiles { flex:0 0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
-  .tile { padding:12px 15px; }
-  .tile .n { font-family:'Poppins'; font-size:24px; font-weight:700; letter-spacing:-.02em; margin-top:4px; line-height:1; }
+  .tile { padding:11px 15px; }
+  .tile .n { font-family:'Poppins'; font-size:23px; font-weight:700; letter-spacing:-.02em; margin-top:4px; line-height:1; }
   .tile .d { font-size:10.5px; color:var(--mudo); margin-top:5px; line-height:1.4; }
 
   /* filtros */
   .filtros { flex:0 0 auto; display:flex; gap:10px; align-items:center; }
   .busca { position:relative; flex:1; }
-  .busca input { width:100%; height:38px; border:1px solid var(--borda); border-radius:9px; background:var(--surface);
+  .busca input { width:100%; height:37px; border:1px solid var(--borda); border-radius:9px; background:var(--surface);
                  padding:0 12px 0 36px; font-family:'Inter'; font-size:13px; color:var(--tinta); outline:none; }
   .busca input::placeholder { color:var(--fraco); }
   .busca svg { position:absolute; left:11px; top:50%; transform:translateY(-50%); }
-  .select { height:38px; border:1px solid var(--borda); background:var(--surface); border-radius:9px;
+  .select { height:37px; border:1px solid var(--borda); background:var(--surface); border-radius:9px;
             padding:0 12px; display:flex; align-items:center; gap:9px; font-size:12.5px; font-weight:500; color:var(--corpo); }
 
   /* estado + backlog */
-  .vazio { flex:0 0 auto; display:flex; align-items:center; gap:12px; padding:14px 18px;
+  .vazio { flex:0 0 auto; display:flex; align-items:center; gap:12px; padding:12px 18px;
            border:1px solid var(--ok-borda); background:var(--ok-bg); border-radius:14px; }
   .vazio .t { font-size:13px; font-weight:700; color:#065f46; }
   .vazio .d { font-size:11.5px; color:#047857; margin-top:1px; }
 
   .backlog { flex:0 0 auto; display:flex; flex-direction:column; overflow:hidden; border-color:var(--ambar-borda); }
-  .bk-cab { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:14px 18px 11px;
+  .bk-cab { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 18px 10px;
             background:var(--ambar-bg); border-bottom:1px solid var(--ambar-borda); border-radius:13px 13px 0 0; }
   .bk-cab .t { font-family:'Poppins'; font-weight:700; font-size:15px; color:#92400e; }
   .bk-cab .d { font-size:11.5px; color:var(--ambar); margin-top:2px; }
-  .linha { display:flex; align-items:center; gap:14px; padding:11px 18px; border-bottom:1px solid var(--hairline); }
+  .linha { display:flex; align-items:center; gap:14px; padding:9.5px 18px; border-bottom:1px solid var(--hairline); }
   .linha:last-child { border-bottom:none; }
   .linha .rotulo { font-size:12.5px; font-weight:600; color:var(--tinta-2); }
   .linha .meta { font-size:11px; color:var(--mudo); margin-top:2px; }
@@ -89,9 +103,9 @@
   .t-sent { background:var(--alerta-bg); color:var(--alerta); border:1px solid var(--alerta-borda); }
   .t-desp { background:var(--acento-bg); color:var(--acento-forte); border:1px solid #ddd6fe; }
   .t-rot  { background:var(--hairline); color:var(--mudo); border:1px solid var(--borda); }
-  .mais { padding:11px 18px; font-size:12px; font-weight:600; color:var(--acento-forte); background:var(--acento-bg); border-radius:0 0 13px 13px; }
+  .mais { padding:10px 18px; font-size:12px; font-weight:600; color:var(--acento-forte); background:var(--acento-bg); border-radius:0 0 13px 13px; }
 
-  .nota { flex:0 0 auto; margin-top:auto; display:flex; align-items:center; gap:10px; padding:10px 16px; }
+  .nota { flex:0 0 auto; margin-top:auto; display:flex; align-items:center; gap:10px; padding:9px 16px; }
   .nota .d { font-size:11.5px; color:var(--mudo); }
   .nota b { color:var(--corpo); font-weight:600; }
 </style>
@@ -109,18 +123,25 @@
     <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 0116 0v5a2 2 0 01-2 2h-1v-6h3M4 12v5a2 2 0 002 2h1v-6H4" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>Atendimento<span class="b b-nov">8</span></div>
     <div class="sgrupo">CARTEIRA</div>
     <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="7" r="4" stroke="#fff" stroke-width="1.8"/></svg>Clientes</div>
-    <div class="sitem on"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M14 13l7 7M9 6l5 5M6 9l5 5M3 21l6-6M12 3l6 6-8 8-6-6 8-8z" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Processos<span class="b b-nov">99</span></div>
+    <div class="sitem on"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#fff" stroke-width="1.8"/><path d="M20 20l-3.5-3.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><path d="M8.5 11h5M11 8.5v5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>Processos<span class="b b-nov">99</span></div>
     <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7l3-7z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>Acordos</div>
     <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="5" height="18" rx="1" stroke="#fff" stroke-width="1.8"/><rect x="10" y="3" width="5" height="12" rx="1" stroke="#fff" stroke-width="1.8"/><rect x="17" y="3" width="5" height="8" rx="1" stroke="#fff" stroke-width="1.8"/></svg>Kanban</div>
     <div class="sgrupo">FERRAMENTAS</div>
-    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 017 7c0 2.5-1.3 4.7-3.3 6l-.7 4h-6l-.7-4A7 7 0 0112 2z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>JurisIA</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 017 7c0 2.5-1.3 4.7-3.3 6l-.7 4h-6l-.7-4A7 7 0 0112 2z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>JurisIA<span class="b-beta">BETA</span></div>
     <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" stroke-width="1.8"/><path d="M12 7v5l3 3" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>Ponto</div>
     <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="2" stroke="#fff" stroke-width="1.8"/><path d="M8 7h8M8 12h3M8 17h3M13 12h3M13 17h3" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>Cálculos</div>
     <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2v6h6" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>Modelos</div>
-    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="3" stroke="#fff" stroke-width="1.8"/><circle cx="18" cy="18" r="3" stroke="#fff" stroke-width="1.8"/><path d="M9 6h6a3 3 0 013 3v3M15 18H9a3 3 0 01-3-3v-3" stroke="#fff" stroke-width="1.8"/></svg>Automações</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>Automações</div>
     <div class="sgrupo">GESTÃO</div>
     <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2v20M17 7H9.5a2.5 2.5 0 000 5h5a2.5 2.5 0 010 5H7" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>Financeiro</div>
     <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 21h18M7 21V9M12 21V3M17 21v-8" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>Relatórios</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18h6M10 21h4M12 3a6 6 0 014 10.5c-.6.5-1 1.3-1 2v.5h-6v-.5c0-.7-.4-1.5-1-2A6 6 0 0112 3z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>Roadmap</div>
+    <div class="suser">
+      <div class="avatar">BB</div>
+      <div><div class="nome">Bruno...</div><div class="cargo">escritor...</div></div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#fff" stroke-width="1.8"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 00-2-1.2L14 3h-4l-.5 2.7a7 7 0 00-2 1.2l-2.4-1-2 3.4 2 1.5A7 7 0 005 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 002 1.2L10 21h4l.5-2.7a7 7 0 002-1.2l2.4 1 2-3.4-2-1.5c.06-.4.1-.8.1-1.2z" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
   </div>
 
   <div class="wrap">
@@ -128,18 +149,22 @@
     <div class="topo">
       <div>
         <div class="h1">Processos</div>
-        <div class="sub">Sua carteira e tudo que os tribunais publicaram nela</div>
+        <div class="sub">O robô entra nos tribunais todo dia e avisa o que mudou nos seus processos</div>
+        <div class="pastilhas">
+          <span class="pastilha"><b>61</b> monitorados</span>
+          <span class="pastilha"><b>184</b> créditos</span>
+        </div>
       </div>
-      <div style="display:flex; gap:10px">
-        <div class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#64748b" stroke-width="1.8"/><path d="M3 8l9 6 9-6" stroke="#64748b" stroke-width="1.8" stroke-linejoin="round"/></svg>Resumo diário</div>
-        <div class="btn btn-p">+ Monitorar processo</div>
-      </div>
+      <div class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#64748b" stroke-width="1.8"/><path d="M3 8l9 6 9-6" stroke="#64748b" stroke-width="1.8" stroke-linejoin="round"/></svg>Resumo diário</div>
     </div>
 
     <div class="abas">
-      <div class="aba on">Movimentações<span class="n">99</span></div>
-      <div class="aba">Meus processos<span class="n">132</span></div>
+      <div class="aba on">Movimentações<span class="n">99</span><span class="selo-nova">NOVA AQUI</span></div>
+      <div class="aba">Consultar</div>
       <div class="aba">Monitoramento<span class="n">61</span></div>
+      <div class="aba">Novas Ações<span class="n">3</span></div>
+      <div class="aba">Alertas<span class="n">5</span></div>
+      <div class="aba">Cofre</div>
     </div>
 
     <div class="tiles">
@@ -209,17 +234,12 @@
         <div><div class="rotulo">Publicado edital de citação</div><div class="meta">Fernanda Dias · 0806648-93.2026.8.06.0022</div></div>
         <span class="idade">há 27 dias</span>
       </div>
-      <div class="linha">
-        <span class="tag t-rot">Rotina</span>
-        <div><div class="rotulo">Ato ordinatório praticado</div><div class="meta">Vera Nogueira · 0804415-60.2026.8.06.0140</div></div>
-        <span class="idade">há 29 dias</span>
-      </div>
-      <div class="mais">… e mais 91 — "Ver as 99" muda o período pra 30 dias e mostra tudo</div>
+      <div class="mais">… e mais 92 — "Ver as 99" muda o período pra 30 dias e mostra tudo</div>
     </div>
 
     <div class="card nota">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#94a3b8" stroke-width="1.8"/><path d="M12 8h.01M12 11v5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
-      <div class="d"><b>O menu e a tela passam a contar a mesma coisa:</b> 99 no menu = 0 desta semana + 99 mais antigas. Resolveu ou marcou como vista, o número cai nos dois lugares junto.</div>
+      <div class="d"><b>Nada foi removido do módulo:</b> Consultar, Monitoramento, Novas Ações, Alertas e Cofre continuam como estão. A única mudança é a aba nova "Movimentações" — que hoje é um item separado no menu lateral — e o contador do menu apontando pra Processos.</div>
     </div>
 
   </div>
