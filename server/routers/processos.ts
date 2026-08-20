@@ -43,6 +43,7 @@ import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resu
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
 import { SISTEMA_PJE_NACIONAL, tribunalRequerCredencial } from "../processos/tribunais-pdpj";
+import { normalizarTribunais } from "../../shared/tribunais-pje";
 import { normalizarCnj, mascararCnj, validarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import {
   ehRequestMotorProprio,
@@ -1965,6 +1966,8 @@ export const processosRouter = router({
         // ativa do usuário (TJCE). Frontend pode chamar sem credencial.
         credencialId: z.number().int().positive().optional(),
         recurrenceHoras: z.number().int().min(1).max(168).default(6),
+        /** Tribunais PJe a vigiar; sede (TJCE) entra sempre. Omitido = só sede. */
+        tribunais: z.array(z.string().max(16)).max(24).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -2045,6 +2048,8 @@ export const processosRouter = router({
         .limit(1);
       const dataReferenciaCadastro = cnjQuery[0]?.createdAt ?? null;
 
+      const tribunaisVigiados = normalizarTribunais(input.tribunais);
+
       const result = await db.insert(motorMonitoramentos).values({
         escritorioId: esc.escritorio.id,
         criadoPor: ctx.user.id,
@@ -2053,6 +2058,7 @@ export const processosRouter = router({
         searchKey: docLimpo,
         apelido: input.apelido ?? `${input.tipo.toUpperCase()} ${docLimpo.slice(0, 3)}***`,
         tribunal: tribunalDaCred,
+        tribunais: JSON.stringify(tribunaisVigiados),
         credencialId: cred.id,
         status: "ativo",
         recurrenceHoras: input.recurrenceHoras,
@@ -2065,11 +2071,54 @@ export const processosRouter = router({
         (result as unknown as { insertId: number }).insertId;
 
       log.info(
-        { user: ctx.user.id, monId: insertId, tipo: input.tipo, tribunal: tribunalDaCred },
+        { user: ctx.user.id, monId: insertId, tipo: input.tipo, tribunais: tribunaisVigiados },
         "[motor-proprio] monitoramento de novas ações criado",
       );
 
       return { id: insertId, custoCred: CUSTOS.monitorar_pessoa_mes };
+    }),
+
+  /**
+   * Amplia/reduz os estados vigiados de um monitoramento existente — sem
+   * recriar nada. Estado novo faz a 1ª varredura em silêncio (baseline por
+   * tribunal); reduzir não apaga histórico.
+   */
+  atualizarTribunaisNovasAcoes: protectedProcedure
+    .input(
+      z.object({
+        id: z.number().int().positive(),
+        tribunais: z.array(z.string().max(16)).max(24),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const tribunaisVigiados = normalizarTribunais(input.tribunais);
+      const r = await db
+        .update(motorMonitoramentos)
+        .set({ tribunais: JSON.stringify(tribunaisVigiados) })
+        .where(
+          and(
+            eq(motorMonitoramentos.id, input.id),
+            eq(motorMonitoramentos.escritorioId, esc.escritorio.id),
+            eq(motorMonitoramentos.tipoMonitoramento, "novas_acoes"),
+          ),
+        );
+      const afetadas =
+        (r as unknown as { rowsAffected?: number }[])[0]?.rowsAffected ??
+        (r as unknown as [{ affectedRows?: number }])[0]?.affectedRows ??
+        1;
+      if (!afetadas) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Monitoramento não encontrado" });
+      }
+      log.info(
+        { user: ctx.user.id, monId: input.id, tribunais: tribunaisVigiados },
+        "[motor-proprio] estados do monitoramento atualizados",
+      );
+      return { tribunais: tribunaisVigiados };
     }),
 
   listarNovasAcoes: protectedProcedure
