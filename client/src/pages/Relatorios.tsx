@@ -472,6 +472,9 @@ function AbaAtendimentoConteudo({
     ? Math.round(data.totalConversas / volumeConversas.length)
     : 0;
 
+  const tabAtd = (data.tabelaAtendimento || []) as any[];
+  const totalIniciados = tabAtd.reduce((s: number, a: any) => s + a.iniciados, 0);
+
   const tabela = (data.tabelaAtendentes || []) as any[];
   const totais = tabela.reduce(
     (acc, a) => ({
@@ -514,7 +517,7 @@ function AbaAtendimentoConteudo({
           label="Atendimentos iniciados"
           valor={data.atendimentosIniciados.toLocaleString("pt-BR")}
           delta={d(data.atendimentosIniciados, "atendimentosIniciados")}
-          anterior={`${data.totalConversas.toLocaleString("pt-BR")} de gente nova · ${data.conversasAtendidas.toLocaleString("pt-BR")} conversas com atividade`}
+          anterior={`${(data.atendimentosResolvidos ?? 0).toLocaleString("pt-BR")} resolvidos · ${(data.atendimentosEmAndamento ?? 0).toLocaleString("pt-BR")} em andamento · ${data.totalConversas.toLocaleString("pt-BR")} conversas novas`}
         />
         <KpiRel
           label="Tempo p/ 1ª resposta"
@@ -649,16 +652,89 @@ function AbaAtendimentoConteudo({
       </div>
 
       <CardRel
-        icone={<BarChart3 className="h-4 w-4 text-muted-foreground" />}
-        titulo="Detalhamento por atendente"
-        aviso="volume × conversão × valor"
+        icone={<MessageCircle className="h-4 w-4 text-muted-foreground" />}
+        titulo="Atendimento por atendente"
+        aviso='quem abriu o episódio no período · fechados por silêncio/manual ficam fora das duas colunas'
       >
         <div className="overflow-x-auto px-1 pb-2">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="text-[10px] uppercase tracking-wide">Atendente</TableHead>
-                <TableHead className="text-[10px] uppercase tracking-wide text-center">Atend.</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-wide text-center">Atendimentos</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-wide text-center">Resolvidos</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-wide text-center">Em andamento</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-wide text-center">1ª resposta</TableHead>
+                <TableHead className="text-[10px] uppercase tracking-wide text-right">% do total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tabAtd.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-6">
+                    Nenhum atendimento no período.
+                  </TableCell>
+                </TableRow>
+              )}
+              {tabAtd.map((a: any, i: number) => (
+                <TableRow key={a.colabId ?? "robo"}>
+                  <TableCell className="text-xs font-medium">
+                    {a.colabId == null ? (
+                      <span className="italic text-muted-foreground" title="Episódios que nenhum humano assumiu — atendidos só pelo robô">
+                        {a.nome}
+                      </span>
+                    ) : (
+                      <span className={`flex items-center gap-2 ${a.removido ? "text-muted-foreground" : ""}`}>
+                        <Avatar nome={a.nome} indice={i} />
+                        <span className="truncate">{a.nome}</span>
+                        {a.removido && (
+                          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide">
+                            removido
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center text-xs font-semibold tabular-nums">{a.iniciados}</TableCell>
+                  <TableCell className="text-center text-xs tabular-nums text-emerald-600">{a.resolvidos}</TableCell>
+                  <TableCell className="text-center text-xs tabular-nums text-muted-foreground">{a.emAndamento}</TableCell>
+                  <TableCell className="text-center text-xs tabular-nums">
+                    {a.segPriResp != null ? fmtTempoResposta(a.segPriResp) : "—"}
+                  </TableCell>
+                  <TableCell className="text-right text-xs tabular-nums text-muted-foreground">
+                    {totalIniciados > 0 ? `${Math.round((a.iniciados / totalIniciados) * 100)}%` : "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {tabAtd.length > 0 && (
+                <TableRow className="bg-muted/40 hover:bg-muted/40 font-semibold">
+                  <TableCell className="text-xs">Total</TableCell>
+                  <TableCell className="text-center text-xs tabular-nums">{totalIniciados}</TableCell>
+                  <TableCell className="text-center text-xs tabular-nums text-emerald-600">
+                    {tabAtd.reduce((s: number, a: any) => s + a.resolvidos, 0)}
+                  </TableCell>
+                  <TableCell className="text-center text-xs tabular-nums text-muted-foreground">
+                    {tabAtd.reduce((s: number, a: any) => s + a.emAndamento, 0)}
+                  </TableCell>
+                  <TableCell className="text-center text-xs tabular-nums">{fmtTempoResposta(data.segMedioPriResp)}</TableCell>
+                  <TableCell className="text-right text-xs tabular-nums">100%</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardRel>
+
+      <CardRel
+        icone={<BarChart3 className="h-4 w-4 text-muted-foreground" />}
+        titulo="Comercial por atendente"
+        aviso="Conv. = ganhos ÷ atendimentos iniciados · ordenado por valor fechado"
+      >
+        <div className="overflow-x-auto px-1 pb-2">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="text-[10px] uppercase tracking-wide">Atendente</TableHead>
                 <TableHead className="text-[10px] uppercase tracking-wide text-center">Oportunidades</TableHead>
                 <TableHead className="text-[10px] uppercase tracking-wide text-center">Ganhos</TableHead>
                 <TableHead className="text-[10px] uppercase tracking-wide text-center">Perdidos</TableHead>
@@ -670,7 +746,7 @@ function AbaAtendimentoConteudo({
             <TableBody>
               {tabela.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-6">
+                  <TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-6">
                     Nenhum atendente com movimento no período.
                   </TableCell>
                 </TableRow>
@@ -694,7 +770,6 @@ function AbaAtendimentoConteudo({
                       )}
                     </span>
                   </TableCell>
-                  <TableCell className="text-center text-xs tabular-nums">{a.atendimentos}</TableCell>
                   <TableCell className="text-center text-xs tabular-nums">{a.leadsTotal}</TableCell>
                   <TableCell className="text-center text-xs font-semibold tabular-nums text-emerald-600">
                     {a.ganhos}
@@ -716,7 +791,6 @@ function AbaAtendimentoConteudo({
               {tabela.length > 0 && (
                 <TableRow className="bg-muted/40 hover:bg-muted/40 font-semibold">
                   <TableCell className="text-xs">Total</TableCell>
-                  <TableCell className="text-center text-xs tabular-nums">{totais.atendimentos}</TableCell>
                   <TableCell className="text-center text-xs tabular-nums">{totais.leadsTotal}</TableCell>
                   <TableCell className="text-center text-xs tabular-nums text-emerald-600">
                     {totais.ganhos}
@@ -739,6 +813,19 @@ function AbaAtendimentoConteudo({
           </Table>
         </div>
       </CardRel>
+
+      {data.estoqueConversas && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3 text-[11.5px] leading-relaxed text-muted-foreground dark:border-violet-900 dark:bg-violet-950/30">
+          <b className="text-violet-700 dark:text-violet-300">Por que estes números não batem com o Inbox:</b>{" "}
+          os cartões do Atendimento (Todas {data.estoqueConversas.todas.toLocaleString("pt-BR")} · Em
+          atendimento {data.estoqueConversas.emAtendimento.toLocaleString("pt-BR")} · Resolvidas{" "}
+          {data.estoqueConversas.resolvidas.toLocaleString("pt-BR")}) são o <b>estoque de hoje</b> — tudo que
+          existe na caixa agora, de qualquer época. Este relatório mede o <b>movimento do período</b>:{" "}
+          {data.atendimentosIniciados.toLocaleString("pt-BR")} atendimentos abertos na janela. Cliente antigo
+          que voltou a escrever conta aqui sem virar conversa nova; conversa aberta por disparo/campanha só
+          vira atendimento quando o cliente responde. Os dois estão certos — medem coisas diferentes.
+        </div>
+      )}
 
       {(lig?.feitas > 0 || lig?.recebidas > 0 || lig?.perdidas > 0) && (
         <>

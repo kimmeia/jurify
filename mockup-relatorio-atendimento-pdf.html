@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --corpo:#334155; --mudo:#64748b; --fraco:#94a3b8;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+    --ok:#059669; --ok-bg:#ecfdf5; --rosa:#e11d48; --rosa-bg:#fff1f2;
+    --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1080px; height:1150px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:#e6eaf0; color:var(--tinta); padding:20px; position:relative; }
+  .folha { background:#fff; border-radius:6px; box-shadow:0 10px 40px -12px #0f172a44; padding:34px 40px; height:100%; overflow:hidden; }
+
+  .cab { display:flex; align-items:flex-start; justify-content:space-between; border-bottom:2.5px solid var(--acento); padding-bottom:14px; }
+  .cab .t { font-family:'Poppins'; font-weight:700; font-size:21px; }
+  .cab .esc { font-size:12px; color:var(--mudo); margin-top:2px; }
+  .meta { display:flex; gap:22px; margin-top:14px; flex-wrap:wrap; }
+  .meta .item .r { font-size:8.5px; font-weight:800; letter-spacing:.07em; color:var(--fraco); }
+  .meta .item .v { font-size:11px; font-weight:600; color:var(--corpo); margin-top:2px; }
+
+  .sec { margin-top:20px; }
+  .sec-t { display:flex; align-items:center; gap:8px; font-family:'Poppins'; font-weight:700; font-size:13px; }
+  .sec-t small { font-weight:500; font-family:'Inter'; font-size:10px; color:var(--fraco); margin-left:auto; }
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:10px; }
+  .kpi { border:1px solid var(--borda); border-radius:10px; padding:10px 12px; }
+  .kpi .r { font-size:8.5px; font-weight:800; letter-spacing:.06em; color:var(--fraco); }
+  .kpi .v { font-size:19px; font-weight:800; margin-top:3px; }
+  .kpi .d { font-size:9.5px; margin-top:3px; font-weight:600; }
+  .d.up { color:var(--ok); } .d.dn { color:var(--rosa); }
+
+  table { width:100%; border-collapse:collapse; margin-top:10px; font-size:11px; }
+  th { text-align:left; font-size:8.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--fraco);
+       padding:7px 9px; border-bottom:1.5px solid var(--borda); }
+  th.n, td.n { text-align:right; }
+  td { padding:6.5px 9px; border-bottom:1px solid var(--hairline); }
+  td.nome { font-weight:600; }
+  tr.total td { border-top:2px solid var(--borda); border-bottom:none; font-weight:800; background:#fafbfd; }
+  .verde { color:var(--ok); font-weight:700; }
+  .vermelho { color:var(--rosa); font-weight:700; }
+
+  .nota { margin-top:18px; background:var(--acento-bg); border:1px solid #ddd6fe; border-radius:10px; padding:11px 14px;
+          font-size:10.5px; color:var(--corpo); line-height:1.55; }
+  .nota b { color:var(--acento-forte); }
+
+  .chip { display:inline-flex; font-size:10px; font-weight:800; background:#f59e0b; color:#451a03;
+          border-radius:7px; padding:3px 9px; margin-left:10px; white-space:nowrap; }
+  .micro { position:absolute; top:26px; right:34px; font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#94a3b8; text-align:right; }
+</style>
+</head>
+<body>
+  <div class="micro">mockup pra aprovação · nomes fictícios<br>mesmos totais do PDF de hoje</div>
+
+  <div class="folha">
+    <div class="cab">
+      <div>
+        <div class="t">Relatório de Atendimento</div>
+        <div class="esc">Escritório Exemplo Advogados</div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="item"><div class="r">PERÍODO</div><div class="v">01/08/2026 a 21/08/2026</div></div>
+      <div class="item"><div class="r">SETOR</div><div class="v">Comercial Manhã, Comercial Tarde +1</div></div>
+      <div class="item"><div class="r">ATENDENTE</div><div class="v">Todos</div></div>
+      <div class="item"><div class="r">CANAL</div><div class="v">Todos</div></div>
+      <div class="item"><div class="r">EMITIDO EM</div><div class="v">21/08/2026, 09:12</div></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-t">Operação no período <small>comparado com o período imediatamente anterior</small></div>
+      <div class="kpis">
+        <div class="kpi"><div class="r">ATENDIMENTOS INICIADOS</div><div class="v">597</div><div class="d up">+31% vs. anterior</div></div>
+        <div class="kpi"><div class="r">RESOLVIDOS NO PERÍODO</div><div class="v">512</div><div class="d up">+27% vs. anterior</div></div>
+        <div class="kpi"><div class="r">EM ANDAMENTO HOJE</div><div class="v">85</div><div class="d">—</div></div>
+        <div class="kpi"><div class="r">TEMPO P/ 1ª RESPOSTA</div><div class="v">2 min</div><div class="d up">-88% vs. anterior</div></div>
+      </div>
+    </div>
+
+    <div class="sec" style="position:relative">
+      <div class="sec-t">1 · Atendimento por atendente <span class="chip">① o que você pediu: atendimentos POR ATENDENTE</span> <small>quem abriu o episódio no período</small></div>
+      <table>
+        <thead><tr>
+          <th style="width:30%">Atendente</th>
+          <th class="n">Atendimentos</th>
+          <th class="n">Resolvidos</th>
+          <th class="n">Em andamento</th>
+          <th class="n">1ª resposta (média)</th>
+          <th class="n">% do total</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="nome">Helena Castro</td><td class="n">188</td><td class="n">165</td><td class="n">23</td><td class="n">1 min</td><td class="n">31%</td></tr>
+          <tr><td class="nome">João Marcos Bezerra</td><td class="n">108</td><td class="n">96</td><td class="n">12</td><td class="n">2 min</td><td class="n">18%</td></tr>
+          <tr><td class="nome">Renata Sousa Braga</td><td class="n">171</td><td class="n">148</td><td class="n">23</td><td class="n">3 min</td><td class="n">29%</td></tr>
+          <tr><td class="nome">Jéssica Andrade</td><td class="n">23</td><td class="n">19</td><td class="n">4</td><td class="n">4 min</td><td class="n">4%</td></tr>
+          <tr><td class="nome">Carlos Menezes</td><td class="n">88</td><td class="n">70</td><td class="n">18</td><td class="n">2 min</td><td class="n">15%</td></tr>
+          <tr><td class="nome">Marina Lopes</td><td class="n">18</td><td class="n">13</td><td class="n">5</td><td class="n">6 min</td><td class="n">3%</td></tr>
+          <tr><td class="nome">Pedro Cavalcante</td><td class="n">1</td><td class="n">1</td><td class="n">0</td><td class="n">9 min</td><td class="n">0%</td></tr>
+          <tr class="total"><td>Total</td><td class="n">597</td><td class="n">512</td><td class="n">85</td><td class="n">2 min</td><td class="n">100%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sec" style="position:relative">
+      <div class="sec-t">2 · Comercial por atendente <span class="chip">② leads/valor separados do atendimento</span> <small>ordenado por valor fechado</small></div>
+      <table>
+        <thead><tr>
+          <th style="width:30%">Atendente</th>
+          <th class="n">Oportunidades</th>
+          <th class="n">Ganhos</th>
+          <th class="n">Perdidos</th>
+          <th class="n">Conversão*</th>
+          <th class="n">Valor fechado</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="nome">Helena Castro</td><td class="n">73</td><td class="n verde">12</td><td class="n vermelho">3</td><td class="n">6%</td><td class="n">R$ 39.200,00</td></tr>
+          <tr><td class="nome">João Marcos Bezerra</td><td class="n">37</td><td class="n verde">10</td><td class="n vermelho">5</td><td class="n">9%</td><td class="n">R$ 32.500,00</td></tr>
+          <tr><td class="nome">Renata Sousa Braga</td><td class="n">53</td><td class="n verde">7</td><td class="n vermelho">13</td><td class="n">4%</td><td class="n">R$ 20.000,00</td></tr>
+          <tr><td class="nome">Jéssica Andrade</td><td class="n">5</td><td class="n verde">5</td><td class="n vermelho">0</td><td class="n">22%</td><td class="n">R$ 18.500,00</td></tr>
+          <tr><td class="nome">Carlos Menezes</td><td class="n">11</td><td class="n verde">3</td><td class="n vermelho">5</td><td class="n">3%</td><td class="n">R$ 13.000,00</td></tr>
+          <tr><td class="nome">Marina Lopes</td><td class="n">5</td><td class="n verde">3</td><td class="n vermelho">0</td><td class="n">17%</td><td class="n">R$ 6.400,00</td></tr>
+          <tr><td class="nome">Pedro Cavalcante</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0%</td><td class="n">R$ 0,00</td></tr>
+          <tr class="total"><td>Total</td><td class="n">184</td><td class="n verde">40</td><td class="n vermelho">26</td><td class="n">7%</td><td class="n">R$ 129.600,00</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:6px; font-size:9.5px; color:var(--fraco)">* Conversão = ganhos ÷ atendimentos iniciados do atendente. A MESMA conta em todo o relatório — o cartão "Taxa de conversão" passa a usar esta (hoje o topo mostra 5% e a tabela 7% porque cada um divide por uma coisa).</div>
+    </div>
+
+    <div class="nota">
+      <span class="chip" style="float:right; margin-left:12px">③ impressa no próprio relatório</span>
+      <b>Por que estes números não batem com o Inbox:</b> os cartões do Inbox (Todas 913 · Em atendimento 554 · Resolvidas 359) são o <b>estoque de hoje</b> — tudo que existe na caixa agora, de qualquer época. O relatório mede o <b>movimento do período</b>: 597 episódios de atendimento abertos entre 01 e 21/08, dos quais 512 já foram resolvidos. Um cliente antigo que voltou a escrever conta aqui, mas não vira conversa nova; uma conversa parada desde julho aparece lá, mas não aqui. Os dois estão certos — medem coisas diferentes, e agora cada um diz qual.
+    </div>
+  </div>
+
+
+</body>
+</html>

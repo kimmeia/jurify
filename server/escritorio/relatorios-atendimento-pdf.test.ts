@@ -21,6 +21,16 @@ function dadosCompletos(): AtendimentoPdfData {
     // Maior que as conversas novas de propósito: cliente que volta abre
     // atendimento sem abrir conversa.
     atendimentosIniciados: 1409,
+    atendimentosResolvidos: 1203,
+    atendimentosEmAndamento: 141,
+    tabelaAtendimento: [
+      { nome: "Isaac Luca Cavalcante", iniciados: 480, resolvidos: 420, emAndamento: 44, segPriResp: 95 },
+      { nome: "Francisco Wesley Freitas", iniciados: 402, resolvidos: 344, emAndamento: 39, segPriResp: 140 },
+      { nome: "Milena Mello Mansur", iniciados: 315, resolvidos: 262, emAndamento: 35, segPriResp: 210 },
+      { nome: "Pablo Sousa Silva", iniciados: 180, resolvidos: 152, emAndamento: 18, segPriResp: 330 },
+      { nome: "Sem atendente (robô)", iniciados: 32, resolvidos: 25, emAndamento: 5, segPriResp: null },
+    ],
+    estoqueConversas: { todas: 2913, emAtendimento: 554, resolvidas: 1359 },
     mensagensRecebidas: 9417,
     mensagensEnviadas: 7902,
     segMedioPriResp: 840,

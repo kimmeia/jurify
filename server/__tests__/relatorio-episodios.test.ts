@@ -61,9 +61,9 @@ describe("as telas não podem divergir", () => {
   it("o card do relatório mostra atendimentos, e nomeia o resto", () => {
     expect(tela).toContain("Atendimentos iniciados");
     expect(tela).toContain("data.atendimentosIniciados");
-    // "Conversas novas" continua visível: some gente nova é outra pergunta, e
-    // esconder o número faria as duas leituras se confundirem de novo.
-    expect(tela).toContain("de gente nova");
+    // "Conversas novas" continua visível: gente nova é outra pergunta, e
+    // esconder o número faria as leituras se confundirem de novo.
+    expect(tela).toContain("conversas novas");
   });
 
   it("nada mais chama conversa criada de atendimento", () => {
