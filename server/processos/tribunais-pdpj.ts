@@ -50,11 +50,27 @@ const REGISTRO: Record<string, TribunalPdpjConfig> = {
     urlBusca: "https://tjrj.pje.jus.br/1g/Processo/ConsultaProcesso/listView.seam",
   }),
   tjmg: pdpjTjConfig("mg"),
-  tjrn: pdpjTjConfig("rn"),
+  // Endereços reais confirmados na validação do Cofre de 20/08 — o derivado
+  // caía em portal institucional (PA/PE/RO) ou não respondia (RN):
+  tjrn: pdpjTjConfig("rn", 1, {
+    urlEntrada: "https://pje1g.tjrn.jus.br/pje/login.seam",
+    urlBusca: "https://pje1g.tjrn.jus.br/pje/Processo/ConsultaProcesso/listView.seam",
+  }),
   tjma: pdpjTjConfig("ma"),
-  tjpa: pdpjTjConfig("pa"),
-  tjro: pdpjTjConfig("ro"),
-  tjpe: pdpjTjConfig("pe"),
+  tjpa: pdpjTjConfig("pa", 1, {
+    urlEntrada: "https://pje.tjpa.jus.br/pje/login.seam",
+    urlBusca: "https://pje.tjpa.jus.br/pje/Processo/ConsultaProcesso/listView.seam",
+  }),
+  tjro: pdpjTjConfig("ro", 1, {
+    urlEntrada: "https://pjepg.tjro.jus.br/pje/login.seam",
+    urlBusca: "https://pjepg.tjro.jus.br/pje/Processo/ConsultaProcesso/listView.seam",
+  }),
+  // TJPE migrou o 1º grau pra pje.cloud.tjpe.jus.br (o endereço antigo vive
+  // redirecionando pro portal Liferay institucional).
+  tjpe: pdpjTjConfig("pe", 1, {
+    urlEntrada: "https://pje.cloud.tjpe.jus.br/1g/login.seam",
+    urlBusca: "https://pje.cloud.tjpe.jus.br/1g/Processo/ConsultaProcesso/listView.seam",
+  }),
   tjpb: pdpjTjConfig("pb"),
   tjmt: pdpjTjConfig("mt"),
   tjrr: pdpjTjConfig("rr"),
