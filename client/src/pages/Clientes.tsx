@@ -43,6 +43,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover, VincularAsaasBlock } from "@/components/FinanceiroBadge";
+import { EstadosPicker } from "@/components/EstadosPicker";
+import { TRIBUNAL_SEDE } from "@shared/tribunais-pje";
 import { VincularBeneficiarioDialog } from "./financeiro/VincularBeneficiarioDialog";
 import { GerarContratoDialog } from "@/components/GerarContratoDialog";
 import {
@@ -76,6 +78,7 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
   const [, setLocation] = useLocation();
   const [confirmCriarOpen, setConfirmCriarOpen] = useState(false);
   const [confirmPararOpen, setConfirmPararOpen] = useState(false);
+  const [tribunais, setTribunais] = useState<string[]>([TRIBUNAL_SEDE]);
 
   // Verifica se já existe monitoramento ativo
   const { data: monsData, refetch: refetchMons } =
@@ -200,12 +203,14 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
             <AlertDialogDescription>
               Você será avisado <strong>imediatamente</strong> quando alguém processar
               este cliente — antes mesmo da citação chegar.
-              <br />
-              <br />
-              <span className="text-foreground font-medium">Cobrança: 15 créditos/mês</span>
-              {" "}— renovada automaticamente, podendo ser cancelada a qualquer momento.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <EstadosPicker selecionados={tribunais} onChange={setTribunais} />
+          <p className="text-[12px] text-muted-foreground leading-relaxed">
+            <span className="text-foreground font-medium">Cobrança: 15 créditos/mês</span>, independente
+            dos estados escolhidos — renovada automaticamente, cancela quando quiser. A varredura usa a
+            credencial nacional do Cofre.
+          </p>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={criarMut.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
@@ -215,6 +220,7 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
                   tipo,
                   valor: clean,
                   apelido: nome,
+                  tribunais,
                 });
               }}
               disabled={criarMut.isPending}
@@ -224,7 +230,7 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
               ) : (
                 <Siren className="h-4 w-4 mr-1" />
               )}
-              Criar monitoramento
+              Vigiar em {tribunais.length} {tribunais.length === 1 ? "estado" : "estados"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

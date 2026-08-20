@@ -2067,6 +2067,18 @@ export const motorMonitoramentos = mysqlTable(
     ultimaCobrancaEm: timestamp("ultima_cobranca_em"),
     ultimoErro: text("ultimo_erro"),
     /**
+     * Monitoramento por CPF em vários estados: JSON array dos tribunais
+     * vigiados (["tjce","tjpe",...]). NULL = só o legado `tribunal`.
+     */
+    tribunais: text("tribunais"),
+    /**
+     * Tribunais que já passaram pela 1ª varredura silenciosa (baseline).
+     * Adicionar um estado depois não pode alarmar o estoque antigo de lá.
+     */
+    tribunaisBaseline: text("tribunais_baseline"),
+    /** Última varredura por tribunal: {em, resultados:[{tribunal,ok,erro?,total?}]}. */
+    varreduraJson: text("varredura_json"),
+    /**
      * Indicador de que o processo parece ter subido pro 2º grau (recurso),
      * detectado pelas movimentações do 1º grau. Base da opção C do
      * monitoramento por grau (issue #529); `indicios2grau` guarda os trechos
