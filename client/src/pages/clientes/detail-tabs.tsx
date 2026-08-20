@@ -711,7 +711,10 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
           (na tela e no teclado) e a fita de miniaturas trocam de documento
           sem fechar a janela. */}
       <Dialog open={viewerIdx !== null} onOpenChange={(o) => !o && setViewerIdx(null)}>
-        <DialogContent className="w-[96vw] max-w-[1720px] h-[94vh] flex flex-col gap-0 p-0 overflow-hidden">
+        {/* sm:max-w é obrigatório: o DialogContent base traz sm:max-w-lg, que
+            vence qualquer max-w sem prefixo no CSS final — max-w-5xl nunca
+            valeu; a janela vivia no teto de 512px. */}
+        <DialogContent className="w-[96vw] max-w-[96vw] sm:max-w-[1720px] h-[94vh] flex flex-col gap-0 p-0 overflow-hidden">
           {viewerIdx !== null && arquivos[viewerIdx] && (() => {
             const a = arquivos[viewerIdx];
             const rv = renomeandoArq;
