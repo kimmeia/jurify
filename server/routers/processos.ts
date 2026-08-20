@@ -737,8 +737,13 @@ export const processosRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
+      // A credencial nacional ("pje_*") entra em qualquer PJe — o login do
+      // PDPJ é o mesmo em todos os estados. Sem ela aqui, quem cadastrou a
+      // credencial como nacional (o caminho recomendado pelo Cofre) era
+      // recusado com "nenhuma de TJCE" nos fluxos por CPF, enquanto os
+      // fluxos por CNJ aceitavam a mesma credencial numa boa.
       const { cred } = await escolherCredencial(db, esc.escritorio.id, {
-        sistemas: ["pje_tjce", "esaj_tjce"],
+        sistemas: ["pje_tjce", "esaj_tjce", SISTEMA_PJE_NACIONAL],
         credencialId: input.credencialId,
       });
 
@@ -752,9 +757,12 @@ export const processosRouter = router({
         });
       }
 
-      // Mapeia sistema → tribunal (hoje só TJCE)
+      // Mapeia sistema → tribunal (a varredura por CPF hoje é só TJCE; a
+      // credencial nacional atende, porque TJCE roda PJe)
       const codigoTribunal =
-        cred.sistema === "pje_tjce" || cred.sistema === "esaj_tjce" ? "tjce" : null;
+        cred.sistema === "pje_tjce" || cred.sistema === "esaj_tjce" || cred.sistema === SISTEMA_PJE_NACIONAL
+          ? "tjce"
+          : null;
       if (!codigoTribunal) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
@@ -1977,8 +1985,11 @@ export const processosRouter = router({
       // Confirma posse da credencial. Cofre é compartilhado pelo escritório:
       // qualquer membro (dono ou colaborador) usa as credenciais cadastradas
       // pelo escritório.
+      // Mesma regra do consultarDocumento: a credencial nacional ("pje_*")
+      // atende TJCE — recusá-la aqui barrava o "Monitorar" do cliente pra
+      // quem seguiu o caminho recomendado do Cofre.
       const { cred, sistemasNoCofre } = await escolherCredencial(db, esc.escritorio.id, {
-        sistemas: ["pje_tjce", "esaj_tjce"],
+        sistemas: ["pje_tjce", "esaj_tjce", SISTEMA_PJE_NACIONAL],
         credencialId: input.credencialId,
       });
 
@@ -1994,8 +2005,12 @@ export const processosRouter = router({
         });
       }
 
-      // Mapeia sistema cofre → tribunal. Hoje só TJCE 1º grau.
-      const tribunalDaCred = cred.sistema === "esaj_tjce" || cred.sistema === "pje_tjce" ? "tjce" : null;
+      // Mapeia sistema cofre → tribunal. Hoje só TJCE 1º grau; a credencial
+      // nacional atende (TJCE roda PJe).
+      const tribunalDaCred =
+        cred.sistema === "esaj_tjce" || cred.sistema === "pje_tjce" || cred.sistema === SISTEMA_PJE_NACIONAL
+          ? "tjce"
+          : null;
       if (!tribunalDaCred) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
