@@ -66,8 +66,20 @@ describe("qual credencial serve", () => {
   it("a ordem dos sistemas é a preferência de quem chamou", () => {
     // O TJCE quer pje antes de esaj; o consultarCNJ quer o sistema do tribunal
     // antes do PJe nacional. Um seletor só atende os dois sem saber deles.
-    expect(processos).toContain('sistemas: ["pje_tjce", "esaj_tjce"]');
+    expect(processos).toContain('sistemas: ["pje_tjce", "esaj_tjce", SISTEMA_PJE_NACIONAL]');
     expect(processos).toContain("sistemas: [sistemaCofre, SISTEMA_PJE_NACIONAL]");
+  });
+
+  it("os fluxos por CPF aceitam a credencial nacional (pje_*)", () => {
+    // O login do PDPJ é o mesmo em todos os estados — o Cofre recomenda
+    // cadastrar como nacional. Os fluxos por CNJ aceitavam; os por CPF
+    // (consultarDocumento e o "Monitorar" do cliente) recusavam a MESMA
+    // credencial com "nenhuma de TJCE". Foi o erro visto em produção 20/08.
+    expect(processos).not.toContain('sistemas: ["pje_tjce", "esaj_tjce"],');
+    const mapeamentos = processos.match(/cred\.sistema === "esaj_tjce"|cred\.sistema === "pje_tjce"/g) ?? [];
+    expect(mapeamentos.length).toBeGreaterThanOrEqual(2);
+    // E o mapeamento sistema→tribunal não anula o curinga que o seletor aceitou.
+    expect(processos).toContain('cred.sistema === SISTEMA_PJE_NACIONAL');
   });
 });
 
