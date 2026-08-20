@@ -40,7 +40,9 @@ describe("tribunais-pdpj (registro central)", () => {
     // Smoke: cada TJ habilitado aponta pro próprio portal — não pode
     // cair em pje.tjce.jus.br por engano.
     const casos: [string, string][] = [
-      ["tjrj", "https://pje.tjrj.jus.br/"],
+      // TJRJ foge do padrão: tribunal-como-subdomínio do pje.jus.br —
+      // pje.tjrj.jus.br nem resolve DNS (validação do Cofre, 20/08).
+      ["tjrj", "https://tjrj.pje.jus.br/1g/login.seam"],
       ["tjmg", "https://pje.tjmg.jus.br/"],
       ["tjrn", "https://pje.tjrn.jus.br/"],
       ["tjma", "https://pje.tjma.jus.br/"],
@@ -86,7 +88,7 @@ describe("configPorSistema (login tribunal-aware)", () => {
   it("Lote 1: cada sistema cofre PJe-TJ leva ao portal correto", () => {
     // Garante que cred "pje_tjmg" não cai no portal TJCE
     expect(configPorSistema("pje_tjmg")?.urlEntrada).toBe("https://pje.tjmg.jus.br/");
-    expect(configPorSistema("pje_tjrj")?.urlEntrada).toBe("https://pje.tjrj.jus.br/");
+    expect(configPorSistema("pje_tjrj")?.urlEntrada).toBe("https://tjrj.pje.jus.br/1g/login.seam");
     expect(configPorSistema("pje_tjrn")?.urlEntrada).toBe("https://pje.tjrn.jus.br/");
     expect(configPorSistema("pje_tjpe")?.urlEntrada).toBe("https://pje.tjpe.jus.br/");
   });
