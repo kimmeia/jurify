@@ -5,6 +5,7 @@
  */
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,7 +62,7 @@ export function AcoesRelatorio({
   /** Botões específicos do relatório (ex: CSV, diagnóstico). */
   extras?: React.ReactNode;
 }) {
-  const { periodo } = useRelatorios();
+  const { periodo, slotAcoes } = useRelatorios();
   const [emailAberto, setEmailAberto] = useState(false);
   const [programarAberto, setProgramarAberto] = useState(false);
 
@@ -76,8 +77,7 @@ export function AcoesRelatorio({
 
   const filtrosComPeriodo = { dataInicio: periodo.inicio, dataFim: periodo.fim, ...filtros };
 
-  return (
-    <>
+  const botoes = (
       <div className="flex items-center justify-end gap-2 flex-wrap">
         {extras}
         <Button
@@ -113,6 +113,13 @@ export function AcoesRelatorio({
           Exportar PDF
         </Button>
       </div>
+  );
+
+  return (
+    <>
+      {/* Na linha das abas quando o slot existe (pedido do dono: uma linha a
+          menos na tela); sozinho no lugar antigo quando não existe. */}
+      {slotAcoes ? createPortal(botoes, slotAcoes) : botoes}
 
       <DialogEnviarAgora
         aberto={emailAberto}

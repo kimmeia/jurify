@@ -40,7 +40,7 @@ import {
 } from "./financeiro/helpers";
 import { TIPOS_CANAL_COMUNICACAO } from "@shared/canal-types";
 import {
-  Avatar, BarrasDiarias, BarrasRotuladas, BarraFiltro, CardRel, FiltroSelect,
+  Avatar, BarrasDiarias, BarrasRotuladas, BarraFiltro, CardRel, FiltroMulti, FiltroSelect,
   KpiRel, PastilhaTaxa, ProvedorRelatorios, TituloSecao, calcularDelta,
   calcularDeltaPontos, useRelatorios,
 } from "./relatorios/casca";
@@ -233,22 +233,25 @@ export default function Relatorios() {
         </div>
 
         {tabsVisiveis.length > 0 && (
-          <div className="flex items-center gap-0.5 rounded-xl bg-muted/60 p-1 w-fit max-w-full overflow-x-auto">
-            {RELATORIOS.filter((r) => tabsVisiveis.includes(r.id)).map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => setTab(r.id)}
-                className={`flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
-                  tab === r.id
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <r.icone className="h-4 w-4" />
-                {r.nome}
-              </button>
-            ))}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-0.5 rounded-xl bg-muted/60 p-1 w-fit max-w-full overflow-x-auto">
+              {RELATORIOS.filter((r) => tabsVisiveis.includes(r.id)).map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => setTab(r.id)}
+                  className={`flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
+                    tab === r.id
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <r.icone className="h-4 w-4" />
+                  {r.nome}
+                </button>
+              ))}
+            </div>
+            <SlotAcoes />
           </div>
         )}
 
@@ -271,6 +274,13 @@ export default function Relatorios() {
       </div>
     </ProvedorRelatorios>
   );
+}
+
+/** Ponto de pouso das ações do relatório (PDF/e-mail/programar) na linha das
+ *  abas — a aba ativa pendura os botões aqui via portal (ver AcoesRelatorio). */
+function SlotAcoes() {
+  const { setSlotAcoes } = useRelatorios();
+  return <div ref={setSlotAcoes} className="ml-auto" />;
 }
 
 const RELATORIOS = [
@@ -308,9 +318,10 @@ const DIAS_DEFAULT_RELATORIO = 30;
 
 function AbaAtendimento() {
   const { periodo, comparar } = useRelatorios();
-  const [setorId, setSetorId] = useState<number | null>(null);
-  const [atendenteId, setAtendenteId] = useState<number | null>(null);
-  const [canalId, setCanalId] = useState<number | null>(null);
+  // Listas vazias = sem filtro ("Todos") — o padrão de marcar vários.
+  const [setorIds, setSetorIds] = useState<number[]>([]);
+  const [atendenteIds, setAtendenteIds] = useState<number[]>([]);
+  const [canalIds, setCanalIds] = useState<number[]>([]);
   // Estado escolhido no mapa. Mora aqui, e não no contexto compartilhado,
   // porque só esta aba tem de onde tirá-lo.
   const [uf, setUf] = useState<string | null>(null);
@@ -322,20 +333,20 @@ function AbaAtendimento() {
   );
   const { data: canaisList } = trpc.configuracoes.listarCanais.useQuery(undefined, { retry: false });
 
-  // Atendentes filtrados pelo setor (se selecionado). Quando troca setor,
-  // limpa o atendente pra evitar combinação inválida.
+  // Atendentes limitados aos setores marcados. Quando os setores mudam, quem
+  // ficou de fora sai também da seleção de atendentes (combinação inválida).
   const atendentesFiltrados = ((colabsList?.colaboradores || []) as any[]).filter((c) => {
-    if (setorId == null) return true;
-    return c.setorId === setorId;
+    if (!setorIds.length) return true;
+    return setorIds.includes(c.setorId);
   });
 
   const { data, isLoading } = trpc.relatorios.atendimento.useQuery(
     {
       dataInicio: periodo.inicio,
       dataFim: periodo.fim,
-      setorId: setorId ?? undefined,
-      atendenteId: atendenteId ?? undefined,
-      canalId: canalId ?? undefined,
+      setorIds: setorIds.length ? setorIds : undefined,
+      atendenteIds: atendenteIds.length ? atendenteIds : undefined,
+      canalIds: canalIds.length ? canalIds : undefined,
       uf: uf ?? undefined,
       comparar,
     },
@@ -351,55 +362,50 @@ function AbaAtendimento() {
       <AcoesRelatorio
         relatorio="atendimento"
         filtros={{
-          setorId: setorId ?? undefined,
-          atendenteId: atendenteId ?? undefined,
-          canalId: canalId ?? undefined,
+          setorIds: setorIds.length ? setorIds : undefined,
+          atendenteIds: atendenteIds.length ? atendenteIds : undefined,
+          canalIds: canalIds.length ? canalIds : undefined,
           uf: uf ?? undefined,
         }}
         pronto={!!data}
       />
 
       <BarraFiltro>
-        <FiltroSelect
+        <FiltroMulti
           rotulo="Setor"
-          valor={setorId == null ? "" : String(setorId)}
-          onChange={(v) => {
-            const novo = v === "" ? null : parseInt(v, 10);
-            setSetorId(novo);
-            if (novo != null && atendenteId != null) {
-              const aindaValido = ((colabsList?.colaboradores || []) as any[])
-                .some((c) => c.id === atendenteId && c.setorId === novo);
-              if (!aindaValido) setAtendenteId(null);
+          selecionados={setorIds}
+          onAplicar={(novos) => {
+            setSetorIds(novos);
+            if (novos.length && atendenteIds.length) {
+              const validos = ((colabsList?.colaboradores || []) as any[])
+                .filter((c) => atendenteIds.includes(c.id) && novos.includes(c.setorId))
+                .map((c) => c.id);
+              if (validos.length !== atendenteIds.length) setAtendenteIds(validos);
             }
           }}
-          opcoes={[
-            { value: "", label: "Todos" },
-            ...(setoresList || []).map((s) => ({ value: String(s.id), label: s.nome })),
-          ]}
+          opcoes={(setoresList || []).map((s) => ({ id: s.id, label: s.nome }))}
+          placeholderBusca="Buscar setor…"
         />
-        <FiltroSelect
+        <FiltroMulti
           rotulo="Atendente"
-          valor={atendenteId == null ? "" : String(atendenteId)}
-          onChange={(v) => setAtendenteId(v === "" ? null : parseInt(v, 10))}
-          opcoes={[
-            { value: "", label: "Todos" },
-            ...atendentesFiltrados.map((c) => ({
-              value: String(c.id),
-              label: c.userName || c.userEmail || `#${c.id}`,
-            })),
-          ]}
+          selecionados={atendenteIds}
+          onAplicar={setAtendenteIds}
+          opcoes={atendentesFiltrados.map((c) => ({
+            id: c.id,
+            label: c.userName || c.userEmail || `#${c.id}`,
+          }))}
+          placeholderBusca="Buscar atendente…"
         />
-        <FiltroSelect
+        <FiltroMulti
           rotulo="Canal"
-          valor={canalId == null ? "" : String(canalId)}
-          onChange={(v) => setCanalId(v === "" ? null : parseInt(v, 10))}
-          opcoes={[
-            { value: "", label: "Todos" },
-            ...canaisAtivos.map((c) => ({
-              value: String(c.id),
-              label: `${c.nome || c.tipo}${c.telefone ? ` · ${c.telefone}` : ""}`,
-            })),
-          ]}
+          selecionados={canalIds}
+          onAplicar={setCanalIds}
+          opcoes={canaisAtivos.map((c) => ({
+            id: c.id,
+            label: c.nome || c.tipo,
+            extra: c.telefone || undefined,
+          }))}
+          placeholderBusca="Buscar canal…"
         />
         {uf && (
           <button
