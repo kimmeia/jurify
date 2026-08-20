@@ -27,7 +27,7 @@ import { NovaCobrancaDialog } from "@/pages/financeiro/dialogs";
 import {
   Loader2, Plus, Trash2, Upload, FileText, ExternalLink, PenLine, Send,
   Clock, StickyNote, CheckSquare, Check, Calendar, Download, Folder,
-  ChevronRight, MoreVertical, FolderPlus, Pencil, ArrowLeft, CheckCircle2,
+  ChevronRight, ChevronLeft, MoreVertical, FolderPlus, Pencil, ArrowLeft, CheckCircle2,
 } from "lucide-react";
 import JSZip from "jszip";
 import {
@@ -303,8 +303,12 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
   const [novaPastaNome, setNovaPastaNome] = useState("");
   const [criandoPasta, setCriandoPasta] = useState(false);
   const [renomeando, setRenomeando] = useState<{ id: number; nome: string } | null>(null);
+  const [renomeandoArq, setRenomeandoArq] = useState<{ id: number; nome: string } | null>(null);
   const [zipEmProgresso, setZipEmProgresso] = useState<number | null>(null);
   const [excluirPastaAlvo, setExcluirPastaAlvo] = useState<{ id: number; nome: string } | null>(null);
+  // Índice do arquivo aberto no visualizador (dentro da pasta atual).
+  // null = fechado. Navegar troca o índice sem fechar a janela.
+  const [viewerIdx, setViewerIdx] = useState<number | null>(null);
 
   const { data: pastas = [] } = trpc.clientes.listarPastas.useQuery({ contatoId, parentId: pastaAtualId });
   const { data: arquivos = [] } = trpc.clientes.listarArquivos.useQuery({ contatoId, pastaId: pastaAtualId });
@@ -343,6 +347,23 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
     onSuccess: (r) => { invalidar(); toast.success("Pasta excluída", { description: `${r.pastasExcluidas} pasta(s) e ${r.arquivosExcluidos} arquivo(s) removidos.` }); },
     onError: (e) => toast.error("Erro", { description: e.message }),
   });
+  const renomearArqMut = (trpc.clientes as any).renomearArquivo.useMutation({
+    onSuccess: () => { setRenomeandoArq(null); invalidar(); toast.success("Arquivo renomeado"); },
+    onError: (e: any) => toast.error("Erro ao renomear", { description: e.message }),
+  });
+
+  // ← → trocam de documento e Esc fecha — o visualizador é uma esteira,
+  // não uma janela por arquivo.
+  useEffect(() => {
+    if (viewerIdx === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") setViewerIdx((i) => (i === null ? i : Math.min(arquivos.length - 1, i + 1)));
+      if (e.key === "ArrowLeft") setViewerIdx((i) => (i === null ? i : Math.max(0, i - 1)));
+      if (e.key === "Escape") setViewerIdx(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [viewerIdx, arquivos.length]);
 
   const handleFiles = async (files: FileList | File[]) => {
     setUploading(true);
@@ -381,6 +402,8 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
     setCriandoPasta(false);
     setNovaPastaNome("");
     setRenomeando(null);
+    setRenomeandoArq(null);
+    setViewerIdx(null);
     setUrl("");
     setNome("");
   };
@@ -525,116 +548,157 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
           <p className="text-[10px] text-muted-foreground">PDF, imagens, docs · Máx 2GB</p>
         </div>
 
-        {/* Pastas */}
+        {/* Pastas — blocos estilo explorador (aprovado no mockup de 20/08) */}
         {pastas.length > 0 && (
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Pastas</p>
-            {pastas.map((p: any) => {
-              const r = renomeando;
-              const estaRenomeando = r !== null && r.id === p.id;
-              return (
-              <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/20 transition-colors group">
-                {estaRenomeando && r ? (
-                  <>
-                    <Folder className="h-4 w-4 text-amber-500 shrink-0" />
-                    <Input
-                      value={r.nome}
-                      onChange={(e) => setRenomeando({ id: p.id, nome: e.target.value })}
-                      onKeyDown={(e) => { if (e.key === "Enter" && r.nome.trim()) renomearMut.mutate({ id: p.id, nome: r.nome }); if (e.key === "Escape") setRenomeando(null); }}
-                      className="h-7 text-sm flex-1"
-                      autoFocus
-                    />
-                    <Button size="sm" className="h-7" disabled={!r.nome.trim() || renomearMut.isPending}
-                      onClick={() => renomearMut.mutate({ id: p.id, nome: r.nome })}>
-                      OK
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-7" onClick={() => setRenomeando(null)}>
-                      Cancelar
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <button className="flex items-center gap-2 flex-1 min-w-0" onClick={() => entrarNaPasta(p.id, p.nome)}>
-                      <Folder className="h-4 w-4 text-amber-500 shrink-0" />
-                      <span className="text-sm font-medium truncate">{p.nome}</span>
-                      <span className="text-[10px] text-muted-foreground shrink-0">
-                        {p.totalSubpastas > 0 ? `${p.totalSubpastas} pasta(s) · ` : ""}{p.totalArquivos} arquivo(s)
-                      </span>
-                    </button>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Baixar pasta (ZIP)"
-                      disabled={zipEmProgresso === p.id}
-                      onClick={() => baixarPastaZip(p.id, p.nome)}>
-                      {zipEmProgresso === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                          <MoreVertical className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setRenomeando({ id: p.id, nome: p.nome })}>
-                          <Pencil className="h-3.5 w-3.5 mr-2" /> Renomear
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => setExcluirPastaAlvo({ id: p.id, nome: p.nome })}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir pasta
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </>
-                )}
-              </div>
-              );
-            })}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {pastas.map((p: any) => {
+                const r = renomeando;
+                const estaRenomeando = r !== null && r.id === p.id;
+                return (
+                  <div key={p.id} className="relative rounded-xl border hover:bg-muted/30 transition-colors group p-3 text-center">
+                    {estaRenomeando && r ? (
+                      <div className="space-y-1.5">
+                        <Folder className="h-8 w-8 text-amber-500 mx-auto" />
+                        <Input
+                          value={r.nome}
+                          onChange={(e) => setRenomeando({ id: p.id, nome: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === "Enter" && r.nome.trim()) renomearMut.mutate({ id: p.id, nome: r.nome }); if (e.key === "Escape") setRenomeando(null); }}
+                          className="h-7 text-xs"
+                          autoFocus
+                        />
+                        <div className="flex gap-1 justify-center">
+                          <Button size="sm" className="h-6 text-[10px] px-2" disabled={!r.nome.trim() || renomearMut.isPending}
+                            onClick={() => renomearMut.mutate({ id: p.id, nome: r.nome })}>OK</Button>
+                          <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setRenomeando(null)}>Cancelar</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <button className="w-full" onClick={() => entrarNaPasta(p.id, p.nome)}>
+                          <Folder className="h-8 w-8 text-amber-500 mx-auto" />
+                          <p className="text-xs font-semibold mt-1.5 line-clamp-2 leading-snug">{p.nome}</p>
+                          <p className="text-[9.5px] text-muted-foreground mt-0.5">
+                            {p.totalSubpastas > 0 ? `${p.totalSubpastas} pasta(s) · ` : ""}{p.totalArquivos} arquivo(s)
+                          </p>
+                        </button>
+                        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                <MoreVertical className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => setRenomeando({ id: p.id, nome: p.nome })}>
+                                <Pencil className="h-3.5 w-3.5 mr-2" /> Renomear
+                              </DropdownMenuItem>
+                              <DropdownMenuItem disabled={zipEmProgresso === p.id} onClick={() => baixarPastaZip(p.id, p.nome)}>
+                                {zipEmProgresso === p.id ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-2" />}
+                                Baixar (ZIP)
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setExcluirPastaAlvo({ id: p.id, nome: p.nome })}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir pasta
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {/* Arquivos */}
+        {/* Arquivos — blocos com ícone por tipo; clique abre o visualizador */}
         {arquivos.length > 0 && (
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Arquivos</p>
-            {arquivos.map((a: any) => (
-              <div key={a.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/20 transition-colors">
-                {isImage(a.tipo)
-                  ? <div className="h-10 w-10 rounded-lg overflow-hidden bg-muted shrink-0"><img src={a.url} alt={a.nome} className="h-full w-full object-cover" onError={(e) => { (e.target as any).style.display = "none"; }} /></div>
-                  : <FileText className="h-4 w-4 text-blue-500 shrink-0" />}
-                <div className="flex-1 min-w-0">
-                  <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline truncate block">{a.nome}</a>
-                  <p className="text-[10px] text-muted-foreground">{a.tipo || "Documento"} {a.tamanho ? `· ${formatSize(a.tamanho)}` : ""} · {new Date(a.createdAt).toLocaleDateString("pt-BR")}</p>
-                </div>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600 shrink-0" title="Baixar" onClick={() => {
-                  const link = document.createElement("a"); link.href = a.url; link.download = a.nome || "arquivo"; link.target = "_blank"; link.click();
-                }}>
-                  <Download className="h-3 w-3" />
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0">
-                      <MoreVertical className="h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
-                    <DropdownMenuItem onClick={() => moverArq.mutate({ id: a.id, pastaId: null })} disabled={a.pastaId == null}>
-                      Mover para raiz
-                    </DropdownMenuItem>
-                    {todasPastas.length > 0 && <DropdownMenuSeparator />}
-                    {todasPastas.filter((p: any) => p.id !== a.pastaId).map((p: any) => (
-                      <DropdownMenuItem key={p.id} onClick={() => moverArq.mutate({ id: a.id, pastaId: p.id })}>
-                        <Folder className="h-3.5 w-3.5 mr-2 text-amber-500" /> {p.nome}
-                      </DropdownMenuItem>
-                    ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => excluirArq.mutate({ id: a.id })}>
-                      <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir arquivo
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ))}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {arquivos.map((a: any, idx: number) => {
+                const r = renomeandoArq;
+                const estaRenomeando = r !== null && r.id === a.id;
+                return (
+                  <div key={a.id} className="relative rounded-xl border hover:bg-muted/30 transition-colors group p-3 text-center">
+                    {estaRenomeando && r ? (
+                      <div className="space-y-1.5">
+                        <FileText className="h-8 w-8 text-blue-500 mx-auto" />
+                        <Input
+                          value={r.nome}
+                          onChange={(e) => setRenomeandoArq({ id: a.id, nome: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === "Enter" && r.nome.trim()) renomearArqMut.mutate({ id: a.id, nome: r.nome }); if (e.key === "Escape") setRenomeandoArq(null); }}
+                          className="h-7 text-xs"
+                          autoFocus
+                        />
+                        <div className="flex gap-1 justify-center">
+                          <Button size="sm" className="h-6 text-[10px] px-2" disabled={!r.nome.trim() || renomearArqMut.isPending}
+                            onClick={() => renomearArqMut.mutate({ id: a.id, nome: r.nome })}>OK</Button>
+                          <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setRenomeandoArq(null)}>Cancelar</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <button className="w-full" onClick={() => setViewerIdx(idx)} title="Abrir no visualizador">
+                          {isImage(a.tipo) ? (
+                            <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted mx-auto">
+                              <img src={a.url} alt={a.nome} className="h-full w-full object-cover" onError={(e) => { (e.target as any).style.display = "none"; }} />
+                            </div>
+                          ) : (
+                            <FileText className={`h-8 w-8 mx-auto ${(a.tipo || "").includes("pdf") || /\.pdf$/i.test(a.nome || "") ? "text-rose-500" : "text-blue-500"}`} />
+                          )}
+                          <p className="text-xs font-semibold mt-1.5 line-clamp-2 leading-snug break-all">{a.nome}</p>
+                          <p className="text-[9.5px] text-muted-foreground mt-0.5">
+                            {a.tamanho ? `${formatSize(a.tamanho)} · ` : ""}{new Date(a.createdAt).toLocaleDateString("pt-BR")}
+                          </p>
+                        </button>
+                        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                <MoreVertical className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+                              <DropdownMenuItem onClick={() => setViewerIdx(idx)}>
+                                <ExternalLink className="h-3.5 w-3.5 mr-2" /> Abrir
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setRenomeandoArq({ id: a.id, nome: a.nome })}>
+                                <Pencil className="h-3.5 w-3.5 mr-2" /> Renomear
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                const link = document.createElement("a"); link.href = a.url; link.download = a.nome || "arquivo"; link.target = "_blank"; link.click();
+                              }}>
+                                <Download className="h-3.5 w-3.5 mr-2" /> Baixar
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => moverArq.mutate({ id: a.id, pastaId: null })} disabled={a.pastaId == null}>
+                                Mover para raiz
+                              </DropdownMenuItem>
+                              {todasPastas.filter((p: any) => p.id !== a.pastaId).map((p: any) => (
+                                <DropdownMenuItem key={p.id} onClick={() => moverArq.mutate({ id: a.id, pastaId: p.id })}>
+                                  <Folder className="h-3.5 w-3.5 mr-2 text-amber-500" /> {p.nome}
+                                </DropdownMenuItem>
+                              ))}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => excluirArq.mutate({ id: a.id })}>
+                                <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir arquivo
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -642,6 +706,115 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
           <p className="text-sm text-muted-foreground text-center py-4">Nenhuma pasta ou arquivo aqui.</p>
         )}
       </CardContent>
+
+      {/* Visualizador — uma esteira sobre os arquivos da pasta atual: setas
+          (na tela e no teclado) e a fita de miniaturas trocam de documento
+          sem fechar a janela. */}
+      <Dialog open={viewerIdx !== null} onOpenChange={(o) => !o && setViewerIdx(null)}>
+        <DialogContent className="max-w-5xl h-[88vh] flex flex-col gap-0 p-0 overflow-hidden">
+          {viewerIdx !== null && arquivos[viewerIdx] && (() => {
+            const a = arquivos[viewerIdx];
+            const rv = renomeandoArq;
+            const renomeandoEste = rv !== null && rv.id === a.id;
+            return (
+              <>
+                <DialogHeader className="px-4 py-3 border-b flex-row items-center gap-2 space-y-0">
+                  {renomeandoEste && rv ? (
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Input
+                        value={rv.nome}
+                        onChange={(e) => setRenomeandoArq({ id: a.id, nome: e.target.value })}
+                        onKeyDown={(e) => { if (e.key === "Enter" && rv.nome.trim()) renomearArqMut.mutate({ id: a.id, nome: rv.nome }); if (e.key === "Escape") setRenomeandoArq(null); }}
+                        className="h-8 text-sm max-w-md"
+                        autoFocus
+                      />
+                      <Button size="sm" className="h-8" disabled={!rv.nome.trim() || renomearArqMut.isPending}
+                        onClick={() => renomearArqMut.mutate({ id: a.id, nome: rv.nome })}>OK</Button>
+                      <Button size="sm" variant="ghost" className="h-8" onClick={() => setRenomeandoArq(null)}>Cancelar</Button>
+                    </div>
+                  ) : (
+                    <DialogTitle className="text-sm font-bold truncate flex items-center gap-2 flex-1 min-w-0">
+                      <span className="truncate">{a.nome}</span>
+                      <button
+                        className="text-violet-700 dark:text-violet-400 shrink-0"
+                        title="Renomear arquivo"
+                        onClick={() => setRenomeandoArq({ id: a.id, nome: a.nome })}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </DialogTitle>
+                  )}
+                  <span className="text-[11px] font-bold text-muted-foreground tabular-nums shrink-0">
+                    {viewerIdx + 1} de {arquivos.length}
+                  </span>
+                  <Button size="sm" variant="outline" className="h-8 shrink-0" onClick={() => {
+                    const link = document.createElement("a"); link.href = a.url; link.download = a.nome || "arquivo"; link.target = "_blank"; link.click();
+                  }}>
+                    <Download className="h-3.5 w-3.5 mr-1.5" /> Baixar
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 shrink-0" title="Abrir em nova aba"
+                    onClick={() => window.open(a.url, "_blank")}>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                </DialogHeader>
+
+                <div className="flex-1 min-h-0 relative bg-muted/40">
+                  {isImage(a.tipo ?? "") ? (
+                    <div className="h-full w-full flex items-center justify-center p-4">
+                      <img src={a.url} alt={a.nome} className="max-h-full max-w-full object-contain rounded" />
+                    </div>
+                  ) : (
+                    // PDFs e docs: o navegador renderiza no iframe. URL externa
+                    // que recusar moldura tem a saída "Abrir em nova aba" acima.
+                    <iframe src={a.url} title={a.nome} className="h-full w-full border-0" />
+                  )}
+                  {viewerIdx > 0 && (
+                    <Button
+                      variant="outline" size="sm"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 h-9 w-9 p-0 rounded-full shadow-md"
+                      onClick={() => setViewerIdx(viewerIdx - 1)}
+                      title="Documento anterior (←)"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {viewerIdx < arquivos.length - 1 && (
+                    <Button
+                      variant="outline" size="sm"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 h-9 w-9 p-0 rounded-full shadow-md"
+                      onClick={() => setViewerIdx(viewerIdx + 1)}
+                      title="Próximo documento (→)"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+
+                <div className="border-t px-4 py-2 flex items-center gap-2 overflow-x-auto">
+                  {arquivos.map((f: any, i: number) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setViewerIdx(i)}
+                      title={f.nome}
+                      className={`shrink-0 w-14 h-16 rounded-md border-2 flex flex-col items-center justify-center gap-1 overflow-hidden transition-colors ${
+                        i === viewerIdx ? "border-violet-500 bg-violet-50 dark:bg-violet-950/40" : "border-border bg-card hover:bg-muted"
+                      }`}
+                    >
+                      {isImage(f.tipo) ? (
+                        <img src={f.url} alt={f.nome} className="h-9 w-11 object-cover rounded-sm" onError={(e) => { (e.target as any).style.display = "none"; }} />
+                      ) : (
+                        <FileText className={`h-5 w-5 ${(f.tipo || "").includes("pdf") || /\.pdf$/i.test(f.nome || "") ? "text-rose-500" : "text-blue-500"}`} />
+                      )}
+                      <span className="text-[7.5px] text-muted-foreground max-w-[48px] truncate px-0.5">{f.nome}</span>
+                    </button>
+                  ))}
+                  <span className="ml-auto text-[10px] text-muted-foreground shrink-0 pl-2">← → do teclado navegam</span>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!excluirPastaAlvo} onOpenChange={(o) => !o && setExcluirPastaAlvo(null)}>
         <AlertDialogContent>

@@ -242,12 +242,26 @@ export const clientesRouter = router({
       }
     }
 
+    // Nome do atendente responsável, em lote — a coluna da lista mostra quem
+    // cuida de cada cliente sem precisar abrir o cadastro.
+    const respIds = [...new Set(rows.map((r) => r.responsavelId).filter((v): v is number => typeof v === "number"))];
+    const nomeResp = new Map<number, string>();
+    if (respIds.length > 0) {
+      const respRows = await db
+        .select({ id: colaboradores.id, nome: users.name })
+        .from(colaboradores)
+        .innerJoin(users, eq(users.id, colaboradores.userId))
+        .where(and(eq(colaboradores.escritorioId, perm.escritorioId), inArray(colaboradores.id, respIds)));
+      for (const r of respRows) nomeResp.set(r.id, r.nome ?? "");
+    }
+
     return {
       clientes: rows.map((r) => ({
         ...r,
         createdAt: toIsoString(r.createdAt) ?? "",
         updatedAt: toIsoString(r.updatedAt) ?? "",
         ultimaConversaAt: dateMap.get(r.id) ?? null,
+        responsavelNome: r.responsavelId ? nomeResp.get(r.responsavelId) ?? null : null,
       })),
       total: Number((cnt as { count: number } | undefined)?.count || 0),
       pagina: input?.pagina || 1,
@@ -930,6 +944,26 @@ export const clientesRouter = router({
     }
     await db.update(clienteArquivos).set({ pastaId: input.pastaId })
       .where(eq(clienteArquivos.id, input.id));
+    return { success: true };
+  }),
+  renomearArquivo: protectedProcedure.input(z.object({
+    id: z.number(),
+    nome: z.string().min(1).max(255),
+  })).mutation(async ({ ctx, input }) => {
+    const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+    if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+    const [arquivo] = await db.select({ contatoId: clienteArquivos.contatoId })
+      .from(clienteArquivos)
+      .where(and(eq(clienteArquivos.id, input.id), eq(clienteArquivos.escritorioId, perm.escritorioId)))
+      .limit(1);
+    if (!arquivo) throw new TRPCError({ code: "NOT_FOUND", message: "Arquivo não encontrado." });
+    const okClient = await podeVerCliente(db, arquivo.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!okClient) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão neste cliente." });
+    // Só o rótulo muda — a URL/blob fica intacta, então nenhum link quebra.
+    await db.update(clienteArquivos).set({ nome: input.nome.trim() })
+      .where(and(eq(clienteArquivos.id, input.id), eq(clienteArquivos.escritorioId, perm.escritorioId)));
     return { success: true };
   }),
 
