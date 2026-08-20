@@ -834,7 +834,7 @@ export default function Clientes() {
           ) : (
             <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
               {/* Header */}
-              <div className={`grid ${aba === "lead" ? "grid-cols-[24px_48px_1fr_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-semibold text-slate-500`}>
+              <div className={`grid ${aba === "lead" ? "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-semibold text-slate-500`}>
                 <Checkbox
                   checked={
                     selecionados.size > 0 &&
@@ -849,6 +849,7 @@ export default function Clientes() {
                     {" "}· {clientesFiltrados.length} {aba === "lead" ? "lead" : "cliente"}{clientesFiltrados.length !== 1 ? "s" : ""}
                   </span>
                 </div>
+                <div>Atendente</div>
                 <div className="text-right">Financeiro</div>
                 <div className="text-right">Última interação</div>
                 <div className="text-right">Origem</div>
@@ -1069,7 +1070,7 @@ function LinhaCliente({
 
   return (
     <div
-      className={`grid ${modoLead ? "grid-cols-[24px_48px_1fr_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-3 border-t border-slate-100 hover:bg-slate-50/70 cursor-pointer transition-colors group`}
+      className={`grid ${modoLead ? "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-3 border-t border-slate-100 hover:bg-slate-50/70 cursor-pointer transition-colors group`}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("[data-stop-row-click]")) return;
         onAbrir();
@@ -1127,6 +1128,20 @@ function LinhaCliente({
             </span>
           )}
         </div>
+      </div>
+
+      {/* Atendente responsável — a lista responde "quem cuida?" sem abrir a ficha */}
+      <div className="min-w-0">
+        {c.responsavelNome ? (
+          <span className="inline-flex items-center gap-2 min-w-0">
+            <span className={`w-6 h-6 rounded-full bg-gradient-to-br ${gradientAvatar(c.responsavelNome)} text-white flex items-center justify-center text-[9px] font-bold shrink-0`}>
+              {gerarIniciais(c.responsavelNome)}
+            </span>
+            <span className="text-xs font-medium text-slate-700 truncate">{c.responsavelNome}</span>
+          </span>
+        ) : (
+          <span className="text-[11px] italic text-slate-400">sem atendente</span>
+        )}
       </div>
 
       {/* Financeiro com cor semântica */}
