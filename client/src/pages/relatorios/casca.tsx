@@ -8,9 +8,12 @@
  */
 
 import { createContext, useContext, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ArrowDownRight, ArrowUpRight, ChevronDown } from "lucide-react";
 import { type DeltaKpi, formatarDelta } from "@shared/relatorios-comparativo";
 
 export {
@@ -61,6 +64,11 @@ interface CtxRelatorios {
   setPeriodo: (p: Periodo) => void;
   comparar: boolean;
   setComparar: (v: boolean) => void;
+  /** Div na linha das abas onde as ações (PDF/e-mail/programar) se penduram
+   *  via portal. Null enquanto a linha não montou → as ações caem no lugar
+   *  antigo, acima da barra de filtros. */
+  slotAcoes: HTMLElement | null;
+  setSlotAcoes: (el: HTMLElement | null) => void;
 }
 
 const Ctx = createContext<CtxRelatorios | null>(null);
@@ -74,9 +82,10 @@ export function useRelatorios(): CtxRelatorios {
 export function ProvedorRelatorios({ children }: { children: React.ReactNode }) {
   const [periodo, setPeriodo] = useState<Periodo>(() => periodoInicial());
   const [comparar, setComparar] = useState(true);
+  const [slotAcoes, setSlotAcoes] = useState<HTMLElement | null>(null);
   const valor = useMemo(
-    () => ({ periodo, setPeriodo, comparar, setComparar }),
-    [periodo, comparar],
+    () => ({ periodo, setPeriodo, comparar, setComparar, slotAcoes, setSlotAcoes }),
+    [periodo, comparar, slotAcoes],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }
@@ -162,6 +171,147 @@ export function BarraFiltro({ children }: { children?: React.ReactNode }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Filtro de marcar vários — o padrão aprovado no mockup dos Relatórios:
+ * botão com rótulo + contagem, popover com busca, "marcar todos · limpar",
+ * linhas com checkbox e o rodapé com Aplicar. Lista vazia = "Todos".
+ *
+ * A seleção só sai do popover no Aplicar (rascunho local): cada clique num
+ * checkbox NÃO dispara query — quem marca 4 atendentes paga uma consulta,
+ * não quatro.
+ */
+export function FiltroMulti({
+  rotulo,
+  selecionados,
+  onAplicar,
+  opcoes,
+  placeholderBusca,
+}: {
+  rotulo: string;
+  /** Ids marcados. Vazio = sem filtro (todos). */
+  selecionados: number[];
+  onAplicar: (ids: number[]) => void;
+  opcoes: Array<{ id: number; label: string; extra?: string }>;
+  placeholderBusca?: string;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [busca, setBusca] = useState("");
+  const [rascunho, setRascunho] = useState<Set<number>>(new Set());
+
+  const abrir = (v: boolean) => {
+    if (v) {
+      setRascunho(new Set(selecionados));
+      setBusca("");
+    }
+    setAberto(v);
+  };
+  const alternar = (id: number) => {
+    setRascunho((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  };
+  const aplicar = () => {
+    // Marcar todos = mesmo efeito de nenhum: normaliza pra "sem filtro" e a
+    // query não carrega uma lista de ids que não restringe nada.
+    const ids = rascunho.size >= opcoes.length ? [] : [...rascunho];
+    onAplicar(ids);
+    setAberto(false);
+  };
+
+  const visiveis = busca.trim()
+    ? opcoes.filter((o) => o.label.toLowerCase().includes(busca.trim().toLowerCase()))
+    : opcoes;
+
+  const nomesSel = selecionados
+    .map((id) => opcoes.find((o) => o.id === id)?.label)
+    .filter(Boolean) as string[];
+  const resumo = !selecionados.length
+    ? "Todos"
+    : nomesSel.length <= 2
+      ? nomesSel.join(", ")
+      : `${nomesSel.slice(0, 2).join(", ")} +${nomesSel.length - 2}`;
+
+  return (
+    <Popover open={aberto} onOpenChange={abrir}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`flex h-8 items-center gap-1.5 rounded-lg border pl-2.5 pr-2 text-xs transition-colors ${
+            selecionados.length ? "border-violet-400 dark:border-violet-700" : ""
+          }`}
+        >
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {rotulo}
+          </span>
+          {selecionados.length > 0 && (
+            <span className="rounded-full bg-violet-600 px-1.5 text-[10px] font-bold text-white">
+              {selecionados.length}
+            </span>
+          )}
+          <span className={`max-w-[180px] truncate font-medium ${selecionados.length ? "" : "text-muted-foreground"}`}>
+            {resumo}
+          </span>
+          <ChevronDown className="h-3 w-3 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 p-2.5">
+        <Input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder={placeholderBusca ?? "Buscar…"}
+          className="h-8 text-xs"
+        />
+        <div className="mt-2 mb-1 flex items-center justify-between px-1">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            {rotulo}
+          </span>
+          <span className="text-[11px] font-semibold text-violet-600 dark:text-violet-400">
+            <button type="button" onClick={() => setRascunho(new Set(opcoes.map((o) => o.id)))}>
+              marcar todos
+            </button>
+            {" · "}
+            <button type="button" onClick={() => setRascunho(new Set())}>limpar</button>
+          </span>
+        </div>
+        <div className="max-h-64 overflow-y-auto">
+          {visiveis.length === 0 && (
+            <p className="px-1 py-3 text-xs text-muted-foreground">Nada com esse nome.</p>
+          )}
+          {visiveis.map((o) => (
+            <label
+              key={o.id}
+              className={`flex cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1.5 ${
+                rascunho.has(o.id) ? "bg-violet-50 dark:bg-violet-950/40" : "hover:bg-muted/60"
+              }`}
+            >
+              <Checkbox
+                checked={rascunho.has(o.id)}
+                onCheckedChange={() => alternar(o.id)}
+                className="h-3.5 w-3.5"
+              />
+              <span className="flex-1 truncate text-xs font-medium">{o.label}</span>
+              {o.extra && <span className="text-[11px] text-muted-foreground">{o.extra}</span>}
+            </label>
+          ))}
+        </div>
+        <div className="mt-2 flex items-center justify-between border-t pt-2">
+          <span className="text-[11px] font-semibold text-muted-foreground">
+            {rascunho.size === 0 || rascunho.size >= opcoes.length
+              ? "Todos"
+              : `${rascunho.size} de ${opcoes.length} selecionados`}
+          </span>
+          <Button size="sm" className="h-7 px-4 text-xs" onClick={aplicar}>
+            Aplicar
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

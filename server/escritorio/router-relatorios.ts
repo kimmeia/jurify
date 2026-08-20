@@ -144,6 +144,11 @@ const AtendimentoInput = z
     setorId: z.number().int().positive().optional(),
     atendenteId: z.number().int().positive().optional(),
     canalId: z.number().int().positive().optional(),
+    // Versão plural dos três filtros. Os singulares continuam aceitos porque
+    // envios programados antigos ficaram gravados com eles.
+    setorIds: z.array(z.number().int().positive()).max(100).optional(),
+    atendenteIds: z.array(z.number().int().positive()).max(200).optional(),
+    canalIds: z.array(z.number().int().positive()).max(100).optional(),
     /** Sigla da UF. Filtra o relatório inteiro, menos o próprio bloco de
      *  estados — que é o controle que aplica o filtro. */
     uf: z.string().trim().length(2).optional(),
@@ -173,45 +178,51 @@ export function metaProporcionalPeriodo(
   return metaMensal * (diasNoRange / diasNoMes);
 }
 
+/** Une o filtro singular (legado, gravado em envios programados antigos) com
+ *  o plural. `undefined` = sem filtro (todos). */
+export function idsDoFiltro(um?: number, varios?: number[]): number[] | undefined {
+  const lista = varios?.length ? varios : um != null ? [um] : [];
+  return lista.length ? [...new Set(lista)] : undefined;
+}
+
 /** Resolve a lista de colaboradorIds que satisfaz os filtros opcionais
- *  setorId + atendenteId, respeitando permissão (soProprios trava no
+ *  setorIds + atendenteIds, respeitando permissão (soProprios trava no
  *  próprio colaborador). Retorna null quando o filtro resultaria em
  *  "todos do escritório" (sem WHERE adicional). */
 async function resolverColaboradorIds(args: {
   db: any;
   escritorioId: number;
-  setorId?: number;
-  atendenteId?: number;
+  setorIds?: number[];
+  atendenteIds?: number[];
   soProprios: boolean;
   proprioColabId: number;
 }): Promise<number[] | null> {
-  const { db, escritorioId, setorId, atendenteId, soProprios, proprioColabId } = args;
+  const { db, escritorioId, setorIds, atendenteIds, soProprios, proprioColabId } = args;
 
   if (soProprios) return [proprioColabId];
 
-  if (atendenteId) {
-    if (setorId) {
-      const [c] = await db
+  if (atendenteIds?.length) {
+    if (setorIds?.length) {
+      const rows = await db
         .select({ id: colaboradores.id })
         .from(colaboradores)
         .where(and(
           eq(colaboradores.escritorioId, escritorioId),
-          eq(colaboradores.id, atendenteId),
-          eq(colaboradores.setorId, setorId),
-        ))
-        .limit(1);
-      return c ? [atendenteId] : [-1];
+          inArray(colaboradores.id, atendenteIds),
+          inArray(colaboradores.setorId, setorIds),
+        ));
+      return rows.length ? rows.map((r: any) => r.id) : [-1];
     }
-    return [atendenteId];
+    return atendenteIds;
   }
 
-  if (setorId) {
+  if (setorIds?.length) {
     const rows = await db
       .select({ id: colaboradores.id })
       .from(colaboradores)
       .where(and(
         eq(colaboradores.escritorioId, escritorioId),
-        eq(colaboradores.setorId, setorId),
+        inArray(colaboradores.setorId, setorIds),
       ));
     return rows.length ? rows.map((r: any) => r.id) : [-1];
   }
@@ -497,11 +508,15 @@ export const relatoriosRouter = router({
     const soProprios = !perm.verTodos && perm.verProprios;
     const colabId = esc.colaborador.id;
 
+    const setorIds = idsDoFiltro(input?.setorId, input?.setorIds);
+    const atendenteIds = idsDoFiltro(input?.atendenteId, input?.atendenteIds);
+    const canalIds = idsDoFiltro(input?.canalId, input?.canalIds);
+
     const colaboradorIds = await resolverColaboradorIds({
       db,
       escritorioId: eid,
-      setorId: input?.setorId,
-      atendenteId: input?.atendenteId,
+      setorIds,
+      atendenteIds,
       soProprios,
       proprioColabId: colabId,
     });
@@ -512,9 +527,16 @@ export const relatoriosRouter = router({
     const filtroRespLead = colaboradorIds
       ? [inArray(leads.responsavelId, colaboradorIds)]
       : [];
-    const filtroCanal = input?.canalId
-      ? [eq(conversas.canalId, input.canalId)]
+    const filtroCanal = canalIds
+      ? [inArray(conversas.canalId, canalIds)]
       : [];
+    // Fragmentos pros trechos em SQL cru (alias `c` = conversas).
+    const filtroCanalSql = canalIds
+      ? sql`AND c.canalIdConv IN (${sql.join(canalIds.map((id) => sql`${id}`), sql`, `)})`
+      : sql``;
+    const filtroAtendSql = colaboradorIds
+      ? sql`AND c.atendenteIdConv IN (${sql.join(colaboradorIds.map((id) => sql`${id}`), sql`, `)})`
+      : sql``;
 
     // Filtro por estado. Vale pro relatório inteiro, MENOS pro bloco que o
     // gera: o mapa é o controle que aplica o filtro, e controle que se filtra
@@ -619,12 +641,12 @@ export const relatoriosRouter = router({
     );
     // Canal não está no episódio: vive na conversa. Sai por subquery pra não
     // transformar todas as contagens num JOIN.
-    const filtroCanalAtd = input?.canalId
+    const filtroCanalAtd = canalIds
       ? [inArray(
           atendimentos.conversaId,
           db.select({ id: conversas.id }).from(conversas).where(and(
             eq(conversas.escritorioId, eid),
-            eq(conversas.canalId, input.canalId),
+            inArray(conversas.canalId, canalIds),
           )),
         )]
       : [];
@@ -646,8 +668,14 @@ export const relatoriosRouter = router({
 
     // ─── Leads: funil, agregados, por dia, motivos de perda ────────────
     // Canal filtra via join com conversas (NULL → fora se filtroCanal ativo).
-    const joinCanalLead = (q: any) => input?.canalId
-      ? q.innerJoin(conversas, eq(leads.conversaId, conversas.id))
+    // A condição de canal mora NO join: só o innerJoin, como era antes,
+    // exigia que o lead tivesse conversa mas aceitava conversa de QUALQUER
+    // canal — o filtro não filtrava.
+    const joinCanalLead = (q: any) => canalIds
+      ? q.innerJoin(conversas, and(
+          eq(leads.conversaId, conversas.id),
+          inArray(conversas.canalId, canalIds),
+        ))
       : q;
 
     const [
@@ -761,7 +789,8 @@ export const relatoriosRouter = router({
       WHERE c.escritorioIdConv = ${eid}
         AND c.createdAtConv >= ${dataInicio}
         AND c.createdAtConv <= ${dataFim}
-        ${input?.canalId ? sql`AND c.canalIdConv = ${input.canalId}` : sql``}
+        ${filtroCanalSql}
+        ${filtroAtendSql}
     `);
     const segMedioPriResp = Number((tempoPriRespRow as any)[0]?.[0]?.segMedio ?? (tempoPriRespRow as any).rows?.[0]?.segMedio ?? 0);
 
@@ -849,7 +878,7 @@ export const relatoriosRouter = router({
       gte(chamadas.createdAt, dataInicio),
       lte(chamadas.createdAt, dataFim),
       ...(colaboradorIds ? [inArray(chamadas.atendenteId, colaboradorIds)] : []),
-      ...(input?.canalId ? [eq(chamadas.canalId, input.canalId)] : []),
+      ...(canalIds ? [inArray(chamadas.canalId, canalIds)] : []),
     );
     const [chamGeral, chamPorAtend, chamPorDiaRows] = await Promise.all([
       db.select({
@@ -1014,9 +1043,6 @@ export const relatoriosRouter = router({
     // O filtro de atendente entra aqui também: sem ele o numerador varria o
     // escritório inteiro contra um denominador já filtrado, e a razão podia
     // passar de 100% ao escolher um atendente.
-    const filtroAtendSql = colaboradorIds
-      ? sql`AND c.atendenteIdConv IN (${sql.join(colaboradorIds.map((id) => sql`${id}`), sql`, `)})`
-      : sql``;
     const contarConvsComLead = async (di: Date, df: Date): Promise<number> => {
       const row = await db.execute(sql`
         SELECT COUNT(DISTINCT c.id) AS total
@@ -1025,7 +1051,7 @@ export const relatoriosRouter = router({
         WHERE c.escritorioIdConv = ${eid}
           AND c.createdAtConv >= ${di}
           AND c.createdAtConv <= ${df}
-          ${input?.canalId ? sql`AND c.canalIdConv = ${input.canalId}` : sql``}
+          ${filtroCanalSql}
           ${filtroAtendSql}
       `);
       return Number((row as any)[0]?.[0]?.total ?? (row as any).rows?.[0]?.total ?? 0);
@@ -1069,7 +1095,7 @@ export const relatoriosRouter = router({
                 WHERE c.escritorioIdConv = ${eid}
                   AND c.createdAtConv >= ${dataInicioAnt}
                   AND c.createdAtConv <= ${dataFimAnt}
-                  ${input?.canalId ? sql`AND c.canalIdConv = ${input.canalId}` : sql``}
+                  ${filtroCanalSql}
                   ${filtroAtendSql}
               `),
               db.select({
@@ -1082,7 +1108,7 @@ export const relatoriosRouter = router({
                 gte(chamadas.createdAt, dataInicioAnt),
                 lte(chamadas.createdAt, dataFimAnt),
                 ...(colaboradorIds ? [inArray(chamadas.atendenteId, colaboradorIds)] : []),
-                ...(input?.canalId ? [eq(chamadas.canalId, input.canalId)] : []),
+                ...(canalIds ? [inArray(chamadas.canalId, canalIds)] : []),
               )).groupBy(chamadas.direcao, chamadas.status),
               contarConvsComLead(dataInicioAnt, dataFimAnt),
               db.select({ total: sql<number>`COUNT(*)` })
@@ -1134,6 +1160,9 @@ export const relatoriosRouter = router({
         setorId: input?.setorId ?? null,
         atendenteId: input?.atendenteId ?? null,
         canalId: input?.canalId ?? null,
+        setorIds: setorIds ?? null,
+        atendenteIds: atendenteIds ?? null,
+        canalIds: canalIds ?? null,
         uf: input?.uf ? input.uf.toUpperCase() : null,
       },
       // KPIs Funil
@@ -2487,8 +2516,8 @@ export const relatoriosRouter = router({
     const colaboradorIds = await resolverColaboradorIds({
       db,
       escritorioId: eid,
-      setorId: input?.setorId,
-      atendenteId: input?.atendenteId,
+      setorIds: idsDoFiltro(input?.setorId),
+      atendenteIds: idsDoFiltro(input?.atendenteId),
       soProprios,
       proprioColabId: esc.colaborador.id,
     });
@@ -2787,6 +2816,9 @@ export const relatoriosPdfRouter = router({
           setorId: z.number().int().positive().optional(),
           atendenteId: z.number().int().positive().optional(),
           canalId: z.number().int().positive().optional(),
+          setorIds: z.array(z.number().int().positive()).max(100).optional(),
+          atendenteIds: z.array(z.number().int().positive()).max(200).optional(),
+          canalIds: z.array(z.number().int().positive()).max(100).optional(),
           // Sem isto o zod descarta o `uf` que a tela manda e o PDF sai com o
           // relatório inteiro enquanto a tela mostra um estado só — divergência
           // silenciosa, que é a pior espécie.
@@ -2807,26 +2839,36 @@ export const relatoriosPdfRouter = router({
       }
 
       const db = await getDb();
+      // Rótulo humano de uma lista: "Todos", "Trabalhista" ou "A, B +2".
+      const juntarNomes = (nomes: string[]): string => {
+        if (!nomes.length) return "Todos";
+        const mostra = nomes.slice(0, 3).join(", ");
+        return nomes.length > 3 ? `${mostra} +${nomes.length - 3}` : mostra;
+      };
       const rotuloDe = async (
         tabela: "setor" | "canal",
-        id: number | undefined,
+        ids: number[] | undefined,
       ): Promise<string> => {
-        if (id == null) return "Todos";
-        if (!db) return `#${id}`;
-        if (tabela === "setor") {
-          const [row] = await db.select({ nome: setores.nome }).from(setores)
-            .where(and(eq(setores.id, id), eq(setores.escritorioId, esc.escritorio.id))).limit(1);
-          return row?.nome ?? `#${id}`;
-        }
-        const [row] = await db
-          .select({ nome: canaisIntegrados.nome, tipo: canaisIntegrados.tipo })
-          .from(canaisIntegrados)
-          .where(and(eq(canaisIntegrados.id, id), eq(canaisIntegrados.escritorioId, esc.escritorio.id)))
-          .limit(1);
-        return row?.nome || row?.tipo || `#${id}`;
+        if (!ids?.length) return "Todos";
+        if (!db) return ids.map((id) => `#${id}`).join(", ");
+        const rows = tabela === "setor"
+          ? await db.select({ id: setores.id, nome: setores.nome }).from(setores)
+            .where(and(inArray(setores.id, ids), eq(setores.escritorioId, esc.escritorio.id)))
+          : await db
+            .select({ id: canaisIntegrados.id, nome: canaisIntegrados.nome, tipo: canaisIntegrados.tipo })
+            .from(canaisIntegrados)
+            .where(and(inArray(canaisIntegrados.id, ids), eq(canaisIntegrados.escritorioId, esc.escritorio.id)));
+        const nomePorId = new Map<number, string>(
+          rows.map((r: any) => [r.id, r.nome || r.tipo || `#${r.id}`]),
+        );
+        return juntarNomes(ids.map((id) => nomePorId.get(id) ?? `#${id}`));
       };
-      const atendenteLabel = input?.atendenteId != null
-        ? (data.tabelaAtendentes.find((a) => a.colabId === input.atendenteId)?.nome ?? `#${input.atendenteId}`)
+      const setorIdsPdf = idsDoFiltro(input?.setorId, input?.setorIds);
+      const atendenteIdsPdf = idsDoFiltro(input?.atendenteId, input?.atendenteIds);
+      const canalIdsPdf = idsDoFiltro(input?.canalId, input?.canalIds);
+      const atendenteLabel = atendenteIdsPdf
+        ? juntarNomes(atendenteIdsPdf.map((id) =>
+            data.tabelaAtendentes.find((a) => a.colabId === id)?.nome ?? `#${id}`))
         : "Todos";
 
       const buffer = await gerarAtendimentoPdf({
@@ -2852,9 +2894,9 @@ export const relatoriosPdfRouter = router({
           ligacoesPorAtendente: data.ligacoesPorAtendente,
         },
         nomeEscritorio: esc.escritorio.nome,
-        setorLabel: await rotuloDe("setor", input?.setorId),
+        setorLabel: await rotuloDe("setor", setorIdsPdf),
         atendenteLabel,
-        canalLabel: await rotuloDe("canal", input?.canalId),
+        canalLabel: await rotuloDe("canal", canalIdsPdf),
         ufLabel: input?.uf ? input.uf.toUpperCase() : "Todos",
       });
 
