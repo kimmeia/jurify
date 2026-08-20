@@ -100,6 +100,17 @@ export async function registrarMensagemNoEpisodio(args: {
         ultimaMensagemEm: args.em,
         // A primeira resposta é a PRIMEIRA: só grava se ainda não houver.
         ...(args.daEquipe ? { primeiraRespostaEm: sql`COALESCE(${atendimentos.primeiraRespostaEm}, ${args.em})` } : {}),
+        // Episódio que nasceu sem dono (conversa ainda não atribuída — o robô
+        // respondeu primeiro) ganha como "quem abriu" o primeiro humano que
+        // respondeu. Sem isso o trabalho dessa pessoa fica sem dono pra
+        // sempre e some de qualquer relatório filtrado por setor/atendente.
+        // COALESCE preserva o congelamento: dono já definido nunca muda.
+        ...(args.daEquipe && args.atendenteId != null
+          ? {
+              atendenteAbriu: sql`COALESCE(${atendimentos.atendenteAbriu}, ${args.atendenteId})`,
+              atendenteAtual: sql`COALESCE(${atendimentos.atendenteAtual}, ${args.atendenteId})`,
+            }
+          : {}),
       })
       .where(eq(atendimentos.id, ultimo.id));
     return ultimo.id;
@@ -141,7 +152,12 @@ export async function transferirEpisodioDaConversa(
     if (!db) return;
     await db
       .update(atendimentos)
-      .set({ atendenteAtual: novoAtendenteId })
+      .set({
+        atendenteAtual: novoAtendenteId,
+        // Assumir um episódio que nasceu sem dono também define quem abriu —
+        // é o primeiro humano no atendimento. Dono já definido não muda.
+        atendenteAbriu: sql`COALESCE(${atendimentos.atendenteAbriu}, ${novoAtendenteId})`,
+      })
       .where(and(eq(atendimentos.conversaId, conversaId), isNull(atendimentos.fechadoEm)));
   } catch {
     /* idem */

@@ -814,7 +814,7 @@ export const relatoriosRouter = router({
     // conversas (atendenteId) pra atendimentos. Atendente pode ter um sem
     // ter o outro. Resolvemos via UNION + agregação no app.
     const filtroColabIdsArr = colaboradorIds && colaboradorIds.length > 0 ? colaboradorIds : null;
-    const [leadsPorResp, atendPorAtend] = await Promise.all([
+    const [leadsPorResp, atdOperacional] = await Promise.all([
       joinCanalLead(
         db.select({
           colabId: leads.responsavelId,
@@ -836,10 +836,15 @@ export const relatoriosRouter = router({
       // Por quem ABRIU o atendimento, não pelo dono atual da conversa: com
       // `conversas.atendenteId` o histórico inteiro migrava pro último
       // atendente no dia em que alguém encostava na conversa, e o SDR que
-      // trabalhou o lead em março perdia o registro.
+      // trabalhou o lead em março perdia o registro. colabId NULL = episódio
+      // que nenhum humano assumiu (robô) — aparece como linha própria, não
+      // some: sumir faria a tabela somar menos que o KPI.
       db.select({
         colabId: atendimentos.atendenteAbriu,
-        atendimentos: sql<number>`COUNT(*)`,
+        iniciados: sql<number>`COUNT(*)`,
+        resolvidos: sql<number>`SUM(CASE WHEN ${atendimentos.fechadoEm} IS NOT NULL AND ${atendimentos.motivoFechamento} = 'resolvido' THEN 1 ELSE 0 END)`,
+        emAndamento: sql<number>`SUM(CASE WHEN ${atendimentos.fechadoEm} IS NULL THEN 1 ELSE 0 END)`,
+        segPriResp: sql<number>`AVG(TIMESTAMPDIFF(SECOND, ${atendimentos.abertoEm}, ${atendimentos.primeiraRespostaEm}))`,
       })
         .from(atendimentos)
         .where(and(baseAtd(dataInicio, dataFim), ...filtroCanalAtd))
@@ -950,10 +955,45 @@ export const relatoriosRouter = router({
       else if (balde === "perdidos") { x.perdidos += t; }
       else { x.emAberto += t; }
     }
-    for (const r of atendPorAtend) {
+    for (const r of atdOperacional) {
       if (!r.colabId) continue;
       const x = garantir(r.colabId);
-      x.atendimentos += Number(r.atendimentos);
+      x.atendimentos += Number(r.iniciados);
+    }
+
+    // ─── Quadro operacional por atendente (o que o dono pediu ver) ──────
+    const tabelaAtendimento = atdOperacional
+      .map((r) => ({
+        colabId: r.colabId as number | null,
+        nome: r.colabId
+          ? (nomePorColab.get(r.colabId)?.nome || `#${r.colabId}`)
+          : "Sem atendente (robô)",
+        removido: r.colabId ? (nomePorColab.get(r.colabId)?.removido ?? false) : false,
+        iniciados: Number(r.iniciados),
+        resolvidos: Number(r.resolvidos || 0),
+        emAndamento: Number(r.emAndamento || 0),
+        segPriResp: r.segPriResp != null ? Number(r.segPriResp) : null,
+      }))
+      .sort((a, b) => b.iniciados - a.iniciados);
+    const atendimentosResolvidos = tabelaAtendimento.reduce((a, r) => a + r.resolvidos, 0);
+    const atendimentosEmAndamento = tabelaAtendimento.reduce((a, r) => a + r.emAndamento, 0);
+
+    // Estoque atual do Inbox (todas as conversas, de qualquer época). Vai no
+    // rodapé do relatório: é a resposta à pergunta "por que não bate com o
+    // Inbox" impressa no lugar onde a pergunta nasce.
+    const estoqueRows = await db
+      .select({ status: conversas.status, total: sql<number>`COUNT(*)` })
+      .from(conversas)
+      .where(eq(conversas.escritorioId, eid))
+      .groupBy(conversas.status);
+    let estoqueTodas = 0;
+    let estoqueEmAtendimento = 0;
+    let estoqueResolvidas = 0;
+    for (const r of estoqueRows) {
+      const t = Number(r.total);
+      estoqueTodas += t;
+      if (r.status === "em_atendimento") estoqueEmAtendimento += t;
+      if (r.status === "resolvido") estoqueResolvidas += t;
     }
     const tabelaAtendentes = [...porAtendente.values()]
       .map((a) => ({
@@ -1030,12 +1070,11 @@ export const relatoriosRouter = router({
     }));
 
     // ─── Derivados ──────────────────────────────────────────────────────
-    // Taxa de conversão = ganhos / atendimentos do período. Reflete "do
-    // total de pessoas atendidas, qual % virou contrato". Antes era
-    // ganhos/(ganhos+perdidos) — ignorava leads em aberto e dava 100% pra
-    // quem só fechou poucos sem perder nenhum.
-    const taxaConversao = totalConversas > 0
-      ? Math.round((leadsGanhos / totalConversas) * 100)
+    // Taxa de conversão = ganhos / atendimentos INICIADOS — a mesma conta da
+    // tabela por atendente. O card dividia por conversas novas e a tabela por
+    // atendimentos: dois números diferentes pra "mesma" taxa no mesmo papel.
+    const taxaConversao = atendimentosIniciados > 0
+      ? Math.round((leadsGanhos / atendimentosIniciados) * 100)
       : null;
     const ticketMedio = leadsGanhos > 0 ? valorGanho / leadsGanhos : null;
     const cicloMedioDias = Number((cicloRows as any[])[0]?.diasMedio || 0);
@@ -1111,7 +1150,10 @@ export const relatoriosRouter = router({
                 ...(canalIds ? [inArray(chamadas.canalId, canalIds)] : []),
               )).groupBy(chamadas.direcao, chamadas.status),
               contarConvsComLead(dataInicioAnt, dataFimAnt),
-              db.select({ total: sql<number>`COUNT(*)` })
+              db.select({
+                total: sql<number>`COUNT(*)`,
+                resolvidos: sql<number>`SUM(CASE WHEN ${atendimentos.fechadoEm} IS NOT NULL AND ${atendimentos.motivoFechamento} = 'resolvido' THEN 1 ELSE 0 END)`,
+              })
                 .from(atendimentos)
                 .where(and(baseAtd(dataInicioAnt, dataFimAnt), ...filtroCanalAtd)),
             ]);
@@ -1120,20 +1162,22 @@ export const relatoriosRouter = router({
           const msgsAnt: Record<string, number> = {};
           for (const r of msgsAntRows) msgsAnt[r.direcao as string] = Number(r.total);
 
+          const atdIniciadosAnt = Number(atdAntRows[0]?.total || 0);
           return {
             periodo: {
               dataInicio: dataInicioAnt.toISOString().slice(0, 10),
               dataFim: dataFimAnt.toISOString().slice(0, 10),
             },
             totalConversas: totalConversasAnt,
-            atendimentosIniciados: Number(atdAntRows[0]?.total || 0),
+            atendimentosIniciados: atdIniciadosAnt,
+            atendimentosResolvidos: Number((atdAntRows[0] as any)?.resolvidos || 0),
             mensagensRecebidas: msgsAnt["entrada"] || 0,
             mensagensEnviadas: msgsAnt["saida"] || 0,
             segMedioPriResp: Number(
               (priRespAntRow as any)[0]?.[0]?.segMedio ?? (priRespAntRow as any).rows?.[0]?.segMedio ?? 0,
             ),
-            taxaConversao: totalConversasAnt > 0
-              ? Math.round((leadsGanhosAnt / totalConversasAnt) * 100)
+            taxaConversao: atdIniciadosAnt > 0
+              ? Math.round((leadsGanhosAnt / atdIniciadosAnt) * 100)
               : null,
             ticketMedio: leadsGanhosAnt > 0 ? valorGanhoAnt / leadsGanhosAnt : null,
             conversaParaLead: totalConversasAnt > 0
@@ -1195,6 +1239,14 @@ export const relatoriosRouter = router({
       totalConversas,
       conversasAtendidas,
       atendimentosIniciados,
+      atendimentosResolvidos,
+      atendimentosEmAndamento,
+      tabelaAtendimento,
+      estoqueConversas: {
+        todas: estoqueTodas,
+        emAtendimento: estoqueEmAtendimento,
+        resolvidas: estoqueResolvidas,
+      },
       atendimentosPorDia: atdPorDiaRows.map((r) => ({ dia: String(r.dia), total: Number(r.total) })),
       mensagensEnviadas: msgsDirecao["saida"] || 0,
       mensagensRecebidas: msgsDirecao["entrada"] || 0,
@@ -2876,6 +2928,10 @@ export const relatoriosPdfRouter = router({
           periodo: data.periodo,
           totalConversas: data.totalConversas,
           atendimentosIniciados: data.atendimentosIniciados,
+          atendimentosResolvidos: data.atendimentosResolvidos,
+          atendimentosEmAndamento: data.atendimentosEmAndamento,
+          tabelaAtendimento: data.tabelaAtendimento,
+          estoqueConversas: data.estoqueConversas,
           mensagensRecebidas: data.mensagensRecebidas,
           mensagensEnviadas: data.mensagensEnviadas,
           segMedioPriResp: data.segMedioPriResp,
