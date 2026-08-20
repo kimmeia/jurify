@@ -17,6 +17,10 @@ export type AtendimentoPdfData = {
   periodo: { dataInicio: string; dataFim: string };
   totalConversas: number;
   atendimentosIniciados: number;
+  /** Dos iniciados no período, quantos fecharam como "resolvido". */
+  atendimentosResolvidos?: number;
+  /** Dos iniciados no período, quantos seguem abertos. */
+  atendimentosEmAndamento?: number;
   mensagensRecebidas: number;
   mensagensEnviadas: number;
   segMedioPriResp: number;
@@ -28,6 +32,7 @@ export type AtendimentoPdfData = {
   anterior: {
     totalConversas: number;
     atendimentosIniciados: number;
+    atendimentosResolvidos?: number;
     mensagensRecebidas: number;
     mensagensEnviadas: number;
     segMedioPriResp: number;
@@ -35,6 +40,17 @@ export type AtendimentoPdfData = {
     ticketMedio: number | null;
     conversaParaLead: number | null;
   } | null;
+  /** Quadro operacional — quem abriu quantos atendimentos no período. */
+  tabelaAtendimento?: Array<{
+    nome: string;
+    iniciados: number;
+    resolvidos: number;
+    emAndamento: number;
+    segPriResp: number | null;
+  }>;
+  /** Estoque atual do Inbox, pro rodapé que explica por que os números
+   *  não batem com a tela de Atendimento. */
+  estoqueConversas?: { todas: number; emAtendimento: number; resolvidas: number };
   conversasPorDia: Array<{ dia: string; total: number }>;
   atendimentosPorDia: Array<{ dia: string; total: number }>;
   porCanal: Array<{ nome: string; total: number }>;
@@ -282,10 +298,27 @@ export async function gerarAtendimentoPdf(args: {
           delta: calcularDelta(data.atendimentosIniciados, ant?.atendimentosIniciados),
           bd: C.violetBd, color: C.dark,
         },
-        {
-          label: "Conversas novas", value: formatMilhar(data.totalConversas),
-          delta: calcularDelta(data.totalConversas, ant?.totalConversas), bd: C.line, color: C.dark,
-        },
+        ...(data.atendimentosResolvidos != null
+          ? [
+              {
+                label: "Resolvidos no período",
+                value: formatMilhar(data.atendimentosResolvidos),
+                delta: calcularDelta(data.atendimentosResolvidos, ant?.atendimentosResolvidos),
+                bd: C.emeraldBd, color: C.dark,
+              },
+              {
+                label: "Em andamento hoje",
+                value: formatMilhar(data.atendimentosEmAndamento ?? 0),
+                delta: null,
+                bd: C.line, color: C.dark,
+              },
+            ]
+          : [
+              {
+                label: "Conversas novas", value: formatMilhar(data.totalConversas),
+                delta: calcularDelta(data.totalConversas, ant?.totalConversas), bd: C.line, color: C.dark,
+              },
+            ]),
         {
           label: "Tempo p/ 1ª resposta", value: formatTempo(data.segMedioPriResp),
           delta: calcularDelta(data.segMedioPriResp, ant?.segMedioPriResp, true),
@@ -369,26 +402,80 @@ export async function gerarAtendimentoPdf(args: {
         "Sem canal no período.",
       );
 
-      // ── 6) POR ATENDENTE ───────────────────────────────────────────────────
+      // ── 6) ATENDIMENTO POR ATENDENTE ───────────────────────────────────────
+      // O quadro que responde "quantos atendimentos cada um fez": só operação,
+      // sem misturar com o funil comercial (que tem a tabela dele logo abaixo).
+      const tabAtd = data.tabelaAtendimento ?? [];
+      if (tabAtd.length > 0) {
+        ensure(70);
+        sectionHeader(
+          "Atendimento por atendente", C.violet,
+          "Quem abriu o episódio no período. Resolvidos = fechados como \"resolvido\"; fechados por silêncio/manual não entram nas duas colunas.",
+        );
+        const xNome = L, wNome = 150, wCol = 52;
+        const xIni = L + 155, xRes = xIni + 56, xAnd = xRes + 56, xResp = xAnd + 56;
+        const yh = doc.y;
+        doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(7.5);
+        doc.text("Atendente", xNome, yh, { width: wNome });
+        doc.text("Atendimentos", xIni, yh, { width: wCol, align: "right" });
+        doc.text("Resolvidos", xRes, yh, { width: wCol, align: "right" });
+        doc.text("Em andamento", xAnd, yh, { width: wCol + 6, align: "right" });
+        doc.text("1ª resposta", xResp, yh, { width: wCol, align: "right" });
+        doc.text("% do total", xResp + 56, yh, { width: R - xResp - 56, align: "right" });
+        doc.y = yh + 12;
+        hr(doc.y, C.line, 0.7);
+        doc.y += 4;
+
+        const totalIni = tabAtd.reduce((a, x) => a + x.iniciados, 0);
+        tabAtd.forEach((a) => {
+          ensure(20);
+          const yr = doc.y;
+          doc.fillColor(C.dark).font("Helvetica-Bold").fontSize(8.5)
+            .text(a.nome, xNome, yr + 3, { width: wNome, lineBreak: false, ellipsis: true });
+          doc.font("Helvetica").fontSize(8.5);
+          doc.fillColor(C.dark).text(formatMilhar(a.iniciados), xIni, yr + 3, { width: wCol, align: "right" });
+          doc.fillColor(C.emerald).text(formatMilhar(a.resolvidos), xRes, yr + 3, { width: wCol, align: "right" });
+          doc.fillColor(C.muted).text(formatMilhar(a.emAndamento), xAnd, yr + 3, { width: wCol + 6, align: "right" });
+          doc.fillColor(C.dark).text(a.segPriResp != null ? formatTempo(a.segPriResp) : "—", xResp, yr + 3, { width: wCol, align: "right" });
+          doc.fillColor(C.muted).text(
+            totalIni > 0 ? `${Math.round((a.iniciados / totalIni) * 100)}%` : "—",
+            xResp + 56, yr + 3, { width: R - xResp - 56, align: "right" },
+          );
+          doc.y = yr + 18;
+          hr(doc.y - 2, "#f1f5f9", 0.5);
+        });
+
+        ensure(22);
+        const yt = doc.y + 2;
+        rrect(L, yt - 2, W, 18, 3, "#f8fafc");
+        doc.fillColor(C.dark).font("Helvetica-Bold").fontSize(8.5);
+        doc.text("Total", xNome, yt + 3, { width: wNome });
+        doc.text(formatMilhar(totalIni), xIni, yt + 3, { width: wCol, align: "right" });
+        doc.fillColor(C.emerald).text(formatMilhar(tabAtd.reduce((a, x) => a + x.resolvidos, 0)), xRes, yt + 3, { width: wCol, align: "right" });
+        doc.fillColor(C.muted).text(formatMilhar(tabAtd.reduce((a, x) => a + x.emAndamento, 0)), xAnd, yt + 3, { width: wCol + 6, align: "right" });
+        doc.fillColor(C.dark).text(formatTempo(data.segMedioPriResp), xResp, yt + 3, { width: wCol, align: "right" });
+        doc.text("100%", xResp + 56, yt + 3, { width: R - xResp - 56, align: "right" });
+        doc.y = yt + 24;
+      }
+
+      // ── 7) COMERCIAL POR ATENDENTE ─────────────────────────────────────────
       ensure(70);
       sectionHeader(
-        "Detalhamento por atendente", C.amber,
-        "Conv. = ganhos ÷ atendimentos. Ordenado por valor fechado.",
+        "Comercial por atendente", C.amber,
+        "Conv. = ganhos ÷ atendimentos iniciados. Ordenado por valor fechado.",
       );
       if (data.tabelaAtendentes.length === 0) {
         doc.fillColor(C.muted).font("Helvetica-Oblique").fontSize(9)
           .text("Nenhum atendente com movimento no período.", L, doc.y);
         doc.moveDown(0.8);
       } else {
-        const xNome = L, wNome = 140,
-          xAtend = L + 145, wCol = 42,
-          xLeads = xAtend + 46, xGanhos = xLeads + 46,
-          xPerd = xGanhos + 46, xConv = xPerd + 46,
-          xValor = xConv + 50;
+        const xNome = L, wNome = 150, wCol = 50,
+          xLeads = L + 165, xGanhos = xLeads + 54,
+          xPerd = xGanhos + 54, xConv = xPerd + 54,
+          xValor = xConv + 58;
         const yh = doc.y;
         doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(7.5);
         doc.text("Atendente", xNome, yh, { width: wNome });
-        doc.text("Atend.", xAtend, yh, { width: wCol, align: "right" });
         doc.text("Oportun.", xLeads, yh, { width: wCol, align: "right" });
         doc.text("Ganhos", xGanhos, yh, { width: wCol, align: "right" });
         doc.text("Perd.", xPerd, yh, { width: wCol, align: "right" });
@@ -415,7 +502,6 @@ export async function gerarAtendimentoPdf(args: {
           doc.fillColor(C.dark).font("Helvetica-Bold").fontSize(8.5)
             .text(a.nome, xNome, yr + 3, { width: wNome, lineBreak: false, ellipsis: true });
           doc.font("Helvetica").fontSize(8.5);
-          doc.fillColor(C.dark).text(formatMilhar(a.atendimentos), xAtend, yr + 3, { width: wCol, align: "right" });
           doc.fillColor(C.muted).text(formatMilhar(a.leadsTotal), xLeads, yr + 3, { width: wCol, align: "right" });
           doc.fillColor(C.emerald).text(formatMilhar(a.ganhos), xGanhos, yr + 3, { width: wCol, align: "right" });
           doc.fillColor(C.rose).text(formatMilhar(a.perdidos), xPerd, yr + 3, { width: wCol, align: "right" });
@@ -432,7 +518,6 @@ export async function gerarAtendimentoPdf(args: {
         rrect(L, yt - 2, W, 18, 3, "#f8fafc");
         doc.fillColor(C.dark).font("Helvetica-Bold").fontSize(8.5);
         doc.text("Total", xNome, yt + 3, { width: wNome });
-        doc.text(formatMilhar(totais.atendimentos), xAtend, yt + 3, { width: wCol, align: "right" });
         doc.text(formatMilhar(totais.leadsTotal), xLeads, yt + 3, { width: wCol, align: "right" });
         doc.fillColor(C.emerald).text(formatMilhar(totais.ganhos), xGanhos, yt + 3, { width: wCol, align: "right" });
         doc.fillColor(C.rose).text(formatMilhar(totais.perdidos), xPerd, yt + 3, { width: wCol, align: "right" });
@@ -444,7 +529,29 @@ export async function gerarAtendimentoPdf(args: {
         doc.y = yt + 24;
       }
 
-      // ── 7) LIGAÇÕES ────────────────────────────────────────────────────────
+      // ── Por que não bate com o Inbox ───────────────────────────────────────
+      // A pergunta nasce toda vez que alguém compara o PDF com a tela de
+      // Atendimento. A resposta impressa aqui poupa a próxima pessoa.
+      if (data.estoqueConversas) {
+        const e = data.estoqueConversas;
+        const txt =
+          `Por que estes números não batem com a tela de Atendimento: os cartões do Inbox ` +
+          `(Todas ${formatMilhar(e.todas)} · Em atendimento ${formatMilhar(e.emAtendimento)} · Resolvidas ${formatMilhar(e.resolvidas)}) ` +
+          `são o estoque de HOJE — tudo que existe na caixa agora, de qualquer época. Este relatório mede o movimento do período: ` +
+          `${formatMilhar(data.atendimentosIniciados)} atendimentos abertos na janela` +
+          (data.atendimentosResolvidos != null ? `, dos quais ${formatMilhar(data.atendimentosResolvidos)} já foram resolvidos` : "") +
+          `. Cliente antigo que voltou a escrever conta aqui sem virar conversa nova (entraram ${formatMilhar(data.totalConversas)} conversas novas); ` +
+          `conversa aberta por disparo/campanha só vira atendimento quando o cliente responde. Os dois estão certos — medem coisas diferentes.`;
+        const alturaTxt = doc.heightOfString(txt, { width: W - 24 }) + 20;
+        ensure(alturaTxt + 8);
+        const yn = doc.y;
+        rrect(L, yn, W, alturaTxt, 6, "#faf5ff", C.violetBd, 0.8);
+        doc.fillColor(C.dark).font("Helvetica").fontSize(8)
+          .text(txt, L + 12, yn + 10, { width: W - 24 });
+        doc.y = yn + alturaTxt + 12;
+      }
+
+      // ── 8) LIGAÇÕES ────────────────────────────────────────────────────────
       const temLigacoes =
         data.ligacoes.feitas > 0 || data.ligacoes.recebidas > 0 || data.ligacoes.perdidas > 0;
       if (temLigacoes) {
