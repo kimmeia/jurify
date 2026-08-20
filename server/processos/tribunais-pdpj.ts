@@ -41,7 +41,14 @@ export function pdpjTjConfig(
 // usado pra alinhar a URL sem mudar o id interno.
 const REGISTRO: Record<string, TribunalPdpjConfig> = {
   tjce: pdpjTjConfig("ce"),
-  tjrj: pdpjTjConfig("rj"),
+  // TJRJ foge do padrão: o portal é tribunal-como-subdomínio do pje.jus.br
+  // (tjrj.pje.jus.br) com grau no path curto (/1g). O derivado
+  // pje.tjrj.jus.br nem resolve DNS — foi o ERR_NAME_NOT_RESOLVED visto na
+  // validação do Cofre em 20/08.
+  tjrj: pdpjTjConfig("rj", 1, {
+    urlEntrada: "https://tjrj.pje.jus.br/1g/login.seam",
+    urlBusca: "https://tjrj.pje.jus.br/1g/Processo/ConsultaProcesso/listView.seam",
+  }),
   tjmg: pdpjTjConfig("mg"),
   tjrn: pdpjTjConfig("rn"),
   tjma: pdpjTjConfig("ma"),
