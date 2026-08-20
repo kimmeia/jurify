@@ -23,6 +23,61 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal, Globe, HelpCircle, Mail } from "lucide-react";
 import { MovimentacoesCentral, ConfigResumoDiario } from "./Movimentacoes";
+import { EstadosPicker } from "@/components/EstadosPicker";
+import { TRIBUNAL_SEDE, siglaDoTribunal, tribunalDoCnj } from "@shared/tribunais-pje";
+
+/** Estados vigiados de um monitoramento (coluna nova; legado = `tribunal`). */
+function lerTribunaisDoMonitorCliente(m: { tribunais?: string | null; tribunal?: string }): string[] {
+  if (m.tribunais) {
+    try {
+      const lista = JSON.parse(m.tribunais);
+      if (Array.isArray(lista) && lista.length > 0) return lista.filter((t) => typeof t === "string");
+    } catch {
+      /* legado */
+    }
+  }
+  return m.tribunal ? [m.tribunal] : [TRIBUNAL_SEDE];
+}
+
+/**
+ * "O robô está mesmo olhando os outros estados?" — responde com o que a
+ * última varredura de fato fez (varreduraJson), não com a intenção. Falha
+ * por tribunal aparece aqui em vez de morrer no log.
+ */
+function CoberturaVarredura({ mons }: { mons: any[] }) {
+  let ultimaEm: string | null = null;
+  const estados = new Set<string>();
+  const falhas = new Set<string>();
+  for (const m of mons) {
+    for (const t of lerTribunaisDoMonitorCliente(m)) estados.add(t);
+    if (!m.varreduraJson) continue;
+    try {
+      const v = JSON.parse(m.varreduraJson);
+      if (v?.em && (!ultimaEm || v.em > ultimaEm)) ultimaEm = v.em;
+      for (const r of v?.resultados ?? []) {
+        if (r && r.ok === false && typeof r.tribunal === "string") falhas.add(siglaDoTribunal(r.tribunal));
+      }
+    } catch {
+      /* varredura antiga sem json */
+    }
+  }
+  if (estados.size === 0) return null;
+  return (
+    <p className="text-[10px] mt-0.5">
+      <span className="text-violet-700 font-semibold">
+        Vigiando em {[...estados].map(siglaDoTribunal).join(" · ")}
+      </span>
+      {ultimaEm && (
+        <span className="text-slate-500">
+          {" "}· última varredura {new Date(ultimaEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+        </span>
+      )}
+      {falhas.size > 0 && (
+        <span className="text-rose-600 font-semibold"> · ⚠ falha em {[...falhas].join(", ")}</span>
+      )}
+    </p>
+  );
+}
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -2815,6 +2870,10 @@ function NovasAcoesTab() {
   const [novoOpen, setNovoOpen] = useState(false);
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
+  const [novoTribunais, setNovoTribunais] = useState<string[]>([TRIBUNAL_SEDE]);
+  // Editar estados de um monitoramento existente (menu do card).
+  const [editarEstadosTarget, setEditarEstadosTarget] = useState<any>(null);
+  const [editarEstadosLista, setEditarEstadosLista] = useState<string[]>([TRIBUNAL_SEDE]);
   const [credencialId, setCredencialId] = useState<string>("");
   const [deletarMonTarget, setDeletarMonTarget] = useState<{ id: number; nome: string } | null>(null);
   const [atualOperacaoId, setAtualOperacaoId] = useState<string | null>(null);
@@ -2875,9 +2934,21 @@ function NovasAcoesTab() {
       setNovoOpen(false);
       setBuscaCliente("");
       setClienteSelecionado(null);
+      setNovoTribunais([TRIBUNAL_SEDE]);
       recarregarDoTopo();
     },
     onError: (e: any) => toast.error(e.message),
+  });
+
+  const atualizarTribunaisMut = (trpc.processos as any).atualizarTribunaisNovasAcoes.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(`Agora vigiando em ${r.tribunais.length} ${r.tribunais.length === 1 ? "estado" : "estados"}`, {
+        description: "Estado novo faz a primeira varredura em silêncio — só o que aparecer depois dela vira alerta.",
+      });
+      setEditarEstadosTarget(null);
+      recarregarDoTopo();
+    },
+    onError: (e: any) => toast.error("Falha ao atualizar estados", { description: e.message }),
   });
 
   // Resolve um card (monitorando/lida/falso): sai da lista atual na hora
@@ -3218,6 +3289,7 @@ function NovasAcoesTab() {
                 <p className="text-[10px] text-slate-500">
                   {monitoramentosRaw.filter((m: any) => (m.statusJudit || m.status) === "ativo").length} ativos · {monitoramentosRaw.filter((m: any) => !!m.ultimoErro).length} com erro
                 </p>
+                <CoberturaVarredura mons={monitoramentosRaw} />
               </div>
             </div>
             <p className="text-[10px] text-slate-400">
@@ -3274,6 +3346,9 @@ function NovasAcoesTab() {
                             </span>
                             <span className="text-[10px] text-slate-500 font-mono truncate">{m.searchKey}</span>
                           </div>
+                          <p className="text-[9.5px] text-slate-500 mt-1 truncate" title="Estados vigiados">
+                            <span className="font-semibold text-violet-700">{lerTribunaisDoMonitorCliente(m).map(siglaDoTribunal).join(" · ")}</span>
+                          </p>
                           {(m.totalNovasAcoes ?? 0) > 0 && (
                             <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[9.5px] font-bold mt-1.5">
                               <Siren className="h-2.5 w-2.5" />
@@ -3288,6 +3363,19 @@ function NovasAcoesTab() {
                         </div>
                       </div>
                       <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-slate-100">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-[10px] rounded-md text-slate-600 hover:bg-violet-50 hover:text-violet-700 px-2"
+                          title="Escolher em quais estados vigiar este cliente"
+                          onClick={() => {
+                            setEditarEstadosTarget(m);
+                            setEditarEstadosLista(lerTribunaisDoMonitorCliente(m));
+                          }}
+                        >
+                          <MapPin className="h-3 w-3 mr-1" />
+                          Estados
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -3502,6 +3590,14 @@ function NovasAcoesTab() {
                       <div className="mt-3 rounded-lg bg-slate-50/70 border border-slate-200/70 p-3 space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-bold font-mono text-slate-900">{a.cnj}</p>
+                          {(() => {
+                            const trib = tribunalDoCnj(a.cnj) ?? a.tribunal;
+                            return trib ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-[9.5px] font-extrabold tracking-wide">
+                                {siglaDoTribunal(trib)}
+                              </span>
+                            ) : null;
+                          })()}
                           {valor != null && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9.5px] font-semibold tabular-nums">
                               <CircleDollarSign className="h-2.5 w-2.5" />
@@ -3797,6 +3893,10 @@ function NovasAcoesTab() {
               </div>
             )}
 
+            {clienteSelecionado && (
+              <EstadosPicker selecionados={novoTribunais} onChange={setNovoTribunais} />
+            )}
+
             <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 p-3 text-xs flex items-start gap-2">
               <ShieldAlert className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
               <div className="text-blue-900 dark:text-blue-200 space-y-1">
@@ -3804,7 +3904,8 @@ function NovasAcoesTab() {
                 <p>
                   O monitoramento de novas ações é permitido apenas para clientes cadastrados
                   no seu escritório, garantindo que existe relação jurídica legítima para o
-                  tratamento dos dados processuais. Custo: <strong>15 créditos/mês</strong>.
+                  tratamento dos dados processuais. Custo: <strong>15 créditos/mês</strong>,
+                  independente dos estados escolhidos.
                 </p>
               </div>
             </div>
@@ -3821,12 +3922,37 @@ function NovasAcoesTab() {
                   valor: clean,
                   apelido: clienteSelecionado.nome,
                   credencialId: Number(credencialId),
+                  tribunais: novoTribunais,
                 });
               }}
               disabled={!clienteSelecionado || !credencialId || criarMut.isPending}
             >
               {criarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Criar monitoramento
+              Vigiar em {novoTribunais.length} {novoTribunais.length === 1 ? "estado" : "estados"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Editar estados vigiados de um monitoramento existente */}
+      <Dialog open={!!editarEstadosTarget} onOpenChange={(v) => !v && setEditarEstadosTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Onde vigiar {editarEstadosTarget?.apelido || editarEstadosTarget?.searchKey}?</DialogTitle>
+            <DialogDescription>
+              Estado adicionado faz a primeira varredura em silêncio: registra o que já existe lá
+              sem alarmar — só processo novo a partir dela vira alerta.
+            </DialogDescription>
+          </DialogHeader>
+          <EstadosPicker selecionados={editarEstadosLista} onChange={setEditarEstadosLista} />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditarEstadosTarget(null)}>Cancelar</Button>
+            <Button
+              disabled={atualizarTribunaisMut.isPending}
+              onClick={() => atualizarTribunaisMut.mutate({ id: editarEstadosTarget.id, tribunais: editarEstadosLista })}
+            >
+              {atualizarTribunaisMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Vigiar em {editarEstadosLista.length} {editarEstadosLista.length === 1 ? "estado" : "estados"}
             </Button>
           </DialogFooter>
         </DialogContent>
