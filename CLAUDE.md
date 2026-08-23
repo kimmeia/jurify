@@ -110,15 +110,20 @@ Caso clássico: validação inicial passou → integração quebrou depois → p
 
 Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
 
-0. **Aviso de spam da Meta (19/08)** — causas corrigidas e em produção no
-   mesmo dia (opt-out ampliado + alerta de intenção, opt-in exigido em envio
-   frio manual, executarManual sanitizado, bot se identifica como assistente
-   virtual). Conta verificada, zero template rejeitado/recategorizado.
-   Lembrete agendado (26/08, trigger `trig_01Tg9mU9aGhgVWKbC7ShfuHw`): se a
-   semana rodou limpa, dono clica "solicitar uma análise" (prazo 17/11).
-   Em STAND-BY por decisão do dono (19/08): tela de evidência de
-   conformidade (mockup enviado) e botão "cliente autorizou WhatsApp" no
-   cadastro do contato — não implementar sem ele pedir.
+0. **Avisos de spam da Meta (19/08 E 22/08)** — SEGUNDO aviso chegou em
+   22/08 (prazo de análise 20/11), três dias após as correções de 19/08
+   (opt-out ampliado, opt-in em envio frio manual, executarManual
+   sanitizado, bot se identifica). Vetores automáticos conferidos em 23/08:
+   SmartFlow gate ok (`exigirOptin: !veioDeMensagem`), lembretes WhatsApp
+   nem existem, resumo diário vai só pro dono. Hipótese principal:
+   denúncias atrasadas de envios pré-19/08 e/ou conteúdo de disparos com
+   opt-in que ainda soa anúncio. Plano: 14 dias SEM disparo frio (WhatsApp
+   só reativo/1:1), NÃO clicar "solicitar análise" antes disso; lembrete
+   26/08 atualizado (`trig_01Tg9mU9aGhgVWKbC7ShfuHw`). Aguardando do dono:
+   print do "Ver detalhes" do aviso 2 + Quality Rating no WhatsApp Manager.
+   Aviso 2 é o gatilho descrito pros itens em STAND-BY (tela de evidência
+   de conformidade + botão "cliente autorizou WhatsApp") — dono foi
+   lembrado em 23/08; segue sem implementar até ele pedir.
    Relatório completo em `docs/auditoria-meta-whatsapp-2026-08-19.md`.
 1. **Robô de jornada varre em 32s** — dono já disse que está errado. A
    instrumentação (tempos por tela + "X de 19 mostraram esqueleto") já grava;
