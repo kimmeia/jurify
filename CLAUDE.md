@@ -66,9 +66,21 @@ Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
   próprio do add-on).
 - Migration 0200 gravou a lista completa em todos os planos existentes
   (grandfather) — restringir é decisão do admin no painel, e aí vale.
-- Fases 2/3 pendentes: Clientes essencial + Prazos + dashboard processual
-  (pacote Acompanhamento Processual) e painel comercial (preço por módulo,
-  assentos, desconto por escritório) — mockup navegável aprovado 23/08.
+- **Fase 3 (cobrança por módulo) entregue 24/08**: catálogo de preços por
+  módulo (`modulos_catalogo`, seed 0 = "a definir", editável na aba Planos
+  do AdminFinanceiro); assentos por plano (`planos.atendentes_inclusos`
+  NULL = sem cobrança por assento — grandfather); módulos avulsos por
+  escritório (`escritorio_addons` produto `modulo:<slug>`, preço congelado
+  na concessão, o porteiro SOMA avulsos vigentes à cesta do plano);
+  desconto por escritório (`escritorios.desconto_*`, % ou fixo, validade);
+  fatura composta em `shared/fatura-modulos.ts` (UMA função pura, testada
+  — preview do painel e valor aplicado nascem dela no SERVIDOR). Card
+  "Módulos & cobrança" na ficha do cliente (AdminClients) mostra fatura ×
+  valor cobrado no Asaas e só muda a assinatura via botão explícito
+  (`aplicarValorAssinatura`, recalcula server-side, nunca aceita valor do
+  client).
+- Fase 2 pendente: Clientes essencial + Prazos + dashboard processual
+  (pacote Acompanhamento Processual) — mockup navegável aprovado 23/08.
 
 ### Permissões
 - Matriz em `checkPermission(userId, modulo, ação)` → `{verTodos, verProprios, criar, editar, ...}`

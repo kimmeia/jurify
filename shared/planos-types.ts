@@ -42,6 +42,9 @@ export interface Plano {
   precoMensalCentavos: number;
   precoAnualCentavos: number | null;
   trialDias: number;
+  /** Assentos de atendente inclusos. null = plano sem cobrança por assento. */
+  atendentesInclusos: number | null;
+  precoAtendenteAdicionalCentavos: number;
   limites: PlanoLimites;
   modulosLiberados: ModuloAppId[];
   features: string[];

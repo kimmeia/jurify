@@ -59,6 +59,7 @@ import {
 } from "../db";
 import { PLANS } from "../billing/products";
 import { invalidarCachePlanos } from "../billing/planos-repo";
+import { invalidarCacheGateModulos } from "../_core/gate-modulos";
 import { MODULOS_APP, ehModuloValido } from "@shared/modulos-app";
 import { MODULO_JURISIA } from "@shared/addon-jurisia";
 import { PLANOS_PADRAO_SLUGS } from "@shared/planos-types";
@@ -1452,6 +1453,8 @@ export const adminRouter = router({
         maxMonitoramentosProcessos: row.maxMonitoramentosProcessos,
         creditosCalculosMes: row.creditosCalculosMes,
         jurisiaMensagensMes: row.jurisiaMensagensMes,
+        atendentesInclusos: row.atendentesInclusos,
+        precoAtendenteAdicionalCentavos: row.precoAtendenteAdicionalCentavos,
         modulosLiberados: modulos.filter(ehModuloValido),
         features,
         popular: row.popular,
@@ -1480,6 +1483,8 @@ export const adminRouter = router({
       maxMonitoramentosProcessos: z.number().int().min(0).nullable().optional(),
       creditosCalculosMes: z.number().int().min(0).default(0),
       jurisiaMensagensMes: z.number().int().min(0).default(0),
+      atendentesInclusos: z.number().int().min(0).nullable().optional(),
+      precoAtendenteAdicionalCentavos: z.number().int().min(0).default(0),
       modulosLiberados: z.array(z.string()).default([]),
       features: z.array(z.string()).default([]),
       popular: z.boolean().default(false),
@@ -1518,6 +1523,8 @@ export const adminRouter = router({
         maxMonitoramentosProcessos: input.maxMonitoramentosProcessos ?? null,
         creditosCalculosMes: input.creditosCalculosMes,
         jurisiaMensagensMes: input.jurisiaMensagensMes,
+        atendentesInclusos: input.atendentesInclusos ?? null,
+        precoAtendenteAdicionalCentavos: input.precoAtendenteAdicionalCentavos,
         modulosLiberados: modulosValidos,
         features: input.features,
         popular: input.popular,
@@ -1629,6 +1636,8 @@ export const adminRouter = router({
       maxMonitoramentosProcessos: z.number().int().min(0).nullable().optional(),
       creditosCalculosMes: z.number().int().min(0).optional(),
       jurisiaMensagensMes: z.number().int().min(0).optional(),
+      atendentesInclusos: z.number().int().min(0).nullable().optional(),
+      precoAtendenteAdicionalCentavos: z.number().int().min(0).optional(),
       modulosLiberados: z.array(z.string()).optional(),
       features: z.array(z.string()).optional(),
       popular: z.boolean().optional(),
@@ -1660,6 +1669,8 @@ export const adminRouter = router({
       if (input.maxMonitoramentosProcessos !== undefined) dadosUpdate.maxMonitoramentosProcessos = input.maxMonitoramentosProcessos;
       if (input.creditosCalculosMes !== undefined) dadosUpdate.creditosCalculosMes = input.creditosCalculosMes;
       if (input.jurisiaMensagensMes !== undefined) dadosUpdate.jurisiaMensagensMes = input.jurisiaMensagensMes;
+      if (input.atendentesInclusos !== undefined) dadosUpdate.atendentesInclusos = input.atendentesInclusos;
+      if (input.precoAtendenteAdicionalCentavos !== undefined) dadosUpdate.precoAtendenteAdicionalCentavos = input.precoAtendenteAdicionalCentavos;
       if (input.modulosLiberados !== undefined) dadosUpdate.modulosLiberados = input.modulosLiberados.filter(ehModuloValido);
       if (input.features !== undefined) dadosUpdate.features = input.features;
       if (input.popular !== undefined) dadosUpdate.popular = input.popular;
@@ -1732,6 +1743,219 @@ export const adminRouter = router({
       obrigatorio: m.obrigatorio,
     }));
   }),
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // COBRANÇA POR MÓDULO — catálogo de preços, avulsos e desconto (Fase 3)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /** Módulos vendáveis com o preço mensal avulso gravado (0 = a definir). */
+  listarCatalogoModulos: adminProcedure.query(async () => {
+    const { listarCatalogoModulos } = await import("../billing/modulos-cobranca");
+    return listarCatalogoModulos();
+  }),
+
+  salvarPrecoModulo: adminProcedure
+    .input(z.object({
+      modulo: z.string().min(1).max(48),
+      precoMensalCentavos: z.number().int().min(0).max(100_000_000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { salvarPrecoModulo } = await import("../billing/modulos-cobranca");
+      await salvarPrecoModulo({
+        modulo: input.modulo,
+        precoMensalCentavos: input.precoMensalCentavos,
+        atualizadoPor: ctx.user.id,
+      });
+      await registrarAuditoria({
+        ctx,
+        acao: "modulo.preco",
+        alvoTipo: "modulo",
+        alvoNome: input.modulo,
+        detalhes: { precoMensalCentavos: input.precoMensalCentavos },
+      });
+      return { ok: true };
+    }),
+
+  /**
+   * Visão de cobrança de um escritório: fatura composta (pacote + avulsos +
+   * atendentes adicionais − desconto), avulsos com status e a assinatura
+   * Asaas atual (pra comparar valor cobrado × valor calculado).
+   */
+  cobrancaDoEscritorio: adminProcedure
+    .input(z.object({ escritorioId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      const { faturaDoEscritorio, listarAvulsosDoEscritorio } = await import("../billing/modulos-cobranca");
+      const [fatura, avulsos] = await Promise.all([
+        faturaDoEscritorio(input.escritorioId),
+        listarAvulsosDoEscritorio(input.escritorioId),
+      ]);
+
+      // Valor atualmente cobrado no Asaas (se existir assinatura vinculada).
+      let assinatura: { asaasSubscriptionId: string; valorCentavos: number | null } | null = null;
+      try {
+        const db = await getDb();
+        if (db) {
+          const { escritorios } = await import("../../drizzle/schema");
+          const [esc] = await db
+            .select({ ownerId: escritorios.ownerId })
+            .from(escritorios)
+            .where(eq(escritorios.id, input.escritorioId))
+            .limit(1);
+          if (esc?.ownerId) {
+            const { getActiveSubscriptionComHeranca } = await import("../db");
+            const sub = await getActiveSubscriptionComHeranca(esc.ownerId);
+            if (sub?.asaasSubscriptionId) {
+              assinatura = { asaasSubscriptionId: sub.asaasSubscriptionId, valorCentavos: null };
+              const { getAdminAsaasClient, isAsaasBillingConfigured } = await import("../billing/asaas-billing-client");
+              if (await isAsaasBillingConfigured()) {
+                const client = await getAdminAsaasClient();
+                const remota = await client.buscarAssinatura(sub.asaasSubscriptionId);
+                assinatura.valorCentavos = Math.round((remota.value ?? 0) * 100);
+              }
+            }
+          }
+        }
+      } catch {
+        // Asaas fora do ar não pode derrubar o painel — a fatura calculada já apareceu.
+      }
+
+      return { fatura, avulsos, assinatura };
+    }),
+
+  /**
+   * Concede/edita/remove módulo avulso do escritório. Preço fica congelado
+   * na linha (default sugerido = catálogo). Status "cancelado" desliga.
+   */
+  salvarModuloAvulso: adminProcedure
+    .input(z.object({
+      escritorioId: z.number().int().positive(),
+      modulo: z.string().min(1).max(48),
+      status: z.enum(["ativo", "suspenso", "cancelado"]),
+      precoCentavos: z.number().int().min(0).max(100_000_000),
+      expiraEm: z.string().datetime().nullable().default(null),
+      observacao: z.string().max(500).nullable().default(null),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { salvarModuloAvulso } = await import("../billing/modulos-cobranca");
+      await salvarModuloAvulso({
+        escritorioId: input.escritorioId,
+        modulo: input.modulo,
+        status: input.status,
+        precoCentavos: input.precoCentavos,
+        expiraEm: input.expiraEm ? new Date(input.expiraEm) : null,
+        observacao: input.observacao,
+        concedidoPor: ctx.user.id,
+      });
+      // O porteiro cacheia 30s por usuário — limpar faz o módulo novo valer já.
+      invalidarCacheGateModulos();
+      await registrarAuditoria({
+        ctx,
+        acao: "modulo.avulso",
+        alvoTipo: "escritorio",
+        alvoId: input.escritorioId,
+        detalhes: {
+          modulo: input.modulo,
+          status: input.status,
+          precoCentavos: input.precoCentavos,
+          expiraEm: input.expiraEm,
+        },
+      });
+      return { ok: true };
+    }),
+
+  /** Desconto comercial do escritório — percentual ou fixo, validade opcional. */
+  salvarDescontoEscritorio: adminProcedure
+    .input(z.object({
+      escritorioId: z.number().int().positive(),
+      /** null = remover desconto. */
+      tipo: z.enum(["percentual", "fixo"]).nullable(),
+      valor: z.number().int().min(0).max(100_000_000).default(0),
+      validoAte: z.string().datetime().nullable().default(null),
+      observacao: z.string().max(255).nullable().default(null),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (input.tipo === "percentual" && input.valor > 100) {
+        throw new Error("Desconto percentual não pode passar de 100%.");
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { escritorios } = await import("../../drizzle/schema");
+      await db
+        .update(escritorios)
+        .set({
+          descontoTipo: input.tipo,
+          descontoValor: input.tipo ? input.valor : 0,
+          descontoValidoAte: input.tipo && input.validoAte ? new Date(input.validoAte) : null,
+          descontoObservacao: input.tipo ? input.observacao : null,
+        })
+        .where(eq(escritorios.id, input.escritorioId));
+      await registrarAuditoria({
+        ctx,
+        acao: "escritorio.desconto",
+        alvoTipo: "escritorio",
+        alvoId: input.escritorioId,
+        detalhes: { tipo: input.tipo, valor: input.valor, validoAte: input.validoAte },
+      });
+      return { ok: true };
+    }),
+
+  /**
+   * Aplica o total calculado da fatura na assinatura Asaas do escritório.
+   * O valor é SEMPRE recalculado aqui — o painel mostra um preview, mas o
+   * número que vai pra cobrança nasce no servidor.
+   */
+  aplicarValorAssinatura: adminProcedure
+    .input(z.object({
+      escritorioId: z.number().int().positive(),
+      /** Também atualiza cobranças já geradas e ainda não pagas. */
+      atualizarPendentes: z.boolean().default(false),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { faturaDoEscritorio } = await import("../billing/modulos-cobranca");
+      const fatura = await faturaDoEscritorio(input.escritorioId);
+      if (!fatura.planoSlug) throw new Error("Escritório sem plano ativo — nada a aplicar.");
+      if (fatura.cortesia) throw new Error("Assinatura de cortesia não é cobrada.");
+      if (fatura.totalCentavos <= 0) throw new Error("Fatura calculada em R$ 0 — confira preços antes de aplicar.");
+
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { escritorios } = await import("../../drizzle/schema");
+      const [esc] = await db
+        .select({ ownerId: escritorios.ownerId })
+        .from(escritorios)
+        .where(eq(escritorios.id, input.escritorioId))
+        .limit(1);
+      if (!esc?.ownerId) throw new Error("Escritório não encontrado.");
+
+      const { getActiveSubscriptionComHeranca } = await import("../db");
+      const sub = await getActiveSubscriptionComHeranca(esc.ownerId);
+      if (!sub?.asaasSubscriptionId) {
+        throw new Error("Escritório sem assinatura Asaas vinculada (trial ou cobrança manual).");
+      }
+
+      const { getAdminAsaasClient } = await import("../billing/asaas-billing-client");
+      const client = await getAdminAsaasClient();
+      await client.atualizarAssinatura(sub.asaasSubscriptionId, {
+        value: fatura.totalCentavos / 100,
+        updatePendingPayments: input.atualizarPendentes,
+      });
+
+      await registrarAuditoria({
+        ctx,
+        acao: "assinatura.valor",
+        alvoTipo: "escritorio",
+        alvoId: input.escritorioId,
+        detalhes: {
+          asaasSubscriptionId: sub.asaasSubscriptionId,
+          totalCentavos: fatura.totalCentavos,
+          itens: fatura.itens,
+          descontoCentavos: fatura.descontoCentavos,
+          atualizarPendentes: input.atualizarPendentes,
+        },
+      });
+
+      return { ok: true, totalCentavos: fatura.totalCentavos };
+    }),
 
   // ═══════════════════════════════════════════════════════════════════════
   // CUPONS DE DESCONTO — Sprint 3
