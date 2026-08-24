@@ -691,6 +691,42 @@ export class AsaasClient {
     return res.data;
   }
 
+  async buscarAssinatura(id: string): Promise<AsaasSubscription> {
+    const res = await this.api.get(`/subscriptions/${id}`);
+    return res.data;
+  }
+
+  /**
+   * Atualiza uma assinatura existente (tipicamente o `value`, quando a
+   * fatura composta do escritório muda — módulo avulso, atendente
+   * adicional, desconto). `updatePendingPayments` estende o novo valor às
+   * cobranças já geradas e ainda não pagas.
+   */
+  async atualizarAssinatura(
+    id: string,
+    input: { value?: number; updatePendingPayments?: boolean; description?: string },
+  ): Promise<AsaasSubscription> {
+    try {
+      const res = await this.api.put(`/subscriptions/${id}`, input);
+      return res.data;
+    } catch (err) {
+      const axErr = err as AxiosError<any>;
+      if (axErr.response) {
+        const data = axErr.response.data;
+        const errors = data?.errors;
+        const msgs = Array.isArray(errors)
+          ? errors
+              .map((e: any) => `${e.code ?? ""}: ${e.description ?? JSON.stringify(e)}`)
+              .join(" | ")
+          : typeof data === "string"
+          ? data
+          : JSON.stringify(data).slice(0, 500);
+        throw new Error(`Asaas rejeitou atualizarAssinatura (${axErr.response.status}): ${msgs}`);
+      }
+      throw err;
+    }
+  }
+
   /**
    * Versão paginada de `listarCobrancas` — itera até hasMore=false,
    * agregando todas as páginas. Útil pra KPIs admin (MRR, faturamento)

@@ -17,6 +17,7 @@
 import { TRPCError } from "@trpc/server";
 import { contratoLibera, moduloDoPath } from "@shared/modulos-contratacao";
 import { MODULOS_APP } from "@shared/modulos-app";
+import { unirModulosContratados } from "@shared/fatura-modulos";
 
 interface AcessoCacheado {
   expiraEm: number;
@@ -51,6 +52,19 @@ export async function modulosContratadosDoUsuario(userId: number): Promise<strin
       const plano = await getPlanoBySlug(sub.planId);
       if (plano && plano.modulosLiberados.length > 0) {
         modulos = plano.modulosLiberados;
+        // Módulos avulsos do escritório somam à cesta do plano. Erro aqui
+        // só perde o bônus — nunca restringe além do plano.
+        try {
+          const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
+          const vinculo = await getEscritorioPorUsuario(userId);
+          if (vinculo) {
+            const { modulosAvulsosVigentes } = await import("../billing/modulos-cobranca");
+            const avulsos = await modulosAvulsosVigentes(vinculo.escritorio.id);
+            if (avulsos.length > 0) modulos = unirModulosContratados(modulos, avulsos);
+          }
+        } catch {
+          // fica só com a lista do plano
+        }
       }
     }
   } catch {

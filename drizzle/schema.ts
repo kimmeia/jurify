@@ -328,6 +328,16 @@ export const escritorios = mysqlTable("escritorios", {
   msgDividirRitmo: mysqlEnum("msgDividirRitmo", ["rapido", "natural", "calmo"])
     .default("natural")
     .notNull(),
+  /**
+   * Desconto comercial do escritório — aplicado na fatura inteira (pacote +
+   * módulos avulsos + atendentes adicionais). NULL em descontoTipo = sem
+   * desconto. Valor: pontos percentuais (tipo "percentual") ou centavos
+   * (tipo "fixo"). Validade NULL = não vence.
+   */
+  descontoTipo: varchar("desconto_tipo", { length: 16 }),
+  descontoValor: int("desconto_valor").default(0).notNull(),
+  descontoValidoAte: timestamp("desconto_valido_ate"),
+  descontoObservacao: varchar("desconto_observacao", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -2214,6 +2224,12 @@ export const planos = mysqlTable("planos", {
   /** JSON array de strings — bullets que aparecem na LP e em /plans. */
   features: json("features").notNull(),
 
+  /** Assentos de atendente inclusos no pacote. NULL = plano sem cobrança
+   *  por assento (todos os planos pré-existentes ficam assim). */
+  atendentesInclusos: int("atendentes_inclusos"),
+  /** Preço do atendente além dos inclusos. 0 = não cobra excedente. */
+  precoAtendenteAdicionalCentavos: int("preco_atendente_adicional_centavos").notNull().default(0),
+
   popular: boolean("popular").notNull().default(false),
   oculto: boolean("oculto").notNull().default(false),
   ordem: int("ordem").notNull().default(0),
@@ -2229,6 +2245,22 @@ export const planos = mysqlTable("planos", {
 
 export type PlanoRow = typeof planos.$inferSelect;
 export type InsertPlanoRow = typeof planos.$inferInsert;
+
+/**
+ * Catálogo de preços por módulo — preço mensal da venda avulsa, editável
+ * pelo admin sem deploy. Também alimenta a "soma da cesta" na montagem de
+ * pacotes. Módulo sem linha (ou com 0) = preço a definir: não aparece como
+ * vendável avulso até o admin dar valor.
+ */
+export const modulosCatalogo = mysqlTable("modulos_catalogo", {
+  id: int("id").autoincrement().primaryKey(),
+  modulo: varchar("modulo", { length: 48 }).notNull().unique(),
+  precoMensalCentavos: int("preco_mensal_centavos").notNull().default(0),
+  atualizadoPor: int("atualizado_por"),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ModuloCatalogoRow = typeof modulosCatalogo.$inferSelect;
 
 /**
  * Cupons de desconto — admin cria, cliente aplica no checkout.
