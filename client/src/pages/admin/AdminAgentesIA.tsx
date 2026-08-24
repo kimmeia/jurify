@@ -439,7 +439,7 @@ function TreinamentoDialog({
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <BrainCircuit className="h-5 w-5 text-violet-600" />
+            <BrainCircuit className="h-5 w-5 text-violet-600 dark:text-violet-400" />
             Treinamento: {agente?.nome || "..."}
           </DialogTitle>
           <DialogDescription>
@@ -494,11 +494,11 @@ function TreinamentoDialog({
                     className="flex items-center gap-2 border rounded-md p-2 text-xs"
                   >
                     {d.tipo === "arquivo" ? (
-                      <FileIcon className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                      <FileIcon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
                     ) : d.tipo === "link" ? (
-                      <Link2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      <Link2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     ) : (
-                      <FileText className="h-3.5 w-3.5 text-violet-600 shrink-0" />
+                      <FileText className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400 shrink-0" />
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{d.nome}</p>
@@ -677,7 +677,7 @@ function TreinamentoDialog({
             {testeResposta && (
               <div className="border rounded-lg p-4 bg-violet-500/5 border-violet-500/20 space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-1.5 text-violet-700">
+                  <Label className="flex items-center gap-1.5 text-violet-700 dark:text-violet-300">
                     <Sparkles className="h-3.5 w-3.5" />
                     Resposta do agente
                   </Label>
@@ -793,7 +793,7 @@ export default function AdminAgentesIA() {
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/40 dark:to-purple-900/40">
-            <BrainCircuit className="h-6 w-6 text-violet-600" />
+            <BrainCircuit className="h-6 w-6 text-violet-600 dark:text-violet-400" />
           </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Agentes de IA</h1>
@@ -812,7 +812,7 @@ export default function AdminAgentesIA() {
       {status && !status.openaiConfigurado && !status.anthropicConfigurado && (
         <Card className="border-amber-500/30 bg-amber-50/30 dark:bg-amber-950/10">
           <CardContent className="pt-6 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-foreground">Nenhuma IA configurada</p>
               <p className="text-sm text-muted-foreground mt-1">
@@ -831,7 +831,7 @@ export default function AdminAgentesIA() {
       {status && (status.openaiConfigurado || status.anthropicConfigurado) && (
         <Card className="border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/10">
           <CardContent className="pt-4 pb-4 flex items-center gap-3">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             <p className="text-sm text-muted-foreground">
               {status.openaiConfigurado && status.anthropicConfigurado
                 ? "OpenAI + Claude conectados — agentes GPT e Claude podem ser usados."
@@ -847,7 +847,7 @@ export default function AdminAgentesIA() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Scale className="h-4 w-4 text-violet-600" /> Base jurídica — Agente Jurídico
+            <Scale className="h-4 w-4 text-violet-600 dark:text-violet-400" /> Base jurídica — Agente Jurídico
           </CardTitle>
           <CardDescription>
             Súmulas, leis e precedentes usados pra avaliar a chance de sucesso e redigir peças.
@@ -857,14 +857,14 @@ export default function AdminAgentesIA() {
         <CardContent className="flex flex-wrap items-center gap-4">
           <div className="text-sm">
             <span className="font-semibold">{baseStatus?.total ?? 0}</span> fontes ·{" "}
-            <span className="font-semibold text-emerald-600">{baseStatus?.indexadas ?? 0}</span> indexadas
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">{baseStatus?.indexadas ?? 0}</span> indexadas
           </div>
           <Button size="sm" onClick={() => seedBaseMut.mutate()} disabled={seedBaseMut.isPending}>
             {seedBaseMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1.5" />}
             Popular / indexar base (revisional)
           </Button>
           {(baseStatus?.total ?? 0) > 0 && (baseStatus?.indexadas ?? 0) < (baseStatus?.total ?? 0) && (
-            <span className="text-xs text-amber-600">
+            <span className="text-xs text-amber-600 dark:text-amber-400">
               Há fontes não indexadas — clique pra indexar (precisa de chave OpenAI configurada).
             </span>
           )}
@@ -930,12 +930,12 @@ export default function AdminAgentesIA() {
                       <span className="text-sm font-semibold truncate">{f.identificador}</span>
                       <span className="text-[10px] px-1.5 rounded bg-muted">{f.tipo}</span>
                       <span className="text-[10px] text-muted-foreground">{f.area}</span>
-                      {!f.indexada && <span className="text-[10px] text-amber-600">não indexada</span>}
+                      {!f.indexada && <span className="text-[10px] text-amber-600 dark:text-amber-400">não indexada</span>}
                     </div>
                     <p className="text-[11px] text-muted-foreground line-clamp-1">{f.titulo || f.texto}</p>
                   </div>
                   <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setFonteEdit({ ...f, orgao: f.orgao || "", titulo: f.titulo || "", tags: f.tags || "" })}><Edit className="h-3.5 w-3.5" /></Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 hover:text-rose-600" onClick={() => setFonteExcluir(f)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 hover:text-rose-600 dark:hover:text-rose-400" onClick={() => setFonteExcluir(f)}><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>
               ))}
               {!fontesGlobaisQ.isLoading && (fontesGlobaisQ.data?.fontes?.length ?? 0) === 0 && (
@@ -1064,7 +1064,7 @@ export default function AdminAgentesIA() {
                   {(a.modulosPermitidos || []).slice(0, 3).map((m: string) => (
                     <span
                       key={m}
-                      className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-700"
+                      className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-300"
                     >
                       {m}
                     </span>

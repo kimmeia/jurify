@@ -346,7 +346,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
                 <Label htmlFor="login-password" className="text-xs">
                   Senha
                 </Label>
-                <a href="/esqueci-senha" className="text-[11px] text-violet-600 hover:underline">
+                <a href="/esqueci-senha" className="text-[11px] text-violet-600 dark:text-violet-400 hover:underline">
                   Esqueci minha senha
                 </a>
               </div>
@@ -479,8 +479,8 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
                 <p
                   className={`text-[10px] flex items-center gap-1 ${
                     signupPassword === signupPasswordConfirm
-                      ? "text-emerald-600"
-                      : "text-red-600"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-red-600 dark:text-red-400"
                   }`}
                 >
                   {signupPassword === signupPasswordConfirm ? (
@@ -506,11 +506,11 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
               />
               <span>
                 Li e aceito os{" "}
-                <a href="/termos" target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:underline">
+                <a href="/termos" target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 hover:underline">
                   Termos de Uso
                 </a>{" "}
                 e a{" "}
-                <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:underline">
+                <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 hover:underline">
                   Política de Privacidade
                 </a>
                 .

@@ -103,10 +103,10 @@ export default function AdminRoboJornada() {
 
       {/* Onde ele entra e o que não toca — a pergunta que vem antes de
           qualquer resultado é "isso mexe nos meus dados?". */}
-      <Card className="border-violet-200 bg-violet-50/40">
+      <Card className="border-violet-200 dark:border-violet-800/50 bg-violet-50/40 dark:bg-violet-950/30">
         <CardContent className="pt-5 flex gap-3">
-          <ShieldCheck className="h-5 w-5 text-violet-600 shrink-0 mt-0.5" />
-          <div className="text-[13px] text-violet-900 leading-relaxed">
+          <ShieldCheck className="h-5 w-5 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
+          <div className="text-[13px] text-violet-900 dark:text-violet-200 leading-relaxed">
             <p>
               O robô cria um <b>escritório descartável</b>, entra nele e apaga tudo no fim. Ele é
               um usuário comum de um escritório que só tem ele dentro — a parede é a mesma que
@@ -118,7 +118,7 @@ export default function AdminRoboJornada() {
               painel admin, e e-mail para conta de teste é barrado antes de sair.
             </p>
             {catalogo.data?.baseUrl && (
-              <p className="mt-1.5 text-[12px] text-violet-700">
+              <p className="mt-1.5 text-[12px] text-violet-700 dark:text-violet-300">
                 Aponta para <code className="font-semibold">{catalogo.data.baseUrl}</code>
               </p>
             )}
@@ -127,10 +127,10 @@ export default function AdminRoboJornada() {
       </Card>
 
       {emVoo && (
-        <Card className="border-violet-300 bg-violet-50/60">
+        <Card className="border-violet-300 bg-violet-50/60 dark:bg-violet-950/30">
           <CardContent className="pt-5 flex items-center gap-3">
-            <Loader2 className="h-4 w-4 animate-spin text-violet-600 shrink-0" />
-            <p className="text-[13px] text-violet-900">
+            <Loader2 className="h-4 w-4 animate-spin text-violet-600 dark:text-violet-400 shrink-0" />
+            <p className="text-[13px] text-violet-900 dark:text-violet-200">
               Varredura em andamento desde <b>{quando(emVoo.iniciadoEm)}</b>. Os números abaixo são
               da execução anterior até esta terminar.
             </p>
@@ -179,7 +179,7 @@ export default function AdminRoboJornada() {
               </p>
               <p
                 className={`text-2xl font-bold mt-1 tabular-nums ${
-                  ultima.rotasComAchado > 0 ? "text-rose-600" : "text-emerald-600"
+                  ultima.rotasComAchado > 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
                 }`}
               >
                 {ultima.rotasComAchado}
@@ -193,7 +193,7 @@ export default function AdminRoboJornada() {
               </p>
               <p
                 className={`text-sm font-bold mt-1 flex items-center gap-1.5 ${
-                  ultima.escritorioLimpo ? "text-emerald-600" : "text-rose-600"
+                  ultima.escritorioLimpo ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
                 }`}
               >
                 {ultima.escritorioLimpo ? (
@@ -207,7 +207,7 @@ export default function AdminRoboJornada() {
                 )}
               </p>
               {!ultima.escritorioLimpo && (
-                <p className="text-[11px] text-rose-600 mt-0.5">
+                <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-0.5">
                   A regra ROB-01 do auditor também acusa.
                 </p>
               )}
@@ -223,11 +223,11 @@ export default function AdminRoboJornada() {
             <p className="text-sm font-bold mb-3">O que quebrou na última execução</p>
             <div className="space-y-2">
               {ultima.rotasComProblema.map((r) => (
-                <div key={r.rota} className="rounded-lg border border-rose-200 bg-rose-50/60 p-3">
-                  <code className="text-[12.5px] font-bold text-rose-900">{r.rota}</code>
+                <div key={r.rota} className="rounded-lg border border-rose-200 dark:border-rose-800/50 bg-rose-50/60 dark:bg-rose-950/30 p-3">
+                  <code className="text-[12.5px] font-bold text-rose-900 dark:text-rose-200">{r.rota}</code>
                   <ul className="mt-1.5 space-y-1">
                     {r.problemas.map((p, i) => (
-                      <li key={i} className="text-[11.5px] text-rose-800 leading-snug">
+                      <li key={i} className="text-[11.5px] text-rose-800 dark:text-rose-200 leading-snug">
                         {p}
                       </li>
                     ))}
@@ -323,13 +323,13 @@ export default function AdminRoboJornada() {
               {anteriores.map((v) => (
                 <div key={v.runId} className="flex items-center gap-3 py-2">
                   {v.status === "rodando" ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-600 shrink-0" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-600 dark:text-violet-400 shrink-0" />
                   ) : v.status === "falhou" ? (
-                    <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                    <AlertTriangle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
                   ) : v.rotasComAchado > 0 ? (
                     <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                   ) : (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   )}
                   <span className="text-[12px] text-muted-foreground">{quando(v.iniciadoEm)}</span>
                   <Badge variant="outline" className="text-[10px]">
@@ -341,7 +341,7 @@ export default function AdminRoboJornada() {
                       : `${v.rotasVisitadas} telas, tudo limpo`}
                   </span>
                   {v.erro && (
-                    <span className="text-[11px] text-rose-600 truncate max-w-[280px]" title={v.erro}>
+                    <span className="text-[11px] text-rose-600 dark:text-rose-400 truncate max-w-[280px]" title={v.erro}>
                       {v.erro}
                     </span>
                   )}

@@ -94,13 +94,13 @@ export function OrigensLeadTab() {
         <div>
           <h3 className="text-base font-bold tracking-tight">Origens de leads</h3>
           <p className="text-[11px] text-slate-500">
-            <b className="text-slate-700">{ativas.length}</b> ativas · {inativas.length} inativas · aparecem no dropdown "Origem" ao cadastrar cliente
+            <b className="text-slate-700 dark:text-slate-200">{ativas.length}</b> ativas · {inativas.length} inativas · aparecem no dropdown "Origem" ao cadastrar cliente
           </p>
         </div>
       </div>
 
       {/* Criar nova — inline */}
-      <div className="flex gap-2 rounded-xl border border-dashed border-violet-200 bg-violet-50/40 p-2.5">
+      <div className="flex gap-2 rounded-xl border border-dashed border-violet-200 dark:border-violet-800/50 bg-violet-50/40 dark:bg-violet-950/30 p-2.5">
         <Input
           placeholder='Nova origem (ex: "Instagram", "BNI", "Google Ads")'
           value={novoNome}
@@ -110,7 +110,7 @@ export function OrigensLeadTab() {
               criarMut.mutate({ nome: novoNome.trim() });
             }
           }}
-          className="h-9 text-sm flex-1 bg-white"
+          className="h-9 text-sm flex-1 bg-white dark:bg-card"
           maxLength={80}
         />
         <Button

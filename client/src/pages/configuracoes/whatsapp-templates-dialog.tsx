@@ -91,7 +91,7 @@ export function WhatsAppTemplatesDialog({ open, onClose, canalId, canEdit }: Pro
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-emerald-600" />
+            <FileText className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
             Templates de mensagem
           </DialogTitle>
           <DialogDescription>
@@ -143,7 +143,7 @@ export function WhatsAppTemplatesDialog({ open, onClose, canalId, canEdit }: Pro
             )}
 
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-700 dark:text-red-300">
                 {(error as any).message}
               </div>
             )}
@@ -263,7 +263,7 @@ function renderBodyPreview(texto: string, exemplos: string[]) {
       const idx = parseInt(m[1], 10) - 1;
       const val = exemplos[idx];
       return val && val.trim() ? (
-        <span key={i} className="text-emerald-700 font-medium">
+        <span key={i} className="text-emerald-700 dark:text-emerald-300 font-medium">
           {val}
         </span>
       ) : (
@@ -303,7 +303,7 @@ function IPhonePreview({
           className="absolute left-1/2 -translate-x-1/2 z-30 rounded-full bg-black"
           style={{ top: 9, width: 84, height: 23 }}
         />
-        <div className="relative h-full w-full overflow-hidden rounded-[33px] bg-white">
+        <div className="relative h-full w-full overflow-hidden rounded-[33px] bg-white dark:bg-card">
           {/* status bar */}
           <div className="absolute inset-x-0 top-0 z-20 flex h-8 items-end justify-between px-5 pb-1 text-[10px] font-semibold text-white">
             <span>9:41</span>
@@ -331,11 +331,11 @@ function IPhonePreview({
                 "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23d3cabb'/%3E%3C/svg%3E\")",
             }}
           >
-            <div className="max-w-[92%] rounded-lg rounded-tl-none bg-white px-3 py-2 text-[12.5px] leading-snug shadow">
+            <div className="max-w-[92%] rounded-lg rounded-tl-none bg-white dark:bg-card px-3 py-2 text-[12.5px] leading-snug shadow">
               {header && header.trim() && (
-                <p className="mb-1 font-bold text-slate-800">{header}</p>
+                <p className="mb-1 font-bold text-slate-800 dark:text-slate-200">{header}</p>
               )}
-              <span className="whitespace-pre-wrap text-slate-700">
+              <span className="whitespace-pre-wrap text-slate-700 dark:text-slate-200">
                 {body.trim() ? renderBodyPreview(body, exemplos) : (
                   <span className="text-slate-400">Digite o corpo da mensagem…</span>
                 )}
@@ -349,7 +349,7 @@ function IPhonePreview({
         </div>
       </div>
       <p className="mt-3 max-w-[230px] text-center text-[10px] leading-relaxed text-muted-foreground">
-        Trechos em <span className="font-medium text-emerald-600">verde</span> são variáveis —
+        Trechos em <span className="font-medium text-emerald-600 dark:text-emerald-400">verde</span> são variáveis —
         substituídas por dados reais no envio.
       </p>
     </div>
@@ -418,7 +418,7 @@ function FormularioCriar({
               placeholder="lembrete_audiencia"
               className="font-mono text-sm"
             />
-            {erroNome && <p className="text-[11px] text-red-600">{erroNome}</p>}
+            {erroNome && <p className="text-[11px] text-red-600 dark:text-red-400">{erroNome}</p>}
             <p className="text-[10px] text-muted-foreground">
               Só letras minúsculas, números e underscore.
             </p>
@@ -475,7 +475,7 @@ function FormularioCriar({
               type="button"
               variant="outline"
               size="sm"
-              className="h-6 px-2 text-[11px] text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+              className="h-6 px-2 text-[11px] text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
               onClick={inserirVariavel}
             >
               <Plus className="h-3 w-3 mr-0.5" /> Variável {`{{${numVars + 1}}}`}
@@ -496,13 +496,13 @@ function FormularioCriar({
         </div>
 
         {numVars > 0 && (
-          <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
-            <Label className="text-xs font-semibold text-amber-800">
+          <div className="space-y-2 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/30 p-3">
+            <Label className="text-xs font-semibold text-amber-800 dark:text-amber-200">
               Exemplos para a análise da Meta *
             </Label>
             {exemplosAjustados.map((ex, i) => (
               <div key={i} className="flex items-center gap-2">
-                <span className="font-mono text-xs font-semibold text-amber-800 bg-amber-100 border border-amber-300 rounded px-1.5 py-0.5">{`{{${i + 1}}}`}</span>
+                <span className="font-mono text-xs font-semibold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 rounded px-1.5 py-0.5">{`{{${i + 1}}}`}</span>
                 <Input
                   value={ex}
                   onChange={(e) => {
@@ -511,11 +511,11 @@ function FormularioCriar({
                     setExemplos(arr);
                   }}
                   placeholder={`Valor de exemplo ${i + 1}`}
-                  className="text-sm h-8 bg-white"
+                  className="text-sm h-8 bg-white dark:bg-card"
                 />
               </div>
             ))}
-            <p className="text-[10px] text-amber-700 leading-relaxed">
+            <p className="text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
               ⓘ Esses valores são vistos <b>só pela Meta</b> ao aprovar o template.{" "}
               <b>Não afetam o envio real</b> — servem só pra ela entender o formato.
             </p>
@@ -607,7 +607,7 @@ function EnviarTemplateDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Send className="h-4 w-4 text-emerald-600" />
+            <Send className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             Enviar template
           </DialogTitle>
           <DialogDescription className="font-mono text-xs">{template.name}</DialogDescription>

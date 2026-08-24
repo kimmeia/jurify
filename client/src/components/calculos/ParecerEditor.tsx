@@ -145,7 +145,7 @@ export function ParecerEditor({
       <Card className="border-blue-200 bg-blue-50/40 dark:border-blue-900 dark:bg-blue-950/20">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <User className="h-4 w-4 text-blue-600" /> Revisão profissional
+            <User className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Revisão profissional
           </CardTitle>
           <CardDescription>
             Identifique o(a) advogado(a) responsável pela revisão. O nome será incluído no PDF

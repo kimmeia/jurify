@@ -156,7 +156,7 @@ export function TagsChipPicker({ value, onChange, permitirCriar = true, placehol
               type="button"
               onClick={criarECselectionar}
               disabled={criarTag.isPending}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border border-dashed border-violet-400 text-violet-600 hover:bg-violet-50 transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border border-dashed border-violet-400 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition-colors"
             >
               {criarTag.isPending ? (
                 <Loader2 className="h-2.5 w-2.5 animate-spin" />

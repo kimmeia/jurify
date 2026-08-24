@@ -392,7 +392,7 @@ export default function SmartFlow() {
           ) : (
             <div className="space-y-2">
               {execucoesVisiveis.map((e: any) => {
-                const st = STATUS_EXEC[e.status as StatusExecucao] || { label: e.status, cor: "bg-gray-100", icon: Clock };
+                const st = STATUS_EXEC[e.status as StatusExecucao] || { label: e.status, cor: "bg-gray-100 dark:bg-slate-800/60", icon: Clock };
                 const StIcon = st.icon;
                 const nomeCenario = nomePorCenario.get(e.cenarioId) || `Cenário #${e.cenarioId}`;
                 return (
@@ -415,12 +415,12 @@ export default function SmartFlow() {
                             </span>
                             <span className="text-xs text-muted-foreground">Passo {e.passoAtual}</span>
                             {e.retomarEm && (
-                              <Badge variant="outline" className="text-[9px] gap-1 border-amber-500/30 text-amber-700">
+                              <Badge variant="outline" className="text-[9px] gap-1 border-amber-500/30 text-amber-700 dark:text-amber-300">
                                 <Clock className="h-2.5 w-2.5" /> Aguardando
                               </Badge>
                             )}
                           </div>
-                          {e.erro && <p className="text-[10px] text-red-600 mt-0.5 line-clamp-1">{e.erro}</p>}
+                          {e.erro && <p className="text-[10px] text-red-600 dark:text-red-400 mt-0.5 line-clamp-1">{e.erro}</p>}
                         </div>
                         <span className="text-[10px] text-muted-foreground shrink-0">
                           {new Date(e.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
@@ -503,7 +503,7 @@ function ExecucaoDetalheDialog({ id, onClose }: { id: number | null; onClose: ()
 
   const ctx = data?.contexto || {};
   const status = (data?.status || "rodando") as StatusExecucao;
-  const st = STATUS_EXEC[status] || { label: status, cor: "bg-gray-100", icon: Clock };
+  const st = STATUS_EXEC[status] || { label: status, cor: "bg-gray-100 dark:bg-slate-800/60", icon: Clock };
 
   return (
     <Dialog open={id != null} onOpenChange={(o) => !o && onClose()}>

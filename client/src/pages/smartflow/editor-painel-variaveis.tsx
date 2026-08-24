@@ -31,17 +31,17 @@ const CATEGORIA_META: Array<{
   cor: string;
   corBg: string;
 }> = [
-  { id: "passos", label: "Resultados de passos anteriores", icon: Workflow, cor: "text-amber-600", corBg: "bg-amber-50/60 dark:bg-amber-950/20" },
-  { id: "cliente", label: "Dados do cliente", icon: User, cor: "text-violet-600", corBg: "bg-violet-50/60 dark:bg-violet-950/20" },
-  { id: "campos_personalizados", label: "Campos personalizados do cadastro", icon: FileText, cor: "text-pink-600", corBg: "bg-pink-50/60 dark:bg-pink-950/20" },
-  { id: "mensagem", label: "Mensagem / conversa", icon: MessageCircle, cor: "text-blue-600", corBg: "bg-blue-50/60 dark:bg-blue-950/20" },
-  { id: "pagamento", label: "Pagamento / cobrança", icon: DollarSign, cor: "text-emerald-600", corBg: "bg-emerald-50/60 dark:bg-emerald-950/20" },
-  { id: "acao", label: "Ação / processo", icon: Briefcase, cor: "text-indigo-600", corBg: "bg-indigo-50/60 dark:bg-indigo-950/20" },
-  { id: "agendamento", label: "Agendamento", icon: Calendar, cor: "text-orange-600", corBg: "bg-orange-50/60 dark:bg-orange-950/20" },
-  { id: "ia", label: "Resultados da IA", icon: Brain, cor: "text-fuchsia-600", corBg: "bg-fuchsia-50/60 dark:bg-fuchsia-950/20" },
+  { id: "passos", label: "Resultados de passos anteriores", icon: Workflow, cor: "text-amber-600 dark:text-amber-400", corBg: "bg-amber-50/60 dark:bg-amber-950/20" },
+  { id: "cliente", label: "Dados do cliente", icon: User, cor: "text-violet-600 dark:text-violet-400", corBg: "bg-violet-50/60 dark:bg-violet-950/20" },
+  { id: "campos_personalizados", label: "Campos personalizados do cadastro", icon: FileText, cor: "text-pink-600 dark:text-pink-400", corBg: "bg-pink-50/60 dark:bg-pink-950/20" },
+  { id: "mensagem", label: "Mensagem / conversa", icon: MessageCircle, cor: "text-blue-600 dark:text-blue-400", corBg: "bg-blue-50/60 dark:bg-blue-950/20" },
+  { id: "pagamento", label: "Pagamento / cobrança", icon: DollarSign, cor: "text-emerald-600 dark:text-emerald-400", corBg: "bg-emerald-50/60 dark:bg-emerald-950/20" },
+  { id: "acao", label: "Ação / processo", icon: Briefcase, cor: "text-indigo-600 dark:text-indigo-400", corBg: "bg-indigo-50/60 dark:bg-indigo-950/20" },
+  { id: "agendamento", label: "Agendamento", icon: Calendar, cor: "text-orange-600 dark:text-orange-400", corBg: "bg-orange-50/60 dark:bg-orange-950/20" },
+  { id: "ia", label: "Resultados da IA", icon: Brain, cor: "text-fuchsia-600 dark:text-fuchsia-400", corBg: "bg-fuchsia-50/60 dark:bg-fuchsia-950/20" },
 ];
 
-const CATEGORIA_OUTROS = { id: "outros", label: "Outras informações", icon: Info, cor: "text-slate-600", corBg: "bg-slate-50/60 dark:bg-slate-900/40" };
+const CATEGORIA_OUTROS = { id: "outros", label: "Outras informações", icon: Info, cor: "text-slate-600 dark:text-slate-300", corBg: "bg-slate-50/60 dark:bg-slate-900/40" };
 
 /**
  * Drawer "Informações" — lista TODAS as variáveis disponíveis pro fluxo

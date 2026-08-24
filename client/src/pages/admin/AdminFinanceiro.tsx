@@ -46,14 +46,14 @@ function formatMes(yyyymm: string) {
 
 function StatusPagamentoBadge({ status }: { status: string }) {
   const cfg: Record<string, { label: string; cls: string; icon: any }> = {
-    PENDING:    { label: "Pendente", cls: "bg-amber-500/15 text-amber-700 border-amber-500/30", icon: Hourglass },
-    RECEIVED:   { label: "Pago",     cls: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30", icon: CheckCircle2 },
-    CONFIRMED:  { label: "Confirmado", cls: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30", icon: CheckCircle2 },
-    OVERDUE:    { label: "Vencida",  cls: "bg-red-500/15 text-red-700 border-red-500/30", icon: AlertTriangle },
-    REFUNDED:   { label: "Estornado", cls: "bg-slate-500/15 text-slate-700 border-slate-500/30", icon: Ban },
-    RECEIVED_IN_CASH: { label: "Recebido", cls: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30", icon: CheckCircle2 },
+    PENDING:    { label: "Pendente", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30", icon: Hourglass },
+    RECEIVED:   { label: "Pago",     cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30", icon: CheckCircle2 },
+    CONFIRMED:  { label: "Confirmado", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30", icon: CheckCircle2 },
+    OVERDUE:    { label: "Vencida",  cls: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30", icon: AlertTriangle },
+    REFUNDED:   { label: "Estornado", cls: "bg-slate-500/15 text-slate-700 dark:text-slate-200 border-slate-500/30", icon: Ban },
+    RECEIVED_IN_CASH: { label: "Recebido", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30", icon: CheckCircle2 },
   };
-  const c = cfg[status] || { label: status, cls: "bg-slate-500/15 text-slate-700", icon: Clock };
+  const c = cfg[status] || { label: status, cls: "bg-slate-500/15 text-slate-700 dark:text-slate-200", icon: Clock };
   const Icon = c.icon;
   return (
     <Badge className={`${c.cls} text-[10px]`}>
@@ -65,7 +65,7 @@ function StatusPagamentoBadge({ status }: { status: string }) {
 
 function StatusSubBadge({ status }: { status: string }) {
   if (status === "ACTIVE") {
-    return <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px]">Ativa</Badge>;
+    return <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px]">Ativa</Badge>;
   }
   if (status === "EXPIRED" || status === "INACTIVE") {
     return <Badge variant="outline" className="text-[10px]">Cancelada</Badge>;
@@ -158,7 +158,7 @@ export default function AdminFinanceiro() {
       <div className="space-y-6">
         <div className="flex items-start gap-3">
           <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/40 dark:to-green-900/40">
-            <DollarSign className="h-6 w-6 text-emerald-600" />
+            <DollarSign className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Financeiro SaaS</h1>
@@ -170,7 +170,7 @@ export default function AdminFinanceiro() {
 
         <Card className="border-amber-500/30 bg-amber-50/30 dark:bg-amber-950/10">
           <CardContent className="pt-6 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-foreground">
                 Asaas não configurado
@@ -200,7 +200,7 @@ export default function AdminFinanceiro() {
               <div className="flex items-center gap-2 mb-1">
                 <span className="relative inline-flex items-center justify-center w-1.5 h-1.5">
                   <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-75 animate-ping" />
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-100" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-100 dark:bg-emerald-900/30" />
                 </span>
                 <p className="text-xs font-medium text-white/85 uppercase tracking-wider">Faturamento da plataforma</p>
               </div>
@@ -218,7 +218,7 @@ export default function AdminFinanceiro() {
               <p className="text-sm font-medium text-white/80 mb-1">Receita recorrente mensal (MRR)</p>
               <div className="flex items-baseline gap-3 flex-wrap">
                 <span className="text-5xl font-extrabold tracking-tight tabular-nums leading-none">{formatBRL(kpis?.mrr ?? 0)}</span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-300/25 text-emerald-50 border border-emerald-200/30">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-300/25 text-emerald-50 border border-emerald-200/30 dark:border-emerald-800/50">
                   <TrendingUp className="w-3 h-3" /> {kpis?.assinaturasAtivas ?? 0} assinaturas ativas
                 </span>
               </div>
@@ -257,7 +257,7 @@ export default function AdminFinanceiro() {
       {status.erro ? (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex items-center gap-3 flex-wrap dark:bg-amber-950/20 dark:border-amber-900">
           <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 grid place-items-center shrink-0">
-            <AlertTriangle className="w-4 h-4 text-amber-600" />
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
@@ -276,7 +276,7 @@ export default function AdminFinanceiro() {
       ) : (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3 flex-wrap dark:bg-emerald-950/20 dark:border-emerald-900">
           <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 grid place-items-center shrink-0">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
@@ -303,7 +303,7 @@ export default function AdminFinanceiro() {
           value={formatBRL(kpis?.mrr ?? 0)}
           icon={Repeat}
           iconBg="bg-emerald-500/10"
-          iconFg="text-emerald-600"
+          iconFg="text-emerald-600 dark:text-emerald-400"
           hint={`${kpis?.assinaturasAtivas ?? 0} assinaturas ativas`}
         />
         <KPICard
@@ -311,7 +311,7 @@ export default function AdminFinanceiro() {
           value={formatBRL(kpis?.receita30d ?? 0)}
           icon={TrendingUp}
           iconBg="bg-blue-500/10"
-          iconFg="text-blue-600"
+          iconFg="text-blue-600 dark:text-blue-400"
           hint={`${kpis?.pago30d ?? 0} pagamentos recebidos`}
         />
         <KPICard
@@ -319,7 +319,7 @@ export default function AdminFinanceiro() {
           value={formatBRL(kpis?.pendente ?? 0)}
           icon={Hourglass}
           iconBg="bg-amber-500/10"
-          iconFg="text-amber-600"
+          iconFg="text-amber-600 dark:text-amber-400"
           hint="Aguardando pagamento"
         />
         <KPICard
@@ -327,8 +327,8 @@ export default function AdminFinanceiro() {
           value={formatBRL(kpis?.vencido ?? 0)}
           icon={AlertTriangle}
           iconBg="bg-rose-500/10"
-          iconFg="text-rose-600"
-          valueColor="text-rose-600"
+          iconFg="text-rose-600 dark:text-rose-400"
+          valueColor="text-rose-600 dark:text-rose-400"
           hint="Requer cobrança ativa"
         />
       </div>

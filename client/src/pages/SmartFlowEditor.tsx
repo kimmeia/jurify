@@ -286,7 +286,7 @@ function BarraAcoesNo({ nodeId }: { nodeId: string }) {
       <button
         onClick={(e) => { e.stopPropagation(); acoes.duplicar(nodeId); }}
         title="Duplicar bloco (Ctrl+D)"
-        className="flex h-6 w-6 items-center justify-center rounded text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40"
+        className="flex h-6 w-6 items-center justify-center rounded text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/40"
       >
         <Copy className="h-3.5 w-3.5" />
       </button>
@@ -818,7 +818,7 @@ function MenuDoNo({
           <>
             <Item
               onClick={onDuplicar}
-              icone={<Copy className="h-3.5 w-3.5 text-violet-600" />}
+              icone={<Copy className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
               texto="Duplicar bloco"
               atalho="Ctrl D"
             />
@@ -2537,7 +2537,7 @@ function JanelaDisparoFields({
             onChange={(e) => onChange({ disparosPorDia: Math.min(3, Math.max(1, Number(e.target.value) || 1)) })}
           />
           {Number(cfg.disparosPorDia ?? 1) > 1 && (
-            <p className="text-[10px] text-amber-600 mt-1">
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
               Mais de 1×/dia pro mesmo cliente pode ser marcado como <b>spam</b> pela Meta (risco de bloqueio). Recomendado: 1.
             </p>
           )}

@@ -103,11 +103,11 @@ export function TagsTab({ canEdit }: { canEdit: boolean }) {
       {isLoading ? (
         <div className="text-center py-8 text-sm text-slate-400">Carregando…</div>
       ) : !tags || tags.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-violet-50/30 py-14 text-center space-y-2">
+        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 bg-gradient-to-br from-slate-50 dark:from-slate-900 to-violet-50/30 dark:to-violet-950/20 py-14 text-center space-y-2">
           <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 flex items-center justify-center mx-auto mb-1">
             <TagIcon className="h-7 w-7 text-violet-500/70" />
           </div>
-          <p className="font-semibold text-slate-700">Nenhuma tag configurada</p>
+          <p className="font-semibold text-slate-700 dark:text-slate-200">Nenhuma tag configurada</p>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
             Tags ajudam a categorizar clientes (VIP, Trabalhista, Recorrente...) e ficam disponíveis em todo o sistema.
           </p>
@@ -126,7 +126,7 @@ export function TagsTab({ canEdit }: { canEdit: boolean }) {
           {tags.map((t: Tag) => (
             <div
               key={t.id}
-              className="group flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm transition-all"
+              className="group flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-card hover:border-slate-300 hover:shadow-sm transition-all"
             >
               <span
                 className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold text-white shrink-0"
@@ -139,7 +139,7 @@ export function TagsTab({ canEdit }: { canEdit: boolean }) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 p-0 text-slate-500 hover:bg-slate-100"
+                    className="h-7 w-7 p-0 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/60"
                     onClick={() => setEditando(t)}
                     title="Editar"
                   >
@@ -148,7 +148,7 @@ export function TagsTab({ canEdit }: { canEdit: boolean }) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 p-0 text-rose-600 hover:bg-rose-50"
+                    className="h-7 w-7 p-0 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                     onClick={() => setExcluindo(t)}
                     title="Excluir"
                   >

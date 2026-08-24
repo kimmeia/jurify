@@ -45,7 +45,7 @@ export function ConfigurarAgente({ open, onOpenChange }: { open: boolean; onOpen
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Library className="h-5 w-5 text-violet-600" /> Configurar o Agente Jurídico</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Library className="h-5 w-5 text-violet-600 dark:text-violet-400" /> Configurar o Agente Jurídico</DialogTitle>
           <DialogDescription>Ajuste como o agente se comporta e cadastre fontes próprias — ele usa tudo nas respostas e peças.</DialogDescription>
         </DialogHeader>
 
@@ -105,7 +105,7 @@ export function ConfigurarAgente({ open, onOpenChange }: { open: boolean; onOpen
           {(minhasFontesQ.data ?? []).map((f: any) => (
             <div key={f.id} className="flex items-start justify-between gap-2 border rounded-md p-2">
               <div className="min-w-0"><p className="text-sm font-medium truncate">{f.identificador}{f.titulo ? ` — ${f.titulo}` : ""}</p><p className="text-[11px] text-muted-foreground line-clamp-2">{f.texto}</p></div>
-              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 hover:text-rose-600" disabled={delFonteMut.isPending} onClick={() => delFonteMut.mutate({ id: f.id })}><Trash2 className="h-3.5 w-3.5" /></Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 hover:text-rose-600 dark:hover:text-rose-400" disabled={delFonteMut.isPending} onClick={() => delFonteMut.mutate({ id: f.id })}><Trash2 className="h-3.5 w-3.5" /></Button>
             </div>
           ))}
           {!minhasFontesQ.isLoading && (minhasFontesQ.data?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground">Nenhuma fonte própria ainda — a base global já está disponível.</p>}

@@ -93,7 +93,7 @@ export function WhatsappManualDialog({ open, onClose, onConectado }: WhatsappMan
 
         <div className="space-y-3 py-1">
           {/* Onde achar — guia rápido */}
-          <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-[11px] text-amber-900 space-y-1.5">
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 px-3 py-2.5 text-[11px] text-amber-900 dark:text-amber-200 space-y-1.5">
             <p className="font-semibold flex items-center gap-1">
               <ExternalLink className="h-3 w-3" /> Como conseguir os 3 valores
             </p>
@@ -149,8 +149,8 @@ export function WhatsappManualDialog({ open, onClose, onConectado }: WhatsappMan
             </div>
           </div>
 
-          <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-[11px] text-slate-700 flex items-start gap-2">
-            <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
+          <div className="rounded-lg bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/80 px-3 py-2 text-[11px] text-slate-700 dark:text-slate-200 flex items-start gap-2">
+            <CheckCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
             <span>
               Antes de salvar, vamos chamar a Graph API com esses valores. Se a
               Meta confirmar (retornar o nome verificado e o número do canal),

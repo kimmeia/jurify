@@ -186,7 +186,7 @@ export default function FichaColaborador() {
 
   return (
     <div className="space-y-3">
-      <Link href="/ponto" className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-violet-600 hover:underline">
+      <Link href="/ponto" className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-violet-600 dark:text-violet-400 hover:underline">
         <ArrowLeft className="h-3.5 w-3.5" />
         RH · Equipe
       </Link>
@@ -212,7 +212,7 @@ export default function FichaColaborador() {
       {pessoa && (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <Clock className="h-5 w-5 text-violet-600" />
+            <Clock className="h-5 w-5 text-violet-600 dark:text-violet-400" />
             <div>
               <h1 className="text-lg font-extrabold">
                 {pessoa.nome}

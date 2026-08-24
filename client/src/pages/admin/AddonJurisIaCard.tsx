@@ -32,9 +32,9 @@ import { diasParaVencer, type StatusAddon } from "@shared/addon-jurisia";
 const nf = new Intl.NumberFormat("pt-BR");
 
 const SELO: Record<StatusAddon, { label: string; cls: string }> = {
-  ativo: { label: "ativo", cls: "border-emerald-500/40 text-emerald-700 bg-emerald-500/10" },
-  suspenso: { label: "suspenso", cls: "border-amber-500/40 text-amber-700 bg-amber-500/10" },
-  cancelado: { label: "cancelado", cls: "border-slate-300 text-slate-600 bg-slate-500/10" },
+  ativo: { label: "ativo", cls: "border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10" },
+  suspenso: { label: "suspenso", cls: "border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10" },
+  cancelado: { label: "cancelado", cls: "border-slate-300 text-slate-600 dark:text-slate-300 bg-slate-500/10" },
 };
 
 const dataBR = (iso: string | null) =>
@@ -112,7 +112,7 @@ export default function AddonJurisIaCard({ escritorioId }: { escritorioId: numbe
     <div className="border rounded-lg p-4">
       <div className="flex items-center justify-between mb-3 gap-2">
         <div className="flex items-center gap-2 text-sm font-semibold">
-          <Gavel className="h-4 w-4 text-violet-600" /> JurisIA
+          <Gavel className="h-4 w-4 text-violet-600 dark:text-violet-400" /> JurisIA
           <span className="text-[11px] font-normal text-muted-foreground">contratado à parte</span>
         </div>
         {acesso?.liberado ? (
@@ -157,7 +157,7 @@ export default function AddonJurisIaCard({ escritorioId }: { escritorioId: numbe
                 <p className="font-semibold mt-0.5">
                   {dataBR(addon.expiraEm)}
                   {dias !== null && dias <= 15 && (
-                    <span className="ml-1.5 text-[11px] font-bold text-amber-600">{dias}d</span>
+                    <span className="ml-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-400">{dias}d</span>
                   )}
                 </p>
               </div>

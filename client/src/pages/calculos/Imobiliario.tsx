@@ -104,11 +104,11 @@ function StepIndicator({ steps, current }: { steps: string[]; current: number })
               <div className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[11px] ${
                 concluido ? "bg-emerald-600 text-white"
                 : ativo ? "bg-emerald-700 text-white"
-                : "bg-slate-200 text-slate-600"
+                : "bg-slate-200 text-slate-600 dark:text-slate-300"
               }`}>
                 {concluido ? <Check className="w-3 h-3" /> : num}
               </div>
-              <span className={ativo ? "font-medium text-slate-900" : "text-slate-500"}>{nome}</span>
+              <span className={ativo ? "font-medium text-slate-900 dark:text-slate-100" : "text-slate-500"}>{nome}</span>
             </div>
             {i < steps.length - 1 && (
               <div className={`w-8 h-px ${concluido ? "bg-emerald-300" : "bg-slate-300"}`} />
@@ -410,7 +410,7 @@ export default function Imobiliario() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-emerald-50/20 p-6 space-y-5">
+      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-emerald-50/20 dark:to-emerald-950/20 p-6 space-y-5">
         {step !== 4 && <StepIndicator steps={stepLabels} current={step} />}
         {step !== 4 && (
           <ImobHero
@@ -426,7 +426,7 @@ export default function Imobiliario() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Home className="h-5 w-5 text-emerald-600" />
+              <Home className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
               Dados do Imóvel e Financiamento
             </CardTitle>
             <CardDescription>Informe os dados básicos do imóvel e do financiamento</CardDescription>
@@ -516,7 +516,7 @@ export default function Imobiliario() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-emerald-600" />
+              <Building2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
               Enquadramento do Contrato
             </CardTitle>
             <CardDescription>Identifique o sistema e o tipo de credor do financiamento</CardDescription>
@@ -633,7 +633,7 @@ export default function Imobiliario() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-emerald-600" />
+              <FileText className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
               Dados do Contrato
             </CardTitle>
             <CardDescription>Informe as datas, indexador e configurações do contrato</CardDescription>
@@ -848,7 +848,7 @@ export default function Imobiliario() {
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <Button size="sm" onClick={() => { setStep(1); setResultado(null); setForm(initialForm); }}
-                        className="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-8">
+                        className="bg-white dark:bg-card text-slate-900 dark:text-slate-100 hover:bg-slate-100 font-semibold shadow-sm h-8">
                         <Copy className="h-3.5 w-3.5 mr-1" /> Novo cálculo
                       </Button>
                     </div>
@@ -1079,7 +1079,7 @@ export default function Imobiliario() {
                         </tr>
                       </thead>
                       <tbody>
-                        <tr className="border-b"><td className="py-2 px-3">Total Pago</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalPagoOriginal)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalPagoRecalculado)}</td><td className="py-2 px-3 text-right font-medium text-red-600">{formatBRL(resumo.diferencaTotal)}</td></tr>
+                        <tr className="border-b"><td className="py-2 px-3">Total Pago</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalPagoOriginal)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalPagoRecalculado)}</td><td className="py-2 px-3 text-right font-medium text-red-600 dark:text-red-400">{formatBRL(resumo.diferencaTotal)}</td></tr>
                         <tr className="border-b"><td className="py-2 px-3">Total Juros</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalJurosOriginal)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalJurosRecalculado)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.diferencaJuros)}</td></tr>
                         <tr className="border-b"><td className="py-2 px-3">Total Correção</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalCorrecaoOriginal)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalCorrecaoRecalculado)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.diferencaCorrecao)}</td></tr>
                         <tr className="border-b"><td className="py-2 px-3">Total MIP</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalMIPOriginal)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalMIPRecalculado)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalMIPOriginal - resumo.totalMIPRecalculado)}</td></tr>
@@ -1087,9 +1087,9 @@ export default function Imobiliario() {
                         <tr className="border-b"><td className="py-2 px-3">Total Tx. Admin</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalTxAdminOriginal)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalTxAdminRecalculado)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalTxAdminOriginal - resumo.totalTxAdminRecalculado)}</td></tr>
                       </tbody>
                       <tfoot>
-                        <tr className="bg-muted/30 font-bold"><td className="py-2 px-3">Valor Pago a Mais</td><td className="py-2 px-3" colSpan={2}></td><td className="py-2 px-3 text-right text-red-600 text-lg">{formatBRL(resumo.diferencaTotal)}</td></tr>
+                        <tr className="bg-muted/30 font-bold"><td className="py-2 px-3">Valor Pago a Mais</td><td className="py-2 px-3" colSpan={2}></td><td className="py-2 px-3 text-right text-red-600 dark:text-red-400 text-lg">{formatBRL(resumo.diferencaTotal)}</td></tr>
                         {resumo.repeticaoIndebito > 0 && resumo.diferencaTotal > 0 && (
-                          <tr className="bg-amber-50/30 dark:bg-amber-950/10 font-bold"><td className="py-2 px-3">Repetição em Dobro (CDC art. 42)</td><td className="py-2 px-3" colSpan={2}></td><td className="py-2 px-3 text-right text-amber-700 text-lg">{formatBRL(resumo.repeticaoIndebito)}</td></tr>
+                          <tr className="bg-amber-50/30 dark:bg-amber-950/10 font-bold"><td className="py-2 px-3">Repetição em Dobro (CDC art. 42)</td><td className="py-2 px-3" colSpan={2}></td><td className="py-2 px-3 text-right text-amber-700 dark:text-amber-300 text-lg">{formatBRL(resumo.repeticaoIndebito)}</td></tr>
                         )}
                       </tfoot>
                     </table>
@@ -1105,7 +1105,7 @@ export default function Imobiliario() {
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           <p>Total pago (contrato): <strong>{formatBRL(dadosParcPagas.valorPagoTotal)}</strong></p>
                           <p>Total devido (recálculo): <strong>{formatBRL(dadosParcPagas.valorDevidoRecalculado)}</strong></p>
-                          <p className="text-red-600 font-bold col-span-2">Valor pago a mais: {formatBRL(dadosParcPagas.valorPagoAMais)}</p>
+                          <p className="text-red-600 dark:text-red-400 font-bold col-span-2">Valor pago a mais: {formatBRL(dadosParcPagas.valorPagoAMais)}</p>
                           <p>Saldo devedor (contrato): <strong>{formatBRL(dadosParcPagas.saldoDevedorAtualOriginal)}</strong></p>
                           <p>Saldo devedor (recálculo): <strong>{formatBRL(dadosParcPagas.saldoDevedorAtualRecalculado)}</strong></p>
                           <p>Parcelas restantes: <strong>{dadosParcPagas.parcelasRestantes}</strong></p>

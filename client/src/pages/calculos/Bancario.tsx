@@ -40,13 +40,13 @@ function formatPercent(value: number, decimals = 4): string {
 // ─── Modalidades com ícones ────────────────────────────────────────────────────
 
 const MODALIDADES = [
-  { id: "credito_pessoal" as ModalidadeCredito, label: "Crédito Pessoal", desc: "Empréstimo sem garantia para uso livre", icon: Wallet, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/30", border: "border-blue-200 dark:border-blue-800", ring: "ring-blue-500" },
-  { id: "consignado" as ModalidadeCredito, label: "Consignado", desc: "Desconto direto na folha de pagamento", icon: Banknote, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30", border: "border-emerald-200 dark:border-emerald-800", ring: "ring-emerald-500" },
-  { id: "financiamento_veiculo" as ModalidadeCredito, label: "Financiamento de Veículo", desc: "Financiamento com garantia do veículo", icon: Car, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/30", border: "border-amber-200 dark:border-amber-800", ring: "ring-amber-500" },
+  { id: "credito_pessoal" as ModalidadeCredito, label: "Crédito Pessoal", desc: "Empréstimo sem garantia para uso livre", icon: Wallet, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/30", border: "border-blue-200 dark:border-blue-800", ring: "ring-blue-500" },
+  { id: "consignado" as ModalidadeCredito, label: "Consignado", desc: "Desconto direto na folha de pagamento", icon: Banknote, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30", border: "border-emerald-200 dark:border-emerald-800", ring: "ring-emerald-500" },
+  { id: "financiamento_veiculo" as ModalidadeCredito, label: "Financiamento de Veículo", desc: "Financiamento com garantia do veículo", icon: Car, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30", border: "border-amber-200 dark:border-amber-800", ring: "ring-amber-500" },
 
-  { id: "cartao_credito" as ModalidadeCredito, label: "Cartão de Crédito", desc: "Parcelamento ou rotativo do cartão", icon: CreditCard, color: "text-rose-600", bg: "bg-rose-50 dark:bg-rose-950/30", border: "border-rose-200 dark:border-rose-800", ring: "ring-rose-500" },
-  { id: "cheque_especial" as ModalidadeCredito, label: "Cheque Especial", desc: "Limite pré-aprovado na conta corrente", icon: Building2, color: "text-orange-600", bg: "bg-orange-50 dark:bg-orange-950/30", border: "border-orange-200 dark:border-orange-800", ring: "ring-orange-500" },
-  { id: "capital_giro" as ModalidadeCredito, label: "Capital de Giro", desc: "Crédito para empresas e negócios", icon: PiggyBank, color: "text-teal-600", bg: "bg-teal-50 dark:bg-teal-950/30", border: "border-teal-200 dark:border-teal-800", ring: "ring-teal-500" },
+  { id: "cartao_credito" as ModalidadeCredito, label: "Cartão de Crédito", desc: "Parcelamento ou rotativo do cartão", icon: CreditCard, color: "text-rose-600 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-950/30", border: "border-rose-200 dark:border-rose-800", ring: "ring-rose-500" },
+  { id: "cheque_especial" as ModalidadeCredito, label: "Cheque Especial", desc: "Limite pré-aprovado na conta corrente", icon: Building2, color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-50 dark:bg-orange-950/30", border: "border-orange-200 dark:border-orange-800", ring: "ring-orange-500" },
+  { id: "capital_giro" as ModalidadeCredito, label: "Capital de Giro", desc: "Crédito para empresas e negócios", icon: PiggyBank, color: "text-teal-600 dark:text-teal-400", bg: "bg-teal-50 dark:bg-teal-950/30", border: "border-teal-200 dark:border-teal-800", ring: "ring-teal-500" },
 ];
 
 // ─── Form Types ────────────────────────────────────────────────────────────────
@@ -163,8 +163,8 @@ function DemonstrativoTable({ linhas, title, desc }: { linhas: LinhaFinanciament
                 <td className="p-2 text-muted-foreground">{l.parcela}</td>
                 <td className="p-2">{l.dataVencimento.split("-").reverse().join("/")}</td>
                 <td className="p-2 text-right">{formatBRL(l.saldoDevedorAnterior)}</td>
-                <td className="p-2 text-right text-red-600">{formatBRL(l.juros)}</td>
-                <td className="p-2 text-right text-emerald-600">{formatBRL(l.amortizacao)}</td>
+                <td className="p-2 text-right text-red-600 dark:text-red-400">{formatBRL(l.juros)}</td>
+                <td className="p-2 text-right text-emerald-600 dark:text-emerald-400">{formatBRL(l.amortizacao)}</td>
                 <td className="p-2 text-right font-semibold">{formatBRL(l.valorParcela)}</td>
                 <td className="p-2 text-right">{formatBRL(l.saldoDevedorAtual)}</td>
               </tr>
@@ -195,11 +195,11 @@ function StepBar({ current }: { current: number }) {
               <div className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[11px] ${
                 concluido ? "bg-emerald-600 text-white"
                 : ativo ? "bg-blue-600 text-white"
-                : "bg-slate-200 text-slate-600"
+                : "bg-slate-200 text-slate-600 dark:text-slate-300"
               }`}>
                 {concluido ? <Check className="w-3 h-3" /> : num}
               </div>
-              <span className={ativo ? "font-medium text-slate-900" : "text-slate-500"}>{nome}</span>
+              <span className={ativo ? "font-medium text-slate-900 dark:text-slate-100" : "text-slate-500"}>{nome}</span>
             </div>
             {i < steps.length - 1 && (
               <div className={`w-8 h-px ${concluido ? "bg-emerald-300" : "bg-slate-300"}`} />
@@ -398,7 +398,7 @@ export default function Bancario() {
   if (step === 1) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-blue-50/20 p-6 space-y-5">
+        <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-blue-50/20 dark:to-blue-950/20 p-6 space-y-5">
           <StepBar current={1} />
 
           <BancarioHero
@@ -421,10 +421,10 @@ export default function Bancario() {
                     if (mod.id !== "financiamento_veiculo") updateField("tipoPessoa", "fisica");
                     if (mod.id !== "consignado") updateField("tipoVinculoConsignado", "clt");
                   }}
-                  className={`text-left bg-white rounded-xl p-5 transition-all ${
+                  className={`text-left bg-white dark:bg-card rounded-xl p-5 transition-all ${
                     selected
                       ? "border-2 border-blue-500 ring-2 ring-blue-100 shadow-md"
-                      : "border border-slate-200 hover:border-blue-400 hover:shadow-md"
+                      : "border border-slate-200 dark:border-slate-700/80 hover:border-blue-400 hover:shadow-md"
                   }`}
                 >
                   <div className="flex items-start justify-between mb-3">
@@ -432,12 +432,12 @@ export default function Bancario() {
                       <mod.icon className={`w-5 h-5 ${mod.color}`} />
                     </div>
                     {mod.id === "credito_pessoal" && (
-                      <span className="text-[10px] uppercase font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] uppercase font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full">
                         Mais comum
                       </span>
                     )}
                   </div>
-                  <p className="font-semibold text-slate-900 mb-1">{mod.label}</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100 mb-1">{mod.label}</p>
                   <p className="text-xs text-slate-500">{mod.desc}</p>
                 </button>
               );
@@ -451,8 +451,8 @@ export default function Bancario() {
             <p className="text-sm text-muted-foreground mb-4">O financiamento foi contratado por pessoa física ou jurídica?</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {([
-                { id: "fisica" as TipoPessoa, label: "Pessoa Física", desc: "CPF — financiamento pessoal", icon: User, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/30", border: "border-blue-200 dark:border-blue-800", ring: "ring-blue-500" },
-                { id: "juridica" as TipoPessoa, label: "Pessoa Jurídica", desc: "CNPJ — financiamento empresarial", icon: Building2, color: "text-teal-600", bg: "bg-teal-50 dark:bg-teal-950/30", border: "border-teal-200 dark:border-teal-800", ring: "ring-teal-500" },
+                { id: "fisica" as TipoPessoa, label: "Pessoa Física", desc: "CPF — financiamento pessoal", icon: User, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/30", border: "border-blue-200 dark:border-blue-800", ring: "ring-blue-500" },
+                { id: "juridica" as TipoPessoa, label: "Pessoa Jurídica", desc: "CNPJ — financiamento empresarial", icon: Building2, color: "text-teal-600 dark:text-teal-400", bg: "bg-teal-50 dark:bg-teal-950/30", border: "border-teal-200 dark:border-teal-800", ring: "ring-teal-500" },
               ]).map((tp) => {
                 const selected = form.tipoPessoa === tp.id;
                 return (
@@ -483,10 +483,10 @@ export default function Bancario() {
             <p className="text-sm text-muted-foreground mb-4">Qual o vínculo do tomador do crédito consignado?</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {([
-                { id: "clt" as TipoVinculoConsignado, label: "CLT", desc: "Trabalhador com carteira assinada", icon: Briefcase, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/30", border: "border-blue-200 dark:border-blue-800", ring: "ring-blue-500" },
-                { id: "servidor_publico" as TipoVinculoConsignado, label: "Servidor Público", desc: "Servidor federal, estadual ou municipal", icon: Building2, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30", border: "border-emerald-200 dark:border-emerald-800", ring: "ring-emerald-500" },
-                { id: "militar" as TipoVinculoConsignado, label: "Militar", desc: "Forças Armadas e forças auxiliares", icon: Shield, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/30", border: "border-amber-200 dark:border-amber-800", ring: "ring-amber-500" },
-                { id: "inss" as TipoVinculoConsignado, label: "INSS", desc: "Aposentado ou pensionista do INSS", icon: HeartPulse, color: "text-rose-600", bg: "bg-rose-50 dark:bg-rose-950/30", border: "border-rose-200 dark:border-rose-800", ring: "ring-rose-500" },
+                { id: "clt" as TipoVinculoConsignado, label: "CLT", desc: "Trabalhador com carteira assinada", icon: Briefcase, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/30", border: "border-blue-200 dark:border-blue-800", ring: "ring-blue-500" },
+                { id: "servidor_publico" as TipoVinculoConsignado, label: "Servidor Público", desc: "Servidor federal, estadual ou municipal", icon: Building2, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30", border: "border-emerald-200 dark:border-emerald-800", ring: "ring-emerald-500" },
+                { id: "militar" as TipoVinculoConsignado, label: "Militar", desc: "Forças Armadas e forças auxiliares", icon: Shield, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30", border: "border-amber-200 dark:border-amber-800", ring: "ring-amber-500" },
+                { id: "inss" as TipoVinculoConsignado, label: "INSS", desc: "Aposentado ou pensionista do INSS", icon: HeartPulse, color: "text-rose-600 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-950/30", border: "border-rose-200 dark:border-rose-800", ring: "ring-rose-500" },
               ]).map((vc) => {
                 const selected = form.tipoVinculoConsignado === vc.id;
                 return (
@@ -562,7 +562,7 @@ export default function Bancario() {
           </Card>
         )}
 
-          <div className="flex items-center justify-end border-t border-slate-200 pt-4">
+          <div className="flex items-center justify-end border-t border-slate-200 dark:border-slate-700/80 pt-4">
             <Button size="lg" onClick={() => setStep(2)} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 shadow-sm">
               Continuar com {selectedModalidade?.label}{form.modalidadeCredito === "financiamento_veiculo" ? ` (${form.tipoPessoa === "fisica" ? "PF" : "PJ"})` : ""}{form.modalidadeCredito === "consignado" ? ` — ${form.tipoVinculoConsignado === "clt" ? "CLT" : form.tipoVinculoConsignado === "servidor_publico" ? "Servidor Público" : form.tipoVinculoConsignado === "inss" ? "INSS" : "Militar"}` : ""} <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
@@ -579,7 +579,7 @@ export default function Bancario() {
   if (step === 2) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-blue-50/20 p-6 space-y-5">
+        <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-blue-50/20 dark:to-blue-950/20 p-6 space-y-5">
           <StepBar current={2} />
           <BancarioHero
             titulo={`Dados do contrato — ${selectedModalidade?.label}`}
@@ -794,7 +794,7 @@ export default function Bancario() {
         </Card>
 
         {/* Calcular */}
-        <div className="flex items-center justify-between border-t border-slate-200 pt-4">
+        <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-700/80 pt-4">
           <Button variant="ghost" onClick={() => setStep(1)} className="text-sm">
             <ChevronLeft className="h-4 w-4 mr-1" /> Voltar para modalidade
           </Button>
@@ -826,8 +826,8 @@ export default function Bancario() {
       <div className="space-y-6">
         <div className={`rounded-2xl p-6 space-y-5 ${
           temProblema
-            ? "bg-gradient-to-br from-slate-50/40 via-white to-rose-50/20"
-            : "bg-gradient-to-br from-slate-50/40 via-white to-emerald-50/20"
+            ? "bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-rose-50/20 dark:to-rose-950/20"
+            : "bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-emerald-50/20 dark:to-emerald-950/20"
         }`}>
           <StepBar current={3} />
 
@@ -859,7 +859,7 @@ export default function Bancario() {
                     {isPdfLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Download className="h-3.5 w-3.5 mr-1" />} PDF
                   </Button>
                   <Button size="sm" onClick={() => { setStep(1); setResultado(null); }}
-                    className="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-8">
+                    className="bg-white dark:bg-card text-slate-900 dark:text-slate-100 hover:bg-slate-100 font-semibold shadow-sm h-8">
                     <Copy className="h-3.5 w-3.5 mr-1" /> Nova análise
                   </Button>
                 </div>
@@ -911,9 +911,9 @@ export default function Bancario() {
 
         {/* Parcelas Já Pagas */}
         {dadosParcPagas && dadosParcPagas.parcelasPagas > 0 && (
-          <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20">
+          <Card className="border-blue-200 dark:border-blue-800/50 bg-blue-50/50 dark:bg-blue-950/20">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2"><Receipt className="h-4 w-4 text-blue-600" /> Suas parcelas já pagas</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2"><Receipt className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Suas parcelas já pagas</CardTitle>
               <CardDescription>Recálculo considerando o que você já pagou</CardDescription>
             </CardHeader>
             <CardContent>
@@ -921,13 +921,13 @@ export default function Bancario() {
                 <div><p className="text-muted-foreground text-xs">Parcelas pagas</p><p className="font-semibold text-lg">{dadosParcPagas.parcelasPagas}</p></div>
                 <div><p className="text-muted-foreground text-xs">Você pagou</p><p className="font-semibold">{formatBRL(dadosParcPagas.valorPagoTotal)}</p></div>
                 <div><p className="text-muted-foreground text-xs">Deveria ter pago</p><p className="font-semibold">{formatBRL(dadosParcPagas.valorDevidoGauss)}</p></div>
-                <div><p className="text-muted-foreground text-xs">Pagou a mais</p><p className="font-bold text-red-600 text-lg">{formatBRL(dadosParcPagas.valorPagoAMais)}</p></div>
+                <div><p className="text-muted-foreground text-xs">Pagou a mais</p><p className="font-bold text-red-600 dark:text-red-400 text-lg">{formatBRL(dadosParcPagas.valorPagoAMais)}</p></div>
               </div>
               <Separator className="my-4" />
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                 <div><p className="text-muted-foreground text-xs">Sua dívida real</p><p className="font-bold text-lg">{formatBRL(dadosParcPagas.saldoDevedorAtualizado)}</p></div>
                 <div><p className="text-muted-foreground text-xs">Parcelas restantes</p><p className="font-semibold text-lg">{dadosParcPagas.parcelasRestantes}</p></div>
-                <div><p className="text-muted-foreground text-xs">Nova parcela justa</p><p className="font-bold text-emerald-600 text-lg">{formatBRL(dadosParcPagas.parcelaFinalRecalculada)}</p></div>
+                <div><p className="text-muted-foreground text-xs">Nova parcela justa</p><p className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">{formatBRL(dadosParcPagas.parcelaFinalRecalculada)}</p></div>
               </div>
             </CardContent>
           </Card>
@@ -935,13 +935,13 @@ export default function Bancario() {
 
         {/* Repetição Indébito */}
         {resumo && resumo.repeticaoIndebito > 0 && temProblema && (
-          <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+          <Card className="border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/20">
             <CardContent className="pt-5 flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold flex items-center gap-2"><Scale className="h-4 w-4 text-amber-600" /> Você pode receber em dobro</p>
+                <p className="text-sm font-semibold flex items-center gap-2"><Scale className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Você pode receber em dobro</p>
                 <p className="text-xs text-muted-foreground mt-1">Pelo Código de Defesa do Consumidor (art. 42), valores indevidos podem ser restituídos em dobro</p>
               </div>
-              <p className="text-2xl font-bold text-amber-700 shrink-0 ml-4">{formatBRL(resumo.repeticaoIndebito)}</p>
+              <p className="text-2xl font-bold text-amber-700 dark:text-amber-300 shrink-0 ml-4">{formatBRL(resumo.repeticaoIndebito)}</p>
             </CardContent>
           </Card>
         )}
@@ -951,7 +951,7 @@ export default function Bancario() {
           <Card>
             <CardContent className="pt-5">
               <div className="flex items-start gap-3">
-                <div className="h-9 w-9 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center shrink-0"><Landmark className="h-4 w-4 text-blue-600" /></div>
+                <div className="h-9 w-9 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center shrink-0"><Landmark className="h-4 w-4 text-blue-600 dark:text-blue-400" /></div>
                 <div className="flex-1">
                   <p className="text-sm font-medium">Taxa média de mercado (Banco Central)</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -1029,7 +1029,7 @@ export default function Bancario() {
                       <div className="rounded-lg bg-muted/50 p-3 text-center"><p className="text-xs text-muted-foreground">CET Mensal</p><p className="font-bold">{formatPercent(analise.cet.cetMensal)}</p></div>
                       <div className="rounded-lg bg-muted/50 p-3 text-center"><p className="text-xs text-muted-foreground">CET Anual</p><p className="font-bold">{formatPercent(analise.cet.cetAnual, 2)}</p></div>
                       <div className="rounded-lg bg-muted/50 p-3 text-center"><p className="text-xs text-muted-foreground">Taxa Nominal</p><p className="font-bold">{formatPercent(analise.cet.taxaNominalAnual, 2)}</p></div>
-                      <div className="rounded-lg bg-muted/50 p-3 text-center"><p className="text-xs text-muted-foreground">Diferença</p><p className="font-bold text-amber-600">+{formatPercent(analise.cet.diferencaCET_vs_Nominal, 2)}</p></div>
+                      <div className="rounded-lg bg-muted/50 p-3 text-center"><p className="text-xs text-muted-foreground">Diferença</p><p className="font-bold text-amber-600 dark:text-amber-400">+{formatPercent(analise.cet.diferencaCET_vs_Nominal, 2)}</p></div>
                     </div>
                     <p className="text-xs text-muted-foreground mt-3">O CET é o custo total real. É maior que a taxa do contrato porque inclui todas as tarifas e encargos.</p>
                   </CardContent>
@@ -1057,7 +1057,7 @@ export default function Bancario() {
 
               {/* Divergência Taxas */}
               {!analise.verificacaoTaxas.taxasEquivalentes && !analise.verificacaoTaxas.anualAutoCalculada && (
-                <Card className="border-amber-200">
+                <Card className="border-amber-200 dark:border-amber-800/50">
                   <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-500" /> Taxas não conferem</CardTitle></CardHeader>
                   <CardContent className="text-sm"><p className="text-muted-foreground">{analise.verificacaoTaxas.capitalizacaoDetalhes}</p>{analise.verificacaoTaxas.capitalizacaoDiaria && <Badge variant="outline" className="mt-2 border-amber-500 text-amber-700 dark:text-amber-400">Possível cobrança de juros diários</Badge>}</CardContent>
                 </Card>
@@ -1065,13 +1065,13 @@ export default function Bancario() {
 
               {/* Tarifas Ilegais */}
               {analise.tarifasIlegais.length > 0 && (
-                <Card className="border-red-200">
+                <Card className="border-red-200 dark:border-red-800/50">
                   <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><XCircle className="h-4 w-4 text-red-500" /> Tarifas Ilegais</CardTitle><CardDescription>Estas tarifas não deveriam ter sido cobradas</CardDescription></CardHeader>
                   <CardContent className="space-y-3">
                     {analise.tarifasIlegais.map((t, i) => (
                       <div key={i} className="flex items-start justify-between p-3 rounded-lg bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900">
                         <div><p className="font-medium text-sm">{t.descricao}</p><p className="text-xs text-muted-foreground mt-0.5">{t.fundamento}</p></div>
-                        <span className="font-bold text-red-600 shrink-0 ml-3">{formatBRL(t.valor)}</span>
+                        <span className="font-bold text-red-600 dark:text-red-400 shrink-0 ml-3">{formatBRL(t.valor)}</span>
                       </div>
                     ))}
                   </CardContent>
@@ -1080,7 +1080,7 @@ export default function Bancario() {
 
               {/* Mora Abusivos */}
               {analise.verificacaoEncargosMora.irregularidades.length > 0 && (
-                <Card className="border-red-200">
+                <Card className="border-red-200 dark:border-red-800/50">
                   <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-red-500" /> Encargos de Atraso Abusivos</CardTitle></CardHeader>
                   <CardContent className="text-sm space-y-2">
                     {analise.verificacaoEncargosMora.irregularidades.map((irr, i) => (
@@ -1131,15 +1131,15 @@ export default function Bancario() {
                     <table className="w-full text-sm">
                       <thead><tr className="bg-muted/60"><th className="p-3 text-left font-medium">Item</th><th className="p-3 text-right font-medium">Contrato Atual</th><th className="p-3 text-right font-medium">Valor Justo</th><th className="p-3 text-right font-medium">Diferença</th></tr></thead>
                       <tbody>
-                        {resumo.valorFinanciadoLiquido < resumo.valorFinanciadoOriginal && <tr className="border-t bg-amber-50/30 dark:bg-amber-950/10"><td className="p-3">Valor financiado</td><td className="p-3 text-right">{formatBRL(resumo.valorFinanciadoOriginal)}</td><td className="p-3 text-right">{formatBRL(resumo.valorFinanciadoLiquido)}</td><td className="p-3 text-right font-bold text-amber-600">{formatBRL(resumo.tarifasFinanciadas)}</td></tr>}
-                        <tr className="border-t"><td className="p-3">Total de todas as parcelas</td><td className="p-3 text-right">{formatBRL(resumo.totalPagoOriginal)}</td><td className="p-3 text-right text-emerald-700 font-medium">{formatBRL(resumo.totalPagoRecalculado)}</td><td className="p-3 text-right font-bold text-red-600">{formatBRL(resumo.diferencaTotal)}</td></tr>
-                        <tr className="border-t"><td className="p-3">Total pago em juros</td><td className="p-3 text-right">{formatBRL(resumo.totalJurosOriginal)}</td><td className="p-3 text-right text-emerald-700 font-medium">{formatBRL(resumo.totalJurosRecalculado)}</td><td className="p-3 text-right font-bold text-red-600">{formatBRL(resumo.diferencaJuros)}</td></tr>
-                        {resumo.tarifasIlegais > 0 && <tr className="border-t"><td className="p-3">Tarifas ilegais</td><td className="p-3 text-right">{formatBRL(resumo.tarifasIlegais)}</td><td className="p-3 text-right">—</td><td className="p-3 text-right font-bold text-red-600">{formatBRL(resumo.tarifasIlegais)}</td></tr>}
-                        {resumo.encargosAbusivos > 0 && <tr className="border-t"><td className="p-3">Encargos abusivos</td><td className="p-3 text-right">{formatBRL(resumo.encargosAbusivos)}</td><td className="p-3 text-right">—</td><td className="p-3 text-right font-bold text-red-600">{formatBRL(resumo.encargosAbusivos)}</td></tr>}
+                        {resumo.valorFinanciadoLiquido < resumo.valorFinanciadoOriginal && <tr className="border-t bg-amber-50/30 dark:bg-amber-950/10"><td className="p-3">Valor financiado</td><td className="p-3 text-right">{formatBRL(resumo.valorFinanciadoOriginal)}</td><td className="p-3 text-right">{formatBRL(resumo.valorFinanciadoLiquido)}</td><td className="p-3 text-right font-bold text-amber-600 dark:text-amber-400">{formatBRL(resumo.tarifasFinanciadas)}</td></tr>}
+                        <tr className="border-t"><td className="p-3">Total de todas as parcelas</td><td className="p-3 text-right">{formatBRL(resumo.totalPagoOriginal)}</td><td className="p-3 text-right text-emerald-700 dark:text-emerald-300 font-medium">{formatBRL(resumo.totalPagoRecalculado)}</td><td className="p-3 text-right font-bold text-red-600 dark:text-red-400">{formatBRL(resumo.diferencaTotal)}</td></tr>
+                        <tr className="border-t"><td className="p-3">Total pago em juros</td><td className="p-3 text-right">{formatBRL(resumo.totalJurosOriginal)}</td><td className="p-3 text-right text-emerald-700 dark:text-emerald-300 font-medium">{formatBRL(resumo.totalJurosRecalculado)}</td><td className="p-3 text-right font-bold text-red-600 dark:text-red-400">{formatBRL(resumo.diferencaJuros)}</td></tr>
+                        {resumo.tarifasIlegais > 0 && <tr className="border-t"><td className="p-3">Tarifas ilegais</td><td className="p-3 text-right">{formatBRL(resumo.tarifasIlegais)}</td><td className="p-3 text-right">—</td><td className="p-3 text-right font-bold text-red-600 dark:text-red-400">{formatBRL(resumo.tarifasIlegais)}</td></tr>}
+                        {resumo.encargosAbusivos > 0 && <tr className="border-t"><td className="p-3">Encargos abusivos</td><td className="p-3 text-right">{formatBRL(resumo.encargosAbusivos)}</td><td className="p-3 text-right">—</td><td className="p-3 text-right font-bold text-red-600 dark:text-red-400">{formatBRL(resumo.encargosAbusivos)}</td></tr>}
                       </tbody>
                       <tfoot>
-                        <tr className="bg-muted/60 font-bold border-t-2"><td className="p-3">Total pago a mais</td><td className="p-3" colSpan={2}></td><td className="p-3 text-right text-red-600 text-lg">{formatBRL(resumo.diferencaTotal)}</td></tr>
-                        {resumo.repeticaoIndebito > 0 && temProblema && <tr className="bg-amber-50/50 dark:bg-amber-950/10 font-bold"><td className="p-3">Restituição em dobro (CDC art. 42)</td><td className="p-3" colSpan={2}></td><td className="p-3 text-right text-amber-700 text-lg">{formatBRL(resumo.repeticaoIndebito)}</td></tr>}
+                        <tr className="bg-muted/60 font-bold border-t-2"><td className="p-3">Total pago a mais</td><td className="p-3" colSpan={2}></td><td className="p-3 text-right text-red-600 dark:text-red-400 text-lg">{formatBRL(resumo.diferencaTotal)}</td></tr>
+                        {resumo.repeticaoIndebito > 0 && temProblema && <tr className="bg-amber-50/50 dark:bg-amber-950/10 font-bold"><td className="p-3">Restituição em dobro (CDC art. 42)</td><td className="p-3" colSpan={2}></td><td className="p-3 text-right text-amber-700 dark:text-amber-300 text-lg">{formatBRL(resumo.repeticaoIndebito)}</td></tr>}
                       </tfoot>
                     </table>
                   </div>

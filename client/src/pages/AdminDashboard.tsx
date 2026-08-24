@@ -97,14 +97,14 @@ export default function AdminDashboard() {
           value={statsLoading ? <Skeleton className="h-7 w-24" /> : formatBRL(mrr / 100)}
           icon={DollarSign}
           iconBg="bg-emerald-500/10"
-          iconFg="text-emerald-600"
+          iconFg="text-emerald-600 dark:text-emerald-400"
         />
         <KPICard
           label="Assinaturas ativas"
           value={statsLoading ? <Skeleton className="h-7 w-16" /> : assinantesPagantes}
           icon={CreditCard}
           iconBg="bg-indigo-500/10"
-          iconFg="text-indigo-600"
+          iconFg="text-indigo-600 dark:text-indigo-400"
           hint={
             stats?.trialingSubscriptions
               ? `+ ${stats.trialingSubscriptions} em trial`
@@ -116,10 +116,10 @@ export default function AdminDashboard() {
           value={statsLoading ? <Skeleton className="h-7 w-16" /> : (stats?.totalClients ?? 0)}
           icon={Users}
           iconBg="bg-violet-500/10"
-          iconFg="text-violet-600"
+          iconFg="text-violet-600 dark:text-violet-400"
           badge={
             stats?.newClientsThisMonth ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300">
                 +{stats.newClientsThisMonth} este mês
               </span>
             ) : undefined
@@ -130,7 +130,7 @@ export default function AdminDashboard() {
           value={statsLoading ? <Skeleton className="h-7 w-16" /> : `${conversao}%`}
           icon={Target}
           iconBg="bg-amber-500/10"
-          iconFg="text-amber-600"
+          iconFg="text-amber-600 dark:text-amber-400"
           hint="Clientes com plano ativo"
         />
       </div>
@@ -152,7 +152,7 @@ export default function AdminDashboard() {
             }
             icon={TrendingDown}
             iconBg="bg-rose-500/10"
-            iconFg="text-rose-600"
+            iconFg="text-rose-600 dark:text-rose-400"
             valueColor={churnColor(churn?.churnAtual ?? 0)}
             hint="Churn (últimos 3 meses)"
           />
@@ -161,7 +161,7 @@ export default function AdminDashboard() {
             value={churnLoading ? <Skeleton className="h-7 w-28" /> : formatBRL((churn?.ltvEstimado ?? 0) / 100)}
             icon={Target}
             iconBg="bg-violet-500/10"
-            iconFg="text-violet-600"
+            iconFg="text-violet-600 dark:text-violet-400"
             hint="LTV estimado"
           />
           <KPICard
@@ -169,7 +169,7 @@ export default function AdminDashboard() {
             value={churnLoading ? <Skeleton className="h-7 w-20" /> : `${retencao}%`}
             icon={Activity}
             iconBg="bg-indigo-500/10"
-            iconFg="text-indigo-600"
+            iconFg="text-indigo-600 dark:text-indigo-400"
             hint="Retenção 12 meses"
           />
         </div>
@@ -286,18 +286,18 @@ export default function AdminDashboard() {
 }
 
 function churnColor(rate: number): string {
-  if (rate < 3) return "text-emerald-600";
-  if (rate < 7) return "text-amber-600";
-  return "text-rose-600";
+  if (rate < 3) return "text-emerald-600 dark:text-emerald-400";
+  if (rate < 7) return "text-amber-600 dark:text-amber-400";
+  return "text-rose-600 dark:text-rose-400";
 }
 
 const PLANO_TONS: Record<
   "emerald" | "blue" | "violet",
   { iconBg: string; iconFg: string }
 > = {
-  emerald: { iconBg: "bg-emerald-500/10", iconFg: "text-emerald-600" },
-  blue: { iconBg: "bg-blue-500/10", iconFg: "text-blue-600" },
-  violet: { iconBg: "bg-violet-500/10", iconFg: "text-violet-600" },
+  emerald: { iconBg: "bg-emerald-500/10", iconFg: "text-emerald-600 dark:text-emerald-400" },
+  blue: { iconBg: "bg-blue-500/10", iconFg: "text-blue-600 dark:text-blue-400" },
+  violet: { iconBg: "bg-violet-500/10", iconFg: "text-violet-600 dark:text-violet-400" },
 };
 
 function PlanoCard({

@@ -142,12 +142,12 @@ export function NovoCompromissoDialog({
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-indigo-600" />
+            <Calendar className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
             Novo Compromisso
           </DialogTitle>
           {contexto?.contatoId && contexto?.contatoNome && (
             <div className="flex items-center gap-2 mt-1.5">
-              <span className="inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-violet-100 text-violet-800 text-xs font-semibold">
+              <span className="inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-800 dark:text-violet-200 text-xs font-semibold">
                 <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 text-white text-[10px] font-bold">
                   {iniciais(contexto.contatoNome)}
                 </span>
@@ -279,7 +279,7 @@ export function NovoCompromissoDialog({
             <button
               onClick={adicionarLembrete}
               type="button"
-              className="text-[11px] text-indigo-600 hover:underline font-semibold inline-flex items-center gap-1"
+              className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold inline-flex items-center gap-1"
             >
               <Plus className="h-3 w-3" /> Adicionar lembrete
             </button>

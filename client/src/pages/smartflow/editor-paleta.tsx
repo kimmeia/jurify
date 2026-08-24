@@ -102,12 +102,12 @@ const GRUPO_ICON: Record<GrupoSmartflow, LucideIcon> = {
 };
 
 const GRUPO_COR_ICONE: Record<GrupoSmartflow, string> = {
-  mensagem: "text-blue-600",
-  asaas: "text-emerald-600",
-  crm: "text-violet-600",
-  ia: "text-violet-600",
-  acoes: "text-indigo-600",
-  fluxo: "text-amber-600",
+  mensagem: "text-blue-600 dark:text-blue-400",
+  asaas: "text-emerald-600 dark:text-emerald-400",
+  crm: "text-violet-600 dark:text-violet-400",
+  ia: "text-violet-600 dark:text-violet-400",
+  acoes: "text-indigo-600 dark:text-indigo-400",
+  fluxo: "text-amber-600 dark:text-amber-400",
 };
 
 const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
@@ -273,7 +273,7 @@ export function EditorPaleta({
       {/* ─── GATILHO em destaque ─── */}
       <div className="p-3">
         <div className="flex items-center gap-1.5 mb-2">
-          <Zap className="w-3 h-3 text-amber-600" />
+          <Zap className="w-3 h-3 text-amber-600 dark:text-amber-400" />
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
             Gatilho do fluxo
           </p>
@@ -313,7 +313,7 @@ export function EditorPaleta({
       {/* ─── AÇÕES (passos) ─── */}
       <div className="p-3 space-y-3">
         <div className="flex items-center gap-1.5">
-          <Layers className="w-3 h-3 text-violet-600" />
+          <Layers className="w-3 h-3 text-violet-600 dark:text-violet-400" />
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
             Ações disponíveis
           </p>
@@ -555,7 +555,7 @@ function TrocarGatilhoPopover({
                             : "hover:bg-slate-100 dark:hover:bg-slate-900/50"
                         }`}
                       >
-                        <GatIcon className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${ativo ? "text-violet-600" : "text-muted-foreground"}`} />
+                        <GatIcon className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${ativo ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground"}`} />
                         <div className="flex-1 min-w-0">
                           <p className={`text-[11px] font-semibold leading-tight ${ativo ? "text-violet-700 dark:text-violet-300" : ""}`}>
                             {g.label}
@@ -563,7 +563,7 @@ function TrocarGatilhoPopover({
                           <p className="text-[9px] text-muted-foreground line-clamp-1 mt-0.5">{g.descricao}</p>
                         </div>
                         {ativo && (
-                          <CheckCircle2 className="w-3 h-3 text-violet-600 shrink-0 mt-1" />
+                          <CheckCircle2 className="w-3 h-3 text-violet-600 dark:text-violet-400 shrink-0 mt-1" />
                         )}
                       </button>
                     );

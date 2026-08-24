@@ -33,7 +33,7 @@ export function InstalarAppDialog({ open, onOpenChange }: { open: boolean; onOpe
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Smartphone className="h-5 w-5 text-violet-600" />
+            <Smartphone className="h-5 w-5 text-violet-600 dark:text-violet-400" />
             {ios ? "Instalar no iPhone" : "Instalar o app"}
           </DialogTitle>
           <DialogDescription>

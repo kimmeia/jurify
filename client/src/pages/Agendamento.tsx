@@ -54,12 +54,12 @@ function formatTimeBR(d: string) {
 }
 
 const TIPO_ICONE_CORES: Record<string, string> = {
-  prazo_processual: "bg-red-100 text-red-700 border-red-200",
-  audiencia: "bg-violet-100 text-violet-700 border-violet-200",
-  reuniao_comercial: "bg-blue-100 text-blue-700 border-blue-200",
-  tarefa: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  follow_up: "bg-amber-100 text-amber-700 border-amber-200",
-  outro: "bg-gray-100 text-gray-700 border-gray-200",
+  prazo_processual: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50",
+  audiencia: "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800/50",
+  reuniao_comercial: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50",
+  tarefa: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50",
+  follow_up: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50",
+  outro: "bg-gray-100 dark:bg-slate-800/60 text-gray-700 dark:text-slate-200 border-gray-200 dark:border-slate-700/80",
 };
 
 // ─── Main Component ─────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ export default function Agendamento() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="p-2.5 rounded-xl bg-orange-100 dark:bg-orange-900/30">
-          <CalendarDays className="h-6 w-6 text-orange-600" />
+          <CalendarDays className="h-6 w-6 text-orange-600 dark:text-orange-400" />
         </div>
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">Agendamento</h1>
@@ -128,10 +128,10 @@ export default function Agendamento() {
       {/* Contadores */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Pendentes", val: c.pendente, cls: "border-amber-200 bg-amber-50/50", txtCls: "text-amber-600", numCls: "text-amber-700" },
-          { label: "Em Andamento", val: c.em_andamento, cls: "border-blue-200 bg-blue-50/50", txtCls: "text-blue-600", numCls: "text-blue-700" },
-          { label: "Concluídos", val: c.concluido, cls: "border-emerald-200 bg-emerald-50/50", txtCls: "text-emerald-600", numCls: "text-emerald-700" },
-          { label: "Atrasados", val: c.atrasado, cls: "border-red-200 bg-red-50/50", txtCls: "text-red-600", numCls: "text-red-700" },
+          { label: "Pendentes", val: c.pendente, cls: "border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/30", txtCls: "text-amber-600 dark:text-amber-400", numCls: "text-amber-700 dark:text-amber-300" },
+          { label: "Em Andamento", val: c.em_andamento, cls: "border-blue-200 dark:border-blue-800/50 bg-blue-50/50 dark:bg-blue-950/30", txtCls: "text-blue-600 dark:text-blue-400", numCls: "text-blue-700 dark:text-blue-300" },
+          { label: "Concluídos", val: c.concluido, cls: "border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-950/30", txtCls: "text-emerald-600 dark:text-emerald-400", numCls: "text-emerald-700 dark:text-emerald-300" },
+          { label: "Atrasados", val: c.atrasado, cls: "border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-red-950/30", txtCls: "text-red-600 dark:text-red-400", numCls: "text-red-700 dark:text-red-300" },
         ].map((item) => (
           <Card key={item.label} className={item.cls}>
             <CardContent className="pt-4 pb-3 px-4">
@@ -328,7 +328,7 @@ function AgendamentoCard({ agendamento: a, onUpdated }: { agendamento: any; onUp
             onClick={() => atualizarMut.mutate({ id: a.id, status: "concluido" })}
             disabled={atualizarMut.isPending}
             title="Concluir">
-            <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+            <CheckCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
           </Button>
         )}
         <Button variant="ghost" size="icon" className="h-7 w-7"

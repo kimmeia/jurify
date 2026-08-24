@@ -320,7 +320,7 @@ function EditarPlanoDialog({
             </p>
             {features.map((f, i) => (
               <div key={i} className="flex items-center gap-2">
-                <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span className="flex-1 text-sm truncate">{f}</span>
                 <Button size="sm" variant="ghost" className="h-6 w-6 p-0"
                   onClick={() => setFeatures(features.filter((_, idx) => idx !== i))}>

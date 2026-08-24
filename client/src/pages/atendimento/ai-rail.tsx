@@ -39,7 +39,7 @@ export function AIRail({
   if (modo === "panel" && contatoId) {
     return (
       <div className="border-l bg-card flex flex-col w-[340px] max-w-[340px]">
-        <div className="flex items-center justify-between px-3 py-2 border-b bg-gradient-to-r from-violet-50/40 to-indigo-50/40">
+        <div className="flex items-center justify-between px-3 py-2 border-b bg-gradient-to-r from-violet-50/40 dark:from-violet-950/40 to-indigo-50/40 dark:to-indigo-950/20">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
               <Sparkles className="h-3.5 w-3.5 text-white" />
@@ -74,7 +74,7 @@ export function AIRail({
 
   // RAIL colapsado
   return (
-    <div className="border-l bg-gradient-to-b from-violet-50/30 via-background to-background flex flex-col items-center py-3 w-[64px]">
+    <div className="border-l bg-gradient-to-b from-violet-50/30 dark:from-violet-950/40 via-background to-background flex flex-col items-center py-3 w-[64px]">
       <button
         onClick={() => contatoId && setModo("panel")}
         disabled={!contatoId}
@@ -113,7 +113,7 @@ export function AIRail({
       )}
 
       <RailButton
-        icon={<ScrollText className="h-4 w-4 text-violet-600" />}
+        icon={<ScrollText className="h-4 w-4 text-violet-600 dark:text-violet-400" />}
         label="Linha do tempo"
         onClick={onAbrirLinhaTempo}
         disabled={!contatoId}
@@ -149,7 +149,7 @@ function RailButton({
         "w-10 h-10 rounded-xl bg-card border border-border flex items-center justify-center mb-2 transition " +
         (disabled
           ? "opacity-40 cursor-not-allowed"
-          : "hover:border-violet-300 hover:bg-violet-50/40 cursor-pointer")
+          : "hover:border-violet-300 hover:bg-violet-50/40 dark:hover:bg-violet-950/30 cursor-pointer")
       }
       title={label}
     >
@@ -167,20 +167,20 @@ function RiskMiniGauge({ conversaId }: { conversaId: number }) {
   if (!data) return null;
   const corBg =
     data.nivel === "saudavel"
-      ? "from-emerald-50 to-emerald-100 border-emerald-200"
+      ? "from-emerald-50 dark:from-emerald-950/40 to-emerald-100 dark:to-emerald-950/20 border-emerald-200 dark:border-emerald-800/50"
       : data.nivel === "atenção"
-        ? "from-amber-50 to-amber-100 border-amber-200"
+        ? "from-amber-50 dark:from-amber-950/40 to-amber-100 dark:to-amber-950/20 border-amber-200 dark:border-amber-800/50"
         : data.nivel === "risco"
-          ? "from-orange-50 to-orange-100 border-orange-200"
-          : "from-rose-50 to-rose-100 border-rose-200";
+          ? "from-orange-50 dark:from-orange-950/40 to-orange-100 dark:to-orange-950/20 border-orange-200 dark:border-orange-800/50"
+          : "from-rose-50 dark:from-rose-950/40 to-rose-100 dark:to-rose-950/20 border-rose-200 dark:border-rose-800/50";
   const corText =
     data.nivel === "saudavel"
-      ? "text-emerald-700"
+      ? "text-emerald-700 dark:text-emerald-300"
       : data.nivel === "atenção"
-        ? "text-amber-700"
+        ? "text-amber-700 dark:text-amber-300"
         : data.nivel === "risco"
-          ? "text-orange-700"
-          : "text-rose-700";
+          ? "text-orange-700 dark:text-orange-300"
+          : "text-rose-700 dark:text-rose-300";
 
   return (
     <div className="flex flex-col items-center gap-1" title={data.sinais.length ? data.sinais.join(" · ") : "Cliente saudável"}>

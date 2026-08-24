@@ -836,7 +836,7 @@ function AgenteFormDialog({
                                 ⚠ Outra variável já usa esse atributo
                               </p>
                             ) : atributoInvalido ? (
-                              <p className="text-[9px] text-amber-600 mt-0.5">
+                              <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
                                 Use letras, números e underscore. Comece com letra.
                               </p>
                             ) : null}
@@ -1195,7 +1195,7 @@ function TreinamentoDialog({
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <BrainCircuit className="h-5 w-5 text-violet-600" />
+            <BrainCircuit className="h-5 w-5 text-violet-600 dark:text-violet-400" />
             Treinamento: {agente?.nome || "..."}
           </DialogTitle>
           <DialogDescription>
@@ -1253,11 +1253,11 @@ function TreinamentoDialog({
                       }
                     >
                       {ehArquivo ? (
-                        <FileIcon className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                        <FileIcon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
                       ) : d.tipo === "link" ? (
-                        <Link2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        <Link2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                       ) : (
-                        <FileText className="h-3.5 w-3.5 text-violet-600 shrink-0" />
+                        <FileText className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400 shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -1266,7 +1266,7 @@ function TreinamentoDialog({
                             d.temConteudoExtraido ? (
                               <span
                                 title={`Texto extraído (${d.tamanhoConteudo} caracteres)`}
-                                className="text-[9px] px-1 py-0 rounded bg-emerald-100 text-emerald-700 font-semibold inline-flex items-center gap-0.5 shrink-0"
+                                className="text-[9px] px-1 py-0 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-semibold inline-flex items-center gap-0.5 shrink-0"
                               >
                                 <CheckCircle2 className="h-2.5 w-2.5" />
                                 texto OK
@@ -1274,7 +1274,7 @@ function TreinamentoDialog({
                             ) : (
                               <span
                                 title="Sem texto extraído — a IA não vai ver o conteúdo deste arquivo. Clique em reprocessar."
-                                className="text-[9px] px-1 py-0 rounded bg-amber-100 text-amber-700 font-semibold inline-flex items-center gap-0.5 shrink-0"
+                                className="text-[9px] px-1 py-0 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-semibold inline-flex items-center gap-0.5 shrink-0"
                               >
                                 <AlertTriangle className="h-2.5 w-2.5" />
                                 sem texto
@@ -1295,7 +1295,7 @@ function TreinamentoDialog({
                           onClick={() => reprocessarMut.mutate({ id: d.id })}
                           disabled={reprocessarMut.isPending}
                           title="Reextrair texto do arquivo"
-                          className="text-muted-foreground hover:text-violet-600 disabled:opacity-50"
+                          className="text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 disabled:opacity-50"
                         >
                           {reprocessarMut.isPending && reprocessarMut.variables?.id === d.id
                             ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -1442,7 +1442,7 @@ function TreinamentoDialog({
             {testeResposta && (
               <div className="border rounded-lg p-4 bg-violet-500/5 border-violet-500/20 space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-1.5 text-violet-700">
+                  <Label className="flex items-center gap-1.5 text-violet-700 dark:text-violet-300">
                     <Sparkles className="h-3.5 w-3.5" />
                     Resposta do agente
                   </Label>
@@ -1601,7 +1601,7 @@ export default function AgentesIA() {
           cliente/processo real). Vive aqui em Agentes IA, com tela própria. */}
       <Link href="/jurisia">
         <a className="block group">
-          <Card className="border-violet-200 bg-gradient-to-br from-violet-50 to-white hover:shadow-md transition-shadow cursor-pointer">
+          <Card className="border-violet-200 dark:border-violet-800/50 bg-gradient-to-br from-violet-50 dark:from-violet-950/40 to-white dark:to-slate-900 hover:shadow-md transition-shadow cursor-pointer">
             <CardContent className="flex items-center gap-4 py-4">
               <div className="h-11 w-11 rounded-xl bg-violet-600 text-white flex items-center justify-center shrink-0">
                 <Scale className="h-6 w-6" />
@@ -1615,7 +1615,7 @@ export default function AgentesIA() {
                   Lê o processo e os documentos do cliente, mede como o tribunal decide casos como aquele e redige a peça no padrão forense. Você revisa e assina.
                 </p>
               </div>
-              <ArrowRight className="h-5 w-5 text-violet-600 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+              <ArrowRight className="h-5 w-5 text-violet-600 dark:text-violet-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
             </CardContent>
           </Card>
         </a>

@@ -151,7 +151,7 @@ export function ExportarPdfDialog({
 
         <DialogFooter className="sm:justify-start gap-3">
           {marcadas.length === 0 ? (
-            <p className="text-[12px] flex-1 font-semibold text-amber-700 inline-flex items-center gap-1.5">
+            <p className="text-[12px] flex-1 font-semibold text-amber-700 dark:text-amber-300 inline-flex items-center gap-1.5">
               <TriangleAlert className="h-3.5 w-3.5" />
               Marque uma coluna
             </p>

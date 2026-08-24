@@ -668,7 +668,7 @@ function ChatArea({
                         title="Copiar resposta"
                       >
                         {copiandoId === m.id ? (
-                          <Check className="h-3 w-3 text-emerald-600" />
+                          <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                         ) : (
                           <Copy className="h-3 w-3" />
                         )}

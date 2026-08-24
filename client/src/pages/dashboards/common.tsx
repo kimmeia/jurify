@@ -61,20 +61,20 @@ export type SetorTema = "comercial" | "operacional" | "financeiro" | "geral";
 export const TEMA: Record<SetorTema, { gradient: string; bg: string; accent: string; ring: string }> = {
   comercial: {
     gradient: "bg-gradient-to-br from-indigo-500 via-violet-500 to-purple-600",
-    bg: "bg-gradient-to-br from-indigo-50/40 via-white to-violet-50/30",
-    accent: "text-indigo-600",
+    bg: "bg-gradient-to-br from-indigo-50/40 dark:from-indigo-950/40 via-white dark:via-slate-900 to-violet-50/30 dark:to-violet-950/20",
+    accent: "text-indigo-600 dark:text-indigo-400",
     ring: "ring-indigo-200",
   },
   operacional: {
     gradient: "bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-600",
-    bg: "bg-gradient-to-br from-indigo-50/40 via-white to-violet-50/30",
-    accent: "text-indigo-600",
+    bg: "bg-gradient-to-br from-indigo-50/40 dark:from-indigo-950/40 via-white dark:via-slate-900 to-violet-50/30 dark:to-violet-950/20",
+    accent: "text-indigo-600 dark:text-indigo-400",
     ring: "ring-indigo-200",
   },
   financeiro: {
     gradient: "bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500",
-    bg: "bg-gradient-to-br from-emerald-50/40 via-white to-teal-50/30",
-    accent: "text-emerald-600",
+    bg: "bg-gradient-to-br from-emerald-50/40 dark:from-emerald-950/40 via-white dark:via-slate-900 to-teal-50/30 dark:to-teal-950/20",
+    accent: "text-emerald-600 dark:text-emerald-400",
     ring: "ring-emerald-200",
   },
   geral: {
@@ -82,8 +82,8 @@ export const TEMA: Record<SetorTema, { gradient: string; bg: string; accent: str
     // mais sóbrio que os painéis setoriais (que são coloridos/temáticos).
     // Sinaliza "visão consolidada" pra Dono/Admin.
     gradient: "bg-gradient-to-br from-slate-800 via-slate-700 to-indigo-700",
-    bg: "bg-gradient-to-br from-slate-50/40 via-white to-blue-50/20",
-    accent: "text-slate-700",
+    bg: "bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-blue-50/20 dark:to-blue-950/20",
+    accent: "text-slate-700 dark:text-slate-200",
     ring: "ring-slate-200",
   },
 };
@@ -271,7 +271,7 @@ export function HeroCard({
                 <div className="h-2 bg-white/15 rounded-full overflow-hidden">
                   <div
                     style={{ width: `${Math.max(0, Math.min(100, progresso.valor))}%` }}
-                    className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-emerald-200 to-white"
+                    className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-emerald-200 to-white dark:to-slate-900"
                   />
                 </div>
               </div>
@@ -327,7 +327,7 @@ export function VariacaoBadge({
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
-        neutro ? "bg-slate-100 text-slate-600" : positivo ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+        neutro ? "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300" : positivo ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
       }`}
     >
       {positivo ? <TrendingUp className="w-3 h-3" /> : !neutro ? <TrendingDown className="w-3 h-3" /> : null}
@@ -344,9 +344,9 @@ export function KPICard({
   label,
   value,
   icon: Icon,
-  iconBg = "bg-slate-100",
-  iconFg = "text-slate-600",
-  valueColor = "text-slate-900",
+  iconBg = "bg-slate-100 dark:bg-slate-800/60",
+  iconFg = "text-slate-600 dark:text-slate-300",
+  valueColor = "text-slate-900 dark:text-slate-100",
   badge,
   hint,
 }: {
@@ -360,7 +360,7 @@ export function KPICard({
   hint?: ReactNode;
 }) {
   return (
-    <Card className="border-slate-200">
+    <Card className="border-slate-200 dark:border-slate-700/80">
       <CardContent className="pt-5 pb-5">
         <div className="flex items-start justify-between mb-3">
           {Icon && (
@@ -392,11 +392,11 @@ export function AvisoBanner({
   acao?: ReactNode;
 }) {
   return (
-    <div className="rounded-md border border-amber-200 bg-amber-50 p-4 flex flex-wrap items-start gap-3">
-      <Info className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
+    <div className="rounded-md border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 p-4 flex flex-wrap items-start gap-3">
+      <Info className="w-4 h-4 text-amber-700 dark:text-amber-300 mt-0.5 shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-amber-900">{titulo}</p>
-        <p className="text-xs text-amber-800 mt-1">{descricao}</p>
+        <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{titulo}</p>
+        <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">{descricao}</p>
       </div>
       {acao}
     </div>

@@ -66,8 +66,8 @@ export function TimelineCard({
           <Badge
             className={
               data.concluidoEmAtraso
-                ? "bg-red-500/15 text-red-700 border-red-500/30 text-[10px]"
-                : "bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px]"
+                ? "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30 text-[10px]"
+                : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px]"
             }
           >
             {data.concluidoEmAtraso ? "Concluído em atraso" : "Concluído no prazo"}
@@ -133,12 +133,12 @@ export function TimelineCard({
                       {ev.origemNome} → {ev.destinoNome}
                     </span>
                     {ehConclusao && ev.concluidoEmAtraso === true && (
-                      <span className="ml-2 text-[10px] text-red-600 font-semibold">
+                      <span className="ml-2 text-[10px] text-red-600 dark:text-red-400 font-semibold">
                         EM ATRASO
                       </span>
                     )}
                     {ehConclusao && ev.concluidoEmAtraso === false && (
-                      <span className="ml-2 text-[10px] text-emerald-600 font-semibold">
+                      <span className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
                         NO PRAZO
                       </span>
                     )}

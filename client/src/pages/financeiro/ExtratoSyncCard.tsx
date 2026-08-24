@@ -99,7 +99,7 @@ export function ExtratoSyncCard() {
     new Date(data.proximaTentativaEm).getTime() > Date.now();
 
   const emAlerta = data.status === "pausado" || data.status === "erro" || aguardandoCota;
-  const corStatus = emAlerta ? "border-amber-300 bg-amber-50" : "border-violet-300 bg-violet-50";
+  const corStatus = emAlerta ? "border-amber-300 bg-amber-50 dark:bg-amber-950/30" : "border-violet-300 bg-violet-50 dark:bg-violet-950/30";
 
   return (
     <Card className={"border " + corStatus}>
@@ -109,8 +109,8 @@ export function ExtratoSyncCard() {
             className={
               "h-4 w-4 " +
               (data.status === "executando" && !aguardandoCota
-                ? "animate-spin text-violet-600"
-                : "text-amber-600")
+                ? "animate-spin text-violet-600 dark:text-violet-400"
+                : "text-amber-600 dark:text-amber-400")
             }
           />
           <div className="flex-1 min-w-[200px]">
@@ -128,7 +128,7 @@ export function ExtratoSyncCard() {
                 : ""}
             </div>
             {data.status === "erro" && data.erroMensagem && (
-              <div className="text-xs text-red-600 mt-0.5">{data.erroMensagem}</div>
+              <div className="text-xs text-red-600 dark:text-red-400 mt-0.5">{data.erroMensagem}</div>
             )}
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
