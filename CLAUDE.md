@@ -223,6 +223,22 @@ do duplicar ficou de fora: apareceria e sumiria no primeiro reload.
 **Lembrar o dono quando:** ele reclamar de três "ENVIAR MENSAGEM" iguais no
 canvas sem saber qual é qual, ou pedir de novo o sufixo da cópia.
 
+### Onboarding guiado do pacote processual (adiado 24/08)
+
+Mockup pronto e aprovável em `mockup-onboarding-processual.html` (4 cenas:
+checklist de 3 passos no primeiro login, conectar credencial com cobertura
+transparente de tribunais + "avisar quando chegar", primeiro monitoramento
+pré-preenchido, estado completo). Dono decidiu NÃO implementar por
+enquanto ("Por enquanto não vamos fazer isso"). Hoje quem assina o pacote
+processual cai no dashboard processual vazio e se vira.
+
+**Lembrar o dono quando:** ele for ligar a campanha de
+verificação/monitoramento de processos (tráfego pago → cadastro
+self-service), ou quando contas novas do pacote processual começarem a
+chegar e não ativarem (sem credencial/monitoramento no dia 1). Sem o guia,
+clique de anúncio tende a morrer na tela vazia — era o atrito nº 1 mapeado
+pro funil da campanha.
+
 ## Anti-patterns conhecidos
 
 - ❌ `authenticator.options = X` (modifica singleton)
