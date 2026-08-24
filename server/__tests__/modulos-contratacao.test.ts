@@ -16,6 +16,7 @@ import {
   contratoLibera,
   moduloDoPath,
   modulosDaRota,
+  pacoteProcessualPuro,
 } from "../../shared/modulos-contratacao";
 
 const raiz = join(__dirname, "..", "..");
@@ -125,5 +126,47 @@ describe("fiação — servidor e client usam o porteiro", () => {
     const guard = ler("client/src/components/ModuloGuard.tsx");
     expect(guard).toContain("contratoLibera(contratados, exigidos)");
     expect(guard).toContain("modulosDaRota(location)");
+  });
+});
+
+describe("pacote Acompanhamento Processual (Fase 2)", () => {
+  it("os namespaces do pacote pertencem ao módulo processos", () => {
+    expect(MODULO_POR_NAMESPACE.clientesEssencial).toBe("processos");
+    expect(MODULO_POR_NAMESPACE.prazos).toBe("processos");
+    expect(MODULO_POR_NAMESPACE.painelProcessual).toBe("processos");
+  });
+
+  it("/clientes abre com clientes OU processos; /prazos exige processos", () => {
+    expect(modulosDaRota("/clientes")).toEqual(["clientes", "processos"]);
+    expect(modulosDaRota("/prazos")).toEqual(["processos"]);
+  });
+
+  it("pacoteProcessualPuro: só processos = puro; qualquer módulo da suíte desliga", () => {
+    expect(pacoteProcessualPuro(["processos", "calculos", "relatorios"])).toBe(true);
+    expect(pacoteProcessualPuro(["processos"])).toBe(true);
+    expect(pacoteProcessualPuro(["processos", "agenda"])).toBe(false);
+    expect(pacoteProcessualPuro(["processos", "clientes"])).toBe(false);
+    expect(pacoteProcessualPuro(["processos", "atendimento"])).toBe(false);
+    expect(pacoteProcessualPuro(["processos", "financeiro"])).toBe(false);
+    expect(pacoteProcessualPuro(["processos", "kanban"])).toBe(false);
+  });
+
+  it("contrato indeterminado ou sem processos NUNCA é puro (ninguém muda de painel)", () => {
+    expect(pacoteProcessualPuro(null)).toBe(false);
+    expect(pacoteProcessualPuro([])).toBe(false);
+    expect(pacoteProcessualPuro(["clientes", "atendimento"])).toBe(false);
+  });
+
+  it("o menu tem os itens enxutos condicionados à ausência do módulo completo", () => {
+    const layout = ler("client/src/components/AppLayout.tsx");
+    expect(layout).toContain("!contratoLibera(modulosContratados, i.soSemModulo)");
+    expect(layout).toContain('soSemModulo: ["clientes"]');
+    expect(layout).toContain('soSemModulo: ["agenda"]');
+  });
+
+  it("a rota /clientes decide entre completo e essencial pelo contrato", () => {
+    const app = ler("client/src/App.tsx");
+    expect(app).toContain('contratoLibera(contratados, ["clientes"]) ? <Clientes /> : <ClientesEssencial />');
+    expect(app).toContain('contratoLibera(contratados, ["agenda"]) ? <Redirect to="/agenda" /> : <Prazos />');
   });
 });

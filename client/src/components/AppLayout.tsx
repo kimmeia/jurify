@@ -106,6 +106,10 @@ type ItemMenu = {
    *  (permissão do cargo) e de `ocultaPor` (config global): este vem do
    *  PLANO do escritório. Sem o campo, o item nunca é escondido por plano. */
   modulo?: string[];
+  /** O inverso: item só aparece quando NENHUM destes módulos está no
+   *  contrato. É o que faz "Clientes essencial" e "Prazos" existirem só no
+   *  pacote processual — quem contrata o módulo completo vê o item normal. */
+  soSemModulo?: string[];
 };
 
 const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
@@ -121,9 +125,13 @@ const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
     titulo: "Carteira",
     itens: [
       { id: "clientes", rotulo: "Clientes", rota: "/clientes", icone: Users, ver: (c) => c("clientes"), modulo: ["clientes"] },
+      // Pacote processual (Fase 2): as versões enxutas só existem quando o
+      // módulo completo correspondente NÃO está no contrato.
+      { id: "clientes-essencial", rotulo: "Clientes", rota: "/clientes", icone: Users, ver: (c) => c("clientes"), modulo: ["processos"], soSemModulo: ["clientes"], selo: "essencial" },
       // A Central de Movimentações virou aba daqui — o contador de não lidas
       // veio junto, senão o número sumia do menu com a página.
       { id: "processos", rotulo: "Processos", rota: "/processos", icone: FileSearch, ver: (c) => c("processos"), ocultaPor: "processos", tomBadge: "novidade", prefixo: true, modulo: ["processos"] },
+      { id: "prazos", rotulo: "Prazos", rota: "/prazos", icone: CalendarDays, ver: (c) => c("agenda"), modulo: ["processos"], soSemModulo: ["agenda"] },
       // Acordo é vinculado a cliente; o gate herda de "clientes" e o
       // verProprios filtra por responsável no backend.
       { id: "acordos", rotulo: "Acordos", rota: "/acordos", icone: Handshake, ver: (c) => c("clientes"), modulo: ["clientes"] },
@@ -504,6 +512,7 @@ function AppSidebarContent({
                 (i) =>
                   !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) &&
                   (i.modulo ? contratoLibera(modulosContratados, i.modulo) : true) &&
+                  (i.soSemModulo ? !contratoLibera(modulosContratados, i.soSemModulo) : true) &&
                   (i.ver ? i.ver(canSee, canSeeEstrito) : true),
               );
               if (visiveis.length === 0) return null;
