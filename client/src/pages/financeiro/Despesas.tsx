@@ -487,13 +487,13 @@ export function DespesasTab() {
           label="Pendente"
           valor={kpis.data?.pendente ?? 0}
           icon={<Clock className="h-4 w-4" />}
-          accent="text-amber-600"
+          accent="text-amber-600 dark:text-amber-400"
         />
         <KpiCard
           label="Pago"
           valor={kpis.data?.pago ?? 0}
           icon={<CheckCircle2 className="h-4 w-4" />}
-          accent="text-emerald-600"
+          accent="text-emerald-600 dark:text-emerald-400"
         />
         <KpiCard
           label="Vencido"
@@ -634,7 +634,7 @@ export function DespesasTab() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 text-xs text-emerald-600 hover:text-emerald-700"
+                              className="h-7 text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
                               onClick={() => setPagando(d)}
                             >
                               <DollarSign className="h-3.5 w-3.5 mr-1" />
@@ -662,7 +662,7 @@ export function DespesasTab() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-amber-600 hover:text-amber-700"
+                                className="h-7 w-7 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300"
                                 onClick={() => pausarRecMut?.mutate?.({ id: d.id })}
                                 disabled={pausarRecMut?.isPending}
                                 title="Pausar geração automática"
@@ -673,7 +673,7 @@ export function DespesasTab() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-emerald-600 hover:text-emerald-700"
+                                className="h-7 w-7 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
                                 onClick={() => retomarRecMut?.mutate?.({ id: d.id })}
                                 disabled={retomarRecMut?.isPending}
                                 title="Retomar geração automática"
@@ -917,9 +917,9 @@ function KpiCard({
 
 function StatusBadge({ status }: { status: string }) {
   const cores: Record<string, string> = {
-    pendente: "text-amber-600 border-amber-200",
+    pendente: "text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/50",
     parcial: "text-info-fg border-info/40 bg-info-bg/50",
-    pago: "text-emerald-600 border-emerald-200",
+    pago: "text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50",
     vencido: "text-destructive border-destructive/30",
   };
   return (
@@ -935,7 +935,7 @@ function StatusBadge({ status }: { status: string }) {
 function TipoBadge({ origem }: { origem?: string }) {
   if (origem === "comissao") {
     return (
-      <Badge variant="outline" className="text-pink-700 border-pink-200 bg-pink-50">
+      <Badge variant="outline" className="text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-800/50 bg-pink-50 dark:bg-pink-950/30">
         Comissão
       </Badge>
     );
@@ -947,7 +947,7 @@ function TipoBadge({ origem }: { origem?: string }) {
     extrato_asaas: "Extrato",
   };
   return (
-    <Badge variant="outline" className="text-slate-600 border-slate-200">
+    <Badge variant="outline" className="text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80">
       {labels[origem ?? "manual"] ?? "Despesa"}
     </Badge>
   );
@@ -1274,7 +1274,7 @@ function RegistrarPagamentoDialog({
             </div>
             <div>
               <div className="text-muted-foreground">Restante</div>
-              <div className="font-medium tabular-nums text-amber-600">
+              <div className="font-medium tabular-nums text-amber-600 dark:text-amber-400">
                 {formatBRL(restante)}
               </div>
             </div>

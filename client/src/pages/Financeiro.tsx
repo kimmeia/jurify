@@ -532,15 +532,15 @@ export default function Financeiro() {
   const conectado = !!statusAsaas?.conectado;
 
   return (
-    <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-emerald-50/20 p-6 space-y-5">
+    <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-emerald-50/20 dark:to-emerald-950/20 p-6 space-y-5">
       {/* ═══════════ STATUS BAR ═══════════ */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 rounded-full">
             {conectado ? (
               <>
                 <PulseDot />
-                <span className="text-xs font-semibold text-slate-900">Asaas {statusAsaas?.modo === "sandbox" ? "Sandbox" : "conectado"}</span>
+                <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">Asaas {statusAsaas?.modo === "sandbox" ? "Sandbox" : "conectado"}</span>
               </>
             ) : (
               <>
@@ -550,10 +550,10 @@ export default function Financeiro() {
             )}
           </div>
           {conectado && saldo && (
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full">
-              <CircleDollarSign className="w-3.5 h-3.5 text-emerald-600" />
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 rounded-full">
+              <CircleDollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span className="text-xs text-slate-500">Saldo Asaas</span>
-              <span className="text-xs font-bold tabular-nums text-slate-900">
+              <span className="text-xs font-bold tabular-nums text-slate-900 dark:text-slate-100">
                 {formatBRL(saldo.balance)}
               </span>
             </div>
@@ -684,31 +684,31 @@ export default function Financeiro() {
         próprios — total comissionável, sem decisão, próximo lançamento).
       */}
       <Tabs value={tab} onValueChange={setTab}>
-        <div className="sticky top-0 z-20 py-2 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-gradient-to-br from-slate-50/95 to-white/95 backdrop-blur-md">
-          <TabsList className="!bg-slate-100 !h-auto !p-1.5 inline-flex gap-1 rounded-xl border border-slate-200 shadow-sm">
+        <div className="sticky top-0 z-20 py-2 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-gradient-to-br from-slate-50/95 dark:from-slate-900 to-white/95 backdrop-blur-md">
+          <TabsList className="!bg-slate-100 dark:bg-slate-800/60 !h-auto !p-1.5 inline-flex gap-1 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-sm">
             <TabsTrigger
               value="cobrancas"
-              className="!text-xs !gap-1.5 !px-3 !py-2 !rounded-lg !text-slate-600 hover:!text-slate-900 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm transition-all"
+              className="!text-xs !gap-1.5 !px-3 !py-2 !rounded-lg !text-slate-600 dark:text-slate-300 hover:!text-slate-900 dark:text-slate-100 data-[state=active]:!bg-white dark:bg-card data-[state=active]:!text-slate-900 dark:text-slate-100 data-[state=active]:!shadow-sm transition-all"
             >
               <Receipt className="h-3.5 w-3.5" />
               Cobranças
-              <span className="ml-1 text-[10px] bg-slate-200/70 text-slate-600 px-1.5 rounded-full tabular-nums font-semibold">
+              <span className="ml-1 text-[10px] bg-slate-200/70 dark:bg-slate-900/20 text-slate-600 dark:text-slate-300 px-1.5 rounded-full tabular-nums font-semibold">
                 {kpis?.totalCobrancas ?? 0}
               </span>
             </TabsTrigger>
             <TabsTrigger
               value="clientes"
-              className="!text-xs !gap-1.5 !px-3 !py-2 !rounded-lg !text-slate-600 hover:!text-slate-900 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm transition-all"
+              className="!text-xs !gap-1.5 !px-3 !py-2 !rounded-lg !text-slate-600 dark:text-slate-300 hover:!text-slate-900 dark:text-slate-100 data-[state=active]:!bg-white dark:bg-card data-[state=active]:!text-slate-900 dark:text-slate-100 data-[state=active]:!shadow-sm transition-all"
             >
               <Users className="h-3.5 w-3.5" />
               Clientes
-              <span className="ml-1 text-[10px] bg-slate-200/70 text-slate-600 px-1.5 rounded-full tabular-nums font-semibold">
+              <span className="ml-1 text-[10px] bg-slate-200/70 dark:bg-slate-900/20 text-slate-600 dark:text-slate-300 px-1.5 rounded-full tabular-nums font-semibold">
                 {clientesVinculados?.length ?? 0}
               </span>
             </TabsTrigger>
             <TabsTrigger
               value="despesas"
-              className="!text-xs !gap-1.5 !px-3 !py-2 !rounded-lg !text-slate-600 hover:!text-slate-900 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm transition-all"
+              className="!text-xs !gap-1.5 !px-3 !py-2 !rounded-lg !text-slate-600 dark:text-slate-300 hover:!text-slate-900 dark:text-slate-100 data-[state=active]:!bg-white dark:bg-card data-[state=active]:!text-slate-900 dark:text-slate-100 data-[state=active]:!shadow-sm transition-all"
             >
               <TrendingDown className="h-3.5 w-3.5" />
               Despesas
@@ -725,7 +725,7 @@ export default function Financeiro() {
         <TabsContent value="cobrancas" className="mt-4 space-y-4">
           <div className="space-y-4">
           {!conectado && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-900 dark:text-amber-200">
+            <div className="rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-900 dark:text-amber-200">
               <b>Asaas desconectado.</b> Você está vendo apenas cobranças manuais.
               Pra criar cobranças online (Pix, boleto, cartão) e ver KPIs/fluxo de
               caixa,{" "}
@@ -751,7 +751,7 @@ export default function Financeiro() {
                 <div>
                   <p className="text-sm text-muted-foreground font-medium">Fluxo de caixa</p>
                   <div className="flex items-baseline gap-3 mt-1">
-                    <h2 className="text-3xl font-bold tracking-tight text-emerald-600">
+                    <h2 className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
                       {formatBRL(cashFlow?.totalRecebido ?? kpis?.recebido ?? 0)}
                     </h2>
                     <span className="text-sm text-muted-foreground">
@@ -1004,8 +1004,8 @@ export default function Financeiro() {
 
           {/* Bulk actions bar — aparece quando há seleções */}
           {selecionadas.size > 0 && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
-              <span className="text-sm font-medium text-blue-900">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50">
+              <span className="text-sm font-medium text-blue-900 dark:text-blue-200">
                 {selecionadas.size} cobrança(s) selecionada(s)
               </span>
               <div className="flex-1" />
@@ -1013,7 +1013,7 @@ export default function Financeiro() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                  className="text-emerald-700 dark:text-emerald-300 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                   onClick={() => setBulkAtribuirAberto(true)}
                   disabled={atribuirMut.isPending}
                 >
@@ -1231,7 +1231,7 @@ export default function Financeiro() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 w-7 p-0 text-emerald-600"
+                                className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400"
                                 onClick={() => marcarPagaMut.mutate({ id: c.id })}
                                 disabled={marcarPagaMut.isPending}
                                 title="Marcar como paga (hoje)"
@@ -1685,18 +1685,18 @@ function ClientesContent({
                     {c.contatoTelefone || c.contatoEmail || "—"}
                   </TableCell>
                   <TableCell className="text-sm text-center tabular-nums">{c.totalCobrancas}</TableCell>
-                  <TableCell className="text-sm text-right text-amber-600 tabular-nums">
+                  <TableCell className="text-sm text-right text-amber-600 dark:text-amber-400 tabular-nums">
                     {c.pendente > 0 ? formatBRL(c.pendente) : "—"}
                   </TableCell>
-                  <TableCell className="text-sm text-right text-red-600 tabular-nums">
+                  <TableCell className="text-sm text-right text-red-600 dark:text-red-400 tabular-nums">
                     {c.vencido > 0 ? formatBRL(c.vencido) : "—"}
                   </TableCell>
-                  <TableCell className="text-sm text-right text-emerald-600 tabular-nums">
+                  <TableCell className="text-sm text-right text-emerald-600 dark:text-emerald-400 tabular-nums">
                     {c.pago > 0 ? formatBRL(c.pago) : "—"}
                   </TableCell>
                   <TableCell className="text-sm text-right tabular-nums">
                     {c.diasAtrasoMax != null ? (
-                      <span className="text-red-600 font-semibold">{c.diasAtrasoMax} dias</span>
+                      <span className="text-red-600 dark:text-red-400 font-semibold">{c.diasAtrasoMax} dias</span>
                     ) : (
                       "—"
                     )}
@@ -1785,9 +1785,9 @@ function KPICard({
   color: "emerald" | "amber" | "red" | "blue";
 }) {
   const colors = {
-    emerald: { bg: "bg-emerald-500/10", text: "text-emerald-500", valueText: "text-emerald-600" },
-    amber: { bg: "bg-amber-500/10", text: "text-amber-500", valueText: "text-amber-600" },
-    red: { bg: "bg-red-500/10", text: "text-red-500", valueText: "text-red-600" },
+    emerald: { bg: "bg-emerald-500/10", text: "text-emerald-500", valueText: "text-emerald-600 dark:text-emerald-400" },
+    amber: { bg: "bg-amber-500/10", text: "text-amber-500", valueText: "text-amber-600 dark:text-amber-400" },
+    red: { bg: "bg-red-500/10", text: "text-red-500", valueText: "text-red-600 dark:text-red-400" },
     blue: { bg: "bg-blue-500/10", text: "text-blue-500", valueText: "text-foreground" },
   };
   const c = colors[color];
@@ -1937,7 +1937,7 @@ function FiltrosAvancadosPopover({
                 checked={filtros.incluirSemCategoria}
                 onCheckedChange={(v) => set("incluirSemCategoria", !!v)}
               />
-              <span className="text-amber-700">Incluir cobranças sem categoria</span>
+              <span className="text-amber-700 dark:text-amber-300">Incluir cobranças sem categoria</span>
             </label>
           </div>
 
@@ -1959,7 +1959,7 @@ function FiltrosAvancadosPopover({
                 checked={filtros.incluirSemAtendente}
                 onCheckedChange={(v) => set("incluirSemAtendente", !!v)}
               />
-              <span className="text-blue-700">Incluir cobranças sem atendente</span>
+              <span className="text-blue-700 dark:text-blue-300">Incluir cobranças sem atendente</span>
             </label>
           </div>
 
@@ -2042,20 +2042,20 @@ function BannersPendencia() {
   return (
     <div className="space-y-2">
       {(semContato ?? 0) > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-300 bg-red-50 p-3 text-xs">
-          <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+        <div className="flex items-center gap-3 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 p-3 text-xs">
+          <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0" />
           <div className="flex-1">
-            <b className="text-red-900">
+            <b className="text-red-900 dark:text-red-200">
               {semContato} {semContato === 1 ? "cobrança sem cliente" : "cobranças sem cliente"}
             </b>
-            <span className="text-red-700">
+            <span className="text-red-700 dark:text-red-300">
               {" "}— pagamento recebido sem vínculo no CRM. Afeta DRE, comissão e detecção de duplicatas.
             </span>
           </div>
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-xs border-red-400 text-red-900 hover:bg-red-100"
+            className="h-7 text-xs border-red-400 text-red-900 dark:text-red-200 hover:bg-red-100 dark:hover:bg-red-900/30"
             onClick={() => {
               window.location.href = "/financeiro/revisar-orfas";
             }}
@@ -2066,18 +2066,18 @@ function BannersPendencia() {
         </div>
       )}
       {semCategoria > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs">
-          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+        <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
           <div className="flex-1">
-            <b className="text-amber-900">
+            <b className="text-amber-900 dark:text-amber-200">
               {semCategoria} {semCategoria === 1 ? "cobrança sem categoria" : "cobranças sem categoria"}
             </b>
-            <span className="text-amber-700"> — afeta o DRE em /relatorios.</span>
+            <span className="text-amber-700 dark:text-amber-300"> — afeta o DRE em /relatorios.</span>
           </div>
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-xs border-amber-400 text-amber-900 hover:bg-amber-100"
+            className="h-7 text-xs border-amber-400 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/30"
             onClick={() => {
               window.location.href = "/financeiro/atribuir?filtro=semCategoria";
             }}
@@ -2088,18 +2088,18 @@ function BannersPendencia() {
         </div>
       )}
       {semAtendente > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs">
-          <UserPlus className="h-4 w-4 text-blue-600 shrink-0" />
+        <div className="flex items-center gap-3 rounded-lg border border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-950/30 p-3 text-xs">
+          <UserPlus className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
           <div className="flex-1">
-            <b className="text-blue-900">
+            <b className="text-blue-900 dark:text-blue-200">
               {semAtendente} {semAtendente === 1 ? "cobrança sem atendente" : "cobranças sem atendente"}
             </b>
-            <span className="text-blue-700"> — sem comissão atribuída.</span>
+            <span className="text-blue-700 dark:text-blue-300"> — sem comissão atribuída.</span>
           </div>
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-xs border-blue-300 text-blue-900 hover:bg-blue-100"
+            className="h-7 text-xs border-blue-300 text-blue-900 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/30"
             onClick={() => {
               window.location.href = "/financeiro/atribuir?filtro=semAtendente";
             }}
@@ -2171,7 +2171,7 @@ function BulkAtribuirDialog({
       <AlertDialogContent className="max-w-md">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
-            <Tags className="h-4 w-4 text-emerald-600" />
+            <Tags className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             Atribuir em massa
           </AlertDialogTitle>
           <AlertDialogDescription>
@@ -2188,7 +2188,7 @@ function BulkAtribuirDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="keep">Manter atual</SelectItem>
-                <SelectItem value="none" className="italic text-amber-700">
+                <SelectItem value="none" className="italic text-amber-700 dark:text-amber-300">
                   — sem categoria —
                 </SelectItem>
                 {categorias.map((cat) => (
@@ -2207,7 +2207,7 @@ function BulkAtribuirDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="keep">Manter atual</SelectItem>
-                <SelectItem value="none" className="italic text-blue-700">
+                <SelectItem value="none" className="italic text-blue-700 dark:text-blue-300">
                   — sem atendente —
                 </SelectItem>
                 {atendentes.map((a) => (
@@ -2272,7 +2272,7 @@ function CelulaCliente({
             <div className="text-sm font-medium flex items-center gap-1">
               <span className="truncate">{nomeBeneficiario}</span>
               <span
-                className="shrink-0 rounded border border-violet-300 bg-violet-50 px-1 text-[9px] font-medium text-violet-700"
+                className="shrink-0 rounded border border-violet-300 bg-violet-50 dark:bg-violet-950/30 px-1 text-[9px] font-medium text-violet-700 dark:text-violet-300"
                 title="Cliente real — beneficiário do pagamento"
               >
                 cliente
@@ -2441,14 +2441,14 @@ function CelulaCategoria({
         className={
           "h-7 text-xs border-dashed " +
           (semCategoria
-            ? "text-amber-700 border-amber-300 bg-amber-50/40"
-            : "border-slate-200")
+            ? "text-amber-700 dark:text-amber-300 border-amber-300 bg-amber-50/40 dark:bg-amber-950/30"
+            : "border-slate-200 dark:border-slate-700/80")
         }
       >
         <SelectValue placeholder="— sem —" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="none" className="text-amber-700 italic">
+        <SelectItem value="none" className="text-amber-700 dark:text-amber-300 italic">
           — sem categoria —
         </SelectItem>
         {categorias.map((cat) => (
@@ -2489,10 +2489,10 @@ function CelulaComissao({
         : "nao";
   const cor =
     value === "sim"
-      ? "text-emerald-700 border-emerald-300 bg-emerald-50/40"
+      ? "text-emerald-700 dark:text-emerald-300 border-emerald-300 bg-emerald-50/40 dark:bg-emerald-950/30"
       : value === "nao"
-        ? "text-red-700 border-red-300 bg-red-50/40"
-        : "text-slate-600 border-slate-200";
+        ? "text-red-700 dark:text-red-300 border-red-300 bg-red-50/40 dark:bg-red-950/30"
+        : "text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80";
   return (
     <Select
       value={value}
@@ -2505,13 +2505,13 @@ function CelulaComissao({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="padrao" className="italic text-slate-600">
+        <SelectItem value="padrao" className="italic text-slate-600 dark:text-slate-300">
           Padrão (categoria)
         </SelectItem>
-        <SelectItem value="sim" className="text-emerald-700">
+        <SelectItem value="sim" className="text-emerald-700 dark:text-emerald-300">
           Sim — comissionar
         </SelectItem>
-        <SelectItem value="nao" className="text-red-700">
+        <SelectItem value="nao" className="text-red-700 dark:text-red-300">
           Não — não comissionar
         </SelectItem>
       </SelectContent>
@@ -2545,14 +2545,14 @@ function CelulaAtendente({
         className={
           "h-7 text-xs border-dashed " +
           (semAtendente
-            ? "text-blue-700 border-blue-300 bg-blue-50/40"
-            : "border-slate-200")
+            ? "text-blue-700 dark:text-blue-300 border-blue-300 bg-blue-50/40 dark:bg-blue-950/30"
+            : "border-slate-200 dark:border-slate-700/80")
         }
       >
         <SelectValue placeholder="— sem —" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="none" className="text-blue-700 italic">
+        <SelectItem value="none" className="text-blue-700 dark:text-blue-300 italic">
           — sem atendente —
         </SelectItem>
         {atendentes.map((a) => (
@@ -2620,8 +2620,8 @@ function PainelSyncHistorico() {
 
   const corStatus =
     data.status === "pausado" || data.status === "erro"
-      ? "border-amber-300 bg-amber-50"
-      : "border-blue-300 bg-blue-50";
+      ? "border-amber-300 bg-amber-50 dark:bg-amber-950/30"
+      : "border-blue-300 bg-blue-50 dark:bg-blue-950/30";
 
   return (
     <Card className={"border " + corStatus}>
@@ -2630,7 +2630,7 @@ function PainelSyncHistorico() {
           <RefreshCw
             className={
               "h-4 w-4 " +
-              (data.status === "executando" ? "animate-spin text-blue-600" : "text-amber-600")
+              (data.status === "executando" ? "animate-spin text-blue-600 dark:text-blue-400" : "text-amber-600 dark:text-amber-400")
             }
           />
           <div className="flex-1 min-w-[200px]">
@@ -2724,14 +2724,14 @@ function PainelSyncHistorico() {
             </Select>
           </label>
           {(intervaloMin <= 5 || diasPorTick >= 5) && (
-            <span className="text-amber-700 text-[11px]">
+            <span className="text-amber-700 dark:text-amber-300 text-[11px]">
               ⚡ Modo turbo — pode bater no rate guard se Asaas estiver com cota baixa
             </span>
           )}
         </div>
 
         {data.erroMensagem && (
-          <p className="text-xs text-amber-700">⚠ {data.erroMensagem}</p>
+          <p className="text-xs text-amber-700 dark:text-amber-300">⚠ {data.erroMensagem}</p>
         )}
       </CardContent>
     </Card>
@@ -2831,7 +2831,7 @@ function HeroFinanceiro({
                 onClick={() => onPeriodoChange(m)}
                 className={`px-3 py-1 text-[11px] font-medium transition-colors ${
                   !rangeCustom && periodo === m
-                    ? "bg-white text-slate-900 shadow-sm"
+                    ? "bg-white dark:bg-card text-slate-900 dark:text-slate-100 shadow-sm"
                     : "text-white/80 hover:text-white"
                 }`}
               >
@@ -3004,8 +3004,8 @@ function CardInadimplencia({ pct, vencido }: { pct: number | null; vencido: numb
     : "#10b981";
 
   return (
-    <Card className="border-slate-200 relative overflow-hidden">
-      <div className="absolute -right-6 -top-6 w-32 h-32 bg-rose-100 rounded-full opacity-40" />
+    <Card className="border-slate-200 dark:border-slate-700/80 relative overflow-hidden">
+      <div className="absolute -right-6 -top-6 w-32 h-32 bg-rose-100 dark:bg-rose-900/30 rounded-full opacity-40" />
       <CardContent className="pt-5 pb-5 relative">
         <h3 className="text-xs uppercase tracking-wider font-bold text-slate-500 mb-3">
           Inadimplência
@@ -3039,7 +3039,7 @@ function CardInadimplencia({ pct, vencido }: { pct: number | null; vencido: numb
             <p className="text-[11px] text-slate-500">
               Total em aberto
             </p>
-            <p className="text-lg font-bold text-rose-600 tabular-nums">{formatBRL(vencido)}</p>
+            <p className="text-lg font-bold text-rose-600 dark:text-rose-400 tabular-nums">{formatBRL(vencido)}</p>
             <p className="text-[10px] text-slate-400">
               {pct == null
                 ? "Sem cobranças no período"
@@ -3058,13 +3058,13 @@ function CardInadimplencia({ pct, vencido }: { pct: number | null; vencido: numb
 
 function CardTopDevedores({ devedores }: { devedores: Array<{ nome: string; valor: number; qtd: number; maxDias: number }> }) {
   return (
-    <Card className="border-slate-200">
+    <Card className="border-slate-200 dark:border-slate-700/80">
       <CardContent className="pt-5 pb-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs uppercase tracking-wider font-bold text-slate-500">
             Top devedores
           </h3>
-          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-700">
+          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300">
             {devedores.length} {devedores.length === 1 ? "ativo" : "ativos"}
           </span>
         </div>
@@ -3087,7 +3087,7 @@ function CardTopDevedores({ devedores }: { devedores: Array<{ nome: string; valo
                     {d.qtd} vencida{d.qtd !== 1 ? "s" : ""} · {d.maxDias}d atraso
                   </p>
                 </div>
-                <p className="text-sm font-bold text-rose-600 tabular-nums">
+                <p className="text-sm font-bold text-rose-600 dark:text-rose-400 tabular-nums">
                   {formatBRLShort(d.valor)}
                 </p>
               </div>
@@ -3107,13 +3107,13 @@ function CardReceitaPrevista({
   total: number;
 }) {
   return (
-    <Card className="border-slate-200">
+    <Card className="border-slate-200 dark:border-slate-700/80">
       <CardContent className="pt-5 pb-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs uppercase tracking-wider font-bold text-slate-500">
             Receita esperada (7d)
           </h3>
-          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 tabular-nums">
+          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 tabular-nums">
             {formatBRLShort(total)}
           </span>
         </div>
@@ -3130,7 +3130,7 @@ function CardReceitaPrevista({
                 : "—";
               return (
                 <div key={c.id} className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-[9px] font-bold text-emerald-700 tabular-nums leading-tight whitespace-pre text-center shrink-0">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center text-[9px] font-bold text-emerald-700 dark:text-emerald-300 tabular-nums leading-tight whitespace-pre text-center shrink-0">
                     {diaCurto}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -3141,7 +3141,7 @@ function CardReceitaPrevista({
                       {c.diasAte === 0 ? "vence hoje" : c.diasAte === 1 ? "vence amanhã" : `vence em ${c.diasAte}d`}
                     </p>
                   </div>
-                  <p className="text-sm font-bold text-emerald-600 tabular-nums">
+                  <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
                     {formatBRLShort(c.valor)}
                   </p>
                 </div>

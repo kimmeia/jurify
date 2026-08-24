@@ -120,7 +120,7 @@ export function EditorTestarDialog({
       <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Play className="h-5 w-5 text-emerald-600" />
+            <Play className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
             Testar cenário
           </DialogTitle>
           <DialogDescription>
@@ -165,7 +165,7 @@ export function EditorTestarDialog({
               <button
                 type="button"
                 onClick={() => setContextoJson(exemploContexto(gatilho))}
-                className="text-[10px] text-violet-600 hover:underline flex items-center gap-1"
+                className="text-[10px] text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1"
               >
                 <Sparkles className="h-3 w-3" /> Carregar exemplo do gatilho
               </button>
@@ -192,9 +192,9 @@ export function EditorTestarDialog({
             >
               <div className="flex items-center gap-2 mb-2">
                 {resultado.sucesso ? (
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 ) : (
-                  <XCircle className="h-4 w-4 text-red-600" />
+                  <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                 )}
                 <span
                   className={`text-sm font-semibold ${

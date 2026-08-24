@@ -1203,7 +1203,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const STATUS_ASSINATURA_LABELS: Record<string, string> = { pendente: "Pendente", enviado: "Enviado", visualizado: "Visualizado", assinado: "Assinado", recusado: "Recusado", expirado: "Expirado" };
-const STATUS_ASSINATURA_CORES: Record<string, string> = { pendente: "text-gray-600 bg-gray-100", enviado: "text-blue-600 bg-blue-100", visualizado: "text-amber-600 bg-amber-100", assinado: "text-emerald-600 bg-emerald-100", recusado: "text-red-600 bg-red-100", expirado: "text-gray-500 bg-gray-100" };
+const STATUS_ASSINATURA_CORES: Record<string, string> = { pendente: "text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-800/60", enviado: "text-blue-600 bg-blue-100", visualizado: "text-amber-600 bg-amber-100", assinado: "text-emerald-600 bg-emerald-100", recusado: "text-red-600 bg-red-100", expirado: "text-gray-500 bg-gray-100 dark:bg-slate-800/60" };
 
 export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: { contatoId: number; cliente: any; assinaturas: any[]; onRefresh: () => void }) {
   const [showNovo, setShowNovo] = useState(false);
@@ -1286,9 +1286,9 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
       </div>
 
       {linkCopiado && (
-        <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 space-y-2">
-          <p className="text-xs font-medium text-emerald-700">Link de assinatura criado:</p>
-          <div className="flex gap-2"><Input value={linkCopiado} readOnly className="h-8 text-xs bg-white" /><Button size="sm" variant="outline" className="h-8" onClick={() => { navigator.clipboard.writeText(linkCopiado); toast.success("Copiado!"); }}>Copiar</Button></div>
+        <div className="p-3 rounded-lg border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/20 space-y-2">
+          <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Link de assinatura criado:</p>
+          <div className="flex gap-2"><Input value={linkCopiado} readOnly className="h-8 text-xs bg-white dark:bg-card" /><Button size="sm" variant="outline" className="h-8" onClick={() => { navigator.clipboard.writeText(linkCopiado); toast.success("Copiado!"); }}>Copiar</Button></div>
           <Button size="sm" variant="outline" className="h-7 text-xs w-full" onClick={() => setLinkCopiado(null)}>Fechar</Button>
         </div>
       )}
@@ -1314,7 +1314,7 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
         <div className="space-y-2">
           {assinaturas.map((a: any) => (
             <div key={a.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/20 transition-colors">
-              <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-rose-100 to-pink-100 flex items-center justify-center shrink-0"><PenLine className="h-4 w-4 text-rose-600" /></div>
+              <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-rose-100 dark:from-rose-950/40 to-pink-100 dark:to-pink-950/20 flex items-center justify-center shrink-0"><PenLine className="h-4 w-4 text-rose-600 dark:text-rose-400" /></div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{a.titulo}</p>
                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
@@ -1327,13 +1327,13 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
               <div className="flex gap-1 shrink-0">
                 {a.documentoUrl && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Ver documento original" onClick={() => abrirArquivoOuAvisar(a.documentoUrl, "Documento original indisponível")}><ExternalLink className="h-3 w-3" /></Button>}
                 {a.status === "assinado" && a.documentoAssinadoUrl && (
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Baixar PDF assinado (com carimbo + página de certificação)" onClick={() => abrirArquivoOuAvisar(a.documentoAssinadoUrl, "PDF assinado indisponível")}>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400" title="Baixar PDF assinado (com carimbo + página de certificação)" onClick={() => abrirArquivoOuAvisar(a.documentoAssinadoUrl, "PDF assinado indisponível")}>
                     <Download className="h-3 w-3" />
                   </Button>
                 )}
                 {a.tokenAssinatura && a.status !== "assinado" && a.status !== "expirado" && (<>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Copiar link" onClick={() => copiarLink(a.tokenAssinatura)}><FileText className="h-3 w-3" /></Button>
-                  {cliente.telefone && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Enviar WhatsApp" onClick={() => enviarWhatsApp(a.tokenAssinatura)}><Send className="h-3 w-3" /></Button>}
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 dark:text-blue-400" title="Copiar link" onClick={() => copiarLink(a.tokenAssinatura)}><FileText className="h-3 w-3" /></Button>
+                  {cliente.telefone && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400" title="Enviar WhatsApp" onClick={() => enviarWhatsApp(a.tokenAssinatura)}><Send className="h-3 w-3" /></Button>}
                 </>)}
                 {a.status !== "assinado" && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setExcluirAssinAlvo({ id: a.id, titulo: a.titulo || "Documento sem título" })}><Trash2 className="h-3 w-3" /></Button>}
               </div>
@@ -1378,7 +1378,7 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const PRIOR_DOT: Record<string, string> = { urgente: "bg-red-500", alta: "bg-orange-400", normal: "bg-blue-400", baixa: "bg-gray-300" };
-const ST_COR: Record<string, string> = { pendente: "bg-amber-100 text-amber-700", em_andamento: "bg-blue-100 text-blue-700", concluida: "bg-emerald-100 text-emerald-700", cancelada: "bg-gray-100 text-gray-500" };
+const ST_COR: Record<string, string> = { pendente: "bg-amber-100 text-amber-700 dark:text-amber-300", em_andamento: "bg-blue-100 text-blue-700 dark:text-blue-300", concluida: "bg-emerald-100 text-emerald-700 dark:text-emerald-300", cancelada: "bg-gray-100 dark:bg-slate-800/60 text-gray-500" };
 const ST_LBL: Record<string, string> = { pendente: "Pendente", em_andamento: "Em andamento", concluida: "Concluída", cancelada: "Cancelada" };
 
 export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
@@ -1553,7 +1553,7 @@ export function RegistrarFechamentoDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
             Registrar fechamento
           </DialogTitle>
         </DialogHeader>

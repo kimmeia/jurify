@@ -25,7 +25,7 @@ export default function EsqueciSenha() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
       <div className="w-full max-w-md">
-        <Link href="/" className="text-sm text-violet-600 hover:underline inline-flex items-center gap-1 mb-6">
+        <Link href="/" className="text-sm text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-1 mb-6">
           <ArrowLeft className="h-3.5 w-3.5" /> Voltar ao login
         </Link>
 
@@ -47,7 +47,7 @@ export default function EsqueciSenha() {
                 <p className="text-xs text-muted-foreground mt-3">
                   O link expira em 1 hora. Cheque também a pasta de spam.
                 </p>
-                <Link href="/" className="inline-block mt-6 text-sm text-violet-600 hover:underline">
+                <Link href="/" className="inline-block mt-6 text-sm text-violet-600 dark:text-violet-400 hover:underline">
                   Voltar ao login
                 </Link>
               </div>

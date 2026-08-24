@@ -114,7 +114,7 @@ export default function AceitarConvite({ token }: { token: string }) {
       <CenteredLayout>
         <Card className="w-full max-w-md">
           <CardContent className="pt-8 pb-8 text-center space-y-4">
-            <div className="h-16 w-16 rounded-full bg-red-100 flex items-center justify-center mx-auto">
+            <div className="h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto">
               <XCircle className="h-8 w-8 text-red-500" />
             </div>
             <h2 className="text-xl font-bold">Convite inválido</h2>
@@ -198,8 +198,8 @@ export default function AceitarConvite({ token }: { token: string }) {
       <CenteredLayout>
         <Card className="w-full max-w-md">
           <CardContent className="pt-8 pb-8 text-center space-y-4">
-            <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
-              <CheckCircle className="h-8 w-8 text-emerald-600" />
+            <div className="h-16 w-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto">
+              <CheckCircle className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
             </div>
             <h2 className="text-xl font-bold text-emerald-800 dark:text-emerald-200">{mensagem}</h2>
             <p className="text-xs text-muted-foreground">Redirecionando para o painel...</p>
@@ -214,7 +214,7 @@ export default function AceitarConvite({ token }: { token: string }) {
     <CenteredLayout>
       <Card className="w-full max-w-md">
         <CardContent className="pt-8 pb-8 text-center space-y-4">
-          <div className="h-16 w-16 rounded-full bg-red-100 flex items-center justify-center mx-auto">
+          <div className="h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto">
             <XCircle className="h-8 w-8 text-red-500" />
           </div>
           <h2 className="text-xl font-bold">Não foi possível aceitar</h2>

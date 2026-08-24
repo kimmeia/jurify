@@ -128,7 +128,7 @@ export function PermissoesTab() {
           <div
             key={cargo.id}
             onClick={() => setEditId(cargo.id)}
-            className="group rounded-xl bg-white border border-slate-200 border-l-[4px] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all cursor-pointer p-4"
+            className="group rounded-xl bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 border-l-[4px] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all cursor-pointer p-4"
             style={{ borderLeftColor: cargo.cor }}
           >
             <div className="flex items-start gap-3">
@@ -141,20 +141,20 @@ export function PermissoesTab() {
                   {cargo.isDefault && <Badge variant="outline" className="text-[8.5px] px-1 py-0">Padrão</Badge>}
                 </div>
                 <p className="text-[10.5px] text-slate-500 mt-0.5">
-                  <b className="text-slate-700 tabular-nums">{cargo.totalColaboradores}</b> {cargo.totalColaboradores === 1 ? "colaborador" : "colaboradores"}
+                  <b className="text-slate-700 dark:text-slate-200 tabular-nums">{cargo.totalColaboradores}</b> {cargo.totalColaboradores === 1 ? "colaborador" : "colaboradores"}
                 </p>
               </div>
               <Shield className="h-3.5 w-3.5 text-slate-300 group-hover:text-violet-500 transition-colors shrink-0" />
             </div>
             {modulosVisiveis.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-slate-100">
+              <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                 {modulosVisiveis.slice(0, 6).map(m => (
-                  <span key={m} className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700 font-medium">
+                  <span key={m} className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 font-medium">
                     {MODULOS_LABELS[m]}
                   </span>
                 ))}
                 {modulosVisiveis.length > 6 && (
-                  <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
+                  <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/60 text-slate-500 font-medium">
                     +{modulosVisiveis.length - 6}
                   </span>
                 )}

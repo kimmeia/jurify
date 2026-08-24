@@ -286,7 +286,7 @@ export function CalcularSection() {
             <KpiCard
               label="Comissionável"
               valor={totais?.comissionavel ?? 0}
-              accent="text-emerald-600"
+              accent="text-emerald-600 dark:text-emerald-400"
             />
             <KpiCard
               label="Não comissionável"
@@ -466,12 +466,12 @@ export function CalcularSection() {
                 <KpiCard
                   label="Entra na comissão"
                   valor={diag.data.totalComissionavel}
-                  accent="text-emerald-600"
+                  accent="text-emerald-600 dark:text-emerald-400"
                 />
                 <KpiCard
                   label="Diferença (não entra)"
                   valor={diag.data.diferenca}
-                  accent={diag.data.diferenca > 0 ? "text-amber-600" : "text-muted-foreground"}
+                  accent={diag.data.diferenca > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}
                   destaque
                 />
               </div>
@@ -637,7 +637,7 @@ function ListaCobrancas({
   }>;
 }) {
   const headerCor =
-    cor === "emerald" ? "text-emerald-600" : "text-muted-foreground";
+    cor === "emerald" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground";
 
   return (
     <Card>
@@ -1083,7 +1083,7 @@ export function AtribuirSection() {
                       {l.atendenteId ? (
                         atendNome ?? `#${l.atendenteId}`
                       ) : (
-                        <Badge variant="outline" className="text-amber-600 border-amber-200">
+                        <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/50">
                           sem atendente
                         </Badge>
                       )}
@@ -1328,7 +1328,7 @@ function FechamentoDetalheDialog({
               <KpiCard
                 label="Comissionável"
                 valor={Number(data.totalComissionavel)}
-                accent="text-emerald-600"
+                accent="text-emerald-600 dark:text-emerald-400"
               />
               <KpiCard
                 label="Não comiss."
@@ -1364,7 +1364,7 @@ function FechamentoDetalheDialog({
                     </TableCell>
                     <TableCell className="text-xs">
                       {it.foiComissionavel ? (
-                        <Badge variant="outline" className="text-emerald-600">
+                        <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400">
                           comissionada
                         </Badge>
                       ) : (

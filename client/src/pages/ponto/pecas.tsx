@@ -110,10 +110,10 @@ export function corDaNota(n: number): string {
 }
 
 export function textoDaNota(n: number): string {
-  if (n < 2) return "text-rose-600";
-  if (n < 3) return "text-orange-600";
-  if (n < 4) return "text-amber-600";
-  return "text-emerald-600";
+  if (n < 2) return "text-rose-600 dark:text-rose-400";
+  if (n < 3) return "text-orange-600 dark:text-orange-400";
+  if (n < 4) return "text-amber-600 dark:text-amber-400";
+  return "text-emerald-600 dark:text-emerald-400";
 }
 
 export function dataCurta(iso: string | null): string {
@@ -264,7 +264,7 @@ export function LinhaJornada({
         {j.saldoMin != null && j.saldoMin !== 0 && (
           <span
             className={`ml-1 text-[10px] font-semibold ${
-              j.saldoMin > 0 ? "text-emerald-600" : "text-rose-600"
+              j.saldoMin > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
             }`}
             title={`Previsto ${formatarDuracao(j.previstoMin)}`}
           >
@@ -304,7 +304,7 @@ export function LinhaJornada({
           <button
             type="button"
             onClick={() => aoAjustar(j)}
-            className="text-muted-foreground hover:text-violet-600"
+            className="text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400"
             title="Corrigir este dia"
           >
             <Pencil className="h-3.5 w-3.5" />
@@ -783,7 +783,7 @@ export function PainelOcorrencias({
                 href={o.atestadoUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1 text-[10.5px] font-semibold text-violet-600 hover:underline"
+                className="flex items-center gap-1 text-[10.5px] font-semibold text-violet-600 dark:text-violet-400 hover:underline"
               >
                 <FileText className="h-3 w-3" />
                 {o.atestadoNome || "atestado"}
@@ -801,7 +801,7 @@ export function PainelOcorrencias({
                   <>
                     <button
                       type="button"
-                      className="flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-violet-600"
+                      className="flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400"
                       disabled={upload.isPending || anexar.isPending}
                       onClick={() => {
                         setAlvo(o.id);
@@ -815,8 +815,8 @@ export function PainelOcorrencias({
                       type="button"
                       className={`flex items-center gap-1 text-[10.5px] ${
                         o.aprovadoEm
-                          ? "text-muted-foreground hover:text-rose-600"
-                          : "text-muted-foreground hover:text-emerald-600"
+                          ? "text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
+                          : "text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
                       }`}
                       disabled={decidir.isPending}
                       title={
@@ -835,7 +835,7 @@ export function PainelOcorrencias({
                 )}
                 <button
                   type="button"
-                  className="text-muted-foreground hover:text-rose-600"
+                  className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
                   title="Remover"
                   onClick={() => setExcluindo(o)}
                 >
@@ -962,7 +962,7 @@ export function DialogAvaliar({
                     {typeof v === "number" && (
                       <button
                         type="button"
-                        className="text-[10px] text-muted-foreground hover:text-rose-600"
+                        className="text-[10px] text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
                         onClick={() => setNotas((n) => {
                           const { [c.id]: _, ...resto } = n;
                           return resto;
@@ -1005,7 +1005,7 @@ export function DialogAvaliar({
             <Label className="text-xs">Plano combinado</Label>
             <button
               type="button"
-              className="flex items-center gap-1 text-[11px] font-semibold text-violet-600 hover:underline"
+              className="flex items-center gap-1 text-[11px] font-semibold text-violet-600 dark:text-violet-400 hover:underline"
               onClick={() => setAcoes((a) => [...a, { descricao: "", prazo: "" }])}
             >
               <Plus className="h-3 w-3" />
@@ -1042,7 +1042,7 @@ export function DialogAvaliar({
                 />
                 <button
                   type="button"
-                  className="text-muted-foreground hover:text-rose-600"
+                  className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
                   onClick={() => setAcoes((lista) => lista.filter((_, j) => j !== i))}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -1129,7 +1129,7 @@ export function PainelAvaliacao({
         {gestor && (
           <button
             type="button"
-            className="text-[10.5px] text-muted-foreground hover:text-rose-600"
+            className="text-[10.5px] text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
             onClick={() => setExcluindo(ultima)}
           >
             remover
@@ -1146,7 +1146,7 @@ export function PainelAvaliacao({
         <span className="text-[11px] text-muted-foreground">de {NOTA_MAX},0</span>
         {delta != null && delta !== 0 && (
           <span
-            className={`text-[11px] font-bold tabular-nums ${delta > 0 ? "text-emerald-600" : "text-rose-600"}`}
+            className={`text-[11px] font-bold tabular-nums ${delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
             title={`Ciclo anterior: ${anterior?.media?.toFixed(1).replace(".", ",")}`}
           >
             {delta > 0 ? "+" : "−"}
@@ -1215,7 +1215,7 @@ export function PainelAvaliacao({
                     {a.descricao}
                     {a.prazo && (
                       <span
-                        className={`ml-1.5 text-[10px] font-semibold ${s === "atrasada" ? "text-rose-600" : "text-muted-foreground"}`}
+                        className={`ml-1.5 text-[10px] font-semibold ${s === "atrasada" ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground"}`}
                       >
                         {s === "atrasada" ? "venceu" : "até"} {a.prazo.split("-").reverse().join("/")}
                       </span>
@@ -1232,7 +1232,7 @@ export function PainelAvaliacao({
         <div className="mt-2">
           <button
             type="button"
-            className="text-[10.5px] font-semibold text-violet-600 hover:underline"
+            className="text-[10.5px] font-semibold text-violet-600 dark:text-violet-400 hover:underline"
             onClick={() => setVerHistorico((v) => !v)}
           >
             {verHistorico ? "esconder" : `ver histórico (${avaliacoes.length - 1})`}
@@ -1253,7 +1253,7 @@ export function PainelAvaliacao({
                     </span>
                     {d != null && d !== 0 && (
                       <span
-                        className={`text-[10px] font-semibold tabular-nums ${d > 0 ? "text-emerald-600" : "text-rose-600"}`}
+                        className={`text-[10px] font-semibold tabular-nums ${d > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
                       >
                         {d > 0 ? "+" : "−"}
                         {Math.abs(d).toFixed(1).replace(".", ",")}

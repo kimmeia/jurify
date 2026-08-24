@@ -149,12 +149,12 @@ function previewMensagem(c: any): string {
 }
 
 const EST: Record<EtapaFunil, { bg: string; border: string; header: string; dot: string; text: string }> = {
-  novo: { bg: "bg-slate-100", border: "border-slate-200", header: "bg-slate-100", dot: "bg-slate-400", text: "text-slate-700" },
-  qualificado: { bg: "bg-blue-100", border: "border-blue-200", header: "bg-blue-100", dot: "bg-blue-500", text: "text-blue-700" },
-  proposta: { bg: "bg-violet-100", border: "border-violet-200", header: "bg-violet-100", dot: "bg-violet-500", text: "text-violet-700" },
-  negociacao: { bg: "bg-amber-100", border: "border-amber-200", header: "bg-amber-100", dot: "bg-amber-500", text: "text-amber-700" },
-  fechado_ganho: { bg: "bg-emerald-100", border: "border-emerald-200", header: "bg-emerald-100", dot: "bg-emerald-500", text: "text-emerald-700" },
-  fechado_perdido: { bg: "bg-red-100", border: "border-red-200", header: "bg-red-100", dot: "bg-red-400", text: "text-red-700" },
+  novo: { bg: "bg-slate-100 dark:bg-slate-800/60", border: "border-slate-200 dark:border-slate-700/80", header: "bg-slate-100 dark:bg-slate-800/60", dot: "bg-slate-400", text: "text-slate-700 dark:text-slate-200" },
+  qualificado: { bg: "bg-blue-100 dark:bg-blue-900/30", border: "border-blue-200 dark:border-blue-800/50", header: "bg-blue-100 dark:bg-blue-900/30", dot: "bg-blue-500", text: "text-blue-700 dark:text-blue-300" },
+  proposta: { bg: "bg-violet-100 dark:bg-violet-900/30", border: "border-violet-200 dark:border-violet-800/50", header: "bg-violet-100 dark:bg-violet-900/30", dot: "bg-violet-500", text: "text-violet-700 dark:text-violet-300" },
+  negociacao: { bg: "bg-amber-100 dark:bg-amber-900/30", border: "border-amber-200 dark:border-amber-800/50", header: "bg-amber-100 dark:bg-amber-900/30", dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-300" },
+  fechado_ganho: { bg: "bg-emerald-100 dark:bg-emerald-900/30", border: "border-emerald-200 dark:border-emerald-800/50", header: "bg-emerald-100 dark:bg-emerald-900/30", dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300" },
+  fechado_perdido: { bg: "bg-red-100 dark:bg-red-900/30", border: "border-red-200 dark:border-red-800/50", header: "bg-red-100 dark:bg-red-900/30", dot: "bg-red-400", text: "text-red-700 dark:text-red-300" },
 };
 const ETAPAS: EtapaFunil[] = ["novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido"];
 
@@ -346,7 +346,7 @@ function IniciarConversaDialog({
     // Envia só os dígitos — o servidor adiciona DDI 55 e converte para JID
     ini.mutate({ telefone: telDigits, nome: nome || undefined, mensagem: msg, canalId });
   };
-  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-emerald-600" /> Nova Conversa</DialogTitle></DialogHeader>
+  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" /> Nova Conversa</DialogTitle></DialogHeader>
     <div className="space-y-3 py-2"><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone *</Label><Input placeholder="(11) 99999-0000" value={tel} onChange={(e) => setTel(maskPhoneBR(e.target.value))} inputMode="tel" maxLength={16} className={tel && !telValido ? "border-red-400" : ""} />{tel && !telValido && <p className="text-[10px] text-red-500">DDD + número (10 ou 11 dígitos)</p>}</div><div className="space-y-1.5"><Label>Nome</Label><Input placeholder="Nome do contato" value={nome} onChange={(e) => setNome(e.target.value)} /></div></div>
     <div className="space-y-1.5"><Label>Mensagem *</Label><Input placeholder="Olá! Como posso ajudar?" value={msg} onChange={(e) => setMsg(e.target.value)} /></div>
     {waCh.length > 1 && (
@@ -365,7 +365,7 @@ function IniciarConversaDialog({
         </select>
       </div>
     )}
-    {waCh.length === 0 && <p className="text-xs text-red-600">Nenhum WhatsApp conectado.</p>}</div>
+    {waCh.length === 0 && <p className="text-xs text-red-600 dark:text-red-400">Nenhum WhatsApp conectado.</p>}</div>
     <DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={handleEnviar} disabled={!telValido || !msg || !canalId || ini.isPending}>{ini.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />} Enviar</Button></DialogFooter>
   </DialogContent></Dialog>);
 }
@@ -381,7 +381,7 @@ function NovoLeadDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOp
       await criarLead.mutateAsync({ contatoId: contato.id, valorEstimado: valor || undefined, origemLead: origem || undefined });
     } catch (e: any) { toast.error(e.message); }
   };
-  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-violet-600" /> Novo Lead</DialogTitle></DialogHeader>
+  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-violet-600 dark:text-violet-400" /> Novo Lead</DialogTitle></DialogHeader>
     <div className="space-y-3 py-2">
       <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Nome *</Label><Input placeholder="Nome do lead" value={nome} onChange={(e) => setNome(e.target.value)} /></div><div className="space-y-1.5"><Label>Telefone</Label><Input placeholder="(85) 99999-0000" value={tel} onChange={(e) => setTel(e.target.value)} /></div></div>
       <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Valor estimado</Label><Input placeholder="5000" value={valor} onChange={(e) => setValor(e.target.value)} /></div><div className="space-y-1.5"><Label>Origem</Label><Input placeholder="Indicação, Site..." value={origem} onChange={(e) => setOrigem(e.target.value)} /></div></div>
@@ -409,10 +409,10 @@ function AddLeadFromConversaDialog({ open, onOpenChange, conversaId, atendentes,
     onSuccess: () => { toast.success("Lead adicionado ao Pipeline!"); onOpenChange(false); setValor(""); onSuccess(); },
     onError: (e: any) => toast.error(e.message),
   });
-  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-violet-600" /> Adicionar ao Pipeline</DialogTitle></DialogHeader>
+  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-violet-600 dark:text-violet-400" /> Adicionar ao Pipeline</DialogTitle></DialogHeader>
     <div className="space-y-3 py-2">
       <div className="space-y-1.5">
-        <Label className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-blue-600" /> Responsável</Label>
+        <Label className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" /> Responsável</Label>
         <Select value={responsavelId != null ? String(responsavelId) : undefined} onValueChange={(v) => setResponsavelId(Number(v))}>
           <SelectTrigger><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
           <SelectContent>
@@ -1058,7 +1058,7 @@ export default function Atendimento() {
                         <span
                           className={
                             "block text-[10px] font-semibold leading-tight truncate " +
-                            (ativo ? "text-violet-600" : "text-muted-foreground")
+                            (ativo ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground")
                           }
                         >
                           {p.l}
@@ -1066,7 +1066,7 @@ export default function Atendimento() {
                         <span
                           className={
                             "block text-[12.5px] font-extrabold tabular-nums leading-tight " +
-                            (ativo ? "text-violet-600" : "text-muted-foreground/70")
+                            (ativo ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground/70")
                           }
                         >
                           {p.n}
@@ -1201,7 +1201,7 @@ export default function Atendimento() {
                               <span
                                 className={
                                   "text-[10px] shrink-0 tabular-nums " +
-                                  (naoLidas > 0 ? "text-violet-600 font-bold" : "text-muted-foreground")
+                                  (naoLidas > 0 ? "text-violet-600 dark:text-violet-400 font-bold" : "text-muted-foreground")
                                 }
                               >
                                 {timeAgo(c.ultimaMensagemAt)}
@@ -1224,7 +1224,7 @@ export default function Atendimento() {
                             </div>
                             <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                               {(c as any).temAtraso ? (
-                                <span className="text-[9px] px-1.5 py-0 rounded font-bold bg-red-100 text-red-700 border border-red-200 inline-flex items-center gap-0.5">
+                                <span className="text-[9px] px-1.5 py-0 rounded font-bold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/50 inline-flex items-center gap-0.5">
                                   <AlertTriangle className="h-2.5 w-2.5" /> SLA crítico
                                 </span>
                               ) : (
@@ -1678,8 +1678,8 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           const tel = conv?.contatoTelefone || conv?.chatIdExterno?.replace(/@.*/, "") || "";
           const podeLigarWa = !!onLigarWhatsApp && conv?.canalTipo === "whatsapp_api" && !!conv?.canalId && !!tel;
           return (<>
-            {onWA && tel && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 shrink-0" title="Abrir no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-4 w-4" /></Button>}
-            {podeLigarWa && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-green-600 shrink-0" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-4 w-4" /></Button>}
+            {onWA && tel && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 dark:text-emerald-400 shrink-0" title="Abrir no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-4 w-4" /></Button>}
+            {podeLigarWa && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-green-600 dark:text-green-400 shrink-0" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-4 w-4" /></Button>}
           </>);
         })()}
         <DropdownMenu>
@@ -1707,7 +1707,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setShowVincular(true)}><Link2 className="h-4 w-4 mr-2" />Vincular</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-4 w-4 mr-2 text-emerald-600" />Resolver</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-400" />Resolver</DropdownMenuItem>
             <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-4 w-4 mr-2" />Fechar</DropdownMenuItem>
             <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive"><Trash2 className="h-4 w-4 mr-2" />Excluir</DropdownMenuItem>
           </DropdownMenuContent>
@@ -1828,9 +1828,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           const podeLigarWa = !!onLigarWhatsApp && conv?.canalTipo === "whatsapp_api" && !!conv?.canalId && !!tel;
           return (
             <div className="flex items-center gap-1 shrink-0">
-              {onWA && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Abrir conversa no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-3.5 w-3.5" /></Button>}
-              {podeLigarWa && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-green-600" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-3.5 w-3.5" /></Button>}
-              {onTel && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Ligar (Twilio)" onClick={() => onTel(tel)}><Phone className="h-3.5 w-3.5" /></Button>}
+              {onWA && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400" title="Abrir conversa no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-3.5 w-3.5" /></Button>}
+              {podeLigarWa && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-green-600 dark:text-green-400" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-3.5 w-3.5" /></Button>}
+              {onTel && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 dark:text-blue-400" title="Ligar (Twilio)" onClick={() => onTel(tel)}><Phone className="h-3.5 w-3.5" /></Button>}
             </div>
           );
         })()}
@@ -1948,7 +1948,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-[11px] border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-700 px-2.5"
+          className="h-7 text-[11px] border-violet-300 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:text-violet-700 dark:hover:text-violet-300 px-2.5"
           disabled={composerSugestao.isPending || composerBloqueado}
           onClick={() => composerSugestao.mutate({ conversaId: cid, tom })}
           title={composerBloqueado ? "Envio de texto livre bloqueado nesta conversa" : "Gerar resposta com IA no tom selecionado"}
@@ -1989,10 +1989,10 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       {/* Preview de mídia anexada (vinda do template). Some ao enviar. */}
       {pendingMedia && (
         <div className="mx-3 mb-1 flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-md px-2.5 py-1.5">
-          {pendingMedia.tipo === "imagem" ? <ImageIcon className="h-3.5 w-3.5 text-emerald-700 shrink-0" /> :
-           pendingMedia.tipo === "video" ? <VideoIcon className="h-3.5 w-3.5 text-emerald-700 shrink-0" /> :
-           pendingMedia.tipo === "documento" ? <FileText className="h-3.5 w-3.5 text-emerald-700 shrink-0" /> :
-           <Paperclip className="h-3.5 w-3.5 text-emerald-700 shrink-0" />}
+          {pendingMedia.tipo === "imagem" ? <ImageIcon className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300 shrink-0" /> :
+           pendingMedia.tipo === "video" ? <VideoIcon className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300 shrink-0" /> :
+           pendingMedia.tipo === "documento" ? <FileText className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300 shrink-0" /> :
+           <Paperclip className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300 shrink-0" />}
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200 truncate">
               {pendingMedia.nome || pendingMedia.tipo}
@@ -2005,7 +2005,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           </div>
           <button
             onClick={() => setPendingMedia(null)}
-            className="text-emerald-700 hover:text-emerald-900 shrink-0"
+            className="text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-200 shrink-0"
             title="Remover anexo"
           >
             <X className="h-3.5 w-3.5" />
@@ -2028,7 +2028,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             <Button
               variant="outline"
               size="sm"
-              className="h-6 text-[11px] px-2 border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 dark:border-red-800 dark:text-red-300"
+              className="h-6 text-[11px] px-2 border-red-300 text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-800 dark:border-red-800 dark:text-red-300"
               onClick={() => setLocation("/configuracoes?tab=canais")}
             >
               Ver status do canal
@@ -2145,12 +2145,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium text-xs">{t.titulo}</p>
                           {t.atalho && (
-                            <span className="font-mono text-[10px] bg-violet-100 text-violet-700 px-1 py-0.5 rounded">
+                            <span className="font-mono text-[10px] bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 px-1 py-0.5 rounded">
                               /{t.atalho}
                             </span>
                           )}
                           {t.midiaTipo && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded">
+                            <span className="inline-flex items-center gap-0.5 text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-1 py-0.5 rounded">
                               {t.midiaTipo === "imagem" ? <ImageIcon className="h-2.5 w-2.5" /> :
                                t.midiaTipo === "documento" ? <FileText className="h-2.5 w-2.5" /> :
                                <Paperclip className="h-2.5 w-2.5" />}
@@ -2190,9 +2190,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                           >
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-mono text-xs">{t.name}</p>
-                              <span className="text-[10px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded">{t.language}</span>
+                              <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1 py-0.5 rounded">{t.language}</span>
                               {totalVars > 0 && (
-                                <span className="text-[10px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded">
+                                <span className="text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1 py-0.5 rounded">
                                   {totalVars} {totalVars === 1 ? "var" : "vars"}
                                 </span>
                               )}
@@ -2266,7 +2266,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           <kbd className="font-mono bg-background px-1 py-0.5 rounded border text-[10px]">Enter</kbd> enviar
         </span>
         {composerSugestao.data?.ia === false && (
-          <span className="text-amber-600 text-[10px]">⚠ IA não configurada — usando template</span>
+          <span className="text-amber-600 dark:text-amber-400 text-[10px]">⚠ IA não configurada — usando template</span>
         )}
       </div>
       )}
@@ -2294,7 +2294,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
     {showVincular && (
       <Dialog open={showVincular} onOpenChange={(v) => { setShowVincular(v); setBuscaVincular(""); }}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Link2 className="h-5 w-5 text-indigo-600" /> Vincular a cliente</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Link2 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> Vincular a cliente</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">Busque o cliente cadastrado para vincular esta conversa:</p>
             <Input placeholder="Buscar por nome, CPF..." value={buscaVincular} onChange={(e) => setBuscaVincular(e.target.value)} />
@@ -2506,7 +2506,7 @@ function AudioRecordButton({ onSend, disabled }: { onSend: (args: EnvioComposer)
         >
           <X className="h-4 w-4" />
         </Button>
-        <span className="text-xs font-mono tabular-nums text-rose-600 flex items-center gap-1">
+        <span className="text-xs font-mono tabular-nums text-rose-600 dark:text-rose-400 flex items-center gap-1">
           <span className="h-2 w-2 rounded-full bg-rose-600 animate-pulse" />
           {fmtDur(duracao)}
         </span>
@@ -2664,21 +2664,21 @@ function AnexoButton({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" side="top" className="w-56">
           <DropdownMenuItem onClick={() => escolher("imagem")}>
-            <ImageIcon className="h-4 w-4 mr-2 text-emerald-600" />
+            <ImageIcon className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-400" />
             <span className="text-sm">
               Foto
               <span className="block text-[10px] text-muted-foreground">JPG, PNG, GIF, WebP · até 5 MB</span>
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => escolher("video")}>
-            <VideoIcon className="h-4 w-4 mr-2 text-violet-600" />
+            <VideoIcon className="h-4 w-4 mr-2 text-violet-600 dark:text-violet-400" />
             <span className="text-sm">
               Vídeo
               <span className="block text-[10px] text-muted-foreground">MP4 · até 16 MB (WhatsApp)</span>
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => escolher("documento")}>
-            <FileText className="h-4 w-4 mr-2 text-blue-600" />
+            <FileText className="h-4 w-4 mr-2 text-blue-600 dark:text-blue-400" />
             <span className="text-sm">
               Documento
               <span className="block text-[10px] text-muted-foreground">PDF, Word, Excel, CSV · até 95 MB</span>
@@ -2887,7 +2887,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           <h2 className="text-xl font-extrabold tracking-tight leading-tight">Pipeline de Vendas</h2>
           <p className="text-xs text-white/85 mt-1 flex items-center gap-2">
             <span className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-semibold">
-              <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+              <span className="h-1.5 w-1.5 rounded-full bg-white dark:bg-card animate-pulse" />
               Atualização ao vivo
             </span>
             Negociações em andamento · arraste os cards entre etapas
@@ -2922,7 +2922,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
         className={
           "relative h-9 px-3 inline-flex items-center gap-1.5 rounded-md border text-xs font-semibold transition " +
           (filtrosAtivos > 0 || showFiltros
-            ? "border-violet-500 text-violet-700 bg-violet-50"
+            ? "border-violet-500 text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/30"
             : "text-muted-foreground hover:bg-muted")
         }
         title="Filtros: atendente, setor, período, valor"
@@ -2942,7 +2942,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           onClick={() => setCompacto(false)}
           className={
             "px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition " +
-            (!compacto ? "bg-background text-violet-600 shadow-sm" : "text-muted-foreground hover:text-foreground")
+            (!compacto ? "bg-background text-violet-600 dark:text-violet-400 shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Cards no tamanho normal"
         >
@@ -2953,7 +2953,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           onClick={() => setCompacto(true)}
           className={
             "px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition " +
-            (compacto ? "bg-background text-violet-600 shadow-sm" : "text-muted-foreground hover:text-foreground")
+            (compacto ? "bg-background text-violet-600 dark:text-violet-400 shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Cards menores — cabem mais por coluna"
         >
@@ -2966,7 +2966,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           onClick={() => setView("kanban")}
           className={
             "px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition " +
-            (view === "kanban" ? "bg-background text-violet-600 shadow-sm" : "text-muted-foreground hover:text-foreground")
+            (view === "kanban" ? "bg-background text-violet-600 dark:text-violet-400 shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Visualização Kanban"
         >
@@ -2977,7 +2977,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           onClick={() => setView("lista")}
           className={
             "px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition " +
-            (view === "lista" ? "bg-background text-violet-600 shadow-sm" : "text-muted-foreground hover:text-foreground")
+            (view === "lista" ? "bg-background text-violet-600 dark:text-violet-400 shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Visualização Lista"
         >
@@ -3061,7 +3061,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                 <button
                   onClick={() => setResponsaveisFiltro([])}
                   disabled={responsaveisFiltro.length === 0}
-                  className="font-semibold text-violet-600 hover:underline disabled:opacity-40 disabled:no-underline"
+                  className="font-semibold text-violet-600 dark:text-violet-400 hover:underline disabled:opacity-40 disabled:no-underline"
                 >
                   Limpar seleção
                 </button>
@@ -3140,7 +3140,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           <button
             onClick={limparFiltrosAv}
             disabled={filtrosAtivos === 0}
-            className="text-xs font-semibold text-violet-600 hover:underline disabled:opacity-40 disabled:no-underline"
+            className="text-xs font-semibold text-violet-600 dark:text-violet-400 hover:underline disabled:opacity-40 disabled:no-underline"
           >
             Limpar filtros
           </button>
@@ -3177,7 +3177,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
               >
                 <div className="flex items-center gap-2">
                   <span className={"h-2.5 w-2.5 rounded-full shrink-0 " + (isGanho ? st.dot + " animate-pulse" : st.dot)} />
-                  <span className={"text-xs font-bold uppercase tracking-wide flex-1 truncate " + (isGanho ? "text-emerald-800" : "text-foreground")}>
+                  <span className={"text-xs font-bold uppercase tracking-wide flex-1 truncate " + (isGanho ? "text-emerald-800 dark:text-emerald-200" : "text-foreground")}>
                     {ETAPA_FUNIL_LABELS[etapa]}
                   </span>
                   <Badge variant="outline" className={"text-[10px] h-5 px-1.5 shrink-0 " + (isGanho ? "bg-emerald-600 text-white border-emerald-600" : "")}>
@@ -3185,7 +3185,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                   </Badge>
                 </div>
                 {val > 0 && (
-                  <p className={"text-[11px] font-semibold mt-1 ml-[18px] " + (isGanho ? "text-emerald-700" : "text-muted-foreground")}>
+                  <p className={"text-[11px] font-semibold mt-1 ml-[18px] " + (isGanho ? "text-emerald-700 dark:text-emerald-300" : "text-muted-foreground")}>
                     {formatBRL(val)} {isGanho ? "fechado" : "estimado"}
                   </p>
                 )}
@@ -3198,7 +3198,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                     className={
                       "rounded-lg flex items-center justify-center text-[11px] py-6 transition-colors " +
                       (isOver
-                        ? "border-2 border-dashed border-violet-400 bg-violet-50 text-violet-700"
+                        ? "border-2 border-dashed border-violet-400 bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300"
                         : "border border-dashed border-slate-300 text-muted-foreground/60")
                     }
                   >
@@ -3386,7 +3386,7 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                 {lead.conversaId ? (
                   <button
                     onClick={() => onGoToConversa(lead.conversaId)}
-                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-[12.5px] font-semibold hover:bg-blue-100"
+                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50 text-[12.5px] font-semibold hover:bg-blue-100"
                   >
                     <Inbox className="h-3.5 w-3.5" /> Ir pra conversa
                   </button>
@@ -3396,7 +3396,7 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                 {lead.contatoTelefone && onWA ? (
                   <button
                     onClick={() => onWA(lead.contatoTelefone)}
-                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-[12.5px] font-semibold hover:bg-emerald-100"
+                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 text-[12.5px] font-semibold hover:bg-emerald-100"
                   >
                     <PhoneCall className="h-3.5 w-3.5" /> WhatsApp
                   </button>
@@ -3446,7 +3446,7 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                           onChange={(e) => { setProbEdit(Number(e.target.value)); setDirty(true); }}
                           className="flex-1"
                         />
-                        <span className="text-[13px] font-bold text-violet-700 tabular-nums w-9 text-right">{probEdit}%</span>
+                        <span className="text-[13px] font-bold text-violet-700 dark:text-violet-300 tabular-nums w-9 text-right">{probEdit}%</span>
                       </div>
                     </div>
                   </div>
@@ -3534,12 +3534,12 @@ function KanbanLista({ leads, onWA, onDelete, onGoToConversa }: {
         <tbody className="divide-y">
           {leads.map((l: any) => {
             const v = parseValorBR(l.valorEstimado);
-            const corBg = l.etapaFunil === "fechado_ganho" ? "bg-emerald-100 text-emerald-700"
-              : l.etapaFunil === "fechado_perdido" ? "bg-rose-100 text-rose-700"
-              : l.etapaFunil === "negociacao" ? "bg-amber-100 text-amber-700"
-              : l.etapaFunil === "proposta" ? "bg-violet-100 text-violet-700"
-              : l.etapaFunil === "qualificado" ? "bg-blue-100 text-blue-700"
-              : "bg-slate-100 text-slate-700";
+            const corBg = l.etapaFunil === "fechado_ganho" ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300"
+              : l.etapaFunil === "fechado_perdido" ? "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300"
+              : l.etapaFunil === "negociacao" ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
+              : l.etapaFunil === "proposta" ? "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300"
+              : l.etapaFunil === "qualificado" ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+              : "bg-slate-100 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200";
             return (
               <tr key={l.id} className="hover:bg-muted/20 transition-colors">
                 <td className="px-3 py-2">
@@ -3557,17 +3557,17 @@ function KanbanLista({ leads, onWA, onDelete, onGoToConversa }: {
                     {ETAPA_FUNIL_LABELS[l.etapaFunil as EtapaFunil]}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-right font-bold text-emerald-700 text-xs">{v > 0 ? formatBRL(v) : "—"}</td>
+                <td className="px-3 py-2 text-right font-bold text-emerald-700 dark:text-emerald-300 text-xs">{v > 0 ? formatBRL(v) : "—"}</td>
                 <td className="px-3 py-2 text-right text-xs text-muted-foreground tabular-nums">{l.probabilidade ? `${l.probabilidade}%` : "—"}</td>
                 <td className="px-3 py-2">
                   <div className="flex items-center justify-end gap-0.5">
                     {l.conversaId && (
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Ir para conversa" onClick={() => onGoToConversa(l.conversaId)}>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 dark:text-blue-400" title="Ir para conversa" onClick={() => onGoToConversa(l.conversaId)}>
                         <Inbox className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     {l.contatoTelefone && onWA && (
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="WhatsApp" onClick={() => onWA(l.contatoTelefone)}>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400" title="WhatsApp" onClick={() => onWA(l.contatoTelefone)}>
                         <PhoneCall className="h-3.5 w-3.5" />
                       </Button>
                     )}
@@ -3624,13 +3624,13 @@ function KpiCard({ label, value, hint }: { label: string; value: string; hint?: 
 /** Cor do chip baseada na origem do lead (paleta segura, fallback cinza). */
 function corOrigem(origem: string): { bg: string; text: string; dot: string } {
   const s = (origem || "").toLowerCase();
-  if (s.includes("indica")) return { bg: "bg-emerald-100", text: "text-emerald-700", dot: "bg-emerald-500" };
-  if (s.includes("facebook") || s.includes("fb") || s.includes("instagram") || s.includes("meta")) return { bg: "bg-violet-100", text: "text-violet-700", dot: "bg-violet-500" };
-  if (s.includes("google")) return { bg: "bg-blue-100", text: "text-blue-700", dot: "bg-blue-500" };
-  if (s.includes("site") || s.includes("organico")) return { bg: "bg-cyan-100", text: "text-cyan-700", dot: "bg-cyan-500" };
-  if (s.includes("ligac") || s.includes("telefone") || s.includes("call")) return { bg: "bg-amber-100", text: "text-amber-700", dot: "bg-amber-500" };
-  if (s.includes("evento") || s.includes("present")) return { bg: "bg-pink-100", text: "text-pink-700", dot: "bg-pink-500" };
-  return { bg: "bg-slate-100", text: "text-slate-700", dot: "bg-slate-400" };
+  if (s.includes("indica")) return { bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" };
+  if (s.includes("facebook") || s.includes("fb") || s.includes("instagram") || s.includes("meta")) return { bg: "bg-violet-100 dark:bg-violet-900/30", text: "text-violet-700 dark:text-violet-300", dot: "bg-violet-500" };
+  if (s.includes("google")) return { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-300", dot: "bg-blue-500" };
+  if (s.includes("site") || s.includes("organico")) return { bg: "bg-cyan-100 dark:bg-cyan-900/30", text: "text-cyan-700 dark:text-cyan-300", dot: "bg-cyan-500" };
+  if (s.includes("ligac") || s.includes("telefone") || s.includes("call")) return { bg: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300", dot: "bg-amber-500" };
+  if (s.includes("evento") || s.includes("present")) return { bg: "bg-pink-100 dark:bg-pink-900/30", text: "text-pink-700 dark:text-pink-300", dot: "bg-pink-500" };
+  return { bg: "bg-slate-100 dark:bg-slate-800/60", text: "text-slate-700 dark:text-slate-200", dot: "bg-slate-400" };
 }
 
 /** Badge contextual por etapa: diz o próximo passo pro atendente. */
@@ -3667,8 +3667,8 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
   const diasParado = lead.updatedAt ? Math.floor((Date.now() - new Date(lead.updatedAt).getTime()) / (24 * 60 * 60 * 1000)) : null;
   const paradoCls = diasParado === null || isGanho || isPerd
     ? "text-muted-foreground"
-    : diasParado > 7 ? "text-red-700 font-semibold"
-    : diasParado > 3 ? "text-orange-700 font-semibold"
+    : diasParado > 7 ? "text-red-700 dark:text-red-300 font-semibold"
+    : diasParado > 3 ? "text-orange-700 dark:text-orange-300 font-semibold"
     : "text-muted-foreground";
 
   const acao = ACAO_POR_ETAPA[etapa];
@@ -3676,10 +3676,10 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
 
   // Background sutil pra Ganho/Perdido (mostra status do card só de bater o olho)
   const cardBg = isGanho
-    ? "bg-gradient-to-br from-emerald-50/70 to-white"
+    ? "bg-gradient-to-br from-emerald-50/70 dark:from-emerald-950/40 to-white dark:to-slate-900"
     : isPerd
-    ? "bg-gradient-to-br from-rose-50/70 to-white"
-    : "bg-white";
+    ? "bg-gradient-to-br from-rose-50/70 dark:from-rose-950/40 to-white dark:to-slate-900"
+    : "bg-white dark:bg-card";
 
   return (
     <div
@@ -3703,7 +3703,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
       className={
         "relative rounded-xl border border-l-[3px] shadow-sm hover:shadow-md hover:border-slate-400 transition-all cursor-pointer active:cursor-grabbing group " +
         cardBg +
-        (isOver ? " ring-2 ring-violet-500 ring-offset-1 border-violet-300" : " border-slate-200") +
+        (isOver ? " ring-2 ring-violet-500 ring-offset-1 border-violet-300" : " border-slate-200 dark:border-slate-700/80") +
         (compacto ? " px-2.5 py-2" : " p-3")
       }
     >
@@ -3732,7 +3732,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
           {/* Valor + probabilidade */}
           <div className="flex items-center justify-between mt-1.5 gap-2">
             {v > 0 ? (
-              <span className={(compacto ? "text-[12px]" : "text-[13.5px]") + " font-extrabold text-emerald-700 tabular-nums -tracking-tight"}>{formatBRL(v)}</span>
+              <span className={(compacto ? "text-[12px]" : "text-[13.5px]") + " font-extrabold text-emerald-700 dark:text-emerald-300 tabular-nums -tracking-tight"}>{formatBRL(v)}</span>
             ) : (
               <span className="text-[10px] text-muted-foreground italic">sem valor</span>
             )}
@@ -3756,8 +3756,8 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
             <div className={
               "mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase tracking-wide border " +
               (acao.tone === "emerald"
-                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                : "bg-amber-50 text-amber-800 border-amber-200")
+                ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800/50"
+                : "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 border-amber-200 dark:border-amber-800/50")
             }>
               <span>{acao.emoji}</span> {acao.label}
             </div>
@@ -3794,7 +3794,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
             {lead.conversaId && (
               <Button
                 variant="ghost" size="sm"
-                className="h-6 px-1.5 text-[10px] text-blue-600"
+                className="h-6 px-1.5 text-[10px] text-blue-600 dark:text-blue-400"
                 title="Ir para conversa"
                 onClick={(e) => { e.stopPropagation(); onGoToConversa(lead.conversaId); }}
               >
@@ -3804,7 +3804,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
             {lead.contatoTelefone && onWA && (
               <Button
                 variant="ghost" size="sm"
-                className="h-6 w-6 p-0 text-emerald-600"
+                className="h-6 w-6 p-0 text-emerald-600 dark:text-emerald-400"
                 title="WhatsApp"
                 onClick={(e) => { e.stopPropagation(); onWA(lead.contatoTelefone); }}
               >
@@ -3885,7 +3885,7 @@ function MotivoPerdaDialog({
             >
               <span className="text-lg">{m.emoji}</span>
               <span className="flex-1">{m.label}</span>
-              {escolha === m.id && <Check className="h-4 w-4 text-rose-600" />}
+              {escolha === m.id && <Check className="h-4 w-4 text-rose-600 dark:text-rose-400" />}
             </button>
           ))}
           <button
@@ -3899,7 +3899,7 @@ function MotivoPerdaDialog({
           >
             <span className="text-lg">✏️</span>
             <span className="flex-1">Outro motivo</span>
-            {escolha === "outro" && <Check className="h-4 w-4 text-rose-600" />}
+            {escolha === "outro" && <Check className="h-4 w-4 text-rose-600 dark:text-rose-400" />}
           </button>
           {escolha === "outro" && (
             <Input

@@ -57,7 +57,7 @@ const SUBMODULOS: Array<{
     descricao: "Revisão de financiamento",
     fundamentacao: "PRICE · SAC · CET · Anatocismo",
     icone: Landmark,
-    cor: { bg: "bg-blue-100", iconBg: "bg-blue-100", iconFg: "text-blue-600", hoverBorder: "hover:border-blue-400", hoverFg: "group-hover:text-blue-600", chipBg: "bg-blue-50", chipFg: "text-blue-700" },
+    cor: { bg: "bg-blue-100", iconBg: "bg-blue-100", iconFg: "text-blue-600 dark:text-blue-400", hoverBorder: "hover:border-blue-400", hoverFg: "group-hover:text-blue-600 dark:group-hover:text-blue-400", chipBg: "bg-blue-50 dark:bg-blue-950/30", chipFg: "text-blue-700 dark:text-blue-300" },
     path: "/calculos/bancario",
   },
   {
@@ -66,7 +66,7 @@ const SUBMODULOS: Array<{
     descricao: "Rescisão · HE · FGTS",
     fundamentacao: "CLT · Lei 12.506 · Súmulas TST",
     icone: Briefcase,
-    cor: { bg: "bg-amber-100", iconBg: "bg-amber-100", iconFg: "text-amber-600", hoverBorder: "hover:border-amber-400", hoverFg: "group-hover:text-amber-600", chipBg: "bg-amber-50", chipFg: "text-amber-700" },
+    cor: { bg: "bg-amber-100", iconBg: "bg-amber-100", iconFg: "text-amber-600 dark:text-amber-400", hoverBorder: "hover:border-amber-400", hoverFg: "group-hover:text-amber-600 dark:group-hover:text-amber-400", chipBg: "bg-amber-50 dark:bg-amber-950/30", chipFg: "text-amber-700 dark:text-amber-300" },
     path: "/calculos/trabalhista",
   },
   {
@@ -75,7 +75,7 @@ const SUBMODULOS: Array<{
     descricao: "Financiamento habitacional",
     fundamentacao: "SFH · SFI · MIP · DFI · Indexadores",
     icone: Building2,
-    cor: { bg: "bg-emerald-100", iconBg: "bg-emerald-100", iconFg: "text-emerald-600", hoverBorder: "hover:border-emerald-400", hoverFg: "group-hover:text-emerald-600", chipBg: "bg-emerald-50", chipFg: "text-emerald-700" },
+    cor: { bg: "bg-emerald-100", iconBg: "bg-emerald-100", iconFg: "text-emerald-600 dark:text-emerald-400", hoverBorder: "hover:border-emerald-400", hoverFg: "group-hover:text-emerald-600 dark:group-hover:text-emerald-400", chipBg: "bg-emerald-50 dark:bg-emerald-950/30", chipFg: "text-emerald-700 dark:text-emerald-300" },
     path: "/calculos/imobiliario",
   },
   {
@@ -84,7 +84,7 @@ const SUBMODULOS: Array<{
     descricao: "Aposentadoria · RMI · GPS",
     fundamentacao: "EC 103 · 10 regras de aposentadoria",
     icone: ShieldCheck,
-    cor: { bg: "bg-violet-100", iconBg: "bg-violet-100", iconFg: "text-violet-600", hoverBorder: "hover:border-violet-400", hoverFg: "group-hover:text-violet-600", chipBg: "bg-violet-50", chipFg: "text-violet-700" },
+    cor: { bg: "bg-violet-100", iconBg: "bg-violet-100", iconFg: "text-violet-600 dark:text-violet-400", hoverBorder: "hover:border-violet-400", hoverFg: "group-hover:text-violet-600 dark:group-hover:text-violet-400", chipBg: "bg-violet-50 dark:bg-violet-950/30", chipFg: "text-violet-700 dark:text-violet-300" },
     path: "/calculos/previdenciario",
   },
   {
@@ -93,7 +93,7 @@ const SUBMODULOS: Array<{
     descricao: "Taxas · Juros · Atualização · Prazos",
     fundamentacao: "IPCA · IGPM · SELIC · CDI · Prescrição",
     icone: TrendingUp,
-    cor: { bg: "bg-teal-100", iconBg: "bg-teal-100", iconFg: "text-teal-600", hoverBorder: "hover:border-teal-400", hoverFg: "group-hover:text-teal-600", chipBg: "bg-teal-50", chipFg: "text-teal-700" },
+    cor: { bg: "bg-teal-100", iconBg: "bg-teal-100", iconFg: "text-teal-600 dark:text-teal-400", hoverBorder: "hover:border-teal-400", hoverFg: "group-hover:text-teal-600 dark:group-hover:text-teal-400", chipBg: "bg-teal-50 dark:bg-teal-950/30", chipFg: "text-teal-700 dark:text-teal-300" },
     path: "/calculos/atualizacao-monetaria",
     livre: true,
   },
@@ -103,7 +103,7 @@ const SUBMODULOS: Array<{
     descricao: "CTN · Repetição de indébito",
     fundamentacao: "Em breve",
     icone: Receipt,
-    cor: { bg: "bg-purple-100", iconBg: "bg-purple-100", iconFg: "text-purple-600", hoverBorder: "", hoverFg: "", chipBg: "bg-purple-50", chipFg: "text-purple-700" },
+    cor: { bg: "bg-purple-100", iconBg: "bg-purple-100", iconFg: "text-purple-600 dark:text-purple-400", hoverBorder: "", hoverFg: "", chipBg: "bg-purple-50 dark:bg-purple-950/30", chipFg: "text-purple-700 dark:text-purple-300" },
     path: "/calculos/tributario",
     emBreve: true,
   },
@@ -189,7 +189,7 @@ export default function Calculos() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-amber-50/20 p-6 space-y-5">
+      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-amber-50/20 dark:to-amber-950/20 p-6 space-y-5">
         {/* ═══════════ HERO ═══════════ */}
         <div className="rounded-2xl bg-gradient-to-br from-amber-600 via-orange-600 to-rose-700 p-7 text-white relative overflow-hidden shadow-lg">
           <Calculator className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
@@ -262,7 +262,7 @@ export default function Calculos() {
               placeholder="Buscar no histórico de cálculos..."
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              className="pl-10 h-10 bg-white"
+              className="pl-10 h-10 bg-white dark:bg-card"
             />
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -298,14 +298,14 @@ export default function Calculos() {
                 return (
                   <div
                     key={s.tipo}
-                    className="bg-slate-50 rounded-xl p-5 border border-dashed border-slate-300 opacity-60"
+                    className="bg-slate-50 dark:bg-slate-900/70 rounded-xl p-5 border border-dashed border-slate-300 opacity-60"
                   >
                     <div className="flex items-start gap-3 mb-3">
                       <div className={`p-2.5 ${s.cor.iconBg} rounded-lg`}>
                         <Icone className={`w-5 h-5 ${s.cor.iconFg}`} />
                       </div>
                       <div className="flex-1">
-                        <p className="font-semibold text-slate-900">{s.label}</p>
+                        <p className="font-semibold text-slate-900 dark:text-slate-100">{s.label}</p>
                       </div>
                     </div>
                     <div className="text-xs text-slate-500">{s.descricao}</div>
@@ -316,7 +316,7 @@ export default function Calculos() {
                 <button
                   key={s.tipo}
                   onClick={() => setLocation(s.path)}
-                  className={`group text-left bg-white rounded-xl p-5 border border-slate-200 ${s.cor.hoverBorder} hover:shadow-lg transition-all`}
+                  className={`group text-left bg-white dark:bg-card rounded-xl p-5 border border-slate-200 dark:border-slate-700/80 ${s.cor.hoverBorder} hover:shadow-lg transition-all`}
                 >
                   <div className="flex items-start gap-3 mb-3">
                     <div
@@ -325,20 +325,20 @@ export default function Calculos() {
                       <Icone className={`w-5 h-5 ${s.cor.iconFg} group-hover:text-white`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-slate-900">{s.label}</p>
+                      <p className="font-semibold text-slate-900 dark:text-slate-100">{s.label}</p>
                       <p className="text-xs text-slate-500 truncate">{s.descricao}</p>
                     </div>
                     <ArrowRight className={`w-4 h-4 text-slate-300 ${s.cor.hoverFg} group-hover:translate-x-1 transition-all`} />
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     {s.livre ? (
-                      <span className="text-emerald-600 font-medium flex items-center gap-1">
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
                         <Gift className="w-3 h-3" /> Grátis (sem créditos)
                       </span>
                     ) : (
                       <span className="text-slate-500 truncate">{s.fundamentacao}</span>
                     )}
-                    <span className="font-bold tabular-nums text-slate-700">{count}</span>
+                    <span className="font-bold tabular-nums text-slate-700 dark:text-slate-200">{count}</span>
                   </div>
                 </button>
               );
@@ -378,7 +378,7 @@ export default function Calculos() {
               </CardContent>
             </Card>
           ) : (
-            <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+            <div className="bg-white dark:bg-card rounded-xl border border-slate-200 dark:border-slate-700/80 divide-y divide-slate-100 dark:divide-slate-800">
               {historicoFiltrado.map((h) => {
                 const sub = submoduloPorTipo[h.tipo];
                 if (!sub) return null;
@@ -388,7 +388,7 @@ export default function Calculos() {
                   <button
                     key={h.id}
                     onClick={() => setLocation(sub.path)}
-                    className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 text-left"
+                    className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-900/70 text-left"
                   >
                     <div className={`p-2 ${sub.cor.iconBg} rounded-lg shrink-0`}>
                       <Icone className={`w-4 h-4 ${sub.cor.iconFg}`} />
@@ -402,7 +402,7 @@ export default function Calculos() {
                       </p>
                     </div>
                     {valor && (
-                      <span className="text-sm font-bold tabular-nums text-slate-800">{valor}</span>
+                      <span className="text-sm font-bold tabular-nums text-slate-800 dark:text-slate-200">{valor}</span>
                     )}
                     <MoreVertical className="w-4 h-4 text-slate-300 shrink-0" />
                   </button>
@@ -439,7 +439,7 @@ function ChipFiltro({
   return (
     <button
       onClick={onClick}
-      className={`${base} bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900`}
+      className={`${base} bg-white dark:bg-card border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 hover:border-slate-300 hover:text-slate-900 dark:hover:text-slate-100`}
     >
       {children}
     </button>
@@ -453,7 +453,7 @@ function CountPill({ children, ativo }: { children: React.ReactNode; ativo: bool
     );
   }
   return (
-    <span className="bg-slate-100 text-slate-600 px-1.5 rounded-full text-[10px] tabular-nums">
+    <span className="bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 px-1.5 rounded-full text-[10px] tabular-nums">
       {children}
     </span>
   );

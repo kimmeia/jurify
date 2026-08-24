@@ -17,18 +17,18 @@ import {
 import { useState } from "react";
 
 const ACAO_LABELS: Record<string, { label: string; icon: any; color: string }> = {
-  "user.bloquear": { label: "Bloqueou usuário", icon: Lock, color: "text-red-600 bg-red-500/10" },
-  "user.desbloquear": { label: "Desbloqueou usuário", icon: Unlock, color: "text-emerald-600 bg-emerald-500/10" },
-  "user.impersonar": { label: "Entrou como usuário", icon: LogIn, color: "text-blue-600 bg-blue-500/10" },
-  "user.resetSenha": { label: "Resetou senha", icon: RotateCcw, color: "text-amber-600 bg-amber-500/10" },
-  "user.updateRole": { label: "Mudou role", icon: ShieldAlert, color: "text-violet-600 bg-violet-500/10" },
-  "user.concederCreditos": { label: "Concedeu créditos", icon: Coins, color: "text-emerald-600 bg-emerald-500/10" },
-  "escritorio.suspender": { label: "Suspendeu escritório", icon: AlertTriangle, color: "text-red-600 bg-red-500/10" },
-  "escritorio.reativar": { label: "Reativou escritório", icon: Building2, color: "text-emerald-600 bg-emerald-500/10" },
+  "user.bloquear": { label: "Bloqueou usuário", icon: Lock, color: "text-red-600 dark:text-red-400 bg-red-500/10" },
+  "user.desbloquear": { label: "Desbloqueou usuário", icon: Unlock, color: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" },
+  "user.impersonar": { label: "Entrou como usuário", icon: LogIn, color: "text-blue-600 dark:text-blue-400 bg-blue-500/10" },
+  "user.resetSenha": { label: "Resetou senha", icon: RotateCcw, color: "text-amber-600 dark:text-amber-400 bg-amber-500/10" },
+  "user.updateRole": { label: "Mudou role", icon: ShieldAlert, color: "text-violet-600 dark:text-violet-400 bg-violet-500/10" },
+  "user.concederCreditos": { label: "Concedeu créditos", icon: Coins, color: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" },
+  "escritorio.suspender": { label: "Suspendeu escritório", icon: AlertTriangle, color: "text-red-600 dark:text-red-400 bg-red-500/10" },
+  "escritorio.reativar": { label: "Reativou escritório", icon: Building2, color: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" },
 };
 
 function AcaoBadge({ acao }: { acao: string }) {
-  const config = ACAO_LABELS[acao] || { label: acao, icon: FileText, color: "text-slate-600 bg-slate-500/10" };
+  const config = ACAO_LABELS[acao] || { label: acao, icon: FileText, color: "text-slate-600 dark:text-slate-300 bg-slate-500/10" };
   const Icon = config.icon;
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${config.color}`}>

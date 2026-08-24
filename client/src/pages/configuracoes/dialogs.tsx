@@ -84,7 +84,7 @@ function RateGuardSection({ canEdit }: { canEdit: boolean }) {
             Cota do Asaas
           </span>
           {bloqueado && (
-            <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-[10px] ml-auto">
+            <Badge className="bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30 text-[10px] ml-auto">
               <AlertTriangle className="h-3 w-3 mr-1" />
               Bloqueado
             </Badge>
@@ -241,32 +241,32 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
       : 0;
 
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50/40 dark:bg-blue-950/20 p-3 space-y-3">
+    <div className="rounded-lg border border-blue-200 dark:border-blue-800/50 bg-blue-50/40 dark:bg-blue-950/20 p-3 space-y-3">
       <div className="flex items-center gap-2">
         <History className="h-4 w-4 text-blue-700 dark:text-blue-300" />
         <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">
           Importar histórico
         </span>
         {emAndamento && (
-          <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/30 text-[10px] ml-auto">
+          <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[10px] ml-auto">
             <Loader2 className="h-3 w-3 mr-1 animate-spin" />
             {status.status === "agendado" ? "Agendado" : "Importando"}
           </Badge>
         )}
         {pausado && (
-          <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px] ml-auto">
+          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px] ml-auto">
             <Pause className="h-3 w-3 mr-1" />
             Pausado
           </Badge>
         )}
         {concluido && (
-          <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px] ml-auto">
+          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] ml-auto">
             <CheckCircle className="h-3 w-3 mr-1" />
             Concluído
           </Badge>
         )}
         {erro && (
-          <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-[10px] ml-auto">
+          <Badge className="bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30 text-[10px] ml-auto">
             <AlertTriangle className="h-3 w-3 mr-1" />
             Erro
           </Badge>
@@ -395,7 +395,7 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
                 {status.diasFeitos}/{status.totalDias} dias ({progresso}%)
               </span>
             </div>
-            <div className="h-2 bg-blue-200/40 rounded-full overflow-hidden">
+            <div className="h-2 bg-blue-200/40 dark:bg-blue-900/20 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all ${
                   concluido
@@ -599,7 +599,7 @@ export function SincronizarExtratoSection({ canEdit }: { canEdit: boolean }) {
   };
 
   return (
-    <div className="rounded-lg border border-violet-200 bg-violet-50/40 dark:bg-violet-950/20 p-3 space-y-3">
+    <div className="rounded-lg border border-violet-200 dark:border-violet-800/50 bg-violet-50/40 dark:bg-violet-950/20 p-3 space-y-3">
       <div className="flex items-center gap-2">
         <Receipt className="h-4 w-4 text-violet-700 dark:text-violet-300" />
         <span className="text-sm font-semibold text-violet-900 dark:text-violet-100">
@@ -789,7 +789,7 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-xl shadow-md">💰</div>
             <div>
               <span>Asaas</span>
-              {conectado && <Badge variant="outline" className="ml-2 text-[10px] text-emerald-600 bg-emerald-50 border-emerald-200"><Wifi className="h-3 w-3 mr-1" />Conectado</Badge>}
+              {conectado && <Badge variant="outline" className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50"><Wifi className="h-3 w-3 mr-1" />Conectado</Badge>}
             </div>
           </DialogTitle>
         </DialogHeader>
@@ -801,10 +801,10 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
 
           {aguardandoValidacao ? (
             <div className="space-y-3">
-              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-2">
+              <div className="rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-amber-900 dark:text-amber-200 font-semibold">Aguardando validação</span>
-                  <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px]">
+                  <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
                     <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                     Pendente
                   </Badge>
@@ -815,7 +815,7 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
                   30min — você não precisa fazer nada.
                 </p>
                 {asaasStatus?.mensagemErro && (
-                  <p className="text-[10px] text-amber-700/70 font-mono bg-amber-100/50 dark:bg-amber-900/20 p-1.5 rounded">
+                  <p className="text-[10px] text-amber-700/70 dark:text-amber-300 font-mono bg-amber-100/50 dark:bg-amber-900/20 p-1.5 rounded">
                     {asaasStatus.mensagemErro}
                   </p>
                 )}
@@ -854,7 +854,7 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
               <div className="rounded-lg border p-3 space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Status</span>
-                  <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/25 hover:bg-emerald-500/15 text-[10px]">
+                  <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/15 text-[10px]">
                     <CheckCircle className="h-3 w-3 mr-1" />Conectado
                   </Badge>
                 </div>
@@ -900,7 +900,7 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
           ) : (
             <div className="space-y-3">
               {erroConexao && asaasStatus?.mensagemErro && (
-                <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-3 space-y-2">
+                <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20 p-3 space-y-2">
                   <p className="text-xs font-semibold text-red-900 dark:text-red-200">Última tentativa falhou</p>
                   <p className="text-xs text-red-800 dark:text-red-200">
                     {asaasStatus.mensagemErro}
@@ -1011,9 +1011,9 @@ export function TwilioDialog({ open, onClose, canEdit }: { open: boolean; onClos
             <Input placeholder="+5585999990000" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} disabled={!canEdit} />
             <p className="text-[10px] text-muted-foreground">Número comprado no Twilio Console</p>
           </div>
-          <div className="rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 p-3">
-            <p className="text-xs text-purple-700 font-medium">Como obter credenciais</p>
-            <p className="text-[11px] text-purple-600 mt-1">Acesse <a href="https://www.twilio.com/console" target="_blank" rel="noopener noreferrer" className="underline">twilio.com/console</a> → copie Account SID e Auth Token → compre um número em Phone Numbers.</p>
+          <div className="rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/50 p-3">
+            <p className="text-xs text-purple-700 dark:text-purple-300 font-medium">Como obter credenciais</p>
+            <p className="text-[11px] text-purple-600 dark:text-purple-400 mt-1">Acesse <a href="https://www.twilio.com/console" target="_blank" rel="noopener noreferrer" className="underline">twilio.com/console</a> → copie Account SID e Auth Token → compre um número em Phone Numbers.</p>
           </div>
         </div>
         <DialogFooter>
@@ -1080,7 +1080,7 @@ export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClo
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center text-xl shadow">🤖</div>
             <div>
               <span>OpenAI / ChatGPT</span>
-              {conectado && <Badge className="ml-2 bg-emerald-500/15 text-emerald-700 border-emerald-500/25 text-[10px]"><CheckCircle className="h-3 w-3 mr-1" />Configurada</Badge>}
+              {conectado && <Badge className="ml-2 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 text-[10px]"><CheckCircle className="h-3 w-3 mr-1" />Configurada</Badge>}
             </div>
           </DialogTitle>
         </DialogHeader>
@@ -1112,7 +1112,7 @@ export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClo
             </p>
           </div>
 
-          <div className="space-y-2.5 rounded-lg border border-slate-200 p-3">
+          <div className="space-y-2.5 rounded-lg border border-slate-200 dark:border-slate-700/80 p-3">
             <p className="text-xs font-semibold flex items-center gap-1.5">🎙️ Recursos de mídia</p>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -1136,13 +1136,13 @@ export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClo
                 onCheckedChange={(v) => flagsMut.mutate({ visionAtivo: v })}
               />
             </div>
-            {!conectado && <p className="text-[10px] text-amber-600">Salve a chave da OpenAI primeiro para liberar estes recursos.</p>}
+            {!conectado && <p className="text-[10px] text-amber-600 dark:text-amber-400">Salve a chave da OpenAI primeiro para liberar estes recursos.</p>}
             <p className="text-[10px] text-muted-foreground">Consome créditos da OpenAI (Whisper ~US$ 0,006/min; Vision usa um modelo com visão).</p>
           </div>
 
-          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 p-3 space-y-1">
-            <p className="text-xs font-semibold text-blue-700">📌 Próximo passo</p>
-            <p className="text-[11px] text-blue-600">
+          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/50 p-3 space-y-1">
+            <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">📌 Próximo passo</p>
+            <p className="text-[11px] text-blue-600 dark:text-blue-400">
               Após salvar a chave, vá em <strong>Configurações → Agentes de IA</strong> para criar
               chatbots com prompts personalizados, vincular a canais (WhatsApp, Instagram) e ativar
               respostas automáticas.
@@ -1204,7 +1204,7 @@ export function ClaudeDialog({ open, onClose, canEdit }: { open: boolean; onClos
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-xl shadow">🧠</div>
             <div>
               <span>Claude — Anthropic</span>
-              {conectado && <Badge className="ml-2 bg-emerald-500/15 text-emerald-700 border-emerald-500/25 text-[10px]"><CheckCircle className="h-3 w-3 mr-1" />Configurada</Badge>}
+              {conectado && <Badge className="ml-2 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 text-[10px]"><CheckCircle className="h-3 w-3 mr-1" />Configurada</Badge>}
             </div>
           </DialogTitle>
         </DialogHeader>

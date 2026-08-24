@@ -85,11 +85,11 @@ function CargoBadge({
   cor?: string | null;
 }) {
   const colors: Record<CargoColaborador, string> = {
-    dono: "bg-purple-100 text-purple-700 border-purple-200",
-    gestor: "bg-blue-100 text-blue-700 border-blue-200",
-    atendente: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    estagiario: "bg-amber-100 text-amber-700 border-amber-200",
-    sdr: "bg-orange-100 text-orange-700 border-orange-200",
+    dono: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/50",
+    gestor: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50",
+    atendente: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50",
+    estagiario: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50",
+    sdr: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800/50",
   };
 
   if (nomePersonalizado) {
@@ -415,24 +415,24 @@ export default function Configuracoes() {
 
           {/* ─── SIDEBAR LATERAL VERTICAL ─────────────────────────────── */}
           <aside className="lg:sticky lg:top-4 lg:self-start">
-            <div className="rounded-2xl bg-white border border-slate-200 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] p-2">
+            <div className="rounded-2xl bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] p-2">
               <TabsList className="!flex !flex-col !gap-0.5 !h-auto !bg-transparent !p-0 !w-full">
                 <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 self-start">Geral</p>
                 <TabsTrigger
                   value="perfil"
-                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <Building2 className="h-4 w-4" /> <span className="flex-1 text-left">Escritório</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="equipe"
-                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <Users className="h-4 w-4" /> <span className="flex-1 text-left">Equipe</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="permissoes"
-                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <Shield className="h-4 w-4" /> <span className="flex-1 text-left">Permissões</span>
                 </TabsTrigger>
@@ -440,25 +440,25 @@ export default function Configuracoes() {
                 <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Cadastros</p>
                 <TabsTrigger
                   value="tags"
-                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <TagIcon className="h-4 w-4" /> <span className="flex-1 text-left">Tags</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="origens"
-                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <Megaphone className="h-4 w-4" /> <span className="flex-1 text-left">Origens de leads</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="campos"
-                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <Sparkles className="h-4 w-4" /> <span className="flex-1 text-left">Campos de cliente</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="templates"
-                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <MessageSquare className="h-4 w-4" /> <span className="flex-1 text-left">Templates</span>
                 </TabsTrigger>
@@ -466,13 +466,13 @@ export default function Configuracoes() {
                 <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Integrações</p>
                 <TabsTrigger
                   value="canais"
-                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <MessageCircle className="h-4 w-4" /> <span className="flex-1 text-left">Canais</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="integracoes"
-                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <Plug className="h-4 w-4" /> <span className="flex-1 text-left">Apps externos</span>
                 </TabsTrigger>
@@ -480,14 +480,14 @@ export default function Configuracoes() {
                 <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Operação</p>
                 <TabsTrigger
                   value="financeiro"
-                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <DollarSign className="h-4 w-4" /> <span className="flex-1 text-left">Financeiro</span>
                 </TabsTrigger>
                 {podeVerMeuPlano && (
                   <TabsTrigger
                     value="meu-plano"
-                    className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                    className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                   >
                     <CreditCardIcon className="h-4 w-4" /> <span className="flex-1 text-left">Meu plano</span>
                   </TabsTrigger>
@@ -509,10 +509,10 @@ export default function Configuracoes() {
           )}
 
           {/* Section 1: Dados básicos */}
-          <details open className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
-            <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+          <details open className="card group rounded-2xl bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 overflow-hidden">
+            <summary className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between cursor-pointer list-none">
               <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center"><Building2 className="h-4 w-4" /></span>
+                <span className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 flex items-center justify-center"><Building2 className="h-4 w-4" /></span>
                 <div>
                   <p className="text-sm font-bold tracking-tight">Dados básicos</p>
                   <p className="text-[10.5px] text-slate-500">Nome, CNPJ, telefone, email, endereço</p>
@@ -532,21 +532,21 @@ export default function Configuracoes() {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Nome</p><p className="font-semibold mt-0.5">{escritorio.nome}</p></div>
-                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">CNPJ</p><p className="font-mono mt-0.5">{escritorio.cnpj || "—"}</p></div>
-                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Telefone</p><p className="font-mono mt-0.5">{escritorio.telefone || "—"}</p></div>
-                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Email</p><p className="mt-0.5">{escritorio.email || "—"}</p></div>
-                  {escritorio.endereco && <div className="rounded-lg bg-slate-50 p-3 col-span-2"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Endereço</p><p className="mt-0.5">{escritorio.endereco}</p></div>}
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-900/70 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Nome</p><p className="font-semibold mt-0.5">{escritorio.nome}</p></div>
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-900/70 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">CNPJ</p><p className="font-mono mt-0.5">{escritorio.cnpj || "—"}</p></div>
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-900/70 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Telefone</p><p className="font-mono mt-0.5">{escritorio.telefone || "—"}</p></div>
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-900/70 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Email</p><p className="mt-0.5">{escritorio.email || "—"}</p></div>
+                  {escritorio.endereco && <div className="rounded-lg bg-slate-50 dark:bg-slate-900/70 p-3 col-span-2"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Endereço</p><p className="mt-0.5">{escritorio.endereco}</p></div>}
                 </div>
               )}
             </div>
           </details>
 
           {/* Section 2: Horários */}
-          <details open className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
-            <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+          <details open className="card group rounded-2xl bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 overflow-hidden">
+            <summary className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between cursor-pointer list-none">
               <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center"><Clock className="h-4 w-4" /></span>
+                <span className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 flex items-center justify-center"><Clock className="h-4 w-4" /></span>
                 <div>
                   <p className="text-sm font-bold tracking-tight">Horários de atendimento</p>
                   <p className="text-[10.5px] text-slate-500">
@@ -577,7 +577,7 @@ export default function Configuracoes() {
                     <Label className="text-[11px]">Dias de funcionamento</Label>
                     <div className="flex gap-1.5 flex-wrap">
                       {DIAS_SEMANA.map((d) => (
-                        <button key={d.key} type="button" onClick={() => toggleDia(d.key)} className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${formPerfil.diasFuncionamento?.includes(d.key) ? "bg-violet-600 text-white border-violet-600" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"}`}>{d.label}</button>
+                        <button key={d.key} type="button" onClick={() => toggleDia(d.key)} className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${formPerfil.diasFuncionamento?.includes(d.key) ? "bg-violet-600 text-white border-violet-600" : "bg-white dark:bg-card text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80 hover:border-slate-300"}`}>{d.label}</button>
                       ))}
                     </div>
                   </div>
@@ -589,7 +589,7 @@ export default function Configuracoes() {
                     return (
                       <div key={d.key} className="text-center">
                         <p className="text-[10px] font-bold text-slate-500 mb-1 uppercase">{d.label}</p>
-                        <div className={`rounded-lg p-2 ${ativo ? "bg-emerald-100 border border-emerald-200" : "bg-slate-100 border border-slate-200"}`}>
+                        <div className={`rounded-lg p-2 ${ativo ? "bg-emerald-100 border border-emerald-200" : "bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80"}`}>
                           {ativo ? (
                             <>
                               <p className="text-[11px] font-bold tabular-nums">{escritorio.horarioAbertura}</p>
@@ -609,10 +609,10 @@ export default function Configuracoes() {
           </details>
 
           {/* Section 2.5: Agenda automática */}
-          <details className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
-            <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+          <details className="card group rounded-2xl bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 overflow-hidden">
+            <summary className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between cursor-pointer list-none">
               <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center"><Calendar className="h-4 w-4" /></span>
+                <span className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 flex items-center justify-center"><Calendar className="h-4 w-4" /></span>
                 <div>
                   <p className="text-sm font-bold tracking-tight">Agenda automática</p>
                   <p className="text-[10.5px] text-slate-500">Quem fica com os agendamentos do atendente IA quando não há responsável</p>
@@ -644,9 +644,9 @@ export default function Configuracoes() {
                     <p className="text-[10.5px] text-slate-500">Usado quando o Atendente IA está em modo automático e a conversa não tem atendente nem o contato tem responsável. Vazio = dono do escritório.</p>
                   </div>
                 ) : (
-                  <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-900/70 p-3">
                     <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">🗓 Responsável padrão</p>
-                    <p className="text-[12px] font-medium text-slate-700">{nomePadrao}</p>
+                    <p className="text-[12px] font-medium text-slate-700 dark:text-slate-200">{nomePadrao}</p>
                   </div>
                 );
               })()}
@@ -654,10 +654,10 @@ export default function Configuracoes() {
           </details>
 
           {/* Section 3: Mensagens automáticas */}
-          <details className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
-            <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+          <details className="card group rounded-2xl bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 overflow-hidden">
+            <summary className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between cursor-pointer list-none">
               <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center"><MessageCircle className="h-4 w-4" /></span>
+                <span className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 flex items-center justify-center"><MessageCircle className="h-4 w-4" /></span>
                 <div>
                   <p className="text-sm font-bold tracking-tight">Mensagens automáticas</p>
                   <p className="text-[10.5px] text-slate-500">Boas-vindas e fora do horário</p>
@@ -670,7 +670,7 @@ export default function Configuracoes() {
                 <>
                   <div className="space-y-1.5"><Label className="text-[11px]">Mensagem de boas-vindas (primeiro contato)</Label><Textarea placeholder="Olá! Bem-vindo ao escritório..." rows={3} value={formPerfil.mensagemBoasVindas} onChange={(e) => setFormPerfil({ ...formPerfil, mensagemBoasVindas: e.target.value })} /></div>
                   <div className="space-y-1.5"><Label className="text-[11px]">Mensagem de ausência (fora do horário)</Label><Textarea placeholder="No momento estamos fora do horário..." rows={3} value={formPerfil.mensagemAusencia} onChange={(e) => setFormPerfil({ ...formPerfil, mensagemAusencia: e.target.value })} /></div>
-                  <div className="rounded-lg border border-slate-200 p-3 space-y-3">
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700/80 p-3 space-y-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-[12px] font-semibold">Dividir respostas longas do robô</p>
@@ -710,17 +710,17 @@ export default function Configuracoes() {
                 </>
               ) : (
                 <>
-                  <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-900/70 p-3">
                     <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">📨 Boas-vindas</p>
-                    <p className="text-[11.5px] text-slate-700 italic">"{escritorio.mensagemBoasVindas || "Sem mensagem configurada"}"</p>
+                    <p className="text-[11.5px] text-slate-700 dark:text-slate-200 italic">"{escritorio.mensagemBoasVindas || "Sem mensagem configurada"}"</p>
                   </div>
-                  <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-900/70 p-3">
                     <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">🌙 Fora do horário</p>
-                    <p className="text-[11.5px] text-slate-700 italic">"{escritorio.mensagemAusencia || "Sem mensagem configurada"}"</p>
+                    <p className="text-[11.5px] text-slate-700 dark:text-slate-200 italic">"{escritorio.mensagemAusencia || "Sem mensagem configurada"}"</p>
                   </div>
-                  <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-900/70 p-3">
                     <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">💬 Divisão de respostas do robô</p>
-                    <p className="text-[11.5px] text-slate-700">
+                    <p className="text-[11.5px] text-slate-700 dark:text-slate-200">
                       {(escritorio as any).msgDividirRespostas ?? true
                         ? `Ativada · máx. ${(escritorio as any).msgDividirMax ?? 4} mensagens · ritmo ${
                             ({ rapido: "rápido", natural: "natural", calmo: "calmo" } as any)[(escritorio as any).msgDividirRitmo ?? "natural"]
@@ -735,10 +735,10 @@ export default function Configuracoes() {
 
           {/* Section 4: Backup */}
           {podeFazerBackup && (
-            <details className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
-              <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+            <details className="card group rounded-2xl bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 overflow-hidden">
+              <summary className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between cursor-pointer list-none">
                 <div className="flex items-center gap-2.5">
-                  <span className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center"><Database className="h-4 w-4" /></span>
+                  <span className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 flex items-center justify-center"><Database className="h-4 w-4" /></span>
                   <div>
                     <p className="text-sm font-bold tracking-tight">Backup e importação</p>
                     <p className="text-[10.5px] text-slate-500">Exporte ou restaure todos os dados do escritório</p>
@@ -756,7 +756,7 @@ export default function Configuracoes() {
 
           {/* Save/cancel sticky em edit mode */}
           {editMode && (
-            <div className="flex gap-2 sticky bottom-4 bg-white p-3 rounded-xl border border-slate-200 shadow-md">
+            <div className="flex gap-2 sticky bottom-4 bg-white dark:bg-card p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-md">
               <Button onClick={() => atualizarMut.mutate(formPerfil)} disabled={atualizarMut.isPending}>
                 {atualizarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-2" />} Salvar alterações
               </Button>
@@ -790,9 +790,9 @@ export default function Configuracoes() {
                   <div>
                     <h3 className="text-base font-bold tracking-tight">Equipe</h3>
                     <p className="text-[11px] text-slate-500">
-                      <b className="text-slate-700">{equipeData?.total ?? 0}</b> ativos · limite plano {equipeData?.limite ?? 0}
+                      <b className="text-slate-700 dark:text-slate-200">{equipeData?.total ?? 0}</b> ativos · limite plano {equipeData?.limite ?? 0}
                       {(equipeData?.extras ?? 0) > 0 && (
-                        <> · <b className="text-amber-700">{equipeData?.extras}</b> extras × R$ {CUSTO_COLABORADOR_EXTRA.toFixed(2)}</>
+                        <> · <b className="text-amber-700 dark:text-amber-300">{equipeData?.extras}</b> extras × R$ {CUSTO_COLABORADOR_EXTRA.toFixed(2)}</>
                       )}
                       {inativos > 0 && <> · <b className="text-slate-500">{inativos}</b> removidos</>}
                     </p>
@@ -821,7 +821,7 @@ export default function Configuracoes() {
                       placeholder="Buscar por nome, email, cargo…"
                       value={buscaEquipe}
                       onChange={(e) => setBuscaEquipe(e.target.value)}
-                      className="pl-9 h-9 bg-white"
+                      className="pl-9 h-9 bg-white dark:bg-card"
                     />
                   </div>
                   <div className="flex gap-1.5 flex-wrap">
@@ -844,8 +844,8 @@ export default function Configuracoes() {
                                 ? "bg-amber-500 text-white border-amber-500 shadow-sm"
                                 : "bg-slate-900 text-white border-slate-900 shadow-sm"
                               : isAmber
-                                ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
-                                : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                                ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50 hover:bg-amber-100"
+                                : "bg-white dark:bg-card text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80 hover:border-slate-300"
                           }`}
                         >
                           {chip.label}
@@ -881,7 +881,7 @@ export default function Configuracoes() {
                         return (
                           <div
                             key={c.id}
-                            className={`rounded-xl bg-white border border-slate-200 border-l-[3px] ${corBorda} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all ${!c.ativo ? "opacity-65" : ""}`}
+                            className={`rounded-xl bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 border-l-[3px] ${corBorda} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all ${!c.ativo ? "opacity-65" : ""}`}
                           >
                             <div className="p-3">
                               <div className="flex items-start gap-2.5">
@@ -905,7 +905,7 @@ export default function Configuracoes() {
                               </div>
 
                               {/* Métricas inline */}
-                              <div className="grid grid-cols-3 gap-1 mt-3 pt-3 border-t border-slate-100 text-[10px]">
+                              <div className="grid grid-cols-3 gap-1 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-[10px]">
                                 <div>
                                   <p className="text-slate-400 uppercase tracking-wider text-[9px]">Setor</p>
                                   <p className="font-semibold truncate" title={c.setorNome || c.departamento || "Todos"}>{c.setorNome || c.departamento || "—"}</p>
@@ -916,7 +916,7 @@ export default function Configuracoes() {
                                 </div>
                                 <div>
                                   <p className="text-slate-400 uppercase tracking-wider text-[9px]">Leads auto</p>
-                                  <p className={`font-semibold ${c.recebeLeadsAutomaticos ? "text-emerald-600" : "text-slate-400"}`}>
+                                  <p className={`font-semibold ${c.recebeLeadsAutomaticos ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`}>
                                     {c.recebeLeadsAutomaticos ? "Sim" : "Não"}
                                   </p>
                                 </div>
@@ -924,12 +924,12 @@ export default function Configuracoes() {
 
                               {/* Ações */}
                               {(canEdit || isDono) && c.ativo && (
-                                <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-slate-100">
+                                <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                                   {canEdit && c.cargo !== "dono" && (
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      className="h-7 text-[10px] rounded-md text-violet-600 hover:bg-violet-50 px-2"
+                                      className="h-7 text-[10px] rounded-md text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 px-2"
                                       title="Editar cargo, setor e atendimento"
                                       onClick={() => abrirEditColab(c)}
                                     >
@@ -940,7 +940,7 @@ export default function Configuracoes() {
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      className="h-7 text-[10px] rounded-md text-blue-600 hover:bg-blue-50 px-2"
+                                      className="h-7 text-[10px] rounded-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 px-2"
                                       title="Diagnóstico de permissões"
                                       onClick={() => setDiagColabId(c.id)}
                                     >
@@ -951,7 +951,7 @@ export default function Configuracoes() {
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      className="h-7 text-[10px] rounded-md text-rose-600 hover:bg-rose-50 px-2"
+                                      className="h-7 text-[10px] rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 px-2"
                                       onClick={() => {
                                         if (confirm(`Remover ${nome}?`)) removerColabMut.mutate({ colaboradorId: c.id });
                                       }}
@@ -970,9 +970,9 @@ export default function Configuracoes() {
                 )}
 
                 {filtroEquipe === "convites" && (
-                  <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/40 p-6 text-center">
-                    <p className="text-[12px] text-amber-700 font-semibold">📨 Convites pendentes</p>
-                    <p className="text-[10.5px] text-amber-600/85 mt-1">
+                  <div className="rounded-xl border border-dashed border-amber-200 dark:border-amber-800/50 bg-amber-50/40 dark:bg-amber-950/30 p-6 text-center">
+                    <p className="text-[12px] text-amber-700 dark:text-amber-300 font-semibold">📨 Convites pendentes</p>
+                    <p className="text-[10.5px] text-amber-600/85 dark:text-amber-400 mt-1">
                       Use o formulário abaixo pra convidar. Convites enviados via link ficam ativos até serem aceitos.
                     </p>
                   </div>
@@ -986,7 +986,7 @@ export default function Configuracoes() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <span className="text-amber-600">🗑</span>
+                  <span className="text-amber-600 dark:text-amber-400">🗑</span>
                   Removidos ({removidos.length})
                 </CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -1080,8 +1080,8 @@ export default function Configuracoes() {
                 </Button>
 
                 {lastToken && (
-                  <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 p-3 space-y-2">
-                    <p className="text-xs font-medium text-emerald-700 flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5" /> Convite criado! Compartilhe o link:</p>
+                  <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 p-3 space-y-2">
+                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300 flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5" /> Convite criado! Compartilhe o link:</p>
                     <div className="flex gap-2">
                       <Input readOnly value={`${window.location.origin}/convite/${lastToken}`} className="text-xs font-mono" />
                       <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/convite/${lastToken}`); toast.success("Link copiado!"); }}>
@@ -1116,7 +1116,7 @@ export default function Configuracoes() {
                       {conv.status === "pendente" && (conv as any).emailEnviado === false && (
                         <Badge
                           variant="outline"
-                          className="text-[10px] bg-red-50 text-red-700 border-red-200 shrink-0"
+                          className="text-[10px] bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50 shrink-0"
                           title={(conv as any).ultimoErroEmail || "Email não enviado"}
                         >
                           email falhou
@@ -1126,7 +1126,7 @@ export default function Configuracoes() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="shrink-0 text-blue-600"
+                          className="shrink-0 text-blue-600 dark:text-blue-400"
                           title={(conv as any).ultimoErroEmail || "Reenviar email"}
                           onClick={() => reenviarConviteMut.mutate({ conviteId: conv.id })}
                           disabled={reenviarConviteMut.isPending}
@@ -1618,7 +1618,7 @@ export default function Configuracoes() {
                           ef.excluir !== db.excluir
                         );
                         const cell = (v: boolean) => (
-                          <span className={v ? "text-emerald-600 font-bold" : "text-muted-foreground"}>
+                          <span className={v ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-muted-foreground"}>
                             {v ? "✓" : "—"}
                           </span>
                         );
@@ -1631,7 +1631,7 @@ export default function Configuracoes() {
                             <td className="text-center">{cell(ef.editar)}</td>
                             <td className="text-center">{cell(ef.excluir)}</td>
                             <td className="text-center text-[10px] text-muted-foreground">
-                              {db ? "ok" : <span className="text-amber-600">sem row</span>}
+                              {db ? "ok" : <span className="text-amber-600 dark:text-amber-400">sem row</span>}
                             </td>
                           </tr>
                         );
@@ -1795,14 +1795,14 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
           <h3 className="text-base font-bold tracking-tight">Canais de comunicação</h3>
           <p className="text-[11px] text-slate-500">
             {canaisPrincipais.length} canais disponíveis ·
-            <b className="text-emerald-700 ml-1">{totalCanaisConectados} conectados</b>
-            {totalCanaisErro > 0 && <> · <b className="text-rose-700">{totalCanaisErro} com erro</b></>}
+            <b className="text-emerald-700 dark:text-emerald-300 ml-1">{totalCanaisConectados} conectados</b>
+            {totalCanaisErro > 0 && <> · <b className="text-rose-700 dark:text-rose-300">{totalCanaisErro} com erro</b></>}
           </p>
         </div>
       </div>
 
       {/* Banner explicativo */}
-      <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/50 p-4 mb-4">
+      <div className="rounded-xl border border-blue-200 dark:border-blue-800/50 bg-gradient-to-r from-blue-50 dark:from-blue-950/40 to-indigo-50/50 dark:to-indigo-950/20 p-4 mb-4">
         <div className="flex items-start gap-3">
           <div className="h-8 w-8 rounded-lg bg-[#1877F2] flex items-center justify-center text-white shrink-0">
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
@@ -1810,10 +1810,10 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-blue-900">
+            <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
               Conexão simplificada via Facebook
             </p>
-            <p className="text-xs text-blue-700 mt-1">
+            <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
               WhatsApp, Instagram e Messenger se conectam com 1 clique. Sem precisar copiar
               tokens ou IDs manualmente — basta autorizar pelo Facebook Login.
             </p>
@@ -1822,7 +1822,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                 Pequeno e discreto pra não competir com o caminho padrão. */}
             <button
               onClick={() => setManualWhatsappOpen(true)}
-              className="text-[11px] text-blue-700 hover:text-blue-900 hover:underline mt-2 inline-flex items-center gap-1"
+              className="text-[11px] text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-200 hover:underline mt-2 inline-flex items-center gap-1"
             >
               <span>📥</span> Ou cadastrar WhatsApp Cloud manualmente (avançado)
             </button>
@@ -1837,7 +1837,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
             key={canal.key}
             className={`overflow-hidden cursor-pointer hover:shadow-lg transition-all border-2 ${
               canal.isAdicionar
-                ? "border-dashed border-emerald-300/60 bg-emerald-50/30 hover:bg-emerald-50/50"
+                ? "border-dashed border-emerald-300/60 bg-emerald-50/30 dark:bg-emerald-950/30 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30"
                 : canal.conectado
                   ? "border-emerald-300"
                   : canal.comErro
@@ -1861,7 +1861,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                     {!canal.isAdicionar && canal.conectado && (
                       <Badge
                         variant="outline"
-                        className="text-[10px] text-emerald-600 bg-emerald-50 border-emerald-200"
+                        className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50"
                       >
                         <Wifi className="h-3 w-3 mr-1" />
                         Conectado
@@ -1870,7 +1870,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                     {!canal.isAdicionar && canal.comErro && (
                       <Badge
                         variant="outline"
-                        className="text-[10px] text-red-600 bg-red-50 border-red-200"
+                        className="text-[10px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50"
                       >
                         <AlertTriangle className="h-3 w-3 mr-1" />
                         Erro
@@ -1879,7 +1879,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                     {!canal.isAdicionar && !canal.conectado && !canal.comErro && (
                       <Badge
                         variant="outline"
-                        className="text-[10px] text-gray-500 bg-gray-50 border-gray-200"
+                        className="text-[10px] text-gray-500 bg-gray-50 dark:bg-slate-900/70 border-gray-200 dark:border-slate-700/80"
                       >
                         Não conectado
                       </Badge>
@@ -1893,8 +1893,8 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                         variant="outline"
                         className={`text-[10px] ${
                           (canal.canal as any).qualidadeMeta === "RED"
-                            ? "text-red-600 bg-red-50 border-red-200"
-                            : "text-amber-600 bg-amber-50 border-amber-200"
+                            ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50"
+                            : "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50"
                         }`}
                       >
                         <AlertTriangle className="h-3 w-3 mr-1" />
@@ -1907,7 +1907,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                       canal.canal?.padraoEnvio ? (
                         <Badge
                           variant="outline"
-                          className="text-[10px] text-indigo-600 bg-indigo-50 border-indigo-200"
+                          className="text-[10px] text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800/50"
                         >
                           <Send className="h-3 w-3 mr-1" />
                           Número de envio
@@ -1920,7 +1920,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                             definirPadraoEnvioMut.mutate({ canalId: canal.canal!.id });
                           }}
                           disabled={definirPadraoEnvioMut.isPending}
-                          className="text-[10px] text-indigo-600 hover:underline disabled:opacity-50"
+                          className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
                         >
                           Usar p/ envio
                         </button>
@@ -1938,7 +1938,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-7 px-2"
+                    className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 h-7 px-2"
                     onClick={(e) => {
                       e.stopPropagation();
                       setExcluirCanalInfo({ id: canal.canal!.id, nome: canal.nome });
@@ -2041,7 +2041,7 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
       descricao: "Cobranças por boleto, Pix e cartão",
       categoria: "Financeiro",
       logo: "💰",
-      bgIcon: "bg-cyan-50 border-cyan-200",
+      bgIcon: "bg-cyan-50 dark:bg-cyan-950/30 border-cyan-200 dark:border-cyan-800/50",
       conectado: asaasStatus?.conectado || false,
     },
     {
@@ -2050,7 +2050,7 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
       descricao: "OpenAI · GPT-4o · GPT-4o-mini",
       categoria: "IA",
       logo: "🤖",
-      bgIcon: "bg-emerald-50 border-emerald-200",
+      bgIcon: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50",
       conectado: chatgptCanal?.status === "conectado",
     },
     {
@@ -2059,7 +2059,7 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
       descricao: "Anthropic · Claude Sonnet / Haiku",
       categoria: "IA",
       logo: "🦾",
-      bgIcon: "bg-amber-50 border-amber-200",
+      bgIcon: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50",
       conectado: claudeCanal?.status === "conectado",
     },
     {
@@ -2068,7 +2068,7 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
       descricao: "Ligações telefônicas pelo sistema",
       categoria: "Mensageria",
       logo: "📞",
-      bgIcon: "bg-violet-50 border-violet-200",
+      bgIcon: "bg-violet-50 dark:bg-violet-950/30 border-violet-200 dark:border-violet-800/50",
       conectado: twilioCanal?.status === "conectado",
     },
   ];
@@ -2082,7 +2082,7 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
           <h3 className="text-base font-bold tracking-tight">Apps externos</h3>
           <p className="text-[11px] text-slate-500">
             {integracoes.length} integrações disponíveis ·
-            <b className="text-emerald-700 ml-1">{totalConectadas} conectadas</b>
+            <b className="text-emerald-700 dark:text-emerald-300 ml-1">{totalConectadas} conectadas</b>
           </p>
         </div>
       </div>
@@ -2091,7 +2091,7 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
           <div
             key={integ.id}
             onClick={() => setOpenDialog(integ.id)}
-            className={`rounded-xl bg-white border border-slate-200 border-l-[3px] ${
+            className={`rounded-xl bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 border-l-[3px] ${
               integ.conectado ? "border-l-emerald-500" : "border-l-slate-300"
             } hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all cursor-pointer p-4`}
           >
@@ -2103,11 +2103,11 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <p className="text-sm font-bold">{integ.nome}</p>
                   {integ.conectado ? (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-bold">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold">
                       <span className="w-1 h-1 rounded-full bg-emerald-500" /> Conectada
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-bold">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/60 text-slate-500 text-[9px] font-bold">
                       <span className="w-1 h-1 rounded-full bg-slate-400" /> Não configurada
                     </span>
                   )}
@@ -2116,14 +2116,14 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
                 <p className="text-[9.5px] text-slate-400 mt-1 uppercase tracking-wider font-semibold">{integ.categoria}</p>
               </div>
             </div>
-            <div className="flex gap-1.5 mt-3 pt-3 border-t border-slate-100">
+            <div className="flex gap-1.5 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
               <Button
                 variant={integ.conectado ? "outline" : "default"}
                 size="sm"
                 className={`flex-1 h-7 text-[10.5px] rounded-md ${
                   integ.conectado
-                    ? "border-slate-200 hover:bg-slate-50"
-                    : "bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200"
+                    ? "border-slate-200 dark:border-slate-700/80 hover:bg-slate-50 dark:hover:bg-slate-900/70"
+                    : "bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 hover:bg-violet-100 border border-violet-200 dark:border-violet-800/50"
                 }`}
                 onClick={(e) => { e.stopPropagation(); setOpenDialog(integ.id); }}
               >
@@ -2167,7 +2167,7 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
 // ─── Templates de Mensagem ─────────────────────────────────────────────────
 
 const CATEGORIA_LABELS: Record<string, string> = { saudacao: "Saudacao", cobranca: "Cobranca", agendamento: "Agendamento", juridico: "Juridico", encerramento: "Encerramento", outro: "Outro" };
-const CATEGORIA_CORES: Record<string, string> = { saudacao: "bg-emerald-100 text-emerald-700", cobranca: "bg-amber-100 text-amber-700", agendamento: "bg-blue-100 text-blue-700", juridico: "bg-purple-100 text-purple-700", encerramento: "bg-gray-100 text-gray-700", outro: "bg-gray-100 text-gray-600" };
+const CATEGORIA_CORES: Record<string, string> = { saudacao: "bg-emerald-100 text-emerald-700", cobranca: "bg-amber-100 text-amber-700", agendamento: "bg-blue-100 text-blue-700", juridico: "bg-purple-100 text-purple-700", encerramento: "bg-gray-100 dark:bg-slate-800/60 text-gray-700 dark:text-slate-200", outro: "bg-gray-100 dark:bg-slate-800/60 text-gray-600 dark:text-slate-300" };
 
 function TemplatesSection({ canEdit }: { canEdit: boolean }) {
   const [showNovo, setShowNovo] = useState(false);

@@ -672,7 +672,7 @@ function RespostaUna({
 
         <button
           type="button"
-          className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-violet-600"
+          className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400"
           onClick={() => aoExportar(r.texto)}
           disabled={exportando}
         >
@@ -796,7 +796,7 @@ function PainelContexto({
 
       <div className="rounded-lg border border-violet-200 bg-violet-50/40 px-3 py-2.5 dark:border-violet-900 dark:bg-violet-950/20">
         <div className="flex items-center gap-1.5">
-          <Database className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+          <Database className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
           <p className="flex-1 text-[11.5px] font-bold">Acervo público</p>
           <span className="rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-px text-[9px] font-extrabold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400">
             {(acervo?.total ?? 0).toLocaleString("pt-BR")}
@@ -828,7 +828,7 @@ function PainelContexto({
           {ultima.fontesDetalhe.length > 0 && (
             <div className="rounded-lg border px-3 py-2.5">
               <div className="flex items-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                 <p className="flex-1 text-[11.5px] font-bold">Processos citados</p>
                 <span className="text-[11px] font-bold tabular-nums">
                   {ultima.fontesDetalhe.length}
@@ -1276,7 +1276,7 @@ export default function JurisIa() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Gavel className="h-5 w-5 text-violet-600" />
+        <Gavel className="h-5 w-5 text-violet-600 dark:text-violet-400" />
         <h1 className="text-lg font-extrabold">
           JurisIA <span className="font-medium text-muted-foreground">· assistente jurídico</span>
         </h1>

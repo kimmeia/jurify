@@ -144,7 +144,7 @@ export function GaleriaTemplatesDialog({
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-violet-600" />
+                <Sparkles className="h-5 w-5 text-violet-600 dark:text-violet-400" />
                 Como você quer começar?
               </DialogTitle>
               <DialogDescription>

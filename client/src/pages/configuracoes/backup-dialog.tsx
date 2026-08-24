@@ -196,10 +196,10 @@ function BackupConteudo() {
           </div>
 
           <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs space-y-1">
-            <p className="font-semibold text-amber-700 flex items-center gap-1.5">
+            <p className="font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
               <AlertTriangle className="h-3.5 w-3.5" /> Aviso LGPD
             </p>
-            <p className="text-amber-800/90">
+            <p className="text-amber-800/90 dark:text-amber-200">
               O arquivo gerado contém dados pessoais (nomes, CPF/CNPJ, telefones,
               conversas). Armazene em local seguro — sob a LGPD, o escritório é
               responsável pelo tratamento desses dados.
@@ -255,7 +255,7 @@ function BackupConteudo() {
                 <Badge key={t.nome} variant="secondary" className="font-mono text-[10px]">
                   {t.nome} ({t.linhas})
                   {t.colunasOmitidas?.length > 0 && (
-                    <span className="ml-1 text-amber-600" title={`Colunas omitidas: ${t.colunasOmitidas.join(", ")}`}>
+                    <span className="ml-1 text-amber-600 dark:text-amber-400" title={`Colunas omitidas: ${t.colunasOmitidas.join(", ")}`}>
                       *
                     </span>
                   )}
@@ -263,7 +263,7 @@ function BackupConteudo() {
               ))}
             </div>
             <p className="text-[10px] text-muted-foreground mt-1">
-              <span className="text-amber-600">*</span> tabela tem colunas com chaves API
+              <span className="text-amber-600 dark:text-amber-400">*</span> tabela tem colunas com chaves API
               omitidas (segredos não vão pro backup).
             </p>
           </div>
@@ -283,7 +283,7 @@ function BackupConteudo() {
         <CardContent className="space-y-1.5">
           {data.excluidasPorSegredo.map((t: any) => (
             <div key={t.nomeBanco} className="flex items-start gap-2 text-xs">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
               <div>
                 <code className="font-mono text-[11px]">{t.nomeBanco}</code>
                 <span className="text-muted-foreground"> — {t.motivo}</span>
@@ -433,10 +433,10 @@ function ImportarBackupCard() {
                 <p className="text-xs text-muted-foreground">linhas atuais</p>
               </div>
               <div className="border rounded-md p-3 bg-emerald-500/5">
-                <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
+                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
                   <Upload className="h-3.5 w-3.5" /> Vai INSERIR
                 </p>
-                <p className="text-2xl font-bold text-emerald-700 mt-1">
+                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 mt-1">
                   {estado.preview.totalInserir.toLocaleString("pt-BR")}
                 </p>
                 <p className="text-xs text-muted-foreground">linhas do backup</p>
@@ -453,7 +453,7 @@ function ImportarBackupCard() {
                     <tr>
                       <th className="text-left p-2">Tabela</th>
                       <th className="text-right p-2 text-destructive">Apagar</th>
-                      <th className="text-right p-2 text-emerald-700">Inserir</th>
+                      <th className="text-right p-2 text-emerald-700 dark:text-emerald-300">Inserir</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -463,7 +463,7 @@ function ImportarBackupCard() {
                         <td className="p-2 text-right text-destructive">
                           {t.vaiApagar.toLocaleString("pt-BR")}
                         </td>
-                        <td className="p-2 text-right text-emerald-700">
+                        <td className="p-2 text-right text-emerald-700 dark:text-emerald-300">
                           {t.vaiInserir.toLocaleString("pt-BR")}
                         </td>
                       </tr>

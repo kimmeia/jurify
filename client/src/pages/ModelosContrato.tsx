@@ -92,14 +92,14 @@ const GRADIENTES_MODELO = [
   "from-lime-500 to-emerald-600",
 ];
 const CORES_PASTA = [
-  { bg: "bg-indigo-100", fg: "text-indigo-600" },
-  { bg: "bg-emerald-100", fg: "text-emerald-600" },
-  { bg: "bg-amber-100", fg: "text-amber-600" },
-  { bg: "bg-violet-100", fg: "text-violet-600" },
-  { bg: "bg-cyan-100", fg: "text-cyan-600" },
-  { bg: "bg-rose-100", fg: "text-rose-600" },
-  { bg: "bg-lime-100", fg: "text-lime-600" },
-  { bg: "bg-blue-100", fg: "text-blue-600" },
+  { bg: "bg-indigo-100 dark:bg-indigo-900/30", fg: "text-indigo-600 dark:text-indigo-400" },
+  { bg: "bg-emerald-100 dark:bg-emerald-900/30", fg: "text-emerald-600 dark:text-emerald-400" },
+  { bg: "bg-amber-100 dark:bg-amber-900/30", fg: "text-amber-600 dark:text-amber-400" },
+  { bg: "bg-violet-100 dark:bg-violet-900/30", fg: "text-violet-600 dark:text-violet-400" },
+  { bg: "bg-cyan-100 dark:bg-cyan-900/30", fg: "text-cyan-600 dark:text-cyan-400" },
+  { bg: "bg-rose-100 dark:bg-rose-900/30", fg: "text-rose-600 dark:text-rose-400" },
+  { bg: "bg-lime-100 dark:bg-lime-900/30", fg: "text-lime-600 dark:text-lime-400" },
+  { bg: "bg-blue-100 dark:bg-blue-900/30", fg: "text-blue-600 dark:text-blue-400" },
 ];
 
 function hash(seed: string): number {
@@ -222,7 +222,7 @@ export default function ModelosContrato() {
   }, [lista, chip, busca, pastaAtiva]);
 
   return (
-    <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-blue-50/20 p-6 space-y-6">
+    <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-blue-50/20 dark:to-blue-950/20 p-6 space-y-6">
       {/* ═══════════ HERO ═══════════ */}
       <div className="rounded-2xl bg-gradient-to-br from-slate-800 via-slate-700 to-indigo-700 p-7 text-white relative overflow-hidden shadow-lg">
         <FileText className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
@@ -243,7 +243,7 @@ export default function ModelosContrato() {
             {isGestor && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button className="bg-white text-slate-900 hover:bg-slate-100 shadow-sm font-semibold">
+                  <Button className="bg-white dark:bg-card text-slate-900 dark:text-slate-100 hover:bg-slate-100 shadow-sm font-semibold">
                     <Plus className="h-4 w-4 mr-1.5" />
                     Novo
                     <ChevronDown className="h-4 w-4 ml-1" />
@@ -251,21 +251,21 @@ export default function ModelosContrato() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-72">
                   <DropdownMenuItem onClick={() => setUploadOpen(true)} className="cursor-pointer items-start gap-2.5 py-2.5">
-                    <FileText className="h-4 w-4 mt-0.5 text-indigo-600" />
+                    <FileText className="h-4 w-4 mt-0.5 text-indigo-600 dark:text-indigo-400" />
                     <div>
                       <p className="text-sm font-medium">Modelo reutilizável</p>
                       <p className="text-[11px] text-muted-foreground">Sobe um .docx com placeholders pra reusar sempre.</p>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setAvulsoOpen(true)} className="cursor-pointer items-start gap-2.5 py-2.5">
-                    <PenLine className="h-4 w-4 mt-0.5 text-violet-600" />
+                    <PenLine className="h-4 w-4 mt-0.5 text-violet-600 dark:text-violet-400" />
                     <div>
                       <p className="text-sm font-medium">Contrato avulso</p>
                       <p className="text-[11px] text-muted-foreground">Escolhe um modelo existente, preenche e gera (PDF ou assinatura).</p>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setSubirOpen(true)} className="cursor-pointer items-start gap-2.5 py-2.5">
-                    <Upload className="h-4 w-4 mt-0.5 text-emerald-600" />
+                    <Upload className="h-4 w-4 mt-0.5 text-emerald-600 dark:text-emerald-400" />
                     <div>
                       <p className="text-sm font-medium">Subir documento p/ assinatura</p>
                       <p className="text-[11px] text-muted-foreground">Sobe um PDF/Word pronto e só posiciona as assinaturas.</p>
@@ -326,7 +326,7 @@ export default function ModelosContrato() {
 
       {/* ═══════════ LOADING / EMPTY ═══════════ */}
       {isLoading ? (
-        <div className="h-32 rounded-xl bg-slate-100 animate-pulse" />
+        <div className="h-32 rounded-xl bg-slate-100 dark:bg-slate-800/60 animate-pulse" />
       ) : stats.total === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
@@ -354,7 +354,7 @@ export default function ModelosContrato() {
                 placeholder="Buscar modelo por nome ou descrição..."
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                className="pl-10 h-10 bg-white"
+                className="pl-10 h-10 bg-white dark:bg-card"
               />
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -406,11 +406,11 @@ export default function ModelosContrato() {
                 onClick={() => setPastaAtiva(null)}
                 nome="Todas"
                 count={stats.total}
-                cor={{ bg: "bg-slate-100", fg: "text-slate-700" }}
+                cor={{ bg: "bg-slate-100 dark:bg-slate-800/60", fg: "text-slate-700 dark:text-slate-200" }}
                 icone={Folder}
               />
               {stats.pastas.map((p) => {
-                const cor = p.nome ? corDaPasta(p.nome) : { bg: "bg-slate-100", fg: "text-slate-500" };
+                const cor = p.nome ? corDaPasta(p.nome) : { bg: "bg-slate-100 dark:bg-slate-800/60", fg: "text-slate-500" };
                 return (
                   <PastaCard
                     key={p.nome || "__raiz__"}
@@ -452,8 +452,8 @@ export default function ModelosContrato() {
               ) : (
                 <>
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                      <Folder className="w-4 h-4 text-indigo-600" />
+                    <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                      <Folder className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                       {pastaAtiva === null
                         ? "Todos os modelos"
                         : pastaAtiva === ""
@@ -480,15 +480,15 @@ export default function ModelosContrato() {
 
               {/* Dica */}
               {lista.length < 5 && (
-                <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/40 p-4 flex items-start gap-3">
-                  <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                <div className="mt-5 rounded-xl border border-blue-100 dark:border-blue-900/50 bg-blue-50/40 dark:bg-blue-950/30 p-4 flex items-start gap-3">
+                  <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-xs font-medium text-blue-900">Dica</p>
-                    <p className="text-[11px] text-blue-800 mt-0.5">
+                    <p className="text-xs font-medium text-blue-900 dark:text-blue-200">Dica</p>
+                    <p className="text-[11px] text-blue-800 dark:text-blue-200 mt-0.5">
                       Suba modelos .docx com placeholders como{" "}
-                      <code className="bg-white px-1 py-0.5 rounded text-[10px]">{`{{nome completo}}`}</code>{" "}
+                      <code className="bg-white dark:bg-card px-1 py-0.5 rounded text-[10px]">{`{{nome completo}}`}</code>{" "}
                       ou{" "}
-                      <code className="bg-white px-1 py-0.5 rounded text-[10px]">{`{{cpf}}`}</code>.
+                      <code className="bg-white dark:bg-card px-1 py-0.5 rounded text-[10px]">{`{{cpf}}`}</code>.
                       O sistema reconhece variáveis do catálogo automaticamente; o que não bater fica
                       como preenchimento manual.
                     </p>
@@ -575,12 +575,12 @@ function ChipBtn({
   destaque?: "amber" | "rose";
 }) {
   const ativoBg = "bg-slate-900 text-white border-slate-900";
-  const idleBg = "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900";
+  const idleBg = "bg-white dark:bg-card border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 hover:border-slate-300 hover:text-slate-900 dark:hover:text-slate-100";
   const destaqueIdle =
     destaque === "amber"
-      ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+      ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100"
       : destaque === "rose"
-        ? "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100"
+        ? "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-300 hover:bg-rose-100"
         : "";
   return (
     <button
@@ -606,10 +606,10 @@ function CountPill({
   if (ativo)
     return <span className="bg-white/20 px-1.5 rounded-full text-[10px]">{children}</span>;
   if (tom === "amber")
-    return <span className="bg-amber-100 text-amber-700 px-1.5 rounded-full text-[10px]">{children}</span>;
+    return <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 rounded-full text-[10px]">{children}</span>;
   if (tom === "rose")
-    return <span className="bg-rose-100 text-rose-700 px-1.5 rounded-full text-[10px]">{children}</span>;
-  return <span className="bg-slate-100 text-slate-600 px-1.5 rounded-full text-[10px]">{children}</span>;
+    return <span className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 px-1.5 rounded-full text-[10px]">{children}</span>;
+  return <span className="bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 px-1.5 rounded-full text-[10px]">{children}</span>;
 }
 
 function PastaCard({
@@ -632,8 +632,8 @@ function PastaCard({
       onClick={onClick}
       className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
         ativa
-          ? "border-indigo-400 bg-gradient-to-br from-indigo-50 to-white shadow-sm"
-          : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+          ? "border-indigo-400 bg-gradient-to-br from-indigo-50 dark:from-indigo-950/40 to-white dark:to-slate-900 shadow-sm"
+          : "border-slate-200 dark:border-slate-700/80 bg-white dark:bg-card hover:border-slate-300 hover:shadow-sm"
       }`}
     >
       <div className={`w-9 h-9 rounded-lg ${cor.bg} flex items-center justify-center shrink-0`}>
@@ -666,12 +666,12 @@ function CardModelo({
   const gradient = gradientDoModelo(modelo.nome);
 
   const borda = semVariaveis
-    ? "border-amber-300 bg-gradient-to-br from-amber-50/30 to-white"
-    : "border-slate-200 hover:border-slate-400";
+    ? "border-amber-300 bg-gradient-to-br from-amber-50/30 dark:from-amber-950/40 to-white dark:to-slate-900"
+    : "border-slate-200 dark:border-slate-700/80 hover:border-slate-400";
 
   return (
     <div
-      className={`group relative bg-white border rounded-2xl p-4 transition-all hover:shadow-md hover:-translate-y-0.5 ${borda}`}
+      className={`group relative bg-white dark:bg-card border rounded-2xl p-4 transition-all hover:shadow-md hover:-translate-y-0.5 ${borda}`}
     >
       {/* Topo: ícone + nome + badge ASSIN ou pending */}
       <div className="flex items-start gap-3 mb-3">
@@ -687,11 +687,11 @@ function CardModelo({
           )}
         </div>
         {semVariaveis ? (
-          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 shrink-0">
+          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 shrink-0">
             ⚠ Revisar
           </span>
         ) : modelo.ehParaAssinatura ? (
-          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 shrink-0">
+          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 shrink-0">
             <FileSignature className="w-2.5 h-2.5 mr-0.5" />
             ASSIN
           </span>
@@ -701,7 +701,7 @@ function CardModelo({
       {/* Pills */}
       <div className="flex items-center gap-1.5 flex-wrap mb-3">
         {totalVar > 0 && (
-          <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+          <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300">
             <Variable className="w-2.5 h-2.5 mr-0.5" />
             {totalVar} variáve{totalVar === 1 ? "l" : "is"}
           </span>
@@ -709,7 +709,7 @@ function CardModelo({
         {totalManual > 0 && (
           <span
             className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-              semVariaveis ? "bg-amber-100 text-amber-800" : "bg-amber-50 text-amber-700"
+              semVariaveis ? "bg-amber-100 text-amber-800 dark:text-amber-200" : "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300"
             }`}
           >
             {totalManual} manua{totalManual === 1 ? "l" : "is"}
@@ -717,7 +717,7 @@ function CardModelo({
           </span>
         )}
         {modelo.placeholders.length === 0 && (
-          <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+          <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300">
             Sem placeholders
           </span>
         )}
@@ -758,7 +758,7 @@ function CardModelo({
           <Button
             size="sm"
             variant="ghost"
-            className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50"
+            className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
             onClick={onExcluir}
             title="Excluir"
           >

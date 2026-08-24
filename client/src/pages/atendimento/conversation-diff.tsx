@@ -55,19 +55,19 @@ export function ConversationDiff({ conversaId }: { conversaId: number }) {
   const diasDesde = data.diasDesde || 0;
 
   return (
-    <div className="mx-4 mt-2 rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50/80 to-orange-50/40 overflow-hidden">
+    <div className="mx-4 mt-2 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-gradient-to-r from-amber-50/80 dark:from-amber-950/40 to-orange-50/40 dark:to-orange-950/20 overflow-hidden">
       <div className="flex items-stretch">
         <button
           onClick={() => setExpandido((v) => !v)}
-          className="flex-1 min-w-0 px-3.5 py-2 flex items-center gap-2.5 hover:bg-amber-100/40 transition-colors text-left"
+          className="flex-1 min-w-0 px-3.5 py-2 flex items-center gap-2.5 hover:bg-amber-100/40 dark:hover:bg-amber-900/30 transition-colors text-left"
         >
           <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center flex-shrink-0">
             <Zap className="h-3 w-3 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 text-[10px] font-bold text-amber-700 uppercase tracking-wide">
+            <div className="flex items-center gap-2 text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wide">
               Desde sua última resposta
-              {diasDesde > 0 && <span className="text-amber-600">· há {diasDesde}d</span>}
+              {diasDesde > 0 && <span className="text-amber-600 dark:text-amber-400">· há {diasDesde}d</span>}
             </div>
             <div className="flex items-center gap-3 text-xs text-foreground mt-0.5 flex-wrap">
               {e.mensagens > 0 && (
@@ -81,36 +81,36 @@ export function ConversationDiff({ conversaId }: { conversaId: number }) {
                 </span>
               )}
               {e.pagosCent > 0 && (
-                <span className="text-emerald-700">
+                <span className="text-emerald-700 dark:text-emerald-300">
                   <strong>{formatBRL(e.pagosCent)}</strong> pagos
                 </span>
               )}
               {e.prazos > 0 && (
-                <span className="text-rose-700 font-semibold">
+                <span className="text-rose-700 dark:text-rose-300 font-semibold">
                   ⚠️ {e.prazos} prazo(s) em 48h
                 </span>
               )}
             </div>
           </div>
           <ArrowUpRight
-            className={"h-3.5 w-3.5 text-amber-700 transition-transform " + (expandido ? "rotate-90" : "")}
+            className={"h-3.5 w-3.5 text-amber-700 dark:text-amber-300 transition-transform " + (expandido ? "rotate-90" : "")}
           />
         </button>
         <button
           onClick={dispensar}
           title="Dispensar — volta quando houver novidade nova"
           aria-label="Dispensar resumo"
-          className="px-2.5 flex items-center justify-center text-amber-700/70 hover:text-amber-900 hover:bg-amber-100/60 transition-colors"
+          className="px-2.5 flex items-center justify-center text-amber-700/70 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-200 hover:bg-amber-100/60 dark:hover:bg-amber-900/30 transition-colors"
         >
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
 
       {expandido && (
-        <div className="border-t border-amber-200 px-3.5 py-2.5 bg-white/60 space-y-2">
+        <div className="border-t border-amber-200 dark:border-amber-800/50 px-3.5 py-2.5 bg-white/60 space-y-2">
           {atos.length > 0 && (
             <div>
-              <p className="text-[10px] font-bold text-amber-700 uppercase mb-1">Atos processuais</p>
+              <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase mb-1">Atos processuais</p>
               <div className="space-y-1">
                 {atos.map((a: any, i: number) => (
                   <div key={i} className="text-[11px] text-foreground">
@@ -126,10 +126,10 @@ export function ConversationDiff({ conversaId }: { conversaId: number }) {
           )}
           {prazos.length > 0 && (
             <div>
-              <p className="text-[10px] font-bold text-rose-700 uppercase mb-1">Prazos próximos (48h)</p>
+              <p className="text-[10px] font-bold text-rose-700 dark:text-rose-300 uppercase mb-1">Prazos próximos (48h)</p>
               <div className="space-y-1">
                 {prazos.map((p: any) => (
-                  <div key={p.id} className="text-[11px] text-rose-900">
+                  <div key={p.id} className="text-[11px] text-rose-900 dark:text-rose-200">
                     <strong>{p.titulo}</strong>{" "}
                     <span className="text-muted-foreground">
                       · {new Date(p.data).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}

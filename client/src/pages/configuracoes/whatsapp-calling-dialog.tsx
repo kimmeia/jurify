@@ -50,7 +50,7 @@ export function WhatsAppCallingDialog({ open, onClose, canalId, canEdit }: Props
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Phone className="h-5 w-5 text-green-600" />
+            <Phone className="h-5 w-5 text-green-600 dark:text-green-400" />
             Ligação de voz
           </DialogTitle>
           <DialogDescription>
@@ -65,7 +65,7 @@ export function WhatsAppCallingDialog({ open, onClose, canalId, canEdit }: Props
         )}
 
         {statusQuery.error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-700 dark:text-red-300">
             {(statusQuery.error as any).message}
           </div>
         )}

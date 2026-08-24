@@ -267,7 +267,7 @@ function PromoverDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
     <Dialog open={open} onOpenChange={(o) => { if (!o) fechar(); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5 text-violet-600" /> Novo modelo</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5 text-violet-600 dark:text-violet-400" /> Novo modelo</DialogTitle>
           <DialogDescription>
             Comece de um modelo pronto da biblioteca interna ou promova um fluxo do seu
             próprio SmartFlow. Em ambos os casos vira um blueprint editável — os campos

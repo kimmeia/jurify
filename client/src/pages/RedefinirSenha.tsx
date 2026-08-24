@@ -42,7 +42,7 @@ export default function RedefinirSenha() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
       <div className="w-full max-w-md">
-        <Link href="/" className="text-sm text-violet-600 hover:underline inline-flex items-center gap-1 mb-6">
+        <Link href="/" className="text-sm text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-1 mb-6">
           <ArrowLeft className="h-3.5 w-3.5" /> Voltar ao login
         </Link>
 
@@ -59,7 +59,7 @@ export default function RedefinirSenha() {
                 <p className="text-sm text-muted-foreground mt-1">
                   O link de redefinição parece estar incompleto ou foi quebrado pelo email.
                 </p>
-                <Link href="/esqueci-senha" className="inline-block mt-6 text-sm text-violet-600 hover:underline">
+                <Link href="/esqueci-senha" className="inline-block mt-6 text-sm text-violet-600 dark:text-violet-400 hover:underline">
                   Solicitar novo link
                 </Link>
               </div>
@@ -118,7 +118,7 @@ export default function RedefinirSenha() {
                     />
                   </div>
                   {confirmar.length > 0 && confirmar !== novaSenha && (
-                    <p className="text-xs text-red-600">As senhas não conferem.</p>
+                    <p className="text-xs text-red-600 dark:text-red-400">As senhas não conferem.</p>
                   )}
                 </div>
                 <Button type="submit" className="w-full" disabled={!podeSubmeter}>

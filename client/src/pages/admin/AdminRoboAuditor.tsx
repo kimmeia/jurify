@@ -35,9 +35,9 @@ const SEVERIDADE_LABEL: Record<Severidade, string> = {
 };
 
 const SEVERIDADE_COR: Record<Severidade, string> = {
-  critico: "text-red-600 bg-red-500/10 border-red-500/20",
-  alto: "text-amber-600 bg-amber-500/10 border-amber-500/20",
-  medio: "text-cyan-600 bg-cyan-500/10 border-cyan-500/20",
+  critico: "text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20",
+  alto: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20",
+  medio: "text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
   baixo: "text-slate-500 bg-slate-500/10 border-slate-500/20",
 };
 
@@ -105,7 +105,7 @@ export default function AdminRoboAuditor() {
       </div>
 
       <div className="flex items-start gap-3 rounded-lg border border-violet-500/20 bg-violet-500/5 px-4 py-3">
-        <Eye className="h-4 w-4 text-violet-600 mt-0.5 shrink-0" />
+        <Eye className="h-4 w-4 text-violet-600 dark:text-violet-400 mt-0.5 shrink-0" />
         <div className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">Shadow mode.</span> Todas as regras estão em
           observação: o robô só relata. A correção fica descrita em cada achado, mas não existe
@@ -121,13 +121,13 @@ export default function AdminRoboAuditor() {
           <Tile
             titulo="Invariantes violadas"
             valor={resumo.achados}
-            cor={resumo.achados > 0 ? "text-amber-600" : "text-emerald-600"}
+            cor={resumo.achados > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}
           />
           <Tile titulo="Linhas afetadas" valor={resumo.linhasAfetadas} />
           <Tile
             titulo="Regras com erro"
             valor={resumo.regrasComErro}
-            cor={resumo.regrasComErro > 0 ? "text-red-600" : undefined}
+            cor={resumo.regrasComErro > 0 ? "text-red-600 dark:text-red-400" : undefined}
           />
         </div>
       )}
@@ -232,7 +232,7 @@ function UltimaAutomatica({
   if (!varredura) {
     return (
       <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
-        <Clock className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+        <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
         <div className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">Nenhuma varredura automática registrada.</span>{" "}
           O robô roda 2 min após a partida do servidor e de hora em hora. Se isso persistir depois de
@@ -256,18 +256,18 @@ function UltimaAutomatica({
         {varredura.regrasExecutadas} regras em {varredura.latenciaMs} ms
       </span>
       {limpo ? (
-        <Badge variant="outline" className="text-emerald-600 bg-emerald-500/10 border-emerald-500/20">
+        <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20">
           <CheckCircle2 className="h-3 w-3 mr-1" />
           Sem achados
         </Badge>
       ) : (
         <>
-          <Badge variant="outline" className="text-amber-600 bg-amber-500/10 border-amber-500/20">
+          <Badge variant="outline" className="text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20">
             {varredura.achados} {varredura.achados === 1 ? "invariante violada" : "invariantes violadas"} ·{" "}
             {varredura.linhasAfetadas} linhas
           </Badge>
           {varredura.regrasComErro > 0 && (
-            <Badge variant="outline" className="text-red-600 bg-red-500/10 border-red-500/20">
+            <Badge variant="outline" className="text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20">
               <XCircle className="h-3 w-3 mr-1" />
               {varredura.regrasComErro} regra(s) falhando
             </Badge>
@@ -293,7 +293,7 @@ function Tile({ titulo, valor, cor }: { titulo: string; valor: number; cor?: str
 function EstadoBadge({ ok, erro, total }: { ok: boolean; erro: boolean; total: number }) {
   if (erro) {
     return (
-      <Badge variant="outline" className="text-red-600 bg-red-500/10 border-red-500/20 shrink-0">
+      <Badge variant="outline" className="text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20 shrink-0">
         <XCircle className="h-3 w-3 mr-1" />
         Falhou
       </Badge>
@@ -303,7 +303,7 @@ function EstadoBadge({ ok, erro, total }: { ok: boolean; erro: boolean; total: n
     return (
       <Badge
         variant="outline"
-        className="text-emerald-600 bg-emerald-500/10 border-emerald-500/20 shrink-0"
+        className="text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20 shrink-0"
       >
         <CheckCircle2 className="h-3 w-3 mr-1" />
         Limpo
@@ -311,7 +311,7 @@ function EstadoBadge({ ok, erro, total }: { ok: boolean; erro: boolean; total: n
     );
   }
   return (
-    <Badge variant="outline" className="text-amber-600 bg-amber-500/10 border-amber-500/20 shrink-0">
+    <Badge variant="outline" className="text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20 shrink-0">
       {total} {total === 1 ? "linha" : "linhas"}
     </Badge>
   );
@@ -364,7 +364,7 @@ function Detalhe({ achado }: { achado: Achado }) {
 
         {erro ? (
           <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-red-600">
+            <div className="flex items-center gap-2 text-sm font-medium text-red-600 dark:text-red-400">
               <ShieldAlert className="h-4 w-4" />A regra falhou ao executar
             </div>
             <p className="text-xs text-muted-foreground mt-2 font-mono break-all">{erro}</p>
@@ -381,7 +381,7 @@ function Detalhe({ achado }: { achado: Achado }) {
         ) : (
           <Secao titulo={`Linhas em violação (${linhas.length}${truncado ? "+" : ""})`}>
             {truncado && (
-              <p className="text-xs text-amber-600 mb-2">
+              <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
                 A consulta bateu no limite de linhas. Volume alto costuma ser bug de código, não dado
                 sujo pontual.
               </p>

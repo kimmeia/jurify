@@ -107,8 +107,8 @@ export function CentroDeComando({
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
             Você tem <strong className="text-foreground">{convs.length}</strong> conversa{convs.length === 1 ? "" : "s"}
-            {aguardando > 0 && <> · <strong className="text-amber-600">{aguardando} aguardando</strong></>}
-            {slaCritico > 0 && <> · <strong className="text-red-600">{slaCritico} com SLA crítico</strong></>}
+            {aguardando > 0 && <> · <strong className="text-amber-600 dark:text-amber-400">{aguardando} aguardando</strong></>}
+            {slaCritico > 0 && <> · <strong className="text-red-600 dark:text-red-400">{slaCritico} com SLA crítico</strong></>}
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
@@ -196,10 +196,10 @@ function KpiCard({
   label: string;
 }) {
   const corMap = {
-    amber: { bg: "bg-amber-100", text: "text-amber-700", valor: "text-amber-700" },
-    rose: { bg: "bg-rose-100", text: "text-rose-700", valor: "text-rose-700" },
-    violet: { bg: "bg-violet-100", text: "text-violet-700", valor: "text-violet-700" },
-    emerald: { bg: "bg-emerald-100", text: "text-emerald-700", valor: "text-emerald-700" },
+    amber: { bg: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300", valor: "text-amber-700 dark:text-amber-300" },
+    rose: { bg: "bg-rose-100 dark:bg-rose-900/30", text: "text-rose-700 dark:text-rose-300", valor: "text-rose-700 dark:text-rose-300" },
+    violet: { bg: "bg-violet-100 dark:bg-violet-900/30", text: "text-violet-700 dark:text-violet-300", valor: "text-violet-700 dark:text-violet-300" },
+    emerald: { bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-300", valor: "text-emerald-700 dark:text-emerald-300" },
   } as const;
   const c = corMap[cor];
   return (
@@ -227,8 +227,8 @@ function PriorityRow({ conv, onClick }: { conv: Conv; onClick: () => void }) {
   const nome = conv.contatoNome || "Cliente";
   const corBorda = conv.temAtraso ? "border-l-rose-500" : "border-l-amber-500";
   const razao = conv.temAtraso
-    ? <span className="text-red-700 font-semibold">⏰ SLA crítico</span>
-    : <span className="text-amber-700">Aguardando resposta</span>;
+    ? <span className="text-red-700 dark:text-red-300 font-semibold">⏰ SLA crítico</span>
+    : <span className="text-amber-700 dark:text-amber-300">Aguardando resposta</span>;
   return (
     <button
       onClick={onClick}
@@ -266,7 +266,7 @@ function ShortcutPill({
         </kbd>
       )}
       {typeof icon === "string"
-        ? <span className="font-mono text-violet-600 font-bold">{icon}</span>
+        ? <span className="font-mono text-violet-600 dark:text-violet-400 font-bold">{icon}</span>
         : icon}
       <span className="text-foreground/80">{label}</span>
     </span>

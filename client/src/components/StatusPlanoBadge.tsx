@@ -23,13 +23,13 @@ export function StatusPlanoBadge({ status, className }: Props) {
   switch (status.tipo) {
     case "ativo":
       return (
-        <Badge className={`bg-emerald-500/15 text-emerald-700 border-emerald-500/30 ${className ?? ""}`}>
+        <Badge className={`bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 ${className ?? ""}`}>
           <CheckCircle2 className="h-3 w-3 mr-1" /> Ativo
         </Badge>
       );
     case "trial":
       return (
-        <Badge className={`bg-sky-500/15 text-sky-700 border-sky-500/30 ${className ?? ""}`}>
+        <Badge className={`bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30 ${className ?? ""}`}>
           <Clock className="h-3 w-3 mr-1" />
           Trial — {status.diasRestantes}d restante{status.diasRestantes === 1 ? "" : "s"}
         </Badge>
@@ -43,19 +43,19 @@ export function StatusPlanoBadge({ status, className }: Props) {
       );
     case "cancelado":
       return (
-        <Badge variant="outline" className={`text-slate-600 ${className ?? ""}`}>
+        <Badge variant="outline" className={`text-slate-600 dark:text-slate-300 ${className ?? ""}`}>
           <Ban className="h-3 w-3 mr-1" /> Cancelado
         </Badge>
       );
     case "cortesia":
       return (
-        <Badge className={`bg-violet-500/15 text-violet-700 border-violet-500/30 ${className ?? ""}`}>
+        <Badge className={`bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30 ${className ?? ""}`}>
           <Sparkles className="h-3 w-3 mr-1" /> Cortesia
         </Badge>
       );
     case "incompleto":
       return (
-        <Badge className={`bg-amber-500/15 text-amber-700 border-amber-500/30 ${className ?? ""}`}>
+        <Badge className={`bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 ${className ?? ""}`}>
           <Hourglass className="h-3 w-3 mr-1" /> Aguardando pagamento
         </Badge>
       );

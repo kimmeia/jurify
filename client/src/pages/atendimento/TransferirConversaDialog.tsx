@@ -39,13 +39,13 @@ function nomeDe(a: AtendenteTransferencia): string {
 
 function Carga({ n }: { n: number }) {
   if (n === 0) {
-    return <span className="text-[10.5px] font-bold text-emerald-600 shrink-0">livre</span>;
+    return <span className="text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0">livre</span>;
   }
   const cheio = n >= CARGA_ALTA;
   return (
     <span
       className={`text-[10.5px] tabular-nums shrink-0 inline-flex items-center gap-1 ${
-        cheio ? "font-bold text-rose-600" : "text-muted-foreground"
+        cheio ? "font-bold text-rose-600 dark:text-rose-400" : "text-muted-foreground"
       }`}
     >
       <MessageSquare className="h-3 w-3" />
@@ -175,7 +175,7 @@ export function TransferirConversaDialog({
                   : "hover:bg-muted/50"
               }`}
             >
-              <UserRound className="h-4 w-4 text-violet-600 shrink-0" />
+              <UserRound className="h-4 w-4 text-violet-600 dark:text-violet-400 shrink-0" />
               <span className="text-[12.5px] font-bold flex-1 text-left">Assumir eu mesmo</span>
               <span className="text-[10.5px] text-muted-foreground truncate max-w-[140px]">
                 {nomeDe(eu!)}

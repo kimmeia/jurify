@@ -99,7 +99,7 @@ export function ResolverDuplicidadesDialog({
       <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Wand2 className="h-5 w-5 text-violet-600" />
+            <Wand2 className="h-5 w-5 text-violet-600 dark:text-violet-400" />
             Resolver duplicatas no caixa
           </DialogTitle>
           <DialogDescription>
@@ -128,7 +128,7 @@ export function ResolverDuplicidadesDialog({
         ) : (
           <>
             <div className="flex items-center gap-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-xs dark:bg-amber-950/30 dark:border-amber-900">
-              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
               <div className="flex-1">
                 <p className="font-medium">
                   {pares.length} par{pares.length > 1 ? "es" : ""} suspeito
@@ -284,8 +284,8 @@ function LadoCard({
           variant="outline"
           className={`text-[9px] ${
             lado.origem === "manual"
-              ? "border-amber-400 text-amber-700"
-              : "border-emerald-400 text-emerald-700"
+              ? "border-amber-400 text-amber-700 dark:text-amber-300"
+              : "border-emerald-400 text-emerald-700 dark:text-emerald-300"
           }`}
         >
           {lado.origem}

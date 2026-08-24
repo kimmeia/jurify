@@ -78,7 +78,7 @@ export default function AdminBackups() {
       ) : !status.data?.configurado ? (
         <Card className="border-amber-500/40 bg-amber-500/5">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-amber-700">
+            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
               <AlertTriangle className="h-5 w-5" /> Backup não configurado
             </CardTitle>
             <CardDescription>
@@ -108,7 +108,7 @@ export default function AdminBackups() {
                       key={b.key}
                       className="flex items-center gap-3 p-3 hover:bg-muted/30"
                     >
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-mono truncate">{b.key}</div>
                         <div className="text-xs text-muted-foreground">
@@ -181,7 +181,7 @@ mysql -u USUARIO -p NOME_DO_BANCO < ${chaveSelecionada ? chaveSelecionada.split(
 # 4) verifica contagens
 mysql -u USUARIO -p -e "SELECT COUNT(*) FROM contatos" NOME_DO_BANCO`}
               </pre>
-              <p className="text-xs text-amber-700">
+              <p className="text-xs text-amber-700 dark:text-amber-300">
                 <strong>Atenção:</strong> dumps são do banco completo — restaurar joga
                 fora dados criados depois da hora do dump. Use só pra disaster recovery.
               </p>

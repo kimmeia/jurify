@@ -94,7 +94,7 @@ export function LimpezaContatosOrfaosDialog({
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="rounded border border-amber-200 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm text-amber-900 dark:text-amber-200">
+            <div className="rounded border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm text-amber-900 dark:text-amber-200">
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <div className="space-y-1">

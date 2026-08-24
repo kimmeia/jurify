@@ -24,10 +24,10 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const NIVEL_COR: Record<string, string> = {
-  fatal: "text-red-600 bg-red-500/10",
-  error: "text-red-600 bg-red-500/10",
-  warning: "text-amber-600 bg-amber-500/10",
-  info: "text-sky-600 bg-sky-500/10",
+  fatal: "text-red-600 dark:text-red-400 bg-red-500/10",
+  error: "text-red-600 dark:text-red-400 bg-red-500/10",
+  warning: "text-amber-600 dark:text-amber-400 bg-amber-500/10",
+  info: "text-sky-600 dark:text-sky-400 bg-sky-500/10",
   debug: "text-slate-500 bg-slate-500/10",
 };
 
@@ -69,7 +69,7 @@ export default function AdminErros() {
         <Card className="border-amber-500/30 bg-amber-50/30 dark:bg-amber-500/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               Sentry não configurado
             </CardTitle>
             <CardDescription>

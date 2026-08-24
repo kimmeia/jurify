@@ -148,7 +148,7 @@ export default function AuthSplitPage({ modo }: AuthSplitPageProps) {
             ) : (
               <>
                 Teste completo por 14 dias —{" "}
-                <span className="font-semibold text-emerald-600">sem cartão de crédito</span>.
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">sem cartão de crédito</span>.
               </>
             )}
           </p>
@@ -166,9 +166,9 @@ export default function AuthSplitPage({ modo }: AuthSplitPageProps) {
 
           {!isLogin && (
             <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm font-medium text-muted-foreground">
-              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-600" /> 14 dias grátis</span>
-              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-600" /> sem cartão</span>
-              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-600" /> sem cobrança automática</span>
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> 14 dias grátis</span>
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> sem cartão</span>
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> sem cobrança automática</span>
             </div>
           )}
 
@@ -176,14 +176,14 @@ export default function AuthSplitPage({ modo }: AuthSplitPageProps) {
             {isLogin ? (
               <>
                 Não tem conta?{" "}
-                <Link href="/cadastro" className="font-bold text-violet-600 hover:underline">
+                <Link href="/cadastro" className="font-bold text-violet-600 dark:text-violet-400 hover:underline">
                   Criar conta grátis
                 </Link>
               </>
             ) : (
               <>
                 Já tem conta?{" "}
-                <Link href="/login" className="font-bold text-violet-600 hover:underline">
+                <Link href="/login" className="font-bold text-violet-600 dark:text-violet-400 hover:underline">
                   Entrar
                 </Link>
               </>
@@ -193,7 +193,7 @@ export default function AuthSplitPage({ modo }: AuthSplitPageProps) {
           {isLogin && (
             <p className="mt-4 text-center text-sm text-muted-foreground/70">
               Teste grátis de 14 dias —{" "}
-              <span className="font-semibold text-emerald-600">sem cartão de crédito</span>.
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">sem cartão de crédito</span>.
             </p>
           )}
         </div>

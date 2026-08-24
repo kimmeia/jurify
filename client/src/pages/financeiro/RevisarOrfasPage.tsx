@@ -73,7 +73,7 @@ export default function RevisarOrfasPage() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             Como isso aconteceu?
           </CardTitle>
         </CardHeader>
@@ -221,7 +221,7 @@ function GrupoOrfa({
                   onClick={() => setSelecionado({ id: c.id, nome: c.nome })}
                   className={
                     "w-full text-left p-2 text-xs hover:bg-accent border-b last:border-b-0 " +
-                    (selecionado?.id === c.id ? "bg-emerald-50" : "")
+                    (selecionado?.id === c.id ? "bg-emerald-50 dark:bg-emerald-950/30" : "")
                   }
                 >
                   <div className="font-medium">{c.nome}</div>
