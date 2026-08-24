@@ -10,6 +10,9 @@ import { useMemo, useState } from "react";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../../server/routers";
 import { trpc } from "@/lib/trpc";
+import { useModulosContratados } from "@/components/ModuloGuard";
+import { contratoLibera } from "@shared/modulos-contratacao";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -392,6 +395,10 @@ const STATUS_ENVIO: Record<string, { label: string; cls: string }> = {
 export function ConfigResumoDiario({ open, onClose }: { open: boolean; onClose: () => void }) {
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.resumoDiario.obter.useQuery(undefined, { enabled: open });
+  // Sem o módulo Atendimento não há canal Meta — o campo ganha cadeado com
+  // explicação em vez de aceitar um número que nunca vai receber nada.
+  const modulosContratados = useModulosContratados();
+  const temAtendimento = contratoLibera(modulosContratados, ["atendimento"]);
 
   const [ativo, setAtivo] = useState(false);
   const [hora, setHora] = useState("7");
@@ -490,31 +497,46 @@ export function ConfigResumoDiario({ open, onClose }: { open: boolean; onClose: 
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">WhatsApp</Label>
-                <Input
-                  className="h-9"
-                  value={whatsapp}
-                  onChange={(e) => setWhatsapp(e.target.value)}
-                  placeholder="5585999999999"
-                />
+            {temAtendimento ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">WhatsApp</Label>
+                    <Input
+                      className="h-9"
+                      value={whatsapp}
+                      onChange={(e) => setWhatsapp(e.target.value)}
+                      placeholder="5585999999999"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Template aprovado na Meta</Label>
+                    <Input
+                      className="h-9"
+                      value={template}
+                      onChange={(e) => setTemplate(e.target.value)}
+                      placeholder="resumo_diario"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug -mt-1">
+                  O WhatsApp sai fora da janela de 24h, então a Meta só aceita template aprovado (HSM)
+                  com uma variável de texto no corpo. Sem template configurado, o resumo vai só por
+                  e-mail.
+                </p>
+              </>
+            ) : (
+              <div className="rounded-lg border border-dashed bg-muted/40 p-3 opacity-80">
+                <p className="text-xs font-semibold flex items-center gap-1.5">
+                  Enviar por WhatsApp
+                  <Badge variant="outline" className="text-[9px] text-muted-foreground">🔒 módulo Atendimento</Badge>
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                  Precisa de um canal WhatsApp conectado — disponível ao contratar o módulo
+                  Atendimento. O resumo por e-mail funciona normalmente.
+                </p>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Template aprovado na Meta</Label>
-                <Input
-                  className="h-9"
-                  value={template}
-                  onChange={(e) => setTemplate(e.target.value)}
-                  placeholder="resumo_diario"
-                />
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground leading-snug -mt-1">
-              O WhatsApp sai fora da janela de 24h, então a Meta só aceita template aprovado (HSM)
-              com uma variável de texto no corpo. Sem template configurado, o resumo vai só por
-              e-mail.
-            </p>
+            )}
 
             {data?.ultimosEnvios?.length ? (
               <div className="rounded-lg border">

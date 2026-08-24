@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { useModulosContratados } from "@/components/ModuloGuard";
+import { contratoLibera } from "@shared/modulos-contratacao";
 import { EditorJornada } from "./configuracoes/editor-jornada";
 import { normalizarJornada, type JornadaSemanal } from "@shared/jornada";
 import { Button } from "@/components/ui/button";
@@ -169,6 +171,26 @@ export default function Configuracoes() {
   const { user } = useAuth();
   const [tabAtiva, setTabAtiva] = useState(getTabFromQueryString());
   const [backupDialogOpen, setBackupDialogOpen] = useState(false);
+
+  // Abas de módulo não contratado somem (Fase 2 da modularização): campo de
+  // configuração de coisa que o plano não tem é convite pra suporte.
+  const modulosContratados = useModulosContratados();
+  const libera = (mods: string[]) => contratoLibera(modulosContratados, mods);
+  const abaTags = libera(["clientes"]);
+  const abaOrigens = libera(["clientes", "kanban"]);
+  const abaCampos = libera(["clientes"]);
+  const abaTemplates = libera(["atendimento"]);
+  const abaCanais = libera(["atendimento"]);
+  const abaFinanceiro = libera(["financeiro"]);
+  const temCadastros = abaTags || abaOrigens || abaCampos || abaTemplates;
+  const abaEstaVisivel: Record<string, boolean> = {
+    tags: abaTags, origens: abaOrigens, campos: abaCampos, templates: abaTemplates,
+    canais: abaCanais, financeiro: abaFinanceiro,
+  };
+  useEffect(() => {
+    if (abaEstaVisivel[tabAtiva] === false) setTabAtiva("perfil");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabAtiva, modulosContratados]);
 
   const { data, isLoading, refetch } = trpc.configuracoes.meuEscritorio.useQuery();
   const { data: equipeData, refetch: refetchEquipe } = trpc.configuracoes.listarColaboradores.useQuery(undefined, { enabled: !!data });
@@ -437,39 +459,51 @@ export default function Configuracoes() {
                   <Shield className="h-4 w-4" /> <span className="flex-1 text-left">Permissões</span>
                 </TabsTrigger>
 
-                <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Cadastros</p>
+                {temCadastros && (
+                  <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Cadastros</p>
+                )}
+                {abaTags && (
                 <TabsTrigger
                   value="tags"
                   className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <TagIcon className="h-4 w-4" /> <span className="flex-1 text-left">Tags</span>
                 </TabsTrigger>
+                )}
+                {abaOrigens && (
                 <TabsTrigger
                   value="origens"
                   className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <Megaphone className="h-4 w-4" /> <span className="flex-1 text-left">Origens de leads</span>
                 </TabsTrigger>
+                )}
+                {abaCampos && (
                 <TabsTrigger
                   value="campos"
                   className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <Sparkles className="h-4 w-4" /> <span className="flex-1 text-left">Campos de cliente</span>
                 </TabsTrigger>
+                )}
+                {abaTemplates && (
                 <TabsTrigger
                   value="templates"
                   className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <MessageSquare className="h-4 w-4" /> <span className="flex-1 text-left">Templates</span>
                 </TabsTrigger>
+                )}
 
                 <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Integrações</p>
+                {abaCanais && (
                 <TabsTrigger
                   value="canais"
                   className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <MessageCircle className="h-4 w-4" /> <span className="flex-1 text-left">Canais</span>
                 </TabsTrigger>
+                )}
                 <TabsTrigger
                   value="integracoes"
                   className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
@@ -478,12 +512,14 @@ export default function Configuracoes() {
                 </TabsTrigger>
 
                 <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Operação</p>
+                {abaFinanceiro && (
                 <TabsTrigger
                   value="financeiro"
                   className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 dark:from-violet-950/40 data-[state=active]:!to-indigo-50 dark:to-indigo-950/20 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
                 >
                   <DollarSign className="h-4 w-4" /> <span className="flex-1 text-left">Financeiro</span>
                 </TabsTrigger>
+                )}
                 {podeVerMeuPlano && (
                   <TabsTrigger
                     value="meu-plano"
