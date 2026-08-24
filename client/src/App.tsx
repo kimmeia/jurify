@@ -63,6 +63,7 @@ import AuthSplitPage from "./pages/auth/AuthSplitPage";
 import AppLayout from "./components/AppLayout";
 import AdminLayout from "./components/AdminLayout";
 import SubscriptionGuard from "./components/SubscriptionGuard";
+import ModuloGuard from "./components/ModuloGuard";
 
 /**
  * Redireciona /plans (rota antiga) pra /configuracoes?tab=meu-plano,
@@ -78,7 +79,9 @@ function RedirectPlansParaConfiguracoes() {
 function ClientArea({ children }: { children: React.ReactNode }) {
   return (
     <AppLayout>
-      <SubscriptionGuard>{children}</SubscriptionGuard>
+      <SubscriptionGuard>
+        <ModuloGuard>{children}</ModuloGuard>
+      </SubscriptionGuard>
     </AppLayout>
   );
 }

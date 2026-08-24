@@ -52,6 +52,24 @@ Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
 - Cofre tem 2 procedures distintas: `listarMinhas` (admin gate, edição) vs `listarParaSelecao` (qualquer colaborador, dropdown de seleção)
 - View mascarada do cofre retorna `apelido` + `usernameMascarado` — **nunca** `customerKey` ou `username` (esses campos não existem na view)
 
+### Módulos contratáveis (Fase 1 — fundação, 23/08)
+
+- Camada POR ESCRITÓRIO (o que o plano contratou), separada da matriz de
+  permissões POR CARGO. Porteiro global no `protectedProcedure`
+  (`server/_core/gate-modulos.ts`), **fail-open**: só bloqueia quando o
+  plano foi resolvido e a lista NÃO inclui o módulo.
+- **Router tRPC novo TEM que se declarar** em
+  `shared/modulos-contratacao.ts` (namespace → módulo ou `null` pra core) —
+  o teste `modulos-contratacao.test.ts` quebra se faltar, de propósito.
+- Client: `ModuloGuard` (rota → tela de bloqueio) + itens do menu com campo
+  `modulo` no AppLayout. jurisia/juridico ficam FORA do porteiro (gate
+  próprio do add-on).
+- Migration 0200 gravou a lista completa em todos os planos existentes
+  (grandfather) — restringir é decisão do admin no painel, e aí vale.
+- Fases 2/3 pendentes: Clientes essencial + Prazos + dashboard processual
+  (pacote Acompanhamento Processual) e painel comercial (preço por módulo,
+  assentos, desconto por escritório) — mockup navegável aprovado 23/08.
+
 ### Permissões
 - Matriz em `checkPermission(userId, modulo, ação)` → `{verTodos, verProprios, criar, editar, ...}`
 - `verTodos: true` = dono e gestor (e cargos personalizados com flag)
