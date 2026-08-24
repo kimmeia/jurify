@@ -336,6 +336,9 @@ export const configuracoesRouter = router({
   atualizarColaborador: protectedProcedure
     .input(z.object({
       colaboradorId: z.number(),
+      /** Corrige o nome exibido do colaborador (grava em users.name — vale
+       *  na equipe, relatórios e atribuições). E-mail não muda aqui: é login. */
+      nome: z.string().min(2).max(255).optional(),
       cargo: z.enum(["gestor", "atendente", "estagiario", "sdr"]).optional(),
       /** Quando informado, é a fonte da verdade do cargo. O enum `cargo`
        *  é derivado pelo backend (default ou "atendente" pra customs). */
@@ -368,7 +371,26 @@ export const configuracoesRouter = router({
         "Sem permissão para editar colaboradores.",
       );
 
-      const { colaboradorId, jornadaSemanal, ...dados } = input;
+      const { colaboradorId, jornadaSemanal, nome, ...dados } = input;
+
+      if (nome !== undefined) {
+        // O nome mora no cadastro do usuário — o vínculo com o escritório no
+        // WHERE é o que impede renomear gente de outro tenant por ID.
+        const { getDb } = await import("../db");
+        const db = await getDb();
+        if (!db) throw new Error("Base de dados indisponível.");
+        const { colaboradores, users } = await import("../../drizzle/schema");
+        const [colab] = await db
+          .select({ userId: colaboradores.userId })
+          .from(colaboradores)
+          .where(and(
+            eq(colaboradores.id, colaboradorId),
+            eq(colaboradores.escritorioId, result.escritorio.id),
+          ))
+          .limit(1);
+        if (!colab) throw new Error("Colaborador não encontrado neste escritório.");
+        await db.update(users).set({ name: nome.trim() }).where(eq(users.id, colab.userId));
+      }
       // A validação de horário mora no shared, junto de quem lê: guardar um
       // JSON que a leitura vai descartar deixaria a tela dizendo "salvo" e o
       // ponto tratando como sem jornada.

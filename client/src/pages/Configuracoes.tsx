@@ -210,6 +210,7 @@ export default function Configuracoes() {
 
   // ─── Convite form state ───
   const [editandoColab, setEditandoColab] = useState<any | null>(null);
+  const [editColabNome, setEditColabNome] = useState("");
   const [editColabCargoPersonalizadoId, setEditColabCargoPersonalizadoId] = useState<number | null>(null);
   const [editColabSetorId, setEditColabSetorId] = useState<number | null>(null);
   const [editColabMaxAtend, setEditColabMaxAtend] = useState<number | null>(5); // null = sem limite
@@ -341,6 +342,7 @@ export default function Configuracoes() {
 
   function abrirEditColab(c: any) {
     setEditandoColab(c);
+    setEditColabNome(c.userName ?? "");
     setEditColabCargoPersonalizadoId(c.cargoPersonalizadoId ?? null);
     setEditColabSetorId(c.setorId ?? null);
     setEditColabMaxAtend(c.maxAtendimentosSimultaneos ?? null);
@@ -1332,9 +1334,21 @@ export default function Configuracoes() {
           </DialogHeader>
           {editandoColab && (
             <div className="space-y-4">
-              <div className="rounded-lg bg-muted/40 p-3">
-                <p className="text-sm font-medium">{editandoColab.userName || "Sem nome"}</p>
-                <p className="text-xs text-muted-foreground">{editandoColab.userEmail || "—"}</p>
+              <div className="space-y-2">
+                <Label>Nome completo</Label>
+                <Input
+                  value={editColabNome}
+                  onChange={(e) => setEditColabNome(e.target.value)}
+                  maxLength={255}
+                  placeholder="Nome do colaborador"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Aparece na equipe, nos relatórios e nas atribuições. A pessoa também pode mudar no próprio perfil.
+                </p>
+                <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
+                  <span className="text-xs text-muted-foreground">{editandoColab.userEmail || "—"}</span>
+                  <Badge variant="outline" className="text-[9px] text-muted-foreground">login · não muda aqui</Badge>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -1456,8 +1470,10 @@ export default function Configuracoes() {
                 const metaParsed = editColabMetaMensal.trim() === ""
                   ? null
                   : parseFloat(editColabMetaMensal.replace(",", "."));
+                const nomeNovo = editColabNome.trim();
                 atualizarColabMut.mutate({
                   colaboradorId: editandoColab.id,
+                  ...(nomeNovo && nomeNovo !== (editandoColab.userName ?? "") ? { nome: nomeNovo } : {}),
                   cargoPersonalizadoId: editColabCargoPersonalizadoId,
                   setorId: editColabSetorId,
                   maxAtendimentosSimultaneos: editColabMaxAtend,
