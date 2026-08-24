@@ -52,6 +52,7 @@ import Clientes from "./pages/Clientes";
 import ClientesEssencial from "./pages/ClientesEssencial";
 import Prazos from "./pages/Prazos";
 import { useModulosContratados } from "./components/ModuloGuard";
+import TermosGate from "./components/TermosGate";
 import { contratoLibera } from "@shared/modulos-contratacao";
 import Acordos from "./pages/Acordos";
 import Relatorios from "./pages/Relatorios";
@@ -83,6 +84,9 @@ function RedirectPlansParaConfiguracoes() {
 function ClientArea({ children }: { children: React.ReactNode }) {
   return (
     <AppLayout>
+      {/* Antes do guard de assinatura de propósito: o dono precisa aceitar
+          os termos vigentes mesmo se estiver caindo na tela de plano. */}
+      <TermosGate />
       <SubscriptionGuard>
         <ModuloGuard>{children}</ModuloGuard>
       </SubscriptionGuard>

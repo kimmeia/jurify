@@ -24,6 +24,7 @@ import type { ModuloAppId } from "./modulos-app";
 export const MODULO_POR_NAMESPACE: Record<string, ModuloAppId | null> = {
   // core / plataforma — nunca bloqueia
   auth: null,
+  termos: null, // aceite de Termos de Uso — core, vale pra qualquer plano
   subscription: null,
   notificacoes: null,
   push: null,

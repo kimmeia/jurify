@@ -513,7 +513,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
                 <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 hover:underline">
                   Política de Privacidade
                 </a>
-                .
+                , e declaro que o escritório é o responsável pelos dados de terceiros que inserir na plataforma.
               </span>
             </label>
 
@@ -533,6 +533,11 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
               {signupMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Criar conta
             </Button>
+            {!aceitouTermos && (
+              <p className="text-center text-[10.5px] text-muted-foreground">
+                marque o aceite acima pra habilitar o botão
+              </p>
+            )}
           </form>
 
           {googleConfig?.enabled && (
