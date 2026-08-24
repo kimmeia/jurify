@@ -243,7 +243,7 @@ export function AgendamentoComissaoCard() {
                           })
                         : "—"}
                     </TableCell>
-                    <TableCell className="text-xs text-red-600 max-w-[300px] truncate">
+                    <TableCell className="text-xs text-red-600 dark:text-red-400 max-w-[300px] truncate">
                       {row.mensagemErro || "—"}
                     </TableCell>
                   </TableRow>

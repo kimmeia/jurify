@@ -128,7 +128,7 @@ export function ChamadaOverlay({ chamada }: { chamada: UseWhatsappCall }) {
               </p>
             )}
             {permissaoEnviada && (
-              <p className="text-xs text-emerald-600">
+              <p className="text-xs text-emerald-600 dark:text-emerald-400">
                 Pedido enviado! Quando o cliente aprovar, você poderá ligar (válido por 7 dias).
               </p>
             )}

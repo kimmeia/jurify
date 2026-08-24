@@ -121,7 +121,7 @@ export function CamposClienteTab({ canEdit }: { canEdit: boolean }) {
         <div>
           <h3 className="text-base font-bold tracking-tight">Campos personalizados</h3>
           <p className="text-[11px] text-slate-500">
-            {campos?.length || 0} campo(s) · disponíveis no SmartFlow como <code className="bg-slate-100 px-1 rounded text-[10px]">{`{{cliente.campos.chave}}`}</code>
+            {campos?.length || 0} campo(s) · disponíveis no SmartFlow como <code className="bg-slate-100 dark:bg-slate-800/60 px-1 rounded text-[10px]">{`{{cliente.campos.chave}}`}</code>
           </p>
         </div>
         {canEdit && (
@@ -139,11 +139,11 @@ export function CamposClienteTab({ canEdit }: { canEdit: boolean }) {
         {isLoading ? (
           <div className="text-center py-8 text-sm text-slate-400">Carregando…</div>
         ) : !campos || campos.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-violet-50/30 py-14 text-center space-y-2">
+          <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 bg-gradient-to-br from-slate-50 dark:from-slate-900 to-violet-50/30 dark:to-violet-950/20 py-14 text-center space-y-2">
             <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 flex items-center justify-center mx-auto mb-1">
               <Sparkles className="h-7 w-7 text-violet-500/70" />
             </div>
-            <p className="font-semibold text-slate-700">Nenhum campo configurado</p>
+            <p className="font-semibold text-slate-700 dark:text-slate-200">Nenhum campo configurado</p>
             <p className="text-xs text-slate-500 max-w-md mx-auto">
               Exemplos: Número OAB, Data da audiência, Tipo de processo, Vara. Aparecem no cadastro de cliente e ficam disponíveis no SmartFlow.
             </p>

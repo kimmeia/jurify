@@ -170,7 +170,7 @@ export function VariableTrigger({
           setFiltro("");
         }}
         title="Inserir informação"
-        className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] font-medium text-violet-600 hover:bg-violet-100 dark:hover:bg-violet-950/30 transition-colors"
+        className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-950/30 transition-colors"
       >
         <Braces className="h-3 w-3" />
         Inserir
@@ -379,7 +379,7 @@ export function VariableInput({
               onScroll={syncScroll}
               onBlur={() => setTimeout(() => setAutocompleteOpen(false), 150)}
               placeholder={placeholder}
-              className={`${className ?? ""} relative bg-transparent text-transparent caret-foreground selection:bg-violet-200/40`}
+              className={`${className ?? ""} relative bg-transparent text-transparent caret-foreground selection:bg-violet-200/40 dark:bg-violet-900/20`}
               rows={rows}
               maxLength={maxLength}
             />

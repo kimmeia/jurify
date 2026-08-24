@@ -150,7 +150,7 @@ function DashboardComTabs({
   return (
     <div className="space-y-4">
       <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)} className="w-full">
-        {/* Cores por token, não por `slate-*`/`bg-white` fixos: no tema escuro
+        {/* Cores por token, não por `slate-*`/`bg-white dark:bg-card` fixos: no tema escuro
             a aba ativa ficava branca com texto branco por cima — sumia — e as
             inativas viravam cinza sobre cinza. */}
         <div className="inline-flex rounded-md border bg-muted p-1.5">

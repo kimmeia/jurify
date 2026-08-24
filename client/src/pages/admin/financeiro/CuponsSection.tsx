@@ -336,7 +336,7 @@ export function CuponsSection() {
                         )}
                       </TableCell>
                       <TableCell className="text-sm">
-                        <Badge className="bg-pink-500/15 text-pink-700 border-pink-500/30">
+                        <Badge className="bg-pink-500/15 text-pink-700 dark:text-pink-300 border-pink-500/30">
                           {formatValor(c.tipo, c.valor)}
                         </Badge>
                       </TableCell>
@@ -364,7 +364,7 @@ export function CuponsSection() {
                             Esgotado
                           </Badge>
                         ) : c.ativo ? (
-                          <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px]">
+                          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px]">
                             <CheckCircle2 className="h-2.5 w-2.5 mr-1" /> Ativo
                           </Badge>
                         ) : (

@@ -33,11 +33,11 @@ function formatUptime(seconds: number) {
 
 function CanalStatusBadge({ status }: { status: string }) {
   const map: Record<string, { cls: string; label: string }> = {
-    conectado: { cls: "bg-emerald-500/15 text-emerald-700 border-emerald-500/25", label: "Conectado" },
-    desconectado: { cls: "bg-gray-500/15 text-gray-600 border-gray-500/25", label: "Desconectado" },
-    pendente: { cls: "bg-amber-500/15 text-amber-700 border-amber-500/25", label: "Pendente" },
-    erro: { cls: "bg-red-500/15 text-red-700 border-red-500/25", label: "Erro" },
-    banido: { cls: "bg-red-500/15 text-red-700 border-red-500/25", label: "Banido" },
+    conectado: { cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25", label: "Conectado" },
+    desconectado: { cls: "bg-gray-500/15 text-gray-600 dark:text-slate-300 border-gray-500/25", label: "Desconectado" },
+    pendente: { cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25", label: "Pendente" },
+    erro: { cls: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/25", label: "Erro" },
+    banido: { cls: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/25", label: "Banido" },
   };
   const cfg = map[status] || { cls: "", label: status };
   return <Badge className={`${cfg.cls} hover:${cfg.cls} text-[10px] font-normal`}>{cfg.label}</Badge>;

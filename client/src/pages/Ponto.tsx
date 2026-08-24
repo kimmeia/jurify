@@ -175,7 +175,7 @@ function LinhaPessoa({
           </span>
           {p.total.previstoMin > 0 && p.total.diasFechados > 0 && (
             <span
-              className={`ml-auto text-[11px] font-bold tabular-nums ${p.total.saldoMin >= 0 ? "text-emerald-600" : "text-rose-600"}`}
+              className={`ml-auto text-[11px] font-bold tabular-nums ${p.total.saldoMin >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
             >
               {p.total.saldoMin >= 0 ? "+" : "−"}
               {formatarDuracao(Math.abs(p.total.saldoMin))}
@@ -229,7 +229,7 @@ function LinhaPessoa({
         <Button variant="ghost" size="sm" className="h-8 px-2" title="Avaliar" onClick={aoAvaliar}>
           <ShieldCheck className="h-3.5 w-3.5" />
         </Button>
-        <button type="button" onClick={aoAbrir} className="text-muted-foreground hover:text-violet-600" title="Abrir ficha">
+        <button type="button" onClick={aoAbrir} className="text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400" title="Abrir ficha">
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
@@ -465,7 +465,7 @@ export default function Ponto() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Clock className="h-5 w-5 text-violet-600" />
+        <Clock className="h-5 w-5 text-violet-600 dark:text-violet-400" />
         <h1 className="text-lg font-extrabold">
           RH{" "}
           <span className="font-medium text-muted-foreground">

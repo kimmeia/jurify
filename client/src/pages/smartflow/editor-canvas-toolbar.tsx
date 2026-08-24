@@ -97,7 +97,7 @@ export function EditorCanvasToolbar({
       <Button
         variant="ghost"
         size="sm"
-        className="w-7 h-7 p-0 text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:hover:bg-violet-950/30"
+        className="w-7 h-7 p-0 text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30"
         onClick={onAutoArranjar}
         title="Reorganizar os nós automaticamente"
       >
@@ -107,7 +107,7 @@ export function EditorCanvasToolbar({
       <Button
         variant="ghost"
         size="sm"
-        className="h-7 px-2 gap-1 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+        className="h-7 px-2 gap-1 text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
         onClick={onValidar}
         title="Verificar se o fluxo está bem montado (sem ciclos, sem condicional órfão)"
       >

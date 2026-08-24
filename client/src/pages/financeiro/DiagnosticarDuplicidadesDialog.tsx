@@ -57,7 +57,7 @@ export function DiagnosticarDuplicidadesDialog({
                   <Clock className="h-3.5 w-3.5 text-amber-500" />
                   Órfãs pagas
                 </div>
-                <p className="text-2xl font-bold text-amber-600 tabular-nums">
+                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 tabular-nums">
                   {data.orfasRecebidas.count}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
@@ -68,12 +68,12 @@ export function DiagnosticarDuplicidadesDialog({
                 </p>
               </div>
 
-              <div className="border-2 border-red-200 rounded-lg p-3 space-y-1">
+              <div className="border-2 border-red-200 dark:border-red-800/50 rounded-lg p-3 space-y-1">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
                   Pares suspeitos
                 </div>
-                <p className="text-2xl font-bold text-red-600 tabular-nums">
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400 tabular-nums">
                   {data.paresSuspeitos.count}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
@@ -89,7 +89,7 @@ export function DiagnosticarDuplicidadesDialog({
                   <FileText className="h-3.5 w-3.5 text-blue-500" />
                   Manuais já-pagas
                 </div>
-                <p className="text-2xl font-bold text-blue-600 tabular-nums">
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 tabular-nums">
                   {data.manuaisJaPagas.count}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
@@ -155,7 +155,7 @@ export function DiagnosticarDuplicidadesDialog({
                 </li>
               </ul>
               {data.paresSuspeitos.count === 0 && data.orfasRecebidas.count === 0 && (
-                <p className="text-emerald-700 font-medium pt-2 border-t">
+                <p className="text-emerald-700 dark:text-emerald-300 font-medium pt-2 border-t">
                   ✓ Nenhuma duplicação ou órfã encontrada no momento.
                 </p>
               )}

@@ -295,11 +295,11 @@ export default function Plans() {
 
       {/* Aviso quando o sistema de cobrança não está configurado */}
       {billingOk === false && (
-        <div className="rounded-xl border-l-[3px] border-l-amber-500 border border-amber-200 bg-amber-50/50 p-3.5 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+        <div className="rounded-xl border-l-[3px] border-l-amber-500 border border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/30 p-3.5 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-bold text-amber-900">Sistema de cobrança em configuração</p>
-            <p className="text-[11px] text-amber-700 mt-0.5">
+            <p className="text-sm font-bold text-amber-900 dark:text-amber-200">Sistema de cobrança em configuração</p>
+            <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
               A integração com o Asaas ainda não foi configurada. Os botões de assinatura ficarão disponíveis em breve.
             </p>
           </div>
@@ -308,26 +308,26 @@ export default function Plans() {
 
       {/* Estado "aguardando pagamento" — polling ativo */}
       {awaitingPayment && (
-        <div className="rounded-xl border-l-[3px] border-l-blue-500 border border-blue-200 bg-blue-50/50 p-3.5 flex items-start gap-3">
+        <div className="rounded-xl border-l-[3px] border-l-blue-500 border border-blue-200 dark:border-blue-800/50 bg-blue-50/50 dark:bg-blue-950/30 p-3.5 flex items-start gap-3">
           <div className="relative shrink-0">
-            <Clock className="h-5 w-5 text-blue-600 mt-0.5" />
-            <Loader2 className="h-3 w-3 text-blue-600 absolute -bottom-0.5 -right-0.5 animate-spin" />
+            <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+            <Loader2 className="h-3 w-3 text-blue-600 dark:text-blue-400 absolute -bottom-0.5 -right-0.5 animate-spin" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-bold text-blue-900">Aguardando confirmação do pagamento</p>
-            <p className="text-[11px] text-blue-700 mt-0.5">
+            <p className="text-sm font-bold text-blue-900 dark:text-blue-200">Aguardando confirmação do pagamento</p>
+            <p className="text-[11px] text-blue-700 dark:text-blue-300 mt-0.5">
               Complete o pagamento na aba do Asaas que foi aberta. Esta página vai atualizar automaticamente.
             </p>
             <Button
               size="sm"
               variant="outline"
-              className="mt-2 h-7 text-[11px] border-blue-300 text-blue-700 hover:bg-blue-100"
+              className="mt-2 h-7 text-[11px] border-blue-300 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30"
               onClick={() => { utils.subscription.current.invalidate(); toast.info("Verificando..."); }}
             >
               <Loader2 className="h-3 w-3 mr-1" /> Verificar agora
             </Button>
           </div>
-          <button onClick={() => setAwaitingPayment(false)} className="text-slate-400 hover:text-slate-700" aria-label="Cancelar espera">
+          <button onClick={() => setAwaitingPayment(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" aria-label="Cancelar espera">
             <XCircle className="h-4 w-4" />
           </button>
         </div>
@@ -343,13 +343,13 @@ export default function Plans() {
             {currentSub ? "Upgrade pra desbloquear recursos · downgrade reduz limites" : "Escolha o melhor pro tamanho do seu escritório"}
           </p>
         </div>
-        <div className="bg-slate-100 border border-slate-200 rounded-lg p-1 inline-flex gap-0.5">
+        <div className="bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-lg p-1 inline-flex gap-0.5">
           <button
             onClick={() => setBillingInterval("monthly")}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
               billingInterval === "monthly"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-500 hover:text-slate-700"
+                ? "bg-white dark:bg-card text-slate-900 dark:text-slate-100 shadow-sm"
+                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"
             }`}
           >
             Mensal
@@ -358,12 +358,12 @@ export default function Plans() {
             onClick={() => setBillingInterval("yearly")}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all inline-flex items-center gap-1.5 ${
               billingInterval === "yearly"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-500 hover:text-slate-700"
+                ? "bg-white dark:bg-card text-slate-900 dark:text-slate-100 shadow-sm"
+                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"
             }`}
           >
             Anual
-            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">−2 meses</span>
+            <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-full">−2 meses</span>
           </button>
         </div>
       </div>
@@ -393,12 +393,12 @@ export default function Plans() {
           return (
             <div
               key={plan.id}
-              className={`relative flex flex-col rounded-2xl border bg-white p-6 ${
+              className={`relative flex flex-col rounded-2xl border bg-white dark:bg-card p-6 ${
                 isCurrentPlan
-                  ? "border-2 border-violet-500 bg-violet-50/30 ring-4 ring-violet-100"
+                  ? "border-2 border-violet-500 bg-violet-50/30 dark:bg-violet-950/30 ring-4 ring-violet-100"
                   : isPopular
-                    ? "border-2 border-amber-300 bg-gradient-to-br from-amber-50/40 to-orange-50/40 shadow-lg"
-                    : "border-slate-200"
+                    ? "border-2 border-amber-300 bg-gradient-to-br from-amber-50/40 dark:from-amber-950/40 to-orange-50/40 dark:to-orange-950/20 shadow-lg"
+                    : "border-slate-200 dark:border-slate-700/80"
               }`}
             >
               {isPopular && !isCurrentPlan && (
@@ -414,13 +414,13 @@ export default function Plans() {
 
               <div>
                 <p className={`text-[11px] font-bold uppercase tracking-wider ${
-                  isCurrentPlan ? "text-violet-700" : isPopular ? "text-amber-700" : "text-slate-500"
+                  isCurrentPlan ? "text-violet-700 dark:text-violet-300" : isPopular ? "text-amber-700 dark:text-amber-300" : "text-slate-500"
                 }`}>
                   {plan.name}
                 </p>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className={`text-3xl font-extrabold tracking-tight tabular-nums ${
-                    isCurrentPlan ? "text-violet-700" : isPopular ? "text-amber-700" : "text-slate-900"
+                    isCurrentPlan ? "text-violet-700" : isPopular ? "text-amber-700" : "text-slate-900 dark:text-slate-100"
                   }`}>
                     {formatPrice(price)}
                   </span>
@@ -429,7 +429,7 @@ export default function Plans() {
                   </span>
                 </div>
                 {billingInterval === "yearly" && (
-                  <p className="text-[10px] text-emerald-700 font-semibold mt-1">
+                  <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold mt-1">
                     Economia de {formatPrice(plan.priceMonthly * 12 - plan.priceYearly)}/ano
                   </p>
                 )}
@@ -440,9 +440,9 @@ export default function Plans() {
                 {plan.features.map((feature, i) => (
                   <li key={i} className="flex items-start gap-2 text-[11.5px]">
                     <Check className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${
-                      isCurrentPlan ? "text-violet-600" : isPopular ? "text-amber-600" : "text-emerald-600"
+                      isCurrentPlan ? "text-violet-600 dark:text-violet-400" : isPopular ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
                     }`} />
-                    <span className="text-slate-700">{feature}</span>
+                    <span className="text-slate-700 dark:text-slate-200">{feature}</span>
                   </li>
                 ))}
               </ul>
@@ -450,7 +450,7 @@ export default function Plans() {
               <Button
                 className={`w-full mt-5 ${
                   isCurrentPlan
-                    ? "bg-violet-100 text-violet-700 hover:bg-violet-100 cursor-default"
+                    ? "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/30 cursor-default"
                     : isPopular
                       ? "bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-sm"
                       : ""
@@ -483,7 +483,7 @@ export default function Plans() {
       {!currentSub && (
         <div className="text-center text-[11px] text-slate-500 mt-6 space-y-0.5">
           <p>
-            Pagamento seguro via <b className="text-slate-700">Asaas</b> · PIX · Boleto · Cartão
+            Pagamento seguro via <b className="text-slate-700 dark:text-slate-200">Asaas</b> · PIX · Boleto · Cartão
           </p>
           <p>O acesso é liberado automaticamente após confirmação do pagamento.</p>
         </div>

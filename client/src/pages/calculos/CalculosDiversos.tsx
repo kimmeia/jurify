@@ -323,7 +323,7 @@ function ConversaoTaxasTab() {
                 </div>
                 <div className="bg-background rounded-md p-3 border border-primary/30">
                   <p className="text-xs text-muted-foreground">Taxa Real</p>
-                  <p className={`text-lg font-bold ${resultadoFisher.taxaReal >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  <p className={`text-lg font-bold ${resultadoFisher.taxaReal >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                     {formatPercent(resultadoFisher.taxaReal, 4)} a.a.
                   </p>
                 </div>
@@ -494,7 +494,7 @@ function JurosTab() {
                   </div>
                   <div className="bg-background rounded-md p-3 border">
                     <p className="text-xs text-muted-foreground">Juros</p>
-                    <p className="text-lg font-bold text-amber-600">{formatBRL(resultado.juros)}</p>
+                    <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatBRL(resultado.juros)}</p>
                   </div>
                   <div className="bg-background rounded-md p-3 border border-primary/30">
                     <p className="text-xs text-muted-foreground">Montante Final</p>
@@ -529,7 +529,7 @@ function JurosTab() {
                             <tr key={ev.periodo} className="border-t">
                               <td className="p-2">{ev.periodo}</td>
                               <td className="text-right p-2">{formatBRL(ev.saldoInicial)}</td>
-                              <td className="text-right p-2 text-amber-600">{formatBRL(ev.juros)}</td>
+                              <td className="text-right p-2 text-amber-600 dark:text-amber-400">{formatBRL(ev.juros)}</td>
                               <td className="text-right p-2 font-medium">{formatBRL(ev.saldoFinal)}</td>
                             </tr>
                           ))}
@@ -736,7 +736,7 @@ function AtualizacaoMonetariaTab() {
                   </div>
                   <div className="bg-background rounded-md p-3 border">
                     <p className="text-xs text-muted-foreground">Correção Monetária</p>
-                    <p className="text-lg font-bold text-amber-600">{formatBRL(resultado.correcaoMonetaria)}</p>
+                    <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatBRL(resultado.correcaoMonetaria)}</p>
                     <p className="text-xs text-muted-foreground">{formatPercent(resultado.variacaoPercentual, 2)}</p>
                   </div>
                   <div className="bg-background rounded-md p-3 border">
@@ -746,13 +746,13 @@ function AtualizacaoMonetariaTab() {
                   {resultado.jurosMora > 0 && (
                     <div className="bg-background rounded-md p-3 border">
                       <p className="text-xs text-muted-foreground">Juros de Mora</p>
-                      <p className="text-lg font-bold text-orange-600">{formatBRL(resultado.jurosMora)}</p>
+                      <p className="text-lg font-bold text-orange-600 dark:text-orange-400">{formatBRL(resultado.jurosMora)}</p>
                     </div>
                   )}
                   {resultado.multa > 0 && (
                     <div className="bg-background rounded-md p-3 border">
                       <p className="text-xs text-muted-foreground">Multa</p>
-                      <p className="text-lg font-bold text-red-600">{formatBRL(resultado.multa)}</p>
+                      <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatBRL(resultado.multa)}</p>
                     </div>
                   )}
                   <div className="bg-background rounded-md p-3 border border-primary/30">
@@ -795,7 +795,7 @@ function AtualizacaoMonetariaTab() {
                           {resultado.indices.map((idx: any, i: number) => (
                             <tr key={i} className="border-t">
                               <td className="p-2">{idx.data}</td>
-                              <td className={`text-right p-2 ${idx.variacao >= 0 ? "text-green-600" : "text-red-600"}`}>
+                              <td className={`text-right p-2 ${idx.variacao >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                                 {idx.variacao >= 0 ? "+" : ""}{idx.variacao.toFixed(4)}%
                               </td>
                               <td className="text-right p-2 font-mono">{idx.fatorAcumulado.toFixed(8)}</td>
@@ -972,7 +972,7 @@ function PrazosTab() {
                     />
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => removeSuspensao(i)} className="text-red-500 hover:text-red-700">
+                <Button variant="ghost" size="sm" onClick={() => removeSuspensao(i)} className="text-red-500 hover:text-red-700 dark:hover:text-red-300">
                   ✕
                 </Button>
               </div>
@@ -999,9 +999,9 @@ function PrazosTab() {
             }`}>
               <div className="flex items-center gap-3">
                 {resultado.prescrito ? (
-                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                  <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
                 ) : (
-                  <CheckCircle className="h-6 w-6 text-green-600" />
+                  <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
                 )}
                 <div>
                   <h4 className={`font-bold text-lg ${resultado.prescrito ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"}`}>
@@ -1066,7 +1066,7 @@ function PrazosTab() {
 export default function CalculosDiversos() {
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-teal-50/20 p-6 space-y-5">
+      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-teal-50/20 dark:to-teal-950/20 p-6 space-y-5">
         {/* HERO teal/cyan — distinto dos outros submódulos */}
         <div className="rounded-2xl bg-gradient-to-br from-teal-600 via-cyan-700 to-blue-800 p-6 text-white relative overflow-hidden shadow-lg">
           <TrendingUp className="absolute -right-6 -bottom-8 w-40 h-40 opacity-10" strokeWidth={1.2} />

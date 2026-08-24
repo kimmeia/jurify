@@ -65,7 +65,7 @@ function RoleBadge({
       <TooltipProvider delayDuration={150}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 hover:bg-emerald-500/15 cursor-help">
+            <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/15 cursor-help">
               <UsersIcon className="h-3 w-3 mr-1" />Colaborador
             </Badge>
           </TooltipTrigger>
@@ -82,7 +82,7 @@ function RoleBadge({
 
 function SubBadge({ active }: { active: boolean }) {
   return active
-    ? <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/25 hover:bg-emerald-500/15 text-[10px]">Ativa</Badge>
+    ? <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/15 text-[10px]">Ativa</Badge>
     : <Badge variant="outline" className="text-[10px]">Sem plano</Badge>;
 }
 
@@ -104,11 +104,11 @@ const CATEGORIA_LABELS: Record<string, string> = {
 };
 
 const CATEGORIA_CORES: Record<string, string> = {
-  geral: "bg-slate-500/15 text-slate-700",
-  financeiro: "bg-emerald-500/15 text-emerald-700",
-  suporte: "bg-blue-500/15 text-blue-700",
-  comercial: "bg-violet-500/15 text-violet-700",
-  alerta: "bg-red-500/15 text-red-700",
+  geral: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
+  financeiro: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  suporte: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+  comercial: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
+  alerta: "bg-red-500/15 text-red-700 dark:text-red-300",
 };
 
 function fmtBRLAdmin(v: number): string {
@@ -470,35 +470,35 @@ function ClienteDetalheDialog({
           </div>
 
           {isBloqueado && user?.motivoBloqueio && (
-            <div className="flex items-start gap-2 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-700">
+            <div className="flex items-start gap-2 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-700 dark:text-red-300">
               <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
               <div>
                 <strong>Bloqueado:</strong> {user.motivoBloqueio}
                 {user.bloqueadoEm && (
-                  <span className="text-red-600/70 ml-1">({new Date(user.bloqueadoEm).toLocaleDateString("pt-BR")})</span>
+                  <span className="text-red-600/70 dark:text-red-400 ml-1">({new Date(user.bloqueadoEm).toLocaleDateString("pt-BR")})</span>
                 )}
               </div>
             </div>
           )}
 
           <Tabs defaultValue="detalhes" className="w-full">
-            <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex">
+            <div className="bg-slate-50/80 dark:bg-slate-900/70 backdrop-blur-sm border border-slate-200 dark:border-slate-700/80 rounded-xl p-1.5 inline-flex">
               <TabsList className="bg-transparent gap-1 p-0 h-auto flex-wrap">
-                <TabsTrigger value="detalhes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                <TabsTrigger value="detalhes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg">
                   <User className="h-3.5 w-3.5" /> Detalhes
                 </TabsTrigger>
                 {temEquipe && (
-                  <TabsTrigger value="equipe" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <TabsTrigger value="equipe" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg">
                     <UsersIcon className="h-3.5 w-3.5" /> Equipe ({data.colaboradores!.length})
                   </TabsTrigger>
                 )}
-                <TabsTrigger value="assinatura" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                <TabsTrigger value="assinatura" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg">
                   <CreditCard className="h-3.5 w-3.5" /> Assinatura
                 </TabsTrigger>
-                <TabsTrigger value="notas" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                <TabsTrigger value="notas" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg">
                   <MessageSquarePlus className="h-3.5 w-3.5" /> Notas {notas && notas.length > 0 ? `(${notas.length})` : ""}
                 </TabsTrigger>
-                <TabsTrigger value="acoes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                <TabsTrigger value="acoes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg">
                   <ShieldCheck className="h-3.5 w-3.5" /> Ações
                 </TabsTrigger>
               </TabsList>
@@ -538,12 +538,12 @@ function ClienteDetalheDialog({
                         <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Trocar plano
                       </Button>
                       {!sub.cortesia && (
-                        <Button size="sm" variant="outline" className="border-emerald-500/50 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-500/10" onClick={() => setCortesiaOpen(true)}>
+                        <Button size="sm" variant="outline" className="border-emerald-500/50 text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-emerald-200 hover:bg-emerald-500/10" onClick={() => setCortesiaOpen(true)}>
                           <Gift className="h-3.5 w-3.5 mr-1.5" /> Marcar cortesia
                         </Button>
                       )}
                       {sub.status !== "canceled" && (
-                        <Button size="sm" variant="outline" className="border-rose-500/50 text-rose-600 hover:text-rose-700 hover:bg-rose-500/10" onClick={() => setCancelarOpen(true)}>
+                        <Button size="sm" variant="outline" className="border-rose-500/50 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-500/10" onClick={() => setCancelarOpen(true)}>
                           <AlertCircle className="h-3.5 w-3.5 mr-1.5" /> Cancelar assinatura
                         </Button>
                       )}
@@ -552,7 +552,7 @@ function ClienteDetalheDialog({
                 ) : (
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">Cliente sem assinatura ativa.</p>
-                    <Button size="sm" variant="outline" className="border-emerald-500/50 text-emerald-700" onClick={() => setCortesiaOpen(true)}>
+                    <Button size="sm" variant="outline" className="border-emerald-500/50 text-emerald-700 dark:text-emerald-300" onClick={() => setCortesiaOpen(true)}>
                       <Gift className="h-3.5 w-3.5 mr-1.5" /> Marcar cortesia
                     </Button>
                   </div>
@@ -582,9 +582,9 @@ function ClienteDetalheDialog({
                   <>
                     {cobrancasData.resumo && (
                       <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="rounded-lg bg-emerald-500/10 p-2"><p className="text-[10px] text-emerald-700 uppercase">Pago</p><p className="text-sm font-bold text-emerald-700 tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.pago)}</p></div>
-                        <div className="rounded-lg bg-amber-500/10 p-2"><p className="text-[10px] text-amber-700 uppercase">Pendente</p><p className="text-sm font-bold text-amber-700 tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.pendente)}</p></div>
-                        <div className="rounded-lg bg-rose-500/10 p-2"><p className="text-[10px] text-rose-700 uppercase">Vencido</p><p className="text-sm font-bold text-rose-700 tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.vencido)}</p></div>
+                        <div className="rounded-lg bg-emerald-500/10 p-2"><p className="text-[10px] text-emerald-700 dark:text-emerald-300 uppercase">Pago</p><p className="text-sm font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.pago)}</p></div>
+                        <div className="rounded-lg bg-amber-500/10 p-2"><p className="text-[10px] text-amber-700 dark:text-amber-300 uppercase">Pendente</p><p className="text-sm font-bold text-amber-700 dark:text-amber-300 tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.pendente)}</p></div>
+                        <div className="rounded-lg bg-rose-500/10 p-2"><p className="text-[10px] text-rose-700 dark:text-rose-300 uppercase">Vencido</p><p className="text-sm font-bold text-rose-700 dark:text-rose-300 tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.vencido)}</p></div>
                       </div>
                     )}
                     {cobrancasData.cobrancas.length > 0 ? (
@@ -634,7 +634,7 @@ function ClienteDetalheDialog({
                         <div className="flex items-center gap-1.5">
                           <p className="text-sm font-medium truncate">{c.name || "—"}</p>
                           {c.ehDono && (
-                            <Badge className="bg-indigo-500/15 text-indigo-700 border-indigo-500/25 text-[9px] px-1">
+                            <Badge className="bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/25 text-[9px] px-1">
                               <Crown className="h-2 w-2 mr-0.5" /> Dono
                             </Badge>
                           )}
@@ -686,14 +686,14 @@ function ClienteDetalheDialog({
                     <Badge variant="outline" className="text-[9px] ml-auto">Escritório</Badge>
                   )}
                   {(data as any)?.creditsSource === "legacy" && (
-                    <Badge variant="outline" className="text-[9px] ml-auto bg-amber-50 text-amber-700 border-amber-200">Legacy</Badge>
+                    <Badge variant="outline" className="text-[9px] ml-auto bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50">Legacy</Badge>
                   )}
                 </div>
                 {credits ? (
                   <div className="text-sm space-y-1">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Disponíveis:</span>
-                      <span className="font-bold text-emerald-600">
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
                         {(credits as any).saldo ?? ((credits.creditsTotal ?? 0) - (credits.creditsUsed ?? 0))}
                       </span>
                     </div>
@@ -917,7 +917,7 @@ function ClienteDetalheDialog({
             <TabsContent value="acoes" className="space-y-3 py-3">
               <div className={`border rounded-lg p-4 space-y-2 ${sub?.cortesia ? "border-emerald-500/40 bg-emerald-500/5" : ""}`}>
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <Gift className={`h-4 w-4 ${sub?.cortesia ? "text-emerald-600" : "text-emerald-700"}`} />
+                  <Gift className={`h-4 w-4 ${sub?.cortesia ? "text-emerald-600 dark:text-emerald-400" : "text-emerald-700 dark:text-emerald-300"}`} />
                   {sub?.cortesia ? "Cortesia ativa" : "Marcar como cortesia"}
                 </div>
                 {sub?.cortesia ? (
@@ -945,7 +945,7 @@ function ClienteDetalheDialog({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full border-amber-500/50 text-amber-700 hover:text-amber-800 hover:bg-amber-500/10"
+                    className="w-full border-amber-500/50 text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 hover:bg-amber-500/10"
                     onClick={() => setRemoverCortesiaOpen(true)}
                   >
                     <Gift className="h-3.5 w-3.5 mr-1.5" />
@@ -955,7 +955,7 @@ function ClienteDetalheDialog({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full border-emerald-500/50 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-500/10"
+                    className="w-full border-emerald-500/50 text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-emerald-200 hover:bg-emerald-500/10"
                     onClick={() => setCortesiaOpen(true)}
                   >
                     <Gift className="h-3.5 w-3.5 mr-1.5" />
@@ -966,7 +966,7 @@ function ClienteDetalheDialog({
 
               <div className="border rounded-lg p-4 space-y-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <LogIn className="h-4 w-4 text-blue-600" />
+                  <LogIn className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                   Entrar como este cliente
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -993,7 +993,7 @@ function ClienteDetalheDialog({
 
               <div className="border rounded-lg p-4 space-y-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <RotateCcw className="h-4 w-4 text-amber-600" />
+                  <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                   Resetar senha
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -1032,7 +1032,7 @@ function ClienteDetalheDialog({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full border-emerald-600/50 text-emerald-700"
+                    className="w-full border-emerald-600/50 text-emerald-700 dark:text-emerald-300"
                     disabled={desbloquearMut.isPending}
                     onClick={() => desbloquearMut.mutate({ userId: current! })}
                   >
@@ -1210,17 +1210,17 @@ function ClienteDetalheDialog({
               <div className="space-y-2">
                 <p>Libera acesso sem mexer no Asaas.</p>
                 {!sub && (
-                  <p className="text-amber-700">
+                  <p className="text-amber-700 dark:text-amber-300">
                     Cliente não tem assinatura — uma será criada virtualmente, marcada como cortesia.
                   </p>
                 )}
                 {data?.isDonoEscritorio && (data?.colabsCount ?? 0) > 1 && (
-                  <p className="rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 text-emerald-800 p-2 text-xs">
+                  <p className="rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-200 p-2 text-xs">
                     <b>Afeta o escritório inteiro:</b> este user é o dono. Cortesia aqui libera acesso pra todos os <b>{data.colabsCount} colaboradores</b> do escritório.
                   </p>
                 )}
                 {!data?.isDonoEscritorio && data?.donoDoEscritorio && (
-                  <p className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 text-amber-800 p-2 text-xs">
+                  <p className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-200 p-2 text-xs">
                     <b>Cortesia individual:</b> este user é colaborador. Vai liberar acesso só pra ele. Pra liberar o escritório todo, ative a cortesia no dono <b>{data.donoDoEscritorio.name || data.donoDoEscritorio.email}</b>.
                   </p>
                 )}

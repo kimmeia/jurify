@@ -59,10 +59,10 @@ export default function AdminReports() {
 
       {/* KPI cards */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <KPICard label="MRR atual" value={formatCurrency(ultimoMesReceita)} icon={TrendingUp} iconBg="bg-emerald-500/10" iconFg="text-emerald-600" />
-        <KPICard label="Clientes totais" value={stats?.totalClients ?? 0} icon={Users} iconBg="bg-blue-500/10" iconFg="text-blue-600" />
-        <KPICard label="Cálculos totais" value={totalCalcModulos} icon={Calculator} iconBg="bg-violet-500/10" iconFg="text-violet-600" />
-        <KPICard label="Conversão" value={`${stats?.conversionRate ?? 0}%`} icon={BarChart3} iconBg="bg-amber-500/10" iconFg="text-amber-600" />
+        <KPICard label="MRR atual" value={formatCurrency(ultimoMesReceita)} icon={TrendingUp} iconBg="bg-emerald-500/10" iconFg="text-emerald-600 dark:text-emerald-400" />
+        <KPICard label="Clientes totais" value={stats?.totalClients ?? 0} icon={Users} iconBg="bg-blue-500/10" iconFg="text-blue-600 dark:text-blue-400" />
+        <KPICard label="Cálculos totais" value={totalCalcModulos} icon={Calculator} iconBg="bg-violet-500/10" iconFg="text-violet-600 dark:text-violet-400" />
+        <KPICard label="Conversão" value={`${stats?.conversionRate ?? 0}%`} icon={BarChart3} iconBg="bg-amber-500/10" iconFg="text-amber-600 dark:text-amber-400" />
       </div>
 
       {/* Charts */}

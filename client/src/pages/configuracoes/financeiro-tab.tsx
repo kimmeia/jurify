@@ -400,10 +400,10 @@ function RegraComissaoCard({ canEdit }: { canEdit: boolean }) {
                           const limiteAte = f.limiteAteText.trim() === "" ? null : parseFloat(f.limiteAteText) || 0;
                           const limiteAnt = idx > 0 ? parseFloat(arr[idx - 1].limiteAteText) || 0 : 0;
                           const cores = [
-                            { bg: "bg-emerald-50 border-emerald-200", num: "bg-emerald-600", text: "text-emerald-700", label: "Faixa básica" },
-                            { bg: "bg-amber-50 border-amber-200", num: "bg-amber-500", text: "text-amber-700", label: "Faixa intermediária" },
-                            { bg: "bg-indigo-50 border-indigo-200", num: "bg-indigo-600", text: "text-indigo-700", label: "Faixa premium" },
-                            { bg: "bg-violet-50 border-violet-200", num: "bg-violet-600", text: "text-violet-700", label: "Faixa elite" },
+                            { bg: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50", num: "bg-emerald-600", text: "text-emerald-700 dark:text-emerald-300", label: "Faixa básica" },
+                            { bg: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50", num: "bg-amber-500", text: "text-amber-700 dark:text-amber-300", label: "Faixa intermediária" },
+                            { bg: "bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800/50", num: "bg-indigo-600", text: "text-indigo-700 dark:text-indigo-300", label: "Faixa premium" },
+                            { bg: "bg-violet-50 dark:bg-violet-950/30 border-violet-200 dark:border-violet-800/50", num: "bg-violet-600", text: "text-violet-700 dark:text-violet-300", label: "Faixa elite" },
                           ];
                           const c = cores[Math.min(idx, cores.length - 1)];
                           const rangeStr = limiteAte === null
@@ -416,7 +416,7 @@ function RegraComissaoCard({ canEdit }: { canEdit: boolean }) {
                               <span className={`w-9 h-9 rounded-full ${c.num} text-white font-bold flex items-center justify-center shrink-0`}>{idx + 1}</span>
                               <div className="flex-1 min-w-0">
                                 <p className="text-[11.5px] font-bold">{rangeStr}</p>
-                                <p className="text-[10px] text-slate-600">{c.label}</p>
+                                <p className="text-[10px] text-slate-600 dark:text-slate-300">{c.label}</p>
                               </div>
                               <div className="text-right">
                                 <p className={`text-lg font-extrabold tabular-nums ${c.text}`}>{aliquota}%</p>

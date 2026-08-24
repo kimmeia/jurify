@@ -153,7 +153,7 @@ function IntegrationLogo({ id, className }: { id: string; className?: string }) 
   if (id === "sentry") {
     return (
       <div className={`flex items-center justify-center rounded-lg bg-purple-500/10 ${className}`}>
-        <AlertCircle className="h-4 w-4 text-purple-600" />
+        <AlertCircle className="h-4 w-4 text-purple-600 dark:text-purple-400" />
       </div>
     );
   }
@@ -197,7 +197,7 @@ function IntegrationLogo({ id, className }: { id: string; className?: string }) 
   }
   return (
     <div className={`flex items-center justify-center rounded-lg bg-emerald-500/10 ${className}`}>
-      <span className="text-base font-bold text-emerald-600">J</span>
+      <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">J</span>
     </div>
   );
 }
@@ -205,7 +205,7 @@ function IntegrationLogo({ id, className }: { id: string; className?: string }) 
 function StatusBadge({ status }: { status: string }) {
   if (status === "conectado") {
     return (
-      <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/25 hover:bg-emerald-500/15">
+      <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/15">
         <CheckCircle2 className="h-3 w-3 mr-1" />
         Conectado
       </Badge>
@@ -501,7 +501,7 @@ function IntegracaoCard({
                 pra WhatsApp/Sentry que têm formulários multi-campo próprios —
                 pra esses o user clica "Desconectar" e re-cadastra. */}
             {showEditForm && integracao.id !== "whatsapp_cloud" && integracao.id !== "sentry" && (
-              <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50/50 dark:bg-amber-950/10 p-2.5">
+              <div className="space-y-1.5 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/10 p-2.5">
                 <Label className="text-[10px] font-semibold text-amber-900 dark:text-amber-200">
                   Nova API key
                 </Label>

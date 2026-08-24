@@ -26,10 +26,10 @@ function AtrasoBadge({ dias }: { dias: number }) {
     return <Badge variant="outline" className="text-[10px]">Vence hoje</Badge>;
   }
   if (dias <= 7) {
-    return <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px]">{dias}d atrasado</Badge>;
+    return <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">{dias}d atrasado</Badge>;
   }
   if (dias <= 30) {
-    return <Badge className="bg-orange-500/15 text-orange-700 border-orange-500/30 text-[10px]">{dias}d atrasado</Badge>;
+    return <Badge className="bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30 text-[10px]">{dias}d atrasado</Badge>;
   }
   return <Badge variant="destructive" className="text-[10px]">{dias}d atrasado</Badge>;
 }
@@ -52,7 +52,7 @@ export function InadimplentesSection() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-red-500/10 flex items-center justify-center">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
+                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total inadimplentes</p>
@@ -65,7 +65,7 @@ export function InadimplentesSection() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-amber-600" />
+                <DollarSign className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">MRR em risco</p>
@@ -78,7 +78,7 @@ export function InadimplentesSection() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Status atualizado</p>

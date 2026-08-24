@@ -129,7 +129,7 @@ export default function CheckoutSuccess() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 p-3 text-xs text-left space-y-1">
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/50 p-3 text-xs text-left space-y-1">
             <p className="font-semibold text-amber-900 dark:text-amber-200">
               Por que pode estar demorando?
             </p>

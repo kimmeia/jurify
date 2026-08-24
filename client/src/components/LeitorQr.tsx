@@ -122,7 +122,7 @@ export default function LeitorQr({ onLido, lido, aoLimpar }: Props) {
     return (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 space-y-2 dark:border-emerald-900/50 dark:bg-emerald-950/20">
         <div className="flex items-start gap-2.5">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
               QR lido — confira a conta
@@ -164,7 +164,7 @@ export default function LeitorQr({ onLido, lido, aoLimpar }: Props) {
           void processar(e.dataTransfer.files?.[0]);
         }}
         className={`rounded-xl border-[1.5px] border-dashed p-5 flex flex-col items-center gap-1.5 transition ${
-          arrastando ? "border-violet-500 bg-violet-100/60" : "border-violet-300 bg-violet-50/60"
+          arrastando ? "border-violet-500 bg-violet-100/60" : "border-violet-300 bg-violet-50/60 dark:bg-violet-950/30"
         } dark:bg-violet-950/20 dark:border-violet-900`}
       >
         {lendo ? (

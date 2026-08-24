@@ -96,7 +96,7 @@ export function BlocoLeadsPorEstado({
       <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-3.5">
         <div>
           <div className="flex items-center gap-2">
-            <Database className="h-4 w-4 text-violet-600" />
+            <Database className="h-4 w-4 text-violet-600 dark:text-violet-400" />
             <h3 className="text-sm font-semibold">De onde vêm as oportunidades</h3>
           </div>
           <p className="mt-1 text-[13px] font-bold">

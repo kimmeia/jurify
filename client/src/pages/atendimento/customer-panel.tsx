@@ -142,17 +142,17 @@ export function CustomerPanel({
 
   // Status financeiro (1 badge)
   const statusFin = financeiro.vencido > 0
-    ? { label: `${formatBRL(financeiro.vencido)} vencido`, color: "bg-red-50 border-red-200 text-red-700" }
+    ? { label: `${formatBRL(financeiro.vencido)} vencido`, color: "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50 text-red-700 dark:text-red-300" }
     : financeiro.pendente > 0
-      ? { label: `${formatBRL(financeiro.pendente)} a receber`, color: "bg-amber-50 border-amber-200 text-amber-700" }
-      : { label: "Em dia", color: "bg-emerald-50 border-emerald-200 text-emerald-700" };
+      ? { label: `${formatBRL(financeiro.pendente)} a receber`, color: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-300" }
+      : { label: "Em dia", color: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-300" };
 
   return (
     <div className="h-full overflow-y-auto space-y-3 pb-4">
       {/* ─── Card 1: Resumo (sempre aberto) ─── */}
       <div className="px-4 pt-4">
         <div className="flex items-start gap-3 mb-3">
-          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-violet-200 to-purple-100 flex items-center justify-center text-sm font-bold text-violet-700 shrink-0">
+          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-violet-200 to-purple-100 dark:to-purple-950/20 flex items-center justify-center text-sm font-bold text-violet-700 dark:text-violet-300 shrink-0">
             {contato.nome.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
@@ -214,7 +214,7 @@ export function CustomerPanel({
       {/* ─── Card 2: Processos ativos ─── */}
       <Section
         icon={Gavel}
-        iconColor="text-indigo-600"
+        iconColor="text-indigo-600 dark:text-indigo-400"
         title={`Processos (${processos.length})`}
         defaultOpen={processos.length > 0}
         headerAction={<AdicionarProcessoInline onSuccess={refetch} />}
@@ -239,7 +239,7 @@ export function CustomerPanel({
                   {p.fonte === "judit" && (
                     <Badge
                       variant="outline"
-                      className="text-[8px] px-1 py-0 bg-violet-50 text-violet-700 border-violet-200"
+                      className="text-[8px] px-1 py-0 bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800/50"
                     >
                       Judit
                     </Badge>
@@ -265,7 +265,7 @@ export function CustomerPanel({
       {/* ─── Card 3: Financeiro ─── */}
       <Section
         icon={DollarSign}
-        iconColor="text-emerald-600"
+        iconColor="text-emerald-600 dark:text-emerald-400"
         title="Financeiro"
         defaultOpen={financeiro.vencido > 0 || financeiro.pendente > 0}
       >
@@ -282,15 +282,15 @@ export function CustomerPanel({
             <div className="grid grid-cols-3 gap-1 text-center">
               <div>
                 <p className="text-[10px] text-muted-foreground">Em dia</p>
-                <p className="text-xs font-bold text-emerald-600">{formatBRL(financeiro.pago)}</p>
+                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{formatBRL(financeiro.pago)}</p>
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground">A receber</p>
-                <p className="text-xs font-bold text-amber-600">{formatBRL(financeiro.pendente)}</p>
+                <p className="text-xs font-bold text-amber-600 dark:text-amber-400">{formatBRL(financeiro.pendente)}</p>
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground">Vencido</p>
-                <p className="text-xs font-bold text-red-600">{formatBRL(financeiro.vencido)}</p>
+                <p className="text-xs font-bold text-red-600 dark:text-red-400">{formatBRL(financeiro.vencido)}</p>
               </div>
             </div>
 
@@ -308,7 +308,7 @@ export function CustomerPanel({
                   <div
                     key={c.id}
                     className={`text-[10px] rounded px-2 py-1 flex items-center gap-1.5 ${
-                      c.status === "OVERDUE" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"
+                      c.status === "OVERDUE" ? "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300" : "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300"
                     }`}
                   >
                     <span className="font-bold">{formatBRL(parseFloat(c.valor))}</span>
@@ -338,7 +338,7 @@ export function CustomerPanel({
       {/* ─── Card 4: Pipeline ─── */}
       <Section
         icon={TrendingUp}
-        iconColor="text-violet-600"
+        iconColor="text-violet-600 dark:text-violet-400"
         title={`Pipeline (${leads.length})`}
         defaultOpen={leads.length > 0}
         headerAction={<CriarLeadInline contatoId={contatoId} onSuccess={refetch} />}
@@ -357,7 +357,7 @@ export function CustomerPanel({
       {/* ─── Card 5: Tarefas ─── */}
       <Section
         icon={CheckSquare}
-        iconColor="text-blue-600"
+        iconColor="text-blue-600 dark:text-blue-400"
         title={`Tarefas (${tarefas.length})`}
         defaultOpen={tarefas.length > 0}
         headerAction={<CriarTarefaInline contatoId={contatoId} onSuccess={refetch} />}
@@ -379,7 +379,7 @@ export function CustomerPanel({
                     <p className="truncate">{t.titulo}</p>
                     {t.dataVencimento && (
                       <p
-                        className={`text-[9px] ${atrasada ? "text-red-600 font-medium" : "text-muted-foreground"}`}
+                        className={`text-[9px] ${atrasada ? "text-red-600 dark:text-red-400 font-medium" : "text-muted-foreground"}`}
                       >
                         {atrasada ? `⚠ vencida há ${-dias!}d` : `venc. ${formatDate(t.dataVencimento)}`}
                       </p>
@@ -395,7 +395,7 @@ export function CustomerPanel({
       {/* ─── Card 6: Próximos compromissos ─── */}
       <Section
         icon={Calendar}
-        iconColor="text-amber-600"
+        iconColor="text-amber-600 dark:text-amber-400"
         title={`Compromissos (${compromissos.length})`}
         headerAction={
           <AbrirNovoCompromisso contatoId={contatoId} contatoNome={contato.nome} onCreated={refetch} />
@@ -496,7 +496,7 @@ export function CustomerPanel({
             >
               <span
                 className={
-                  "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all " +
+                  "absolute top-0.5 w-5 h-5 rounded-full bg-white dark:bg-card shadow transition-all " +
                   (botPausado ? "left-0.5" : "left-[22px]")
                 }
               />
@@ -542,7 +542,7 @@ export function CustomerPanel({
           >
             <span
               className={
-                "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all " +
+                "absolute top-0.5 w-5 h-5 rounded-full bg-white dark:bg-card shadow transition-all " +
                 (contato.optOutWhatsapp ? "left-0.5" : "left-[22px]")
               }
             />
@@ -791,7 +791,7 @@ function AdicionarProcessoInline({ onSuccess }: { onSuccess: () => void }) {
       </PopoverTrigger>
       <PopoverContent className="w-80 space-y-2" side="left">
         <p className="text-xs font-semibold flex items-center gap-1.5">
-          <Gavel className="h-3.5 w-3.5 text-indigo-600" />
+          <Gavel className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
           Monitorar processo
         </p>
         <Input
@@ -892,7 +892,7 @@ function CriarLeadInline({ contatoId, onSuccess }: { contatoId: number; onSucces
       </PopoverTrigger>
       <PopoverContent className="w-72 space-y-2" side="left">
         <p className="text-xs font-semibold flex items-center gap-1.5">
-          <TrendingUp className="h-3.5 w-3.5 text-violet-600" />
+          <TrendingUp className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
           Nova negociação
         </p>
         <div className="space-y-1.5">
@@ -1025,7 +1025,7 @@ function CriarCobrancaInline({
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent className="w-80 space-y-2" side="left">
         <p className="text-xs font-semibold flex items-center gap-1.5">
-          <DollarSign className="h-3.5 w-3.5 text-emerald-600" />
+          <DollarSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
           Nova cobrança
         </p>
         <div className="space-y-1.5">
@@ -1122,12 +1122,12 @@ const ETAPAS_FUNIL_LABELS: Record<string, string> = {
 };
 
 const ETAPAS_FUNIL_COLORS: Record<string, string> = {
-  novo: "bg-blue-50 text-blue-700 border-blue-200",
-  qualificado: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  proposta: "bg-violet-50 text-violet-700 border-violet-200",
-  negociacao: "bg-amber-50 text-amber-700 border-amber-200",
-  fechado_ganho: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  fechado_perdido: "bg-gray-50 text-gray-500 border-gray-200",
+  novo: "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50",
+  qualificado: "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/50",
+  proposta: "bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800/50",
+  negociacao: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50",
+  fechado_ganho: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50",
+  fechado_perdido: "bg-gray-50 dark:bg-slate-900/70 text-gray-500 border-gray-200 dark:border-slate-700/80",
 };
 
 type EtapaFunil = "novo" | "qualificado" | "proposta" | "negociacao" | "fechado_ganho" | "fechado_perdido";
@@ -1178,7 +1178,7 @@ function EditarLeadInline({
               {ETAPAS_FUNIL_LABELS[lead.etapaFunil] || lead.etapaFunil}
             </Badge>
             {lead.valorEstimado && (
-              <span className="font-bold text-emerald-600">
+              <span className="font-bold text-emerald-600 dark:text-emerald-400">
                 {formatBRL(parseValorBR(lead.valorEstimado))}
               </span>
             )}
@@ -1198,11 +1198,11 @@ function EditarLeadInline({
       <PopoverContent className="w-80 space-y-2" side="left">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold flex items-center gap-1.5">
-            <TrendingUp className="h-3.5 w-3.5 text-violet-600" />
+            <TrendingUp className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
             Editar lead
           </p>
           <button
-            className="text-[10px] text-red-600 hover:underline"
+            className="text-[10px] text-red-600 dark:text-red-400 hover:underline"
             onClick={() => setConfirmExcluir(true)}
             disabled={excluirMut.isPending}
           >
@@ -1346,18 +1346,18 @@ function CapturasIASection({
   const statusInfo = (() => {
     if (!ultimaTentativa) return null;
     if (ultimaTentativa.erro) {
-      return { cor: "text-red-700", dot: "bg-red-500", label: "erro" };
+      return { cor: "text-red-700 dark:text-red-300", dot: "bg-red-500", label: "erro" };
     }
     if (ultimaTentativa.novos > 0) {
-      return { cor: "text-violet-700", dot: "bg-violet-500", label: "novo" };
+      return { cor: "text-violet-700 dark:text-violet-300", dot: "bg-violet-500", label: "novo" };
     }
-    return { cor: "text-emerald-700", dot: "bg-emerald-500", label: "ok" };
+    return { cor: "text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500", label: "ok" };
   })();
 
   return (
     <Section
       icon={Sparkles}
-      iconColor="text-violet-600"
+      iconColor="text-violet-600 dark:text-violet-400"
       title={`Capturas IA${campos.length > 0 ? ` (${campos.length})` : ""}`}
       defaultOpen
       headerAction={

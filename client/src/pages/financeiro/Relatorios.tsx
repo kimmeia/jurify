@@ -195,28 +195,28 @@ export function RelatoriosTab() {
             <KpiRel
               label="Receita total"
               valor={formatBRL(receitaCaixa)}
-              cor="text-emerald-600"
+              cor="text-emerald-600 dark:text-emerald-400"
               delta={dreAnt ? calcularDelta(receitaCaixa, receitaAnt) : undefined}
               anterior={dreAnt ? `${formatBRL(receitaAnt ?? 0)} no período anterior` : null}
             />
             <KpiRel
               label="Despesa total"
               valor={formatBRL(despesaTotal)}
-              cor="text-red-600"
+              cor="text-red-600 dark:text-red-400"
               delta={dreAnt ? calcularDelta(despesaTotal, despesaAnt, true) : undefined}
               anterior={dreAnt ? `${formatBRL(despesaAnt ?? 0)} no período anterior` : null}
             />
             <KpiRel
               label="Resultado líquido"
               valor={formatBRL(resultado)}
-              cor={positivo ? "text-emerald-600" : "text-red-600"}
+              cor={positivo ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}
               delta={dreAnt ? calcularDelta(resultado, resultadoAnt) : undefined}
               anterior={dreAnt ? `${formatBRL(resultadoAnt ?? 0)} no período anterior` : null}
             />
             <KpiRel
               label="Margem"
               valor={isNaN(margemCaixa) ? "—" : `${margemCaixa.toFixed(1)}%`}
-              cor={positivo ? "text-emerald-600" : "text-red-600"}
+              cor={positivo ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}
               delta={dreAnt ? calcularDeltaPontos(margemCaixa, margemAnt) : undefined}
               anterior={
                 margemAnt != null ? `${margemAnt.toFixed(1)}% no período anterior` : null
@@ -364,7 +364,7 @@ function TabelaDre({
   const temOutros = !!outrosMeses && outrosMeses.valor > 0;
   const totalCaixa = total + (temOutros ? outrosMeses.valor : 0);
   const pct = (v: number) => (totalCaixa > 0 ? Math.round((v / totalCaixa) * 100) : 0);
-  const corTitulo = accent === "emerald" ? "text-emerald-600" : "text-red-600";
+  const corTitulo = accent === "emerald" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400";
 
   return (
     <div className="rounded-xl border bg-card">
@@ -415,15 +415,15 @@ function TabelaDre({
                 <TableRow className="bg-amber-50/50 dark:bg-amber-950/10">
                   <TableCell className="text-xs text-amber-800 dark:text-amber-300">
                     + Recebido de outros meses{" "}
-                    <span className="text-[10px] text-amber-600">(venceu antes, pago agora)</span>
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400">(venceu antes, pago agora)</span>
                   </TableCell>
-                  <TableCell className="text-center text-xs tabular-nums text-amber-700">
+                  <TableCell className="text-center text-xs tabular-nums text-amber-700 dark:text-amber-300">
                     {outrosMeses.count}
                   </TableCell>
-                  <TableCell className="text-center text-xs tabular-nums text-amber-700">
+                  <TableCell className="text-center text-xs tabular-nums text-amber-700 dark:text-amber-300">
                     {pct(outrosMeses.valor)}%
                   </TableCell>
-                  <TableCell className="text-right text-xs font-semibold tabular-nums text-amber-700">
+                  <TableCell className="text-right text-xs font-semibold tabular-nums text-amber-700 dark:text-amber-300">
                     {formatBRL(outrosMeses.valor)}
                   </TableCell>
                 </TableRow>
@@ -440,7 +440,7 @@ function TabelaDre({
                 </TableCell>
                 <TableCell
                   className={`text-right text-xs tabular-nums ${
-                    accent === "emerald" ? "text-emerald-700" : "text-red-700"
+                    accent === "emerald" ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"
                   }`}
                 >
                   {formatBRL(totalCaixa)}
@@ -503,14 +503,14 @@ function DiagnosticoDivergenciaDialog({
 
         {data && (
           <div className="space-y-6">
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-slate-600 dark:text-slate-300">
               Período: <strong>{data.periodo.inicio}</strong> a{" "}
               <strong>{data.periodo.fim}</strong>. Compare cada bloco abaixo
               com o painel Asaas pra identificar a causa da diferença.
             </p>
 
             {/* Comparação ao vivo com o Asaas */}
-            <section className="rounded-lg border border-indigo-200 bg-indigo-50/40 dark:bg-indigo-950/20 p-3">
+            <section className="rounded-lg border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/40 dark:bg-indigo-950/20 p-3">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">
                   Comparação ao vivo com o Asaas
@@ -550,12 +550,12 @@ function DiagnosticoDivergenciaDialog({
                     </div>
                     <div>
                       <p className="text-indigo-700 dark:text-indigo-300">Diferença</p>
-                      <p className="font-bold tabular-nums text-red-600">{formatBRL(comp.diferenca)}</p>
+                      <p className="font-bold tabular-nums text-red-600 dark:text-red-400">{formatBRL(comp.diferenca)}</p>
                     </div>
                   </div>
 
                   {comp.creditoMesDiferente && comp.creditoMesDiferente.count > 0 && (
-                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 rounded p-2 text-xs">
+                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded p-2 text-xs">
                       <p className="font-semibold text-amber-900 dark:text-amber-100">
                         Crédito em mês diferente do pagamento: {comp.creditoMesDiferente.count} cobranças
                         ({formatBRL(comp.creditoMesDiferente.total)})
@@ -588,7 +588,7 @@ function DiagnosticoDivergenciaDialog({
                               <TableCell className="text-[10px] font-mono">
                                 {s.status}
                                 {s.status === "RECEIVED_IN_CASH" && (
-                                  <span className="ml-1 text-[9px] text-amber-700 bg-amber-50 px-1 rounded">
+                                  <span className="ml-1 text-[9px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 px-1 rounded">
                                     fora do painel
                                   </span>
                                 )}
@@ -668,7 +668,7 @@ function DiagnosticoDivergenciaDialog({
                             <TableRow key={d.row.id}>
                               <TableCell className="text-[10px] max-w-[140px] truncate">{d.row.descricao ?? "—"}</TableCell>
                               <TableCell className="text-[10px] font-mono">{d.row.status}</TableCell>
-                              <TableCell className="text-[10px] font-mono text-red-600">{d.statusAsaas}</TableCell>
+                              <TableCell className="text-[10px] font-mono text-red-600 dark:text-red-400">{d.statusAsaas}</TableCell>
                               <TableCell className="text-[10px] text-right tabular-nums">{formatBRL(Number(d.row.valor || 0))}</TableCell>
                             </TableRow>
                           ))}
@@ -681,7 +681,7 @@ function DiagnosticoDivergenciaDialog({
             </section>
 
             {data.resumo && (
-              <section className="rounded-lg border border-amber-200 bg-amber-50/40 dark:bg-amber-950/20 p-3">
+              <section className="rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50/40 dark:bg-amber-950/20 p-3">
                 <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2">
                   Resumo bruto vs líquido (hipótese: taxas Asaas)
                 </h3>
@@ -719,7 +719,7 @@ function DiagnosticoDivergenciaDialog({
             )}
 
             <section>
-              <h3 className="text-sm font-semibold text-slate-800 mb-2">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">
                 1. Total por status (JuridFlow) — bruto vs líquido por forma de pagamento
               </h3>
               <p className="text-[11px] text-slate-500 mb-2">
@@ -752,7 +752,7 @@ function DiagnosticoDivergenciaDialog({
                       <TableCell className="text-xs font-mono">
                         {r.status}
                         {r.status === "RECEIVED_IN_CASH" && (
-                          <span className="ml-1 text-[9px] text-amber-700 bg-amber-50 px-1 rounded">
+                          <span className="ml-1 text-[9px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 px-1 rounded">
                             cash
                           </span>
                         )}
@@ -768,7 +768,7 @@ function DiagnosticoDivergenciaDialog({
                       <TableCell className="text-xs text-right tabular-nums">
                         {formatBRL(r.valorLiquido)}
                       </TableCell>
-                      <TableCell className="text-xs text-right tabular-nums font-medium text-amber-700">
+                      <TableCell className="text-xs text-right tabular-nums font-medium text-amber-700 dark:text-amber-300">
                         {formatBRL(r.taxa)}
                       </TableCell>
                     </TableRow>
@@ -778,7 +778,7 @@ function DiagnosticoDivergenciaDialog({
             </section>
 
             {data.saudeValorLiquido && (
-              <section className="rounded-lg border border-red-200 bg-red-50/40 dark:bg-red-950/20 p-3">
+              <section className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50/40 dark:bg-red-950/20 p-3">
                 <h3 className="text-sm font-semibold text-red-900 dark:text-red-100 mb-2">
                   Saúde do valor líquido (netValue)
                 </h3>
@@ -823,7 +823,7 @@ function DiagnosticoDivergenciaDialog({
                         <TableCell className="text-[10px] max-w-[160px] truncate">{o.descricao ?? "—"}</TableCell>
                         <TableCell className="text-[10px] text-right tabular-nums">{formatBRL(o.valor)}</TableCell>
                         <TableCell className="text-[10px] text-right tabular-nums">{formatBRL(o.valorLiquido ?? 0)}</TableCell>
-                        <TableCell className="text-[10px] text-right tabular-nums font-medium text-red-700">
+                        <TableCell className="text-[10px] text-right tabular-nums font-medium text-red-700 dark:text-red-300">
                           {o.gapPercent.toFixed(1)}%
                         </TableCell>
                       </TableRow>
@@ -835,7 +835,7 @@ function DiagnosticoDivergenciaDialog({
 
             {data.recebidoEmCash.count > 0 && (
               <section>
-                <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">
                   2. Cobranças RECEIVED_IN_CASH no período
                 </h3>
                 <p className="text-[11px] text-slate-500 mb-2">
@@ -872,7 +872,7 @@ function DiagnosticoDivergenciaDialog({
             )}
 
             <section>
-              <h3 className="text-sm font-semibold text-slate-800 mb-2">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">
                 3. Cobranças nas bordas do período (±2 dias)
               </h3>
               <p className="text-[11px] text-slate-500 mb-2">
@@ -883,7 +883,7 @@ function DiagnosticoDivergenciaDialog({
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-[11px] font-semibold text-slate-700 mb-1">
+                  <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-1">
                     Borda do início ({dataInicio} ±2d)
                   </p>
                   <Table>
@@ -915,7 +915,7 @@ function DiagnosticoDivergenciaDialog({
                   </Table>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-slate-700 mb-1">
+                  <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-1">
                     Borda do fim ({dataFim} ±2d)
                   </p>
                   <Table>
@@ -998,15 +998,15 @@ function ComposicaoRecebidoSection({ kpis }: { kpis: any }) {
                 </span>
               </td>
               <td className="py-2.5 text-right tabular-nums text-slate-500">{outrosMesesCount}</td>
-              <td className="py-2.5 text-right tabular-nums font-medium text-amber-700">{formatBRL(outrosMeses)}</td>
+              <td className="py-2.5 text-right tabular-nums font-medium text-amber-700 dark:text-amber-300">{formatBRL(outrosMeses)}</td>
             </tr>
-            <tr className="bg-emerald-50/60 dark:bg-emerald-950/20 font-semibold border-t-2 border-emerald-200">
+            <tr className="bg-emerald-50/60 dark:bg-emerald-950/20 font-semibold border-t-2 border-emerald-200 dark:border-emerald-800/50">
               <td className="py-2.5 px-1 text-slate-900 dark:text-slate-100">
                 = Entrou no caixa no período
                 <span className="text-[11px] font-normal text-slate-400 ml-1">(= Financeiro)</span>
               </td>
-              <td className="py-2.5 text-right tabular-nums text-slate-600">{caixaCount}</td>
-              <td className="py-2.5 text-right tabular-nums text-emerald-700">{formatBRL(caixa)}</td>
+              <td className="py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{caixaCount}</td>
+              <td className="py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{formatBRL(caixa)}</td>
             </tr>
           </tbody>
         </table>
@@ -1024,10 +1024,10 @@ function ComposicaoRecebidoSection({ kpis }: { kpis: any }) {
 function ConferenciaAsaasSection({ situacao, kpis, formaVenc }: { situacao: any; kpis?: any; formaVenc?: any }) {
   const fmt = (v: number) => formatBRL(v);
   const cards = [
-    { key: "recebidas", label: "Recebidas", cor: "text-emerald-600", data: situacao.recebidas },
-    { key: "confirmadas", label: "Confirmadas", cor: "text-sky-600", data: situacao.confirmadas },
-    { key: "aguardando", label: "Aguardando pagam.", cor: "text-amber-600", data: situacao.aguardando },
-    { key: "vencidas", label: "Vencidas", cor: "text-rose-600", data: situacao.vencidas },
+    { key: "recebidas", label: "Recebidas", cor: "text-emerald-600 dark:text-emerald-400", data: situacao.recebidas },
+    { key: "confirmadas", label: "Confirmadas", cor: "text-sky-600 dark:text-sky-400", data: situacao.confirmadas },
+    { key: "aguardando", label: "Aguardando pagam.", cor: "text-amber-600 dark:text-amber-400", data: situacao.aguardando },
+    { key: "vencidas", label: "Vencidas", cor: "text-rose-600 dark:text-rose-400", data: situacao.vencidas },
   ];
   const manual = kpis?.recebidoManual ?? 0;
   const manualCount = kpis?.recebidoManualCount ?? 0;
@@ -1069,7 +1069,7 @@ function ConferenciaAsaasSection({ situacao, kpis, formaVenc }: { situacao: any;
 
         <button
           onClick={() => setDetalhe((d) => !d)}
-          className="text-xs text-indigo-600 hover:underline"
+          className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
         >
           {detalhe ? "Ocultar detalhe por forma ›" : "Ver detalhe por forma de pagamento ›"}
         </button>

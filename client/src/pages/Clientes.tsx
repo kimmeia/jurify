@@ -355,11 +355,11 @@ function aplicarSegmento(
  *  Suspenso = amarelo (pausa reversível); Encerrado = cinza (concluído);
  *  Cancelado/Rescindido/Executado = vermelho (perda). */
 const SITUACAO_SERVICO_INFO: Record<string, { label: string; icon: string; nome: string; badge: string }> = {
-  suspenso:   { label: "Suspenso",   icon: "⏸", nome: "text-amber-600", badge: "bg-amber-50 text-amber-700 border-amber-200" },
-  encerrado:  { label: "Encerrado",  icon: "✓", nome: "text-slate-600", badge: "bg-slate-100 text-slate-600 border-slate-200" },
-  cancelado:  { label: "Cancelado",  icon: "⛔", nome: "text-rose-600", badge: "bg-rose-50 text-rose-700 border-rose-200" },
-  rescindido: { label: "Rescindido", icon: "✂", nome: "text-rose-600", badge: "bg-red-50 text-red-700 border-red-200" },
-  executado:  { label: "Executado",  icon: "⚖", nome: "text-rose-700", badge: "bg-red-100 text-red-800 border-red-300" },
+  suspenso:   { label: "Suspenso",   icon: "⏸", nome: "text-amber-600 dark:text-amber-400", badge: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50" },
+  encerrado:  { label: "Encerrado",  icon: "✓", nome: "text-slate-600 dark:text-slate-300", badge: "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80" },
+  cancelado:  { label: "Cancelado",  icon: "⛔", nome: "text-rose-600 dark:text-rose-400", badge: "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/50" },
+  rescindido: { label: "Rescindido", icon: "✂", nome: "text-rose-600 dark:text-rose-400", badge: "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50" },
+  executado:  { label: "Executado",  icon: "⚖", nome: "text-rose-700 dark:text-rose-300", badge: "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-red-300" },
 };
 
 /** Opções do diálogo de situação — agrupadas (pausa × encerramento). */
@@ -583,7 +583,7 @@ export default function Clientes() {
       {selId ? (
         <ClienteDetalhe id={selId} onVoltar={() => setSelId(null)} onUpdate={refetch} />
       ) : (
-        <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-violet-50/20 p-6 space-y-5">
+        <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-violet-50/20 dark:to-violet-950/20 p-6 space-y-5">
           {/* ═══════════ HERO ═══════════ */}
           <div className="rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 p-7 text-white relative overflow-hidden shadow-lg">
             <Users className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
@@ -614,7 +614,7 @@ export default function Clientes() {
                   <Button
                     size="sm"
                     onClick={() => setShowNovo(true)}
-                    className="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-8"
+                    className="bg-white dark:bg-card text-slate-900 dark:text-slate-100 hover:bg-slate-100 font-semibold shadow-sm h-8"
                   >
                     <Plus className="h-4 w-4 mr-1" /> Novo cliente
                   </Button>
@@ -677,23 +677,23 @@ export default function Clientes() {
           </div>
 
           {/* ═══════════ ABAS CLIENTES / LEADS ═══════════ */}
-          <div className="flex items-center gap-1 border-b border-slate-200">
+          <div className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-700/80">
             <button
               onClick={() => setAba("cliente")}
-              className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 ${aba === "cliente" ? "border-violet-600 text-violet-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+              className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 ${aba === "cliente" ? "border-violet-600 text-violet-700 dark:text-violet-300" : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"}`}
             >
               Clientes
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${aba === "cliente" ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-600"}`}>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${aba === "cliente" ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-600 dark:text-slate-300"}`}>
                 {stats?.clientesAtivos ?? "—"}
               </span>
             </button>
             <button
               onClick={() => setAba("lead")}
-              className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 ${aba === "lead" ? "border-violet-600 text-violet-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+              className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 ${aba === "lead" ? "border-violet-600 text-violet-700 dark:text-violet-300" : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"}`}
             >
               Leads
               <span className="text-[11px] font-normal text-slate-400 hidden sm:inline">em atendimento</span>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${aba === "lead" ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-600"}`}>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${aba === "lead" ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-600 dark:text-slate-300"}`}>
                 {stats?.totalLeads ?? "—"}
               </span>
             </button>
@@ -707,7 +707,7 @@ export default function Clientes() {
                 placeholder="Buscar por nome, telefone, e-mail ou CPF..."
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                className="pl-10 h-10 bg-white"
+                className="pl-10 h-10 bg-white dark:bg-card"
               />
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -770,25 +770,25 @@ export default function Clientes() {
 
           {/* ═══════════ BULK ACTION BAR ═══════════ */}
           {selecionados.size > 0 && (
-            <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900">
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/50 text-indigo-900 dark:text-indigo-200">
               <CheckSquare className="h-4 w-4" />
               <span className="text-sm font-semibold">
                 {selecionados.size} cliente{selecionados.size !== 1 ? "s" : ""} selecionado{selecionados.size !== 1 ? "s" : ""}
               </span>
               <div className="flex-1" />
-              <Button size="sm" variant="outline" className="bg-white hover:bg-indigo-100 border-indigo-200 h-8 text-xs" onClick={handleExport}>
+              <Button size="sm" variant="outline" className="bg-white dark:bg-card hover:bg-indigo-100 border-indigo-200 dark:border-indigo-800/50 h-8 text-xs" onClick={handleExport}>
                 <Download className="h-3 w-3 mr-1" /> Exportar CSV
               </Button>
               {selecionadosComTelefone > 0 && (
-                <Button size="sm" variant="outline" className="bg-white hover:bg-indigo-100 border-indigo-200 h-8 text-xs" onClick={handleBulkInbox}>
-                  <MessageCircle className="h-3 w-3 mr-1 text-emerald-600" /> Inbox
+                <Button size="sm" variant="outline" className="bg-white dark:bg-card hover:bg-indigo-100 border-indigo-200 dark:border-indigo-800/50 h-8 text-xs" onClick={handleBulkInbox}>
+                  <MessageCircle className="h-3 w-3 mr-1 text-emerald-600 dark:text-emerald-400" /> Inbox
                 </Button>
               )}
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => setSelecionados(new Set())}
-                className="text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100 h-8 text-xs"
+                className="text-indigo-700 dark:text-indigo-300 hover:text-indigo-900 dark:hover:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 h-8 text-xs"
               >
                 Limpar
               </Button>
@@ -832,9 +832,9 @@ export default function Clientes() {
               </CardContent>
             </Card>
           ) : (
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden">
               {/* Header */}
-              <div className={`grid ${aba === "lead" ? "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-semibold text-slate-500`}>
+              <div className={`grid ${aba === "lead" ? "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-2.5 bg-slate-50 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-700/80 text-[11px] uppercase tracking-wider font-semibold text-slate-500`}>
                 <Checkbox
                   checked={
                     selecionados.size > 0 &&
@@ -874,7 +874,7 @@ export default function Clientes() {
 
               {/* Paginação */}
               {totalPaginas > 1 && (
-                <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
+                <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900/70 border-t border-slate-200 dark:border-slate-700/80 flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
                   <span>
                     Mostrando <b>{clientesFiltrados.length}</b> de{" "}
                     <b>{stats?.total ?? "—"}</b> clientes
@@ -983,7 +983,7 @@ function ChipSegmento({
     return (
       <button
         onClick={onClick}
-        className={`${base} bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100`}
+        className={`${base} bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100`}
       >
         {children}
       </button>
@@ -993,7 +993,7 @@ function ChipSegmento({
     return (
       <button
         onClick={onClick}
-        className={`${base} bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100`}
+        className={`${base} bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-300 hover:bg-rose-100`}
       >
         {children}
       </button>
@@ -1002,7 +1002,7 @@ function ChipSegmento({
   return (
     <button
       onClick={onClick}
-      className={`${base} bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900`}
+      className={`${base} bg-white dark:bg-card border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 hover:border-slate-300 hover:text-slate-900 dark:hover:text-slate-100`}
     >
       {children}
     </button>
@@ -1022,18 +1022,18 @@ function CountPill({
     return <span className="bg-white/20 px-1.5 rounded-full text-[10px] tabular-nums">{children}</span>;
   if (tom === "amber")
     return (
-      <span className="bg-amber-100 text-amber-700 px-1.5 rounded-full text-[10px] tabular-nums">
+      <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 rounded-full text-[10px] tabular-nums">
         {children}
       </span>
     );
   if (tom === "rose")
     return (
-      <span className="bg-rose-100 text-rose-700 px-1.5 rounded-full text-[10px] tabular-nums">
+      <span className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 px-1.5 rounded-full text-[10px] tabular-nums">
         {children}
       </span>
     );
   return (
-    <span className="bg-slate-100 text-slate-600 px-1.5 rounded-full text-[10px] tabular-nums">
+    <span className="bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 px-1.5 rounded-full text-[10px] tabular-nums">
       {children}
     </span>
   );
@@ -1070,7 +1070,7 @@ function LinhaCliente({
 
   return (
     <div
-      className={`grid ${modoLead ? "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-3 border-t border-slate-100 hover:bg-slate-50/70 cursor-pointer transition-colors group`}
+      className={`grid ${modoLead ? "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-3 border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/70 dark:hover:bg-slate-900/70 cursor-pointer transition-colors group`}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("[data-stop-row-click]")) return;
         onAbrir();
@@ -1086,7 +1086,7 @@ function LinhaCliente({
       </div>
       <div className="min-w-0">
         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-          <p className={`text-sm font-semibold truncate ${situacaoInfo ? situacaoInfo.nome : inativoDias != null ? "text-slate-600" : ""}`}>
+          <p className={`text-sm font-semibold truncate ${situacaoInfo ? situacaoInfo.nome : inativoDias != null ? "text-slate-600 dark:text-slate-300" : ""}`}>
             {c.nome}
           </p>
           {situacaoInfo && (
@@ -1096,17 +1096,17 @@ function LinhaCliente({
           )}
           {isVip && <Star className="h-3.5 w-3.5 text-amber-500 shrink-0 fill-amber-500" />}
           {c.documentacaoPendente && (
-            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
               ⚠ Aguardando docs
             </span>
           )}
           {vencido > 0 && (
-            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-700 tabular-nums">
+            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 tabular-nums">
               ⚠ {fmtBRLShort(vencido)} vencido
             </span>
           )}
           {inativoDias != null && (
-            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">
+            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/60 text-slate-500">
               Inativo {inativoDias}d
             </span>
           )}
@@ -1137,7 +1137,7 @@ function LinhaCliente({
             <span className={`w-6 h-6 rounded-full bg-gradient-to-br ${gradientAvatar(c.responsavelNome)} text-white flex items-center justify-center text-[9px] font-bold shrink-0`}>
               {gerarIniciais(c.responsavelNome)}
             </span>
-            <span className="text-xs font-medium text-slate-700 truncate">{c.responsavelNome}</span>
+            <span className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{c.responsavelNome}</span>
           </span>
         ) : (
           <span className="text-[11px] italic text-slate-400">sem atendente</span>
@@ -1148,17 +1148,17 @@ function LinhaCliente({
       <div className="text-right">
         {vencido > 0 ? (
           <>
-            <p className="text-sm font-semibold text-rose-600 tabular-nums">{fmtBRLShort(vencido)}</p>
+            <p className="text-sm font-semibold text-rose-600 dark:text-rose-400 tabular-nums">{fmtBRLShort(vencido)}</p>
             <p className="text-[10px] text-rose-500">vencido</p>
           </>
         ) : pendente > 0 ? (
           <>
-            <p className="text-sm font-semibold text-amber-600 tabular-nums">{fmtBRLShort(pendente)}</p>
+            <p className="text-sm font-semibold text-amber-600 dark:text-amber-400 tabular-nums">{fmtBRLShort(pendente)}</p>
             <p className="text-[10px] text-amber-500">pendente</p>
           </>
         ) : recebido > 0 ? (
           <>
-            <p className="text-sm font-semibold text-emerald-600 tabular-nums">{fmtBRLShort(recebido)}</p>
+            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmtBRLShort(recebido)}</p>
             <p className="text-[10px] text-muted-foreground">recebido</p>
           </>
         ) : (
@@ -1170,7 +1170,7 @@ function LinhaCliente({
       </div>
 
       <div className="text-right text-xs">
-        <p className="text-slate-700">{timeAgo(c.ultimaConversaAt || c.createdAt)}</p>
+        <p className="text-slate-700 dark:text-slate-200">{timeAgo(c.ultimaConversaAt || c.createdAt)}</p>
         <p className="text-[10px] text-slate-400">
           {c.ultimaConversaAt ? "conversa" : "cadastro"}
         </p>
@@ -1214,7 +1214,7 @@ function LinhaCliente({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 hover:bg-rose-50 hover:text-rose-600"
+              className="h-7 w-7 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400"
               title="Excluir"
               onClick={(e) => {
                 e.stopPropagation();
@@ -1239,12 +1239,12 @@ function fmtBRLShort(v: number): string {
 // ─── Financeiro do Cliente — cobranças Asaas ────────────────────────────────
 
 const STATUS_COBRANCA_LABEL: Record<string, { label: string; cor: string }> = {
-  PENDING: { label: "Pendente", cor: "bg-amber-100 text-amber-700 border-amber-200" },
-  RECEIVED: { label: "Recebido", cor: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  CONFIRMED: { label: "Confirmado", cor: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  OVERDUE: { label: "Vencido", cor: "bg-red-100 text-red-700 border-red-200" },
-  REFUNDED: { label: "Estornado", cor: "bg-zinc-100 text-zinc-700 border-zinc-200" },
-  CANCELED: { label: "Cancelado", cor: "bg-zinc-100 text-zinc-700 border-zinc-200" },
+  PENDING: { label: "Pendente", cor: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50" },
+  RECEIVED: { label: "Recebido", cor: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50" },
+  CONFIRMED: { label: "Confirmado", cor: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50" },
+  OVERDUE: { label: "Vencido", cor: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50" },
+  REFUNDED: { label: "Estornado", cor: "bg-zinc-100 dark:bg-slate-800/60 text-zinc-700 dark:text-slate-200 border-zinc-200 dark:border-slate-700/80" },
+  CANCELED: { label: "Cancelado", cor: "bg-zinc-100 dark:bg-slate-800/60 text-zinc-700 dark:text-slate-200 border-zinc-200 dark:border-slate-700/80" },
 };
 
 function fmtMoeda(centavosOuDecimal: number | string | null | undefined): string {
@@ -1346,7 +1346,7 @@ function KanbanClienteTab({ contatoId }: { contatoId: number }) {
                     <p className="text-[11px] text-muted-foreground">
                       {c.funilNome} · {c.colunaNome}
                       {c.prazo && ` · prazo ${new Date(c.prazo).toLocaleDateString("pt-BR")}`}
-                      {c.atrasado && <span className="ml-1 text-red-600 font-medium">(atrasado)</span>}
+                      {c.atrasado && <span className="ml-1 text-red-600 dark:text-red-400 font-medium">(atrasado)</span>}
                     </p>
                   </div>
                 </div>
@@ -1685,15 +1685,15 @@ function FinanceiroClienteTab({
       {/* Totais agregados */}
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-lg border bg-card px-3 py-2 text-center">
-          <p className="text-base font-bold leading-tight text-emerald-600">{fmtMoeda(totais.pago)}</p>
+          <p className="text-base font-bold leading-tight text-emerald-600 dark:text-emerald-400">{fmtMoeda(totais.pago)}</p>
           <p className="text-[10px] text-muted-foreground">Pago</p>
         </div>
         <div className="rounded-lg border bg-card px-3 py-2 text-center">
-          <p className="text-base font-bold leading-tight text-amber-600">{fmtMoeda(totais.pendente)}</p>
+          <p className="text-base font-bold leading-tight text-amber-600 dark:text-amber-400">{fmtMoeda(totais.pendente)}</p>
           <p className="text-[10px] text-muted-foreground">Pendente</p>
         </div>
         <div className="rounded-lg border bg-card px-3 py-2 text-center">
-          <p className="text-base font-bold leading-tight text-red-600">{fmtMoeda(totais.vencido)}</p>
+          <p className="text-base font-bold leading-tight text-red-600 dark:text-red-400">{fmtMoeda(totais.vencido)}</p>
           <p className="text-[10px] text-muted-foreground">Vencido</p>
         </div>
       </div>
@@ -1703,7 +1703,7 @@ function FinanceiroClienteTab({
         <CardContent className="p-0">
           <div className="divide-y">
             {items.map((c) => {
-              const meta = STATUS_COBRANCA_LABEL[c.status] || { label: c.status, cor: "bg-zinc-100 text-zinc-700 border-zinc-200" };
+              const meta = STATUS_COBRANCA_LABEL[c.status] || { label: c.status, cor: "bg-zinc-100 dark:bg-slate-800/60 text-zinc-700 dark:text-slate-200 border-zinc-200 dark:border-slate-700/80" };
               return (
                 <div key={c.id} className="px-4 py-3 flex items-center gap-3 hover:bg-muted/30">
                   <div className="flex-1 min-w-0">
@@ -1762,7 +1762,7 @@ function FinanceiroClienteTab({
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-6 text-[10px] px-2 text-emerald-600 hover:text-emerald-700"
+                            className="h-6 text-[10px] px-2 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
                             onClick={() => marcarPagaMut.mutate({ id: c.id })}
                             disabled={marcarPagaMut.isPending}
                             title="Marcar como recebida (cobrança manual)"
@@ -1823,7 +1823,7 @@ function FinanceiroClienteTab({
                           href={`https://www.asaas.com/payment/${c.asaasPaymentId}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-[10px] text-violet-600 hover:underline"
+                          className="text-[10px] text-violet-600 dark:text-violet-400 hover:underline"
                         >
                           Abrir no Asaas
                         </a>
@@ -1963,8 +1963,8 @@ function FinanceiroClienteTab({
 // ─── Processos do Cliente ────────────────────────────────────────────────────
 
 const TIPO_PROCESSO_META: Record<string, { label: string; cor: string }> = {
-  extrajudicial: { label: "Extrajudicial", cor: "bg-sky-100 text-sky-700 border-sky-200" },
-  litigioso: { label: "Litigioso", cor: "bg-violet-100 text-violet-700 border-violet-200" },
+  extrajudicial: { label: "Extrajudicial", cor: "bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800/50" },
+  litigioso: { label: "Litigioso", cor: "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800/50" },
 };
 
 function ProcessoCard({
@@ -2034,13 +2034,13 @@ function ProcessoCard({
                 </Badge>
               )}
               {p.monitoramentoId && (
-                <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px]">
+                <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px]">
                   <Radar className="h-2.5 w-2.5 mr-0.5" /> Monitorado
                 </Badge>
               )}
               {/* Judicial sem CNJ ainda — aguardando protocolo */}
               {!p.numeroCnj && (p.tipo === "litigioso" || !p.tipo) && (
-                <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[9px]">
+                <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px]">
                   Aguardando CNJ
                 </Badge>
               )}
@@ -2077,7 +2077,7 @@ function ProcessoCard({
         {expandido && (
           <div className="mt-3 pt-3 border-t space-y-2">
             <div className="flex items-center gap-2">
-              <StickyNote className="h-3.5 w-3.5 text-amber-600" />
+              <StickyNote className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
               <p className="text-xs font-semibold">Anotações de andamento</p>
             </div>
 
@@ -2922,7 +2922,7 @@ function ClienteDetalhe({
           marca como recebida (no form Editar). */}
       {cliente.documentacaoPendente && (
         <div className="rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/30 dark:border-orange-900 px-4 py-3 flex items-start gap-3">
-          <FileText className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
+          <FileText className="h-5 w-5 text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-orange-900 dark:text-orange-100">
               Documentação pendente
@@ -2942,7 +2942,7 @@ function ClienteDetalhe({
       {/* Botão "Voltar" externo ao hero pra ficar discreto */}
       <button
         onClick={onVoltar}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Voltar para lista
       </button>
@@ -3225,41 +3225,41 @@ function ClienteDetalhe({
 
       {/* 6 abas consolidadas — pill style igual Dashboard */}
       <Tabs value={tab} onValueChange={setTab}>
-        <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex">
+        <div className="bg-slate-50/80 dark:bg-slate-900/70 backdrop-blur-sm border border-slate-200 dark:border-slate-700/80 rounded-xl p-1.5 inline-flex">
           <TabsList className="bg-transparent gap-1 p-0 h-auto">
             <TabsTrigger
               value="visao-geral"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg"
             >
               <User className="h-3.5 w-3.5" /> Visão Geral
             </TabsTrigger>
             <TabsTrigger
               value="processos"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg"
             >
               <Scale className="h-3.5 w-3.5" /> Processos
             </TabsTrigger>
             <TabsTrigger
               value="kanban"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg"
             >
               <Trello className="h-3.5 w-3.5" /> Kanban
             </TabsTrigger>
             <TabsTrigger
               value="financeiro"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg"
             >
               <DollarSign className="h-3.5 w-3.5" /> Financeiro
             </TabsTrigger>
             <TabsTrigger
               value="historico"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg"
             >
               <MessageCircle className="h-3.5 w-3.5" /> Histórico
             </TabsTrigger>
             <TabsTrigger
               value="documentos"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg"
             >
               <FileText className="h-3.5 w-3.5" /> Documentos
             </TabsTrigger>
@@ -3370,7 +3370,7 @@ function ClienteDetalhe({
                         />
                       </div>
                       {l.valorEstimado && (
-                        <span className="text-sm font-medium text-emerald-600 whitespace-nowrap">
+                        <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                           <DollarSign className="h-3 w-3 inline mr-0.5" />
                           {fmtMoeda(parseValorBR(l.valorEstimado))}
                         </span>
@@ -3447,7 +3447,7 @@ function ClienteDetalhe({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Ban className="h-5 w-5 text-rose-600" />
+              <Ban className="h-5 w-5 text-rose-600 dark:text-rose-400" />
               Situação do serviço
             </DialogTitle>
             <DialogDescription>
@@ -3468,7 +3468,7 @@ function ClienteDetalhe({
                   <button
                     type="button"
                     onClick={() => setEncerrarTipo(o.tipo)}
-                    className={`w-full text-left flex gap-3 rounded-lg border p-2.5 transition-colors ${sel ? (amber ? "border-amber-400 bg-amber-50" : "border-rose-400 bg-rose-50") : "border-border hover:bg-muted/40"}`}
+                    className={`w-full text-left flex gap-3 rounded-lg border p-2.5 transition-colors ${sel ? (amber ? "border-amber-400 bg-amber-50 dark:bg-amber-950/30" : "border-rose-400 bg-rose-50 dark:bg-rose-950/30") : "border-border hover:bg-muted/40"}`}
                   >
                     <span className={`mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 ${sel ? (amber ? "border-amber-500 bg-amber-500 ring-2 ring-inset ring-white" : "border-rose-500 bg-rose-500 ring-2 ring-inset ring-white") : "border-muted-foreground/40"}`} />
                     <span>
@@ -3601,13 +3601,13 @@ function MesclarClienteDialog({
       <AlertDialogContent className="max-w-lg">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
-            <UserPlus className="h-4 w-4 text-violet-600" />
+            <UserPlus className="h-4 w-4 text-violet-600 dark:text-violet-400" />
             Mesclar com outro cliente
           </AlertDialogTitle>
           <AlertDialogDescription>
             Vai mover <b>todas</b> as cobranças, conversas, processos e
             histórico de <b>{clienteAtual.nome}</b> pro cliente selecionado.
-            Depois,&nbsp;<b className="text-rose-600">{clienteAtual.nome}</b>
+            Depois,&nbsp;<b className="text-rose-600 dark:text-rose-400">{clienteAtual.nome}</b>
             &nbsp;será <b>excluído</b> deste CRM (operação definitiva).
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -3634,7 +3634,7 @@ function MesclarClienteDialog({
                   onClick={() => setSelecionado({ id: c.id, nome: c.nome })}
                   className={
                     "w-full text-left p-2 text-xs hover:bg-accent border-b last:border-b-0 " +
-                    (selecionado?.id === c.id ? "bg-violet-50" : "")
+                    (selecionado?.id === c.id ? "bg-violet-50 dark:bg-violet-950/30" : "")
                   }
                 >
                   <div className="font-medium">{c.nome}</div>
@@ -3646,12 +3646,12 @@ function MesclarClienteDialog({
             </div>
           </div>
         ) : (
-          <div className="rounded-lg border-2 border-rose-300 bg-rose-50 p-3 text-xs space-y-2">
-            <p className="font-semibold text-rose-900 flex items-center gap-1">
+          <div className="rounded-lg border-2 border-rose-300 bg-rose-50 dark:bg-rose-950/30 p-3 text-xs space-y-2">
+            <p className="font-semibold text-rose-900 dark:text-rose-200 flex items-center gap-1">
               <AlertTriangle className="h-4 w-4" />
               Confirmação final
             </p>
-            <p className="text-rose-800">
+            <p className="text-rose-800 dark:text-rose-200">
               Vai mover dados de <b>{clienteAtual.nome}</b> pra{" "}
               <b>{selecionado?.nome}</b> e <b>excluir</b>{" "}
               <b>{clienteAtual.nome}</b> deste CRM. Não há como desfazer.

@@ -289,9 +289,9 @@ export function OFXImportDialog({
                       >
                         <TableCell className="px-2">
                           {ehEntrada ? (
-                            <ArrowDownCircle className="h-4 w-4 text-emerald-600" />
+                            <ArrowDownCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                           ) : (
-                            <ArrowUpCircle className="h-4 w-4 text-red-600" />
+                            <ArrowUpCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                           )}
                         </TableCell>
                         <TableCell className="text-xs whitespace-nowrap">
@@ -350,7 +350,7 @@ export function OFXImportDialog({
                                 ))}
                               </select>
                               {selecionado !== null && selecionado !== undefined && (
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                               )}
                             </div>
                           )}

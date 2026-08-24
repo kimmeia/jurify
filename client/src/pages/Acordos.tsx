@@ -694,7 +694,7 @@ function PainelDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
                   <Button size="sm" className="bg-emerald-600 text-[12px] hover:bg-emerald-700" onClick={() => setFecharAberto(true)}>
                     Fechar
                   </Button>
-                  <Button size="sm" variant="outline" className="border-rose-200 text-[12px] text-rose-600" onClick={() => setCancelarAberto(true)}>
+                  <Button size="sm" variant="outline" className="border-rose-200 dark:border-rose-800/50 text-[12px] text-rose-600 dark:text-rose-400" onClick={() => setCancelarAberto(true)}>
                     Cancelar
                   </Button>
                 </div>

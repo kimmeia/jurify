@@ -64,7 +64,7 @@ function CoberturaVarredura({ mons }: { mons: any[] }) {
   if (estados.size === 0) return null;
   return (
     <p className="text-[10px] mt-0.5">
-      <span className="text-violet-700 font-semibold">
+      <span className="text-violet-700 dark:text-violet-300 font-semibold">
         Vigiando em {[...estados].map(siglaDoTribunal).join(" · ")}
       </span>
       {ultimaEm && (
@@ -73,7 +73,7 @@ function CoberturaVarredura({ mons }: { mons: any[] }) {
         </span>
       )}
       {falhas.size > 0 && (
-        <span className="text-rose-600 font-semibold"> · ⚠ falha em {[...falhas].join(", ")}</span>
+        <span className="text-rose-600 dark:text-rose-400 font-semibold"> · ⚠ falha em {[...falhas].join(", ")}</span>
       )}
     </p>
   );
@@ -153,13 +153,13 @@ const TIPO_LABELS: Record<string, string> = { lawsuit_cnj: "CNJ", cpf: "CPF", cn
 // "ativo" / "pausado" / "erro" são os 3 valores do enum atual em motor_monitoramentos.
 // Legado Judit (created/updating/updated/paused) mantido pra cards antigos.
 const STATUS_MON: Record<string, { label: string; cor: string }> = {
-  ativo: { label: "Ativo", cor: "bg-emerald-100 text-emerald-700" },
-  erro: { label: "Erro", cor: "bg-red-100 text-red-700" },
-  pausado: { label: "Pausado", cor: "bg-amber-100 text-amber-700" },
-  created: { label: "Ativo", cor: "bg-emerald-100 text-emerald-700" },
-  updating: { label: "Atualizando", cor: "bg-blue-100 text-blue-700" },
-  updated: { label: "Atualizado", cor: "bg-emerald-100 text-emerald-700" },
-  paused: { label: "Pausado", cor: "bg-amber-100 text-amber-700" },
+  ativo: { label: "Ativo", cor: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" },
+  erro: { label: "Erro", cor: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300" },
+  pausado: { label: "Pausado", cor: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" },
+  created: { label: "Ativo", cor: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" },
+  updating: { label: "Atualizando", cor: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" },
+  updated: { label: "Atualizado", cor: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" },
+  paused: { label: "Pausado", cor: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" },
 };
 /**
  * Indicador de saúde do monitoramento baseado na última atualização.
@@ -314,12 +314,12 @@ function ProcessoCard({
             {d.courts?.[0] && <p className="text-[10px] text-muted-foreground">{d.courts[0].name}</p>}
             <div className="flex items-center gap-3 mt-0.5">
               {d.distribution_date && <span className="text-[10px] text-muted-foreground">Dist: {new Date(d.distribution_date).toLocaleDateString("pt-BR")}</span>}
-              {d.amount && <span className="text-xs font-medium text-emerald-600">{formatBRL(d.amount)}</span>}
+              {d.amount && <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">{formatBRL(d.amount)}</span>}
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {movsComAlerta > 0 && (
-              <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/25 text-[9px] gap-1">
+              <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/25 text-[9px] gap-1">
                 <Bell className="h-2.5 w-2.5" />
                 {movsComAlerta}
               </Badge>
@@ -348,11 +348,11 @@ function ProcessoCard({
             {d.subjects?.length > 0 && (<div><p className="text-[10px] font-semibold text-muted-foreground mb-1">ASSUNTOS</p><div className="flex flex-wrap gap-1">{d.subjects.map((s: any, i: number) => (<Badge key={i} variant="outline" className="text-[9px]">{s.name}</Badge>))}</div></div>)}
 
             <div className="grid grid-cols-2 gap-4">
-              {ativos.length > 0 && (<div><p className="text-[10px] font-semibold text-blue-600 mb-1">POLO ATIVO</p>{ativos.map((p: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><User className="h-3 w-3 text-blue-500 shrink-0" /><span className="truncate">{p.name}</span></div>))}</div>)}
-              {passivos.length > 0 && (<div><p className="text-[10px] font-semibold text-red-600 mb-1">POLO PASSIVO</p>{passivos.map((p: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><User className="h-3 w-3 text-red-500 shrink-0" /><span className="truncate">{p.name}</span></div>))}</div>)}
+              {ativos.length > 0 && (<div><p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 mb-1">POLO ATIVO</p>{ativos.map((p: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><User className="h-3 w-3 text-blue-500 shrink-0" /><span className="truncate">{p.name}</span></div>))}</div>)}
+              {passivos.length > 0 && (<div><p className="text-[10px] font-semibold text-red-600 dark:text-red-400 mb-1">POLO PASSIVO</p>{passivos.map((p: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><User className="h-3 w-3 text-red-500 shrink-0" /><span className="truncate">{p.name}</span></div>))}</div>)}
             </div>
 
-            {advs.length > 0 && (<div><p className="text-[10px] font-semibold text-violet-600 mb-1">ADVOGADOS</p>{advs.map((l: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><Gavel className="h-3 w-3 text-violet-500 shrink-0" /><span>{l.name}</span>{l.main_document && <span className="text-[9px] text-muted-foreground font-mono">{l.main_document}</span>}</div>))}</div>)}
+            {advs.length > 0 && (<div><p className="text-[10px] font-semibold text-violet-600 dark:text-violet-400 mb-1">ADVOGADOS</p>{advs.map((l: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><Gavel className="h-3 w-3 text-violet-500 shrink-0" /><span>{l.name}</span>{l.main_document && <span className="text-[9px] text-muted-foreground font-mono">{l.main_document}</span>}</div>))}</div>)}
 
             {movs.length > 0 && (
               <div>
@@ -373,14 +373,14 @@ function ProcessoCard({
                           }`}
                         />
                         <div
-                          className={`text-xs pl-2 py-1 ${hasAlert ? "bg-blue-50 rounded pr-2" : ""}`}
+                          className={`text-xs pl-2 py-1 ${hasAlert ? "bg-blue-50 dark:bg-blue-950/30 rounded pr-2" : ""}`}
                         >
                           <div className="flex items-center gap-2 mb-0.5">
                             <span className="text-[9px] text-muted-foreground font-mono">
                               {m.step_date ? new Date(m.step_date).toLocaleDateString("pt-BR") : ""}
                             </span>
                             {hasAlert && (
-                              <Badge className="bg-blue-500/20 text-blue-700 border-0 text-[8px] px-1 py-0">
+                              <Badge className="bg-blue-500/20 text-blue-700 dark:text-blue-300 border-0 text-[8px] px-1 py-0">
                                 <Bell className="h-2 w-2 mr-0.5" />
                                 {matches[0]}
                               </Badge>
@@ -592,7 +592,7 @@ function ConsultarTab() {
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
       <div className="space-y-4 min-w-0">
       {/* Barra de busca */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] space-y-3">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-card p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] space-y-3">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shrink-0">
             <Search className="h-4 w-4 text-white" />
@@ -619,7 +619,7 @@ function ConsultarTab() {
               value={valor}
               onChange={(e) => setValor(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleBuscar(); }}
-              className="pl-9 h-10 rounded-lg border-slate-200 focus-visible:ring-indigo-400"
+              className="pl-9 h-10 rounded-lg border-slate-200 dark:border-slate-700/80 focus-visible:ring-indigo-400"
             />
           </div>
           <Button
@@ -637,14 +637,14 @@ function ConsultarTab() {
         <div className="flex items-center gap-2">
           {credsDisponiveis.length > 0 ? (
             <div className="flex items-center gap-2 flex-1 flex-wrap">
-              <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-violet-50 border border-violet-200">
-                <Lock className="h-3 w-3 text-violet-600" />
-                <span className="text-[10px] font-medium text-violet-700">Cofre</span>
+              <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/50">
+                <Lock className="h-3 w-3 text-violet-600 dark:text-violet-400" />
+                <span className="text-[10px] font-medium text-violet-700 dark:text-violet-300">Cofre</span>
               </div>
               <select
                 value={credencialId}
                 onChange={(e) => setCredencialId(e.target.value)}
-                className="flex h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs flex-1 max-w-xs focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
+                className="flex h-8 rounded-lg border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-card px-2.5 py-1 text-xs flex-1 max-w-xs focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
               >
                 <option value="">Sem credencial (processos públicos)</option>
                 {credsDisponiveis.map((c: any) => (
@@ -665,16 +665,16 @@ function ConsultarTab() {
 
         <div>
           {tipo === "lawsuit_cnj" ? (
-            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200/70">
-              <Coins className="h-3 w-3 text-emerald-600" />
-              <p className="text-[11px] text-emerald-800">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-800/50">
+              <Coins className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+              <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
                 Custo: <strong>1 crédito</strong> — consulta direta por número do processo.
               </p>
             </div>
           ) : (
-            <div className="rounded-lg bg-amber-50 border border-amber-200/70 p-2.5 text-[11px] text-amber-900">
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/50 p-2.5 text-[11px] text-amber-900 dark:text-amber-200">
               <div className="flex items-start gap-2">
-                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-600" />
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
                 <div>
                   <p className="font-semibold">Busca por {TIPO_LABELS[tipo]} — custo variável</p>
                   <p className="mt-0.5 text-[10.5px] opacity-90">
@@ -691,7 +691,7 @@ function ConsultarTab() {
 
       {/* Status da busca */}
       {buscando && (
-        <div className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-indigo-50 via-blue-50 to-indigo-50 border border-indigo-200/60 shadow-sm">
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-indigo-50 dark:from-indigo-950/40 via-blue-50 dark:via-blue-950/25 to-indigo-50 dark:to-indigo-950/20 border border-indigo-200/60 dark:border-indigo-800/50 shadow-sm">
           <div className="relative flex h-9 w-9 shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-30" />
             <div className="relative h-9 w-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
@@ -699,8 +699,8 @@ function ConsultarTab() {
             </div>
           </div>
           <div>
-            <p className="text-sm font-semibold text-indigo-900">Consultando tribunais…</p>
-            <p className="text-xs text-indigo-700/80">
+            <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">Consultando tribunais…</p>
+            <p className="text-xs text-indigo-700/80 dark:text-indigo-300">
               {tipo !== "lawsuit_cnj"
                 ? `Buscando em todos os tribunais por ${TIPO_LABELS[tipo]}. Pode levar até 2 minutos.`
                 : "Resultado em até 9 segundos."}
@@ -724,15 +724,15 @@ function ConsultarTab() {
               const codigo = String(e.code || "outro");
               const isCredencial = /credencial|sess[aã]o|login/i.test(codigo) || /credencial|sess[aã]o|login/i.test(e.message || "");
               return (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-2">
-                  <p className="text-sm font-semibold text-red-900">Falha na consulta</p>
-                  <p className="text-sm text-red-800">{e.message || "Erro desconhecido"}</p>
+                <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/30 p-4 space-y-2">
+                  <p className="text-sm font-semibold text-red-900 dark:text-red-200">Falha na consulta</p>
+                  <p className="text-sm text-red-800 dark:text-red-200">{e.message || "Erro desconhecido"}</p>
                   {isCredencial && (
                     <Button size="sm" variant="outline" onClick={() => (window.location.href = "/processos?tab=cofre")}>
                       Abrir Cofre de Credenciais
                     </Button>
                   )}
-                  <p className="text-xs text-red-700/70">Código: {codigo}</p>
+                  <p className="text-xs text-red-700/70 dark:text-red-300">Código: {codigo}</p>
                 </div>
               );
             }
@@ -777,16 +777,16 @@ function ConsultarTab() {
           })()}
         </div>
       ) : resultados && !buscando ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-12 text-center">
+        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-900/70 py-12 text-center">
           <Scale className="h-8 w-8 text-slate-300 mx-auto mb-2" />
           <p className="text-sm text-slate-500">Nenhum processo encontrado.</p>
         </div>
       ) : !buscando && !resultados ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50/30 py-14 text-center space-y-2">
+        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 bg-gradient-to-br from-slate-50 dark:from-slate-900 to-indigo-50/30 dark:to-indigo-950/20 py-14 text-center space-y-2">
           <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 flex items-center justify-center mx-auto mb-1">
             <Scale className="h-7 w-7 text-indigo-500/70" />
           </div>
-          <p className="font-semibold text-slate-700">Consulte processos judiciais</p>
+          <p className="font-semibold text-slate-700 dark:text-slate-200">Consulte processos judiciais</p>
           <p className="text-sm text-slate-500">Busque por CNJ, CPF ou CNPJ em +90 tribunais do Brasil.</p>
         </div>
       ) : null}
@@ -810,7 +810,7 @@ function ConsultarTab() {
             <div className="space-y-2">
               {vincularDialog.clientes.map((c: any) => (
                 <div key={c.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50">
-                  <div className="h-9 w-9 rounded-full bg-violet-100 flex items-center justify-center text-xs font-bold text-violet-700">
+                  <div className="h-9 w-9 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center text-xs font-bold text-violet-700 dark:text-violet-300">
                     {(c.nome || "?")[0]}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -880,8 +880,8 @@ function ResumoIABloco({ texto }: { texto: string }) {
   };
 
   return (
-    <div className="rounded-lg bg-violet-50 dark:bg-violet-950/20 border border-violet-200/50 p-3 space-y-3">
-      <p className="text-[10px] font-semibold text-violet-600 flex items-center gap-1">
+    <div className="rounded-lg bg-violet-50 dark:bg-violet-950/20 border border-violet-200/50 dark:border-violet-800/50 p-3 space-y-3">
+      <p className="text-[10px] font-semibold text-violet-600 dark:text-violet-400 flex items-center gap-1">
         <FileText className="h-3 w-3" /> ANÁLISE ESTRATÉGICA IA
       </p>
       <div
@@ -892,7 +892,7 @@ function ResumoIABloco({ texto }: { texto: string }) {
         dangerouslySetInnerHTML={{ __html: marked.parse(resto, { async: false }) as string }}
       />
       {mensagemCliente && (
-        <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 p-3 space-y-2">
+        <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-800/50 p-3 space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
               💬 MENSAGEM PRONTA PRO CLIENTE
@@ -981,10 +981,10 @@ function identificadorPrincipal(mon: any): string {
 
 // Selos de classificação da movimentação (resumo IA classificado).
 const DESFECHO_MOV: Record<string, { label: string; emoji: string; cls: string; dot: string }> = {
-  favoravel: { label: "Favorável", emoji: "🟢", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-  desfavoravel: { label: "Desfavorável", emoji: "🔴", cls: "bg-rose-50 text-rose-700 border-rose-200", dot: "bg-rose-500" },
-  parcial: { label: "Parcial", emoji: "🟡", cls: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" },
-  neutro: { label: "Sem mérito", emoji: "⚪", cls: "bg-slate-100 text-slate-600 border-slate-200", dot: "bg-slate-400" },
+  favoravel: { label: "Favorável", emoji: "🟢", cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50", dot: "bg-emerald-500" },
+  desfavoravel: { label: "Desfavorável", emoji: "🔴", cls: "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/50", dot: "bg-rose-500" },
+  parcial: { label: "Parcial", emoji: "🟡", cls: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50", dot: "bg-amber-500" },
+  neutro: { label: "Sem mérito", emoji: "⚪", cls: "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80", dot: "bg-slate-400" },
 };
 
 function MonitoramentoCard({
@@ -1225,7 +1225,7 @@ function MonitoramentoCard({
 
   return (
     <>
-    <div className={`rounded-xl ${cardBg} border border-slate-200 border-l-[3px] ${corLateral} shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all ${pausado ? "opacity-75" : ""}`}>
+    <div className={`rounded-xl ${cardBg} border border-slate-200 dark:border-slate-700/80 border-l-[3px] ${corLateral} shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all ${pausado ? "opacity-75" : ""}`}>
       <div className="px-4 py-3">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setAberto(!aberto)}>
           <div className={`h-11 w-11 rounded-xl ${avatarStyle} flex items-center justify-center shrink-0 shadow-sm`}>
@@ -1252,7 +1252,7 @@ function MonitoramentoCard({
               )}
               {mon.subiu2grau && (
                 <span
-                  className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.04em] bg-amber-50 text-amber-700"
+                  className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.04em] bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300"
                   title={mon.indicios2grau ? `Indícios de 2º grau: ${mon.indicios2grau}` : "As movimentações sugerem que o processo subiu pro 2º grau (recurso)."}
                 >
                   2º grau?
@@ -1299,7 +1299,7 @@ function MonitoramentoCard({
           <div className="shrink-0 text-right mr-1">
             {atualizando ? (
               <>
-                <p className="text-[11.5px] font-semibold text-blue-600 flex items-center justify-end gap-1">
+                <p className="text-[11.5px] font-semibold text-blue-600 dark:text-blue-400 flex items-center justify-end gap-1">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   consultando…
                 </p>
@@ -1411,7 +1411,7 @@ function MonitoramentoCard({
                     <Badge variant="outline" className="text-[10px]">{processoData.instance}ª instância</Badge>
                   )}
                   {processoData.amount && (
-                    <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px]">
+                    <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px]">
                       <CircleDollarSign className="h-2.5 w-2.5 mr-0.5" />
                       {formatBRL(processoData.amount)}
                     </Badge>
@@ -1427,7 +1427,7 @@ function MonitoramentoCard({
                   <div className="grid grid-cols-2 gap-3">
                     {ativos.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-semibold text-blue-600 mb-1">POLO ATIVO</p>
+                        <p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 mb-1">POLO ATIVO</p>
                         {ativos.map((p: any, i: number) => (
                           <p key={i} className="text-xs truncate">{p.name}</p>
                         ))}
@@ -1435,7 +1435,7 @@ function MonitoramentoCard({
                     )}
                     {passivos.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-semibold text-red-600 mb-1">POLO PASSIVO</p>
+                        <p className="text-[10px] font-semibold text-red-600 dark:text-red-400 mb-1">POLO PASSIVO</p>
                         {passivos.map((p: any, i: number) => (
                           <p key={i} className="text-xs truncate">{p.name}</p>
                         ))}
@@ -1453,7 +1453,7 @@ function MonitoramentoCard({
                       </p>
                       {steps.some((s: any) => s.eventoId && !s.resumoIa) && (
                         <button
-                          className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 inline-flex items-center gap-1 disabled:opacity-60"
+                          className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 inline-flex items-center gap-1 disabled:opacity-60"
                           disabled={reclassificarMut.isPending}
                           onClick={() => reclassificarMut.mutate({ monitoramentoId: mon.id })}
                           title="Gera resumo + selos (desfecho/relevância) das movimentações que ainda não têm."
@@ -1482,10 +1482,10 @@ function MonitoramentoCard({
                               {dm && <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-semibold border ${dm.cls}`}>{dm.emoji} {dm.label}</span>}
                               {(s.relevancia === "rotina" || s.relevancia === "relevante") && (
                                 rotina
-                                  ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-slate-100 text-slate-500 border-slate-200">📄 Rotina</span>
-                                  : <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300">⭐ Relevante</span>
+                                  ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-slate-100 dark:bg-slate-800/60 text-slate-500 border-slate-200 dark:border-slate-700/80">📄 Rotina</span>
+                                  : <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-violet-50 text-violet-700 border-violet-200 dark:border-violet-800/50 dark:bg-violet-950/40 dark:text-violet-300">⭐ Relevante</span>
                               )}
-                              {prazo && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold border bg-orange-100 text-orange-700 border-orange-300">⏰ Requer prazo</span>}
+                              {prazo && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold border bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-300">⏰ Requer prazo</span>}
                             </div>
                             {s.resumoIa
                               ? <p className="text-[11.5px] leading-snug mt-1 font-medium text-foreground">{s.resumoIa}</p>
@@ -1851,7 +1851,7 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
             <Button
               size="sm"
               variant="outline"
-              className="border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800"
+              className="border-amber-300 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 text-amber-800 dark:text-amber-200"
               disabled={seedTesteMut.isPending}
               onClick={() => seedTesteMut.mutate()}
               title="Cria um processo de teste com movimentações classificadas (só staging/dev)."
@@ -1947,7 +1947,7 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
 
       {secundarios.length > 0 && (
         <div className="rounded-xl border bg-card border-l-[3px] border-l-amber-500 px-4 py-2.5 flex items-center gap-3 flex-wrap">
-          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
           <p className="text-[12.5px] text-muted-foreground min-w-0">
             <b className="font-bold text-foreground">{totalSecundarios}</b>{" "}
             {totalSecundarios === 1 ? "processo para" : "processos param"} por{" "}
@@ -1997,25 +1997,25 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
                     <div className="w-6 shrink-0 text-center">
                       {m.status === "pendente" && <span className="text-muted-foreground">⏳</span>}
                       {m.status === "rodando" && <Loader2 className="h-3 w-3 animate-spin text-blue-500 inline" />}
-                      {m.status === "ok" && <span className="text-emerald-600">✓</span>}
-                      {m.status === "erro" && <span className="text-red-600">✗</span>}
+                      {m.status === "ok" && <span className="text-emerald-600 dark:text-emerald-400">✓</span>}
+                      {m.status === "erro" && <span className="text-red-600 dark:text-red-400">✗</span>}
                     </div>
                     <span className="flex-1 truncate">{m.apelido || `Monitor ${m.monitoramentoId}`}</span>
                     <Badge variant="outline" className="text-[9px] shrink-0">
                       {m.tipo === "novas_acoes" ? "Novas ações" : "Movs"}
                     </Badge>
                     {m.status === "ok" && m.baseline && (
-                      <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/30 text-[9px] shrink-0">Baseline</Badge>
+                      <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[9px] shrink-0">Baseline</Badge>
                     )}
                     {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) > 0 && (
-                      <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px] shrink-0">+{m.detectadas} novo(s)</Badge>
+                      <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] shrink-0">+{m.detectadas} novo(s)</Badge>
                     )}
                     {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) === 0 && (
                       <span className="text-[9px] text-muted-foreground shrink-0">Sem novidades</span>
                     )}
                     {m.status === "erro" && (
                       <span
-                        className="text-[9px] text-red-600 shrink-0 max-w-[180px] truncate"
+                        className="text-[9px] text-red-600 dark:text-red-400 shrink-0 max-w-[180px] truncate"
                         title={m.erro}
                       >
                         {m.erro}
@@ -2041,11 +2041,11 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
       </Dialog>
 
       {semCredenciais && (
-        <div className="rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50/60 border border-blue-200/60 p-3.5 flex items-start gap-3 shadow-[0_1px_2px_0_rgb(0,0,0,0.03)]">
+        <div className="rounded-xl bg-gradient-to-r from-blue-50 dark:from-blue-950/40 to-indigo-50/60 dark:to-indigo-950/20 border border-blue-200/60 dark:border-blue-800/50 p-3.5 flex items-start gap-3 shadow-[0_1px_2px_0_rgb(0,0,0,0.03)]">
           <div className="h-8 w-8 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
-            <Lock className="h-4 w-4 text-blue-600" />
+            <Lock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <p className="text-xs text-blue-900/90 leading-relaxed">
+          <p className="text-xs text-blue-900/90 dark:text-blue-200 leading-relaxed">
             Processos públicos podem ser monitorados sem credencial.
             Para processos em <strong>segredo de justiça</strong>, cadastre uma credencial OAB no <strong>Cofre</strong>.
           </p>
@@ -2067,17 +2067,17 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
           ))}
         </div>
       ) : listaMons.length > 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-10 text-center space-y-2">
+        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-900/70 py-10 text-center space-y-2">
           <Radar className="h-7 w-7 text-slate-300 mx-auto" />
-          <p className="text-sm font-medium text-slate-600">Nenhum monitoramento com este filtro</p>
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Nenhum monitoramento com este filtro</p>
           <p className="text-xs text-slate-400">Tente outra aba de filtro acima.</p>
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50/30 py-14 text-center space-y-2">
+        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 bg-gradient-to-br from-slate-50 dark:from-slate-900 to-indigo-50/30 dark:to-indigo-950/20 py-14 text-center space-y-2">
           <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 flex items-center justify-center mx-auto mb-1">
             <Radar className="h-7 w-7 text-indigo-500/70" />
           </div>
-          <p className="font-semibold text-slate-700">Nenhum monitoramento ativo</p>
+          <p className="font-semibold text-slate-700 dark:text-slate-200">Nenhum monitoramento ativo</p>
           <p className="text-sm text-slate-500 max-w-md mx-auto">
             {semCredenciais
               ? "Cadastre uma credencial OAB no Cofre para começar."
@@ -2139,8 +2139,8 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 p-3 text-xs flex items-start gap-2">
-              <ShieldAlert className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/50 p-3 text-xs flex items-start gap-2">
+              <ShieldAlert className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
               <div className="text-blue-900 dark:text-blue-200 space-y-1">
                 <p className="font-semibold">Proteção de dados (LGPD)</p>
                 <p>
@@ -2376,9 +2376,9 @@ export default function Processos() {
       />
 
       {saldo < 5 && (
-        <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200/70 px-4 py-2.5">
+        <div className="flex items-center gap-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/50 px-4 py-2.5">
           <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
-          <span className="text-sm text-amber-800">Saldo baixo. Para comprar mais créditos, entre em contato com o suporte.</span>
+          <span className="text-sm text-amber-800 dark:text-amber-200">Saldo baixo. Para comprar mais créditos, entre em contato com o suporte.</span>
         </div>
       )}
 
@@ -2526,8 +2526,8 @@ function AlertasTab() {
 
   return (
     <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-orange-50/40 to-yellow-50/30 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
-        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-amber-200/40 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border border-amber-200/70 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 dark:from-amber-950/40 via-orange-50/40 dark:via-orange-950/25 to-yellow-50/30 dark:to-yellow-950/20 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
+        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-amber-200/40 dark:bg-amber-900/20 blur-3xl" />
         <div className="relative flex items-start gap-3">
           <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shrink-0 shadow-sm">
             <Bell className="h-5 w-5 text-white" />
@@ -2540,7 +2540,7 @@ function AlertasTab() {
                 IA
               </span>
             </div>
-            <p className="text-[11px] text-amber-900/75 mt-1 max-w-2xl leading-relaxed">
+            <p className="text-[11px] text-amber-900/75 dark:text-amber-200 mt-1 max-w-2xl leading-relaxed">
               Sistema detecta automaticamente <strong>audiências, intimações, réplica, contestação e recursos</strong>.
               Aprove pra criar agendamento direto na agenda — ou descarte se for falso positivo.
             </p>
@@ -2551,11 +2551,11 @@ function AlertasTab() {
       {isLoading ? (
         <Skeleton className="h-32 w-full" />
       ) : lista.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-amber-50/30 py-14 text-center space-y-2">
+        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 bg-gradient-to-br from-slate-50 dark:from-slate-900 to-amber-50/30 dark:to-amber-950/20 py-14 text-center space-y-2">
           <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 flex items-center justify-center mx-auto mb-1">
             <Bell className="h-7 w-7 text-amber-500/70" />
           </div>
-          <p className="font-semibold text-slate-700">Nenhum alerta pendente</p>
+          <p className="font-semibold text-slate-700 dark:text-slate-200">Nenhum alerta pendente</p>
           <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
             Quando o cron detectar prazos ou audiências em movimentações dos seus processos monitorados,
             vão aparecer aqui pra você aprovar ou descartar com 1 click.
@@ -2569,24 +2569,24 @@ function AlertasTab() {
             // Pala lateral (borda esquerda) + cores baseadas no tipo
             const palette = isAudiencia
               ? {
-                  borda: "border-l-violet-500 border border-violet-200/60",
+                  borda: "border-l-violet-500 border border-violet-200/60 dark:border-violet-800/50",
                   iconBg: "bg-gradient-to-br from-violet-500 to-purple-500",
-                  badgeBg: "bg-violet-500/15 text-violet-700 border-violet-500/30",
+                  badgeBg: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30",
                   tipoLabel: "Audiência",
                   Icon: Gavel,
                 }
               : isUrgente
                 ? {
-                    borda: "border-l-rose-500 border border-rose-200/60",
+                    borda: "border-l-rose-500 border border-rose-200/60 dark:border-rose-800/50",
                     iconBg: "bg-gradient-to-br from-rose-500 to-red-500",
-                    badgeBg: "bg-rose-500/15 text-rose-700 border-rose-500/30",
+                    badgeBg: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
                     tipoLabel: "Prazo urgente",
                     Icon: AlertTriangle,
                   }
                 : {
-                    borda: "border-l-amber-500 border border-amber-200/60",
+                    borda: "border-l-amber-500 border border-amber-200/60 dark:border-amber-800/50",
                     iconBg: "bg-gradient-to-br from-amber-500 to-orange-500",
-                    badgeBg: "bg-amber-500/15 text-amber-700 border-amber-500/30",
+                    badgeBg: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
                     tipoLabel: "Prazo",
                     Icon: Clock,
                   };
@@ -2594,7 +2594,7 @@ function AlertasTab() {
             return (
               <div
                 key={sug.id}
-                className={`rounded-xl bg-white p-4 border-l-[3px] ${palette.borda} shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all`}
+                className={`rounded-xl bg-white dark:bg-card p-4 border-l-[3px] ${palette.borda} shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all`}
               >
                 <div className="flex items-start gap-3">
                   <div className={`h-9 w-9 rounded-lg ${palette.iconBg} flex items-center justify-center shrink-0 shadow-sm`}>
@@ -2607,12 +2607,12 @@ function AlertasTab() {
                       {sug.tribunal && <Badge variant="outline" className="text-[9px]">{sug.tribunal}</Badge>}
                     </div>
                     <p className="text-[10px] text-slate-500 mt-1">
-                      <span className="font-medium text-slate-700">{sug.apelidoProcesso}</span>
+                      <span className="font-medium text-slate-700 dark:text-slate-200">{sug.apelidoProcesso}</span>
                       {sug.cnj && <span className="font-mono"> · {sug.cnj}</span>}
                     </p>
                     <div className="flex items-center gap-3 mt-1.5 text-[11px] flex-wrap">
                       {sug.dataSugerida && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200/60 text-blue-700 font-medium tabular-nums">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-800/50 text-blue-700 dark:text-blue-300 font-medium tabular-nums">
                           <Clock className="h-3 w-3" />
                           {new Date(sug.dataSugerida).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
                         </span>
@@ -2620,8 +2620,8 @@ function AlertasTab() {
                       {sug.prazoDias != null && (
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
                           isUrgente
-                            ? "bg-rose-50 border-rose-200 text-rose-700"
-                            : "bg-slate-50 border-slate-200 text-slate-600"
+                            ? "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-300"
+                            : "bg-slate-50 dark:bg-slate-900/70 border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-300"
                         }`}>
                           {sug.prazoDias} {sug.prazoDias === 1 ? "dia" : "dias"}{sug.prazoUteis ? " úteis" : ""}
                         </span>
@@ -2632,11 +2632,11 @@ function AlertasTab() {
                     )}
                     {sug.trechoOrigem && (
                       <details className="mt-1.5 group">
-                        <summary className="text-[10px] text-slate-500 cursor-pointer hover:text-slate-700 inline-flex items-center gap-1 list-none">
+                        <summary className="text-[10px] text-slate-500 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 inline-flex items-center gap-1 list-none">
                           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
                           Ver trecho original
                         </summary>
-                        <p className="text-[10px] text-slate-600 mt-1.5 bg-slate-50 border border-slate-200/70 rounded-lg p-2.5 leading-relaxed">
+                        <p className="text-[10px] text-slate-600 dark:text-slate-300 mt-1.5 bg-slate-50 dark:bg-slate-900/70 border border-slate-200/70 dark:border-slate-700/80 rounded-lg p-2.5 leading-relaxed">
                           {sug.trechoOrigem}
                         </p>
                       </details>
@@ -2655,7 +2655,7 @@ function AlertasTab() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 text-[10px] rounded-lg border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                      className="h-7 text-[10px] rounded-lg border-slate-200 dark:border-slate-700/80 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/70"
                       onClick={() => descartarMut.mutate({ id: sug.id })}
                       disabled={aprovarMut.isPending || descartarMut.isPending}
                     >
@@ -2732,7 +2732,7 @@ function MonitoramentosCount() {
       className={`ml-1 text-[10px] px-1.5 rounded-full tabular-nums font-semibold ${
         parados > 0
           ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300"
-          : "bg-indigo-100 text-indigo-700"
+          : "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
       }`}
       title={parados > 0 ? `${parados} de ${mons.length} pararam de atualizar` : undefined}
     >
@@ -2749,7 +2749,7 @@ function NovasAcoesBadge() {
   const count = data?.totalNaoLidas ?? 0;
   if (count === 0) return null;
   return (
-    <span className="ml-1 text-[10px] bg-rose-100 text-rose-700 px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
+    <span className="ml-1 text-[10px] bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
       {count}
     </span>
   );
@@ -2763,7 +2763,7 @@ function AlertasBadge() {
   const count = data?.pendentes ?? 0;
   if (count === 0) return null;
   return (
-    <span className="ml-1 text-[10px] bg-amber-100 text-amber-700 px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
+    <span className="ml-1 text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
       {count}
     </span>
   );
@@ -2774,9 +2774,9 @@ function AlertasBadge() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const RESOLUCAO_META: Record<string, { label: string; emoji: string; badge: string; borda: string; verbo: string }> = {
-  monitorando: { label: "Monitorando", emoji: "🟢", badge: "bg-emerald-100 text-emerald-700 border-emerald-200", borda: "border-l-emerald-500", verbo: "Resolvido" },
-  lida: { label: "Ciente", emoji: "✔", badge: "bg-slate-100 text-slate-600 border-slate-200", borda: "border-l-slate-300", verbo: "Marcada" },
-  falso: { label: "Falso positivo", emoji: "⊘", badge: "bg-rose-50 text-rose-600 border-rose-200", borda: "border-l-rose-300", verbo: "Descartado" },
+  monitorando: { label: "Monitorando", emoji: "🟢", badge: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50", borda: "border-l-emerald-500", verbo: "Resolvido" },
+  lida: { label: "Ciente", emoji: "✔", badge: "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80", borda: "border-l-slate-300", verbo: "Marcada" },
+  falso: { label: "Falso positivo", emoji: "⊘", badge: "bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800/50", borda: "border-l-rose-300", verbo: "Descartado" },
 };
 
 type ParteDoCard = { nome: string; polo: string; documento: string | null };
@@ -2854,10 +2854,10 @@ function capaDoCard(a: any, detalhes: any): CapaDoCard | null {
 }
 
 const SELO_POLO: Record<string, { texto: string; classe: string }> = {
-  passivo: { texto: "Seu cliente é RÉU", classe: "bg-rose-50 text-rose-700 border-rose-200" },
-  ativo: { texto: "Seu cliente é AUTOR", classe: "bg-blue-50 text-blue-700 border-blue-200" },
-  terceiro: { texto: "Seu cliente é TERCEIRO", classe: "bg-slate-100 text-slate-600 border-slate-200" },
-  desconhecido: { texto: "Polo não identificado", classe: "bg-amber-50 text-amber-700 border-amber-200" },
+  passivo: { texto: "Seu cliente é RÉU", classe: "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/50" },
+  ativo: { texto: "Seu cliente é AUTOR", classe: "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50" },
+  terceiro: { texto: "Seu cliente é TERCEIRO", classe: "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80" },
+  desconhecido: { texto: "Polo não identificado", classe: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50" },
 };
 
 function NovasAcoesTab() {
@@ -3160,8 +3160,8 @@ function NovasAcoesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-2xl border border-rose-200/60 bg-gradient-to-br from-rose-50 via-orange-50/50 to-amber-50/30 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
-        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-rose-200/40 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border border-rose-200/60 dark:border-rose-800/50 bg-gradient-to-br from-rose-50 dark:from-rose-950/40 via-orange-50/50 dark:via-orange-950/25 to-amber-50/30 dark:to-amber-950/20 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
+        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-rose-200/40 dark:bg-rose-900/20 blur-3xl" />
         <div className="relative flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3 min-w-0">
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center shrink-0 shadow-sm">
@@ -3171,11 +3171,11 @@ function NovasAcoesTab() {
               <div className="flex items-center gap-2">
                 <p className="font-semibold text-sm tracking-tight">Alerta de novas ações contra clientes</p>
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-bold uppercase tracking-wider">
-                  <span className="h-1 w-1 rounded-full bg-white animate-pulse" />
+                  <span className="h-1 w-1 rounded-full bg-white dark:bg-card animate-pulse" />
                   Em tempo real
                 </span>
               </div>
-              <p className="text-[11px] text-rose-900/75 mt-1 max-w-2xl leading-relaxed">
+              <p className="text-[11px] text-rose-900/75 dark:text-rose-200 mt-1 max-w-2xl leading-relaxed">
                 Selecione clientes cadastrados e seja avisado <strong>imediatamente</strong> quando uma nova ação for distribuída contra eles —
                 antes mesmo da citação. Funciona pra busca e apreensão, reclamações trabalhistas, execuções, etc.
               </p>
@@ -3185,7 +3185,7 @@ function NovasAcoesTab() {
             <Button
               size="sm"
               variant="outline"
-              className="h-9 rounded-lg border-rose-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-rose-700"
+              className="h-9 rounded-lg border-rose-200 dark:border-rose-800/50 bg-white dark:bg-card hover:bg-rose-50 hover:border-rose-300 text-rose-700 dark:text-rose-300"
               disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
               onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: idsNovasAcoes })}
               title="Atualiza todos os monitoramentos de novas ações em paralelo. Sem custo de créditos."
@@ -3234,24 +3234,24 @@ function NovasAcoesTab() {
                     <div className="w-6 shrink-0 text-center">
                       {m.status === "pendente" && <span className="text-muted-foreground">⏳</span>}
                       {m.status === "rodando" && <Loader2 className="h-3 w-3 animate-spin text-blue-500 inline" />}
-                      {m.status === "ok" && <span className="text-emerald-600">✓</span>}
-                      {m.status === "erro" && <span className="text-red-600">✗</span>}
+                      {m.status === "ok" && <span className="text-emerald-600 dark:text-emerald-400">✓</span>}
+                      {m.status === "erro" && <span className="text-red-600 dark:text-red-400">✗</span>}
                     </div>
                     <span className="flex-1 truncate">{m.apelido || `Monitor ${m.monitoramentoId}`}</span>
                     <Badge variant="outline" className="text-[9px] shrink-0">
                       {m.tipo === "novas_acoes" ? "Novas ações" : "Movs"}
                     </Badge>
                     {m.status === "ok" && m.baseline && (
-                      <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/30 text-[9px] shrink-0">Baseline</Badge>
+                      <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[9px] shrink-0">Baseline</Badge>
                     )}
                     {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) > 0 && (
-                      <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px] shrink-0">+{m.detectadas} novo(s)</Badge>
+                      <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] shrink-0">+{m.detectadas} novo(s)</Badge>
                     )}
                     {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) === 0 && (
                       <span className="text-[9px] text-muted-foreground shrink-0">Sem novidades</span>
                     )}
                     {m.status === "erro" && (
-                      <span className="text-[9px] text-red-600 shrink-0 max-w-[180px] truncate" title={m.erro}>
+                      <span className="text-[9px] text-red-600 dark:text-red-400 shrink-0 max-w-[180px] truncate" title={m.erro}>
                         {m.erro}
                       </span>
                     )}
@@ -3276,14 +3276,14 @@ function NovasAcoesTab() {
 
       {/* Cards dos clientes sendo monitorados (contexto) */}
       {monitoramentosRaw.length > 0 && (
-        <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
+        <div className="rounded-2xl bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 p-4 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <div className="flex items-center gap-2">
               <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
                 <Users className="h-3.5 w-3.5 text-white" />
               </div>
               <div>
-                <p className="text-xs font-bold tracking-tight text-slate-900">
+                <p className="text-xs font-bold tracking-tight text-slate-900 dark:text-slate-100">
                   Monitorando {monitoramentosRaw.length} {monitoramentosRaw.length === 1 ? "cliente" : "clientes"}
                 </p>
                 <p className="text-[10px] text-slate-500">
@@ -3294,7 +3294,7 @@ function NovasAcoesTab() {
             </div>
             <p className="text-[10px] text-slate-400">
               {monitoramentos.length !== monitoramentosRaw.length && (
-                <>Mostrando <b className="text-slate-700">{monitoramentos.length}</b> de {monitoramentosRaw.length}</>
+                <>Mostrando <b className="text-slate-700 dark:text-slate-200">{monitoramentos.length}</b> de {monitoramentosRaw.length}</>
               )}
             </p>
           </div>
@@ -3319,7 +3319,7 @@ function NovasAcoesTab() {
                 return (
                   <div
                     key={m.id}
-                    className={`group relative rounded-xl bg-white border border-slate-200 border-l-[3px] ${corteBorda} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all overflow-hidden`}
+                    className={`group relative rounded-xl bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 border-l-[3px] ${corteBorda} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all overflow-hidden`}
                   >
                     <div className="p-3">
                       <div className="flex items-start gap-2.5">
@@ -3341,32 +3341,32 @@ function NovasAcoesTab() {
                             </p>
                           </div>
                           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            <span className="inline-flex items-center px-1.5 py-0 rounded-full bg-slate-100 text-slate-600 text-[9px] font-mono font-semibold">
+                            <span className="inline-flex items-center px-1.5 py-0 rounded-full bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 text-[9px] font-mono font-semibold">
                               {(m.searchType || "").toUpperCase()}
                             </span>
                             <span className="text-[10px] text-slate-500 font-mono truncate">{m.searchKey}</span>
                           </div>
                           <p className="text-[9.5px] text-slate-500 mt-1 truncate" title="Estados vigiados">
-                            <span className="font-semibold text-violet-700">{lerTribunaisDoMonitorCliente(m).map(siglaDoTribunal).join(" · ")}</span>
+                            <span className="font-semibold text-violet-700 dark:text-violet-300">{lerTribunaisDoMonitorCliente(m).map(siglaDoTribunal).join(" · ")}</span>
                           </p>
                           {(m.totalNovasAcoes ?? 0) > 0 && (
-                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[9.5px] font-bold mt-1.5">
+                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 text-[9.5px] font-bold mt-1.5">
                               <Siren className="h-2.5 w-2.5" />
                               {m.totalNovasAcoes} {m.totalNovasAcoes === 1 ? "ação nova" : "ações novas"}
                             </div>
                           )}
                           {temErro && (
-                            <p className="text-[9.5px] text-rose-600 mt-1 truncate" title={m.ultimoErro}>
+                            <p className="text-[9.5px] text-rose-600 dark:text-rose-400 mt-1 truncate" title={m.ultimoErro}>
                               ⚠ {m.ultimoErro}
                             </p>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-slate-100">
+                      <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 text-[10px] rounded-md text-slate-600 hover:bg-violet-50 hover:text-violet-700 px-2"
+                          className="h-6 text-[10px] rounded-md text-slate-600 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:text-violet-700 px-2"
                           title="Escolher em quais estados vigiar este cliente"
                           onClick={() => {
                             setEditarEstadosTarget(m);
@@ -3379,7 +3379,7 @@ function NovasAcoesTab() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 text-[10px] rounded-md text-indigo-600 hover:bg-indigo-50 px-2"
+                          className="h-6 text-[10px] rounded-md text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 px-2"
                           title="Atualizar agora — força consulta imediata (sem custo extra)"
                           onClick={() => atualizarAgoraMut.mutate({ monitoramentoId: m.id })}
                           disabled={atualizarAgoraMut.isPending}
@@ -3392,7 +3392,7 @@ function NovasAcoesTab() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 text-[10px] rounded-md text-rose-600 hover:bg-rose-50 px-2"
+                          className="h-6 text-[10px] rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 px-2"
                           title="Remover monitoramento"
                           onClick={() => setDeletarMonTarget({ id: m.id, nome: m.apelido || m.searchKey || "cliente" })}
                           disabled={deletarMonMut.isPending}
@@ -3417,13 +3417,13 @@ function NovasAcoesTab() {
             placeholder="Buscar por nome, CPF, CNPJ ou CNJ…"
             value={buscaTexto}
             onChange={(e) => setBuscaTexto(e.target.value)}
-            className="pl-8 h-8 rounded-lg border-slate-200 bg-white text-xs focus-visible:ring-rose-400"
+            className="pl-8 h-8 rounded-lg border-slate-200 dark:border-slate-700/80 bg-white dark:bg-card text-xs focus-visible:ring-rose-400"
           />
           {buscaTexto && (
             <button
               type="button"
               onClick={() => setBuscaTexto("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-xs"
               title="Limpar"
             >
               ✕
@@ -3435,7 +3435,7 @@ function NovasAcoesTab() {
           {hasMore && !buscaNormalizada ? "+" : ""}{" "}
           {acoes.length === 1 ? "card" : "cards"}
         </p>
-        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs shrink-0">
+        <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-card p-0.5 text-xs shrink-0">
           {([
             ["pendentes", "Pendentes"],
             ["resolvidas", "Resolvidas"],
@@ -3445,11 +3445,11 @@ function NovasAcoesTab() {
               key={val}
               type="button"
               onClick={() => setFiltro(val)}
-              className={`px-2.5 py-1.5 rounded-md font-medium transition-colors inline-flex items-center gap-1 ${filtro === val ? "bg-indigo-600 text-white" : "text-slate-500 hover:text-slate-700"}`}
+              className={`px-2.5 py-1.5 rounded-md font-medium transition-colors inline-flex items-center gap-1 ${filtro === val ? "bg-indigo-600 text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"}`}
             >
               {label}
               {val === "pendentes" && (data?.totalNaoLidas ?? 0) > 0 && (
-                <span className={`px-1.5 rounded-full text-[10px] tabular-nums ${filtro === val ? "bg-white/25" : "bg-rose-100 text-rose-600"}`}>{data?.totalNaoLidas}</span>
+                <span className={`px-1.5 rounded-full text-[10px] tabular-nums ${filtro === val ? "bg-white/25" : "bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400"}`}>{data?.totalNaoLidas}</span>
               )}
             </button>
           ))}
@@ -3519,7 +3519,7 @@ function NovasAcoesTab() {
             return (
               <div
                 key={a.id}
-                className={`rounded-xl bg-white border border-slate-200 border-l-[3px] ${corteBorda} ${!a.lido ? "shadow-[0_2px_8px_-2px_rgb(244,63,94,0.15)] bg-gradient-to-r from-rose-50/30 to-white" : "shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]"} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all ${resolverMut.isPending ? "pointer-events-none opacity-70" : ""}`}
+                className={`rounded-xl bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 border-l-[3px] ${corteBorda} ${!a.lido ? "shadow-[0_2px_8px_-2px_rgb(244,63,94,0.15)] bg-gradient-to-r from-rose-50/30 dark:from-rose-950/40 to-white dark:to-slate-900" : "shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]"} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all ${resolverMut.isPending ? "pointer-events-none opacity-70" : ""}`}
               >
                 <div className="px-4 py-3.5">
                   <div className="flex items-start gap-3">
@@ -3552,16 +3552,16 @@ function NovasAcoesTab() {
                           </span>
                         )}
                         {a.clienteSearchType && a.clienteSearchKey && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-mono">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 text-[9px] font-mono">
                             {a.clienteSearchType.toUpperCase()} {a.clienteSearchKey}
                           </span>
                         )}
                       </div>
                       {resolvido && (
                         <p className="text-[10.5px] text-slate-500 mt-1">
-                          {rMeta?.verbo} por <b className="text-slate-700">{a.resolvidoPorNome || "—"}</b>
+                          {rMeta?.verbo} por <b className="text-slate-700 dark:text-slate-200">{a.resolvidoPorNome || "—"}</b>
                           {a.resolvidoEm && <> · {tempoRelativoBR(a.resolvidoEm)}</>}
-                          {a.resolucao === "monitorando" && <> · agora aparece em <b className="text-slate-700">Movimentações</b></>}
+                          {a.resolucao === "monitorando" && <> · agora aparece em <b className="text-slate-700 dark:text-slate-200">Movimentações</b></>}
                         </p>
                       )}
 
@@ -3570,13 +3570,13 @@ function NovasAcoesTab() {
                         {tempoRel && (
                           <span className="inline-flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            Detectado <b className="font-semibold text-slate-700">{tempoRel}</b>
+                            Detectado <b className="font-semibold text-slate-700 dark:text-slate-200">{tempoRel}</b>
                           </span>
                         )}
                         {a.tribunal && (
                           <>
                             <span className="text-slate-300">·</span>
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold text-[9.5px]">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 font-semibold text-[9.5px]">
                               {a.tribunal.toUpperCase()}
                             </span>
                           </>
@@ -3587,19 +3587,19 @@ function NovasAcoesTab() {
                       </div>
 
                       {/* Box do processo */}
-                      <div className="mt-3 rounded-lg bg-slate-50/70 border border-slate-200/70 p-3 space-y-1.5">
+                      <div className="mt-3 rounded-lg bg-slate-50/70 dark:bg-slate-900/70 border border-slate-200/70 dark:border-slate-700/80 p-3 space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-bold font-mono text-slate-900">{a.cnj}</p>
+                          <p className="text-sm font-bold font-mono text-slate-900 dark:text-slate-100">{a.cnj}</p>
                           {(() => {
                             const trib = tribunalDoCnj(a.cnj) ?? a.tribunal;
                             return trib ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-[9.5px] font-extrabold tracking-wide">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800/50 text-[9.5px] font-extrabold tracking-wide">
                                 {siglaDoTribunal(trib)}
                               </span>
                             ) : null;
                           })()}
                           {valor != null && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9.5px] font-semibold tabular-nums">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 text-[9.5px] font-semibold tabular-nums">
                               <CircleDollarSign className="h-2.5 w-2.5" />
                               {formatBRL(valor)}
                             </span>
@@ -3611,26 +3611,26 @@ function NovasAcoesTab() {
                           )}
                         </div>
                         {natureza && (
-                          <div className="pt-2 mt-1 border-t border-slate-200/70">
+                          <div className="pt-2 mt-1 border-t border-slate-200/70 dark:border-slate-700/80">
                             <p className="text-[9px] font-bold text-slate-400 mb-0.5 tracking-wider">NATUREZA DA AÇÃO</p>
-                            <p className="text-xs text-slate-700 leading-snug">{natureza}</p>
+                            <p className="text-xs text-slate-700 dark:text-slate-200 leading-snug">{natureza}</p>
                           </div>
                         )}
                         {(ativos.length > 0 || passivos.length > 0 || outras.length > 0) && (
-                          <div className="grid grid-cols-2 gap-3 pt-2 mt-1 border-t border-slate-200/70">
+                          <div className="grid grid-cols-2 gap-3 pt-2 mt-1 border-t border-slate-200/70 dark:border-slate-700/80">
                             {ativos.length > 0 && (
                               <div className="min-w-0">
-                                <p className="text-[9px] font-bold text-blue-700 mb-1 tracking-wider">POLO ATIVO</p>
+                                <p className="text-[9px] font-bold text-blue-700 dark:text-blue-300 mb-1 tracking-wider">POLO ATIVO</p>
                                 {ativos.map((p, i) => (
-                                  <p key={i} className="text-[11px] text-slate-700 truncate" title={p.nome}>{p.nome}</p>
+                                  <p key={i} className="text-[11px] text-slate-700 dark:text-slate-200 truncate" title={p.nome}>{p.nome}</p>
                                 ))}
                               </div>
                             )}
                             {passivos.length > 0 && (
                               <div className="min-w-0">
-                                <p className="text-[9px] font-bold text-rose-700 mb-1 tracking-wider">POLO PASSIVO</p>
+                                <p className="text-[9px] font-bold text-rose-700 dark:text-rose-300 mb-1 tracking-wider">POLO PASSIVO</p>
                                 {passivos.map((p, i) => (
-                                  <p key={i} className="text-[11px] text-slate-700 truncate" title={p.nome}>{p.nome}</p>
+                                  <p key={i} className="text-[11px] text-slate-700 dark:text-slate-200 truncate" title={p.nome}>{p.nome}</p>
                                 ))}
                               </div>
                             )}
@@ -3638,18 +3638,18 @@ function NovasAcoesTab() {
                               <div className="min-w-0">
                                 <p className="text-[9px] font-bold text-slate-500 mb-1 tracking-wider">OUTRAS PARTES</p>
                                 {outras.map((p, i) => (
-                                  <p key={i} className="text-[11px] text-slate-700 truncate" title={p.nome}>{p.nome}</p>
+                                  <p key={i} className="text-[11px] text-slate-700 dark:text-slate-200 truncate" title={p.nome}>{p.nome}</p>
                                 ))}
                               </div>
                             )}
                           </div>
                         )}
                         {corte && (
-                          <p className="text-[10.5px] text-slate-500 flex items-center gap-1 pt-2 mt-1 border-t border-slate-200/70">
+                          <p className="text-[10.5px] text-slate-500 flex items-center gap-1 pt-2 mt-1 border-t border-slate-200/70 dark:border-slate-700/80">
                             <MapPin className="h-2.5 w-2.5" />
                             {corte}
                             {capa?.daDeteccao && (
-                              <span className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-semibold">
+                              <span className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 text-[9px] font-semibold">
                                 <CheckCircle2 className="h-2.5 w-2.5" />
                                 Capa lida na detecção — sem crédito extra
                               </span>
@@ -3657,10 +3657,10 @@ function NovasAcoesTab() {
                           </p>
                         )}
                         {a.capaFalhou && !detalhes && (
-                          <div className="pt-2 mt-1 border-t border-slate-200/70">
-                            <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 flex gap-2">
-                              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-px" />
-                              <p className="text-[11px] text-amber-900 leading-relaxed">
+                          <div className="pt-2 mt-1 border-t border-slate-200/70 dark:border-slate-700/80">
+                            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 p-2.5 flex gap-2">
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-px" />
+                              <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
                                 <b>O tribunal não devolveu a capa deste processo.</b>{" "}
                                 Não dá pra dizer se {a.clienteApelido || "o cliente"} é autor ou réu,
                                 e por isso o card veio pra cá em vez de ser silenciado.
@@ -3669,15 +3669,15 @@ function NovasAcoesTab() {
                           </div>
                         )}
                         {advogados.length > 0 && (
-                          <div className="pt-1.5 mt-1 border-t border-slate-200/70">
-                            <p className="text-[9px] font-bold text-violet-700 mb-0.5 tracking-wider">ADVOGADOS</p>
-                            <p className="text-[10.5px] text-slate-600 truncate">{advogados.join(" · ")}</p>
+                          <div className="pt-1.5 mt-1 border-t border-slate-200/70 dark:border-slate-700/80">
+                            <p className="text-[9px] font-bold text-violet-700 dark:text-violet-300 mb-0.5 tracking-wider">ADVOGADOS</p>
+                            <p className="text-[10.5px] text-slate-600 dark:text-slate-300 truncate">{advogados.join(" · ")}</p>
                           </div>
                         )}
                         {/* Timeline de movimentações (quando detalhes carregados) */}
                         {detalhes?.steps && detalhes.steps.length > 0 && (
-                          <div className="pt-2 mt-1 border-t border-slate-200/70">
-                            <p className="text-[9px] font-bold text-indigo-700 mb-1.5 tracking-wider">
+                          <div className="pt-2 mt-1 border-t border-slate-200/70 dark:border-slate-700/80">
+                            <p className="text-[9px] font-bold text-indigo-700 dark:text-indigo-300 mb-1.5 tracking-wider">
                               MOVIMENTAÇÕES ({detalhes.steps.length})
                             </p>
                             <div className="relative space-y-2 max-h-52 overflow-y-auto pl-3">
@@ -3691,7 +3691,7 @@ function NovasAcoesTab() {
                                         {new Date(s.step_date).toLocaleDateString("pt-BR")}
                                       </span>
                                     )}
-                                    <p className="text-slate-700 leading-snug">{s.content}</p>
+                                    <p className="text-slate-700 dark:text-slate-200 leading-snug">{s.content}</p>
                                   </div>
                                 </div>
                               ))}
@@ -3704,7 +3704,7 @@ function NovasAcoesTab() {
                           </div>
                         )}
                         {!detalhes && (
-                          <div className="pt-2 mt-1 border-t border-slate-200/70 flex items-center justify-between gap-2 flex-wrap">
+                          <div className="pt-2 mt-1 border-t border-slate-200/70 dark:border-slate-700/80 flex items-center justify-between gap-2 flex-wrap">
                             <p className="text-[10.5px] text-slate-500 italic">
                               {capa?.daDeteccao
                                 ? "Movimentações e advogados não carregados ainda."
@@ -3715,7 +3715,7 @@ function NovasAcoesTab() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className={`h-7 text-[10.5px] rounded-lg bg-white ${a.capaFalhou && !capa ? "border-amber-300 hover:bg-amber-50 text-amber-700" : "border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300 text-indigo-700"}`}
+                              className={`h-7 text-[10.5px] rounded-lg bg-white dark:bg-card ${a.capaFalhou && !capa ? "border-amber-300 hover:bg-amber-50 text-amber-700 dark:text-amber-300" : "border-indigo-200 dark:border-indigo-800/50 hover:bg-indigo-50 hover:border-indigo-300 text-indigo-700 dark:text-indigo-300"}`}
                               disabled={carregando || carregandoAcaoId !== null}
                               onClick={() => carregarDetalhes(a.id, a.cnj, credencialIdDoMonitor(a.monitoramentoId))}
                             >
@@ -3738,7 +3738,7 @@ function NovasAcoesTab() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-7 text-[10.5px] rounded-lg text-slate-600"
+                          className="h-7 text-[10.5px] rounded-lg text-slate-600 dark:text-slate-300"
                           title="Reabrir — volta pras Pendentes"
                           disabled={reabrirMut.isPending}
                           onClick={() => reabrirMut.mutate({ id: a.id })}
@@ -3763,7 +3763,7 @@ function NovasAcoesTab() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 text-[10.5px] rounded-lg text-slate-600 hover:bg-slate-100"
+                            className="h-7 text-[10.5px] rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60"
                             title="Ciente — você viu, mas não precisa monitorar agora"
                             disabled={resolverMut.isPending}
                             onClick={() => resolverMut.mutate({ id: a.id, resolucao: "lida" })}
@@ -3774,7 +3774,7 @@ function NovasAcoesTab() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 text-[10.5px] rounded-lg text-rose-600 hover:bg-rose-50"
+                            className="h-7 text-[10.5px] rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                             title="Falso positivo (reversível — vai pras Resolvidas)"
                             disabled={resolverMut.isPending}
                             onClick={() => handleFalsoAcao(a.id)}
@@ -3835,7 +3835,7 @@ function NovasAcoesTab() {
                     onClick={() => { setClienteSelecionado(c); setBuscaCliente(c.nome); }}
                     className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 text-left transition-colors"
                   >
-                    <div className="h-8 w-8 rounded-full bg-violet-100 flex items-center justify-center text-xs font-bold text-violet-700 shrink-0">
+                    <div className="h-8 w-8 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center text-xs font-bold text-violet-700 dark:text-violet-300 shrink-0">
                       {(c.nome || "?")[0]}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -3857,8 +3857,8 @@ function NovasAcoesTab() {
 
             {/* Cliente selecionado */}
             {clienteSelecionado && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-800/50">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold">{clienteSelecionado.nome}</p>
                   <p className="text-xs text-muted-foreground font-mono">{clienteSelecionado.cpfCnpj}</p>
@@ -3886,7 +3886,7 @@ function NovasAcoesTab() {
                   ))}
                 </select>
                 {credsAtivas.length === 0 && (
-                  <p className="text-[10px] text-orange-600 mt-1">
+                  <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-1">
                     Sem credenciais ativas. Cadastre uma na aba "Cofre de Credenciais" primeiro.
                   </p>
                 )}
@@ -3897,8 +3897,8 @@ function NovasAcoesTab() {
               <EstadosPicker selecionados={novoTribunais} onChange={setNovoTribunais} />
             )}
 
-            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 p-3 text-xs flex items-start gap-2">
-              <ShieldAlert className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/50 p-3 text-xs flex items-start gap-2">
+              <ShieldAlert className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
               <div className="text-blue-900 dark:text-blue-200 space-y-1">
                 <p className="font-semibold">Proteção de dados (LGPD)</p>
                 <p>
@@ -4174,8 +4174,8 @@ function CofreTab() {
 
   return (
     <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-2xl border border-violet-200/60 bg-gradient-to-br from-violet-50 via-purple-50/50 to-fuchsia-50/30 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
-        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-violet-200/40 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border border-violet-200/60 dark:border-violet-800/50 bg-gradient-to-br from-violet-50 dark:from-violet-950/40 via-purple-50/50 dark:via-purple-950/25 to-fuchsia-50/30 dark:to-fuchsia-950/20 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
+        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-violet-200/40 dark:bg-violet-900/20 blur-3xl" />
         <div className="relative flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3 min-w-0">
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-600 to-purple-600 flex items-center justify-center shrink-0 shadow-sm">
@@ -4189,7 +4189,7 @@ function CofreTab() {
                   AES-256
                 </span>
               </div>
-              <p className="text-[11px] text-violet-900/75 mt-1 leading-relaxed">
+              <p className="text-[11px] text-violet-900/75 dark:text-violet-200 mt-1 leading-relaxed">
                 Cadastre o login OAB de um advogado pra acessar processos em <strong>segredo de justiça</strong>.
                 As senhas ficam criptografadas e <strong>nunca</strong> são expostas após o cadastro — se precisar trocar, delete e cadastre nova.
               </p>
@@ -4210,14 +4210,14 @@ function CofreTab() {
           aqui nenhuma tela mostrava esse vínculo, então o motivo da parada
           ficava invisível. */}
       {listaOrfaos.length > 0 && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-3">
+        <div className="rounded-2xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/30 p-4 space-y-3">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-amber-900">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
                 Processos apontando para credencial que não pode atender
               </p>
-              <p className="text-[11px] text-amber-900/80 leading-relaxed mt-0.5">
+              <p className="text-[11px] text-amber-900/80 dark:text-amber-200 leading-relaxed mt-0.5">
                 Eles continuam parados até serem reapontados para uma credencial ativa. Reapontar
                 não altera nada no processo — só troca qual login o robô usa.
               </p>
@@ -4227,7 +4227,7 @@ function CofreTab() {
           {listaOrfaos.map((o: any) => (
             <div
               key={String(o.credencialId)}
-              className="flex items-center justify-between gap-3 flex-wrap rounded-xl bg-white border border-amber-200/70 p-3"
+              className="flex items-center justify-between gap-3 flex-wrap rounded-xl bg-white dark:bg-card border border-amber-200/70 dark:border-amber-800/50 p-3"
             >
               <div className="min-w-0 text-xs">
                 <p className="font-medium truncate">
@@ -4249,7 +4249,7 @@ function CofreTab() {
               {o.acao === "reapontar" && (
                 <div className="flex items-center gap-2">
                   <select
-                    className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs"
+                    className="h-8 rounded-md border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-card px-2 text-xs"
                     defaultValue=""
                     onChange={(e) => {
                       const para = Number(e.target.value);
@@ -4285,11 +4285,11 @@ function CofreTab() {
       {isLoading ? (
         <Skeleton className="h-32 w-full" />
       ) : creds.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-violet-50/30 py-14 text-center space-y-2">
+        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 bg-gradient-to-br from-slate-50 dark:from-slate-900 to-violet-50/30 dark:to-violet-950/20 py-14 text-center space-y-2">
           <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 flex items-center justify-center mx-auto mb-1">
             <Lock className="h-7 w-7 text-violet-500/70" />
           </div>
-          <p className="font-semibold text-slate-700">Nenhuma credencial cadastrada</p>
+          <p className="font-semibold text-slate-700 dark:text-slate-200">Nenhuma credencial cadastrada</p>
           <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
             Sem credenciais, você só consegue monitorar processos públicos. Pra acessar
             processos em segredo de justiça, cadastre o login de um advogado.
@@ -4299,18 +4299,18 @@ function CofreTab() {
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {creds.map((c: any) => {
             const statusInfo = c.status === "ativa"
-              ? { dot: "bg-emerald-500", ring: "ring-emerald-500/20", label: "Ativa", labelColor: "bg-emerald-50 text-emerald-700 border-emerald-200", animated: true }
+              ? { dot: "bg-emerald-500", ring: "ring-emerald-500/20", label: "Ativa", labelColor: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50", animated: true }
               : c.status === "erro"
-                ? { dot: "bg-rose-500", ring: "ring-rose-500/20", label: "Erro", labelColor: "bg-rose-50 text-rose-700 border-rose-200", animated: false }
+                ? { dot: "bg-rose-500", ring: "ring-rose-500/20", label: "Erro", labelColor: "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/50", animated: false }
                 : c.status === "expirada"
-                  ? { dot: "bg-orange-500", ring: "ring-orange-500/20", label: "Expirada", labelColor: "bg-orange-50 text-orange-700 border-orange-200", animated: false }
+                  ? { dot: "bg-orange-500", ring: "ring-orange-500/20", label: "Expirada", labelColor: "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800/50", animated: false }
                   : c.status === "validando"
-                    ? { dot: "bg-blue-500", ring: "ring-blue-500/20", label: "Validando", labelColor: "bg-blue-50 text-blue-700 border-blue-200", animated: true }
-                    : { dot: "bg-slate-400", ring: "ring-slate-400/20", label: c.status, labelColor: "bg-slate-100 text-slate-700 border-slate-200", animated: false };
+                    ? { dot: "bg-blue-500", ring: "ring-blue-500/20", label: "Validando", labelColor: "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50", animated: true }
+                    : { dot: "bg-slate-400", ring: "ring-slate-400/20", label: c.status, labelColor: "bg-slate-100 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700/80", animated: false };
             return (
               <div
                 key={c.id}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all"
+                className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-card p-4 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all"
               >
                 <div className="flex items-start gap-2.5">
                   <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center shrink-0 shadow-sm">
@@ -4335,12 +4335,12 @@ function CofreTab() {
                   </div>
                 </div>
                 <div className="mt-3 space-y-1.5 text-xs">
-                  <div className="flex items-center gap-1.5 text-slate-600">
+                  <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
                     <User className="h-3 w-3 text-slate-400" />
                     <span className="font-mono truncate" title={c.usernameMascarado}>{c.usernameMascarado}</span>
                   </div>
                   {(c.tem2fa || c.has2fa) && (
-                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-violet-50 border border-violet-200/70 text-violet-700 text-[10px] font-medium">
+                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-950/30 border border-violet-200/70 dark:border-violet-800/50 text-violet-700 dark:text-violet-300 text-[10px] font-medium">
                       <ShieldAlert className="h-3 w-3" />
                       2FA ativado
                     </div>
@@ -4370,20 +4370,20 @@ function CofreTab() {
                   {(c.ultimoErro || c.mensagemErro) && (
                     <div className={`text-[10px] rounded-lg p-2 ${
                       c.status === "erro" || c.status === "expirada"
-                        ? "bg-rose-50 border border-rose-200/60 text-rose-700"
-                        : "bg-blue-50 border border-blue-200/60 text-blue-700"
+                        ? "bg-rose-50 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-800/50 text-rose-700 dark:text-rose-300"
+                        : "bg-blue-50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-800/50 text-blue-700 dark:text-blue-300"
                     }`}>
                       {c.ultimoErro || c.mensagemErro}
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-1 pt-3 mt-3 border-t border-slate-100">
+                <div className="flex items-center gap-1 pt-3 mt-3 border-t border-slate-100 dark:border-slate-800">
                   <Button
                     size="sm"
                     variant={c.status === "ativa" ? "outline" : "default"}
                     className={`h-7 text-xs rounded-lg ${
                       c.status === "ativa"
-                        ? "border-slate-200 hover:border-slate-300"
+                        ? "border-slate-200 dark:border-slate-700/80 hover:border-slate-300"
                         : "flex-1 bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-sm animate-pulse"
                     }`}
                     onClick={() => validarMut.mutate({ id: c.id })}
@@ -4413,7 +4413,7 @@ function CofreTab() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 ml-auto rounded-lg"
+                    className="h-7 text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 ml-auto rounded-lg"
                     onClick={() => setRemoverTarget({ id: c.id, apelido: c.apelido || c.usernameMascarado || "credencial" })}
                   >
                     <Trash2 className="h-3 w-3 mr-1" />Remover
@@ -4559,7 +4559,7 @@ function CofreTab() {
                       type="button"
                       onClick={() => setModo2fa(m)}
                       className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition ${
-                        modo2fa === m ? "bg-background shadow-sm text-violet-700" : "text-muted-foreground"
+                        modo2fa === m ? "bg-background shadow-sm text-violet-700 dark:text-violet-300" : "text-muted-foreground"
                       }`}
                     >
                       {m === "codigo" ? "Colar o código" : "Ler do print do QR"}
@@ -4735,7 +4735,7 @@ function CofreTab() {
                   } disabled:cursor-default`}
                 >
                   <p className="text-xs font-semibold">
-                    {o.titulo} {atual && <span className="text-violet-600">· atual</span>}
+                    {o.titulo} {atual && <span className="text-violet-600 dark:text-violet-400">· atual</span>}
                   </p>
                   <p className="text-[11px] text-muted-foreground leading-relaxed">{o.desc}</p>
                 </button>

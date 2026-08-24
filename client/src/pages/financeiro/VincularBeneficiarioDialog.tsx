@@ -77,11 +77,11 @@ const FORMAS_OPTS = [
 function FormaBadge({ forma }: { forma: string | null }) {
   if (!forma) return <span className="text-slate-400">—</span>;
   const cores: Record<string, string> = {
-    PIX: "bg-blue-50 text-blue-700 border-blue-200",
-    BOLETO: "bg-orange-50 text-orange-700 border-orange-200",
-    CREDIT_CARD: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    DINHEIRO: "bg-amber-50 text-amber-700 border-amber-200",
-    TRANSFERENCIA: "bg-violet-50 text-violet-700 border-violet-200",
+    PIX: "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50",
+    BOLETO: "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800/50",
+    CREDIT_CARD: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50",
+    DINHEIRO: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50",
+    TRANSFERENCIA: "bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800/50",
   };
   const label =
     FORMAS_OPTS.find((o) => o.value === forma)?.label ?? forma;
@@ -89,7 +89,7 @@ function FormaBadge({ forma }: { forma: string | null }) {
     <span
       className={
         "inline-block px-1.5 py-0.5 rounded text-[10px] font-medium border " +
-        (cores[forma] ?? "bg-slate-50 text-slate-600 border-slate-200")
+        (cores[forma] ?? "bg-slate-50 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80")
       }
     >
       {label}
@@ -407,16 +407,16 @@ export function VincularBeneficiarioDialog({
         </div>
 
         {/* Rodapé com seleção */}
-        <div className="rounded border bg-emerald-50/40 p-3 space-y-2">
+        <div className="rounded border bg-emerald-50/40 dark:bg-emerald-950/30 p-3 space-y-2">
           <div className="flex items-center gap-2 text-sm">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            <b className="text-emerald-900">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <b className="text-emerald-900 dark:text-emerald-200">
               {selecionadas.size} cobrança{selecionadas.size === 1 ? "" : "s"} selecionada{selecionadas.size === 1 ? "" : "s"}
             </b>
             {selecionadas.size > 0 && (
               <>
                 <span className="text-muted-foreground">·</span>
-                <span className="text-emerald-700 font-bold tabular-nums">
+                <span className="text-emerald-700 dark:text-emerald-300 font-bold tabular-nums">
                   {formatBRL(selecionadasResumo.total)}
                 </span>
                 {selecionadasResumo.pagadores > 1 && (
@@ -563,7 +563,7 @@ function ListaAgrupada({
             <>
               <TableRow
                 key={`grp-${g.chave}`}
-                className="bg-blue-50/40 cursor-pointer hover:bg-blue-50/70"
+                className="bg-blue-50/40 dark:bg-blue-950/30 cursor-pointer hover:bg-blue-50/70 dark:hover:bg-blue-950/30"
                 onClick={() => onToggleExpansao(g.chave)}
               >
                 <TableCell className="px-2">
@@ -578,7 +578,7 @@ function ListaAgrupada({
                     }
                   />
                 </TableCell>
-                <TableCell className="font-semibold text-blue-900 text-xs">
+                <TableCell className="font-semibold text-blue-900 dark:text-blue-200 text-xs">
                   <div className="flex items-center gap-1.5">
                     {expandido ? (
                       <ChevronDown className="h-3 w-3" />
@@ -587,13 +587,13 @@ function ListaAgrupada({
                     )}
                     {g.pagadorNome}
                   </div>
-                  <div className="text-[10px] text-blue-700 font-normal pl-4">
+                  <div className="text-[10px] text-blue-700 dark:text-blue-300 font-normal pl-4">
                     {g.cobrancas.length} cobrança
                     {g.cobrancas.length === 1 ? "" : "s"}
                     {g.cpf && ` · ${g.cpf}`}
                   </div>
                 </TableCell>
-                <TableCell colSpan={3} className="text-[11px] text-blue-700 italic">
+                <TableCell colSpan={3} className="text-[11px] text-blue-700 dark:text-blue-300 italic">
                   {todasMarcadas
                     ? "Todas do grupo selecionadas"
                     : algumaMarcada
@@ -602,7 +602,7 @@ function ListaAgrupada({
                         ? "(clique pra expandir)"
                         : ""}
                 </TableCell>
-                <TableCell className="text-right font-bold text-blue-900 text-xs tabular-nums">
+                <TableCell className="text-right font-bold text-blue-900 dark:text-blue-200 text-xs tabular-nums">
                   {formatBRL(g.valorTotal)}
                 </TableCell>
               </TableRow>
@@ -657,7 +657,7 @@ function LinhaCandidato({
           )
         )}
         {cobranca.origem === "manual" && (
-          <span className="ml-1.5 text-[9px] text-amber-700">(manual)</span>
+          <span className="ml-1.5 text-[9px] text-amber-700 dark:text-amber-300">(manual)</span>
         )}
       </TableCell>
       <TableCell className="text-xs max-w-[260px] truncate">

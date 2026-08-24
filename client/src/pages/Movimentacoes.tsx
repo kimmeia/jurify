@@ -376,10 +376,10 @@ export function MovimentacoesCentral() {
 export default MovimentacoesCentral;
 
 const STATUS_ENVIO: Record<string, { label: string; cls: string }> = {
-  enviado: { label: "Enviado", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  falha: { label: "Falhou", cls: "bg-rose-50 text-rose-700 border-rose-200" },
+  enviado: { label: "Enviado", cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50" },
+  falha: { label: "Falhou", cls: "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/50" },
   sem_conteudo: { label: "Nada a enviar", cls: "bg-muted text-muted-foreground border-border" },
-  nao_configurado: { label: "Não configurado", cls: "bg-amber-50 text-amber-800 border-amber-200" },
+  nao_configurado: { label: "Não configurado", cls: "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 border-amber-200 dark:border-amber-800/50" },
 };
 
 /**

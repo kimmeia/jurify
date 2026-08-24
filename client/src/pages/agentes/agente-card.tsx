@@ -51,7 +51,7 @@ function modeloLabel(modelo: string): { label: string; cor: string } {
   if (modelo.includes("gpt")) {
     return { label: modelo.includes("mini") ? "GPT-4o mini" : modelo.includes("turbo") ? "GPT-4 Turbo" : "GPT-4o", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" };
   }
-  return { label: modelo, cor: "bg-slate-100 text-slate-700" };
+  return { label: modelo, cor: "bg-slate-100 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200" };
 }
 
 const MODULO_ICONS: Record<string, string> = {

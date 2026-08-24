@@ -64,7 +64,7 @@ const CENARIOS: Cenario[] = [
   {
     tipo: "sem_justa_causa",
     icone: UserX,
-    iconeBg: "bg-emerald-100", iconeFg: "text-emerald-600",
+    iconeBg: "bg-emerald-100 dark:bg-emerald-900/30", iconeFg: "text-emerald-600 dark:text-emerald-400",
     curto: "Demissão sem justa causa",
     descricao: "Empregador dispensa o empregado sem motivo grave previsto na CLT.",
     direitos: ["Aviso prévio (30 + 3 dias/ano)", "13º proporcional", "Férias proporcionais + 1/3", "FGTS + multa 40%"],
@@ -73,7 +73,7 @@ const CENARIOS: Cenario[] = [
   {
     tipo: "pedido_demissao",
     icone: Hand,
-    iconeBg: "bg-slate-100", iconeFg: "text-slate-700",
+    iconeBg: "bg-slate-100 dark:bg-slate-800/60", iconeFg: "text-slate-700 dark:text-slate-200",
     curto: "Pedido de demissão",
     descricao: "Empregado decide sair por iniciativa própria.",
     direitos: ["✗ Sem aviso indenizado", "✓ 13º proporcional", "✓ Férias proporcionais + 1/3", "✗ Sem multa FGTS"],
@@ -81,7 +81,7 @@ const CENARIOS: Cenario[] = [
   {
     tipo: "acordo_mutuo",
     icone: Handshake,
-    iconeBg: "bg-slate-100", iconeFg: "text-slate-700",
+    iconeBg: "bg-slate-100 dark:bg-slate-800/60", iconeFg: "text-slate-700 dark:text-slate-200",
     curto: "Acordo mútuo (Reforma)",
     descricao: "Empregador e empregado em acordo (art. 484-A CLT).",
     direitos: ["Aviso prévio 50%", "13º proporcional", "Férias proporcionais + 1/3", "FGTS + multa 20%"],
@@ -89,7 +89,7 @@ const CENARIOS: Cenario[] = [
   {
     tipo: "justa_causa",
     icone: AlertOctagon,
-    iconeBg: "bg-rose-100", iconeFg: "text-rose-600",
+    iconeBg: "bg-rose-100 dark:bg-rose-900/30", iconeFg: "text-rose-600 dark:text-rose-400",
     curto: "Demissão por justa causa",
     descricao: "Falta grave do empregado (art. 482 CLT).",
     direitos: ["Apenas saldo de salário", "Férias vencidas + 1/3", "✗ Sem 13º proporcional", "✗ Sem multa FGTS"],
@@ -97,7 +97,7 @@ const CENARIOS: Cenario[] = [
   {
     tipo: "rescisao_indireta",
     icone: Gavel,
-    iconeBg: "bg-rose-100", iconeFg: "text-rose-600",
+    iconeBg: "bg-rose-100 dark:bg-rose-900/30", iconeFg: "text-rose-600 dark:text-rose-400",
     curto: "Rescisão indireta",
     descricao: "Falta grave do empregador (art. 483 CLT) — \"justa causa do patrão\".",
     direitos: ["Mesmos direitos da demissão sem justa causa", "Requer ação judicial"],
@@ -105,7 +105,7 @@ const CENARIOS: Cenario[] = [
   {
     tipo: "termino_contrato",
     icone: CalendarX,
-    iconeBg: "bg-slate-100", iconeFg: "text-slate-700",
+    iconeBg: "bg-slate-100 dark:bg-slate-800/60", iconeFg: "text-slate-700 dark:text-slate-200",
     curto: "Término de contrato",
     descricao: "Contrato com prazo determinado chegou ao fim.",
     direitos: ["13º proporcional", "Férias proporcionais + 1/3", "✗ Sem aviso prévio", "✗ Sem multa FGTS"],
@@ -259,7 +259,7 @@ export default function Trabalhista() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-amber-50/20 p-6 space-y-5">
+      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-amber-50/20 dark:to-amber-950/20 p-6 space-y-5">
         {/* HERO */}
         <div className="rounded-2xl bg-gradient-to-br from-amber-600 via-orange-600 to-rose-700 p-6 text-white relative overflow-hidden shadow-lg">
           <Briefcase className="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" strokeWidth={1.2} />
@@ -306,10 +306,10 @@ export default function Trabalhista() {
                         key={c.tipo}
                         type="button"
                         onClick={() => setRescisaoForm((f) => ({ ...f, tipoRescisao: c.tipo }))}
-                        className={`text-left bg-white rounded-xl p-5 transition-all ${
+                        className={`text-left bg-white dark:bg-card rounded-xl p-5 transition-all ${
                           ativo
                             ? "border-2 border-amber-500 ring-2 ring-amber-100 shadow-md"
-                            : "border border-slate-200 hover:border-amber-400 hover:shadow-md"
+                            : "border border-slate-200 dark:border-slate-700/80 hover:border-amber-400 hover:shadow-md"
                         }`}
                       >
                         <div className="flex items-start justify-between mb-3">
@@ -318,17 +318,17 @@ export default function Trabalhista() {
                           </div>
                           {c.badge && (
                             <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                              c.badge.tom === "emerald" ? "bg-emerald-100 text-emerald-700"
-                              : c.badge.tom === "amber" ? "bg-amber-100 text-amber-700"
-                              : "bg-rose-100 text-rose-700"
+                              c.badge.tom === "emerald" ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300"
+                              : c.badge.tom === "amber" ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
+                              : "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300"
                             }`}>
                               {c.badge.texto}
                             </span>
                           )}
                         </div>
-                        <p className="font-semibold text-slate-900 mb-1">{c.curto}</p>
+                        <p className="font-semibold text-slate-900 dark:text-slate-100 mb-1">{c.curto}</p>
                         <p className="text-xs text-slate-500 mb-3">{c.descricao}</p>
-                        <ul className="text-[11px] text-slate-600 space-y-0.5">
+                        <ul className="text-[11px] text-slate-600 dark:text-slate-300 space-y-0.5">
                           {c.direitos.map((d, i) => (
                             <li key={i}>{d.startsWith("✗") || d.startsWith("✓") ? d : `✓ ${d}`}</li>
                           ))}
@@ -391,7 +391,7 @@ export default function Trabalhista() {
                       </div>
                       <div className="space-y-1.5">
                         <Label>Tipo de rescisão (selecionado no passo 1)</Label>
-                        <div className="h-9 px-3 flex items-center text-sm border border-slate-200 rounded-md bg-slate-50">
+                        <div className="h-9 px-3 flex items-center text-sm border border-slate-200 dark:border-slate-700/80 rounded-md bg-slate-50 dark:bg-slate-900/70">
                           {TIPO_RESCISAO_LABELS[rescisaoForm.tipoRescisao]}
                         </div>
                       </div>
@@ -568,7 +568,7 @@ export default function Trabalhista() {
 
                 <div className="overflow-x-auto rounded-lg border">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-50">
+                    <thead className="bg-slate-50 dark:bg-slate-900/70">
                       <tr>
                         <th className="p-2 text-left font-medium text-xs">Mês/Ano *</th>
                         <th className="p-2 text-left font-medium text-xs">HE 50%</th>
@@ -607,7 +607,7 @@ export default function Trabalhista() {
                           </td>
                           <td className="p-1.5 text-right">
                             {heForm.periodos.length > 1 && (
-                              <Button variant="ghost" size="sm" onClick={() => removePeriodo(i)} className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700">
+                              <Button variant="ghost" size="sm" onClick={() => removePeriodo(i)} className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700 dark:hover:text-rose-300">
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             )}
@@ -657,11 +657,11 @@ function Stepper({ passos, atual }: { passos: string[]; atual: number }) {
               <div className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[11px] ${
                 concluido ? "bg-emerald-600 text-white"
                 : ativo ? "bg-amber-600 text-white"
-                : "bg-slate-200 text-slate-600"
+                : "bg-slate-200 text-slate-600 dark:text-slate-300"
               }`}>
                 {concluido ? <Check className="w-3 h-3" /> : num}
               </div>
-              <span className={ativo ? "font-medium text-slate-900" : "text-slate-500"}>{nome}</span>
+              <span className={ativo ? "font-medium text-slate-900 dark:text-slate-100" : "text-slate-500"}>{nome}</span>
             </div>
             {i < passos.length - 1 && (
               <div className={`w-8 h-px ${concluido ? "bg-emerald-300" : "bg-slate-300"}`} />
@@ -703,7 +703,7 @@ function NavWizard({
   proximoDesabilitado?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between border-t border-slate-200 pt-4">
+    <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-700/80 pt-4">
       {onVoltar ? (
         <Button variant="ghost" onClick={onVoltar} className="text-sm">
           <ArrowLeft className="h-4 w-4 mr-1" /> {voltar}
@@ -759,7 +759,7 @@ function ResultadoRescisao({
                 Editar dados
               </Button>
               <Button size="sm" onClick={onNovo}
-                className="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-8">
+                className="bg-white dark:bg-card text-slate-900 dark:text-slate-100 hover:bg-slate-100 font-semibold shadow-sm h-8">
                 <Copy className="h-3.5 w-3.5 mr-1" /> Novo cálculo
               </Button>
             </div>
@@ -817,17 +817,17 @@ function ResultadoRescisao({
           <Card>
             <CardContent className="pt-5 space-y-5">
               <div>
-                <h3 className="text-sm font-semibold text-emerald-700 mb-2 flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-2 flex items-center gap-2">
                   <PlusCircle className="w-4 h-4" /> Proventos
                 </h3>
                 <div className="space-y-1">
                   {proventos.map((v: any, i: number) => (
-                    <div key={i} className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
+                    <div key={i} className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
                       <div>
                         <p className="text-sm font-medium">{v.descricao}</p>
                         <p className="text-xs text-slate-500">{v.fundamentoLegal}</p>
                       </div>
-                      <p className="font-semibold tabular-nums text-emerald-700">{formatBRL(v.valor)}</p>
+                      <p className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{formatBRL(v.valor)}</p>
                     </div>
                   ))}
                 </div>
@@ -837,18 +837,18 @@ function ResultadoRescisao({
                 <>
                   <Separator />
                   <div>
-                    <h3 className="text-sm font-semibold text-rose-700 mb-2 flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-rose-700 dark:text-rose-300 mb-2 flex items-center gap-2">
                       <MinusCircle className="w-4 h-4" /> Descontos
                     </h3>
                     <div className="space-y-1">
                       {descontos.map((v: any, i: number) => (
-                        <div key={i} className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
+                        <div key={i} className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
                           <div>
                             <p className="text-sm font-medium">{v.descricao}</p>
                             <p className="text-xs text-slate-500">{v.fundamentoLegal}</p>
                             {v.detalhes && <p className="text-xs text-slate-400 mt-0.5">{v.detalhes}</p>}
                           </div>
-                          <p className="font-semibold tabular-nums text-rose-700">− {formatBRL(v.valor)}</p>
+                          <p className="font-semibold tabular-nums text-rose-700 dark:text-rose-300">− {formatBRL(v.valor)}</p>
                         </div>
                       ))}
                     </div>

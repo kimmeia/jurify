@@ -149,7 +149,7 @@ export function JurisIaPainel({ monitoramentoId }: { monitoramentoId: number }) 
   return (
     <div className="flex flex-col rounded-xl border bg-card overflow-hidden">
       <div className="flex items-center gap-2 border-b px-4 py-2.5">
-        <Sparkles className="h-4 w-4 text-violet-600" />
+        <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
         <p className="text-[13.5px] font-bold">JurisIA</p>
         <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-amber-800 dark:bg-amber-950 dark:text-amber-300">
           beta

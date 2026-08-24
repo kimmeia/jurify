@@ -73,7 +73,7 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
               : "bg-muted text-muted-foreground hover:bg-muted/80")
           }
         >
-          <span className={"h-2 w-2 rounded-full " + (disponivel ? "bg-white" : "bg-slate-400")}></span>
+          <span className={"h-2 w-2 rounded-full " + (disponivel ? "bg-white dark:bg-card" : "bg-slate-400")}></span>
           {disponivel ? "Disponível" : "Ausente"}
         </button>
       </div>
@@ -84,7 +84,7 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
           <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Tocando agora</h2>
           {tocando.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 font-semibold">
               {tocando.length}
             </span>
           )}
@@ -94,7 +94,7 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
         ) : (
           <div className="space-y-2">
             {tocando.map((c) => (
-              <div key={c.callId} className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 flex items-center gap-3">
+              <div key={c.callId} className="rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/40 dark:bg-emerald-950/30 p-3 flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0 animate-pulse">
                   {initials(c.contatoNome || c.telefone || "?")}
                 </div>
@@ -138,7 +138,7 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
                     {c.contatoNome || c.telefone}
                     {c.atendenteNome && <span className="text-[11px] font-normal text-muted-foreground"> · {c.atendenteNome}</span>}
                   </p>
-                  <p className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
+                  <p className="text-[11px] text-green-600 dark:text-green-400 font-semibold flex items-center gap-1">
                     <AudioLines className="h-3 w-3" /> ao vivo
                   </p>
                 </div>

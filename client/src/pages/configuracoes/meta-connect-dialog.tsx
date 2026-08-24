@@ -448,13 +448,13 @@ export function MetaConnectDialog({
             <div>
               <span>{meta.title}</span>
               {conectado && (
-                <Badge className="ml-2 bg-emerald-500/15 text-emerald-700 border-emerald-500/25 text-[10px]">
+                <Badge className="ml-2 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 text-[10px]">
                   <Wifi className="h-3 w-3 mr-1" />
                   Conectado
                 </Badge>
               )}
               {comErro && (
-                <Badge className="ml-2 bg-red-500/15 text-red-700 border-red-500/25 text-[10px]">
+                <Badge className="ml-2 bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/25 text-[10px]">
                   <AlertTriangle className="h-3 w-3 mr-1" />
                   Erro
                 </Badge>
@@ -482,11 +482,11 @@ export function MetaConnectDialog({
           {/* Estado: conectado */}
           {conectado && (
             <div className="space-y-3">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
-                <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0" />
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50">
+                <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-emerald-800">Conectado</p>
-                  <p className="text-xs text-emerald-600 truncate">
+                  <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">Conectado</p>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 truncate">
                     {canal?.telefone || canal?.nome || meta.title}
                   </p>
                 </div>
@@ -570,13 +570,13 @@ export function MetaConnectDialog({
 
           {/* Estado: com erro */}
           {comErro && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200 space-y-2">
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 space-y-2">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-red-600" />
-                <p className="text-sm font-medium text-red-800">Conexão falhou</p>
+                <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                <p className="text-sm font-medium text-red-800 dark:text-red-200">Conexão falhou</p>
               </div>
               {mensagemErro && (
-                <p className="text-xs text-red-700">{mensagemErro}</p>
+                <p className="text-xs text-red-700 dark:text-red-300">{mensagemErro}</p>
               )}
               <Button
                 size="sm"
@@ -592,21 +592,21 @@ export function MetaConnectDialog({
 
           {/* Estado: vinculado mas falta registrar na Cloud API */}
           {whatsappPrecisaRegistrar && !comErro && (
-            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-3">
+            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 space-y-3">
               <div className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-amber-900">
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
                     Falta registrar na Cloud API
                   </p>
-                  <p className="text-xs text-amber-800 leading-relaxed">
+                  <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
                     O número{" "}
-                    <code className="bg-amber-100 px-1 py-0.5 rounded">{canal?.telefone}</code>{" "}
+                    <code className="bg-amber-100 dark:bg-amber-900/30 px-1 py-0.5 rounded">{canal?.telefone}</code>{" "}
                     foi vinculado à sua conta WhatsApp Business, mas a Meta exige uma
                     última etapa pra ativar o envio de mensagens: registrar o número
                     na Cloud API com um PIN de 6 dígitos (verificação em duas etapas).
                   </p>
-                  <p className="text-xs text-amber-800 leading-relaxed">
+                  <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
                     Este PIN será o seu PIN de 2FA do WhatsApp Business — guarde-o em
                     local seguro. Se já definiu um PIN no WhatsApp Manager, use ele.
                   </p>
@@ -639,15 +639,15 @@ export function MetaConnectDialog({
                 Registrar na Cloud API
               </Button>
 
-              <div className="pt-2 border-t border-amber-200">
-                <p className="text-[11px] text-amber-800 leading-relaxed mb-1.5">
+              <div className="pt-2 border-t border-amber-200 dark:border-amber-800/50">
+                <p className="text-[11px] text-amber-800 dark:text-amber-200 leading-relaxed mb-1.5">
                   Este número <strong>já envia e recebe mensagens</strong> normalmente? Então ele já
                   está registrado — só a marcação ficou pendente. Pule o PIN:
                 </p>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full bg-white"
+                  className="w-full bg-white dark:bg-card"
                   onClick={() =>
                     verificarMut.mutate(
                       { canalId: canal.id, forcar: true },

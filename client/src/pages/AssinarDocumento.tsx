@@ -33,10 +33,10 @@ const TIPO_ICONE: Record<CampoTipo, any> = {
   ASSINATURA: PenLine, DATA: Calendar, NOME: User, CPF: IdCard,
 };
 const TIPO_COR: Record<CampoTipo, string> = {
-  ASSINATURA: "bg-amber-200/70 border-amber-500 text-amber-900",
-  DATA: "bg-blue-200/70 border-blue-500 text-blue-900",
-  NOME: "bg-emerald-200/70 border-emerald-500 text-emerald-900",
-  CPF: "bg-violet-200/70 border-violet-500 text-violet-900",
+  ASSINATURA: "bg-amber-200/70 dark:bg-amber-900/20 border-amber-500 text-amber-900 dark:text-amber-200",
+  DATA: "bg-blue-200/70 dark:bg-blue-900/20 border-blue-500 text-blue-900 dark:text-blue-200",
+  NOME: "bg-emerald-200/70 dark:bg-emerald-900/20 border-emerald-500 text-emerald-900 dark:text-emerald-200",
+  CPF: "bg-violet-200/70 dark:bg-violet-900/20 border-violet-500 text-violet-900 dark:text-violet-200",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -172,8 +172,8 @@ export default function AssinarDocumento({ token }: { token: string }) {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950 dark:to-green-950 p-4">
         <Card className="w-full max-w-md text-center">
           <CardContent className="pt-8 pb-8">
-            <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="h-8 w-8 text-emerald-600" />
+            <div className="h-16 w-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
             </div>
             <h2 className="text-xl font-bold text-emerald-800 dark:text-emerald-200 mb-2">Documento Assinado!</h2>
             <p className="text-sm text-muted-foreground mb-4">{doc.titulo}</p>
@@ -301,7 +301,7 @@ export default function AssinarDocumento({ token }: { token: string }) {
                       Limpar
                     </Button>
                   </div>
-                  <div className="rounded-lg border-2 border-dashed bg-white">
+                  <div className="rounded-lg border-2 border-dashed bg-white dark:bg-card">
                     {/* touch-none é crítico em mobile: sem ele o scroll do
                         navegador captura o gesto e não dá pra desenhar. */}
                     <canvas
@@ -455,12 +455,12 @@ function PreviewPdfComCampos({
             </div>
           }
           error={
-            <div className="p-12 text-center text-sm text-red-600">
+            <div className="p-12 text-center text-sm text-red-600 dark:text-red-400">
               Não foi possível exibir o documento.
             </div>
           }
         >
-          <div ref={containerRef} className="relative inline-block shadow-md bg-white">
+          <div ref={containerRef} className="relative inline-block shadow-md bg-white dark:bg-card">
             <Page
               pageNumber={paginaAtual}
               width={600}

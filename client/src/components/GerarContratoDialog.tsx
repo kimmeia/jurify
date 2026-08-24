@@ -285,7 +285,7 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
           // Estado pós-criação de assinatura: mostra link copiável + ação
           <div className="space-y-4 py-2">
             <div className="rounded-md border-2 border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
-              <p className="text-sm font-medium flex items-center gap-1.5 text-emerald-700">
+              <p className="text-sm font-medium flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
                 <PenLine className="h-4 w-4" />
                 Assinatura criada com sucesso
               </p>

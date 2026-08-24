@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { CheckSquare, Plus, Loader2, Search, Calendar, Clock, AlertTriangle, User, Trash2, Check, X } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = { pendente: "Pendente", em_andamento: "Em andamento", concluida: "Concluída", cancelada: "Cancelada" };
-const STATUS_CORES: Record<string, string> = { pendente: "bg-amber-100 text-amber-700", em_andamento: "bg-blue-100 text-blue-700", concluida: "bg-emerald-100 text-emerald-700", cancelada: "bg-gray-100 text-gray-500" };
+const STATUS_CORES: Record<string, string> = { pendente: "bg-amber-100 text-amber-700 dark:text-amber-300", em_andamento: "bg-blue-100 text-blue-700 dark:text-blue-300", concluida: "bg-emerald-100 text-emerald-700 dark:text-emerald-300", cancelada: "bg-gray-100 dark:bg-slate-800/60 text-gray-500" };
 const PRIOR_CORES: Record<string, string> = { urgente: "bg-red-500", alta: "bg-orange-400", normal: "bg-blue-400", baixa: "bg-gray-300" };
 
 export default function Tarefas() {
@@ -94,7 +94,7 @@ export default function Tarefas() {
               {/* Ações */}
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                 {t.status !== "em_andamento" && t.status !== "concluida" && (
-                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600" title="Iniciar" onClick={() => atualizarMut.mutate({ id: t.id, status: "em_andamento" })}><Clock className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600 dark:text-blue-400" title="Iniciar" onClick={() => atualizarMut.mutate({ id: t.id, status: "em_andamento" })}><Clock className="h-3 w-3" /></Button>
                 )}
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => { if (confirm("Excluir tarefa?")) excluirMut.mutate({ id: t.id }); }}><Trash2 className="h-3 w-3" /></Button>
               </div>

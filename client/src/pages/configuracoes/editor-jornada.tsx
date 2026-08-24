@@ -64,7 +64,7 @@ export function EditorJornada({
         {valor ? (
           <button
             type="button"
-            className="text-[11px] text-muted-foreground hover:text-rose-600"
+            className="text-[11px] text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
             onClick={() => onChange(null)}
           >
             remover jornada
