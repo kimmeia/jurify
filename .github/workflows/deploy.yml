@@ -148,10 +148,24 @@ jobs:
           # `--detach` retorna assim que o deploy é DISPARADO (não espera
           # build terminar). Build do JuridFlow leva ~5min — esperar tudo
           # estoura o timeout do GitHub Actions sem necessidade.
-          railway up \
-            --service "${{ secrets.RAILWAY_SERVICE_ID_PRODUCTION }}" \
-            --environment "${{ secrets.RAILWAY_ENVIRONMENT_ID_PRODUCTION }}" \
-            --detach
+          #
+          # Retry porque o UPLOAD é chamada de rede à API do Railway e falha
+          # sozinho: 20/08 devolveu 502 e 24/08 devolveu 500, com token e
+          # link válidos. Sem retry, o ambiente fica parado até alguém
+          # re-disparar na mão.
+          for tentativa in 1 2 3; do
+            if railway up \
+              --service "${{ secrets.RAILWAY_SERVICE_ID_PRODUCTION }}" \
+              --environment "${{ secrets.RAILWAY_ENVIRONMENT_ID_PRODUCTION }}" \
+              --detach; then
+              exit 0
+            fi
+            espera=$((tentativa * 20))
+            echo "::warning::railway up (production) falhou na tentativa $tentativa/3 — repetindo em ${espera}s"
+            sleep "$espera"
+          done
+          echo "::error::railway up (production) falhou nas 3 tentativas. Confira o status do Railway."
+          exit 1
 
       - name: Resumo
         if: always()
@@ -231,10 +245,23 @@ jobs:
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          railway up \
-            --service "${{ secrets.RAILWAY_SERVICE_ID_STAGING }}" \
-            --environment "${{ secrets.RAILWAY_ENVIRONMENT_ID_STAGING }}" \
-            --detach
+          # Retry porque o UPLOAD é chamada de rede à API do Railway e falha
+          # sozinho: 20/08 devolveu 502 e 24/08 devolveu 500, com token e
+          # link válidos. Sem retry, o ambiente fica parado até alguém
+          # re-disparar na mão.
+          for tentativa in 1 2 3; do
+            if railway up \
+              --service "${{ secrets.RAILWAY_SERVICE_ID_STAGING }}" \
+              --environment "${{ secrets.RAILWAY_ENVIRONMENT_ID_STAGING }}" \
+              --detach; then
+              exit 0
+            fi
+            espera=$((tentativa * 20))
+            echo "::warning::railway up (staging) falhou na tentativa $tentativa/3 — repetindo em ${espera}s"
+            sleep "$espera"
+          done
+          echo "::error::railway up (staging) falhou nas 3 tentativas. Confira o status do Railway."
+          exit 1
 
       - name: Resumo
         if: always()
