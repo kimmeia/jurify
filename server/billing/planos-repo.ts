@@ -56,6 +56,8 @@ function rowParaPlano(row: PlanoRow): Plano {
     precoMensalCentavos: row.precoMensalCentavos,
     precoAnualCentavos: row.precoAnualCentavos,
     trialDias: row.trialDias,
+    atendentesInclusos: row.atendentesInclusos,
+    precoAtendenteAdicionalCentavos: row.precoAtendenteAdicionalCentavos,
     limites: {
       maxUsuarios: row.maxUsuarios,
       maxArmazenamentoMB: row.maxArmazenamentoMb,

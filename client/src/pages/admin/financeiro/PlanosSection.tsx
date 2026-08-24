@@ -46,6 +46,8 @@ interface PlanoEditavel {
   maxMonitoramentosProcessos: number | null;
   creditosCalculosMes: number;
   jurisiaMensagensMes: number;
+  atendentesInclusos: number | null;
+  precoAtendenteAdicionalCentavos: number;
   modulosLiberados: string[];
   features: string[];
   popular: boolean;
@@ -61,15 +63,104 @@ interface ModuloApp {
   obrigatorio: boolean;
 }
 
+interface ModuloCatalogo {
+  id: string;
+  nome: string;
+  descricao: string;
+  precoMensalCentavos: number;
+}
+
+/**
+ * Catálogo de módulos — preço mensal da venda avulsa, editável inline.
+ * Também é a referência da "soma da cesta" mostrada na edição de planos.
+ */
+function CatalogoModulos({
+  catalogo,
+  onSaved,
+}: {
+  catalogo: ModuloCatalogo[];
+  onSaved: () => void;
+}) {
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [valor, setValor] = useState("");
+
+  const salvarMut = (trpc as any).admin.salvarPrecoModulo.useMutation({
+    onSuccess: () => {
+      toast.success("Preço atualizado");
+      setEditandoId(null);
+      onSaved();
+    },
+    onError: (err: any) => toast.error("Erro ao salvar preço", { description: err.message }),
+  });
+
+  const salvar = (modulo: string) => {
+    const centavos = Math.round(parseFloat(valor.replace(/\./g, "").replace(",", ".")) * 100);
+    if (isNaN(centavos) || centavos < 0) { toast.error("Preço inválido"); return; }
+    salvarMut.mutate({ modulo, precoMensalCentavos: centavos });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Catálogo de módulos — valores mensais</CardTitle>
+        <CardDescription className="text-xs">
+          Preço da venda avulsa de cada módulo. Vale como referência pra montar pacotes;
+          o pacote tem preço próprio (desconto de combo). R$ 0,00 = a definir.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+          {catalogo.map((m) => (
+            <div key={m.id} className="flex items-center justify-between gap-2 py-1 border-b border-dashed last:border-0 sm:[&:nth-last-child(-n+2)]:border-0 lg:[&:nth-last-child(-n+3)]:border-0">
+              <span className="text-sm truncate" title={m.descricao}>{m.nome}</span>
+              {editandoId === m.id ? (
+                <span className="flex items-center gap-1 shrink-0">
+                  <Input
+                    value={valor}
+                    onChange={(e) => setValor(e.target.value)}
+                    inputMode="decimal"
+                    className="h-7 w-24 text-right text-xs"
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === "Enter") salvar(m.id); if (e.key === "Escape") setEditandoId(null); }}
+                  />
+                  <Button size="sm" className="h-7 text-xs px-2" disabled={salvarMut.isPending} onClick={() => salvar(m.id)}>
+                    {salvarMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Salvar"}
+                  </Button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 text-sm tabular-nums shrink-0 hover:text-violet-600 dark:hover:text-violet-400 group"
+                  onClick={() => {
+                    setEditandoId(m.id);
+                    setValor(m.precoMensalCentavos > 0 ? (m.precoMensalCentavos / 100).toFixed(2).replace(".", ",") : "");
+                  }}
+                >
+                  <span className={m.precoMensalCentavos === 0 ? "text-muted-foreground italic" : "font-medium"}>
+                    {m.precoMensalCentavos === 0 ? "a definir" : `${formatBRL(m.precoMensalCentavos)}/mês`}
+                  </span>
+                  <Edit className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function EditarPlanoDialog({
   plano,
   modulosApp,
+  catalogo,
   open,
   onOpenChange,
   onSaved,
 }: {
   plano: PlanoEditavel | null;
   modulosApp: ModuloApp[];
+  catalogo: ModuloCatalogo[];
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSaved: () => void;
@@ -88,6 +179,8 @@ function EditarPlanoDialog({
   const [maxMonitoramentos, setMaxMonitoramentos] = useState<string>("");
   const [creditosCalculos, setCreditosCalculos] = useState("0");
   const [jurisiaMensagens, setJurisiaMensagens] = useState("0");
+  const [atendentesInclusos, setAtendentesInclusos] = useState<string>("");
+  const [precoAtendenteAdicional, setPrecoAtendenteAdicional] = useState<string>("");
   const [modulosLiberados, setModulosLiberados] = useState<string[]>([]);
   const [features, setFeatures] = useState<string[]>([]);
   const [novaFeature, setNovaFeature] = useState("");
@@ -113,6 +206,12 @@ function EditarPlanoDialog({
       setMaxMonitoramentos(plano.maxMonitoramentosProcessos != null ? String(plano.maxMonitoramentosProcessos) : "");
       setCreditosCalculos(String(plano.creditosCalculosMes));
       setJurisiaMensagens(String(plano.jurisiaMensagensMes ?? 0));
+      setAtendentesInclusos(plano.atendentesInclusos != null ? String(plano.atendentesInclusos) : "");
+      setPrecoAtendenteAdicional(
+        plano.precoAtendenteAdicionalCentavos > 0
+          ? (plano.precoAtendenteAdicionalCentavos / 100).toFixed(2).replace(".", ",")
+          : "",
+      );
       setModulosLiberados([...plano.modulosLiberados]);
       setFeatures([...plano.features]);
       setPopular(plano.popular);
@@ -140,6 +239,13 @@ function EditarPlanoDialog({
     const anual = precoAnualReais.trim()
       ? Math.round(parseFloat(precoAnualReais.replace(",", ".")) * 100)
       : null;
+    const adicionalCentavos = precoAtendenteAdicional.trim()
+      ? Math.round(parseFloat(precoAtendenteAdicional.replace(",", ".")) * 100)
+      : 0;
+    if (isNaN(adicionalCentavos) || adicionalCentavos < 0) {
+      toast.error("Preço do atendente adicional inválido");
+      return;
+    }
     editarMut.mutate({
       slug: plano.slug,
       nome,
@@ -156,6 +262,8 @@ function EditarPlanoDialog({
       maxMonitoramentosProcessos: maxMonitoramentos.trim() ? parseInt(maxMonitoramentos, 10) : null,
       creditosCalculosMes: parseInt(creditosCalculos, 10) || 0,
       jurisiaMensagensMes: parseInt(jurisiaMensagens, 10) || 0,
+      atendentesInclusos: atendentesInclusos.trim() ? parseInt(atendentesInclusos, 10) : null,
+      precoAtendenteAdicionalCentavos: adicionalCentavos,
       modulosLiberados,
       features,
       popular,
@@ -224,6 +332,22 @@ function EditarPlanoDialog({
                 <Input value={ordem} onChange={(e) => setOrdem(e.target.value)} type="number" min={0} />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Atendentes inclusos</Label>
+                <Input value={atendentesInclusos} onChange={(e) => setAtendentesInclusos(e.target.value)}
+                  type="number" min={0} placeholder="vazio = sem cobrança por assento" />
+                <p className="text-[10px] text-muted-foreground">
+                  Colaboradores ativos contam. Vazio = não cobra por assento (planos atuais).
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Atendente adicional (R$/mês)</Label>
+                <Input value={precoAtendenteAdicional} onChange={(e) => setPrecoAtendenteAdicional(e.target.value)}
+                  inputMode="decimal" placeholder="25,00" />
+                <p className="text-[10px] text-muted-foreground">Cobrado por atendente além dos inclusos.</p>
+              </div>
+            </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <Label>Popular</Label>
@@ -290,6 +414,24 @@ function EditarPlanoDialog({
             <p className="text-xs text-muted-foreground">
               Marque os módulos liberados nesse plano. Módulos obrigatórios são sempre liberados.
             </p>
+            {(() => {
+              const somaCesta = catalogo
+                .filter((c) => modulosLiberados.includes(c.id))
+                .reduce((s, c) => s + c.precoMensalCentavos, 0);
+              const precoPacote = Math.round(parseFloat(precoMensalReais.replace(",", ".")) * 100);
+              return somaCesta > 0 ? (
+                <div className="rounded-lg border bg-muted/40 p-3 text-xs flex items-center justify-between">
+                  <span className="text-muted-foreground">
+                    Soma avulsa dos módulos da cesta: <strong className="text-foreground">{formatBRL(somaCesta)}/mês</strong>
+                  </span>
+                  {!isNaN(precoPacote) && precoPacote > 0 && precoPacote < somaCesta && (
+                    <span className="text-emerald-700 dark:text-emerald-300 font-medium">
+                      pacote a {formatBRL(precoPacote)} = {Math.round((1 - precoPacote / somaCesta) * 100)}% de combo
+                    </span>
+                  )}
+                </div>
+              ) : null;
+            })()}
             {modulosApp.map((mod) => {
               const liberado = mod.obrigatorio || modulosLiberados.includes(mod.id);
               return (
@@ -435,6 +577,7 @@ function CriarPlanoDialog({
 export function PlanosSection() {
   const { data: planos, isLoading, refetch } = (trpc as any).admin.listarPlanosEditaveis.useQuery();
   const { data: modulosApp } = (trpc as any).admin.listarModulosApp.useQuery();
+  const { data: catalogo, refetch: refetchCatalogo } = (trpc as any).admin.listarCatalogoModulos.useQuery();
   const [editando, setEditando] = useState<PlanoEditavel | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [criarOpen, setCriarOpen] = useState(false);
@@ -458,6 +601,8 @@ export function PlanosSection() {
           Criar plano
         </Button>
       </div>
+
+      <CatalogoModulos catalogo={catalogo ?? []} onSaved={refetchCatalogo} />
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -517,6 +662,13 @@ export function PlanosSection() {
                   <p>💾 <strong className="text-foreground">{exibirLimite(plano.maxArmazenamentoMb)} MB</strong></p>
                   <p>📒 <strong className="text-foreground">{exibirLimite(plano.maxClientes, true)}</strong> clientes</p>
                   <p>🧩 <strong className="text-foreground">{plano.modulosLiberados.length}</strong> módulos</p>
+                  {plano.atendentesInclusos != null && (
+                    <p>🎧 <strong className="text-foreground">{plano.atendentesInclusos}</strong> atendentes
+                      {plano.precoAtendenteAdicionalCentavos > 0 && (
+                        <span> · +{formatBRL(plano.precoAtendenteAdicionalCentavos)}/extra</span>
+                      )}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 pt-2">
@@ -562,6 +714,7 @@ export function PlanosSection() {
       <EditarPlanoDialog
         plano={editando}
         modulosApp={modulosApp ?? []}
+        catalogo={catalogo ?? []}
         open={editOpen}
         onOpenChange={setEditOpen}
         onSaved={refetch}
