@@ -25,7 +25,8 @@ import {
   getUserByGoogleSub,
   getDb,
 } from "../db";
-import { colaboradores, users, passwordResetTokens, emailConfirmationTokens } from "../../drizzle/schema";
+import { aceitesTermos, colaboradores, users, passwordResetTokens, emailConfirmationTokens } from "../../drizzle/schema";
+import { TERMOS_VERSAO } from "@shared/termos";
 import { and, eq, isNull, gt } from "drizzle-orm";
 import { randomBytes, randomUUID } from "node:crypto";
 import {
@@ -330,6 +331,19 @@ export const authRouter = router({
 
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+
+      // Aceite versionado + trilha auditável (LGPD): o cadastro é o
+      // primeiro aceite — grava versão no user e a linha de prova com IP.
+      await db
+        .update(users)
+        .set({ termosVersaoAceita: TERMOS_VERSAO })
+        .where(eq(users.id, userCriado.id));
+      await db.insert(aceitesTermos).values({
+        userId: userCriado.id,
+        versao: TERMOS_VERSAO,
+        contexto: "cadastro",
+        ip,
+      });
 
       // ─── Fluxo de signup via CONVITE ─────────────────────────────────────
       // Convidado não passa pelo email de confirmação — o dono já validou

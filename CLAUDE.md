@@ -169,9 +169,15 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
 1. **Robô de jornada varre em 32s** — dono já disse que está errado. A
    instrumentação (tempos por tela + "X de 19 mostraram esqueleto") já grava;
    olhar a primeira medição real e agir.
-2. **Política de privacidade sem OpenAI/Anthropic** — o sistema manda teor de
-   decisão e conversa de WhatsApp pra IA; LGPD exige listar operadores.
-   Texto é jurídico: dono revisa antes de publicar.
+2. **Termos v2 publicados SEM revisão jurídica final (24/08)** — aceite
+   versionado entregue: `shared/termos.ts` (TERMOS_VERSAO=2), trilha
+   `aceites_termos` (data/hora/IP/versão), TermosGate bloqueante pro DONO
+   (colaborador/admin/impersonação não travam), cadastro com botão travado
+   + declaração de responsabilidade. Texto novo em /termos e /privacidade
+   inclui papéis LGPD (escritório=controlador), indenidade e suboperadores
+   de IA (OpenAI/Anthropic — a antiga pendência de listar operadores está
+   RESOLVIDA). O teor é minuta técnica: **dono revisa o texto jurídico**;
+   mudança relevante no texto = bump em TERMOS_VERSAO (dispara re-aceite).
 3. **HMAC da Meta em modo brando** — sem App Secret cadastrado, o webhook
    aceita com warning. Endurecer em produção.
 4. **Conferências do robô de jornada** só rodam pelo Playwright — ligar no

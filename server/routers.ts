@@ -75,6 +75,7 @@ import { whatsappCallingRouter } from "./routers/router-whatsapp-calling";
 import { customer360Router } from "./routers/customer360";
 import { processosRouter } from "./routers/processos";
 import { prazosSugeridosRouter } from "./routers/router-prazos-sugeridos";
+import { termosRouter } from "./routers/router-termos";
 import {
   clientesEssencialRouter,
   painelProcessualRouter,
@@ -94,6 +95,7 @@ import { pushRouter } from "./routers/push";
 export const appRouter = router({
   // Autenticação própria — email/senha + Google Sign-In
   auth: authRouter,
+  termos: termosRouter,
 
   // Assinaturas SaaS (cobrança via Asaas)
   subscription: subscriptionRouter,

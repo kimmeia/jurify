@@ -51,6 +51,13 @@ export const users = mysqlTable("users", {
    */
   aceitouTermosEm: timestamp("aceitouTermosEm"),
   /**
+   * Versão dos Termos aceita (shared/termos.ts). 0 = nunca registrou
+   * versão (conta antiga ou Google sem aceite) — o TermosGate trava o
+   * DONO até aceitar a vigente. O histórico completo fica em
+   * `aceites_termos` (data/hora/IP/versão, auditável).
+   */
+  termosVersaoAceita: int("termosVersaoAceita").default(0).notNull(),
+  /**
    * Confirmação de email (Fase 2 do roadmap de Planos).
    * Signup novo: false até clicar no link enviado por Resend.
    * Login Google: marca true automaticamente (Google já valida).
@@ -90,6 +97,29 @@ export type EmailConfirmationToken = typeof emailConfirmationTokens.$inferSelect
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+/**
+ * Trilha de aceites dos Termos de Uso — uma linha por aceite, com IP e
+ * versão. `users.termosVersaoAceita` é o cache da última; ESTA tabela é a
+ * prova em caso de disputa (nunca sobrescrita, só acrescida).
+ */
+export const aceitesTermos = mysqlTable(
+  "aceites_termos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userIdAceite").notNull(),
+    versao: int("versaoAceite").notNull(),
+    /** De onde veio: cadastro, reaceite (gate bloqueante). */
+    contexto: varchar("contextoAceite", { length: 32 }).default("cadastro").notNull(),
+    ip: varchar("ipAceite", { length: 64 }),
+    aceitoEm: timestamp("aceitoEmAceite").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxUser: index("idx_aceites_termos_user").on(t.userId),
+  }),
+);
+
+export type AceiteTermos = typeof aceitesTermos.$inferSelect;
 
 /**
  * Subscriptions table — assinaturas SaaS JuridFlow (uma por usuário-dono).
