@@ -63,6 +63,7 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { moduloOcultoNoMenu } from "@/config/visibility";
+import { contratoLibera } from "@shared/modulos-contratacao";
 import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
 import { InstalarAppDialog } from "@/components/InstalarAppDialog";
@@ -101,6 +102,10 @@ type ItemMenu = {
   /** Selo fixo de texto ("beta"). Some quando há contagem: número esperando é
    *  informação viva e ganha do rótulo, e os dois não cabem em 34px. */
   selo?: string;
+  /** Módulo(s) CONTRATADOS que liberam o item (basta um). Diferente de `ver`
+   *  (permissão do cargo) e de `ocultaPor` (config global): este vem do
+   *  PLANO do escritório. Sem o campo, o item nunca é escondido por plano. */
+  modulo?: string[];
 };
 
 const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
@@ -108,21 +113,21 @@ const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
     titulo: "Dia a dia",
     itens: [
       { id: "dashboard", rotulo: "Dashboard", rota: "/dashboard", icone: LayoutDashboard, ver: (c) => c("dashboard") },
-      { id: "agenda", rotulo: "Agenda", rota: "/agenda", icone: CalendarDays, ver: (c) => c("agenda"), ocultaPor: "agenda", tomBadge: "alerta" },
-      { id: "atendimento", rotulo: "Atendimento", rota: "/atendimento", icone: Headphones, ver: (c) => c("atendimento"), ocultaPor: "atendimento", tomBadge: "novidade" },
+      { id: "agenda", rotulo: "Agenda", rota: "/agenda", icone: CalendarDays, ver: (c) => c("agenda"), ocultaPor: "agenda", tomBadge: "alerta", modulo: ["agenda"] },
+      { id: "atendimento", rotulo: "Atendimento", rota: "/atendimento", icone: Headphones, ver: (c) => c("atendimento"), ocultaPor: "atendimento", tomBadge: "novidade", modulo: ["atendimento"] },
     ],
   },
   {
     titulo: "Carteira",
     itens: [
-      { id: "clientes", rotulo: "Clientes", rota: "/clientes", icone: Users, ver: (c) => c("clientes") },
+      { id: "clientes", rotulo: "Clientes", rota: "/clientes", icone: Users, ver: (c) => c("clientes"), modulo: ["clientes"] },
       // A Central de Movimentações virou aba daqui — o contador de não lidas
       // veio junto, senão o número sumia do menu com a página.
-      { id: "processos", rotulo: "Processos", rota: "/processos", icone: FileSearch, ver: (c) => c("processos"), ocultaPor: "processos", tomBadge: "novidade", prefixo: true },
+      { id: "processos", rotulo: "Processos", rota: "/processos", icone: FileSearch, ver: (c) => c("processos"), ocultaPor: "processos", tomBadge: "novidade", prefixo: true, modulo: ["processos"] },
       // Acordo é vinculado a cliente; o gate herda de "clientes" e o
       // verProprios filtra por responsável no backend.
-      { id: "acordos", rotulo: "Acordos", rota: "/acordos", icone: Handshake, ver: (c) => c("clientes") },
-      { id: "kanban", rotulo: "Kanban", rota: "/kanban", icone: LayoutGrid, ver: (c) => c("kanban"), ocultaPor: "kanban" },
+      { id: "acordos", rotulo: "Acordos", rota: "/acordos", icone: Handshake, ver: (c) => c("clientes"), modulo: ["clientes"] },
+      { id: "kanban", rotulo: "Kanban", rota: "/kanban", icone: LayoutGrid, ver: (c) => c("kanban"), ocultaPor: "kanban", modulo: ["kanban"] },
     ],
   },
   {
@@ -137,19 +142,19 @@ const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
       // o tem. Enquanto pegava carona em "equipe" o item aparecia pra
       // atendente, SDR e estagiário (todos têm verProprios lá) e, depois,
       // pro Gestor — que ninguém escolheu, veio junto com gerenciar a equipe.
-      { id: "ponto", rotulo: "Ponto", rota: "/ponto", icone: Clock, ver: (_c, e) => e("ponto") },
-      { id: "calculos", rotulo: "Cálculos", rota: "/calculos", icone: Calculator, ver: (c) => c("calculos"), ocultaPor: "calculos" },
-      { id: "modelos", rotulo: "Modelos", rota: "/modelos-contrato", icone: FileText, ver: (c) => c("modelos") },
+      { id: "ponto", rotulo: "Ponto", rota: "/ponto", icone: Clock, ver: (_c, e) => e("ponto"), modulo: ["ponto"] },
+      { id: "calculos", rotulo: "Cálculos", rota: "/calculos", icone: Calculator, ver: (c) => c("calculos"), ocultaPor: "calculos", modulo: ["calculos"] },
+      { id: "modelos", rotulo: "Modelos", rota: "/modelos-contrato", icone: FileText, ver: (c) => c("modelos"), modulo: ["contratos"] },
       // Fusão de SmartFlow (Fluxos) + Agentes IA: aparece com qualquer um dos
       // dois; o gate por sub-aba fica dentro da página.
-      { id: "automacoes", rotulo: "Automações", rota: "/automacoes", icone: Zap, ver: (c) => c("smartflow") || c("agentesIa"), ocultaPor: "smartflow", prefixo: true },
+      { id: "automacoes", rotulo: "Automações", rota: "/automacoes", icone: Zap, ver: (c) => c("smartflow") || c("agentesIa"), ocultaPor: "smartflow", prefixo: true, modulo: ["smartflow", "agentes_ia"] },
     ],
   },
   {
     titulo: "Gestão",
     itens: [
-      { id: "financeiro", rotulo: "Financeiro", rota: "/financeiro", icone: DollarSign, ver: (c) => c("financeiro"), ocultaPor: "financeiro" },
-      { id: "relatorios", rotulo: "Relatórios", rota: "/relatorios", icone: BarChart3, ver: (c) => c("relatorios"), ocultaPor: "relatorios" },
+      { id: "financeiro", rotulo: "Financeiro", rota: "/financeiro", icone: DollarSign, ver: (c) => c("financeiro"), ocultaPor: "financeiro", modulo: ["financeiro"] },
+      { id: "relatorios", rotulo: "Relatórios", rota: "/relatorios", icone: BarChart3, ver: (c) => c("relatorios"), ocultaPor: "relatorios", modulo: ["relatorios"] },
       // Roadmap não está no sistema de permissões — todo logado vê e vota.
       { id: "roadmap", rotulo: "Roadmap", rota: "/roadmap", icone: Lightbulb, ocultaPor: "roadmap" },
     ],
@@ -295,6 +300,17 @@ function AppSidebarContent({
    * por meio segundo pra quem não tem acesso é pior que ele aparecer meio
    * segundo depois pra quem tem.
    */
+  // Módulos CONTRATADOS pelo plano do escritório — null = tudo liberado
+  // (cortesia/admin/carregando). Complementa canSee: cargo diz quem PODE,
+  // o plano diz o que o escritório TEM.
+  const { data: modulosData } = trpc.subscription.modulosContratados.useQuery(undefined, {
+    enabled: !!user && user.role === "user",
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
+  });
+  const modulosContratados: string[] | null = modulosData?.modulos ?? null;
+
   const canSeeEstrito = (modulo: string) => {
     if (user?.role === "admin" || minhasPerms?.cargo === "Dono") return true;
     if (!minhasPerms?.permissoes) return false;
@@ -417,7 +433,9 @@ function AppSidebarContent({
   const [mobileCompleto, setMobileCompleto] = useState<boolean>(() => {
     try { return localStorage.getItem("jurify:mobileCompleto") === "1"; } catch { return false; }
   });
-  const modoFocadoMobile = isMobile && !mobileCompleto && canSee("atendimento");
+  const modoFocadoMobile =
+    isMobile && !mobileCompleto && canSee("atendimento") &&
+    contratoLibera(modulosContratados, ["atendimento"]);
   const abrirVersaoCompleta = () => {
     try { localStorage.setItem("jurify:mobileCompleto", "1"); } catch { /* modo privado */ }
     setMobileCompleto(true);
@@ -485,6 +503,7 @@ function AppSidebarContent({
               const visiveis = grupo.itens.filter(
                 (i) =>
                   !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) &&
+                  (i.modulo ? contratoLibera(modulosContratados, i.modulo) : true) &&
                   (i.ver ? i.ver(canSee, canSeeEstrito) : true),
               );
               if (visiveis.length === 0) return null;

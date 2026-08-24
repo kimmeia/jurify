@@ -180,6 +180,16 @@ export const subscriptionRouter = router({
     return { ...sub, diasRestantesTrial };
   }),
 
+  /** Módulos que o plano do escritório libera — a mesma resposta que o
+   *  porteiro do servidor usa (cache incluso). `null` = tudo liberado
+   *  (cortesia, admin, sem plano resolvido): o menu mostra tudo, como hoje. */
+  modulosContratados: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role === "admin" || ctx.user.impersonatedBy) return { modulos: null };
+    const { modulosContratadosDoUsuario } = await import("../_core/gate-modulos");
+    const modulos = await modulosContratadosDoUsuario(ctx.user.id);
+    return { modulos };
+  }),
+
   /** Get all subscriptions for current user */
   list: protectedProcedure.query(async ({ ctx }) => {
     return getUserSubscriptions(ctx.user.id);
