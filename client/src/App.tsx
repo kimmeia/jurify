@@ -49,6 +49,10 @@ import Automacoes from "./pages/Automacoes";
 import Kanban from "./pages/Kanban";
 import RestaurarCards from "@/pages/kanban/RestaurarCards";
 import Clientes from "./pages/Clientes";
+import ClientesEssencial from "./pages/ClientesEssencial";
+import Prazos from "./pages/Prazos";
+import { useModulosContratados } from "./components/ModuloGuard";
+import { contratoLibera } from "@shared/modulos-contratacao";
 import Acordos from "./pages/Acordos";
 import Relatorios from "./pages/Relatorios";
 import Financeiro from "./pages/Financeiro";
@@ -88,6 +92,22 @@ function ClientArea({ children }: { children: React.ReactNode }) {
 
 function ClientAreaNoGuard({ children }: { children: React.ReactNode }) {
   return <AppLayout>{children}</AppLayout>;
+}
+
+/**
+ * Fase 2 da modularização: /clientes decide entre o CRM completo e o
+ * cadastro essencial olhando o CONTRATO (não o cargo). Quem não tem nenhum
+ * dos dois nem chega aqui — o ModuloGuard barra antes.
+ */
+function ClientesPorContrato() {
+  const contratados = useModulosContratados();
+  return contratoLibera(contratados, ["clientes"]) ? <Clientes /> : <ClientesEssencial />;
+}
+
+/** /prazos: com Agenda contratada o destino certo é o calendário completo. */
+function PrazosPorContrato() {
+  const contratados = useModulosContratados();
+  return contratoLibera(contratados, ["agenda"]) ? <Redirect to="/agenda" /> : <Prazos />;
 }
 
 function AdminArea({ children }: { children: React.ReactNode }) {
@@ -378,7 +398,12 @@ function Router() {
       </Route>
       <Route path="/clientes">
         <ClientArea>
-          <Clientes />
+          <ClientesPorContrato />
+        </ClientArea>
+      </Route>
+      <Route path="/prazos">
+        <ClientArea>
+          <PrazosPorContrato />
         </ClientArea>
       </Route>
       <Route path="/acordos">

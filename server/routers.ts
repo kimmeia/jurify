@@ -75,6 +75,11 @@ import { whatsappCallingRouter } from "./routers/router-whatsapp-calling";
 import { customer360Router } from "./routers/customer360";
 import { processosRouter } from "./routers/processos";
 import { prazosSugeridosRouter } from "./routers/router-prazos-sugeridos";
+import {
+  clientesEssencialRouter,
+  painelProcessualRouter,
+  prazosRouter,
+} from "./processos/router-pacote-processual";
 import { dashboardRouter } from "./routers/dashboard";
 import { adminRouter } from "./routers/admin";
 import { adminFinanceiroRouter } from "./routers/admin-financeiro";
@@ -166,6 +171,11 @@ export const appRouter = router({
   // Motor próprio (substituiu Judit em 08/05/2026)
   processos: processosRouter,
   prazosSugeridos: prazosSugeridosRouter,
+  // Pacote Acompanhamento Processual (Fase 2): as versões enxutas de
+  // Clientes/Agenda + painel — vivem no módulo "processos" de propósito.
+  clientesEssencial: clientesEssencialRouter,
+  prazos: prazosRouter,
+  painelProcessual: painelProcessualRouter,
 
   // Dashboard do utilizador
   dashboard: dashboardRouter,

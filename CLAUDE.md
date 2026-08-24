@@ -79,8 +79,19 @@ Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
   valor cobrado no Asaas e só muda a assinatura via botão explícito
   (`aplicarValorAssinatura`, recalcula server-side, nunca aceita valor do
   client).
-- Fase 2 pendente: Clientes essencial + Prazos + dashboard processual
-  (pacote Acompanhamento Processual) — mockup navegável aprovado 23/08.
+- **Fase 2 (pacote Acompanhamento Processual) entregue 24/08**: namespaces
+  `clientesEssencial`/`prazos`/`painelProcessual` declarados como módulo
+  "processos" (é o que os libera num plano sem clientes/agenda), sobre as
+  MESMAS tabelas `contatos`/`agendamentos` — contratar o módulo completo
+  depois não migra nada. Client: `/clientes` decide completo × essencial
+  pelo contrato; `/prazos` (redireciona pra /agenda quando Agenda
+  contratada); menu com `soSemModulo` (item enxuto só aparece sem o módulo
+  completo); Dashboard vira variante processual quando
+  `pacoteProcessualPuro(contrato)` (processos sem
+  atendimento/financeiro/kanban/clientes/agenda); Configurações esconde
+  abas de módulo não contratado e o resumo diário ganha cadeado no
+  WhatsApp sem Atendimento. Criar o plano em si é no painel (aba Planos):
+  montar cesta + preço — nada hardcoded.
 
 ### Permissões
 - Matriz em `checkPermission(userId, modulo, ação)` → `{verTodos, verProprios, criar, editar, ...}`

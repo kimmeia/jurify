@@ -59,6 +59,12 @@ export const MODULO_POR_NAMESPACE: Record<string, ModuloAppId | null> = {
   cofreCredenciais: "processos",
   clienteProcessos: "processos",
   importarProcessos: "processos",
+  // Pacote Fase 2: versões enxutas de Clientes/Agenda + painel da variante
+  // processual. São "processos" (não "clientes"/"agenda") de propósito —
+  // é o que as libera num plano que só contratou o acompanhamento.
+  clientesEssencial: "processos",
+  prazos: "processos",
+  painelProcessual: "processos",
 
   // cálculos
   financiamento: "calculos",
@@ -129,10 +135,14 @@ export const MODULOS_POR_ROTA: ReadonlyArray<{ prefixo: string; modulos: ModuloA
   { prefixo: "/agendamento", modulos: ["agenda"] },
   { prefixo: "/agenda", modulos: ["agenda"] },
   { prefixo: "/atendimento", modulos: ["atendimento"] },
-  { prefixo: "/clientes", modulos: ["clientes"] },
+  // "/clientes" também abre com só processos (Fase 2): a rota decide entre a
+  // tela completa e a essencial olhando o contrato — o guard só barra quem
+  // não tem nenhum dos dois.
+  { prefixo: "/clientes", modulos: ["clientes", "processos"] },
   { prefixo: "/acordos", modulos: ["clientes"] },
   { prefixo: "/processos", modulos: ["processos"] },
   { prefixo: "/movimentacoes", modulos: ["processos"] },
+  { prefixo: "/prazos", modulos: ["processos"] },
   { prefixo: "/kanban", modulos: ["kanban"] },
   { prefixo: "/ponto", modulos: ["ponto"] },
   { prefixo: "/calculos", modulos: ["calculos"] },
@@ -164,4 +174,18 @@ export function contratoLibera(
   if (!exigidos.length) return true;
   if (!modulosDoPlano || modulosDoPlano.length === 0) return true;
   return exigidos.some((m) => modulosDoPlano.includes(m));
+}
+
+/**
+ * O contrato é o pacote Acompanhamento Processual "puro"? (processos sem a
+ * suíte completa). É o que liga a variante processual do dashboard e as
+ * versões enxutas de Clientes/Prazos. Contrato indeterminado (null/vazio) =
+ * tudo liberado → NÃO é puro: quem tem tudo vê o app como sempre foi.
+ */
+const SUITE_COMPLETA: readonly string[] = ["atendimento", "financeiro", "kanban", "clientes", "agenda"];
+
+export function pacoteProcessualPuro(modulosDoPlano: readonly string[] | null): boolean {
+  if (!modulosDoPlano || modulosDoPlano.length === 0) return false;
+  if (!modulosDoPlano.includes("processos")) return false;
+  return !SUITE_COMPLETA.some((m) => modulosDoPlano.includes(m));
 }
