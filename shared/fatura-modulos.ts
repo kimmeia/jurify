@@ -44,6 +44,12 @@ export interface FaturaCalculada {
 export interface CalcularFaturaArgs {
   nomePlano: string;
   precoPacoteCentavos: number;
+  /**
+   * Valor fechado na conversa pra ESTE cliente (planos sob consulta).
+   * Quando presente (> 0), substitui o preço de tabela do pacote — sem
+   * isso, aplicar a fatura "corrigiria" a assinatura negociada pra R$ 0.
+   */
+  valorNegociadoCentavos?: number | null;
   avulsos: AvulsoFatura[];
   atendentesAtivos: number;
   /** null = plano sem cobrança por assento (grandfather dos planos atuais). */
@@ -54,11 +60,14 @@ export interface CalcularFaturaArgs {
 }
 
 export function calcularFatura(args: CalcularFaturaArgs): FaturaCalculada {
+  const temValorNegociado = args.valorNegociadoCentavos != null && args.valorNegociadoCentavos > 0;
   const itens: ItemFatura[] = [
     {
       tipo: "pacote",
-      rotulo: `Pacote ${args.nomePlano}`,
-      centavos: Math.max(0, args.precoPacoteCentavos),
+      rotulo: temValorNegociado
+        ? `Pacote ${args.nomePlano} (valor fechado)`
+        : `Pacote ${args.nomePlano}`,
+      centavos: Math.max(0, temValorNegociado ? args.valorNegociadoCentavos! : args.precoPacoteCentavos),
     },
   ];
 
