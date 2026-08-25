@@ -67,6 +67,19 @@ export default function Plans() {
   const [, setLocation] = useLocation();
 
   const { data: plans, isLoading } = trpc.subscription.plans.useQuery();
+  const { data: contatoComercial } = trpc.subscription.contatoComercial.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Plano sob consulta não tem checkout self-service — o caminho é a conversa.
+  const falarComAGente = (nomePlano: string) => {
+    const texto = `Olá! Tenho interesse no plano ${nomePlano} do JuridFlow.`;
+    const url = contatoComercial?.whatsapp
+      ? `https://wa.me/${contatoComercial.whatsapp}?text=${encodeURIComponent(texto)}`
+      : `mailto:contato@juridflow.com.br?subject=${encodeURIComponent(`Interesse no plano ${nomePlano}`)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
   const { data: currentSub } = trpc.subscription.current.useQuery(undefined, {
     enabled: !!user,
     retry: false,
@@ -383,12 +396,15 @@ export default function Plans() {
           const isDowngrade = currentSub && planIndex < currentIndex;
 
           const isTrial = currentSub?.status === "trialing";
+          const sobConsulta = !!(plan as any).precoSobConsulta;
 
           let buttonLabel = "Assinar";
           if (isCurrentPlan && isTrial) buttonLabel = "Continuar com este plano";
           else if (isCurrentPlan) buttonLabel = "Plano Atual";
           else if (isUpgrade) buttonLabel = "Fazer Upgrade";
           else if (isDowngrade) buttonLabel = "Fazer Downgrade";
+          if (sobConsulta && !isCurrentPlan) buttonLabel = "💬 Falar com a gente";
+          if (sobConsulta && isCurrentPlan && isTrial) buttonLabel = "💬 Fechar valor com a gente";
 
           return (
             <div
@@ -419,16 +435,26 @@ export default function Plans() {
                   {plan.name}
                 </p>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className={`text-3xl font-extrabold tracking-tight tabular-nums ${
-                    isCurrentPlan ? "text-violet-700" : isPopular ? "text-amber-700" : "text-slate-900 dark:text-slate-100"
-                  }`}>
-                    {formatPrice(price)}
-                  </span>
-                  <span className="text-xs text-slate-400 font-normal">
-                    /{billingInterval === "monthly" ? "mês" : "ano"}
-                  </span>
+                  {sobConsulta ? (
+                    <span className={`text-2xl font-extrabold tracking-tight ${
+                      isCurrentPlan ? "text-violet-700" : isPopular ? "text-amber-700" : "text-slate-900 dark:text-slate-100"
+                    }`}>
+                      Sob consulta
+                    </span>
+                  ) : (
+                    <>
+                      <span className={`text-3xl font-extrabold tracking-tight tabular-nums ${
+                        isCurrentPlan ? "text-violet-700" : isPopular ? "text-amber-700" : "text-slate-900 dark:text-slate-100"
+                      }`}>
+                        {formatPrice(price)}
+                      </span>
+                      <span className="text-xs text-slate-400 font-normal">
+                        /{billingInterval === "monthly" ? "mês" : "ano"}
+                      </span>
+                    </>
+                  )}
                 </div>
-                {billingInterval === "yearly" && (
+                {!sobConsulta && billingInterval === "yearly" && (
                   <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold mt-1">
                     Economia de {formatPrice(plan.priceMonthly * 12 - plan.priceYearly)}/ano
                   </p>
@@ -457,14 +483,18 @@ export default function Plans() {
                 }`}
                 variant={isCurrentPlan || isPopular ? "default" : "outline"}
                 size="sm"
-                disabled={loadingPlan !== null || isCurrentPlan || billingOk === false}
-                onClick={() => handleSelectPlan(plan.id)}
+                disabled={
+                  loadingPlan !== null ||
+                  (isCurrentPlan && !(sobConsulta && isTrial)) ||
+                  (!sobConsulta && billingOk === false)
+                }
+                onClick={() => (sobConsulta ? falarComAGente(plan.name) : handleSelectPlan(plan.id))}
               >
                 {loadingPlan === plan.id ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando…
                   </>
-                ) : isCurrentPlan ? (
+                ) : isCurrentPlan && !(sobConsulta && isTrial) ? (
                   <>✓ Você está aqui</>
                 ) : (
                   <>

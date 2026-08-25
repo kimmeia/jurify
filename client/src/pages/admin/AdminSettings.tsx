@@ -1,4 +1,8 @@
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,6 +45,43 @@ function CanalStatusBadge({ status }: { status: string }) {
   };
   const cfg = map[status] || { cls: "", label: status };
   return <Badge className={`${cfg.cls} hover:${cfg.cls} text-[10px] font-normal`}>{cfg.label}</Badge>;
+}
+
+/** WhatsApp dos botões "Falar com a gente" da LP — editável sem deploy. */
+function CardWhatsappComercial() {
+  const { data } = trpc.admin.obterWhatsappComercial.useQuery(undefined, { retry: false });
+  const [numero, setNumero] = useState("");
+  useEffect(() => {
+    if (data) setNumero(data.whatsapp);
+  }, [data]);
+  const salvarMut = trpc.admin.salvarWhatsappComercial.useMutation({
+    onSuccess: () => toast.success("WhatsApp comercial salvo — os botões da LP já usam o número novo"),
+    onError: (e) => toast.error("Erro ao salvar", { description: e.message }),
+  });
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">WhatsApp comercial</CardTitle>
+        <CardDescription className="text-xs">
+          Destino dos botões "Falar com a gente" e "Agendar demonstração" da landing page.
+          Vazio = os botões caem no e-mail de contato.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex items-center gap-2">
+        <Input
+          className="max-w-xs"
+          value={numero}
+          onChange={(e) => setNumero(e.target.value)}
+          placeholder="5585999999999 (DDI+DDD+número)"
+          inputMode="numeric"
+          maxLength={32}
+        />
+        <Button size="sm" disabled={salvarMut.isPending} onClick={() => salvarMut.mutate({ whatsapp: numero })}>
+          Salvar
+        </Button>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function AdminSettings() {
@@ -110,6 +151,7 @@ export default function AdminSettings() {
         </div>
 
         <TabsContent value="sistema" className="mt-4 space-y-6">
+          <CardWhatsappComercial />
       {/* Saúde do Sistema */}
       <Card>
         <CardHeader className="pb-3">

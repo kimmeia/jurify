@@ -1451,8 +1451,11 @@ export const adminRouter = router({
         maxConexoesWhatsapp: row.maxConexoesWhatsapp,
         maxAgentesIa: row.maxAgentesIa,
         maxMonitoramentosProcessos: row.maxMonitoramentosProcessos,
+        maxMonitoramentosCpf: row.maxMonitoramentosCpf,
         creditosCalculosMes: row.creditosCalculosMes,
         jurisiaMensagensMes: row.jurisiaMensagensMes,
+        precoSobConsulta: row.precoSobConsulta,
+        ctaDemonstracao: row.ctaDemonstracao,
         atendentesInclusos: row.atendentesInclusos,
         precoAtendenteAdicionalCentavos: row.precoAtendenteAdicionalCentavos,
         modulosLiberados: modulos.filter(ehModuloValido),
@@ -1636,6 +1639,9 @@ export const adminRouter = router({
       maxMonitoramentosProcessos: z.number().int().min(0).nullable().optional(),
       creditosCalculosMes: z.number().int().min(0).optional(),
       jurisiaMensagensMes: z.number().int().min(0).optional(),
+      maxMonitoramentosCpf: z.number().int().min(0).nullable().optional(),
+      precoSobConsulta: z.boolean().optional(),
+      ctaDemonstracao: z.boolean().optional(),
       atendentesInclusos: z.number().int().min(0).nullable().optional(),
       precoAtendenteAdicionalCentavos: z.number().int().min(0).optional(),
       modulosLiberados: z.array(z.string()).optional(),
@@ -1669,6 +1675,9 @@ export const adminRouter = router({
       if (input.maxMonitoramentosProcessos !== undefined) dadosUpdate.maxMonitoramentosProcessos = input.maxMonitoramentosProcessos;
       if (input.creditosCalculosMes !== undefined) dadosUpdate.creditosCalculosMes = input.creditosCalculosMes;
       if (input.jurisiaMensagensMes !== undefined) dadosUpdate.jurisiaMensagensMes = input.jurisiaMensagensMes;
+      if (input.maxMonitoramentosCpf !== undefined) dadosUpdate.maxMonitoramentosCpf = input.maxMonitoramentosCpf;
+      if (input.precoSobConsulta !== undefined) dadosUpdate.precoSobConsulta = input.precoSobConsulta;
+      if (input.ctaDemonstracao !== undefined) dadosUpdate.ctaDemonstracao = input.ctaDemonstracao;
       if (input.atendentesInclusos !== undefined) dadosUpdate.atendentesInclusos = input.atendentesInclusos;
       if (input.precoAtendenteAdicionalCentavos !== undefined) dadosUpdate.precoAtendenteAdicionalCentavos = input.precoAtendenteAdicionalCentavos;
       if (input.modulosLiberados !== undefined) dadosUpdate.modulosLiberados = input.modulosLiberados.filter(ehModuloValido);
@@ -1747,6 +1756,42 @@ export const adminRouter = router({
   // ═══════════════════════════════════════════════════════════════════════
   // COBRANÇA POR MÓDULO — catálogo de preços, avulsos e desconto (Fase 3)
   // ═══════════════════════════════════════════════════════════════════════
+
+  /** WhatsApp comercial dos botões "Falar com a gente" da LP. */
+  obterWhatsappComercial: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { whatsapp: "" };
+    const { configSistema } = await import("../../drizzle/schema");
+    const [row] = await db
+      .select({ valor: configSistema.valor })
+      .from(configSistema)
+      .where(eq(configSistema.chave, "whatsapp_comercial"))
+      .limit(1);
+    return { whatsapp: row?.valor ?? "" };
+  }),
+
+  salvarWhatsappComercial: adminProcedure
+    .input(z.object({ whatsapp: z.string().max(32) }))
+    .mutation(async ({ ctx, input }) => {
+      const digitos = input.whatsapp.replace(/\D/g, "");
+      if (digitos && digitos.length < 10) {
+        throw new Error("Número incompleto — use DDI+DDD+número (ex: 5585999999999).");
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { configSistema } = await import("../../drizzle/schema");
+      await db
+        .insert(configSistema)
+        .values({ chave: "whatsapp_comercial", valor: digitos, atualizadoPor: ctx.user.id })
+        .onDuplicateKeyUpdate({ set: { valor: digitos, atualizadoPor: ctx.user.id } });
+      await registrarAuditoria({
+        ctx,
+        acao: "config.whatsapp_comercial",
+        alvoTipo: "config",
+        detalhes: { whatsapp: digitos },
+      });
+      return { ok: true };
+    }),
 
   /** Módulos vendáveis com o preço mensal avulso gravado (0 = a definir). */
   listarCatalogoModulos: adminProcedure.query(async () => {

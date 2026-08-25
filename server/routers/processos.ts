@@ -1304,6 +1304,14 @@ export const processosRouter = router({
         credencialIdParaSalvar = input.credencialId;
       }
 
+      // Limite do plano ANTES de cobrar crédito — recusar depois de cobrar
+      // seria cobrança sem entrega.
+      const { verificarLimiteMonitoramentos } = await import("../processos/limites-monitoramento");
+      const limitePlano = await verificarLimiteMonitoramentos(esc.escritorio.id, "movimentacoes");
+      if (!limitePlano.permitido) {
+        throw new TRPCError({ code: "FORBIDDEN", message: limitePlano.mensagem ?? "Limite do plano atingido." });
+      }
+
       // Cobra primeira mensalidade
       await consumirCreditos(
         esc.escritorio.id,
@@ -2019,6 +2027,13 @@ export const processosRouter = router({
           code: "NOT_IMPLEMENTED",
           message: `Monitoramento de novas ações ainda só funciona pra TJCE. Sistema ${cred.sistema} entra em sprint futura.`,
         });
+      }
+
+      // Limite do plano (CPF/CNPJ é serviço à parte) ANTES de cobrar crédito.
+      const { verificarLimiteMonitoramentos } = await import("../processos/limites-monitoramento");
+      const limitePlano = await verificarLimiteMonitoramentos(esc.escritorio.id, "novas_acoes");
+      if (!limitePlano.permitido) {
+        throw new TRPCError({ code: "FORBIDDEN", message: limitePlano.mensagem ?? "Limite do plano atingido." });
       }
 
       // Cobra primeira mensalidade (15 cred)
