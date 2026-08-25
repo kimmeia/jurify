@@ -233,7 +233,8 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
             <p className="text-[11px] text-muted-foreground">Assinatura de cortesia — nada é cobrado.</p>
           ) : !assinatura ? (
             <p className="text-[11px] text-muted-foreground">
-              Sem assinatura Asaas vinculada (trial ou cobrança manual) — o total acima é referência.
+              Sem assinatura Asaas vinculada — use "Ativar assinatura paga" (bloco Assinatura acima)
+              pra fechar o valor negociado.
             </p>
           ) : (
             <div className="flex items-center justify-between gap-2 flex-wrap text-xs">

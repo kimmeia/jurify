@@ -192,21 +192,22 @@ Caso clássico: validação inicial passou → integração quebrou depois → p
 Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
 
 -1. **Auditoria pré-lançamento (25/08)** — plano aprovado pelo dono em 4
-   passos. ① créditos/limites pelo catálogo: **ENTREGUE 25/08**. Faltam:
-   ② botão "Ativar assinatura com valor fechado" no admin (hoje NÃO existe
-   caminho pra converter trial sob consulta em pagante — só cortesia ou
-   Asaas na mão; precisa criar assinatura Asaas com valor negociado +
-   persistir `valorNegociadoCentavos` lido pela fatura, senão
-   aplicarValorAssinatura "corrige" pra 0); ③ MRR/relatórios saindo do
-   PLANS deprecado (plano novo vira R$ 97 fictício em admin.stats/
-   receitaMensal), captcha no signup, e-mails/banner de trial sob consulta
-   apontando pro wa.me em vez de tela sem checkout, aviso de credencial no
-   DashboardProcessual; ④ onboarding processual (gatilho DISPAROU — é a
-   campanha; mockup aprovado já existe). Do dono: plano pago do Resend
-   (100 e-mails/dia estoura com campanha) + conferir SENTRY_DSN_BACKEND
-   no Railway (painel diz "conectado" mas captura é só por env). Ressalva
-   de produto: novas ações (CPF/CNPJ) hoje é SÓ TJCE — LP promete sem
-   ressalva.
+   passos. ① créditos/limites pelo catálogo: **ENTREGUE 25/08**.
+   ② "Ativar assinatura paga" (valor fechado): **ENTREGUE 25/08** —
+   `admin.ativarAssinaturaNegociada` cria a assinatura Asaas com o valor
+   negociado (billingType UNDEFINED, link da 1ª cobrança volta pro toast),
+   estende o trial +7d como prazo de pagamento (webhook ativa),
+   `subscriptions.valor_negociado_centavos` (migration 0205) vira o preço
+   do pacote na fatura composta (aplicarValorAssinatura deixa de "corrigir"
+   pra 0); e-mails de trial + TrialBanner apontam pro wa.me quando o plano
+   é sob consulta. Faltam: ③ MRR/relatórios saindo do PLANS deprecado
+   (plano novo vira R$ 97 fictício em admin.stats/receitaMensal), captcha
+   no signup, aviso de credencial no DashboardProcessual; ④ onboarding
+   processual (gatilho DISPAROU — é a campanha; mockup aprovado já
+   existe). Do dono: plano pago do Resend (100 e-mails/dia estoura com
+   campanha) + conferir SENTRY_DSN_BACKEND no Railway (painel diz
+   "conectado" mas captura é só por env). Ressalva de produto: novas
+   ações (CPF/CNPJ) hoje é SÓ TJCE — LP promete sem ressalva.
 
 0. **Avisos de spam da Meta (19/08 E 22/08)** — SEGUNDO aviso chegou em
    22/08 (prazo de análise 20/11), três dias após as correções de 19/08
