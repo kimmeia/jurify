@@ -90,6 +90,28 @@ describe("amarras do admin novo (menu enxuto + editor de planos)", () => {
     }
   });
 
+  it("Visão Geral: planos dinâmicos do catálogo, sem nome de plano fixo no código", () => {
+    const dash = ler("client/src/pages/AdminDashboard.tsx");
+    // Os cards fixos escondiam o superlançamento — não podem voltar.
+    for (const fixo of ['"Plano Básico"', '"Plano Intermediário"', '"Plano Completo"', "planBreakdown"]) {
+      expect(dash, `Visão Geral voltou a hardcodar ${fixo}`).not.toContain(fixo);
+    }
+    expect(dash).toContain("listarPlanosEditaveis");
+  });
+
+  it("Visão Geral: faixa de pendências acionável, com estado 'tudo em dia'", () => {
+    const dash = ler("client/src/pages/AdminDashboard.tsx");
+    expect(dash).toContain("pendenciasDashboard");
+    expect(dash).toContain("Tudo em dia");
+    expect(dash).toContain("/admin/saude?aba=erros");
+    expect(dash).toContain("/admin/financeiro?aba=inadimplencia");
+
+    const adm = ler("server/routers/admin.ts");
+    const trecho = adm.slice(adm.indexOf("pendenciasDashboard:"), adm.indexOf("listarInadimplentes:"));
+    expect(trecho).toContain('"trialing"');
+    expect(trecho).toContain("trialExpiraEm");
+  });
+
   it("Configurações não tem mais a aba Planos duplicada", () => {
     const settings = ler("client/src/pages/admin/AdminSettings.tsx");
     expect(settings).not.toContain('value="planos"');
