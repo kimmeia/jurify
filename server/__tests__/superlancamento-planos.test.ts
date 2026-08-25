@@ -55,6 +55,15 @@ describe("amarras do superlançamento no código", () => {
     expect(plans).toContain("falarComAGente");
   });
 
+  it("o WhatsApp comercial (0204) está em formato internacional — wa.me exige DDI", () => {
+    const mig = ler("drizzle/0204_whatsapp_comercial.sql");
+    expect(mig).toContain("'whatsapp_comercial'");
+    const numero = mig.match(/VALUES \('whatsapp_comercial', '(\d+)'\)/)?.[1];
+    expect(numero, "número não encontrado na migration").toBeTruthy();
+    expect(numero!.startsWith("55"), "sem DDI 55 o wa.me quebra").toBe(true);
+    expect(numero!.length).toBeGreaterThanOrEqual(12);
+  });
+
   it("a migration cria os dois planos do lançamento com módulos válidos", () => {
     const mig = ler("drizzle/0203_superlancamento_planos.sql");
     expect(mig).toContain("'monitoramento-essencial'");
