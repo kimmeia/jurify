@@ -281,6 +281,20 @@ export function iniciarJobs() {
   setTimeout(rodarResumoMovimentacoes, 3 * 60 * 1000);
   setInterval(rodarResumoMovimentacoes, 60 * 60 * 1000);
 
+  // Limite diário de e-mails (Resend): avisa o admin aos 80% e no estouro,
+  // e reenvia sozinho o que falhou por limite quando a cota renova. Tick
+  // horário — o dedup (1 aviso com sucesso por dia UTC) barra repetição.
+  const rodarMonitorLimiteEmails = async () => {
+    try {
+      const { verificarLimiteEmails } = await import("./email-limite");
+      await verificarLimiteEmails();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] monitor de limite de e-mails falhou");
+    }
+  };
+  setTimeout(rodarMonitorLimiteEmails, 5 * 60 * 1000);
+  setInterval(rodarMonitorLimiteEmails, 60 * 60 * 1000);
+
   // Relatórios programados por e-mail: mesmo desenho do resumo diário — tick
   // horário porque quem decide a hora é o fuso de cada escritório, e a
   // idempotência (agendamento, dia local) barra ticks extras.
