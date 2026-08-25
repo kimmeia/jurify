@@ -11,6 +11,8 @@
 import { getDb, getActiveSubscription } from "../db";
 import { contatos, conversas, colaboradores, escritorios, users, clienteArquivos } from "../../drizzle/schema";
 import { eq, and, or, sql } from "drizzle-orm";
+import { getPlanoBySlug } from "./planos-repo";
+import type { Plano } from "@shared/planos-types";
 
 // ─── Definição de limites por plano ─────────────────────────────────────────
 
@@ -91,6 +93,43 @@ export function getLimites(planId: string): LimitesPlano {
   return LIMITES[planId] || LIMITES["free"];
 }
 
+const SEM_TETO = 999999;
+
+/**
+ * Limites a partir da linha da tabela `planos` — a fonte que o admin edita.
+ * Os campos que a tabela não modela (conversas, leads, cobranças Asaas)
+ * vêm do mapa legado quando o slug existe lá; plano novo não ganha teto
+ * inventado. Foi o mapa hardcoded tratando plano desconhecido como "free"
+ * que deixou o superlançamento com 1 usuário e 10 clientes.
+ */
+export function limitesDoPlano(plano: Plano, legado?: LimitesPlano): LimitesPlano {
+  return {
+    maxClientes: plano.limites.maxClientes ?? SEM_TETO,
+    maxColaboradores:
+      plano.limites.maxUsuarios != null && plano.limites.maxUsuarios > 0
+        ? plano.limites.maxUsuarios
+        : SEM_TETO,
+    maxArmazenamentoMB: plano.limites.maxArmazenamentoMB > 0 ? plano.limites.maxArmazenamentoMB : SEM_TETO,
+    maxAgentesIa: plano.limites.maxAgentesIa,
+    maxConversasAtivas: legado?.maxConversasAtivas ?? SEM_TETO,
+    maxLeads: legado?.maxLeads ?? SEM_TETO,
+    maxMonitoramentosJudit: legado?.maxMonitoramentosJudit ?? SEM_TETO,
+    maxCobrancasAsaas: legado?.maxCobrancasAsaas ?? SEM_TETO,
+    modulosPermitidos: plano.modulosLiberados,
+  };
+}
+
+/** Tabela `planos` primeiro; mapa hardcoded só como fallback de emergência. */
+async function resolverLimites(planId: string): Promise<LimitesPlano> {
+  try {
+    const plano = await getPlanoBySlug(planId);
+    if (plano) return limitesDoPlano(plano, LIMITES[planId]);
+  } catch {
+    // catálogo indisponível — cai no mapa legado abaixo
+  }
+  return getLimites(planId);
+}
+
 // ─── Verificação de limites ─────────────────────────────────────────────────
 
 export interface ResultadoLimite {
@@ -142,7 +181,7 @@ export async function verificarLimite(
   }
 
   const planId = sub?.planId || "free";
-  const limites = getLimites(planId);
+  const limites = await resolverLimites(planId);
 
   // Contar uso atual
   let atual = 0;
@@ -220,7 +259,7 @@ export async function moduloDisponivel(escritorioId: number, modulo: string): Pr
   if (sub?.cortesia) return true;
 
   const planId = sub?.planId || "free";
-  const limites = getLimites(planId);
+  const limites = await resolverLimites(planId);
 
   return limites.modulosPermitidos.includes(modulo);
 }
