@@ -1236,6 +1236,7 @@ export const adminRouter = router({
       .where(
         and(
           eq(subscriptionsTable.status, "trialing"),
+          eq(subscriptionsTable.cortesia, false),
           isNotNull(subscriptionsTable.trialExpiraEm),
           lte(subscriptionsTable.trialExpiraEm, emSeteDias),
         ),

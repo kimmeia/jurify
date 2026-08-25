@@ -344,12 +344,16 @@ export default function AdminDashboard() {
           iconFg="text-emerald-600 dark:text-emerald-400"
         />
         <KPICard
-          label="Assinaturas ativas"
+          label="Assinaturas pagas"
           value={statsLoading ? <Skeleton className="h-7 w-16" /> : assinantesPagantes}
           icon={CreditCard}
           iconBg="bg-indigo-500/10"
           iconFg="text-indigo-600 dark:text-indigo-400"
-          hint="Planos pagos no momento"
+          hint={
+            (stats?.cortesiasAtivas ?? 0) > 0
+              ? `cortesia não conta — ${stats?.cortesiasAtivas} ${(stats?.cortesiasAtivas ?? 0) === 1 ? "cortesia ativa" : "cortesias ativas"}`
+              : "cortesia e teste grátis não contam"
+          }
         />
         <KPICard
           label="Em teste grátis agora"
