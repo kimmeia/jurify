@@ -35,6 +35,10 @@ describe("amarras — métricas reais e proteção do funil", () => {
     expect(stats).toContain("valorNegociadoCentavos");
     // Cortesia e trial não são receita.
     expect(stats).toContain("if (sub.cortesia) continue;");
+    // ...nem contam como "assinatura paga": cortesia fica status='active',
+    // e sem o filtro o painel dizia "1 plano pago" pra quem só tem cortesia.
+    expect(stats).toContain("activeSubs.filter((s) => !s.cortesia)");
+    expect(stats).toContain("cortesiasAtivas");
   });
 
   it("receitaMensal e inadimplentes saíram do PLANS deprecado", () => {
