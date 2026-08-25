@@ -217,10 +217,15 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
    no dialog de novas ações; "avisar quando chegar" no Cofre grava
    interesse em tribunal fora da cobertura (`interesse_tribunais`,
    migration 0206, `registrarInteresseTribunal`). Amarras em
-   `onboarding-processual.test.ts`. Do dono: plano pago do Resend (100
-   e-mails/dia estoura com campanha) + conferir SENTRY_DSN_BACKEND no
-   Railway (painel diz "conectado" mas captura é só por env) + chaves do
-   Turnstile. Ressalva de produto: novas ações (CPF/CNPJ) hoje é SÓ TJCE
+   `onboarding-processual.test.ts`. E-mail: domínio juridflow.com.br
+   VERIFICADO no Resend em 25/08 (DNS na Hostinger, região sa-east-1;
+   teste real de "esqueci senha" chegou na inbox — dono confirmou). Do
+   dono: plano pago do Resend (100 e-mails/dia estoura com campanha;
+   verificação de domínio NÃO muda o limite) + conferir se existe
+   FROM_EMAIL no Railway apontando pra endereço errado + conferir
+   SENTRY_DSN_BACKEND no Railway (painel diz "conectado" mas captura é
+   só por env) + chaves do Turnstile. Ressalva de produto: novas ações
+   (CPF/CNPJ) hoje é SÓ TJCE
    — LP promete sem ressalva.
 
 0. **Avisos de spam da Meta (19/08 E 22/08)** — SEGUNDO aviso chegou em
