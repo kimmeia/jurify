@@ -785,10 +785,6 @@ export default function AdminJurisIa() {
         do escritório — o monitoramento de processos não corre risco.
       </p>
 
-      <PainelSondagem />
-
-      {natureza && <PainelNatureza dados={natureza} />}
-
       <div className="grid gap-3 sm:grid-cols-4">
         <Card>
           <CardContent className="pt-4">
@@ -835,10 +831,6 @@ export default function AdminJurisIa() {
           </CardContent>
         </Card>
       </div>
-
-      <FilaIngestao tribunais={linhas.map((l) => ({ sigla: l.sigla, nome: l.nome }))} />
-
-      {amostra.data && <ResultadoAmostra dados={amostra.data} />}
 
       <Card>
         <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
@@ -971,6 +963,20 @@ export default function AdminJurisIa() {
           )}
         </CardContent>
       </Card>
+
+      {natureza && <PainelNatureza dados={natureza} />}
+
+      {/* Ferramentas de diagnóstico usadas de vez em quando — por isso no fim,
+          depois dos números que respondem "como está o acervo". */}
+      <p className="pt-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        Ferramentas técnicas
+      </p>
+      <div className="grid gap-3 lg:grid-cols-2 items-start">
+        <PainelSondagem />
+        <FilaIngestao tribunais={linhas.map((l) => ({ sigla: l.sigla, nome: l.nome }))} />
+      </div>
+
+      {amostra.data && <ResultadoAmostra dados={amostra.data} />}
 
       <ZerarIngestao />
     </div>
