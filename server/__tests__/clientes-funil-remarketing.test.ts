@@ -61,13 +61,26 @@ describe("situacaoComercial — o motivo comercial de cada dono", () => {
 });
 
 describe("cartaoDoFunil — quem conta como 'pra falar hoje'", () => {
-  it("nunca ativou: entra se cadastrou há ≤30d e ainda não teve contato", () => {
+  it("nunca ativou: entra se cadastrou há ≤90d e ainda não teve contato", () => {
     const base = { situacao: "nunca_ativou" as const, trialExpiraEm: null, agoraMs: AGORA };
     expect(cartaoDoFunil({ ...base, criadoEmMs: AGORA - 2 * DIA, ultimoContatoEm: null })).toBe("nunca_ativou");
+    // Janela de 90d: os cadastros de 60-70d que o dono descobriu CONTAM.
+    expect(cartaoDoFunil({ ...base, criadoEmMs: AGORA - 72 * DIA, ultimoContatoEm: null })).toBe("nunca_ativou");
     // Marcou contato depois do cadastro → sai da conta (o "2 vira 1").
     expect(cartaoDoFunil({ ...base, criadoEmMs: AGORA - 2 * DIA, ultimoContatoEm: AGORA - DIA })).toBe(null);
-    // Conta morta de 3 meses não é "pra falar hoje".
-    expect(cartaoDoFunil({ ...base, criadoEmMs: AGORA - 90 * DIA, ultimoContatoEm: null })).toBe(null);
+    // Conta morta de 4 meses não é "pra falar hoje".
+    expect(cartaoDoFunil({ ...base, criadoEmMs: AGORA - 120 * DIA, ultimoContatoEm: null })).toBe(null);
+  });
+
+  it("cadastro solto (sem escritório) entra no funil — era o bug dos cartões zerados", () => {
+    // A amarra é no SQL: a população do funil não pode voltar a ser só
+    // donos de escritório, senão quem parou antes de confirmar o e-mail
+    // (o alvo nº 1) some dos cartões de novo.
+    const dbFonte = ler("server/db.ts");
+    const trecho = dbFonte.slice(dbFonte.indexOf("const alvoFunil"), dbFonte.indexOf("const donos ="));
+    expect(trecho).toContain("escritorios.ownerId");
+    expect(trecho).toContain("notInArray");
+    expect(trecho).toContain("colaboradores.ativo");
   });
 
   it("teste vencido: contato APÓS o vencimento tira da conta; antes não", () => {

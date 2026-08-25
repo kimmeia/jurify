@@ -9,9 +9,13 @@
  */
 
 const DIA_MS = 24 * 60 * 60 * 1000;
-/** Janela de relevância dos cartões: mais velho que isso não é "pra falar
- *  hoje" — continua acessível na lista geral, só sai da contagem. */
+/** Janela do "teste venceu": mais velho que isso não é "pra falar hoje" —
+ *  continua acessível na lista geral, só sai da contagem. */
 const JANELA_CARTAO_MS = 30 * DIA_MS;
+/** "Nunca ativou" tem janela maior: o dono descobriu cadastros de 60-70
+ *  dias parados que ele nunca tinha visto — cortá-los do cartão agora
+ *  seria repetir o problema que o funil veio resolver. */
+const JANELA_NUNCA_ATIVOU_MS = 90 * DIA_MS;
 const VENCENDO_MS = 7 * DIA_MS;
 
 export type TipoSituacao =
@@ -88,7 +92,7 @@ export function cartaoDoFunil(args: {
 }): "nunca_ativou" | "teste_vencendo" | "teste_vencido" | null {
   const { situacao, criadoEmMs, trialExpiraEm, ultimoContatoEm, agoraMs } = args;
   if (situacao === "nunca_ativou") {
-    if (agoraMs - criadoEmMs > JANELA_CARTAO_MS) return null;
+    if (agoraMs - criadoEmMs > JANELA_NUNCA_ATIVOU_MS) return null;
     if (ultimoContatoEm != null && ultimoContatoEm >= criadoEmMs) return null;
     return "nunca_ativou";
   }

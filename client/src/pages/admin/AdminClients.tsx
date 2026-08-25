@@ -140,7 +140,12 @@ function SituacaoBadge({ u }: { u: any }) {
       return (
         <div>
           <Badge variant="outline" className="text-[10px] font-bold text-muted-foreground">CORTESIA</Badge>
-          {u.cortesiaExpiraEm && sub(`até ${new Date(u.cortesiaExpiraEm).toLocaleDateString("pt-BR")}`)}
+          {u.cortesiaExpiraEm &&
+            sub(
+              new Date(u.cortesiaExpiraEm).getFullYear() > 2090
+                ? "sem prazo"
+                : `até ${new Date(u.cortesiaExpiraEm).toLocaleDateString("pt-BR")}`,
+            )}
         </div>
       );
     case "em_teste":

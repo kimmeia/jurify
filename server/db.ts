@@ -334,8 +334,21 @@ export async function getAllUsersWithSubscription(opts: GetAllUsersOpts = {}): P
   if (tipo === "admin") {
     conds.push(eq(users.role, "admin"));
   } else if (tipo === "cliente") {
-    // Dono de escritório (registrado em escritorios.ownerId)
-    conds.push(inArray(users.id, db.select({ id: escritorios.ownerId }).from(escritorios)));
+    // Dono de escritório OU cadastro solto (criou conta e parou antes de
+    // confirmar o e-mail — nem escritório tem). O solto é justamente o alvo
+    // nº 1 do remarketing; deixá-lo fora de "Clientes" escondia ele do dono.
+    conds.push(
+      or(
+        inArray(users.id, db.select({ id: escritorios.ownerId }).from(escritorios)),
+        and(
+          eq(users.role, "user"),
+          notInArray(
+            users.id,
+            db.select({ id: colaboradores.userId }).from(colaboradores).where(eq(colaboradores.ativo, true)),
+          ),
+        ),
+      ),
+    );
   } else if (tipo === "colaborador") {
     // Está em colaboradores ativos MAS não é dono de nenhum escritório.
     // Evita classificar dupla quando user é dono de A e colab em B.
@@ -541,7 +554,20 @@ export async function calcularFunilRemarketing(): Promise<FunilRemarketing> {
   };
   if (!db) return resultado;
 
-  const donosSub = db.select({ id: escritorios.ownerId }).from(escritorios);
+  // Alvos do funil: donos de escritório E cadastros soltos (criou conta e
+  // parou antes de confirmar o e-mail — sem escritório, sem nada). O solto
+  // era invisível: os cartões zeravam enquanto a lista mostrava 3 contas
+  // "nunca ativou". Colaborador de escritório alheio fica fora.
+  const alvoFunil = or(
+    inArray(users.id, db.select({ id: escritorios.ownerId }).from(escritorios)),
+    and(
+      eq(users.role, "user"),
+      notInArray(
+        users.id,
+        db.select({ id: colaboradores.userId }).from(colaboradores).where(eq(colaboradores.ativo, true)),
+      ),
+    ),
+  );
 
   const donos = await db
     .select({
@@ -553,8 +579,9 @@ export async function calcularFunilRemarketing(): Promise<FunilRemarketing> {
       ultimoContatoComercialEm: users.ultimoContatoComercialEm,
     })
     .from(users)
-    .where(inArray(users.id, donosSub))
+    .where(alvoFunil)
     .limit(5000);
+  if (donos.length === 0) return resultado;
 
   const subsRows = await db
     .select({
@@ -566,7 +593,7 @@ export async function calcularFunilRemarketing(): Promise<FunilRemarketing> {
       trialExpiraEm: subscriptions.trialExpiraEm,
     })
     .from(subscriptions)
-    .where(inArray(subscriptions.userId, donosSub))
+    .where(inArray(subscriptions.userId, donos.map((d) => d.id).slice(0, 5000)))
     .limit(10000);
 
   const subsPorUser = new Map<number, typeof subsRows>();
