@@ -224,6 +224,8 @@ export const authRouter = router({
          * Convidado é colaborador — nunca passa por /plans (não escolhe plano).
          */
         conviteToken: z.string().min(16).max(128).optional(),
+        /** Token do Turnstile (Cloudflare). Exigido só quando o servidor tem a chave. */
+        turnstileToken: z.string().max(4096).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -235,6 +237,19 @@ export const authRouter = router({
           code: "TOO_MANY_REQUESTS",
           message: `Muitos cadastros do seu IP. Tente novamente em ${Math.ceil(rl.retryAfter / 60)} minutos.`,
         });
+      }
+
+      // Anti-robô (Turnstile): rate limit por IP não segura pool de proxies —
+      // com campanha de tráfego pago o signup vira alvo. Fail-open sem chave.
+      {
+        const { verificarTurnstile } = await import("../_core/turnstile");
+        const captcha = await verificarTurnstile(input.turnstileToken, ip);
+        if (!captcha.ok) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Não conseguimos confirmar que você não é um robô — recarregue a página e tente de novo.",
+          });
+        }
       }
 
       const email = input.email.trim().toLowerCase();

@@ -1,6 +1,6 @@
 import { eq, and, or, desc, sql, like, inArray, notInArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, subscriptions, calculosHistorico, userCredits, InsertCalculoHistorico, escritorios, colaboradores } from "../drizzle/schema";
+import { InsertUser, users, subscriptions, calculosHistorico, userCredits, InsertCalculoHistorico, escritorios, colaboradores, planos } from "../drizzle/schema";
 import { PLANS } from "./billing/products";
 import { createLogger } from "./_core/logger";
 import { escapeLikePattern } from "./_core/sql-helpers";
@@ -632,7 +632,6 @@ export async function getAdminStats() {
       mrr: 0,
       conversionRate: 0,
       newClientsThisMonth: 0,
-      planBreakdown: { basico: 0, intermediario: 0, completo: 0 },
     };
   }
 
@@ -668,22 +667,20 @@ export async function getAdminStats() {
   const activeSubscriptions = activeSubs.length;
   const trialingSubscriptions = trialingSubs.length;
 
-  let mrr = 0;
-  const planBreakdown = { basico: 0, intermediario: 0, completo: 0 };
+  // MRR de verdade: preço vem da tabela `planos` (o catálogo que o admin
+  // edita), com o valor negociado da assinatura por cima quando existe.
+  // Trial e cortesia não pagam nada — antes entravam como R$ 97 fictícios
+  // e o número inteiro virava ficção com os planos sob consulta.
+  const precoPorSlug = new Map<string, number>();
+  const planosRows = await db
+    .select({ slug: planos.slug, precoMensalCentavos: planos.precoMensalCentavos })
+    .from(planos);
+  for (const p of planosRows) precoPorSlug.set(p.slug, p.precoMensalCentavos);
 
-  const allActiveSubs = activeSubs.concat(trialingSubs);
-  for (const sub of allActiveSubs) {
-    const pid = sub.planId || "basico";
-    const plan = PLANS.find((p) => p.id === pid);
-    if (plan) {
-      mrr += plan.priceMonthly;
-    } else {
-      mrr += 9700;
-    }
-    if (pid === "basico") planBreakdown.basico++;
-    else if (pid === "intermediario") planBreakdown.intermediario++;
-    else if (pid === "completo") planBreakdown.completo++;
-    else planBreakdown.basico++;
+  let mrr = 0;
+  for (const sub of activeSubs) {
+    if (sub.cortesia) continue;
+    mrr += sub.valorNegociadoCentavos ?? (sub.planId ? (precoPorSlug.get(sub.planId) ?? 0) : 0);
   }
 
   const now = new Date();
@@ -705,7 +702,6 @@ export async function getAdminStats() {
     mrr,
     conversionRate,
     newClientsThisMonth,
-    planBreakdown,
   };
 }
 

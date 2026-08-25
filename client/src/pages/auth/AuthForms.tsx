@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Mail, Lock, User, AlertCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { TurnstileWidget, turnstileHabilitado } from "@/components/TurnstileWidget";
 
 interface AuthFormsProps {
   /** Callback chamado quando o login/cadastro é bem sucedido. */
@@ -195,6 +196,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
   const [signupPassword, setSignupPassword] = useState("");
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
   const [aceitouTermos, setAceitouTermos] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,6 +224,10 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
     } catch {
       // sessionStorage bloqueado — ignora
     }
+    if (turnstileHabilitado() && !turnstileToken) {
+      toast.error("Só um segundo — confirmando que você não é um robô. Tente de novo.");
+      return;
+    }
     signupMut.mutate({
       name: signupName.trim(),
       email: signupEmail.trim().toLowerCase(),
@@ -229,6 +235,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
       aceitouTermos: true,
       planoSlug,
       conviteToken,
+      turnstileToken: turnstileToken ?? undefined,
     });
   };
 
@@ -516,6 +523,8 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
                 , e declaro que o escritório é o responsável pelos dados de terceiros que inserir na plataforma.
               </span>
             </label>
+
+            <TurnstileWidget onToken={setTurnstileToken} />
 
             <Button
               type="submit"

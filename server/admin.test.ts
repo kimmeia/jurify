@@ -64,10 +64,9 @@ describe("admin.stats", () => {
     expect(stats).toHaveProperty("mrr");
     expect(stats).toHaveProperty("conversionRate");
     expect(stats).toHaveProperty("newClientsThisMonth");
-    expect(stats).toHaveProperty("planBreakdown");
-    expect(stats.planBreakdown).toHaveProperty("basico");
-    expect(stats.planBreakdown).toHaveProperty("intermediario");
-    expect(stats.planBreakdown).toHaveProperty("completo");
+    // planBreakdown com slugs fixos morreu: a Visão Geral lista assinantes
+    // por plano via listarPlanosEditaveis (dinâmico, direto do catálogo).
+    expect(stats).not.toHaveProperty("planBreakdown");
     expect(typeof stats.totalClients).toBe("number");
     expect(typeof stats.mrr).toBe("number");
     expect(typeof stats.conversionRate).toBe("number");
