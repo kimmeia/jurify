@@ -44,8 +44,11 @@ interface PlanoEditavel {
   maxConexoesWhatsapp: number;
   maxAgentesIa: number;
   maxMonitoramentosProcessos: number | null;
+  maxMonitoramentosCpf: number | null;
   creditosCalculosMes: number;
   jurisiaMensagensMes: number;
+  precoSobConsulta: boolean;
+  ctaDemonstracao: boolean;
   atendentesInclusos: number | null;
   precoAtendenteAdicionalCentavos: number;
   modulosLiberados: string[];
@@ -177,6 +180,9 @@ function EditarPlanoDialog({
   const [maxConexoesWhatsapp, setMaxConexoesWhatsapp] = useState("0");
   const [maxAgentesIa, setMaxAgentesIa] = useState("0");
   const [maxMonitoramentos, setMaxMonitoramentos] = useState<string>("");
+  const [maxMonitoramentosCpf, setMaxMonitoramentosCpf] = useState<string>("");
+  const [precoSobConsulta, setPrecoSobConsulta] = useState(false);
+  const [ctaDemonstracao, setCtaDemonstracao] = useState(false);
   const [creditosCalculos, setCreditosCalculos] = useState("0");
   const [jurisiaMensagens, setJurisiaMensagens] = useState("0");
   const [atendentesInclusos, setAtendentesInclusos] = useState<string>("");
@@ -204,6 +210,9 @@ function EditarPlanoDialog({
       setMaxConexoesWhatsapp(String(plano.maxConexoesWhatsapp));
       setMaxAgentesIa(String(plano.maxAgentesIa));
       setMaxMonitoramentos(plano.maxMonitoramentosProcessos != null ? String(plano.maxMonitoramentosProcessos) : "");
+      setMaxMonitoramentosCpf(plano.maxMonitoramentosCpf != null ? String(plano.maxMonitoramentosCpf) : "");
+      setPrecoSobConsulta(!!plano.precoSobConsulta);
+      setCtaDemonstracao(!!plano.ctaDemonstracao);
       setCreditosCalculos(String(plano.creditosCalculosMes));
       setJurisiaMensagens(String(plano.jurisiaMensagensMes ?? 0));
       setAtendentesInclusos(plano.atendentesInclusos != null ? String(plano.atendentesInclusos) : "");
@@ -260,6 +269,9 @@ function EditarPlanoDialog({
       maxConexoesWhatsapp: parseInt(maxConexoesWhatsapp, 10) || 0,
       maxAgentesIa: parseInt(maxAgentesIa, 10) || 0,
       maxMonitoramentosProcessos: maxMonitoramentos.trim() ? parseInt(maxMonitoramentos, 10) : null,
+      maxMonitoramentosCpf: maxMonitoramentosCpf.trim() ? parseInt(maxMonitoramentosCpf, 10) : null,
+      precoSobConsulta,
+      ctaDemonstracao,
       creditosCalculosMes: parseInt(creditosCalculos, 10) || 0,
       jurisiaMensagensMes: parseInt(jurisiaMensagens, 10) || 0,
       atendentesInclusos: atendentesInclusos.trim() ? parseInt(atendentesInclusos, 10) : null,
@@ -350,6 +362,22 @@ function EditarPlanoDialog({
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
+                <Label>Preço sob consulta</Label>
+                <p className="text-xs text-muted-foreground">
+                  LP esconde o número e mostra "Falar com a gente". Checkout self-service é bloqueado.
+                </p>
+              </div>
+              <Switch checked={precoSobConsulta} onCheckedChange={setPrecoSobConsulta} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <Label>CTA de demonstração</Label>
+                <p className="text-xs text-muted-foreground">Botão principal do card vira "Agendar demonstração".</p>
+              </div>
+              <Switch checked={ctaDemonstracao} onCheckedChange={setCtaDemonstracao} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
                 <Label>Popular</Label>
                 <p className="text-xs text-muted-foreground">Badge "Mais Popular" no card</p>
               </div>
@@ -397,6 +425,12 @@ function EditarPlanoDialog({
                 <Label>Monitoramentos processos</Label>
                 <Input value={maxMonitoramentos} onChange={(e) => setMaxMonitoramentos(e.target.value)}
                   type="number" min={0} placeholder="vazio = ilimitado" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Monitoramentos CPF/CNPJ</Label>
+                <Input value={maxMonitoramentosCpf} onChange={(e) => setMaxMonitoramentosCpf(e.target.value)}
+                  type="number" min={0} placeholder="vazio = ilimitado" />
+                <p className="text-[10px] text-muted-foreground">Novas ações — serviço à parte de vigiar processo.</p>
               </div>
               <div className="space-y-1.5 col-span-2">
                 <Label>Créditos cálculos / mês</Label>

@@ -28,6 +28,8 @@ export interface PlanoLimites {
   maxAgentesIa: number;
   /** null = ilimitado */
   maxMonitoramentosProcessos: number | null;
+  /** Monitoramentos por CPF/CNPJ (novas ações). null = sem limite. */
+  maxMonitoramentosCpf: number | null;
   creditosCalculosMes: number;
   /** Mensagens do JurisIA por mês. 0 = módulo desligado no plano. */
   jurisiaMensagensMes: number;
@@ -42,6 +44,10 @@ export interface Plano {
   precoMensalCentavos: number;
   precoAnualCentavos: number | null;
   trialDias: number;
+  /** LP mostra "Sob consulta" e botão de conversa em vez do preço. */
+  precoSobConsulta: boolean;
+  /** Botão principal do card vira "Agendar demonstração". */
+  ctaDemonstracao: boolean;
   /** Assentos de atendente inclusos. null = plano sem cobrança por assento. */
   atendentesInclusos: number | null;
   precoAtendenteAdicionalCentavos: number;
