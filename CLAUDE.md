@@ -58,6 +58,16 @@ Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
   redirecionam com `?aba=` — não recriar itens de menu pra elas (teste
   `admin-layout-novo.test.ts` quebra). Badge vermelho no menu = erros
   unresolved do Sentry (mesma query/cache da Visão rápida, staleTime 5min).
+- Clientes = funil de remarketing (25/08): 3 cartões "Pra falar hoje"
+  (`admin.funilRemarketing` — nunca ativou/teste vencendo/teste vencido,
+  regras PURAS em `server/admin/funil-remarketing.ts`, janela 30d, contato
+  marcado tira da conta), coluna Situação com motivo comercial (situacao
+  calculada no server em `allUsers`), "Marcar contato"
+  (`marcarContatoComercial`: users.ultimoContatoComercialEm/Canal
+  migration 0207 + nota categoria comercial na ficha), deep-link
+  `?funil=`, card violeta "SEM ATIVAÇÃO" na Visão Geral. Filtro do funil
+  usa os MESMOS ids que o cartão contou (teste trava). past_due = "ativa"
+  (inadimplência tem fluxo próprio, não é remarketing).
 - Planos (Financeiro → aba Planos): lista vitrine/fora com toggle `oculto`
   inline, `duplicarPlano` (cópia SEMPRE oculta, slug `-copia[-N]` via
   `gerarSlugCopia`), arrastar → `reordenarPlanos`. Edição em **tela cheia**

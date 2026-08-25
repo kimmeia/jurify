@@ -58,6 +58,14 @@ export const users = mysqlTable("users", {
    */
   termosVersaoAceita: int("termosVersaoAceita").default(0).notNull(),
   /**
+   * Caderninho comercial do admin da plataforma (funil de remarketing em
+   * /admin/clients): quando e por onde o dono do JuridFlow falou com este
+   * cadastro pela última vez. O histórico completo fica nas notas da ficha
+   * (cliente_notas_admin, categoria comercial).
+   */
+  ultimoContatoComercialEm: timestamp("ultimoContatoComercialEm"),
+  ultimoContatoComercialCanal: varchar("ultimoContatoComercialCanal", { length: 16 }),
+  /**
    * Confirmação de email (Fase 2 do roadmap de Planos).
    * Signup novo: false até clicar no link enviado por Resend.
    * Login Google: marca true automaticamente (Google já valida).
