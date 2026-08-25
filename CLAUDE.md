@@ -120,8 +120,9 @@ Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
   `max_monitoramentos_cpf` (novas ações), enforcement nos dois criar*
   ANTES de cobrar crédito (fail-open: NULL/cortesia/erro nunca barram).
   Antigos free/basico/intermediario ocultos; completo virou "JuridFlow
-  Completo" sob consulta com `cta_demonstracao`. Dono ainda NÃO informou
-  o WhatsApp comercial — botões caem no mailto até ele preencher.
+  Completo" sob consulta com `cta_demonstracao`. WhatsApp comercial
+  gravado (25/08, migration 0204): 5585991080343 — wa.me monta o link
+  com o valor cru, então SEMPRE em formato internacional (teste trava).
 
 ### Permissões
 - Matriz em `checkPermission(userId, modulo, ação)` → `{verTodos, verProprios, criar, editar, ...}`
