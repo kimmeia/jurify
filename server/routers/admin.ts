@@ -285,8 +285,60 @@ export const adminRouter = router({
       offset: z.number().int().min(0).default(0),
       busca: z.string().max(320).optional(),
       tipo: z.enum(["admin", "cliente", "colaborador", "todos"]).default("todos"),
+      funil: z.enum(["nunca_ativou", "teste_vencendo", "teste_vencido"]).optional(),
     }).optional())
     .query(async ({ input }) => getAllUsersWithSubscription(input ?? {})),
+
+  /** Os 3 cartões "Pra falar hoje" de /admin/clients (e o card da Visão Geral). */
+  funilRemarketing: adminProcedure.query(async () => {
+    const { calcularFunilRemarketing } = await import("../db");
+    return calcularFunilRemarketing();
+  }),
+
+  /**
+   * "Marcar contato": o caderninho de remarketing do dono da plataforma.
+   * Grava o resumo no user (a lista e os cartões leem daqui) e o registro
+   * completo nas notas da ficha (categoria comercial). Nada é enviado ao
+   * cliente — o contato em si acontece fora, no WhatsApp/e-mail do dono.
+   */
+  marcarContatoComercial: adminProcedure
+    .input(z.object({
+      userId: z.number().int().positive(),
+      canal: z.enum(["whatsapp", "email", "ligacao"]),
+      nota: z.string().max(2000).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { clienteNotasAdmin } = await import("../../drizzle/schema");
+
+      await db
+        .update(users)
+        .set({
+          ultimoContatoComercialEm: new Date(),
+          ultimoContatoComercialCanal: input.canal,
+        })
+        .where(eq(users.id, input.userId));
+
+      const canalLabel =
+        input.canal === "whatsapp" ? "WhatsApp" : input.canal === "email" ? "E-mail" : "Ligação";
+      await db.insert(clienteNotasAdmin).values({
+        userId: input.userId,
+        autorAdminId: ctx.user.id,
+        conteudo: `Remarketing via ${canalLabel}${input.nota?.trim() ? ` — ${input.nota.trim()}` : ""}`,
+        categoria: "comercial",
+      });
+
+      await registrarAuditoria({
+        ctx,
+        acao: "user.marcarContatoComercial",
+        alvoTipo: "user",
+        alvoId: input.userId,
+        detalhes: { canal: input.canal },
+      });
+
+      return { success: true };
+    }),
 
   /** Get recent users (last 10) */
   recentUsers: adminProcedure.query(async () => getRecentUsers(10)),

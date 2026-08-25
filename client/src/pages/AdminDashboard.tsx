@@ -59,18 +59,21 @@ function AlertaCard({
   acaoLabel,
   onAcao,
 }: {
-  tom: "ambar" | "rosa";
+  tom: "ambar" | "rosa" | "violeta";
   selo: string;
   titulo: string;
   linhas: Array<{ texto: React.ReactNode; direita?: string }>;
   acaoLabel: string;
   onAcao: () => void;
 }) {
-  const borda = tom === "ambar" ? "border-l-amber-500" : "border-l-rose-500";
+  const borda =
+    tom === "ambar" ? "border-l-amber-500" : tom === "violeta" ? "border-l-violet-500" : "border-l-rose-500";
   const pill =
     tom === "ambar"
       ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
-      : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800";
+      : tom === "violeta"
+        ? "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800"
+        : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800";
   return (
     <Card className={`border-l-4 ${borda}`}>
       <CardContent className="pt-4 pb-4 space-y-2">
@@ -180,6 +183,13 @@ function PrecisaDeVoce() {
     refetchOnWindowFocus: false,
     retry: false,
   });
+  // Cadastro novo sem ativação era invisível — o dono só descobria semanas
+  // depois, remarketing perdido. Mesmo cálculo dos cartões de /admin/clients.
+  const funil = (trpc as any).admin.funilRemarketing.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
   // Mesma query (mesmo cache) do badge do menu e da Saúde do sistema.
   const erros = trpc.adminErros.listar.useQuery(
     { status: "unresolved", limite: 25, pagina: 1 },
@@ -191,11 +201,13 @@ function PrecisaDeVoce() {
   const inad = inadimplentes.data ?? [];
   const errosAbertos = erros.data?.configurado ? (erros.data?.total ?? 0) : 0;
   const nivelEmails = limiteEmails.data?.nivel ?? "ok";
+  const semAtivacao = funil.data?.nuncaAtivou ?? { total: 0, nomes: [] };
   const totalPendencias =
     (trials.length > 0 ? 1 : 0) +
     (inad.length > 0 ? 1 : 0) +
     (errosAbertos > 0 ? 1 : 0) +
-    (nivelEmails !== "ok" ? 1 : 0);
+    (nivelEmails !== "ok" ? 1 : 0) +
+    (semAtivacao.total > 0 ? 1 : 0);
 
   if (carregando) return <Skeleton className="h-28 w-full rounded-xl" />;
 
@@ -206,7 +218,8 @@ function PrecisaDeVoce() {
           <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
           <p className="text-sm text-emerald-900 dark:text-emerald-200">
             <span className="font-semibold">Tudo em dia.</span> Nenhum teste grátis vencendo,
-            sem inadimplência, sem erros abertos e e-mails dentro do limite.
+            nenhum cadastro esperando contato, sem inadimplência, sem erros abertos e
+            e-mails dentro do limite.
           </p>
         </CardContent>
       </Card>
@@ -221,6 +234,21 @@ function PrecisaDeVoce() {
       <div className="grid gap-3 lg:grid-cols-3">
         {nivelEmails !== "ok" && (
           <AlertaEmails dados={limiteEmails.data} onVerLog={() => setLocation("/admin/saude?aba=emails")} />
+        )}
+        {semAtivacao.total > 0 && (
+          <AlertaCard
+            tom="violeta"
+            selo="SEM ATIVAÇÃO"
+            titulo={`${semAtivacao.total} ${semAtivacao.total === 1 ? "cadastro novo" : "cadastros novos"}`}
+            acaoLabel="abrir Clientes"
+            onAcao={() => setLocation("/admin/clients?funil=nunca_ativou")}
+            linhas={[
+              ...semAtivacao.nomes.slice(0, 2).map((n: string) => ({
+                texto: <b className="font-semibold text-foreground">{n}</b>,
+              })),
+              { texto: <span className="text-muted-foreground/70">criaram conta e pararam — o contato de boas-vindas fecha venda</span> },
+            ]}
+          />
         )}
         {trials.length > 0 && (
           <AlertaCard
