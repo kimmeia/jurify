@@ -2254,6 +2254,15 @@ export const planos = mysqlTable("planos", {
   /** JSON array de strings — bullets que aparecem na LP e em /plans. */
   features: json("features").notNull(),
 
+  /** Preço não aparece na LP — o card mostra "Sob consulta" e o botão de
+   *  conversa. O dono liga/desliga por plano no painel. */
+  precoSobConsulta: boolean("preco_sob_consulta").notNull().default(false),
+  /** Limite de monitoramentos por CPF/CNPJ (novas ações). NULL = sem limite.
+   *  Separado de maxMonitoramentosProcessos (movimentações por CNJ) — são
+   *  serviços e custos diferentes. */
+  maxMonitoramentosCpf: int("max_monitoramentos_cpf"),
+  /** Card da LP com "Agendar demonstração" como botão principal (Completo). */
+  ctaDemonstracao: boolean("cta_demonstracao").notNull().default(false),
   /** Assentos de atendente inclusos no pacote. NULL = plano sem cobrança
    *  por assento (todos os planos pré-existentes ficam assim). */
   atendentesInclusos: int("atendentes_inclusos"),
@@ -2291,6 +2300,18 @@ export const modulosCatalogo = mysqlTable("modulos_catalogo", {
 });
 
 export type ModuloCatalogoRow = typeof modulosCatalogo.$inferSelect;
+
+/**
+ * Configurações globais do sistema — chave/valor editável pelo admin sem
+ * deploy (ex: whatsapp_comercial dos botões "Falar com a gente" da LP).
+ */
+export const configSistema = mysqlTable("config_sistema", {
+  id: int("id").autoincrement().primaryKey(),
+  chave: varchar("chave", { length: 64 }).notNull().unique(),
+  valor: text("valor"),
+  atualizadoPor: int("atualizado_por"),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().onUpdateNow().notNull(),
+});
 
 /**
  * Cupons de desconto — admin cria, cliente aplica no checkout.

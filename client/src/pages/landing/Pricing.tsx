@@ -24,6 +24,11 @@ function formatBRL(centavos: number) {
 
 export function Pricing({ onCta }: Props) {
   const { data: planos, isLoading } = trpc.subscription.plans.useQuery();
+  const { data: contato } = trpc.subscription.contatoComercial.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60_000,
+  });
 
   const trialMaiorDias = useMemo(() => {
     if (!planos) return 0;
@@ -39,18 +44,30 @@ export function Pricing({ onCta }: Props) {
     onCta("signup");
   }
 
+  /** "Falar com a gente": WhatsApp comercial (config do admin) com mensagem
+   *  pronta; sem número configurado cai no e-mail de contato. */
+  function falarComAGente(nomePlano: string) {
+    const texto = `Olá! Tenho interesse no plano ${nomePlano} do JuridFlow.`;
+    const url = contato?.whatsapp
+      ? `https://wa.me/${contato.whatsapp}?text=${encodeURIComponent(texto)}`
+      : `mailto:contato@juridflow.com.br?subject=${encodeURIComponent(`Interesse no plano ${nomePlano}`)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <section id="pricing" className="border-y border-white/[0.06] bg-[#0a0817]">
       <div className="mx-auto max-w-6xl px-4 py-24">
         <Reveal className="mx-auto mb-12 max-w-2xl text-center">
-          <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-300">Planos</p>
-          <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-            Comece grátis. Cresça quando quiser.
+          <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.06em] text-amber-300">
+            🚀 Superlançamento · Monitoramento Processual
+          </span>
+          <h2 className="font-display mt-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+            Nunca mais perca uma <span className="text-violet-300">movimentação</span>.
           </h2>
           <p className="mt-4 text-lg text-violet-100/70">
-            {trialMaiorDias > 0
-              ? `${trialMaiorDias} dias de teste em qualquer plano pago. Sem cartão de crédito pra começar.`
-              : "Sem cartão de crédito pra começar."}
+            O JuridFlow vigia seus processos e clientes nos tribunais e te avisa na hora — com
+            resumo em português.
+            {trialMaiorDias > 0 ? ` Teste grátis por ${trialMaiorDias} dias, sem cartão.` : ""}
           </p>
         </Reveal>
 
@@ -70,7 +87,9 @@ export function Pricing({ onCta }: Props) {
           >
             {planos.map((p: any) => {
               const destaque = !!p.popular;
-              const gratis = p.precoMensalCentavos === 0;
+              const sobConsulta = !!p.precoSobConsulta;
+              const demonstracao = !!p.ctaDemonstracao;
+              const gratis = !sobConsulta && p.precoMensalCentavos === 0;
               const preco = gratis ? "R$ 0" : formatBRL(p.precoMensalCentavos);
               return (
                 <motion.div
@@ -94,27 +113,63 @@ export function Pricing({ onCta }: Props) {
                     {p.publicoAlvo ?? p.descricao ?? ""}
                   </p>
 
-                  <div className="flex items-baseline gap-1">
-                    <span className="font-display text-[38px] font-extrabold tracking-tight text-white">{preco}</span>
-                    {!gratis && <span className="text-violet-100/55">/mês</span>}
-                  </div>
+                  {sobConsulta ? (
+                    <>
+                      <div className="flex items-baseline gap-1">
+                        <span className="font-display text-[30px] font-extrabold tracking-tight text-white">Sob consulta</span>
+                      </div>
+                      <p className="mb-1 mt-1.5 min-h-[18px] text-xs text-violet-100/55">
+                        {demonstracao
+                          ? "apresentamos numa demonstração ao vivo"
+                          : "preço fechado na conversa, do seu tamanho"}
+                      </p>
+                      <div className="my-4 flex flex-col gap-2">
+                        <Button
+                          className="w-full border-0 bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-500 hover:to-purple-500"
+                          size="lg"
+                          onClick={() =>
+                            demonstracao ? falarComAGente(p.nome) : selecionarPlano(p.slug)
+                          }
+                        >
+                          {demonstracao ? "💬 Agendar demonstração" : `Testar grátis ${p.trialDias || 14} dias`}
+                        </Button>
+                        <Button
+                          className="w-full border border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                          size="lg"
+                          variant="outline"
+                          onClick={() =>
+                            demonstracao ? selecionarPlano(p.slug) : falarComAGente(p.nome)
+                          }
+                        >
+                          {demonstracao ? `Testar grátis ${p.trialDias || 14} dias` : "💬 Falar com a gente"}
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-baseline gap-1">
+                        <span className="font-display text-[38px] font-extrabold tracking-tight text-white">{preco}</span>
+                        {!gratis && <span className="text-violet-100/55">/mês</span>}
+                      </div>
 
-                  <p className="mb-1 mt-1.5 min-h-[18px] text-xs font-semibold text-violet-300">
-                    {p.trialDias > 0 ? `Teste ${p.trialDias} dias grátis` : ""}
-                  </p>
+                      <p className="mb-1 mt-1.5 min-h-[18px] text-xs font-semibold text-violet-300">
+                        {p.trialDias > 0 ? `Teste ${p.trialDias} dias grátis` : ""}
+                      </p>
 
-                  <Button
-                    className={`my-4 w-full ${
-                      destaque
-                        ? "border-0 bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-500 hover:to-purple-500"
-                        : "border border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                    }`}
-                    size="lg"
-                    variant={destaque ? "default" : "outline"}
-                    onClick={() => selecionarPlano(p.slug)}
-                  >
-                    {gratis ? "Criar conta grátis" : "Começar grátis"}
-                  </Button>
+                      <Button
+                        className={`my-4 w-full ${
+                          destaque
+                            ? "border-0 bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-500 hover:to-purple-500"
+                            : "border border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                        }`}
+                        size="lg"
+                        variant={destaque ? "default" : "outline"}
+                        onClick={() => selecionarPlano(p.slug)}
+                      >
+                        {gratis ? "Criar conta grátis" : "Começar grátis"}
+                      </Button>
+                    </>
+                  )}
 
                   <ul className="space-y-2.5 text-sm text-violet-100/80">
                     {(p.features ?? []).map((f: string, idx: number) => (
@@ -131,8 +186,8 @@ export function Pricing({ onCta }: Props) {
         )}
 
         <p className="mt-7 text-center text-[13px] text-violet-100/50">
-          Valores em reais. Pagamento via Pix, boleto ou cartão (Asaas). Você só é cobrado se
-          autorizar — nada automático no fim do teste.
+          Teste com tudo liberado do plano escolhido · sem cartão de crédito · nada é cobrado
+          automaticamente no fim do teste. Pagamento via Pix, boleto ou cartão (Asaas).
         </p>
       </div>
     </section>

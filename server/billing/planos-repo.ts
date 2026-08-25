@@ -56,6 +56,8 @@ function rowParaPlano(row: PlanoRow): Plano {
     precoMensalCentavos: row.precoMensalCentavos,
     precoAnualCentavos: row.precoAnualCentavos,
     trialDias: row.trialDias,
+    precoSobConsulta: row.precoSobConsulta,
+    ctaDemonstracao: row.ctaDemonstracao,
     atendentesInclusos: row.atendentesInclusos,
     precoAtendenteAdicionalCentavos: row.precoAtendenteAdicionalCentavos,
     limites: {
@@ -65,6 +67,7 @@ function rowParaPlano(row: PlanoRow): Plano {
       maxConexoesWhatsapp: row.maxConexoesWhatsapp,
       maxAgentesIa: row.maxAgentesIa,
       maxMonitoramentosProcessos: row.maxMonitoramentosProcessos,
+      maxMonitoramentosCpf: row.maxMonitoramentosCpf,
       creditosCalculosMes: row.creditosCalculosMes,
       jurisiaMensagensMes: row.jurisiaMensagensMes,
     },

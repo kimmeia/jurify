@@ -92,6 +92,19 @@ Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
   abas de módulo não contratado e o resumo diário ganha cadeado no
   WhatsApp sem Atendimento. Criar o plano em si é no painel (aba Planos):
   montar cesta + preço — nada hardcoded.
+- **Superlançamento (25/08)**: planos `monitoramento-essencial` (50
+  processos + 10 CPFs, 2 usuários) e `monitoramento-profissional` (200+50,
+  5, +calculos/relatorios) criados via migration 0203, TODOS sob consulta
+  (`planos.preco_sob_consulta` — LP mostra "Sob consulta" + botão wa.me
+  usando `config_sistema.whatsapp_comercial`, editável em /admin/settings;
+  checkout self-service recusa sob consulta; trial 14d continua vivo).
+  Limites de monitoramento SEPARADOS por serviço:
+  `max_monitoramentos_processos` (movimentações) ×
+  `max_monitoramentos_cpf` (novas ações), enforcement nos dois criar*
+  ANTES de cobrar crédito (fail-open: NULL/cortesia/erro nunca barram).
+  Antigos free/basico/intermediario ocultos; completo virou "JuridFlow
+  Completo" sob consulta com `cta_demonstracao`. Dono ainda NÃO informou
+  o WhatsApp comercial — botões caem no mailto até ele preencher.
 
 ### Permissões
 - Matriz em `checkPermission(userId, modulo, ação)` → `{verTodos, verProprios, criar, editar, ...}`

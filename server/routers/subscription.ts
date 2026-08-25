@@ -246,7 +246,30 @@ export const subscriptionRouter = router({
       popular: p.popular,
       trialDias: p.trialDias,
       modulosLiberados: p.modulosLiberados,
+      precoSobConsulta: p.precoSobConsulta,
+      ctaDemonstracao: p.ctaDemonstracao,
     }));
+  }),
+
+  /**
+   * WhatsApp comercial dos botões "Falar com a gente" da LP. Público de
+   * propósito (a LP é pública); o admin edita em /admin/settings.
+   */
+  contatoComercial: publicProcedure.query(async () => {
+    try {
+      const db = await getDb();
+      if (!db) return { whatsapp: null };
+      const { configSistema } = await import("../../drizzle/schema");
+      const [row] = await db
+        .select({ valor: configSistema.valor })
+        .from(configSistema)
+        .where(eq(configSistema.chave, "whatsapp_comercial"))
+        .limit(1);
+      const digitos = (row?.valor ?? "").replace(/\D/g, "");
+      return { whatsapp: digitos.length >= 10 ? digitos : null };
+    } catch {
+      return { whatsapp: null };
+    }
   }),
 
   /** Health-check: o admin já configurou a integração Asaas? */
@@ -275,6 +298,20 @@ export const subscriptionRouter = router({
     .mutation(async ({ ctx, input }) => {
       const plan = await getPlanByIdResolved(input.planId);
       if (!plan) throw new Error("Plano não encontrado");
+
+      // Plano sob consulta não tem preço público — checkout self-service
+      // geraria assinatura de R$ 0. O caminho é a conversa (o admin aplica
+      // o valor combinado na assinatura depois).
+      {
+        const { getPlanoBySlug } = await import("../billing/planos-repo");
+        const planoRow = await getPlanoBySlug(input.planId);
+        if (planoRow?.precoSobConsulta) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Este plano é sob consulta — fale com a gente pra fechar o valor e ativar.",
+          });
+        }
+      }
 
       const client = await getAdminAsaasClient();
       const customerId = await garantirAsaasCustomer(
