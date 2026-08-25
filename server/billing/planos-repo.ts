@@ -181,3 +181,16 @@ export async function deletarPlano(id: number): Promise<void> {
   await db.delete(planos).where(eq(planos.id, id));
   invalidarCachePlanos();
 }
+
+/**
+ * Slug pra cópia de um plano: "<base>-copia", com sufixo numérico enquanto
+ * colidir com um slug existente. Duplicar duas vezes o mesmo plano gera
+ * "-copia" e "-copia-2", não um erro de UNIQUE.
+ */
+export function gerarSlugCopia(slugOriginal: string, slugsExistentes: ReadonlySet<string>): string {
+  const base = `${slugOriginal}-copia`;
+  if (!slugsExistentes.has(base)) return base;
+  let n = 2;
+  while (slugsExistentes.has(`${base}-${n}`)) n++;
+  return `${base}-${n}`;
+}

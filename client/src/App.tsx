@@ -17,15 +17,11 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AdminClients from "./pages/admin/AdminClients";
 import AdminReports from "./pages/admin/AdminReports";
 import AdminSettings from "./pages/admin/AdminSettings";
-import AdminAuditoria from "./pages/admin/AdminAuditoria";
-import AdminErros from "./pages/admin/AdminErros";
-import AdminRoboAuditor from "./pages/admin/AdminRoboAuditor";
-import AdminRoboJornada from "./pages/admin/AdminRoboJornada";
+import AdminSaude from "./pages/admin/AdminSaude";
+import AdminIA from "./pages/admin/AdminIA";
 import AdminTribunais from "./pages/admin/AdminTribunais";
-import AdminJurisIa from "./pages/admin/AdminJurisIa";
-import AdminEmailLog from "./pages/admin/AdminEmailLog";
 import AdminFinanceiro from "./pages/admin/AdminFinanceiro";
-import AdminAgentesIA from "./pages/admin/AdminAgentesIA";
+import AdminPlanoEditor from "./pages/admin/AdminPlanoEditor";
 import AdminSmartflow from "./pages/admin/AdminSmartflow";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Bancario from "./pages/calculos/Bancario";
@@ -172,9 +168,14 @@ function Router() {
           <AdminFinanceiro />
         </AdminArea>
       </Route>
-      <Route path="/admin/agentes-ia">
+      {/* Editor de plano em tela cheia — sem sidebar de propósito (o gate
+          de admin é do próprio componente). */}
+      <Route path="/admin/planos/:slug">
+        {(params) => <AdminPlanoEditor slug={params.slug} />}
+      </Route>
+      <Route path="/admin/ia">
         <AdminArea>
-          <AdminAgentesIA />
+          <AdminIA />
         </AdminArea>
       </Route>
       <Route path="/admin/smartflow">
@@ -187,39 +188,37 @@ function Router() {
           <AdminReports />
         </AdminArea>
       </Route>
-      <Route path="/admin/auditoria">
+      <Route path="/admin/saude">
         <AdminArea>
-          <AdminAuditoria />
+          <AdminSaude />
         </AdminArea>
+      </Route>
+      {/* Erros, robôs, e-mails e auditoria viraram abas de Saúde do sistema;
+          Agentes IA e JurisIA viraram abas de IA. Links antigos redirecionam. */}
+      <Route path="/admin/agentes-ia">
+        <Redirect to="/admin/ia?aba=agentes" />
+      </Route>
+      <Route path="/admin/jurisia">
+        <Redirect to="/admin/ia?aba=jurisia" />
+      </Route>
+      <Route path="/admin/auditoria">
+        <Redirect to="/admin/saude?aba=auditoria" />
       </Route>
       <Route path="/admin/robo-auditor">
-        <AdminArea>
-          <AdminRoboAuditor />
-        </AdminArea>
+        <Redirect to="/admin/saude?aba=robo-auditor" />
       </Route>
       <Route path="/admin/robo-jornada">
-        <AdminArea>
-          <AdminRoboJornada />
-        </AdminArea>
+        <Redirect to="/admin/saude?aba=robo-jornada" />
       </Route>
       <Route path="/admin/erros">
-        <AdminArea>
-          <AdminErros />
-        </AdminArea>
+        <Redirect to="/admin/saude?aba=erros" />
+      </Route>
+      <Route path="/admin/email-log">
+        <Redirect to="/admin/saude?aba=emails" />
       </Route>
       <Route path="/admin/tribunais">
         <AdminArea>
           <AdminTribunais />
-        </AdminArea>
-      </Route>
-      <Route path="/admin/jurisia">
-        <AdminArea>
-          <AdminJurisIa />
-        </AdminArea>
-      </Route>
-      <Route path="/admin/email-log">
-        <AdminArea>
-          <AdminEmailLog />
         </AdminArea>
       </Route>
       {/* Integrações e Backups foram absorvidos por Configurações (abas).

@@ -791,17 +791,9 @@ export default function AdminAgentesIA() {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/40 dark:to-purple-900/40">
-            <BrainCircuit className="h-6 w-6 text-violet-600 dark:text-violet-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Agentes de IA</h1>
-            <p className="text-muted-foreground mt-1">
-              Crie agentes treináveis que serão usados pelos módulos do JuridFlow (Atendimento, Resumos, etc).
-            </p>
-          </div>
-        </div>
+        <p className="text-muted-foreground">
+          Crie agentes treináveis que serão usados pelos módulos do JuridFlow (Atendimento, Resumos, etc).
+        </p>
         <Button onClick={() => { setEditandoId(null); setNovoOpen(true); }}>
           <Plus className="h-4 w-4 mr-1.5" />
           Novo agente

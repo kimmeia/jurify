@@ -277,9 +277,11 @@ describe("o histórico", () => {
 });
 
 describe("o painel", () => {
-  it("está no menu e na rota do admin", () => {
-    expect(nav).toContain('label: "Robô de jornada", path: "/admin/robo-jornada"');
-    expect(app).toContain('<Route path="/admin/robo-jornada">');
+  it("continua alcançável no admin — aba de Saúde do sistema, com o link antigo redirecionando", () => {
+    expect(nav).toContain('path: "/admin/saude"');
+    expect(app).toContain('Redirect to="/admin/saude?aba=robo-jornada"');
+    const hub = readFileSync(join(raiz, "client/src/pages/admin/AdminSaude.tsx"), "utf8");
+    expect(hub).toContain("<AdminRoboJornada />");
   });
 
   it("dá sinal de vida enquanto o robô navega", () => {
