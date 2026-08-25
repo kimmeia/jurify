@@ -805,9 +805,31 @@ function TrialBanner() {
     retry: false,
     refetchOnWindowFocus: false,
   });
+  // Plano sob consulta não tem checkout — "Adicionar pagamento" levaria a
+  // uma tela sem botão de pagar. O CTA vira a conversa comercial.
+  const { data: planos } = trpc.subscription.plans.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const { data: contato } = trpc.subscription.contatoComercial.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
 
   const dias = (subscription as any)?.diasRestantesTrial as number | null | undefined;
   if (subscription?.status !== "trialing" || dias == null) return null;
+
+  const planoAtual = (planos ?? []).find((p: any) => p.slug === (subscription as any)?.planId);
+  const sobConsulta = Boolean((planoAtual as any)?.precoSobConsulta);
+  const abrirConversa = () => {
+    const texto = `Olá! Meu teste do plano ${(planoAtual as any)?.nome ?? "JuridFlow"} está acabando — quero fechar o valor.`;
+    const url = contato?.whatsapp
+      ? `https://wa.me/${contato.whatsapp}?text=${encodeURIComponent(texto)}`
+      : `mailto:contato@juridflow.com.br?subject=${encodeURIComponent("Quero fechar o valor do meu plano")}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   const cor =
     dias >= 4 ? "bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200" :
@@ -823,10 +845,10 @@ function TrialBanner() {
     <div className={`border-b px-4 py-2 flex items-center justify-between gap-3 text-sm ${cor}`}>
       <span className="font-medium">{texto}</span>
       <button
-        onClick={() => setLocation("/configuracoes?tab=meu-plano")}
+        onClick={() => (sobConsulta ? abrirConversa() : setLocation("/configuracoes?tab=meu-plano"))}
         className="text-xs font-semibold underline underline-offset-2 hover:opacity-80"
       >
-        Adicionar pagamento →
+        {sobConsulta ? "💬 Fechar valor com a gente →" : "Adicionar pagamento →"}
       </button>
     </div>
   );

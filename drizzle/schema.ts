@@ -172,6 +172,12 @@ export const subscriptions = mysqlTable("subscriptions", {
   trialAvisado3d: boolean("trial_avisado_3d").default(false).notNull(),
   trialAvisado1d: boolean("trial_avisado_1d").default(false).notNull(),
   trialConvertido: boolean("trial_convertido").default(false).notNull(),
+  /**
+   * Valor fechado na conversa (planos sob consulta). Quando presente, a
+   * fatura composta usa este valor como preço do pacote deste cliente,
+   * no lugar do preço de tabela.
+   */
+  valorNegociadoCentavos: int("valor_negociado_centavos"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

@@ -2564,6 +2564,134 @@ export const adminRouter = router({
     }),
 
   /**
+   * Fecha a venda de um plano sob consulta: cria a assinatura Asaas com o
+   * valor negociado na conversa e grava esse valor na subscription. É o
+   * único caminho de conversão trial → pagante desses planos (o checkout
+   * self-service os recusa de propósito).
+   *
+   * O acesso não é cortado enquanto o pagamento não cai: o trial é
+   * estendido por 7 dias (prazo do boleto/Pix) e o webhook de pagamento
+   * ativa a assinatura.
+   */
+  ativarAssinaturaNegociada: adminProcedure
+    .input(z.object({
+      userId: z.number().int().positive(),
+      /** Valor do ciclo escolhido (mensal ou anual), em centavos. */
+      valorCentavos: z.number().int().min(100).max(100_000_000),
+      cpfCnpj: z.string().max(24).optional(),
+      interval: z.enum(["monthly", "yearly"]).default("monthly"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const [u] = await db
+        .select({ id: users.id, name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
+      if (!u) throw new Error("Usuário não encontrado");
+
+      // Última subscription do cliente, mesmo com trial expirado/cancelado —
+      // é o cenário típico: a conversa fecha depois que o teste venceu.
+      const [ultima] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, input.userId))
+        .orderBy(desc(subscriptionsTable.id))
+        .limit(1);
+      if (!ultima?.planId) {
+        throw new Error("Cliente sem plano definido — use 'Trocar plano' ou cortesia primeiro.");
+      }
+      if (ultima.cortesia) {
+        throw new Error("Cliente em cortesia — remova a cortesia antes de ativar cobrança.");
+      }
+      if (ultima.asaasSubscriptionId && ultima.status === "active") {
+        throw new Error(
+          "Cliente já tem assinatura Asaas ativa — ajuste o valor pelo card Módulos & cobrança.",
+        );
+      }
+
+      const { getPlanoBySlug } = await import("../billing/planos-repo");
+      const plano = await getPlanoBySlug(ultima.planId);
+      const planoNome = plano?.nome ?? ultima.planId;
+
+      const { getAdminAsaasClient } = await import("../billing/asaas-billing-client");
+      const { criarAssinaturaComFallback, garantirAsaasCustomer, dataVencimentoPadrao } = await import("./subscription");
+      const client = await getAdminAsaasClient();
+      const customerId = await garantirAsaasCustomer(input.userId, u.email, u.name, input.cpfCnpj || "");
+
+      // Assinatura Asaas antiga pendurada (retry incompleto) sai da frente.
+      if (ultima.asaasSubscriptionId) {
+        try {
+          await client.cancelarAssinatura(ultima.asaasSubscriptionId);
+        } catch (err: any) {
+          log.warn({ err: err?.message }, "cancelamento de assinatura antiga falhou (segue)");
+        }
+      }
+
+      const sub = await criarAssinaturaComFallback(client, {
+        customer: customerId,
+        billingType: "UNDEFINED", // cliente escolhe PIX/boleto/cartão no link
+        value: input.valorCentavos / 100,
+        nextDueDate: dataVencimentoPadrao(),
+        cycle: input.interval === "monthly" ? "MONTHLY" : "YEARLY",
+        description: `${planoNome} — JuridFlow (valor fechado)`,
+        externalReference: `${input.userId}:${ultima.planId}`,
+      });
+
+      // A fatura composta trabalha em base mensal.
+      const valorMensalCentavos =
+        input.interval === "monthly" ? input.valorCentavos : Math.round(input.valorCentavos / 12);
+
+      const prazoPagamento = Date.now() + 7 * 24 * 60 * 60 * 1000;
+      await db
+        .update(subscriptionsTable)
+        .set({
+          asaasSubscriptionId: sub.id,
+          asaasCustomerId: customerId,
+          status: "trialing",
+          trialExpiraEm: Math.max(ultima.trialExpiraEm ?? 0, prazoPagamento),
+          trialConvertido: true,
+          valorNegociadoCentavos: valorMensalCentavos,
+        })
+        .where(eq(subscriptionsTable.id, ultima.id));
+
+      // Link da 1ª cobrança — o dono manda na mesma conversa do WhatsApp.
+      let invoiceUrl = "";
+      try {
+        const cobrancas = await client.listarCobrancas({ customer: customerId, limit: 5 });
+        invoiceUrl =
+          cobrancas.data.find(
+            (c) => c.externalReference === `${input.userId}:${ultima.planId}` && !c.deleted,
+          )?.invoiceUrl || "";
+      } catch (err: any) {
+        log.warn({ err: err?.message }, "não achei o link da 1ª cobrança (segue sem)");
+      }
+
+      await registrarAuditoria({
+        ctx,
+        acao: "assinatura.ativarNegociada",
+        alvoTipo: "subscription",
+        alvoId: ultima.id,
+        alvoNome: u.name || u.email || undefined,
+        detalhes: {
+          planId: ultima.planId,
+          valorCentavos: input.valorCentavos,
+          interval: input.interval,
+          asaasSubscriptionId: sub.id,
+        },
+      });
+
+      return {
+        success: true,
+        invoiceUrl,
+        asaasSubscriptionId: sub.id,
+        mensagem: `Assinatura de ${planoNome} criada — pagamento em até 7 dias ativa de vez`,
+      };
+    }),
+
+  /**
    * Marca uma assinatura como cortesia (acesso liberado manualmente).
    *
    * Casos de uso: cliente piloto sem cobrança, isenção pontual, conta

@@ -18,8 +18,9 @@
 
 import { eq, and } from "drizzle-orm";
 import { getDb } from "../db";
-import { subscriptions, users } from "../../drizzle/schema";
+import { subscriptions, users, configSistema } from "../../drizzle/schema";
 import { getPlanoBySlug } from "./planos-repo";
+import type { Plano } from "@shared/planos-types";
 import {
   enviarEmailTrialFaltam3Dias,
   enviarEmailTrialFaltam1Dia,
@@ -28,6 +29,29 @@ import {
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("trial-cron");
+
+/**
+ * Plano sob consulta não tem checkout — mandar o cliente pra
+ * /configuracoes?tab=meu-plano seria um beco sem saída (todos os botões
+ * lá são "Falar com a gente"). O CTA vira a própria conversa.
+ */
+async function ctaTrialDoPlano(plano: Plano | undefined): Promise<{ label: string; url: string } | undefined> {
+  if (!plano?.precoSobConsulta) return undefined;
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db
+    .select({ valor: configSistema.valor })
+    .from(configSistema)
+    .where(eq(configSistema.chave, "whatsapp_comercial"))
+    .limit(1);
+  const numero = (row?.valor ?? "").replace(/\D/g, "");
+  if (numero.length < 10) return undefined;
+  const texto = `Olá! Meu teste do plano ${plano.nome} está acabando — quero fechar o valor.`;
+  return {
+    label: "💬 Fechar valor no WhatsApp",
+    url: `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`,
+  };
+}
 
 const DIA_MS = 24 * 60 * 60 * 1000;
 
@@ -82,6 +106,7 @@ export async function processarTrials(): Promise<ResultadoCronTrial> {
         email: trial.userEmail,
         nome: trial.userNome ?? "",
         planoNome,
+        cta: await ctaTrialDoPlano(plano),
       });
       if (!r.success) {
         log.warn({ userId: trial.userId, error: r.error }, "Email 'trial expirou' falhou");
@@ -99,6 +124,7 @@ export async function processarTrials(): Promise<ResultadoCronTrial> {
         email: trial.userEmail,
         nome: trial.userNome ?? "",
         planoNome,
+        cta: await ctaTrialDoPlano(plano),
       });
       if (!r.success) {
         log.warn({ userId: trial.userId, error: r.error }, "Email 'trial 1 dia' falhou");
@@ -120,6 +146,7 @@ export async function processarTrials(): Promise<ResultadoCronTrial> {
         email: trial.userEmail,
         nome: trial.userNome ?? "",
         planoNome,
+        cta: await ctaTrialDoPlano(plano),
       });
       if (!r.success) {
         log.warn({ userId: trial.userId, error: r.error }, "Email 'trial 3 dias' falhou");

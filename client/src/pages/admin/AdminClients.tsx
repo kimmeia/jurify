@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -20,7 +21,7 @@ import {
 import {
   AlertCircle, Eye, Coins, ShieldCheck, User, Calculator, CreditCard, Clock,
   Loader2, Search, Lock, Unlock, LogIn, FileText, Trash2, MessageSquarePlus,
-  AlertTriangle, RotateCcw, Users as UsersIcon, Gift, ArrowLeft, Crown, ChevronRight, Mail,
+  AlertTriangle, RotateCcw, Users as UsersIcon, Gift, ArrowLeft, Crown, ChevronRight, Mail, DollarSign,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useEffect, useState } from "react";
@@ -334,6 +335,49 @@ function ClienteDetalheDialog({
     onError: (err) => toast.error("Erro ao trocar plano", { description: err.message }),
   });
 
+  // ─── Ativar assinatura com valor fechado (planos sob consulta) ───
+  const [ativarOpen, setAtivarOpen] = useState(false);
+  const [ativarValor, setAtivarValor] = useState("");
+  const [ativarCpf, setAtivarCpf] = useState("");
+  const [ativarCiclo, setAtivarCiclo] = useState<"monthly" | "yearly">("monthly");
+
+  const ativarNegociadaMut = (trpc as any).admin.ativarAssinaturaNegociada.useMutation({
+    onSuccess: (res: any) => {
+      setAtivarOpen(false);
+      setAtivarValor("");
+      setAtivarCpf("");
+      utils.admin.clienteDetalhes.invalidate({ userId: current! });
+      onRefresh();
+      if (res.invoiceUrl) {
+        toast.success(res.mensagem, {
+          description: "Manda o link de pagamento pro cliente na mesma conversa.",
+          action: {
+            label: "Abrir link",
+            onClick: () => window.open(res.invoiceUrl, "_blank", "noopener,noreferrer"),
+          },
+          duration: 15000,
+        });
+      } else {
+        toast.success(res.mensagem);
+      }
+    },
+    onError: (err: any) => toast.error("Erro ao ativar assinatura", { description: err.message }),
+  });
+
+  const confirmarAtivacao = () => {
+    const centavos = Math.round(parseFloat(ativarValor.replace(/\./g, "").replace(",", ".")) * 100);
+    if (isNaN(centavos) || centavos < 100) {
+      toast.error("Informe o valor fechado (mínimo R$ 1,00)");
+      return;
+    }
+    ativarNegociadaMut.mutate({
+      userId: current!,
+      valorCentavos: centavos,
+      cpfCnpj: ativarCpf.trim() || undefined,
+      interval: ativarCiclo,
+    });
+  };
+
   if (!userId) return null;
 
   const user = data?.user as any;
@@ -533,8 +577,21 @@ function ClienteDetalheDialog({
                         <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Cortesia</p>
                         <p className="font-semibold mt-0.5">{sub.cortesia ? "Sim" : "Não"}</p>
                       </div>
+                      {(sub as any).valorNegociadoCentavos != null && (
+                        <div>
+                          <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Valor fechado</p>
+                          <p className="font-semibold mt-0.5 text-violet-700 dark:text-violet-300">
+                            {fmtBRLAdmin((sub as any).valorNegociadoCentavos / 100)}/mês
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 mt-4 pt-3 border-t flex-wrap">
+                      {!sub.cortesia && (sub.status === "trialing" || !(sub as any).asaasSubscriptionId) && (
+                        <Button size="sm" onClick={() => setAtivarOpen(true)}>
+                          <DollarSign className="h-3.5 w-3.5 mr-1.5" /> Ativar assinatura paga
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => { setPlanoSelecionado(sub.planId || null); setTrocarOpen(true); }}>
                         <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Trocar plano
                       </Button>
@@ -551,11 +608,18 @@ function ClienteDetalheDialog({
                     </div>
                   </>
                 ) : (
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">Cliente sem assinatura ativa.</p>
-                    <Button size="sm" variant="outline" className="border-emerald-500/50 text-emerald-700 dark:text-emerald-300" onClick={() => setCortesiaOpen(true)}>
-                      <Gift className="h-3.5 w-3.5 mr-1.5" /> Marcar cortesia
-                    </Button>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-sm text-muted-foreground">
+                      Cliente sem assinatura ativa (teste vencido conta aqui — dá pra ativar a paga direto).
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" onClick={() => setAtivarOpen(true)}>
+                        <DollarSign className="h-3.5 w-3.5 mr-1.5" /> Ativar assinatura paga
+                      </Button>
+                      <Button size="sm" variant="outline" className="border-emerald-500/50 text-emerald-700 dark:text-emerald-300" onClick={() => setCortesiaOpen(true)}>
+                        <Gift className="h-3.5 w-3.5 mr-1.5" /> Marcar cortesia
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1378,6 +1442,64 @@ function ClienteDetalheDialog({
             >
               {trocarPlanoMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
               Trocar plano
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ativar assinatura com valor fechado (planos sob consulta) */}
+      <Dialog open={ativarOpen} onOpenChange={(o) => { if (!o) setAtivarOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ativar assinatura paga</DialogTitle>
+            <DialogDescription>
+              {user?.name || user?.email} · {sub?.planId || "plano atual"}. Cria a cobrança
+              recorrente no Asaas (Pix, boleto ou cartão) com o valor que você fechou.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wide">Valor fechado (R$ / {ativarCiclo === "monthly" ? "mês" : "ano"})</Label>
+              <Input
+                value={ativarValor}
+                onChange={(e) => setAtivarValor(e.target.value)}
+                inputMode="decimal"
+                placeholder="149,00"
+                className="h-11 text-lg font-bold"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wide">CPF/CNPJ de cobrança</Label>
+              <Input
+                value={ativarCpf}
+                onChange={(e) => setAtivarCpf(e.target.value)}
+                placeholder="12.345.678/0001-90"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Obrigatório pro Asaas emitir a cobrança (se o cliente ainda não tem cadastro lá) —
+                pede na mesma conversa.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wide">Ciclo</Label>
+              <div className="inline-flex gap-1 rounded-lg bg-muted p-1">
+                <Button size="sm" variant={ativarCiclo === "monthly" ? "default" : "ghost"} className="h-7 text-xs" onClick={() => setAtivarCiclo("monthly")}>Mensal</Button>
+                <Button size="sm" variant={ativarCiclo === "yearly" ? "default" : "ghost"} className="h-7 text-xs" onClick={() => setAtivarCiclo("yearly")}>Anual</Button>
+              </div>
+            </div>
+            <div className="rounded-lg border border-violet-200 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-950/30 p-3 text-xs text-violet-900 dark:text-violet-200 leading-relaxed">
+              <b>O que acontece ao confirmar:</b> o cliente ganha 7 dias pra pagar sem perder o
+              acesso; o pagamento ativa a assinatura de vez. O valor fica gravado como o preço{" "}
+              <b>deste</b> cliente — o painel calcula receita e divergência com ele, não com o
+              preço de tabela.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAtivarOpen(false)} disabled={ativarNegociadaMut.isPending}>Cancelar</Button>
+            <Button onClick={confirmarAtivacao} disabled={ativarNegociadaMut.isPending || !ativarValor.trim()}>
+              {ativarNegociadaMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <DollarSign className="h-3.5 w-3.5 mr-1.5" />}
+              Ativar assinatura
             </Button>
           </DialogFooter>
         </DialogContent>

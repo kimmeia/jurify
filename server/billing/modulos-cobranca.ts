@@ -165,6 +165,8 @@ export interface FaturaEscritorio extends FaturaCalculada {
   precoAtendenteAdicionalCentavos: number;
   desconto: (DescontoEscritorio & { observacao: string | null }) | null;
   cortesia: boolean;
+  /** Valor fechado na conversa (assinatura sob consulta), quando existe. */
+  valorNegociadoCentavos: number | null;
 }
 
 /**
@@ -205,11 +207,13 @@ export async function faturaDoEscritorio(escritorioId: number): Promise<FaturaEs
 
   let planoSlug: string | null = null;
   let cortesia = false;
+  let valorNegociadoCentavos: number | null = null;
   if (ownerId != null) {
     const { getActiveSubscriptionComHeranca } = await import("../db");
     const sub = await getActiveSubscriptionComHeranca(ownerId);
     planoSlug = sub?.planId ?? null;
     cortesia = Boolean(sub?.cortesia);
+    valorNegociadoCentavos = sub?.valorNegociadoCentavos ?? null;
   }
 
   const { getPlanoBySlug } = await import("./planos-repo");
@@ -221,6 +225,7 @@ export async function faturaDoEscritorio(escritorioId: number): Promise<FaturaEs
   const fatura = calcularFatura({
     nomePlano: plano?.nome ?? planoSlug ?? "sem plano",
     precoPacoteCentavos: plano?.precoMensalCentavos ?? 0,
+    valorNegociadoCentavos,
     avulsos: avulsos.map((a) => ({ modulo: a.modulo, nome: a.nome, precoCentavos: a.precoCentavos })),
     atendentesAtivos,
     atendentesInclusos: plano?.atendentesInclusos ?? null,
@@ -239,5 +244,6 @@ export async function faturaDoEscritorio(escritorioId: number): Promise<FaturaEs
     precoAtendenteAdicionalCentavos: plano?.precoAtendenteAdicionalCentavos ?? 0,
     desconto,
     cortesia,
+    valorNegociadoCentavos,
   };
 }
