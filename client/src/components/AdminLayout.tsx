@@ -13,6 +13,8 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
@@ -23,7 +25,9 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
+import { trpc } from "@/lib/trpc";
 import {
+  Activity,
   LayoutDashboard,
   Users,
   Settings,
@@ -31,17 +35,11 @@ import {
   PanelLeft,
   ShieldCheck,
   BarChart3,
-  ScrollText,
   DollarSign,
   BrainCircuit,
   Radar,
-  Bot,
-  Bug,
-  Mail,
   Zap,
   Lightbulb,
-  Stethoscope,
-  Route,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Redirect } from "wouter";
@@ -174,22 +172,43 @@ function AdminSidebarContent({
     };
   }, [isResizing, setSidebarWidth]);
 
-  const adminMenuItems = [
-    { icon: LayoutDashboard, label: "Visão Geral", path: "/admin" },
-    { icon: Users, label: "Clientes", path: "/admin/clients" },
-    { icon: DollarSign, label: "Financeiro", path: "/admin/financeiro" },
-    { icon: BrainCircuit, label: "Agentes IA", path: "/admin/agentes-ia" },
-    { icon: Zap, label: "SmartFlow", path: "/admin/smartflow" },
-    { icon: BarChart3, label: "Relatórios", path: "/admin/reports" },
-    { icon: ScrollText, label: "Auditoria", path: "/admin/auditoria" },
-    { icon: Stethoscope, label: "Robô auditor", path: "/admin/robo-auditor" },
-    { icon: Route, label: "Robô de jornada", path: "/admin/robo-jornada" },
-    { icon: Bug, label: "Erros", path: "/admin/erros" },
-    { icon: Radar, label: "Tribunais", path: "/admin/tribunais" },
-    { icon: Bot, label: "JurisIA", path: "/admin/jurisia" },
-    { icon: Mail, label: "Log de Emails", path: "/admin/email-log" },
-    { icon: Lightbulb, label: "Roadmap", path: "/admin/roadmap" },
-    { icon: Settings, label: "Configurações", path: "/admin/settings" },
+  // Badge de erros no menu: mesma query (mesmo cache) da Visão rápida da
+  // página Saúde do sistema — o menu não gera chamadas extras ao Sentry.
+  const errosQuery = trpc.adminErros.listar.useQuery(
+    { status: "unresolved", limite: 25, pagina: 1 },
+    { staleTime: 5 * 60_000, refetchOnWindowFocus: false, retry: false },
+  );
+  const errosAbertos = errosQuery.data?.configurado ? (errosQuery.data?.total ?? 0) : 0;
+
+  const gruposMenu: Array<{
+    label: string | null;
+    itens: Array<{ icon: typeof LayoutDashboard; label: string; path: string; badge?: number }>;
+  }> = [
+    {
+      label: null,
+      itens: [
+        { icon: LayoutDashboard, label: "Visão Geral", path: "/admin" },
+        { icon: Users, label: "Clientes", path: "/admin/clients" },
+        { icon: DollarSign, label: "Financeiro", path: "/admin/financeiro" },
+        { icon: BarChart3, label: "Relatórios", path: "/admin/reports" },
+      ],
+    },
+    {
+      label: "Produto",
+      itens: [
+        { icon: BrainCircuit, label: "IA", path: "/admin/ia" },
+        { icon: Zap, label: "SmartFlow", path: "/admin/smartflow" },
+        { icon: Radar, label: "Tribunais", path: "/admin/tribunais" },
+        { icon: Lightbulb, label: "Roadmap", path: "/admin/roadmap" },
+      ],
+    },
+    {
+      label: "Sistema",
+      itens: [
+        { icon: Activity, label: "Saúde do sistema", path: "/admin/saude", badge: errosAbertos },
+        { icon: Settings, label: "Configurações", path: "/admin/settings" },
+      ],
+    },
   ];
 
   return (
@@ -223,26 +242,44 @@ function AdminSidebarContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
-            <SidebarMenu className="px-2 py-1">
-              {adminMenuItems.map((item) => {
-                const isActive = location === item.path;
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className="h-10 transition-all font-normal"
-                    >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
+            {gruposMenu.map((grupo, gi) => (
+              <SidebarGroup key={grupo.label ?? gi} className="py-1">
+                {grupo.label && (
+                  <SidebarGroupLabel className="text-[10px] font-bold uppercase tracking-wider">
+                    {grupo.label}
+                  </SidebarGroupLabel>
+                )}
+                <SidebarMenu className="px-0">
+                  {grupo.itens.map((item) => {
+                    // O editor de planos (/admin/planos/...) vive dentro do
+                    // Financeiro — o item continua aceso lá.
+                    const isActive =
+                      location === item.path ||
+                      (item.path === "/admin/financeiro" && location.startsWith("/admin/planos"));
+                    return (
+                      <SidebarMenuItem key={item.path}>
+                        <SidebarMenuButton
+                          isActive={isActive}
+                          onClick={() => setLocation(item.path)}
+                          tooltip={item.label}
+                          className="h-10 transition-all font-normal"
+                        >
+                          <item.icon
+                            className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                          />
+                          <span>{item.label}</span>
+                          {(item.badge ?? 0) > 0 && (
+                            <span className="ml-auto rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white group-data-[collapsible=icon]:hidden">
+                              {item.badge}
+                            </span>
+                          )}
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroup>
+            ))}
           </SidebarContent>
 
           <SidebarFooter className="p-3">

@@ -86,11 +86,7 @@ function CardWhatsappComercial() {
 
 export default function AdminSettings() {
   const { data: health, isLoading: loadHealth } = trpc.admin.systemHealth.useQuery(undefined, { retry: false });
-  const { data: planos, isLoading: loadPlanos } = trpc.admin.planosAtuais.useQuery(undefined, { retry: false });
   const { data: ops, isLoading: loadOps } = trpc.admin.operacional.useQuery(undefined, { retry: false });
-
-  const formatCurrency = (cents: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 
   const statusGeral = health?.checks?.some((c) => c.status === "erro")
     ? { dot: "bg-rose-400", label: "Atenção" }
@@ -140,9 +136,6 @@ export default function AdminSettings() {
             </TabsTrigger>
             <TabsTrigger value="backups" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
               <Database className="h-3.5 w-3.5" /> Backups
-            </TabsTrigger>
-            <TabsTrigger value="planos" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
-              <CreditCard className="h-3.5 w-3.5" /> Planos
             </TabsTrigger>
             <TabsTrigger value="manutencao" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
               <Wrench className="h-3.5 w-3.5" /> Manutenção
@@ -330,43 +323,6 @@ export default function AdminSettings() {
           <AdminBackups />
         </TabsContent>
 
-        <TabsContent value="planos" className="mt-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
-                Planos ativos
-              </CardTitle>
-              <CardDescription>
-                Planos configurados no sistema. A edição completa fica em Financeiro → Planos.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadPlanos ? (
-                <Skeleton className="h-32 w-full" />
-              ) : planos && planos.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {planos.map((p) => (
-                    <div key={p.id} className="border rounded-lg p-4 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm">{p.name}</span>
-                        <Badge variant="outline" className="text-[10px]">{p.id}</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{p.description}</p>
-                      <div className="flex flex-col gap-0.5 text-xs pt-1">
-                        <span>Mensal: <span className="font-medium">{formatCurrency(p.priceMonthly)}</span></span>
-                        <span>Anual: <span className="font-medium">{formatCurrency(p.priceYearly)}</span></span>
-                        <span>Créditos: <span className="font-medium">{p.creditsPerMonth >= 999999 ? "Ilimitado" : p.creditsPerMonth}</span></span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Nenhum plano configurado.</p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
     </div>
   );

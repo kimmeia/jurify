@@ -7,29 +7,19 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Edit, EyeOff, Loader2, Star, Plus, X, Check, Trash2, Package } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Copy, Edit, GripVertical, Loader2, Package, Plus, Sparkles, Star } from "lucide-react";
+import { useState } from "react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 
 function formatBRL(centavos: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(centavos / 100);
 }
 
-function exibirLimite(valor: number | null | undefined, ilimitadoSeNull = false): string {
-  if (valor == null) return ilimitadoSeNull ? "∞" : "0";
-  if (valor >= 999999) return "∞";
-  return String(valor);
-}
-
-interface PlanoEditavel {
+export interface PlanoEditavel {
   id: number;
   slug: string;
   nome: string;
@@ -57,13 +47,8 @@ interface PlanoEditavel {
   oculto: boolean;
   ordem: number;
   slugProtegido: boolean;
-}
-
-interface ModuloApp {
-  id: string;
-  nome: string;
-  descricao: string;
-  obrigatorio: boolean;
+  assinantesAtivos: number;
+  emTeste: number;
 }
 
 interface ModuloCatalogo {
@@ -153,409 +138,25 @@ function CatalogoModulos({
   );
 }
 
-function EditarPlanoDialog({
-  plano,
-  modulosApp,
-  catalogo,
-  open,
-  onOpenChange,
-  onSaved,
-}: {
-  plano: PlanoEditavel | null;
-  modulosApp: ModuloApp[];
-  catalogo: ModuloCatalogo[];
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  onSaved: () => void;
-}) {
-  const [nome, setNome] = useState("");
-  const [descricao, setDescricao] = useState("");
-  const [publicoAlvo, setPublicoAlvo] = useState("");
-  const [precoMensalReais, setPrecoMensalReais] = useState("");
-  const [precoAnualReais, setPrecoAnualReais] = useState("");
-  const [trialDias, setTrialDias] = useState("0");
-  const [maxUsuarios, setMaxUsuarios] = useState("1");
-  const [maxArmazenamentoMb, setMaxArmazenamentoMb] = useState("100");
-  const [maxClientes, setMaxClientes] = useState<string>("");
-  const [maxConexoesWhatsapp, setMaxConexoesWhatsapp] = useState("0");
-  const [maxAgentesIa, setMaxAgentesIa] = useState("0");
-  const [maxMonitoramentos, setMaxMonitoramentos] = useState<string>("");
-  const [maxMonitoramentosCpf, setMaxMonitoramentosCpf] = useState<string>("");
-  const [precoSobConsulta, setPrecoSobConsulta] = useState(false);
-  const [ctaDemonstracao, setCtaDemonstracao] = useState(false);
-  const [creditosCalculos, setCreditosCalculos] = useState("0");
-  const [jurisiaMensagens, setJurisiaMensagens] = useState("0");
-  const [atendentesInclusos, setAtendentesInclusos] = useState<string>("");
-  const [precoAtendenteAdicional, setPrecoAtendenteAdicional] = useState<string>("");
-  const [modulosLiberados, setModulosLiberados] = useState<string[]>([]);
-  const [features, setFeatures] = useState<string[]>([]);
-  const [novaFeature, setNovaFeature] = useState("");
-  const [popular, setPopular] = useState(false);
-  const [oculto, setOculto] = useState(false);
-  const [ordem, setOrdem] = useState("0");
-
-  useEffect(() => {
-    if (plano && open) {
-      setNome(plano.nome);
-      setDescricao(plano.descricao ?? "");
-      setPublicoAlvo(plano.publicoAlvo ?? "");
-      setPrecoMensalReais((plano.precoMensalCentavos / 100).toFixed(2).replace(".", ","));
-      setPrecoAnualReais(plano.precoAnualCentavos != null
-        ? (plano.precoAnualCentavos / 100).toFixed(2).replace(".", ",")
-        : "");
-      setTrialDias(String(plano.trialDias));
-      setMaxUsuarios(String(plano.maxUsuarios));
-      setMaxArmazenamentoMb(String(plano.maxArmazenamentoMb));
-      setMaxClientes(plano.maxClientes != null ? String(plano.maxClientes) : "");
-      setMaxConexoesWhatsapp(String(plano.maxConexoesWhatsapp));
-      setMaxAgentesIa(String(plano.maxAgentesIa));
-      setMaxMonitoramentos(plano.maxMonitoramentosProcessos != null ? String(plano.maxMonitoramentosProcessos) : "");
-      setMaxMonitoramentosCpf(plano.maxMonitoramentosCpf != null ? String(plano.maxMonitoramentosCpf) : "");
-      setPrecoSobConsulta(!!plano.precoSobConsulta);
-      setCtaDemonstracao(!!plano.ctaDemonstracao);
-      setCreditosCalculos(String(plano.creditosCalculosMes));
-      setJurisiaMensagens(String(plano.jurisiaMensagensMes ?? 0));
-      setAtendentesInclusos(plano.atendentesInclusos != null ? String(plano.atendentesInclusos) : "");
-      setPrecoAtendenteAdicional(
-        plano.precoAtendenteAdicionalCentavos > 0
-          ? (plano.precoAtendenteAdicionalCentavos / 100).toFixed(2).replace(".", ",")
-          : "",
-      );
-      setModulosLiberados([...plano.modulosLiberados]);
-      setFeatures([...plano.features]);
-      setPopular(plano.popular);
-      setOculto(plano.oculto);
-      setOrdem(String(plano.ordem));
-    }
-  }, [plano, open]);
-
-  const editarMut = (trpc as any).admin.editarPlano.useMutation({
-    onSuccess: () => {
-      toast.success("Plano atualizado");
-      onSaved();
-      onOpenChange(false);
-    },
-    onError: (err: any) => toast.error("Erro ao salvar", { description: err.message }),
-  });
-
-  const handleSave = () => {
-    if (!plano) return;
-    const mensal = Math.round(parseFloat(precoMensalReais.replace(",", ".")) * 100);
-    if (isNaN(mensal) || mensal < 0) {
-      toast.error("Preço mensal inválido");
-      return;
-    }
-    const anual = precoAnualReais.trim()
-      ? Math.round(parseFloat(precoAnualReais.replace(",", ".")) * 100)
-      : null;
-    const adicionalCentavos = precoAtendenteAdicional.trim()
-      ? Math.round(parseFloat(precoAtendenteAdicional.replace(",", ".")) * 100)
-      : 0;
-    if (isNaN(adicionalCentavos) || adicionalCentavos < 0) {
-      toast.error("Preço do atendente adicional inválido");
-      return;
-    }
-    editarMut.mutate({
-      slug: plano.slug,
-      nome,
-      descricao: descricao.trim() || null,
-      publicoAlvo: publicoAlvo.trim() || null,
-      precoMensalCentavos: mensal,
-      precoAnualCentavos: anual,
-      trialDias: parseInt(trialDias, 10) || 0,
-      maxUsuarios: parseInt(maxUsuarios, 10) || 1,
-      maxArmazenamentoMb: parseInt(maxArmazenamentoMb, 10) || 0,
-      maxClientes: maxClientes.trim() ? parseInt(maxClientes, 10) : null,
-      maxConexoesWhatsapp: parseInt(maxConexoesWhatsapp, 10) || 0,
-      maxAgentesIa: parseInt(maxAgentesIa, 10) || 0,
-      maxMonitoramentosProcessos: maxMonitoramentos.trim() ? parseInt(maxMonitoramentos, 10) : null,
-      maxMonitoramentosCpf: maxMonitoramentosCpf.trim() ? parseInt(maxMonitoramentosCpf, 10) : null,
-      precoSobConsulta,
-      ctaDemonstracao,
-      creditosCalculosMes: parseInt(creditosCalculos, 10) || 0,
-      jurisiaMensagensMes: parseInt(jurisiaMensagens, 10) || 0,
-      atendentesInclusos: atendentesInclusos.trim() ? parseInt(atendentesInclusos, 10) : null,
-      precoAtendenteAdicionalCentavos: adicionalCentavos,
-      modulosLiberados,
-      features,
-      popular,
-      oculto,
-      ordem: parseInt(ordem, 10) || 0,
-    });
-  };
-
-  if (!plano) return null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Editar plano: {plano.nome}</DialogTitle>
-          <DialogDescription>
-            Slug: <code className="text-xs">{plano.slug}</code>
-            {plano.slugProtegido && " (protegido — não pode ser deletado)"}
-          </DialogDescription>
-        </DialogHeader>
-
-        <Tabs defaultValue="geral" className="mt-2">
-          <TabsList className="grid grid-cols-4 w-full">
-            <TabsTrigger value="geral">Geral</TabsTrigger>
-            <TabsTrigger value="limites">Limites</TabsTrigger>
-            <TabsTrigger value="modulos">Módulos</TabsTrigger>
-            <TabsTrigger value="features">Features (LP)</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="geral" className="space-y-4 mt-4">
-            <div className="space-y-1.5">
-              <Label>Nome</Label>
-              <Input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={100} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Descrição curta</Label>
-              <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={255}
-                placeholder="Para advogado autônomo ou dupla" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Público alvo (subtitle do card)</Label>
-              <Input value={publicoAlvo} onChange={(e) => setPublicoAlvo(e.target.value)} maxLength={255}
-                placeholder="Advogado autônomo ou dupla" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Preço mensal (R$)</Label>
-                <Input value={precoMensalReais} onChange={(e) => setPrecoMensalReais(e.target.value)}
-                  inputMode="decimal" placeholder="97,00" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Preço anual (R$) — opcional</Label>
-                <Input value={precoAnualReais} onChange={(e) => setPrecoAnualReais(e.target.value)}
-                  inputMode="decimal" placeholder="970,00" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Trial (dias sem cartão)</Label>
-                <Input value={trialDias} onChange={(e) => setTrialDias(e.target.value)}
-                  type="number" min={0} max={90} placeholder="14" />
-                <p className="text-[10px] text-muted-foreground">0 = sem trial</p>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Ordem na LP</Label>
-                <Input value={ordem} onChange={(e) => setOrdem(e.target.value)} type="number" min={0} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Atendentes inclusos</Label>
-                <Input value={atendentesInclusos} onChange={(e) => setAtendentesInclusos(e.target.value)}
-                  type="number" min={0} placeholder="vazio = sem cobrança por assento" />
-                <p className="text-[10px] text-muted-foreground">
-                  Colaboradores ativos contam. Vazio = não cobra por assento (planos atuais).
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Atendente adicional (R$/mês)</Label>
-                <Input value={precoAtendenteAdicional} onChange={(e) => setPrecoAtendenteAdicional(e.target.value)}
-                  inputMode="decimal" placeholder="25,00" />
-                <p className="text-[10px] text-muted-foreground">Cobrado por atendente além dos inclusos.</p>
-              </div>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div>
-                <Label>Preço sob consulta</Label>
-                <p className="text-xs text-muted-foreground">
-                  LP esconde o número e mostra "Falar com a gente". Checkout self-service é bloqueado.
-                </p>
-              </div>
-              <Switch checked={precoSobConsulta} onCheckedChange={setPrecoSobConsulta} />
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div>
-                <Label>CTA de demonstração</Label>
-                <p className="text-xs text-muted-foreground">Botão principal do card vira "Agendar demonstração".</p>
-              </div>
-              <Switch checked={ctaDemonstracao} onCheckedChange={setCtaDemonstracao} />
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div>
-                <Label>Popular</Label>
-                <p className="text-xs text-muted-foreground">Badge "Mais Popular" no card</p>
-              </div>
-              <Switch checked={popular} onCheckedChange={setPopular} />
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div>
-                <Label>Oculto na LP</Label>
-                <p className="text-xs text-muted-foreground">
-                  Some da landing e do /plans. Assinantes existentes seguem normalmente.
-                </p>
-              </div>
-              <Switch checked={oculto} onCheckedChange={setOculto} />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="limites" className="space-y-3 mt-4">
-            <p className="text-xs text-muted-foreground">
-              Deixe vazio onde quiser "ilimitado" (clientes, monitoramentos). Use 999999 nos demais
-              campos pra também tratar como ilimitado.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Usuários máximos</Label>
-                <Input value={maxUsuarios} onChange={(e) => setMaxUsuarios(e.target.value)} type="number" min={1} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Armazenamento (MB)</Label>
-                <Input value={maxArmazenamentoMb} onChange={(e) => setMaxArmazenamentoMb(e.target.value)} type="number" min={0} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Clientes ativos</Label>
-                <Input value={maxClientes} onChange={(e) => setMaxClientes(e.target.value)}
-                  type="number" min={0} placeholder="vazio = ilimitado" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Conexões WhatsApp</Label>
-                <Input value={maxConexoesWhatsapp} onChange={(e) => setMaxConexoesWhatsapp(e.target.value)} type="number" min={0} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Agentes IA</Label>
-                <Input value={maxAgentesIa} onChange={(e) => setMaxAgentesIa(e.target.value)} type="number" min={0} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Monitoramentos processos</Label>
-                <Input value={maxMonitoramentos} onChange={(e) => setMaxMonitoramentos(e.target.value)}
-                  type="number" min={0} placeholder="vazio = ilimitado" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Monitoramentos CPF/CNPJ</Label>
-                <Input value={maxMonitoramentosCpf} onChange={(e) => setMaxMonitoramentosCpf(e.target.value)}
-                  type="number" min={0} placeholder="vazio = ilimitado" />
-                <p className="text-[10px] text-muted-foreground">Novas ações — serviço à parte de vigiar processo.</p>
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label>Créditos cálculos / mês</Label>
-                <Input value={creditosCalculos} onChange={(e) => setCreditosCalculos(e.target.value)} type="number" min={0} />
-              </div>
-              <div>
-                <Label>Mensagens JurisIA / mês</Label>
-                <Input value={jurisiaMensagens} onChange={(e) => setJurisiaMensagens(e.target.value)} type="number" min={0} />
-                <p className="text-[10px] text-muted-foreground mt-1">0 desliga o módulo neste plano.</p>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="modulos" className="space-y-2 mt-4">
-            <p className="text-xs text-muted-foreground">
-              Marque os módulos liberados nesse plano. Módulos obrigatórios são sempre liberados.
-            </p>
-            {(() => {
-              const somaCesta = catalogo
-                .filter((c) => modulosLiberados.includes(c.id))
-                .reduce((s, c) => s + c.precoMensalCentavos, 0);
-              const precoPacote = Math.round(parseFloat(precoMensalReais.replace(",", ".")) * 100);
-              return somaCesta > 0 ? (
-                <div className="rounded-lg border bg-muted/40 p-3 text-xs flex items-center justify-between">
-                  <span className="text-muted-foreground">
-                    Soma avulsa dos módulos da cesta: <strong className="text-foreground">{formatBRL(somaCesta)}/mês</strong>
-                  </span>
-                  {!isNaN(precoPacote) && precoPacote > 0 && precoPacote < somaCesta && (
-                    <span className="text-emerald-700 dark:text-emerald-300 font-medium">
-                      pacote a {formatBRL(precoPacote)} = {Math.round((1 - precoPacote / somaCesta) * 100)}% de combo
-                    </span>
-                  )}
-                </div>
-              ) : null;
-            })()}
-            {modulosApp.map((mod) => {
-              const liberado = mod.obrigatorio || modulosLiberados.includes(mod.id);
-              return (
-                <div key={mod.id} className="flex items-start justify-between gap-3 rounded-lg border p-3">
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium">{mod.nome}</Label>
-                    <p className="text-xs text-muted-foreground">{mod.descricao}</p>
-                    {mod.obrigatorio && (
-                      <Badge variant="outline" className="mt-1 text-[10px]">Obrigatório</Badge>
-                    )}
-                  </div>
-                  <Switch
-                    checked={liberado}
-                    disabled={mod.obrigatorio}
-                    onCheckedChange={(v) => {
-                      if (v) setModulosLiberados([...modulosLiberados.filter((x) => x !== mod.id), mod.id]);
-                      else setModulosLiberados(modulosLiberados.filter((x) => x !== mod.id));
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </TabsContent>
-
-          <TabsContent value="features" className="space-y-2 mt-4">
-            <p className="text-xs text-muted-foreground">
-              Bullets que aparecem no card da landing page. Cada linha é uma feature visível.
-            </p>
-            {features.map((f, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span className="flex-1 text-sm truncate">{f}</span>
-                <Button size="sm" variant="ghost" className="h-6 w-6 p-0"
-                  onClick={() => setFeatures(features.filter((_, idx) => idx !== i))}>
-                  <X className="h-3 w-3 text-muted-foreground" />
-                </Button>
-              </div>
-            ))}
-            <div className="flex gap-2">
-              <Input value={novaFeature} onChange={(e) => setNovaFeature(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && novaFeature.trim()) {
-                    setFeatures([...features, novaFeature.trim()]);
-                    setNovaFeature("");
-                  }
-                }}
-                placeholder="Ex: Até 5 colaboradores" className="text-sm" />
-              <Button size="sm" variant="outline" onClick={() => {
-                if (novaFeature.trim()) {
-                  setFeatures([...features, novaFeature.trim()]);
-                  setNovaFeature("");
-                }
-              }}>
-                <Plus className="h-3 w-3" />
-              </Button>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={editarMut.isPending}>
-            {editarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Salvar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function CriarPlanoDialog({
   open,
   onOpenChange,
-  onCreated,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  onCreated: () => void;
 }) {
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [precoMensalReais, setPrecoMensalReais] = useState("");
+  const [, setLocation] = useLocation();
 
   const criarMut = (trpc as any).admin.criarPlano.useMutation({
     onSuccess: (res: any) => {
       toast.success(res.mensagem || "Plano criado");
       setNome(""); setDescricao(""); setPrecoMensalReais("");
-      onCreated();
       onOpenChange(false);
+      // Nasce oculto até o admin terminar de montar — segue direto pro editor.
+      if (res.slug) setLocation(`/admin/planos/${res.slug}`);
     },
     onError: (err: any) => toast.error("Erro ao criar plano", { description: err.message }),
   });
@@ -568,6 +169,7 @@ function CriarPlanoDialog({
       nome: nome.trim(),
       descricao: descricao.trim() || undefined,
       precoMensalCentavos: mensal,
+      oculto: true,
     });
   };
 
@@ -577,7 +179,8 @@ function CriarPlanoDialog({
         <DialogHeader>
           <DialogTitle>Criar plano</DialogTitle>
           <DialogDescription>
-            Define só o essencial agora. Limites, módulos e features você ajusta depois clicando "Editar".
+            Só o essencial agora — na sequência abre o editor completo, com o plano
+            ainda fora da vitrine.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -600,7 +203,7 @@ function CriarPlanoDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={handleSave} disabled={criarMut.isPending || !nome.trim() || !precoMensalReais}>
             {criarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Criar
+            Criar e abrir editor
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -608,41 +211,157 @@ function CriarPlanoDialog({
   );
 }
 
+function descreverAssinantes(p: PlanoEditavel): string {
+  const partes: string[] = [];
+  if (p.assinantesAtivos > 0) partes.push(`${p.assinantesAtivos} ${p.assinantesAtivos === 1 ? "escritório assina" : "escritórios assinam"}`);
+  if (p.emTeste > 0) partes.push(`${p.emTeste} em teste grátis`);
+  return partes.length > 0 ? partes.join(" · ") : "sem assinantes";
+}
+
+function resumoDoPlano(p: PlanoEditavel): string {
+  const partes: string[] = [p.slug];
+  if (p.maxMonitoramentosProcessos != null && p.maxMonitoramentosProcessos > 0) {
+    partes.push(`vigia ${p.maxMonitoramentosProcessos} processos`);
+  }
+  if (p.maxMonitoramentosCpf != null && p.maxMonitoramentosCpf > 0) {
+    partes.push(`${p.maxMonitoramentosCpf} CPFs`);
+  }
+  partes.push(`${p.maxUsuarios >= 999999 ? "∞" : p.maxUsuarios} usuários`);
+  if (!p.precoSobConsulta) partes.push(`${formatBRL(p.precoMensalCentavos)}/mês`);
+  return partes.join(" · ");
+}
+
+function LinhaPlano({
+  plano,
+  arrastavel,
+  onToggleVitrine,
+  onDuplicar,
+  mutando,
+  dragHandlers,
+}: {
+  plano: PlanoEditavel;
+  arrastavel: boolean;
+  onToggleVitrine: (p: PlanoEditavel, naVitrine: boolean) => void;
+  onDuplicar: (p: PlanoEditavel) => void;
+  mutando: boolean;
+  dragHandlers?: React.HTMLAttributes<HTMLDivElement>;
+}) {
+  const [, setLocation] = useLocation();
+  return (
+    <div
+      className={`flex flex-wrap items-center gap-3 px-4 py-3 border-t first:border-t-0 ${plano.oculto ? "opacity-70" : ""}`}
+      {...(arrastavel ? dragHandlers : {})}
+    >
+      {arrastavel ? (
+        <GripVertical className="h-4 w-4 text-muted-foreground/50 cursor-grab shrink-0" />
+      ) : (
+        <span className="w-4 shrink-0" />
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-semibold text-sm">{plano.nome}</span>
+          {plano.precoSobConsulta && (
+            <Badge variant="outline" className="text-[10px] font-bold border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300">
+              SOB CONSULTA
+            </Badge>
+          )}
+          {plano.popular && (
+            <Badge variant="outline" className="text-[10px] font-bold border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+              <Star className="h-2.5 w-2.5 mr-0.5" /> MAIS POPULAR
+            </Badge>
+          )}
+          {plano.ctaDemonstracao && (
+            <Badge variant="outline" className="text-[10px] font-bold border-cyan-300 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-300">
+              DEMONSTRAÇÃO
+            </Badge>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5 truncate">{resumoDoPlano(plano)}</p>
+      </div>
+      <span className="text-xs text-muted-foreground whitespace-nowrap">{descreverAssinantes(plano)}</span>
+      <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground whitespace-nowrap cursor-pointer">
+        <Switch
+          checked={!plano.oculto}
+          disabled={mutando}
+          onCheckedChange={(v) => onToggleVitrine(plano, v)}
+        />
+        {plano.oculto ? "escondido" : "na vitrine"}
+      </label>
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="outline" className="h-8 text-xs" disabled={mutando}
+          onClick={() => onDuplicar(plano)}>
+          <Copy className="h-3 w-3 mr-1" /> Duplicar
+        </Button>
+        <Button size="sm" variant="outline"
+          className="h-8 text-xs border-violet-300 text-violet-700 hover:text-violet-800 dark:border-violet-800 dark:text-violet-300"
+          onClick={() => setLocation(`/admin/planos/${plano.slug}`)}>
+          Editar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function PlanosSection() {
   const { data: planos, isLoading, refetch } = (trpc as any).admin.listarPlanosEditaveis.useQuery();
-  const { data: modulosApp } = (trpc as any).admin.listarModulosApp.useQuery();
   const { data: catalogo, refetch: refetchCatalogo } = (trpc as any).admin.listarCatalogoModulos.useQuery();
-  const [editando, setEditando] = useState<PlanoEditavel | null>(null);
-  const [editOpen, setEditOpen] = useState(false);
   const [criarOpen, setCriarOpen] = useState(false);
+  const [arrastandoSlug, setArrastandoSlug] = useState<string | null>(null);
+  const [, setLocation] = useLocation();
 
-  const deletarMut = (trpc as any).admin.deletarPlano.useMutation({
-    onSuccess: () => {
-      toast.success("Plano deletado");
+  const editarMut = (trpc as any).admin.editarPlano.useMutation({
+    onSuccess: () => refetch(),
+    onError: (err: any) => toast.error("Erro ao salvar", { description: err.message }),
+  });
+  const duplicarMut = (trpc as any).admin.duplicarPlano.useMutation({
+    onSuccess: (res: any) => {
+      toast.success("Cópia criada fora da vitrine — ajuste e ligue quando quiser");
+      refetch();
+      if (res.slug) setLocation(`/admin/planos/${res.slug}`);
+    },
+    onError: (err: any) => toast.error("Erro ao duplicar", { description: err.message }),
+  });
+  const reordenarMut = (trpc as any).admin.reordenarPlanos.useMutation({
+    onSuccess: () => refetch(),
+    onError: (err: any) => {
+      toast.error("Erro ao reordenar", { description: err.message });
       refetch();
     },
-    onError: (err: any) => toast.error("Erro ao deletar", { description: err.message }),
   });
+
+  const lista: PlanoEditavel[] = planos ?? [];
+  const naVitrine = lista.filter((p) => !p.oculto);
+  const foraDaVitrine = lista.filter((p) => p.oculto);
+  const mutando = editarMut.isPending || duplicarMut.isPending || reordenarMut.isPending;
+
+  const toggleVitrine = (p: PlanoEditavel, ligar: boolean) => {
+    editarMut.mutate(
+      { slug: p.slug, oculto: !ligar },
+      {
+        onSuccess: () =>
+          toast.success(
+            ligar ? `"${p.nome}" entrou na vitrine` : `"${p.nome}" saiu da vitrine — assinantes atuais não mudam`,
+          ),
+      },
+    );
+  };
+
+  const soltarSobre = (alvoSlug: string) => {
+    if (!arrastandoSlug || arrastandoSlug === alvoSlug) return;
+    const slugs = naVitrine.map((p) => p.slug);
+    const de = slugs.indexOf(arrastandoSlug);
+    const para = slugs.indexOf(alvoSlug);
+    if (de < 0 || para < 0) return;
+    slugs.splice(de, 1);
+    slugs.splice(para, 0, arrastandoSlug);
+    reordenarMut.mutate({ slugs });
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Edite preços, módulos liberados, limites e textos da landing page. Mudanças refletem instantaneamente.
-        </p>
-        <Button onClick={() => setCriarOpen(true)}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          Criar plano
-        </Button>
-      </div>
-
-      <CatalogoModulos catalogo={catalogo ?? []} onSaved={refetchCatalogo} />
-
       {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-80 rounded-xl" />)}
-        </div>
-      ) : !planos || planos.length === 0 ? (
+        <Skeleton className="h-64 rounded-xl" />
+      ) : lista.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
@@ -650,115 +369,79 @@ export function PlanosSection() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {planos.map((plano: PlanoEditavel) => (
-            <Card
-              key={plano.slug}
-              className={`relative ${plano.popular ? "border-violet-500/50 shadow-md" : ""} ${plano.oculto ? "opacity-60" : ""}`}
-            >
-              {plano.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="bg-violet-600 hover:bg-violet-600 text-white shadow-sm">
-                    <Star className="h-3 w-3 mr-1" /> Popular
-                  </Badge>
-                </div>
+        <>
+          <Card>
+            <CardHeader className="pb-2 flex flex-row flex-wrap items-center gap-3 space-y-0">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                  Na vitrine do site
+                </CardTitle>
+                <CardDescription className="text-xs mt-1">
+                  {naVitrine.length} {naVitrine.length === 1 ? "plano" : "planos"} · arraste pra mudar a ordem na página de preços
+                </CardDescription>
+              </div>
+              <Button className="ml-auto" size="sm" onClick={() => setCriarOpen(true)}>
+                <Plus className="h-4 w-4 mr-1.5" /> Criar plano
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0 pb-1">
+              {naVitrine.length === 0 ? (
+                <p className="text-sm text-muted-foreground px-4 py-6">
+                  Nenhum plano visível no site — a página de preços está vazia.
+                </p>
+              ) : (
+                naVitrine.map((p) => (
+                  <LinhaPlano
+                    key={p.slug}
+                    plano={p}
+                    arrastavel
+                    mutando={mutando}
+                    onToggleVitrine={toggleVitrine}
+                    onDuplicar={(pl) => duplicarMut.mutate({ slug: pl.slug })}
+                    dragHandlers={{
+                      draggable: true,
+                      onDragStart: () => setArrastandoSlug(p.slug),
+                      onDragEnd: () => setArrastandoSlug(null),
+                      onDragOver: (e: React.DragEvent) => e.preventDefault(),
+                      onDrop: () => soltarSobre(p.slug),
+                    } as React.HTMLAttributes<HTMLDivElement>}
+                  />
+                ))
               )}
-              {plano.oculto && (
-                <div className="absolute top-3 right-3">
-                  <Badge variant="outline" className="text-[10px]">
-                    <EyeOff className="h-2.5 w-2.5 mr-1" /> Oculto
-                  </Badge>
-                </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base text-muted-foreground">Fora da vitrine</CardTitle>
+              <CardDescription className="text-xs">
+                {foraDaVitrine.length} {foraDaVitrine.length === 1 ? "plano" : "planos"} · quem já assina continua igual
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0 pb-1">
+              {foraDaVitrine.length === 0 ? (
+                <p className="text-sm text-muted-foreground px-4 py-6">Nenhum plano escondido.</p>
+              ) : (
+                foraDaVitrine.map((p) => (
+                  <LinhaPlano
+                    key={p.slug}
+                    plano={p}
+                    arrastavel={false}
+                    mutando={mutando}
+                    onToggleVitrine={toggleVitrine}
+                    onDuplicar={(pl) => duplicarMut.mutate({ slug: pl.slug })}
+                  />
+                ))
               )}
-              <CardHeader>
-                <CardTitle className="text-lg">{plano.nome}</CardTitle>
-                <CardDescription className="text-xs">{plano.descricao}</CardDescription>
-                <code className="text-[10px] text-muted-foreground">{plano.slug}</code>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-2xl font-bold">
-                    {formatBRL(plano.precoMensalCentavos)}
-                    <span className="text-xs text-muted-foreground font-normal">/mês</span>
-                  </p>
-                  {plano.precoAnualCentavos != null && (
-                    <p className="text-sm text-muted-foreground">{formatBRL(plano.precoAnualCentavos)}/ano</p>
-                  )}
-                  {plano.trialDias > 0 && (
-                    <Badge variant="secondary" className="mt-1 text-[10px]">
-                      {plano.trialDias} dias grátis
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="text-xs space-y-1 border-t pt-3 text-muted-foreground">
-                  <p>👥 <strong className="text-foreground">{exibirLimite(plano.maxUsuarios)}</strong> usuários</p>
-                  <p>💾 <strong className="text-foreground">{exibirLimite(plano.maxArmazenamentoMb)} MB</strong></p>
-                  <p>📒 <strong className="text-foreground">{exibirLimite(plano.maxClientes, true)}</strong> clientes</p>
-                  <p>🧩 <strong className="text-foreground">{plano.modulosLiberados.length}</strong> módulos</p>
-                  {plano.atendentesInclusos != null && (
-                    <p>🎧 <strong className="text-foreground">{plano.atendentesInclusos}</strong> atendentes
-                      {plano.precoAtendenteAdicionalCentavos > 0 && (
-                        <span> · +{formatBRL(plano.precoAtendenteAdicionalCentavos)}/extra</span>
-                      )}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 pt-2">
-                  <Button
-                    size="sm" variant="outline" className="flex-1 text-xs"
-                    onClick={() => { setEditando(plano); setEditOpen(true); }}
-                  >
-                    <Edit className="h-3 w-3 mr-1" /> Editar
-                  </Button>
-                  {!plano.slugProtegido && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button size="sm" variant="ghost" className="text-xs text-destructive hover:text-destructive">
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Deletar plano "{plano.nome}"?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta ação não pode ser desfeita. Não funciona se houver assinantes ativos.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={() => deletarMut.mutate({ slug: plano.slug })}
-                          >
-                            Deletar
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+            </CardContent>
+          </Card>
+        </>
       )}
 
-      <EditarPlanoDialog
-        plano={editando}
-        modulosApp={modulosApp ?? []}
-        catalogo={catalogo ?? []}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        onSaved={refetch}
-      />
+      <CatalogoModulos catalogo={catalogo ?? []} onSaved={refetchCatalogo} />
 
-      <CriarPlanoDialog
-        open={criarOpen}
-        onOpenChange={setCriarOpen}
-        onCreated={refetch}
-      />
+      <CriarPlanoDialog open={criarOpen} onOpenChange={setCriarOpen} />
     </div>
   );
 }

@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Bot, FlaskConical, Play, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
+import { FlaskConical, Play, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -780,16 +780,10 @@ export default function AdminJurisIa() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <Bot className="h-6 w-6 text-violet-600 dark:text-violet-400" />
-          JurisIA — robô de ingestão
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Varredura do acervo público do CNJ (DataJud). Não usa a credencial OAB do escritório —
-          o monitoramento de processos não corre risco.
-        </p>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Robô de ingestão: varredura do acervo público do CNJ (DataJud). Não usa a credencial OAB
+        do escritório — o monitoramento de processos não corre risco.
+      </p>
 
       <PainelSondagem />
 
