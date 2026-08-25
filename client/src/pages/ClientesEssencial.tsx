@@ -8,7 +8,7 @@
  * e porque o "ver só os meus" depende do responsável gravado no cliente.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,12 @@ export default function ClientesEssencial() {
   const [nome, setNome] = useState("");
   const [cpfCnpj, setCpfCnpj] = useState("");
   const [responsavelId, setResponsavelId] = useState<string>("");
+
+  // Deep-link do guia processual (/clientes?novo=1): abre o cadastro direto,
+  // sem obrigar o clique extra de quem veio do passo 2.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("novo") === "1") setCriarOpen(true);
+  }, []);
 
   const criarMut = trpc.clientesEssencial.criar.useMutation({
     onError: (err) => toast.error("Erro ao cadastrar", { description: err.message }),

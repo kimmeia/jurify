@@ -62,12 +62,21 @@ describe("amarras — métricas reais e proteção do funil", () => {
     expect(form).toContain("turnstileToken");
   });
 
-  it("dashboard processual avisa quando o Cofre está vazio — e só nesse caso", () => {
+  it("/cadastro remonta o form ao trocar de modo — sem isso mostrava o LOGIN", () => {
+    // /login e /cadastro montam AuthForms na mesma posição da árvore; sem a
+    // key o React reaproveita a instância e o estado `tab` fica preso.
+    const split = ler("client/src/pages/auth/AuthSplitPage.tsx");
+    expect(split).toContain("key={modo}");
+  });
+
+  it("dashboard processual guia quem ainda não tem credencial (guia de 3 passos)", () => {
     const dash = ler("client/src/pages/dashboards/DashboardProcessual.tsx");
     expect(dash).toContain("cofreCredenciais.listarParaSelecao");
-    expect(dash).toContain("Cadastrar credencial no Cofre");
-    expect(dash).toContain("semCredencial &&");
-    // O botão leva direto pro Cofre.
-    expect(dash).toContain("/processos?tab=cofre");
+    expect(dash).toContain("<GuiaProcessual");
+
+    // O guia substituiu o aviso amber — e leva direto pro Cofre.
+    const guia = ler("client/src/pages/dashboards/GuiaProcessual.tsx");
+    expect(guia).toContain("Conectar credencial");
+    expect(guia).toContain("/processos?tab=cofre");
   });
 });

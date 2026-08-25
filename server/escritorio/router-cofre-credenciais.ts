@@ -25,7 +25,7 @@ import { TRPCError } from "@trpc/server";
 import { eq, and, desc, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { cofreCredencialTribunais, cofreCredenciais, cofreSessoes, motorMonitoramentos } from "../../drizzle/schema";
+import { cofreCredencialTribunais, cofreCredenciais, cofreSessoes, interesseTribunais, motorMonitoramentos } from "../../drizzle/schema";
 import { encrypt, maskToken } from "./crypto-utils";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { checkPermission } from "./check-permission";
@@ -1062,5 +1062,25 @@ export const cofreCredenciaisRouter = router({
         ok: false,
         mensagem: `Sistema "${cred.sistema}" ainda sem adapter automatizado.`,
       };
+    }),
+
+  /**
+   * "Avisar quando chegar": o escritório quer um tribunal que ainda não
+   * cobrimos. Cada registro é um voto na fila de prioridade de adapters —
+   * capturar o interesse aqui evita perder o cadastro (e o cliente) na
+   * tela de credencial.
+   */
+  registrarInteresseTribunal: protectedProcedure
+    .input(z.object({ tribunal: z.string().trim().min(2).max(120) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const escritorioId = await resolverEscritorioId(ctx.user.id);
+      await db.insert(interesseTribunais).values({
+        escritorioId,
+        userId: ctx.user.id,
+        tribunal: input.tribunal,
+      });
+      return { ok: true };
     }),
 });
