@@ -10,7 +10,7 @@
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { eq, inArray, desc, and, gt, sql } from "drizzle-orm";
+import { eq, inArray, desc, and, gt, lte, asc, isNotNull, sql } from "drizzle-orm";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { registrarAuditoria } from "../_core/audit";
 import { consume as rateLimitConsume } from "../_core/rate-limit";
@@ -1209,6 +1209,49 @@ export const adminRouter = router({
    * Inclui dados do usuário pra contato direto. Usado pro dashboard
    * de cobrança / financeiro tomar ação.
    */
+  /**
+   * Pendências da Visão Geral: testes grátis vencendo em até 7 dias (inclui
+   * os já vencidos que seguem "trialing"). É a janela de fechar a venda —
+   * o painel mostra em cima, com nome e data, pro admin chamar antes de vencer.
+   */
+  pendenciasDashboard: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { trialsVencendo: [] };
+
+    // trial_expira_em é epoch em ms (bigint), não DATETIME.
+    const emSeteDias = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    const rows = await db
+      .select({
+        subId: subscriptionsTable.id,
+        userId: users.id,
+        userName: users.name,
+        userEmail: users.email,
+        planId: subscriptionsTable.planId,
+        trialExpiraEm: subscriptionsTable.trialExpiraEm,
+      })
+      .from(subscriptionsTable)
+      .innerJoin(users, eq(subscriptionsTable.userId, users.id))
+      .where(
+        and(
+          eq(subscriptionsTable.status, "trialing"),
+          isNotNull(subscriptionsTable.trialExpiraEm),
+          lte(subscriptionsTable.trialExpiraEm, emSeteDias),
+        ),
+      )
+      .orderBy(asc(subscriptionsTable.trialExpiraEm));
+
+    const { planos } = await import("../../drizzle/schema");
+    const nomes = await db.select({ slug: planos.slug, nome: planos.nome }).from(planos);
+    const nomePorSlug = new Map(nomes.map((p) => [p.slug, p.nome]));
+
+    return {
+      trialsVencendo: rows.map((r) => ({
+        ...r,
+        planNome: (r.planId && nomePorSlug.get(r.planId)) || r.planId || "sem plano",
+      })),
+    };
+  }),
+
   listarInadimplentes: adminProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
