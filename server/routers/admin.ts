@@ -75,6 +75,7 @@ import {
   leads,
   contatos,
   agentesIa,
+  planos as planosTable,
 } from "../../drizzle/schema";
 
 export const adminRouter = router({
@@ -375,19 +376,23 @@ export const adminRouter = router({
     const db = await getDb();
     if (!db) return [];
 
-    // Agrega no banco: pra cada (planId, mês de criação) traz a contagem
-    // de subs ativas. Antes carregava TODAS as subs em memória só pra
-    // iterar — quebrava com milhares de assinaturas. O `priceMonthly` mora
-    // em código (PLANS), por isso a resolução de valor fica em JS.
+    // Agrega no banco por mês de criação, já resolvendo o preço real de
+    // cada assinatura: valor negociado quando existe, senão o preço de
+    // tabela via JOIN com `planos` (o catálogo que o admin edita). Só
+    // pagantes contam — trial e cortesia não são receita (antes entravam
+    // como R$ 97 fictícios e o gráfico virava ficção).
     const rows = await db
       .select({
-        planId: subscriptionsTable.planId,
         mesCriacao: sql<string>`DATE_FORMAT(${subscriptionsTable.createdAt}, '%Y-%m')`,
-        qtd: sql<number>`COUNT(*)`,
+        valorMes: sql<number>`SUM(COALESCE(${subscriptionsTable.valorNegociadoCentavos}, ${planosTable.precoMensalCentavos}, 0))`,
       })
       .from(subscriptionsTable)
-      .where(inArray(subscriptionsTable.status, ["active", "trialing"]))
-      .groupBy(subscriptionsTable.planId, sql`DATE_FORMAT(${subscriptionsTable.createdAt}, '%Y-%m')`);
+      .leftJoin(planosTable, eq(planosTable.slug, subscriptionsTable.planId))
+      .where(and(
+        eq(subscriptionsTable.status, "active"),
+        eq(subscriptionsTable.cortesia, false),
+      ))
+      .groupBy(sql`DATE_FORMAT(${subscriptionsTable.createdAt}, '%Y-%m')`);
 
     const meses: Record<string, number> = {};
     for (let i = 11; i >= 0; i--) {
@@ -396,13 +401,10 @@ export const adminRouter = router({
       meses[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`] = 0;
     }
 
-    // Pra cada (planId, mesCriacao): a sub conta em TODOS os meses
-    // >= mesCriacao (no horizonte de 12 meses). Multiplica por qtd e
-    // priceMonthly do plano.
+    // Cada grupo (mesCriacao) soma em TODOS os meses >= mesCriacao no
+    // horizonte de 12 meses — receita recorrente acumula.
     for (const r of rows) {
-      const plan = PLANS.find((p) => p.id === r.planId);
-      if (!plan) continue;
-      const valor = plan.priceMonthly * Number(r.qtd);
+      const valor = Number(r.valorMes);
       const mesCri = String(r.mesCriacao);
       for (const mesKey of Object.keys(meses)) {
         if (mesCri <= mesKey) meses[mesKey] += valor;
@@ -1267,20 +1269,21 @@ export const adminRouter = router({
         currentPeriodEnd: subscriptionsTable.currentPeriodEnd,
         asaasSubscriptionId: subscriptionsTable.asaasSubscriptionId,
         createdAt: subscriptionsTable.createdAt,
+        valorNegociadoCentavos: subscriptionsTable.valorNegociadoCentavos,
+        planNome: planosTable.nome,
+        planPrecoCentavos: planosTable.precoMensalCentavos,
       })
       .from(subscriptionsTable)
       .innerJoin(users, eq(subscriptionsTable.userId, users.id))
+      .leftJoin(planosTable, eq(planosTable.slug, subscriptionsTable.planId))
       .where(eq(subscriptionsTable.status, "past_due"))
       .orderBy(desc(subscriptionsTable.currentPeriodEnd));
 
-    return rows.map((r) => {
-      const plan = PLANS.find((p) => p.id === r.planId);
-      return {
-        ...r,
-        planName: plan?.name || r.planId,
-        valorMensal: plan?.priceMonthly || 0,
-      };
-    });
+    return rows.map((r) => ({
+      ...r,
+      planName: r.planNome || r.planId,
+      valorMensal: r.valorNegociadoCentavos ?? r.planPrecoCentavos ?? 0,
+    }));
   }),
 
   /**
