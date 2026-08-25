@@ -219,10 +219,19 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
    migration 0206, `registrarInteresseTribunal`). Amarras em
    `onboarding-processual.test.ts`. E-mail: domínio juridflow.com.br
    VERIFICADO no Resend em 25/08 (DNS na Hostinger, região sa-east-1;
-   teste real de "esqueci senha" chegou na inbox — dono confirmou). Do
-   dono: plano pago do Resend (100 e-mails/dia estoura com campanha;
-   verificação de domínio NÃO muda o limite) + conferir se existe
-   FROM_EMAIL no Railway apontando pra endereço errado + conferir
+   teste real de "esqueci senha" chegou na inbox — dono confirmou). Dono
+   decidiu upgrade do Resend SÓ quando estourar → monitor de limite
+   entregue 25/08 (`server/_core/email-limite.ts`, cron horário): amarelo
+   aos 80% + vermelho no estouro (card na faixa "Precisa de você" via
+   `adminEmailLog.limiteDiario`), e-mail de aviso (tipo
+   `alerta_limite_email`, dedup = 1 sucesso/dia UTC — no estouro o aviso
+   falha por 429 e sai sozinho quando a cota renova) e reenvio automático
+   dos falhados por limite (48h, confirmações primeiro, para no 1º 429).
+   Vermelho SÓ com recusa real do Resend (plano pago nunca dispara);
+   config `resend_limite_diario` em config_sistema (default 100; "0"
+   desliga o amarelo pós-upgrade — sem UI, gravar via SQL quando o dono
+   pedir). Amarras em `alerta-limite-email.test.ts`. Do dono: conferir se
+   existe FROM_EMAIL no Railway apontando pra endereço errado + conferir
    SENTRY_DSN_BACKEND no Railway (painel diz "conectado" mas captura é
    só por env) + chaves do Turnstile. Ressalva de produto: novas ações
    (CPF/CNPJ) hoje é SÓ TJCE

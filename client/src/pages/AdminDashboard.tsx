@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   CreditCard,
@@ -95,14 +96,90 @@ function AlertaCard({
 }
 
 /**
+ * Card do limite diário de e-mails (Resend). Amarelo = 80% da cota do
+ * plano grátis; vermelho = o Resend recusou de verdade. O upgrade é fora
+ * do app (billing do Resend), por isso abre em nova aba.
+ */
+function AlertaEmails({ dados, onVerLog }: { dados: any; onVerLog: () => void }) {
+  const estourou = dados.nivel === "estouro";
+  const pct = dados.limite > 0 ? Math.min(100, Math.round((dados.usadosHoje / dados.limite) * 100)) : 100;
+  return (
+    <Card className={`border-l-4 lg:col-span-2 ${estourou ? "border-l-rose-500" : "border-l-amber-500"}`}>
+      <CardContent className="pt-4 pb-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <Badge
+            variant="outline"
+            className={`text-[10px] font-bold ${
+              estourou
+                ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800"
+                : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+            }`}
+          >
+            {estourou ? "E-MAILS NO LIMITE" : `E-MAILS · ${pct}% DO LIMITE`}
+          </Badge>
+          <span className="text-sm font-bold">
+            {estourou
+              ? `${dados.falhasLimite24h} ${dados.falhasLimite24h === 1 ? "e-mail não saiu" : "e-mails não saíram"}`
+              : "tá chegando no teto do plano grátis"}
+          </span>
+          <button
+            className="ml-auto text-xs font-semibold text-violet-700 dark:text-violet-400 hover:underline whitespace-nowrap"
+            onClick={onVerLog}
+          >
+            {estourou ? "ver quem falhou" : "abrir log de e-mails"} →
+          </button>
+        </div>
+        <div>
+          <div className="flex items-baseline gap-2">
+            <span className={`text-lg font-extrabold tabular-nums ${estourou ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`}>
+              {dados.usadosHoje}
+            </span>
+            <span className="text-[11px] text-muted-foreground">de {dados.limite} e-mails do dia usados</span>
+            <span className="ml-auto text-[10px] text-muted-foreground/70">o limite zera à meia-noite</span>
+          </div>
+          <div className="mt-1 h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className={`h-full rounded-full ${estourou ? "bg-rose-500" : "bg-amber-500"}`}
+              style={{ width: `${Math.max(2, pct)}%` }}
+            />
+          </div>
+        </div>
+        {estourou && dados.confirmacoesFalhas24h > 0 && (
+          <p className="text-xs text-muted-foreground">
+            <b className="font-semibold text-foreground">{dados.confirmacoesFalhas24h}{" "}
+            {dados.confirmacoesFalhas24h === 1 ? "era confirmação" : "eram confirmações"} de cadastro</b>{" "}
+            — essas contas não conseguem entrar até o e-mail chegar
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-3 pt-0.5">
+          <Button size="sm" onClick={() => window.open("https://resend.com/settings/billing", "_blank")}>
+            Fazer upgrade no Resend ↗
+          </Button>
+          <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+            {estourou
+              ? "✓ quando a cota zerar: os que falharam são reenviados sozinhos e o aviso chega no seu e-mail"
+              : "✓ aviso enviado pro seu e-mail (no máximo 1 por dia)"}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
  * Faixa "Precisa de você": só existe quando existe pendência. Testes grátis
- * vencendo = a hora de fechar a venda; inadimplência e erros = o que não
- * pode ficar parado. Sem nada, a faixa vira "tudo em dia".
+ * vencendo = a hora de fechar a venda; inadimplência, erros e limite de
+ * e-mails = o que não pode ficar parado. Sem nada, a faixa vira "tudo em dia".
  */
 function PrecisaDeVoce() {
   const [, setLocation] = useLocation();
   const pendencias = trpc.admin.pendenciasDashboard.useQuery(undefined, { retry: false });
   const inadimplentes = trpc.admin.listarInadimplentes.useQuery(undefined, { retry: false });
+  const limiteEmails = (trpc as any).adminEmailLog.limiteDiario.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
   // Mesma query (mesmo cache) do badge do menu e da Saúde do sistema.
   const erros = trpc.adminErros.listar.useQuery(
     { status: "unresolved", limite: 25, pagina: 1 },
@@ -113,7 +190,12 @@ function PrecisaDeVoce() {
   const trials = pendencias.data?.trialsVencendo ?? [];
   const inad = inadimplentes.data ?? [];
   const errosAbertos = erros.data?.configurado ? (erros.data?.total ?? 0) : 0;
-  const totalPendencias = (trials.length > 0 ? 1 : 0) + (inad.length > 0 ? 1 : 0) + (errosAbertos > 0 ? 1 : 0);
+  const nivelEmails = limiteEmails.data?.nivel ?? "ok";
+  const totalPendencias =
+    (trials.length > 0 ? 1 : 0) +
+    (inad.length > 0 ? 1 : 0) +
+    (errosAbertos > 0 ? 1 : 0) +
+    (nivelEmails !== "ok" ? 1 : 0);
 
   if (carregando) return <Skeleton className="h-28 w-full rounded-xl" />;
 
@@ -124,7 +206,7 @@ function PrecisaDeVoce() {
           <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
           <p className="text-sm text-emerald-900 dark:text-emerald-200">
             <span className="font-semibold">Tudo em dia.</span> Nenhum teste grátis vencendo,
-            sem inadimplência e sem erros abertos.
+            sem inadimplência, sem erros abertos e e-mails dentro do limite.
           </p>
         </CardContent>
       </Card>
@@ -137,6 +219,9 @@ function PrecisaDeVoce() {
         Precisa de você · {totalPendencias} {totalPendencias === 1 ? "pendência" : "pendências"}
       </p>
       <div className="grid gap-3 lg:grid-cols-3">
+        {nivelEmails !== "ok" && (
+          <AlertaEmails dados={limiteEmails.data} onVerLog={() => setLocation("/admin/saude?aba=emails")} />
+        )}
         {trials.length > 0 && (
           <AlertaCard
             tom="ambar"
