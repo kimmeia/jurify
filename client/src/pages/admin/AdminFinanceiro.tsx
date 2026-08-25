@@ -74,7 +74,14 @@ function StatusSubBadge({ status }: { status: string }) {
 }
 
 export default function AdminFinanceiro() {
-  const [tab, setTab] = useState("visao");
+  // ?aba= permite links diretos (ex: "← Voltar" do editor de plano cai
+  // na aba Planos, não na Visão).
+  const [tab, setTab] = useState(() => {
+    const aba = new URLSearchParams(window.location.search).get("aba");
+    return ["visao", "pagamentos", "assinaturas", "inadimplencia", "cupons", "planos"].includes(aba ?? "")
+      ? (aba as string)
+      : "visao";
+  });
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
   const [busca, setBusca] = useState("");
   const [cancelPgto, setCancelPgto] = useState<any>(null);

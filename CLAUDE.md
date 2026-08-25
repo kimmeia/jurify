@@ -47,6 +47,23 @@ Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
 - Não explicar WHAT (nomes de identificadores fazem isso)
 - Não referenciar PR/issue/caller atual ("usado por X", "fix do bug Y") — apodrece
 
+### Painel admin — layout novo (25/08)
+
+- Menu agrupado (Principal/Produto/Sistema), 10 itens. Erros + robô auditor +
+  robô de jornada + log de e-mails + auditoria = **abas de `/admin/saude`**
+  (AdminSaude, aba "Visão rápida" compõe as queries existentes); Agentes IA +
+  JurisIA = abas de `/admin/ia`. Rotas antigas redirecionam com `?aba=` —
+  não recriar itens de menu pra elas (teste `admin-layout-novo.test.ts`
+  quebra). Badge vermelho no menu = erros unresolved do Sentry (mesma
+  query/cache da Visão rápida, staleTime 5min).
+- Planos (Financeiro → aba Planos): lista vitrine/fora com toggle `oculto`
+  inline, `duplicarPlano` (cópia SEMPRE oculta, slug `-copia[-N]` via
+  `gerarSlugCopia`), arrastar → `reordenarPlanos`. Edição em **tela cheia**
+  `/admin/planos/:slug` (AdminPlanoEditor, SEM AdminLayout — gate admin
+  próprio) com prévia ao vivo que espelha os MESMOS textos do Pricing.tsx
+  (o teste trava a sincronia). Aba "Planos" de Configurações (duplicada,
+  só leitura) foi removida.
+
 ### tRPC procedures
 - `protectedProcedure` só checa login. Se a regra é "apenas dono/gestor", adiciona gate explícito (`exigirAdminProcessos`, `requireFinanceiroVer`)
 - Cofre tem 2 procedures distintas: `listarMinhas` (admin gate, edição) vs `listarParaSelecao` (qualquer colaborador, dropdown de seleção)

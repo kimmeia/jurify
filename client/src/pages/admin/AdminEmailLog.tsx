@@ -68,12 +68,9 @@ export default function AdminEmailLog() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Log de Emails</h1>
-        <p className="text-muted-foreground mt-1">
-          Histórico de envios via Resend. Use pra auditar falhas e reenviar manualmente.
-        </p>
-      </div>
+      <p className="text-muted-foreground">
+        Histórico de envios via Resend. Use pra auditar falhas e reenviar manualmente.
+      </p>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <KPICard label="Enviados (24h)" value={resumo?.sucesso24h ?? "—"} icon={CheckCircle2} iconBg="bg-emerald-500/10" iconFg="text-emerald-600 dark:text-emerald-400" valueColor="text-emerald-600 dark:text-emerald-400" />

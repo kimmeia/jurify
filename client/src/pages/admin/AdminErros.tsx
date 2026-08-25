@@ -58,12 +58,9 @@ export default function AdminErros() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Erros</h1>
-        <p className="text-muted-foreground mt-1">
-          Issues capturadas pelo Sentry no frontend e no backend.
-        </p>
-      </div>
+      <p className="text-muted-foreground">
+        Issues capturadas pelo Sentry no frontend e no backend.
+      </p>
 
       {!configurado && (
         <Card className="border-amber-500/30 bg-amber-50/30 dark:bg-amber-500/5">

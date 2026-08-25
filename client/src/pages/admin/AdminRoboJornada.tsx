@@ -79,12 +79,9 @@ export default function AdminRoboJornada() {
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Robô de jornada</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Entra no sistema como usuário, percorre as telas e relata o que só o navegador vê.
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Entra no sistema como usuário, percorre as telas e relata o que só o navegador vê.
+        </p>
         <Button
           onClick={() => {
             setRodandoLocal(true);

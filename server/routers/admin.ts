@@ -58,7 +58,7 @@ import {
   getActiveSubscription,
 } from "../db";
 import { PLANS } from "../billing/products";
-import { invalidarCachePlanos } from "../billing/planos-repo";
+import { invalidarCachePlanos, gerarSlugCopia } from "../billing/planos-repo";
 import { invalidarCacheGateModulos } from "../_core/gate-modulos";
 import { MODULOS_APP, ehModuloValido } from "@shared/modulos-app";
 import { MODULO_JURISIA } from "@shared/addon-jurisia";
@@ -1425,6 +1425,26 @@ export const adminRouter = router({
     const { planos } = await import("../../drizzle/schema");
     const rows = await db.select().from(planos).orderBy(planos.ordem);
 
+    // Assinantes por plano — a lista mostra "quem depende deste plano"
+    // antes de o admin esconder/duplicar/editar.
+    const contagens = await db
+      .select({
+        planId: subscriptionsTable.planId,
+        status: subscriptionsTable.status,
+        total: sql<number>`COUNT(*)`,
+      })
+      .from(subscriptionsTable)
+      .where(inArray(subscriptionsTable.status, ["active", "trialing"]))
+      .groupBy(subscriptionsTable.planId, subscriptionsTable.status);
+    const porPlano = new Map<string, { ativos: number; emTeste: number }>();
+    for (const c of contagens) {
+      if (!c.planId) continue;
+      const atual = porPlano.get(c.planId) ?? { ativos: 0, emTeste: 0 };
+      if (c.status === "active") atual.ativos += Number(c.total);
+      else atual.emTeste += Number(c.total);
+      porPlano.set(c.planId, atual);
+    }
+
     return rows.map((row) => {
       const modulosRaw = Array.isArray(row.modulosLiberados)
         ? row.modulosLiberados
@@ -1465,9 +1485,83 @@ export const adminRouter = router({
         ordem: row.ordem,
         slugProtegido,
         atualizadoEm: row.atualizadoEm,
+        assinantesAtivos: porPlano.get(row.slug)?.ativos ?? 0,
+        emTeste: porPlano.get(row.slug)?.emTeste ?? 0,
       };
     });
   }),
+
+  /**
+   * Duplica um plano: cópia integral com slug "<original>-copia", nome
+   * "(cópia)" e SEMPRE fora da vitrine — o admin edita com calma e liga
+   * a vitrine quando estiver pronto.
+   */
+  duplicarPlano: adminProcedure
+    .input(z.object({ slug: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { planos } = await import("../../drizzle/schema");
+
+      const [original] = await db.select().from(planos).where(eq(planos.slug, input.slug)).limit(1);
+      if (!original) throw new Error(`Plano "${input.slug}" não encontrado`);
+
+      const existentes = await db.select({ slug: planos.slug }).from(planos);
+      const slugNovo = gerarSlugCopia(original.slug, new Set(existentes.map((p) => p.slug)));
+
+      const { id: _id, criadoEm: _c, atualizadoEm: _a, ...resto } = original;
+      await db.insert(planos).values({
+        ...resto,
+        slug: slugNovo,
+        nome: `${original.nome} (cópia)`,
+        oculto: true,
+        popular: false,
+        criadoPor: ctx.user.id,
+        atualizadoPor: ctx.user.id,
+      });
+
+      invalidarCachePlanos();
+
+      await registrarAuditoria({
+        ctx,
+        acao: "plano.duplicar",
+        alvoTipo: "plano",
+        alvoNome: slugNovo,
+        detalhes: { origem: input.slug },
+      });
+
+      return { success: true, slug: slugNovo, mensagem: `Cópia criada fora da vitrine` };
+    }),
+
+  /**
+   * Reordena os planos da vitrine de uma vez (arrastar na lista). Recebe os
+   * slugs na ordem final; cada um vira ordem = posição.
+   */
+  reordenarPlanos: adminProcedure
+    .input(z.object({ slugs: z.array(z.string().min(1)).min(1).max(50) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { planos } = await import("../../drizzle/schema");
+
+      for (let i = 0; i < input.slugs.length; i++) {
+        await db
+          .update(planos)
+          .set({ ordem: i + 1, atualizadoPor: ctx.user.id })
+          .where(eq(planos.slug, input.slugs[i]));
+      }
+
+      invalidarCachePlanos();
+
+      await registrarAuditoria({
+        ctx,
+        acao: "plano.reordenar",
+        alvoTipo: "plano",
+        alvoNome: input.slugs.join(","),
+      });
+
+      return { success: true };
+    }),
 
   /** Cria plano novo. Gera slug imutável a partir do nome (+ sufixo se colidir). */
   criarPlano: adminProcedure
