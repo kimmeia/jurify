@@ -24,6 +24,7 @@ import {
   AlertTriangle, RotateCcw, Users as UsersIcon, Gift, ArrowLeft, Crown, ChevronRight, Mail, DollarSign,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import AddonJurisIaCard from "./AddonJurisIaCard";
@@ -86,6 +87,241 @@ function SubBadge({ active }: { active: boolean }) {
   return active
     ? <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/15 text-[10px]">Ativa</Badge>
     : <Badge variant="outline" className="text-[10px]">Sem plano</Badge>;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNIL DE REMARKETING — situação comercial + cartões "pra falar hoje"
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+function diasDesde(quando: string | number | Date): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(quando).getTime()) / DIA_MS));
+}
+
+/** "vence qua 27" / "vence hoje" — urgência curta pro selo de trial. */
+function venceCurto(expiraMs: number): string {
+  const dias = Math.floor((expiraMs - Date.now()) / DIA_MS);
+  if (dias <= 0) return "vence hoje";
+  const dia = new Date(expiraMs).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit" }).replace(".", "");
+  return `vence ${dia}`;
+}
+
+/**
+ * A antiga coluna "Sem plano" não dizia NADA pro remarketing — quem
+ * cadastrou ontem e quem morreu em junho tinham o mesmo selo. Aqui cada
+ * dono ganha o motivo comercial, calculado no servidor (situacao).
+ */
+function SituacaoBadge({ u }: { u: any }) {
+  if (!u.situacao) return <span className="text-muted-foreground">—</span>;
+  const sub = (txt: string) => (
+    <span className="block text-[10px] text-muted-foreground mt-0.5">{txt}</span>
+  );
+  const valor = u.valorMensalCentavos
+    ? ` · R$ ${(u.valorMensalCentavos / 100).toLocaleString("pt-BR")}/mês`
+    : "";
+  const diaTrial =
+    u.trialIniciadoEm && u.trialExpiraEm
+      ? ` · dia ${Math.min(
+          Math.floor((Date.now() - u.trialIniciadoEm) / DIA_MS) + 1,
+          Math.round((u.trialExpiraEm - u.trialIniciadoEm) / DIA_MS),
+        )} de ${Math.round((u.trialExpiraEm - u.trialIniciadoEm) / DIA_MS)}`
+      : "";
+
+  switch (u.situacao) {
+    case "ativa":
+      return (
+        <div>
+          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/15 text-[10px] font-bold">ATIVA</Badge>
+          {u.planNome && sub(`${u.planNome}${valor}`)}
+        </div>
+      );
+    case "cortesia":
+      return (
+        <div>
+          <Badge variant="outline" className="text-[10px] font-bold text-muted-foreground">CORTESIA</Badge>
+          {u.cortesiaExpiraEm && sub(`até ${new Date(u.cortesiaExpiraEm).toLocaleDateString("pt-BR")}`)}
+        </div>
+      );
+    case "em_teste":
+      return (
+        <div>
+          <Badge className="bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/25 hover:bg-cyan-500/15 text-[10px] font-bold">EM TESTE</Badge>
+          {sub(`${u.planNome ?? "trial"}${diaTrial}`)}
+        </div>
+      );
+    case "teste_vencendo":
+      return (
+        <div>
+          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/15 text-[10px] font-bold uppercase">
+            Teste {venceCurto(u.trialExpiraEm)}
+          </Badge>
+          {sub(`${u.planNome ?? "trial"}${diaTrial}`)}
+        </div>
+      );
+    case "teste_vencido": {
+      const d = u.trialExpiraEm ? diasDesde(u.trialExpiraEm) : 0;
+      return (
+        <div>
+          <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30 hover:bg-rose-500/15 text-[10px] font-bold">
+            TESTE VENCEU{d > 0 ? ` HÁ ${d}D` : " HOJE"}
+          </Badge>
+          {sub("não virou cliente — remarketing")}
+        </div>
+      );
+    }
+    case "nunca_ativou": {
+      const d = diasDesde(u.createdAt);
+      return (
+        <div>
+          <Badge className="bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30 hover:bg-violet-500/15 text-[10px] font-bold">
+            CADASTROU · NUNCA ATIVOU
+          </Badge>
+          {sub(d === 0 ? "cadastrou hoje" : d === 1 ? "cadastrou ontem" : `cadastrou há ${d} dias`)}
+        </div>
+      );
+    }
+    default:
+      return <span className="text-muted-foreground">—</span>;
+  }
+}
+
+/**
+ * "Marcar contato": o caderninho de remarketing. Registra quando/por onde
+ * o dono da plataforma falou — nada é enviado ao cliente. Precisa de
+ * stopPropagation em tudo: a linha da tabela abre a ficha no clique.
+ */
+function ContatoComercialCell({ u, onSalvo }: { u: any; onSalvo: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [canal, setCanal] = useState<"whatsapp" | "email" | "ligacao">("whatsapp");
+  const [nota, setNota] = useState("");
+  const marcarMut = trpc.admin.marcarContatoComercial.useMutation({
+    onSuccess: () => {
+      toast.success("Contato registrado", { description: "Ficou salvo nas notas da ficha do cliente." });
+      setOpen(false);
+      setNota("");
+      onSalvo();
+    },
+    onError: (e) => toast.error("Erro ao registrar", { description: e.message }),
+  });
+
+  if (u.tipoUsuario !== "cliente" || u.situacao === "ativa" || u.situacao === "cortesia") return null;
+
+  const jaFalou = !!u.ultimoContatoComercialEm;
+  const canalLabel = { whatsapp: "WhatsApp", email: "e-mail", ligacao: "ligação" } as Record<string, string>;
+  const rel = jaFalou ? diasDesde(u.ultimoContatoComercialEm) : 0;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          className={`h-7 text-[11px] ${jaFalou ? "border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300" : ""}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {jaFalou
+            ? `✓ falei ${rel === 0 ? "hoje" : rel === 1 ? "ontem" : `há ${rel}d`} · ${canalLabel[u.ultimoContatoComercialCanal] ?? u.ultimoContatoComercialCanal}`
+            : "💬 Marcar contato"}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64" align="end" onClick={(e) => e.stopPropagation()}>
+        <p className="text-xs font-bold mb-2">Falei com {u.name?.split(" ")[0] || "o cliente"} por…</p>
+        <div className="flex gap-1.5 mb-2">
+          {(["whatsapp", "email", "ligacao"] as const).map((c) => (
+            <button
+              key={c}
+              className={`flex-1 rounded-lg border px-1 py-1.5 text-[10px] font-bold ${
+                canal === c
+                  ? "border-violet-400 bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                  : "text-muted-foreground"
+              }`}
+              onClick={() => setCanal(c)}
+            >
+              {c === "whatsapp" ? "WhatsApp" : c === "email" ? "E-mail" : "Ligação"}
+            </button>
+          ))}
+        </div>
+        <Textarea
+          className="h-16 text-xs"
+          placeholder="Nota opcional — vai pras notas da ficha"
+          value={nota}
+          onChange={(e) => setNota(e.target.value)}
+          maxLength={2000}
+        />
+        <Button
+          size="sm"
+          className="mt-2 w-full"
+          disabled={marcarMut.isPending}
+          onClick={() => marcarMut.mutate({ userId: u.id, canal, nota: nota.trim() || undefined })}
+        >
+          {marcarMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+          Salvar contato
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+type FunilKey = "nunca_ativou" | "teste_vencendo" | "teste_vencido";
+
+/** Os 3 cartões "Pra falar hoje" — clicar filtra a lista pros mesmos ids. */
+function FunilCards({ funil, onEscolher }: { funil: FunilKey | undefined; onEscolher: (f: FunilKey | undefined) => void }) {
+  const { data } = trpc.admin.funilRemarketing.useQuery(undefined, { retry: false, staleTime: 60_000 });
+  const cards: Array<{ key: FunilKey; n: number; titulo: string; desc: string; cor: string; corNum: string }> = [
+    {
+      key: "nunca_ativou",
+      n: data?.nuncaAtivou.total ?? 0,
+      titulo: "Cadastraram e não ativaram",
+      desc: "criaram conta e pararam — o contato de boas-vindas fecha venda",
+      cor: "border-l-violet-500",
+      corNum: "text-violet-700 dark:text-violet-300",
+    },
+    {
+      key: "teste_vencendo",
+      n: data?.testeVencendo.total ?? 0,
+      titulo: "Teste vencendo esta semana",
+      desc: "é a melhor hora de fechar o valor",
+      cor: "border-l-amber-500",
+      corNum: "text-amber-600 dark:text-amber-400",
+    },
+    {
+      key: "teste_vencido",
+      n: data?.testeVencido.total ?? 0,
+      titulo: "Teste venceu sem virar cliente",
+      desc: "remarketing — marcar contato tira da conta",
+      cor: "border-l-rose-500",
+      corNum: "text-rose-600 dark:text-rose-400",
+    },
+  ];
+  const totalEsperando = cards.reduce((s, c) => s + c.n, 0);
+
+  return (
+    <div>
+      <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+        Pra falar hoje · {totalEsperando} {totalEsperando === 1 ? "advogado esperando" : "advogados esperando"} contato
+      </p>
+      <div className="grid gap-3 lg:grid-cols-3">
+        {cards.map((c) => (
+          <Card
+            key={c.key}
+            className={`border-l-4 ${c.cor} cursor-pointer transition-shadow hover:shadow-sm ${
+              funil === c.key ? "ring-2 ring-violet-500" : ""
+            } ${c.n === 0 ? "opacity-60" : ""}`}
+            onClick={() => onEscolher(funil === c.key ? undefined : c.key)}
+          >
+            <CardContent className="flex items-center gap-3 py-3">
+              <span className={`text-2xl font-extrabold tabular-nums ${c.corNum}`}>{c.n}</span>
+              <div className="min-w-0">
+                <p className="text-xs font-bold leading-tight">{c.titulo}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{c.desc}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function BloqueadoBadge({ bloqueado }: { bloqueado: boolean }) {
@@ -1518,6 +1754,12 @@ export default function AdminClients() {
   // Default = "cliente" (donos/assinantes). Colaboradores não aparecem como
   // linhas soltas — ficam dentro do cadastro do dono (aba Equipe).
   const [tipo, setTipo] = useState<"todos" | "admin" | "cliente" | "colaborador">("cliente");
+  // Deep-link do card da Visão Geral (/admin/clients?funil=nunca_ativou).
+  const [funil, setFunil] = useState<FunilKey | undefined>(() => {
+    if (typeof window === "undefined") return undefined;
+    const f = new URLSearchParams(window.location.search).get("funil");
+    return f === "nunca_ativou" || f === "teste_vencendo" || f === "teste_vencido" ? f : undefined;
+  });
   const [pagina, setPagina] = useState(0);
   const [detalheUserId, setDetalheUserId] = useState<number | null>(null);
   const [detalheOpen, setDetalheOpen] = useState(false);
@@ -1530,15 +1772,23 @@ export default function AdminClients() {
     return () => clearTimeout(t);
   }, [busca]);
 
+  const utils = trpc.useUtils();
   const { data, isLoading, refetch } = trpc.admin.allUsers.useQuery(
     {
       limit: LIMITE,
       offset: pagina * LIMITE,
       busca: buscaDebounced || undefined,
-      tipo,
+      // O funil só existe pra donos — colaborador/admin não é alvo de remarketing.
+      tipo: funil ? "cliente" : tipo,
+      funil,
     },
     { retry: false },
   );
+
+  const aposContato = () => {
+    refetch();
+    utils.admin.funilRemarketing.invalidate();
+  };
 
   const allUsers = data?.itens ?? [];
   const total = data?.total ?? 0;
@@ -1578,14 +1828,30 @@ export default function AdminClients() {
         <p className="text-muted-foreground mt-1">Donos/assinantes da plataforma. Os colaboradores de cada escritório ficam dentro do cadastro do dono (aba Equipe).</p>
       </div>
 
+      <FunilCards funil={funil} onEscolher={(f) => { setFunil(f); setPagina(0); }} />
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <CardTitle className="text-base">Todos os clientes</CardTitle>
+              <CardTitle className="text-base">
+                {funil === "nunca_ativou"
+                  ? "Cadastraram e não ativaram"
+                  : funil === "teste_vencendo"
+                    ? "Teste vencendo esta semana"
+                    : funil === "teste_vencido"
+                      ? "Teste venceu sem virar cliente"
+                      : "Todos os clientes"}
+              </CardTitle>
               <CardDescription>
-                {total.toLocaleString("pt-BR")} utilizadores
-                {tipo !== "todos" || buscaDebounced ? " (filtrado)" : ""}
+                {total.toLocaleString("pt-BR")} {funil ? (total === 1 ? "advogado · " : "advogados · ") : ""}
+                {funil ? (
+                  <button className="text-violet-700 dark:text-violet-400 font-semibold hover:underline" onClick={() => { setFunil(undefined); setPagina(0); }}>
+                    limpar filtro
+                  </button>
+                ) : (
+                  <>utilizadores{tipo !== "todos" || buscaDebounced ? " (filtrado)" : ""}</>
+                )}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -1633,13 +1899,11 @@ export default function AdminClients() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Função</TableHead>
-                  <TableHead>Assinatura</TableHead>
+                  <TableHead>Situação</TableHead>
                   <TableHead>Equipe</TableHead>
-                  <TableHead>Registado em</TableHead>
+                  <TableHead>Cadastro</TableHead>
                   <TableHead>Último acesso</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead className="text-right">Contato comercial</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1649,24 +1913,25 @@ export default function AdminClients() {
                     className="cursor-pointer"
                     onClick={() => { setDetalheUserId(u.id); setDetalheOpen(true); }}
                   >
-                    <TableCell className="font-medium">{u.name || "—"}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{u.email || "—"}</TableCell>
                     <TableCell>
-                      <RoleBadge
-                        role={u.role}
-                        tipoUsuario={u.tipoUsuario}
-                        escritorioVinculado={u.escritorioVinculado}
-                        cargoColaborador={u.cargoColaborador}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <SubBadge active={u.hasActiveSubscription} />
-                        {u.planId && (
-                          <span className="text-xs text-muted-foreground capitalize">{u.planId}</span>
+                      <div className="flex items-center gap-2">
+                        {/* Ponto roxo = cadastro dos últimos 7 dias: o olho acha o novo. */}
+                        {u.tipoUsuario === "cliente" && diasDesde(u.createdAt) < 7 && (
+                          <span className="h-2 w-2 rounded-full bg-violet-500 shrink-0" />
+                        )}
+                        <span className="font-medium">{u.name || "—"}</span>
+                        {u.tipoUsuario !== "cliente" && (
+                          <RoleBadge
+                            role={u.role}
+                            tipoUsuario={u.tipoUsuario}
+                            escritorioVinculado={u.escritorioVinculado}
+                            cargoColaborador={u.cargoColaborador}
+                          />
                         )}
                       </div>
+                      <span className="block text-[11px] text-muted-foreground">{u.email || "—"}</span>
                     </TableCell>
+                    <TableCell><SituacaoBadge u={u} /></TableCell>
                     <TableCell>
                       {u.tipoUsuario === "cliente" ? (
                         <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
@@ -1679,15 +1944,7 @@ export default function AdminClients() {
                     <TableCell className="text-muted-foreground text-sm">{new Date(u.createdAt).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{new Date(u.lastSignedIn).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8"
-                        onClick={() => { setDetalheUserId(u.id); setDetalheOpen(true); }}
-                      >
-                        <Eye className="h-3.5 w-3.5 mr-1" />
-                        Detalhes
-                      </Button>
+                      <ContatoComercialCell u={u} onSalvo={aposContato} />
                     </TableCell>
                   </TableRow>
                 ))}
