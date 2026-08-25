@@ -664,8 +664,20 @@ export async function getAdminStats() {
     .where(eq(subscriptions.status, "past_due"));
   const pastDueSubscriptions = Number(pastDueRow?.c ?? 0);
 
-  const activeSubscriptions = activeSubs.length;
-  const trialingSubscriptions = trialingSubs.length;
+  // Cortesia fica com status='active' mas não é pagante — sem este filtro
+  // o painel dizia "1 plano pago" pra um dono com só cortesias na base.
+  const pagantes = activeSubs.filter((s) => !s.cortesia);
+  const activeSubscriptions = pagantes.length;
+  const trialingSubscriptions = trialingSubs.filter((s) => !s.cortesia).length;
+
+  const cortesiaRows = await db
+    .select({ cortesiaExpiraEm: subscriptions.cortesiaExpiraEm })
+    .from(subscriptions)
+    .where(eq(subscriptions.cortesia, true));
+  const agoraMs = Date.now();
+  const cortesiasAtivas = cortesiaRows.filter(
+    (r) => !r.cortesiaExpiraEm || r.cortesiaExpiraEm > agoraMs,
+  ).length;
 
   // MRR de verdade: preço vem da tabela `planos` (o catálogo que o admin
   // edita), com o valor negociado da assinatura por cima quando existe.
@@ -678,7 +690,7 @@ export async function getAdminStats() {
   for (const p of planosRows) precoPorSlug.set(p.slug, p.precoMensalCentavos);
 
   let mrr = 0;
-  for (const sub of activeSubs) {
+  for (const sub of pagantes) {
     if (sub.cortesia) continue;
     mrr += sub.valorNegociadoCentavos ?? (sub.planId ? (precoPorSlug.get(sub.planId) ?? 0) : 0);
   }
@@ -699,6 +711,7 @@ export async function getAdminStats() {
     activeSubscriptions,
     trialingSubscriptions,
     pastDueSubscriptions,
+    cortesiasAtivas,
     mrr,
     conversionRate,
     newClientsThisMonth,
