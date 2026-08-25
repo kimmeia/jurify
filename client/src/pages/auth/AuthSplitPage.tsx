@@ -154,7 +154,13 @@ export default function AuthSplitPage({ modo }: AuthSplitPageProps) {
           </p>
 
           <div className="mt-8">
+            {/* key={modo}: /login e /cadastro montam este componente na MESMA
+                posição da árvore, então o React reaproveita a instância e o
+                estado interno `tab` fica preso no modo anterior — /cadastro
+                mostrava o formulário de LOGIN pra quem navegou do login (e
+                com hideTabs não havia como sair). A key força remontagem. */}
             <AuthForms
+              key={modo}
               hideTabs
               defaultTab={modo}
               onSuccess={async () => {
