@@ -123,6 +123,15 @@ Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
   Completo" sob consulta com `cta_demonstracao`. WhatsApp comercial
   gravado (25/08, migration 0204): 5585991080343 — wa.me monta o link
   com o valor cru, então SEMPRE em formato internacional (teste trava).
+- **Créditos e limites derivam do catálogo (25/08)**: `cotaMensalDoPlano`
+  (escritorio-creditos) = creditosCalculosMes + maxMonitoramentosProcessos×2
+  + maxMonitoramentosCpf×15 — plano que vende "vigia N" FINANCIA isso em
+  créditos (null/0/ilimitado = sem franquia, planos antigos inalterados);
+  conta presa com cota 0 se auto-cura no primeiro getSaldo. `plan-limits.ts`
+  (colaboradores/clientes/armazenamento/módulos) agora resolve pela tabela
+  `planos` (mapa hardcoded virou fallback) — era ele que dava "1 usuário"
+  pro plano de 2. Telas do pacote usam `useClientesVinculaveis` (Processos)
+  em vez de `clientes.listar` às cegas.
 
 ### Permissões
 - Matriz em `checkPermission(userId, modulo, ação)` → `{verTodos, verProprios, criar, editar, ...}`
@@ -181,6 +190,23 @@ Caso clássico: validação inicial passou → integração quebrou depois → p
 ## Pendências ativas (19/08/2026)
 
 Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
+
+-1. **Auditoria pré-lançamento (25/08)** — plano aprovado pelo dono em 4
+   passos. ① créditos/limites pelo catálogo: **ENTREGUE 25/08**. Faltam:
+   ② botão "Ativar assinatura com valor fechado" no admin (hoje NÃO existe
+   caminho pra converter trial sob consulta em pagante — só cortesia ou
+   Asaas na mão; precisa criar assinatura Asaas com valor negociado +
+   persistir `valorNegociadoCentavos` lido pela fatura, senão
+   aplicarValorAssinatura "corrige" pra 0); ③ MRR/relatórios saindo do
+   PLANS deprecado (plano novo vira R$ 97 fictício em admin.stats/
+   receitaMensal), captcha no signup, e-mails/banner de trial sob consulta
+   apontando pro wa.me em vez de tela sem checkout, aviso de credencial no
+   DashboardProcessual; ④ onboarding processual (gatilho DISPAROU — é a
+   campanha; mockup aprovado já existe). Do dono: plano pago do Resend
+   (100 e-mails/dia estoura com campanha) + conferir SENTRY_DSN_BACKEND
+   no Railway (painel diz "conectado" mas captura é só por env). Ressalva
+   de produto: novas ações (CPF/CNPJ) hoje é SÓ TJCE — LP promete sem
+   ressalva.
 
 0. **Avisos de spam da Meta (19/08 E 22/08)** — SEGUNDO aviso chegou em
    22/08 (prazo de análise 20/11), três dias após as correções de 19/08

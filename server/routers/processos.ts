@@ -66,19 +66,8 @@ const PACOTES_CREDITOS = [
   { id: "pack_1000", nome: "1000 creditos", creditos: 1000, preco: 499.9, popular: false },
 ] as const;
 
-export const CUSTOS = {
-  consulta_cnj: 1,
-  monitorar_processo_mes: 2,    // ANTES: Judit cobrava 5
-  monitorar_pessoa_mes: 15,     // ANTES: Judit cobrava 35
-  /**
-   * Busca por CPF/CNPJ sob demanda — retorna lista de CNJs encontrados
-   * sem detalhes (capa/movs). Cobra flat 3 cred independente do número
-   * de resultados (motor próprio TJCE custa só servidor, sem cobrança
-   * externa por resultado como na Judit). User pode clicar nos CNJs
-   * pra detalhar (1 cred cada via `consultarCNJ`).
-   */
-  consulta_documento: 3,
-} as const;
+export { CUSTOS } from "../processos/custos-creditos";
+import { CUSTOS } from "../processos/custos-creditos";
 
 function safeParse(json: string): unknown {
   try {
