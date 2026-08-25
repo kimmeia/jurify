@@ -18,6 +18,8 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { escritorioCreditos, escritorioTransacoes, subscriptions, escritorios } from "../../drizzle/schema";
 import { getPlanoBySlug } from "./planos-repo";
+import { CUSTOS } from "../processos/custos-creditos";
+import { LIMITE_ILIMITADO, type PlanoLimites } from "@shared/planos-types";
 import { TRPCError } from "@trpc/server";
 
 export interface SaldoEscritorio {
@@ -40,6 +42,39 @@ export async function getSaldoEscritorio(escritorioId: number): Promise<SaldoEsc
     .where(eq(escritorioCreditos.escritorioId, escritorioId)).limit(1);
 
   if (existing) {
+    // Auto-cura: registro criado quando a cota do plano ainda calculava 0
+    // (planos do superlançamento antes da franquia de monitoramento). O
+    // reset mensal pula cota 0, então sem isto a conta ficaria presa no
+    // zero pra sempre. Só roda uma vez: depois da correção cotaMensal > 0.
+    if (existing.cotaMensal === 0) {
+      const cotaCorrigida = await calcularCotaDoPlano(escritorioId);
+      if (cotaCorrigida > 0) {
+        const novoSaldo = existing.saldo + cotaCorrigida;
+        await db.transaction(async (tx) => {
+          await tx.update(escritorioCreditos)
+            .set({ saldo: novoSaldo, cotaMensal: cotaCorrigida, ultimoReset: new Date() })
+            .where(eq(escritorioCreditos.id, existing.id));
+          await tx.insert(escritorioTransacoes).values({
+            escritorioId,
+            tipo: "reset_mensal",
+            quantidade: cotaCorrigida,
+            saldoAnterior: existing.saldo,
+            saldoDepois: novoSaldo,
+            operacao: "correcao_cota",
+            detalhes: `Cota do plano corrigida de 0 pra ${cotaCorrigida} cred/mês`,
+            userId: 0,
+          });
+        });
+        return {
+          saldo: novoSaldo,
+          cotaMensal: cotaCorrigida,
+          totalComprado: existing.totalComprado,
+          totalConsumido: existing.totalConsumido,
+          ultimoReset: new Date(),
+        };
+      }
+    }
+
     return {
       saldo: existing.saldo,
       cotaMensal: existing.cotaMensal,
@@ -169,9 +204,28 @@ export async function creditarEscritorio(
 }
 
 /**
+ * Cota mensal derivada dos limites do plano. Além dos créditos de cálculo,
+ * o plano que vende "vigia N processos / M CPFs" precisa FINANCIAR essa
+ * promessa em créditos — monitoramento cobra 2/15 cred por mês, e um plano
+ * com limite 50 e cota 0 venderia um produto inutilizável (foi exatamente
+ * o caso dos planos do superlançamento). Limite null/0/ilimitado não gera
+ * franquia: planos antigos seguem como sempre foram (créditos avulsos).
+ */
+export function cotaMensalDoPlano(limites: PlanoLimites): number {
+  const franquia = (max: number | null, custoMes: number) =>
+    max != null && max > 0 && max < LIMITE_ILIMITADO ? max * custoMes : 0;
+
+  return (
+    limites.creditosCalculosMes +
+    franquia(limites.maxMonitoramentosProcessos, CUSTOS.monitorar_processo_mes) +
+    franquia(limites.maxMonitoramentosCpf, CUSTOS.monitorar_pessoa_mes)
+  );
+}
+
+/**
  * Determina cota mensal do plano do escritório:
  *   - Procura subscription ativa do dono
- *   - Lê creditsPerMonth do plano
+ *   - Deriva a cota dos limites do plano (cotaMensalDoPlano)
  *   - Free / sem subscription = 3 (legado pra trial)
  */
 export async function calcularCotaDoPlano(escritorioId: number): Promise<number> {
@@ -195,7 +249,7 @@ export async function calcularCotaDoPlano(escritorioId: number): Promise<number>
 
   if (!sub.planId) return 3;
   const plano = await getPlanoBySlug(sub.planId);
-  return plano?.limites.creditosCalculosMes ?? 3;
+  return plano ? cotaMensalDoPlano(plano.limites) : 3;
 }
 
 /**

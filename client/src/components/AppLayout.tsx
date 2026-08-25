@@ -419,6 +419,8 @@ function AppSidebarContent({
   const { data: contAgenda } = trpc.agenda.contadores.useQuery(undefined, {
     refetchInterval: 2 * 60_000,
     retry: false,
+    // Sem Agenda no contrato a chamada só devolveria FORBIDDEN a cada 2min.
+    enabled: contratoLibera(modulosContratados, ["agenda"]),
   });
   const { data: contConversas } = (trpc as any).crm?.contarConversas?.useQuery?.(undefined, {
     refetchInterval: 2 * 60_000,
