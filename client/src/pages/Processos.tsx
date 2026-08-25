@@ -2895,6 +2895,17 @@ function NovasAcoesTab() {
   const [novoOpen, setNovoOpen] = useState(false);
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
+  // Deep-link do guia processual (?tab=novas-acoes&novo=1): abre o dialog e,
+  // quando o escritório só tem 1 cliente com CPF/CNPJ (o do passo 2), já o
+  // pré-seleciona — primeira vez sem fricção.
+  const [preSelecionarDoGuia, setPreSelecionarDoGuia] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("novo") === "1",
+  );
+  useEffect(() => {
+    if (preSelecionarDoGuia) setNovoOpen(true);
+    // roda uma vez: abrir de novo depois de fechar seria sequestro de clique
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [novoTribunais, setNovoTribunais] = useState<string[]>([TRIBUNAL_SEDE]);
   // Editar estados de um monitoramento existente (menu do card).
   const [editarEstadosTarget, setEditarEstadosTarget] = useState<any>(null);
@@ -2949,6 +2960,16 @@ function NovasAcoesTab() {
   // Busca clientes cadastrados para seleção
   const clientes = useClientesVinculaveis({ busca: buscaCliente, enabled: novoOpen })
     .filter((c: any) => c.cpfCnpj);
+
+  useEffect(() => {
+    if (!preSelecionarDoGuia || !novoOpen || clienteSelecionado) return;
+    if (clientes.length === 1) {
+      setClienteSelecionado(clientes[0]);
+      setBuscaCliente(clientes[0].nome);
+    }
+    // Com 0 ou vários clientes o user escolhe — o guia só corta o passo óbvio.
+    if (clientes.length > 0) setPreSelecionarDoGuia(false);
+  }, [preSelecionarDoGuia, novoOpen, clienteSelecionado, clientes]);
 
   const criarMut = trpc.processos.criarMonitoramentoNovasAcoes.useMutation({
     onSuccess: () => {
@@ -4061,6 +4082,26 @@ function CofreTab() {
 
   const [novoOpen, setNovoOpen] = useState(false);
   const [modo2fa, setModo2fa] = useState<"codigo" | "qr">("codigo");
+
+  // Deep-link do guia processual (?tab=cofre&novo=1): abre o cadastro direto.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("novo") === "1") setNovoOpen(true);
+  }, []);
+
+  // "Avisar quando chegar": tribunal fora da cobertura vira registro de
+  // interesse (fila de prioridade de adapters) em vez de cadastro perdido.
+  const [interesseOpen, setInteresseOpen] = useState(false);
+  const [interesseTribunal, setInteresseTribunal] = useState("");
+  const interesseMut = (trpc.cofreCredenciais as any).registrarInteresseTribunal?.useMutation({
+    onSuccess: () => {
+      toast.success("Anotado!", {
+        description: "Quando esse tribunal entrar na cobertura, a gente te avisa.",
+      });
+      setInteresseOpen(false);
+      setInteresseTribunal("");
+    },
+    onError: (e: any) => toast.error("Não deu pra registrar", { description: e.message }),
+  }) ?? { mutate: () => {}, isPending: false };
   const [qrLido, setQrLido] = useState<{ secret: string; emissor: string | null; conta: string | null } | null>(null);
   const [form, setForm] = useState({
     apelido: "",
@@ -4540,6 +4581,17 @@ function CofreTab() {
                   </SelectContent>
                 </Select>
               )}
+
+              {/* Cobertura transparente: melhor perder o cadastro aqui do que
+                  ganhar um churn no dia 3 — tribunal fora da lista vira
+                  registro de interesse, não beco sem saída. */}
+              <button
+                type="button"
+                className="text-[11px] text-violet-700 dark:text-violet-300 underline underline-offset-2"
+                onClick={() => setInteresseOpen(true)}
+              >
+                Seu tribunal não está na lista? Avisar quando chegar →
+              </button>
             </div>
             <div>
               <Label>CPF ou OAB *</Label>
@@ -4644,6 +4696,39 @@ function CofreTab() {
               ) : (
                 "Cadastrar e testar login"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* "Avisar quando chegar" — registra interesse em tribunal fora da cobertura */}
+      <Dialog open={interesseOpen} onOpenChange={setInteresseOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Avisar quando chegar</DialogTitle>
+            <DialogDescription>
+              Diga qual tribunal você precisa. O interesse entra na nossa fila de prioridade,
+              e te avisamos assim que a cobertura chegar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Tribunal</Label>
+            <Input
+              placeholder="Ex.: TJSP, TRT-7, TJBA…"
+              value={interesseTribunal}
+              onChange={(e) => setInteresseTribunal(e.target.value)}
+              maxLength={120}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setInteresseOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={interesseTribunal.trim().length < 2 || interesseMut.isPending}
+              onClick={() => interesseMut.mutate({ tribunal: interesseTribunal.trim() })}
+            >
+              {interesseMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Registrar interesse
             </Button>
           </DialogFooter>
         </DialogContent>

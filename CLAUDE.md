@@ -208,14 +208,20 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
    receita; stats perdeu planBreakdown); Turnstile no signup (fail-open:
    servidor exige só com TURNSTILE_SECRET_KEY, widget só com
    VITE_TURNSTILE_SITE_KEY no build — dono ainda precisa criar as chaves
-   na Cloudflare e colar no Railway); DashboardProcessual avisa quando o
-   Cofre está vazio (some sozinho ao cadastrar credencial). Falta: ④
-   onboarding processual (gatilho DISPAROU — é a campanha; mockup
-   aprovado já existe). Do dono: plano pago do Resend (100 e-mails/dia
-   estoura com campanha) + conferir SENTRY_DSN_BACKEND no Railway (painel
-   diz "conectado" mas captura é só por env) + chaves do Turnstile.
-   Ressalva de produto: novas ações (CPF/CNPJ) hoje é SÓ TJCE — LP
-   promete sem ressalva.
+   na Cloudflare e colar no Railway). ④ onboarding processual: **ENTREGUE
+   25/08** — `GuiaProcessual` no DashboardProcessual (3 passos que abrem
+   os fluxos REAIS via deep-link `?novo=1` em cofre/clientes/novas-acoes;
+   passo 3 trava sem o 1; some quando credencial+monitoramento existem;
+   linha de sucesso via sessionStorage só pra quem acabou de completar —
+   substituiu o aviso amber de Cofre vazio); pré-seleção do único cliente
+   no dialog de novas ações; "avisar quando chegar" no Cofre grava
+   interesse em tribunal fora da cobertura (`interesse_tribunais`,
+   migration 0206, `registrarInteresseTribunal`). Amarras em
+   `onboarding-processual.test.ts`. Do dono: plano pago do Resend (100
+   e-mails/dia estoura com campanha) + conferir SENTRY_DSN_BACKEND no
+   Railway (painel diz "conectado" mas captura é só por env) + chaves do
+   Turnstile. Ressalva de produto: novas ações (CPF/CNPJ) hoje é SÓ TJCE
+   — LP promete sem ressalva.
 
 0. **Avisos de spam da Meta (19/08 E 22/08)** — SEGUNDO aviso chegou em
    22/08 (prazo de análise 20/11), três dias após as correções de 19/08
@@ -289,21 +295,12 @@ do duplicar ficou de fora: apareceria e sumiria no primeiro reload.
 **Lembrar o dono quando:** ele reclamar de três "ENVIAR MENSAGEM" iguais no
 canvas sem saber qual é qual, ou pedir de novo o sufixo da cópia.
 
-### Onboarding guiado do pacote processual (adiado 24/08)
+### Onboarding guiado do pacote processual — ENTREGUE 25/08
 
-Mockup pronto e aprovável em `mockup-onboarding-processual.html` (4 cenas:
-checklist de 3 passos no primeiro login, conectar credencial com cobertura
-transparente de tribunais + "avisar quando chegar", primeiro monitoramento
-pré-preenchido, estado completo). Dono decidiu NÃO implementar por
-enquanto ("Por enquanto não vamos fazer isso"). Hoje quem assina o pacote
-processual cai no dashboard processual vazio e se vira.
-
-**Lembrar o dono quando:** ele for ligar a campanha de
-verificação/monitoramento de processos (tráfego pago → cadastro
-self-service), ou quando contas novas do pacote processual começarem a
-chegar e não ativarem (sem credencial/monitoramento no dia 1). Sem o guia,
-clique de anúncio tende a morrer na tela vazia — era o atrito nº 1 mapeado
-pro funil da campanha.
+Estava represado desde 24/08; o gatilho (campanha) disparou e o dono
+aprovou ("pode fazer"). Implementação descrita na pendência -1 item ④.
+Métrica pra acompanhar: % de contas da campanha que completam os 3 passos
+no dia 1 — é o número que diz se o anúncio vai pagar.
 
 ## Anti-patterns conhecidos
 

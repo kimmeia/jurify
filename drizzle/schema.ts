@@ -3508,6 +3508,28 @@ export type CofreCredencialTribunal = typeof cofreCredencialTribunais.$inferSele
 export type InsertCofreSessao = typeof cofreSessoes.$inferInsert;
 
 /**
+ * "Avisar quando chegar": interesse em tribunal que ainda não cobrimos.
+ * Cada clique é um voto na fila de prioridade de novos adapters — melhor
+ * perder o cadastro da credencial hoje do que ganhar um churn no dia 3.
+ */
+export const interesseTribunais = mysqlTable(
+  "interesse_tribunais",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdIntTrib").notNull(),
+    userId: int("userIdIntTrib").notNull(),
+    tribunal: varchar("tribunalIntTrib", { length: 120 }).notNull(),
+    criadoEm: timestamp("criadoEmIntTrib").defaultNow().notNull(),
+  },
+  (t) => ({
+    porTribunal: index("idx_interesse_tribunais_trib").on(t.tribunal),
+    porEscritorio: index("idx_interesse_tribunais_esc").on(t.escritorioId),
+  }),
+);
+
+export type InteresseTribunal = typeof interesseTribunais.$inferSelect;
+
+/**
  * Eventos detectados pelo motor próprio — granularidade superior a
  * juditRespostas. Cada linha é uma observação atômica: 1 movimentação,
  * 1 publicação no DJE, 1 nova ação distribuída, 1 mandado, etc.
