@@ -200,14 +200,20 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
    `subscriptions.valor_negociado_centavos` (migration 0205) vira o preço
    do pacote na fatura composta (aplicarValorAssinatura deixa de "corrigir"
    pra 0); e-mails de trial + TrialBanner apontam pro wa.me quando o plano
-   é sob consulta. Faltam: ③ MRR/relatórios saindo do PLANS deprecado
-   (plano novo vira R$ 97 fictício em admin.stats/receitaMensal), captcha
-   no signup, aviso de credencial no DashboardProcessual; ④ onboarding
-   processual (gatilho DISPAROU — é a campanha; mockup aprovado já
-   existe). Do dono: plano pago do Resend (100 e-mails/dia estoura com
-   campanha) + conferir SENTRY_DSN_BACKEND no Railway (painel diz
-   "conectado" mas captura é só por env). Ressalva de produto: novas
-   ações (CPF/CNPJ) hoje é SÓ TJCE — LP promete sem ressalva.
+   é sob consulta. ③ métricas reais + captcha + aviso de credencial:
+   **ENTREGUE 25/08** — MRR/receitaMensal/inadimplentes saem do PLANS
+   deprecado (tabela planos + valorNegociado; trial/cortesia não são
+   receita; stats perdeu planBreakdown); Turnstile no signup (fail-open:
+   servidor exige só com TURNSTILE_SECRET_KEY, widget só com
+   VITE_TURNSTILE_SITE_KEY no build — dono ainda precisa criar as chaves
+   na Cloudflare e colar no Railway); DashboardProcessual avisa quando o
+   Cofre está vazio (some sozinho ao cadastrar credencial). Falta: ④
+   onboarding processual (gatilho DISPAROU — é a campanha; mockup
+   aprovado já existe). Do dono: plano pago do Resend (100 e-mails/dia
+   estoura com campanha) + conferir SENTRY_DSN_BACKEND no Railway (painel
+   diz "conectado" mas captura é só por env) + chaves do Turnstile.
+   Ressalva de produto: novas ações (CPF/CNPJ) hoje é SÓ TJCE — LP
+   promete sem ressalva.
 
 0. **Avisos de spam da Meta (19/08 E 22/08)** — SEGUNDO aviso chegou em
    22/08 (prazo de análise 20/11), três dias após as correções de 19/08

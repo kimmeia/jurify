@@ -11,10 +11,11 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KPICard, PainelTopo } from "./common";
-import { Bell, CalendarClock, FileSearch, Radar } from "lucide-react";
+import { Bell, CalendarClock, FileSearch, KeyRound, Radar } from "lucide-react";
 
 function saudacao(): string {
   const h = new Date().getHours();
@@ -42,6 +43,14 @@ export default function DashboardProcessual() {
     refetchInterval: 2 * 60_000,
     retry: false,
   });
+  // Sem credencial no Cofre o robô não entra em tribunal nenhum — e a tela
+  // vazia parecia "tudo certo". O aviso só existe enquanto o Cofre está
+  // vazio; cadastrou, some sozinho.
+  const { data: credenciais } = trpc.cofreCredenciais.listarParaSelecao.useQuery(undefined, {
+    retry: false,
+    staleTime: 60_000,
+  });
+  const semCredencial = credenciais != null && credenciais.length === 0;
 
   const primeiroNome = (user?.name ?? "").split(" ")[0] || "!";
 
@@ -65,6 +74,39 @@ export default function DashboardProcessual() {
         titulo={`${saudacao()}, ${primeiroNome}`}
         subtitulo="Acompanhamento processual do escritório"
       />
+
+      {semCredencial && (
+        <Card className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+          <CardContent className="flex items-start gap-4 py-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-amber-950">
+              <KeyRound className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-amber-900 dark:text-amber-200">
+                Falta 1 passo pra começar a vigiar: sua senha de tribunal
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-amber-800 dark:text-amber-300/90">
+                O robô entra no tribunal <strong>por você</strong> pra buscar as movimentações — e
+                pra isso precisa da sua credencial do PJe (a mesma que você usa pra peticionar),
+                guardada criptografada no Cofre. Leva 2 minutos e destrava tudo: vigiar processos,
+                descobrir ações novas por CPF/CNPJ e os prazos sugeridos.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button size="sm" onClick={() => setLocation("/processos?tab=cofre")}>
+                  🔐 Cadastrar credencial no Cofre
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setLocation("/processos?tab=cofre")}>
+                  Ver tribunais cobertos
+                </Button>
+              </div>
+              <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-400">
+                Cobertura hoje: PJe em 12 estados (CE, RJ, MG, PE, PA, MT, DF…) · novas ações por
+                CPF/CNPJ: TJCE
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard
