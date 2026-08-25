@@ -58,6 +58,42 @@ describe("amarras do admin novo (menu enxuto + editor de planos)", () => {
     expect(ia).toContain("<AdminJurisIa />");
   });
 
+  it("hub IA tem 3 abas e a Base Jurídica mora na aba própria, não nos Agentes", () => {
+    const ia = ler("client/src/pages/admin/AdminIA.tsx");
+    expect(ia).toContain('["agentes", "base", "jurisia"]');
+    expect(ia).toContain("<BaseJuridicaTab />");
+
+    // A aba nova carrega TUDO que saiu de Agentes IA — nada some do painel.
+    const base = ler("client/src/pages/admin/BaseJuridicaTab.tsx");
+    for (const proc of [
+      "statusBaseGlobal",
+      "seedBaseRevisional",
+      "subirDecisao",
+      "listarFontesGlobais",
+      "editarFonteGlobal",
+      "excluirFonteGlobal",
+    ]) {
+      expect(base, `aba Base Jurídica perdeu ${proc}`).toContain(proc);
+    }
+
+    // ...e Agentes IA ficou só com agentes (a mistura era a confusão reclamada).
+    const agentes = ler("client/src/pages/admin/AdminAgentesIA.tsx");
+    expect(agentes).not.toContain("listarFontesGlobais");
+    expect(agentes).not.toContain("Base jurídica");
+  });
+
+  it("JurisIA: números do acervo primeiro, ferramentas técnicas no fim", () => {
+    const juris = ler("client/src/pages/admin/AdminJurisIa.tsx");
+    expect(juris).toContain("Ferramentas técnicas");
+    // Sondagem e fila de ingestão vêm DEPOIS do quadro de tribunais.
+    const posTribunais = juris.indexOf(">Tribunais</CardTitle>");
+    const posFerramentas = juris.indexOf("Ferramentas técnicas");
+    expect(posTribunais).toBeGreaterThan(-1);
+    expect(posFerramentas).toBeGreaterThan(posTribunais);
+    expect(juris.indexOf("<PainelSondagem />")).toBeGreaterThan(posFerramentas);
+    expect(juris.indexOf("<FilaIngestao")).toBeGreaterThan(posFerramentas);
+  });
+
   it("lista de planos tem vitrine, duplicar e reordenar; editar navega pro editor", () => {
     const secao = ler("client/src/pages/admin/financeiro/PlanosSection.tsx");
     expect(secao).toContain("duplicarPlano");

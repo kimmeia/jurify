@@ -51,11 +51,13 @@ Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
 
 - Menu agrupado (Principal/Produto/Sistema), 10 itens. Erros + robô auditor +
   robô de jornada + log de e-mails + auditoria = **abas de `/admin/saude`**
-  (AdminSaude, aba "Visão rápida" compõe as queries existentes); Agentes IA +
-  JurisIA = abas de `/admin/ia`. Rotas antigas redirecionam com `?aba=` —
-  não recriar itens de menu pra elas (teste `admin-layout-novo.test.ts`
-  quebra). Badge vermelho no menu = erros unresolved do Sentry (mesma
-  query/cache da Visão rápida, staleTime 5min).
+  (AdminSaude, aba "Visão rápida" compõe as queries existentes); `/admin/ia`
+  tem 3 abas: Agentes IA · Base Jurídica (`BaseJuridicaTab`, o bloco RAG que
+  morava dentro de AdminAgentesIA) · JurisIA (números do acervo primeiro,
+  Sondagem/Fila viram "Ferramentas técnicas" no fim). Rotas antigas
+  redirecionam com `?aba=` — não recriar itens de menu pra elas (teste
+  `admin-layout-novo.test.ts` quebra). Badge vermelho no menu = erros
+  unresolved do Sentry (mesma query/cache da Visão rápida, staleTime 5min).
 - Planos (Financeiro → aba Planos): lista vitrine/fora com toggle `oculto`
   inline, `duplicarPlano` (cópia SEMPRE oculta, slug `-copia[-N]` via
   `gerarSlugCopia`), arrastar → `reordenarPlanos`. Edição em **tela cheia**
