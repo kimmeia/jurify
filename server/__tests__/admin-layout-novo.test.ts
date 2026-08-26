@@ -82,16 +82,38 @@ describe("amarras do admin novo (menu enxuto + editor de planos)", () => {
     expect(agentes).not.toContain("Base jurídica");
   });
 
-  it("JurisIA: números do acervo primeiro, ferramentas técnicas no fim", () => {
+  it("JurisIA: números do acervo primeiro, ferramentas técnicas colapsadas no fim", () => {
     const juris = ler("client/src/pages/admin/AdminJurisIa.tsx");
-    expect(juris).toContain("Ferramentas técnicas");
-    // Sondagem e fila de ingestão vêm DEPOIS do quadro de tribunais.
+    // v2 (aprovada 26/08): as ferramentas ficam atrás de um clique — o dono
+    // olha os números; Sondagem/Fila/Zerar só aparecem quando pedir.
+    expect(juris).toContain("mostrarFerramentas");
+    expect(juris).toContain("Mostrar ferramentas técnicas");
     const posTribunais = juris.indexOf(">Tribunais</CardTitle>");
-    const posFerramentas = juris.indexOf("Ferramentas técnicas");
+    const posToggle = juris.indexOf("setMostrarFerramentas((v) => !v)");
     expect(posTribunais).toBeGreaterThan(-1);
-    expect(posFerramentas).toBeGreaterThan(posTribunais);
-    expect(juris.indexOf("<PainelSondagem />")).toBeGreaterThan(posFerramentas);
-    expect(juris.indexOf("<FilaIngestao")).toBeGreaterThan(posFerramentas);
+    expect(posToggle).toBeGreaterThan(posTribunais);
+    expect(juris.indexOf("<PainelSondagem />")).toBeGreaterThan(posToggle);
+    expect(juris.indexOf("<FilaIngestao")).toBeGreaterThan(posToggle);
+  });
+
+  it("v2: cada aba da IA abre com contexto discreto e o subtítulo errado morreu", () => {
+    const ia = ler("client/src/pages/admin/AdminIA.tsx");
+    expect(ia).toContain("ContextoAba");
+    // Os agentes são DA PLATAFORMA — o subtítulo antigo dizia "dos
+    // escritórios" e alimentava a confusão que o dono reclamou.
+    expect(ia).not.toContain("dos escritórios");
+    expect(ia).toContain("Robôs de conversa da plataforma");
+    expect(ia).toContain("A biblioteca do Agente Jurídico");
+    expect(ia).toContain("acervo de jurisprudência");
+
+    // Subir decisão virou dialog — o formulário sempre aberto era a
+    // poluição nº 1 da aba.
+    const base = ler("client/src/pages/admin/BaseJuridicaTab.tsx");
+    expect(base).toContain("decisaoOpen");
+
+    // A descrição duplicada saiu de Agentes IA (o contexto mora no hub).
+    const agentes = ler("client/src/pages/admin/AdminAgentesIA.tsx");
+    expect(agentes).not.toContain("Crie agentes treináveis");
   });
 
   it("lista de planos tem vitrine, duplicar e reordenar; editar navega pro editor", () => {

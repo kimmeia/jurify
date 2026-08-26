@@ -21,7 +21,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Bot, Plus, Edit, Trash2, Link2, FileText, FileIcon, Loader2,
-  Send, Sparkles, AlertTriangle, CheckCircle2, ExternalLink, BrainCircuit, Play,
+  Send, Sparkles, AlertTriangle, ExternalLink, BrainCircuit, Play,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -732,9 +732,20 @@ export default function AdminAgentesIA() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-muted-foreground">
-          Crie agentes treináveis que serão usados pelos módulos do JuridFlow (Atendimento, Resumos, etc).
+      {/* A descrição da aba mora no hub (ContextoAba) — aqui só o estado
+          e a ação, numa linha, sem banner ocupando a tela. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          {agentes?.length ?? 0} {(agentes?.length ?? 0) === 1 ? "agente" : "agentes"}
+          {status && (status.openaiConfigurado || status.anthropicConfigurado) && (
+            <span className="ml-2 normal-case tracking-normal font-semibold text-emerald-700 dark:text-emerald-400">
+              ✓ {status.openaiConfigurado && status.anthropicConfigurado
+                ? "OpenAI + Claude conectados"
+                : status.openaiConfigurado
+                  ? "OpenAI conectado"
+                  : "Claude conectado"}
+            </span>
+          )}
         </p>
         <Button onClick={() => { setEditandoId(null); setNovoOpen(true); }}>
           <Plus className="h-4 w-4 mr-1.5" />
@@ -758,21 +769,6 @@ export default function AdminAgentesIA() {
                 .
               </p>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {status && (status.openaiConfigurado || status.anthropicConfigurado) && (
-        <Card className="border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/10">
-          <CardContent className="pt-4 pb-4 flex items-center gap-3">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            <p className="text-sm text-muted-foreground">
-              {status.openaiConfigurado && status.anthropicConfigurado
-                ? "OpenAI + Claude conectados — agentes GPT e Claude podem ser usados."
-                : status.openaiConfigurado
-                  ? "OpenAI conectado — agentes GPT podem ser testados. Para usar Claude, configure Anthropic."
-                  : "Claude conectado — agentes Claude podem ser testados. Para usar GPT, configure OpenAI."}
-            </p>
           </CardContent>
         </Card>
       )}

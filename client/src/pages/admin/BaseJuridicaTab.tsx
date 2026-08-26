@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +15,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Edit, Loader2, Plus, Scale, Sparkles, Trash2, Upload } from "lucide-react";
+import { Edit, Loader2, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 export default function BaseJuridicaTab() {
@@ -32,6 +32,9 @@ export default function BaseJuridicaTab() {
   });
 
   // Subir decisão/jurisprudência pra base GLOBAL (RAG) — amplia o conhecimento.
+  // Vive num Dialog: o formulário sempre aberto ocupava meia tela (feedback
+  // do dono: poluição visual) — agora abre no clique e some ao salvar.
+  const [decisaoOpen, setDecisaoOpen] = useState(false);
   const [decisaoFile, setDecisaoFile] = useState<File | null>(null);
   const [decisaoLink, setDecisaoLink] = useState("");
   const [decisaoId, setDecisaoId] = useState("");
@@ -40,6 +43,7 @@ export default function BaseJuridicaTab() {
     onSuccess: (r: any) => {
       toast.success("Decisão adicionada à base", { description: `${r.trechos} trecho(s), ${r.indexadas} indexado(s) (via ${r.via}).` });
       setDecisaoFile(null); setDecisaoLink(""); setDecisaoId(""); setDecisaoTitulo("");
+      setDecisaoOpen(false);
       refetchBase(); fontesGlobaisQ.refetch();
     },
     onError: (err: any) => toast.error("Erro ao subir decisão", { description: err.message }),
@@ -82,60 +86,62 @@ export default function BaseJuridicaTab() {
 
   return (
     <div className="space-y-4">
-      {/* Resumo: números primeiro, ação de indexar do lado */}
+      {/* Faixa única: números + as 3 ações. A descrição do que é a base
+          mora no hub (ContextoAba); formulário só abre quando pedir. */}
       <Card>
-        <CardContent className="pt-6 flex flex-wrap items-center gap-x-8 gap-y-4">
+        <CardContent className="pt-5 pb-5 flex flex-wrap items-center gap-x-7 gap-y-3">
           <div>
-            <p className="text-3xl font-bold tabular-nums">{total}</p>
-            <p className="text-xs text-muted-foreground">fontes</p>
+            <p className="text-2xl font-bold tabular-nums leading-none">{total}</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mt-1">fontes</p>
           </div>
           <div>
-            <p className={"text-3xl font-bold tabular-nums " + (indexadas < total ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
+            <p className={"text-2xl font-bold tabular-nums leading-none " + (indexadas < total ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
               {indexadas}
             </p>
-            <p className="text-xs text-muted-foreground">indexadas</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mt-1">indexadas</p>
           </div>
-          <p className="text-sm text-muted-foreground flex-1 min-w-[220px]">
-            <Scale className="h-4 w-4 inline mr-1.5 text-violet-600 dark:text-violet-400" />
-            Súmulas, teses e precedentes que o <strong className="text-foreground">Agente Jurídico</strong> consulta
-            pra avaliar chance de sucesso e redigir peças.
-          </p>
-          <div className="flex flex-col items-end gap-1">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={() => setDecisaoOpen(true)}>
+              <Upload className="h-4 w-4 mr-1.5" /> Subir decisão
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setFonteEdit({ id: null, tipo: "sumula", identificador: "", orgao: "", area: baseArea || "", titulo: "", texto: "", tags: "" })}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Nova fonte
+            </Button>
             <Button size="sm" variant="outline" onClick={() => seedBaseMut.mutate()} disabled={seedBaseMut.isPending}>
               {seedBaseMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1.5" />}
-              {total > 0 ? "Reindexar base" : "Popular / indexar base"}
+              {total > 0 ? "Reindexar" : "Popular / indexar"}
             </Button>
-            {total > 0 && indexadas < total && (
-              <span className="text-[11px] text-amber-600 dark:text-amber-400">
-                Há fontes não indexadas — clique pra indexar (precisa de chave OpenAI).
-              </span>
-            )}
           </div>
+          {total > 0 && indexadas < total && (
+            <span className="w-full text-[11px] text-amber-600 dark:text-amber-400">
+              Há fontes não indexadas — clique em Reindexar (precisa de chave OpenAI).
+            </span>
+          )}
         </CardContent>
       </Card>
 
-      {/* Subir decisão / jurisprudência */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Upload className="h-4 w-4 text-violet-600 dark:text-violet-400" /> Subir decisão / jurisprudência
-          </CardTitle>
-          <CardDescription>
+      {/* Subir decisão / jurisprudência — em dialog: aberto só quando pedir */}
+      <Dialog open={decisaoOpen} onOpenChange={setDecisaoOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-4 w-4 text-violet-600 dark:text-violet-400" /> Subir decisão / jurisprudência
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-1">
             Arquivo (PDF/DOCX/imagem — Vision) ou link de súmula/acórdão. O conteúdo é lido,
             fatiado e indexado — passa a valer pra todos os escritórios.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="flex-1 min-w-[180px]">
+          </p>
+          <div className="space-y-3">
+            <div>
               <Label className="text-xs">Identificador *</Label>
               <Input className="mt-1 h-9" placeholder="Ex.: REsp 1.061.530/RS" value={decisaoId} onChange={(e) => setDecisaoId(e.target.value)} />
             </div>
-            <div className="flex-1 min-w-[180px]">
+            <div>
               <Label className="text-xs">Título (opcional)</Label>
               <Input className="mt-1 h-9" placeholder="Resumo curto" value={decisaoTitulo} onChange={(e) => setDecisaoTitulo(e.target.value)} />
             </div>
-            <div className="flex-1 min-w-[180px]">
+            <div>
               <Label className="text-xs">Link (opcional)</Label>
               <Input className="mt-1 h-9" placeholder="https://... (súmula/acórdão)" value={decisaoLink} onChange={(e) => setDecisaoLink(e.target.value)} />
             </div>
@@ -143,25 +149,23 @@ export default function BaseJuridicaTab() {
               type="file"
               accept=".pdf,.docx,.txt,.png,.jpg,.jpeg"
               onChange={(e) => setDecisaoFile(e.target.files?.[0] ?? null)}
-              className="text-xs max-w-[220px]"
+              className="text-xs"
             />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDecisaoOpen(false)}>Cancelar</Button>
             <Button size="sm" disabled={(!decisaoFile && !decisaoLink.trim()) || decisaoId.trim().length < 2 || subirDecisaoMut.isPending} onClick={enviarDecisao}>
               {subirDecisaoMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Plus className="h-4 w-4 mr-1.5" />}
               Subir decisão
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Fontes da base: filtro por área, busca, editar/excluir */}
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <CardTitle className="text-base">Fontes da base ({fontesGlobaisQ.data?.fontes?.length ?? 0})</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => setFonteEdit({ id: null, tipo: "sumula", identificador: "", orgao: "", area: baseArea || "", titulo: "", texto: "", tags: "" })}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Nova fonte
-            </Button>
-          </div>
+          <CardTitle className="text-base">Fontes da base ({fontesGlobaisQ.data?.fontes?.length ?? 0})</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-1.5 mb-2">
