@@ -274,8 +274,12 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
    de IA (OpenAI/Anthropic — a antiga pendência de listar operadores está
    RESOLVIDA). O teor é minuta técnica: **dono revisa o texto jurídico**;
    mudança relevante no texto = bump em TERMOS_VERSAO (dispara re-aceite).
-3. **HMAC da Meta em modo brando** — sem App Secret cadastrado, o webhook
-   aceita com warning. Endurecer em produção.
+3. **HMAC da Meta: ATIVO em produção (conferido 26/08)** — o card WhatsApp
+   Cloud do Admin está "Conectado" e o form só salva com os 3 campos
+   (App ID + App Secret + Verify Token — AdminIntegrations.tsx:51), logo o
+   secret está cadastrado; mensagens chegando = assinatura batendo (secret
+   errado daria 401). Resta só o endurecimento opcional: modo no-secret
+   (config removida) ainda aceita com warn em vez de falhar fechado.
 4. **Conferências do robô de jornada** só rodam pelo Playwright — ligar no
    executor do painel. Depois: cron de staging de hora em hora.
 5. **CSP desligado** no Helmet; **body-parser 3GB em memória** (OOM) — sai
