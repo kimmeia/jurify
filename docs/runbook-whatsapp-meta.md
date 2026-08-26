@@ -148,10 +148,23 @@ simultaneamente na Cloud API. Ground truth: `is_on_biz_app` do
   dias, abrir o app a cada ~14 dias, throughput reduzido, broadcast
   read-only, grupos indisponíveis na API.
 
-## Pendências externas (estado em 14/jul/2026)
+## Pendências externas (estado em 26/ago/2026)
 
-- [ ] Acesso avançado do app `1295...` (Análise do App) — destrava o 1-clique.
-- [ ] Access Verification (após aprovação, ~5 dias úteis).
+- [x] Acesso avançado do app `1295...` (Análise do App) — **ENVIADO em
+      26/08/2026**, status "Análise em andamento" (prazo típico Meta: até
+      20 dias). Pacote: `whatsapp_business_messaging` +
+      `whatsapp_business_management` + `public_profile` (manage_app_solution
+      e whatsapp_business_manage_events foram removidos do pedido — sem uso
+      no código). Evidências: 2 screencasts (envio de mensagem; criação de
+      template) + conta demo `demo@juridflow.com.br` (SEM dados reais;
+      manter cortesia/ativa ≥1 ano — exigência do formulário). Tratamento
+      de dados declarado: operadores Railway/Backblaze/OpenAI/Anthropic/
+      Sentry (categoria "Soluções e serviços de TI", EUA), responsável =
+      Harkan Assessoria e Corretora de Seguros Ltda (CNPJ
+      62.658.285/0001-00) + política de resposta a autoridades adotada.
+      Resposta chega na Caixa de Entrada de alertas do app.
+- [ ] Access Verification (após aprovação, ~5 dias úteis) — pedirá
+      evidência de que a empresa presta serviço a clientes (site + CNPJ).
 - [ ] Apelação da conta antiga banida — protocolo `#2655121:WBxP-849705580-840938876`.
       NÃO clicar "Já resolvi" no banner até a Meta reinstaurar.
 - [ ] Remover inscrição do app legado `1641...` das WABAs.
