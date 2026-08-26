@@ -733,6 +733,7 @@ function PainelNatureza({
 export default function AdminJurisIa() {
   const [paginas, setPaginas] = useState("5");
   const [rodando, setRodando] = useState<string | null>(null);
+  const [mostrarFerramentas, setMostrarFerramentas] = useState(false);
 
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.admin.jurisiaVarreduras.useQuery();
@@ -780,11 +781,6 @@ export default function AdminJurisIa() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Robô de ingestão: varredura do acervo público do CNJ (DataJud). Não usa a credencial OAB
-        do escritório — o monitoramento de processos não corre risco.
-      </p>
-
       <div className="grid gap-3 sm:grid-cols-4">
         <Card>
           <CardContent className="pt-4">
@@ -966,19 +962,34 @@ export default function AdminJurisIa() {
 
       {natureza && <PainelNatureza dados={natureza} />}
 
-      {/* Ferramentas de diagnóstico usadas de vez em quando — por isso no fim,
-          depois dos números que respondem "como está o acervo". */}
-      <p className="pt-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        Ferramentas técnicas
+      {/* Ferramentas de diagnóstico usadas de vez em quando — colapsadas
+          atrás de um clique (feedback do dono: poluição visual). Também usa
+          a credencial zero: a varredura é do acervo público do CNJ (DataJud),
+          a OAB do escritório não corre risco. */}
+      <p className="pt-2 text-xs text-muted-foreground">
+        🔧{" "}
+        <button
+          className="font-bold text-violet-700 dark:text-violet-400 underline underline-offset-2"
+          onClick={() => setMostrarFerramentas((v) => !v)}
+        >
+          {mostrarFerramentas ? "Esconder ferramentas técnicas ▴" : "Mostrar ferramentas técnicas ▸"}
+        </button>{" "}
+        <span className="text-muted-foreground/70">
+          (Sondagem, fila de ingestão, zerar — só quando o robô precisar de você)
+        </span>
       </p>
-      <div className="grid gap-3 lg:grid-cols-2 items-start">
-        <PainelSondagem />
-        <FilaIngestao tribunais={linhas.map((l) => ({ sigla: l.sigla, nome: l.nome }))} />
-      </div>
+      {mostrarFerramentas && (
+        <>
+          <div className="grid gap-3 lg:grid-cols-2 items-start">
+            <PainelSondagem />
+            <FilaIngestao tribunais={linhas.map((l) => ({ sigla: l.sigla, nome: l.nome }))} />
+          </div>
 
-      {amostra.data && <ResultadoAmostra dados={amostra.data} />}
+          {amostra.data && <ResultadoAmostra dados={amostra.data} />}
 
-      <ZerarIngestao />
+          <ZerarIngestao />
+        </>
+      )}
     </div>
   );
 }
