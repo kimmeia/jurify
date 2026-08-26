@@ -21,7 +21,7 @@ import {
 import {
   AlertCircle, Eye, Coins, ShieldCheck, User, Calculator, CreditCard, Clock,
   Loader2, Search, Lock, Unlock, LogIn, FileText, Trash2, MessageSquarePlus,
-  AlertTriangle, RotateCcw, Users as UsersIcon, Gift, ArrowLeft, Crown, ChevronRight, Mail, DollarSign,
+  AlertTriangle, RotateCcw, Users as UsersIcon, Gift, ArrowLeft, Crown, ChevronRight, Mail, DollarSign, Plus,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -265,6 +265,200 @@ function ContatoComercialCell({ u, onSalvo }: { u: any; onSalvo: () => void }) {
         </Button>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Senha provisória legível: sem 0/O/1/l, com símbolo e números garantidos. */
+function gerarSenhaProvisoria(): string {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const arr = new Uint32Array(9);
+  crypto.getRandomValues(arr);
+  let s = "";
+  for (const n of arr) s += chars[n % chars.length];
+  return `${s.slice(0, 3)}#${s.slice(3)}${Math.floor(Math.random() * 90 + 10)}`;
+}
+
+/**
+ * Criar cliente direto do painel (mockup aprovado 26/08): a conta nasce
+ * com e-mail confirmado e o admin copia login+senha pra entregar no
+ * WhatsApp — nada é enviado ao cliente. A senha aparece UMA vez.
+ */
+function CriarClienteDialog({ open, onOpenChange, onCriado }: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onCriado: () => void;
+}) {
+  const [fase, setFase] = useState<"form" | "pronto">("form");
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState(() => gerarSenhaProvisoria());
+  const [planId, setPlanId] = useState("");
+  const [acesso, setAcesso] = useState<"cortesia" | "trial">("cortesia");
+  const [validade, setValidade] = useState("");
+
+  const { data: planos } = (trpc as any).admin.listarPlanosEditaveis.useQuery(undefined, {
+    enabled: open,
+    staleTime: 60_000,
+  });
+
+  const criarMut = trpc.admin.criarCliente.useMutation({
+    onSuccess: () => {
+      setFase("pronto");
+      onCriado();
+    },
+    onError: (e) => toast.error("Não deu pra criar", { description: e.message }),
+  });
+
+  const fechar = (o: boolean) => {
+    onOpenChange(o);
+    if (!o) {
+      setFase("form");
+      setNome(""); setEmail(""); setPlanId(""); setAcesso("cortesia"); setValidade("");
+      setSenha(gerarSenhaProvisoria());
+    }
+  };
+
+  const copiar = (texto: string, rotulo: string) => {
+    navigator.clipboard?.writeText(texto).then(
+      () => toast.success(`${rotulo} copiado`),
+      () => toast.error("Não consegui copiar — selecione e copie na mão"),
+    );
+  };
+
+  const linkApp = `${window.location.origin}/login`;
+
+  const submeter = () => {
+    if (nome.trim().length < 2) { toast.error("Informe o nome"); return; }
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { toast.error("E-mail inválido"); return; }
+    if (senha.length < 8) { toast.error("Senha precisa de 8+ caracteres"); return; }
+    if (acesso === "trial" && !planId) { toast.error("Escolha o plano pro teste"); return; }
+    criarMut.mutate({
+      nome: nome.trim(),
+      email: email.trim().toLowerCase(),
+      senha,
+      planId: planId || undefined,
+      acesso,
+      cortesiaExpiraEm:
+        acesso === "cortesia" && validade
+          ? new Date(`${validade}T23:59:59`).getTime()
+          : undefined,
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={fechar}>
+      <DialogContent className="sm:max-w-md">
+        {fase === "form" ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Criar cliente</DialogTitle>
+              <DialogDescription>
+                A conta nasce pronta: <b>e-mail já confirmado</b>, sem passar pelo cadastro público.
+                Nada é enviado ao cliente — você entrega o acesso do seu jeito.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Nome completo *</Label>
+                <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Beatriz Nogueira Campos" maxLength={255} autoFocus />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">E-mail (vai ser o login) *</Label>
+                <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="beatriz@escritorio.adv.br" maxLength={320} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Senha provisória *</Label>
+                <div className="flex items-center gap-2">
+                  <Input value={senha} onChange={(e) => setSenha(e.target.value)} maxLength={128} className="font-mono" />
+                  <Button size="sm" variant="outline" className="shrink-0" onClick={() => setSenha(gerarSenhaProvisoria())}>
+                    🎲 gerar
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Plano</Label>
+                <select
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                  value={planId}
+                  onChange={(e) => setPlanId(e.target.value)}
+                >
+                  <option value="">Sem plano (só cortesia)</option>
+                  {(planos ?? []).map((p: any) => (
+                    <option key={p.slug} value={p.slug}>{p.nome}{p.oculto ? " (fora da vitrine)" : ""}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Acesso</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { k: "cortesia" as const, t: "Cortesia (grátis)", d: "pra demo e parceiro — sem cobrança" },
+                    { k: "trial" as const, t: "Teste de 14 dias", d: "igual ao cadastro normal — vence e vira venda" },
+                  ]).map((o) => (
+                    <button
+                      key={o.k}
+                      type="button"
+                      className={`rounded-xl border p-2.5 text-left ${
+                        acesso === o.k ? "border-violet-400 bg-violet-50 dark:bg-violet-950/30" : ""
+                      }`}
+                      onClick={() => setAcesso(o.k)}
+                    >
+                      <p className={`text-xs font-bold ${acesso === o.k ? "text-violet-700 dark:text-violet-300" : ""}`}>{o.t}</p>
+                      <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{o.d}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {acesso === "cortesia" && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Validade da cortesia (opcional — vazio = sem prazo)</Label>
+                  <Input type="date" value={validade} onChange={(e) => setValidade(e.target.value)} />
+                </div>
+              )}
+              <p className="rounded-lg bg-muted/60 p-2.5 text-[11px] text-muted-foreground leading-relaxed">
+                🔐 A senha aparece <b>uma vez</b> na tela seguinte pra você copiar e mandar pro
+                cliente. Ele pode trocar depois em "Esqueci minha senha".
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => fechar(false)}>Cancelar</Button>
+              <Button disabled={criarMut.isPending} onClick={submeter}>
+                {criarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Criar cliente
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="text-emerald-700 dark:text-emerald-400">✅ Conta criada — pronta pra usar</DialogTitle>
+            </DialogHeader>
+            <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/20 p-3 space-y-2">
+              {[
+                { rotulo: "Link", valor: linkApp },
+                { rotulo: "Login", valor: email.trim().toLowerCase() },
+                { rotulo: "Senha", valor: senha },
+              ].map((c) => (
+                <div key={c.rotulo} className="flex items-center gap-2 text-sm">
+                  <span className="text-xs text-muted-foreground w-11 shrink-0">{c.rotulo}:</span>
+                  <b className="font-semibold truncate">{c.valor}</b>
+                  <Button size="sm" variant="outline" className="ml-auto h-7 text-[11px] shrink-0" onClick={() => copiar(c.valor, c.rotulo)}>
+                    copiar
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              E-mail já confirmado — pode logar agora. A senha não aparece de novo: se perder,
+              o cliente usa "Esqueci minha senha". No primeiro acesso ele aceita os Termos de Uso.
+            </p>
+            <DialogFooter>
+              <Button onClick={() => fechar(false)}>Fechar</Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1768,6 +1962,7 @@ export default function AdminClients() {
   const [pagina, setPagina] = useState(0);
   const [detalheUserId, setDetalheUserId] = useState<number | null>(null);
   const [detalheOpen, setDetalheOpen] = useState(false);
+  const [criarOpen, setCriarOpen] = useState(false);
   const LIMITE = 50;
 
   // Debounce busca pra não disparar query a cada tecla (evita N+1 requests
@@ -1860,6 +2055,9 @@ export default function AdminClients() {
               </CardDescription>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <Button size="sm" className="text-xs" onClick={() => setCriarOpen(true)}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Criar cliente
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -1989,6 +2187,8 @@ export default function AdminClients() {
           )}
         </CardContent>
       </Card>
+
+      <CriarClienteDialog open={criarOpen} onOpenChange={setCriarOpen} onCriado={aposContato} />
 
       <AlertDialog open={migrarLegacyAberto} onOpenChange={setMigrarLegacyAberto}>
         <AlertDialogContent>
