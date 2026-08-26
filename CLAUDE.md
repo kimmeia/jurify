@@ -53,11 +53,15 @@ Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
   robô de jornada + log de e-mails + auditoria = **abas de `/admin/saude`**
   (AdminSaude, aba "Visão rápida" compõe as queries existentes); `/admin/ia`
   tem 3 abas: Agentes IA · Base Jurídica (`BaseJuridicaTab`, o bloco RAG que
-  morava dentro de AdminAgentesIA) · JurisIA (números do acervo primeiro,
-  Sondagem/Fila viram "Ferramentas técnicas" no fim). Rotas antigas
-  redirecionam com `?aba=` — não recriar itens de menu pra elas (teste
-  `admin-layout-novo.test.ts` quebra). Badge vermelho no menu = erros
-  unresolved do Sentry (mesma query/cache da Visão rápida, staleTime 5min).
+  morava dentro de AdminAgentesIA) · JurisIA. V2 "que se explica" (26/08,
+  aprovada após v1 rejeitada por poluição visual): cada aba abre com
+  `ContextoAba` no hub (1 linha + "entenda como funciona" expansível — os
+  agentes são DA PLATAFORMA, não dos escritórios), Subir decisão da Base
+  virou dialog (`decisaoOpen`), ferramentas técnicas do JurisIA colapsadas
+  (`mostrarFerramentas`). Rotas antigas redirecionam com `?aba=` — não
+  recriar itens de menu pra elas (teste `admin-layout-novo.test.ts`
+  quebra). Badge vermelho no menu = erros unresolved do Sentry (mesma
+  query/cache da Visão rápida, staleTime 5min).
 - Clientes = funil de remarketing (25/08): 3 cartões "Pra falar hoje"
   (`admin.funilRemarketing` — nunca ativou/teste vencendo/teste vencido,
   regras PURAS em `server/admin/funil-remarketing.ts`, janela 30d, contato
