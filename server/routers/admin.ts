@@ -2881,6 +2881,119 @@ export const adminRouter = router({
    * `cortesia=true`. `getActiveSubscription` retorna ela por causa da
    * priorização de cortesia (helper `temAcessoAtivo`).
    */
+  /**
+   * Cria uma conta de cliente direto do painel (mockup aprovado 26/08) —
+   * pra demo e pra cliente fechado no WhatsApp, sem passar pelo cadastro
+   * público. O e-mail nasce confirmado (é o dono entregando o acesso);
+   * os TERMOS não são forjados — o TermosGate pede o aceite no primeiro
+   * login do cliente, como manda a trilha LGPD. Nada é enviado por e-mail:
+   * o admin copia login+senha da tela e entrega do jeito dele.
+   */
+  criarCliente: adminProcedure
+    .input(z.object({
+      nome: z.string().min(2).max(255),
+      email: z.string().email().max(320),
+      senha: z.string().min(8).max(128),
+      planId: z.string().max(64).optional(),
+      acesso: z.enum(["cortesia", "trial"]),
+      cortesiaExpiraEm: z.number().int().positive().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const email = input.email.trim().toLowerCase();
+      const { getUserByEmail, upsertUser } = await import("../db");
+      if (await getUserByEmail(email)) {
+        throw new Error("Já existe conta com esse e-mail.");
+      }
+      if (input.cortesiaExpiraEm != null && input.cortesiaExpiraEm <= Date.now()) {
+        throw new Error("Validade da cortesia precisa estar no futuro.");
+      }
+
+      let plano = null as Awaited<ReturnType<typeof import("../billing/planos-repo").getPlanoBySlug>> | null;
+      if (input.planId) {
+        const { getPlanoBySlug } = await import("../billing/planos-repo");
+        plano = await getPlanoBySlug(input.planId);
+        if (!plano) throw new Error("Plano não encontrado no catálogo.");
+      }
+      if (input.acesso === "trial" && !plano) {
+        throw new Error("Escolha o plano pro teste de 14 dias.");
+      }
+
+      const { hashPassword } = await import("../_core/password");
+      const passwordHash = await hashPassword(input.senha);
+      // Mesmo formato de openId do signup por e-mail — a conta é idêntica
+      // a uma auto-cadastrada, só nasce pela mão do admin.
+      const openId = `email-${Buffer.from(email).toString("base64url")}`;
+
+      await upsertUser({
+        openId,
+        name: input.nome.trim(),
+        email,
+        loginMethod: "email",
+        passwordHash,
+        lastSignedIn: new Date(),
+      });
+      const criado = await getUserByEmail(email);
+      if (!criado) throw new Error("Falha ao criar a conta.");
+
+      await db
+        .update(users)
+        .set({ emailVerificado: true, emailVerificadoEm: new Date() })
+        .where(eq(users.id, criado.id));
+
+      // Escritório nasce junto: é ele que faz a conta aparecer como dono na
+      // lista/funil, em vez de "cadastro solto".
+      const { criarEscritorio, getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
+      let escr = await getEscritorioPorUsuario(criado.id);
+      if (!escr) {
+        await criarEscritorio(criado.id, input.nome.trim(), email);
+        escr = await getEscritorioPorUsuario(criado.id);
+      }
+
+      if (input.acesso === "cortesia") {
+        await db.insert(subscriptionsTable).values({
+          userId: criado.id,
+          planId: input.planId ?? null,
+          status: "active",
+          cortesia: true,
+          cortesiaMotivo: "Conta criada pelo admin no painel",
+          cortesiaExpiraEm: input.cortesiaExpiraEm ?? null,
+        });
+      } else {
+        const dias = plano!.trialDias > 0 ? plano!.trialDias : 14;
+        const agora = Date.now();
+        const expira = agora + dias * 24 * 60 * 60 * 1000;
+        await db.insert(subscriptionsTable).values({
+          userId: criado.id,
+          planId: input.planId!,
+          status: "trialing",
+          trialIniciadoEm: agora,
+          trialExpiraEm: expira,
+          currentPeriodEnd: expira,
+          creditsLimit: plano!.limites.creditosCalculosMes,
+        });
+        if (escr) {
+          await db
+            .update(escritorios)
+            .set({ jaUsouTrial: true, trialUsadoEm: new Date() })
+            .where(eq(escritorios.id, escr.escritorio.id));
+        }
+      }
+
+      await registrarAuditoria({
+        ctx,
+        acao: "user.criarCliente",
+        alvoTipo: "user",
+        alvoId: criado.id,
+        alvoNome: input.nome.trim(),
+        detalhes: { email, acesso: input.acesso, planId: input.planId ?? null },
+      });
+
+      return { userId: criado.id };
+    }),
+
   marcarCortesiaUser: adminProcedure
     .input(z.object({
       userId: z.number(),

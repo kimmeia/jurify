@@ -74,7 +74,11 @@ Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
   (inadimplência tem fluxo próprio, não é remarketing). Cortesia/ativação
   manual CONFIRMA o e-mail do user (26/08, `confirmarEmailPorAcaoAdmin` +
   backfill 0208) — demo com e-mail fictício ficava presa no "confirme seu
-  e-mail".
+  e-mail". "Criar cliente" no painel (26/08, `admin.criarCliente` +
+  `CriarClienteDialog`): conta nasce confirmada com escritório, cortesia
+  (validade opcional) OU trial (marca jaUsouTrial), senha provisória só no
+  client (nunca volta do server), termos NÃO forjados (gate pede no 1º
+  login), recusa e-mail duplicado, auditado.
 - Planos (Financeiro → aba Planos): lista vitrine/fora com toggle `oculto`
   inline, `duplicarPlano` (cópia SEMPRE oculta, slug `-copia[-N]` via
   `gerarSlugCopia`), arrastar → `reordenarPlanos`. Edição em **tela cheia**
