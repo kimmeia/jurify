@@ -78,6 +78,19 @@ import {
   planos as planosTable,
 } from "../../drizzle/schema";
 
+/**
+ * Cortesia/ativação manual é uma decisão humana de dar acesso — mas o login
+ * continuava barrado no "confirme seu e-mail", que numa conta demo (e-mail
+ * fictício) nunca chega. Quem o admin libera na mão entra sem confirmar.
+ * O WHERE emailVerificado=false preserva a data original de quem já tinha.
+ */
+async function confirmarEmailPorAcaoAdmin(db: any, userId: number): Promise<void> {
+  await db
+    .update(users)
+    .set({ emailVerificado: true, emailVerificadoEm: new Date() })
+    .where(and(eq(users.id, userId), eq(users.emailVerificado, false)));
+}
+
 export const adminRouter = router({
   // ─── JurisIA · robô de ingestão do DataJud ────────────────────────────────
 
@@ -2725,6 +2738,8 @@ export const adminRouter = router({
         log.warn({ err: err?.message }, "não achei o link da 1ª cobrança (segue sem)");
       }
 
+      await confirmarEmailPorAcaoAdmin(db, input.userId);
+
       await registrarAuditoria({
         ctx,
         acao: "assinatura.ativarNegociada",
@@ -2786,6 +2801,8 @@ export const adminRouter = router({
           cortesiaExpiraEm: input.expiraEm ?? null,
         })
         .where(eq(subscriptionsTable.id, input.subscriptionId));
+
+      await confirmarEmailPorAcaoAdmin(db, sub.userId);
 
       const [u] = await db.select({ id: users.id, name: users.name, email: users.email })
         .from(users).where(eq(users.id, sub.userId)).limit(1);
@@ -2922,6 +2939,8 @@ export const adminRouter = router({
         subscriptionId = inserido[0].id;
         foiCriadaVirtual = true;
       }
+
+      await confirmarEmailPorAcaoAdmin(db, input.userId);
 
       await registrarAuditoria({
         ctx,

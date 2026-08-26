@@ -71,7 +71,10 @@ Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
   migration 0207 + nota categoria comercial na ficha), deep-link
   `?funil=`, card violeta "SEM ATIVAÇÃO" na Visão Geral. Filtro do funil
   usa os MESMOS ids que o cartão contou (teste trava). past_due = "ativa"
-  (inadimplência tem fluxo próprio, não é remarketing).
+  (inadimplência tem fluxo próprio, não é remarketing). Cortesia/ativação
+  manual CONFIRMA o e-mail do user (26/08, `confirmarEmailPorAcaoAdmin` +
+  backfill 0208) — demo com e-mail fictício ficava presa no "confirme seu
+  e-mail".
 - Planos (Financeiro → aba Planos): lista vitrine/fora com toggle `oculto`
   inline, `duplicarPlano` (cópia SEMPRE oculta, slug `-copia[-N]` via
   `gerarSlugCopia`), arrastar → `reordenarPlanos`. Edição em **tela cheia**
