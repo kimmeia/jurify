@@ -293,17 +293,17 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
    bloco (erro sem nenhuma saída com botões; aviso nomeando botão solto;
    ciclo por ele é seguro). Amarras em `smartflow-template-opcoes.test.ts`.
 
--0.4. **Timeout configurável do Atendente IA (27/08)** — mockup
-   `mockup-atendente-timeout.html` entregue, AGUARDANDO aprovação do dono.
-   Desenho: campo "Se o cliente sumir" (N horas/dias, default 24h = igual
-   hoje) + saída NOVA "não respondeu" no nó (amber), que liga no bloco
-   Enviar template pro follow-up (fora da janela de 24h mensagem comum
-   não chega). Sem seta ligada = comportamento atual (só termina). Engine:
-   handleIaAtendente já pausa com aguardandoTimeoutMinutos fixo 1440
-   (engine.ts ~1187) e a retomada por timeout reentra no nó — implementar
-   = ler cfg.timeoutMinutos + tratar __resumindoWaitMotivo==="timeout"
-   com saída "sem_resposta"/"nao_respondeu" ANTES de re-rodar o agente
-   (hoje re-executa o agente no timeout). NADA é removido — regra do dono.
+-0.4. **Timeout configurável do Atendente IA — ENTREGUE 27/08** (aprovado
+   com DUAS condições do dono: teto de 24h pra ficar dentro da janela do
+   WhatsApp, e sem seta ligada = comportamento padrão, só termina).
+   Implementação: `ConfigIaAtendente.timeoutMinutos` (clamp 1..1440,
+   ausente = 1440); handleIaAtendente trata __resumindoWaitMotivo ===
+   "timeout" ANTES de rodar o agente → saída "nao_respondeu" (regressão
+   consertada: antes o timeout RE-EXECUTAVA o agente — resposta nova pra
+   cliente sumido); painel ganhou seção "Se o cliente sumir" (campo em
+   HORAS, max 24) e o nó a saída "não respondeu (Nh)" sempre visível
+   (amber, corDaEdge). Amarras em `atendente-timeout.test.ts`. Nada
+   removido — acumularSegundos e o resto intactos.
 
 0. **Avisos de spam da Meta (19/08 E 22/08)** — SEGUNDO aviso chegou em
    22/08 (prazo de análise 20/11), três dias após as correções de 19/08
