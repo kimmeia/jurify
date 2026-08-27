@@ -401,7 +401,9 @@ export interface SmartflowExecutores {
     proativo?: boolean;
     /** Disparo proativo automático: exige opt-in do contato. */
     exigirOptin?: boolean;
-  }) => Promise<boolean>;
+    // boolean é compat (mocks antigos); { ok, erro } carrega o motivo real
+    // da recusa (guard anti-ban / Meta) pro erro persistido na execução.
+  }) => Promise<boolean | { ok: boolean; erro?: string }>;
   /**
    * Envia um template (HSM) WhatsApp aprovado da Meta pelo canal oficial
    * (Cloud API). Opcional: ambientes/mocks sem Cloud API não implementam —
@@ -1784,8 +1786,9 @@ async function handleWhatsappPerguntaOpcoes(
   const veioDeMensagem =
     typeof ctx.canalId === "number" && ctx.canalId > 0 && (ctx as any).__retomadaPorTimeout !== true;
   let ok = false;
+  let erroEnvio: string | undefined;
   try {
-    ok = await exec.enviarWhatsAppInteractive({
+    const r = await exec.enviarWhatsAppInteractive({
       telefone,
       modo,
       body: bodyInterp,
@@ -1798,11 +1801,21 @@ async function handleWhatsappPerguntaOpcoes(
       proativo: !veioDeMensagem,
       exigirOptin: !veioDeMensagem,
     });
+    ok = typeof r === "boolean" ? r : r.ok;
+    erroEnvio = typeof r === "boolean" ? undefined : r.erro;
   } catch (err: any) {
     return { sucesso: false, contexto: ctx, mensagemErro: `WhatsApp interativo: ${err?.message || String(err)}` };
   }
   if (!ok) {
-    return { sucesso: false, contexto: ctx, mensagemErro: "Falha ao enviar mensagem interativa (verifique canal Cloud API conectado)." };
+    // Mostra o motivo REAL (guard anti-ban / canal / recusa da Meta) — o
+    // genérico só fica quando o executor não soube dizer o porquê.
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: erroEnvio
+        ? `Falha ao enviar mensagem interativa: ${erroEnvio}`
+        : "Falha ao enviar mensagem interativa (verifique canal Cloud API conectado).",
+    };
   }
 
   const timeoutMinutos = Math.max(1, Math.min(7 * 24 * 60, Number(cfg.timeoutMinutos) || 60));

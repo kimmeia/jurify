@@ -1127,7 +1127,12 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
       }
     },
 
-    async enviarWhatsAppInteractive(p): Promise<boolean> {
+    async enviarWhatsAppInteractive(p): Promise<{ ok: boolean; erro?: string }> {
+      // Devolve { ok, erro } — o motor persiste o motivo REAL na execução
+      // (guard anti-ban, canal, recusa da Meta). Antes devolvia boolean e o
+      // painel só mostrava o genérico "verifique canal Cloud API conectado",
+      // indistinguível de qualidade RED / teto diário / opt-out (caso real
+      // do dono em 27/08: timeout disparou, envio barrado, causa invisível).
       try {
         const { enviarInterativoPeloCanalApi } = await import("../integracoes/canal-envio");
         const r = await enviarInterativoPeloCanalApi({
@@ -1159,10 +1164,10 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
             assunto: "Automação (SmartFlow)",
           });
         }
-        return r.ok;
+        return { ok: r.ok, erro: r.erro };
       } catch (err: any) {
         log.error({ err: err.message }, "SmartFlow: erro ao enviar WhatsApp interativo");
-        return false;
+        return { ok: false, erro: err?.message ? String(err.message) : undefined };
       }
     },
 
