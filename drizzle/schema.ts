@@ -2548,6 +2548,7 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "whatsapp_enviar",               // envia mensagem no WhatsApp
     "whatsapp_aguardar_resposta",    // envia mensagem e pausa esperando resposta
     "whatsapp_pergunta_opcoes",      // botões/lista interativa Cloud API + pausa
+    "whatsapp_enviar_template",      // template aprovado (HSM) + pausa esperando o clique
     "transferir",                    // transfere pra humano
     "encerrar_conversa",             // fecha o atendimento (resolvido/fechado)
     "distribuir_atendimento",        // escolhe atendente de um setor e seta dono da conversa

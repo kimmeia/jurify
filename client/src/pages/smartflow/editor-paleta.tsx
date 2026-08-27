@@ -71,6 +71,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   whatsapp_enviar: MessageCircle,
   whatsapp_aguardar_resposta: Pause,
   whatsapp_pergunta_opcoes: MessageCircleQuestion,
+  whatsapp_enviar_template: FileText,
   transferir: PhoneCall,
   encerrar_conversa: CheckCircle2,
   distribuir_atendimento: Users,
