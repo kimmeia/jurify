@@ -247,6 +247,61 @@ describe("validarGrafo", () => {
     });
   });
 
+  // "Enviar template" ramifica pelos botões quick-reply — mesmas regras de
+  // seta solta da Pergunta com opções, com uma exceção: template SEM botão
+  // é envio simples (fim natural permitido).
+  describe("Enviar template — saídas dos botões", () => {
+    const tpl = (config: Record<string, unknown>): PassoValidar => ({
+      nodeId: "tpl",
+      clienteId: "ctpl",
+      tipo: "whatsapp_enviar_template",
+      config,
+      temProximoSe: true,
+    });
+
+    it("ERRO — template COM botões e nenhuma saída", () => {
+      const passos = [tpl({ opcoes: [{ id: "qr0", titulo: "Podemos sim" }] })];
+      const edges: EdgeValidar[] = [{ source: "gat", target: "tpl" }];
+      const r = validarGrafo("gat", passos, edges);
+      expect(r.erros.some((e) => e.includes("Enviar template sem nenhuma saída"))).toBe(true);
+    });
+
+    it("template SEM botões e sem saída é fim natural (não é erro)", () => {
+      const passos = [tpl({ opcoes: [] })];
+      const edges: EdgeValidar[] = [{ source: "gat", target: "tpl" }];
+      const r = validarGrafo("gat", passos, edges);
+      expect(r.erros).toEqual([]);
+    });
+
+    it("AVISO nomeando o botão do template sem seta", () => {
+      const passos = [
+        tpl({ opcoes: [{ id: "qr0", titulo: "Podemos sim" }, { id: "qr1", titulo: "Podemos não" }] }),
+        passo("fim", "cfim"),
+      ];
+      const edges: EdgeValidar[] = [
+        { source: "gat", target: "tpl" },
+        { source: "tpl", target: "fim", sourceHandle: "cond_qr1" },
+      ];
+      const r = validarGrafo("gat", passos, edges);
+      expect(r.erros).toEqual([]);
+      expect(r.avisos.some((a) => a.includes("Enviar template") && a.includes('"Podemos sim"'))).toBe(true);
+    });
+
+    it("ciclo passando pelo Enviar template é permitido (ele pausa esperando o clique)", () => {
+      const passos = [
+        tpl({ opcoes: [{ id: "qr0", titulo: "Sim" }] }),
+        passo("p1", "c1"),
+      ];
+      const edges: EdgeValidar[] = [
+        { source: "gat", target: "tpl" },
+        { source: "tpl", target: "p1", sourceHandle: "cond_qr0" },
+        { source: "p1", target: "tpl" },
+      ];
+      const r = validarGrafo("gat", passos, edges);
+      expect(r.erros).toEqual([]);
+    });
+  });
+
   it("múltiplos erros convivem (ciclo + condicional sem saída)", () => {
     const passos = [
       passo("p1", "c1"),

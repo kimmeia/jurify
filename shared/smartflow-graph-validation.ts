@@ -134,6 +134,7 @@ export function validarGrafo(
         (p) =>
           p.tipo === "whatsapp_aguardar_resposta" ||
           p.tipo === "whatsapp_pergunta_opcoes" ||
+          p.tipo === "whatsapp_enviar_template" ||
           p.tipo === "ia_atendente",
       )
       .map((p) => p.nodeId),
@@ -163,36 +164,41 @@ export function validarGrafo(
     );
   }
 
-  // "Pergunta com opções" existe pra ramificar pelo clique. Sem NENHUMA
-  // saída, o bot pergunta e morre calado seja qual for a resposta → erro.
-  // Botão específico sem seta é permitido (pode ser fim intencional), mas
-  // o engine encerra o fluxo EM SILÊNCIO quando aquele botão é clicado —
-  // então avisa nomeando o botão, que é o jeito desse esquecimento aparecer
-  // antes do cliente clicar no vazio.
+  // Blocos que ramificam pelo clique (Pergunta com opções / Enviar template)
+  // existem pra isso. Com botões e NENHUMA saída, o bot pergunta e morre
+  // calado seja qual for a resposta → erro. Botão específico sem seta é
+  // permitido (pode ser fim intencional), mas o engine encerra o fluxo EM
+  // SILÊNCIO quando aquele botão é clicado — então avisa nomeando o botão,
+  // que é o jeito desse esquecimento aparecer antes do cliente clicar no vazio.
   for (const p of passos) {
-    if (p.tipo !== "whatsapp_pergunta_opcoes") continue;
-    const saidas = edges.filter((e) => e.source === p.nodeId);
-    if (saidas.length === 0) {
-      erros.push(
-        "Pergunta com opções sem nenhuma saída conectada — ligue cada botão (e as saídas \"outra resposta\"/\"sem resposta\") ao passo seguinte, senão o fluxo termina sem responder ao clique.",
-      );
-      continue;
-    }
-    const handles = new Set(saidas.map((e) => e.sourceHandle || "default"));
+    const ehOpcoes = p.tipo === "whatsapp_pergunta_opcoes";
+    const ehTemplate = p.tipo === "whatsapp_enviar_template";
+    if (!ehOpcoes && !ehTemplate) continue;
+    const rotulo = ehOpcoes ? "Pergunta com opções" : "Enviar template";
     const cfg = p.config as {
       modo?: string;
       opcoes?: Array<{ id?: string; titulo?: string }>;
       secoes?: Array<{ itens?: Array<{ id?: string; titulo?: string }> }>;
     };
     const itens =
-      cfg.modo === "lista"
+      ehOpcoes && cfg.modo === "lista"
         ? (cfg.secoes ?? []).flatMap((s) => s.itens ?? [])
         : (cfg.opcoes ?? []);
+    const saidas = edges.filter((e) => e.source === p.nodeId);
+    if (saidas.length === 0) {
+      // Enviar template SEM botão é envio simples — fim natural permitido.
+      if (ehTemplate && itens.length === 0) continue;
+      erros.push(
+        `${rotulo} sem nenhuma saída conectada — ligue cada botão (e as saídas "outra resposta"/"sem resposta") ao passo seguinte, senão o fluxo termina sem responder ao clique.`,
+      );
+      continue;
+    }
+    const handles = new Set(saidas.map((e) => e.sourceHandle || "default"));
     const soltos = itens.filter((o) => o?.id && !handles.has(`cond_${o.id}`));
     if (soltos.length > 0) {
       const nomes = soltos.map((o) => `"${o.titulo || o.id}"`).join(", ");
       avisos.push(
-        `Pergunta com opções: ${soltos.length === 1 ? "a opção" : "as opções"} ${nomes} não tem seta ligada — quem clicar nela encerra o fluxo sem resposta. Ligue a saída da opção ao próximo passo (ou remova a opção).`,
+        `${rotulo}: ${soltos.length === 1 ? "a opção" : "as opções"} ${nomes} não tem seta ligada — quem clicar nela encerra o fluxo sem resposta. Ligue a saída da opção ao próximo passo (ou remova a opção).`,
       );
     }
   }
@@ -227,7 +233,8 @@ export function validarGrafo(
     (p) =>
       p.tipo === "ia_atendente" ||
       p.tipo === "whatsapp_aguardar_resposta" ||
-      p.tipo === "whatsapp_pergunta_opcoes",
+      p.tipo === "whatsapp_pergunta_opcoes" ||
+      p.tipo === "whatsapp_enviar_template",
   );
   const temSaidaHumana = passos.some(
     (p) => p.tipo === "transferir" || (p.tipo === "ia_atendente" && temFerramentaTransferir(p)),

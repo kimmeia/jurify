@@ -267,15 +267,21 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
    (resposta de botão de TEMPLATE — {payload, text}) que antes virava
    "[button]" e nunca retomava o fluxo. Pedir ao dono: reabrir o fluxo,
    conferir a seta do "Podemos sim" e salvar (a validação acusa na hora).
-   PRÓXIMO PASSO: bloco "Enviar template" pro follow-up fora da janela de
-   24h — mockup `mockup-followup-template.html` entregue 27/08, AGUARDANDO
-   aprovação. Desenho: lista templates aprovados do WhatsApp Manager
-   (badge Utility/Marketing + status), botões do template viram saídas
-   `cond_<payload>` (mesma amarração da Pergunta com opções, retomada já
-   funciona com o case novo), variáveis mapeadas, timeout "sem resposta".
-   Anti-punição (conta com 2 avisos!): follow-up = categoria UTILITY;
-   Marketing só com confirmação extra (Meta limita ~2 marketing/contato/
-   dia e denúncia derruba qualidade); 1 follow-up por contato.
+   Bloco "Enviar template" (follow-up fora da janela de 24h): **ENTREGUE
+   27/08** (aprovado com a condição "se respeita a documentação da Meta").
+   Tipo novo `whatsapp_enviar_template`: reusa o builder do modo template
+   do Enviar mensagem (`ConfigWhatsappTemplateBuilder` com `comOpcoes` —
+   grava categoria + snapshot dos quick-replies) e o envio
+   `enviarTemplateWhatsApp`; payload estável `qr<index>` vai no envio
+   (sub_type quick_reply) e volta no clique (case "button" do parse) →
+   saídas `cond_qr<N>` + outra_resposta + sem_resposta (timeout default
+   1440min); template SEM botão não pausa (saída default). Anti-punição:
+   MARKETING recusa envio sem `confirmoMarketing` (checkbox com aviso no
+   painel; validação do editor acusa); o guard existente já força
+   opt-in (= contato iniciou conversa), honra opt-out, pausa proativo em
+   qualidade RED e aplica teto diário/rate limit. validarGrafo cobre o
+   bloco (erro sem nenhuma saída com botões; aviso nomeando botão solto;
+   ciclo por ele é seguro). Amarras em `smartflow-template-opcoes.test.ts`.
 
 0. **Avisos de spam da Meta (19/08 E 22/08)** — SEGUNDO aviso chegou em
    22/08 (prazo de análise 20/11), três dias após as correções de 19/08

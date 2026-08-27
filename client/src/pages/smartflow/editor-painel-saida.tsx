@@ -69,6 +69,10 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
     { path: "respostaOpcao", label: "{tipo, id, titulo} da opção clicada (button/list reply)", tipo: "objeto" },
     { path: "respostaUsuario", label: "Texto digitado se cliente respondeu por texto livre", tipo: "texto" },
   ],
+  whatsapp_enviar_template: [
+    { path: "respostaOpcao", label: "{tipo, id, titulo} do botão do template clicado", tipo: "objeto" },
+    { path: "respostaUsuario", label: "Texto digitado se cliente respondeu por texto livre", tipo: "texto" },
+  ],
   transferir: [
     { path: "transferir", label: "Sinaliza transferência pra humano (encerra)", tipo: "booleano" },
   ],

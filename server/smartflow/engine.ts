@@ -1341,6 +1341,118 @@ async function enviarTemplateWhatsApp(
   };
 }
 
+/**
+ * Passo `whatsapp_enviar_template` — envia um template aprovado e PAUSA
+ * esperando a resposta, ramificando pelos botões quick-reply (cond_<id>).
+ * É o "Pergunta com opções" de fora da janela de 24h: reusa o envio de
+ * template do `whatsapp_enviar` (componentes/validação/opt-in) e a pausa
+ * do `whatsapp_pergunta_opcoes` (timeout → sem_resposta; texto → fuzzy).
+ *
+ * Anti-punição: categoria MARKETING só sai com `confirmoMarketing` — a
+ * Meta limita marketing por contato/dia e denúncia derruba a qualidade.
+ */
+async function handleWhatsappEnviarTemplate(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    templateNome?: string;
+    templateCategoria?: string;
+    confirmoMarketing?: boolean;
+    opcoes?: Array<{ id: string; titulo: string; index: number }>;
+    timeoutMinutos?: number;
+    fallbackTexto?: "fuzzy" | "ignorar";
+  };
+  const opcoes = Array.isArray(cfg.opcoes) ? cfg.opcoes.filter((o) => o?.id) : [];
+
+  // MODO RETOMADA — mesma decisão de ramo da Pergunta com opções.
+  const resumindoEsseNo = (ctx as any).__resumindoWaitClienteId === passo.clienteId;
+  if (resumindoEsseNo) {
+    const motivo = (ctx as any).__resumindoWaitMotivo as string | undefined;
+    const novoCtx: SmartflowContexto = { ...ctx };
+    delete (novoCtx as any).__resumindoWaitClienteId;
+    delete (novoCtx as any).__resumindoWaitMotivo;
+    delete (novoCtx as any).aguardandoNodeClienteId;
+
+    if (motivo === "timeout") {
+      return { sucesso: true, contexto: novoCtx, proximoRamoId: "sem_resposta" };
+    }
+    // Clique no botão do template: o webhook chega como type "button" com
+    // {payload, text} e o parse injeta respostaOpcao — payload é o id (qrN).
+    const reply = (novoCtx as any).respostaOpcao as { id?: string; titulo?: string } | undefined;
+    if (reply && typeof reply.id === "string" && reply.id) {
+      // Payload conhecido roteia direto; payload estranho (ex: clique num
+      // template ANTIGO de outra conversa) cai no fuzzy pelo título.
+      if (opcoes.some((o) => o.id === reply.id)) {
+        return { sucesso: true, contexto: novoCtx, proximoRamoId: `cond_${reply.id}` };
+      }
+      const porTitulo = reply.titulo
+        ? encontrarMatchPorTitulo(reply.titulo, opcoes.map((o) => ({ id: o.id, titulo: o.titulo })))
+        : null;
+      if (porTitulo) return { sucesso: true, contexto: novoCtx, proximoRamoId: `cond_${porTitulo.id}` };
+    }
+    const fallback = cfg.fallbackTexto ?? "fuzzy";
+    if (fallback === "fuzzy") {
+      const texto = String((novoCtx as any).respostaUsuario || "").trim();
+      const match = encontrarMatchPorTitulo(texto, opcoes.map((o) => ({ id: o.id, titulo: o.titulo })));
+      if (match) return { sucesso: true, contexto: novoCtx, proximoRamoId: `cond_${match.id}` };
+    }
+    return { sucesso: true, contexto: novoCtx, proximoRamoId: "outra_resposta" };
+  }
+
+  // MODO ENVIO.
+  const contatoId = ctx.contatoId;
+  if (typeof contatoId !== "number") {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Enviar template: sem contato no contexto — use um gatilho/passo que traga o contato." };
+  }
+  if (!String(cfg.templateNome || "").trim()) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Enviar template: escolha um template aprovado no passo." };
+  }
+  const categoria = String(cfg.templateCategoria || "").toUpperCase();
+  if (categoria === "MARKETING" && cfg.confirmoMarketing !== true) {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro:
+        "Template de MARKETING exige a confirmação extra no passo (a Meta limita marketing por contato/dia e denúncias derrubam a qualidade do número). Pra follow-up, prefira um template Utility.",
+    };
+  }
+
+  // Injeta o payload de cada quick-reply (qrN) — é ele que volta no clique
+  // e permite rotear cond_<id> sem depender do texto do botão.
+  const configEnvio = {
+    ...passo.config,
+    templateBotoes: [
+      ...(Array.isArray((passo.config as any).templateBotoes)
+        ? (passo.config as any).templateBotoes.filter((b: any) => String(b?.tipo).toUpperCase() !== "QUICK_REPLY")
+        : []),
+      ...opcoes.map((o) => ({ index: o.index, tipo: "QUICK_REPLY", valor: o.id })),
+    ],
+  };
+  const envio = await enviarTemplateWhatsApp({ ...passo, config: configEnvio }, ctx, exec);
+  if (!envio.sucesso) return envio;
+
+  // Sem botão configurado não há o que esperar — segue como envio simples
+  // pela saída default (fluxo pode continuar ou terminar ali).
+  if (opcoes.length === 0) {
+    return { sucesso: true, contexto: envio.contexto, proximoRamoId: "default" };
+  }
+
+  const timeoutMinutos = Math.max(1, Math.min(7 * 24 * 60, Number(cfg.timeoutMinutos) || 1440));
+  return {
+    sucesso: true,
+    parar: true,
+    contexto: {
+      ...envio.contexto,
+      aguardandoMensagem: true,
+      aguardandoContatoId: contatoId,
+      aguardandoTimeoutMinutos: timeoutMinutos,
+      aguardandoNodeClienteId: passo.clienteId ?? null,
+    },
+  };
+}
+
 async function handleWhatsAppEnviar(
   passo: Passo,
   ctx: SmartflowContexto,
@@ -3029,6 +3141,7 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   whatsapp_enviar: handleWhatsAppEnviar,
   whatsapp_aguardar_resposta: handleWhatsappAguardarResposta,
   whatsapp_pergunta_opcoes: handleWhatsappPerguntaOpcoes,
+  whatsapp_enviar_template: handleWhatsappEnviarTemplate,
   transferir: handleTransferir,
   distribuir_atendimento: handleDistribuirAtendimento,
   condicional: handleCondicional,

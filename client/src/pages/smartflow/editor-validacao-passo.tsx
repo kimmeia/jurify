@@ -143,6 +143,29 @@ export function validarPasso(
       break;
     }
 
+    case "whatsapp_enviar_template": {
+      if (!varsGatilho.has("canalId") && !varsGatilho.has("telefoneCliente")) {
+        itens.push({
+          severidade: gatilhoIsManual ? "aviso" : "erro",
+          mensagem: `Sem canal nem telefone no contexto — o envio não tem destino. Use um passo "Buscar contato" antes pra resolver o telefone.`,
+        });
+      }
+      const nome = String((config as any).templateNome || "").trim();
+      if (!nome) {
+        itens.push({ severidade: "erro", mensagem: "Escolha um template aprovado da sua conta Meta." });
+        break;
+      }
+      const cat = String((config as any).templateCategoria || "").toUpperCase();
+      if (cat === "MARKETING" && (config as any).confirmoMarketing !== true) {
+        itens.push({
+          severidade: "erro",
+          mensagem: "Template de MARKETING sem a confirmação extra — o passo vai recusar o envio. Prefira um template Utility pro follow-up.",
+        });
+      }
+      itens.push({ severidade: "aviso", mensagem: "Template só vai pelo WhatsApp oficial (API Meta) e precisa estar aprovado na Meta." });
+      break;
+    }
+
     case "asaas_gerar_cobranca":
     case "asaas_consultar_valor_aberto": {
       requerVar("contatoId", "Asaas precisa do contato pra resolver o cliente vinculado");
