@@ -293,6 +293,18 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
    bloco (erro sem nenhuma saída com botões; aviso nomeando botão solto;
    ciclo por ele é seguro). Amarras em `smartflow-template-opcoes.test.ts`.
 
+-0.4. **Timeout configurável do Atendente IA (27/08)** — mockup
+   `mockup-atendente-timeout.html` entregue, AGUARDANDO aprovação do dono.
+   Desenho: campo "Se o cliente sumir" (N horas/dias, default 24h = igual
+   hoje) + saída NOVA "não respondeu" no nó (amber), que liga no bloco
+   Enviar template pro follow-up (fora da janela de 24h mensagem comum
+   não chega). Sem seta ligada = comportamento atual (só termina). Engine:
+   handleIaAtendente já pausa com aguardandoTimeoutMinutos fixo 1440
+   (engine.ts ~1187) e a retomada por timeout reentra no nó — implementar
+   = ler cfg.timeoutMinutos + tratar __resumindoWaitMotivo==="timeout"
+   com saída "sem_resposta"/"nao_respondeu" ANTES de re-rodar o agente
+   (hoje re-executa o agente no timeout). NADA é removido — regra do dono.
+
 0. **Avisos de spam da Meta (19/08 E 22/08)** — SEGUNDO aviso chegou em
    22/08 (prazo de análise 20/11), três dias após as correções de 19/08
    (opt-out ampliado, opt-in em envio frio manual, executarManual
