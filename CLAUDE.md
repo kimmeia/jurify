@@ -42,6 +42,16 @@ código depois do "aprovado" dele. **A entrega é o ARQUIVO HTML auto-contido
 (fontes embutidas em base64), não PNG** — o dono abre no navegador dele.
 Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
 
+### Nunca remover sem autorização expressa (regra do dono, 27/08/2026)
+
+Nenhuma remoção — campo de tela, bloco, procedure, coluna, funcionalidade,
+comportamento — sem o dono autorizar EXPRESSAMENTE aquela remoção
+específica. "Pode fazer X" autoriza ADICIONAR X, não remover outra coisa
+no caminho; refatorar não é licença pra apagar; código "aparentemente
+morto" também não sai sem perguntar. Na dúvida, pergunta antes. (Origem:
+ele estranhou um suposto sumiço do timeout do Atendente IA — era alarme
+falso, mas a regra fica.)
+
 ### Comentários
 - Default: NÃO escrever. Só pra "WHY" não-óbvio (workaround, invariant escondido, surpresa pra um leitor futuro)
 - Não explicar WHAT (nomes de identificadores fazem isso)
