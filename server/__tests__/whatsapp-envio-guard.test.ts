@@ -27,6 +27,7 @@ function fakeDb(opts: { selectQueue?: any[][]; onUpdate?: (values: any) => void 
       from: () => chain,
       innerJoin: () => chain,
       where: () => chain,
+      orderBy: () => chain,
       limit: () => Promise.resolve(rows),
     };
     return chain;
@@ -259,6 +260,65 @@ describe("podeEnviar — opt-out do contato", () => {
     const db = fakeDb({ selectQueue: [[{ restrito: false }], [{ optOut: false }]] });
     const r = await podeEnviar({ db, canalId: 1, contatoId: 5, proativo: true, agoraMs: 1000 });
     expect(r.ok).toBe(true);
+  });
+
+  // Decisão do dono (27/08): quem mandou SAIR mas VOLTOU A ESCREVER reabriu
+  // a conversa — a mensagem dele é o que abre a janela de 24h da Meta, então
+  // continuar o atendimento dentro dela não é aviso indesejado. Fora da
+  // janela (ou sem mensagem depois do SAIR), o bloqueio segue integral.
+  it("SAIR + contato escreveu DEPOIS (janela aberta) → o fluxo continua", async () => {
+    const agora = 10_000_000;
+    const db = fakeDb({
+      selectQueue: [
+        [{ restrito: false }],
+        [{ optOut: true, em: new Date(agora - 60 * 60 * 1000) }],       // SAIR há 1h
+        [{ createdAt: new Date(agora - 10 * 60 * 1000) }],              // escreveu há 10min
+      ],
+    });
+    const r = await podeEnviar({ db, canalId: 1, contatoId: 5, proativo: true, agoraMs: agora });
+    expect(r.ok).toBe(true);
+  });
+
+  it("SAIR + mensagem posterior mas janela FECHADA (>24h) → bloqueia", async () => {
+    const agora = 100_000_000;
+    const db = fakeDb({
+      selectQueue: [
+        [{ restrito: false }],
+        [{ optOut: true, em: new Date(agora - 72 * 60 * 60 * 1000) }],  // SAIR há 3 dias
+        [{ createdAt: new Date(agora - 30 * 60 * 60 * 1000) }],         // escreveu há 30h
+      ],
+    });
+    const r = await podeEnviar({ db, canalId: 1, contatoId: 5, proativo: true, agoraMs: agora });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.tipo).toBe("optout");
+  });
+
+  it("SAIR sem NENHUMA mensagem posterior → bloqueia (a última entrada é o próprio SAIR)", async () => {
+    const agora = 10_000_000;
+    const em = new Date(agora - 60 * 60 * 1000);
+    const db = fakeDb({
+      selectQueue: [
+        [{ restrito: false }],
+        [{ optOut: true, em }],
+        [{ createdAt: em }], // empate de timestamp = a mensagem do SAIR — não reabre
+      ],
+    });
+    const r = await podeEnviar({ db, canalId: 1, contatoId: 5, proativo: true, agoraMs: agora });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.tipo).toBe("optout");
+  });
+
+  it("registro de opt-out sem data não reabre (lado seguro)", async () => {
+    const agora = 10_000_000;
+    const db = fakeDb({
+      selectQueue: [
+        [{ restrito: false }],
+        [{ optOut: true, em: null }],
+        [{ createdAt: new Date(agora - 10 * 60 * 1000) }],
+      ],
+    });
+    const r = await podeEnviar({ db, canalId: 1, contatoId: 5, proativo: true, agoraMs: agora });
+    expect(r.ok).toBe(false);
   });
 });
 

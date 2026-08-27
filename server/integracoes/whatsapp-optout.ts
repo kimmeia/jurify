@@ -125,6 +125,57 @@ export async function contatoEstaOptOut(db: any, contatoId: number): Promise<boo
 }
 
 /**
+ * O opt-out está VIGENTE pra um envio proativo? Pura, testável.
+ *
+ * SAIR segue bloqueando disparo frio até o VOLTAR — isso não muda. Mas
+ * quando o contato volta a ESCREVER depois do SAIR, a própria Meta lê a
+ * mensagem como "quero conversar" (é ela que abre a janela de atendimento
+ * de 24h): dentro dessa janela, continuar a conversa que ELE iniciou não é
+ * aviso indesejado. Fora da janela — ou sem mensagem posterior ao SAIR —
+ * o bloqueio vale integral. (Decisão do dono, 27/08.)
+ *
+ * A comparação é ESTRITA (>): a própria mensagem "SAIR" é uma entrada
+ * gravada junto do registro do opt-out — empate de timestamp não reabre.
+ * Registro antigo sem data de opt-out também não reabre (sem como provar
+ * que a mensagem veio depois → bloqueia, que é o lado seguro).
+ */
+export function optOutVigente(opts: {
+  optOut: boolean;
+  optOutEm: Date | string | null | undefined;
+  ultimaEntradaAt: Date | string | null | undefined;
+  agoraMs: number;
+}): boolean {
+  if (!opts.optOut) return false;
+  const entrada = opts.ultimaEntradaAt ? new Date(opts.ultimaEntradaAt as any).getTime() : NaN;
+  if (Number.isNaN(entrada)) return true;
+  const em = opts.optOutEm ? new Date(opts.optOutEm as any).getTime() : NaN;
+  const reabriuDepoisDoSair = !Number.isNaN(em) && entrada > em;
+  return !(reabriuDepoisDoSair && janela24hAberta(new Date(entrada), opts.agoraMs));
+}
+
+/**
+ * Versão com I/O do `optOutVigente`: carrega o registro do contato e a
+ * última entrada dele no canal. Sem `canalId` não dá pra medir a janela —
+ * bloqueio integral (lado seguro).
+ */
+export async function contatoOptOutVigenteParaEnvio(
+  db: any,
+  contatoId: number,
+  canalId?: number,
+  agoraMs: number = Date.now(),
+): Promise<boolean> {
+  const [row] = await db
+    .select({ optOut: contatos.optOutWhatsapp, em: contatos.optOutWhatsappEm })
+    .from(contatos)
+    .where(eq(contatos.id, contatoId))
+    .limit(1);
+  if (!row?.optOut) return false;
+  if (!canalId) return true;
+  const ultima = await ultimaEntradaDoContatoNoCanal(db, contatoId, canalId);
+  return optOutVigente({ optOut: true, optOutEm: row.em ?? null, ultimaEntradaAt: ultima, agoraMs });
+}
+
+/**
  * Registra o opt-in documental se ainda não existir — idempotente e
  * best-effort (nunca lança; não pode derrubar o fluxo de mensagem).
  */
