@@ -305,6 +305,23 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
    (amber, corDaEdge). Amarras em `atendente-timeout.test.ts`. Nada
    removido — acumularSegundos e o resto intactos.
 
+-0.3. **Filtro de período do Inbox pelo INÍCIO do atendimento (27/08)** —
+   mockup `mockup-filtro-inicio-atendimento.html` entregue, AGUARDANDO
+   aprovação. Problema real: filtro "hoje" mostrava conversa de ontem
+   porque a pergunta atual é "teve mensagem no período?" (EXISTS sobre
+   mensagens, db-crm.ts condicoesConversa). Regra do dono: período conta
+   pelo início do ATENDIMENTO — primeira mensagem da conversa; se um
+   atendimento foi encerrado (resolvido/fechado) e o cliente voltou a
+   escrever, o retorno é um NOVO início. Desenho: seletor "O período
+   conta pelo…" com 2 modos (Início do atendimento = novo default ×
+   Qualquer mensagem no período = comportamento atual, NADA removido),
+   preset "Hoje" novo, tags "iniciado hoje"/"reaberto hoje" nos cards e
+   nota "Maria Clara e +3 fora do filtro · mostrar mesmo assim".
+   Implementação provável: coluna conversas.atendimentoIniciadoEm
+   (set na criação; re-set quando entrada chega com conversa
+   resolvida/fechada) + backfill por migração — computar via subquery a
+   cada listagem seria caro.
+
 0. **Avisos de spam da Meta (19/08 E 22/08)** — SEGUNDO aviso chegou em
    22/08 (prazo de análise 20/11), três dias após as correções de 19/08
    (opt-out ampliado, opt-in em envio frio manual, executarManual
