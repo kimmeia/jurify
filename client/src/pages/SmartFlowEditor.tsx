@@ -503,8 +503,9 @@ function PassoNodeView({ id, data, selected }: NodeProps<PassoNode>) {
             <HandleRow key={f} handleId={f} label={FERRAMENTA_ATENDENTE_LABEL[f] || f} cor="#0ea5e9" />
           ))}
           {(() => {
-            const horas = Math.max(1, Math.min(24, Math.round((Number((data.config as any)?.timeoutMinutos) || 1440) / 60)));
-            return <HandleRow handleId="nao_respondeu" label={`não respondeu (${horas}h)`} italic cor="#f59e0b" />;
+            const min = Math.max(1, Math.min(1440, Math.floor(Number((data.config as any)?.timeoutMinutos) || 1440)));
+            const rotulo = min % 60 === 0 ? `${min / 60}h` : `${min}min`;
+            return <HandleRow handleId="nao_respondeu" label={`não respondeu (${rotulo})`} italic cor="#f59e0b" />;
           })()}
         </div>
       ) : data.tipo === "distribuir_atendimento" ? (
@@ -3103,22 +3104,24 @@ function ConfigIaAtendenteFields({
           <Input
             type="number"
             min={1}
-            max={24}
-            className="h-8 w-20"
-            value={Math.max(1, Math.min(24, Math.round((Number(cfg.timeoutMinutos) || 1440) / 60)))}
+            max={1440}
+            className="h-8 w-24"
+            value={Math.max(1, Math.min(1440, Math.floor(Number(cfg.timeoutMinutos) || 1440)))}
             onChange={(e) => {
-              const horas = Math.max(1, Math.min(24, Math.floor(Number(e.target.value) || 24)));
-              onChange({ timeoutMinutos: horas * 60 });
+              const minutos = Math.max(1, Math.min(1440, Math.floor(Number(e.target.value) || 1440)));
+              onChange({ timeoutMinutos: minutos });
             }}
           />
-          <span className="text-xs text-foreground">horas</span>
+          <span className="text-xs text-foreground">minutos</span>
           <span className="text-[10px] text-muted-foreground">→ saída "não respondeu"</span>
         </div>
         <p className="text-[10px] text-muted-foreground leading-relaxed">
           Estourando o prazo, o fluxo segue pela saída <strong>"não respondeu"</strong> do bloco no canvas —
           ligue nela um Encerrar, um Transferir ou o follow-up. <strong>Sem seta ligada, o fluxo apenas
-          termina</strong> (comportamento de sempre; 24h é o padrão). Máximo de 24h pra ficar dentro da
-          janela do WhatsApp.
+          termina</strong> (comportamento de sempre; 1440 = 24h é o padrão). Máximo de 1440 minutos (24h)
+          pra ficar dentro da janela do WhatsApp. O prazo conta a partir da última resposta do agente e
+          <strong> salve o fluxo</strong> pra valer nas próximas conversas — conversa que já estava
+          esperando mantém o prazo antigo.
         </p>
       </div>
 
