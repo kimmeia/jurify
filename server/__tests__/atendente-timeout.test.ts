@@ -102,12 +102,15 @@ describe("amarras de UI", () => {
   const raiz = join(__dirname, "..", "..");
   const editor = readFileSync(join(raiz, "client/src/pages/SmartFlowEditor.tsx"), "utf8");
 
-  it("o nó mostra a saída 'não respondeu' e o painel tem o campo em horas com teto 24", () => {
+  it("o nó mostra a saída 'não respondeu' e o painel tem o campo em MINUTOS com teto 1440", () => {
     expect(editor).toContain('handleId="nao_respondeu"');
     expect(editor).toContain("Se o cliente sumir no meio da conversa");
-    // Teto de 24 horas no input (condição expressa do dono).
+    // Campo em minutos (pedido do dono 27/08) com teto de 1440 = 24h
+    // (condição expressa: dentro da janela do WhatsApp).
     const secao = editor.slice(editor.indexOf("Se o cliente sumir"), editor.indexOf("Agrupar mensagens picadas"));
-    expect(secao).toContain("max={24}");
+    expect(secao).toContain("max={1440}");
+    expect(secao).toContain("minutos");
+    expect(secao).not.toContain("horas</span>");
   });
 
   it("config compartilhada documenta o teto de 1440 minutos", () => {
