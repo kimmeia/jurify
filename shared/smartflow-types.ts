@@ -259,6 +259,16 @@ export interface ConfigIaAtendente {
   consultaConfig?: { responsavelModo?: "auto" | "fixo"; responsavelId?: number; duracaoMin?: number; dias?: number };
   /** Janela (segundos) pra juntar mensagens picadas. 0/ausente = desligado. */
   acumularSegundos?: number;
+  /**
+   * Quanto tempo esperar o cliente responder antes de sair pela saída
+   * "nao_respondeu". Em MINUTOS. Ausente = 1440 (24h, comportamento de
+   * sempre). Teto: 1440 — decisão do dono (27/08): o timeout fica DENTRO
+   * da janela de 24h do WhatsApp, então a saída ainda alcança o cliente
+   * com mensagem comum; follow-up mais tardio é papel do bloco Enviar
+   * template. Sem seta ligada em "nao_respondeu", o fluxo apenas termina
+   * (igual sempre foi).
+   */
+  timeoutMinutos?: number;
 }
 
 /**

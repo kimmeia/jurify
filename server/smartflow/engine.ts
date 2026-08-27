@@ -1066,9 +1066,26 @@ async function handleIaAtendente(
     consultas?: string[];
     consultaConfig?: { responsavelModo?: "auto" | "fixo"; responsavelId?: number; duracaoMin?: number; dias?: number };
     acumularSegundos?: number;
+    timeoutMinutos?: number;
   };
   if (typeof cfg.agenteId !== "number" || cfg.agenteId <= 0) {
     return { sucesso: false, contexto: ctx, mensagemErro: "Atendente IA: escolha um agente." };
+  }
+
+  // TIMEOUT: o cliente sumiu e o prazo estourou. Sai pela saída
+  // "nao_respondeu" SEM re-rodar o agente — re-executar aqui gerava uma
+  // resposta nova pra ninguém (e antes deste ramo era exatamente o que
+  // acontecia). Sem seta ligada, resolverProximo devolve null e o fluxo
+  // termina — comportamento de sempre, escolhido pelo dono como padrão.
+  if (
+    (ctx as any).__resumindoWaitClienteId === passo.clienteId &&
+    (ctx as any).__resumindoWaitMotivo === "timeout"
+  ) {
+    const novoCtx: SmartflowContexto = { ...ctx };
+    delete (novoCtx as any).__resumindoWaitClienteId;
+    delete (novoCtx as any).__resumindoWaitMotivo;
+    delete (novoCtx as any).aguardandoNodeClienteId;
+    return { sucesso: true, contexto: novoCtx, proximoRamoId: "nao_respondeu" };
   }
   const acumularSegundos = Number(cfg.acumularSegundos) > 0 ? Math.floor(Number(cfg.acumularSegundos)) : 0;
   const ferramentas = Array.isArray(cfg.ferramentas) ? cfg.ferramentas.filter((f) => typeof f === "string") : [];
@@ -1184,7 +1201,9 @@ async function handleIaAtendente(
         mensagensEnviadas: resposta ? [...enviadas, resposta] : enviadas,
         aguardandoMensagem: true,
         aguardandoContatoId: contatoId,
-        aguardandoTimeoutMinutos: 1440,
+        // Teto de 1440 (24h) por decisão do dono: dentro da janela do
+        // WhatsApp. Ausente/inválido = 1440 (comportamento de sempre).
+        aguardandoTimeoutMinutos: Math.max(1, Math.min(1440, Number(cfg.timeoutMinutos) || 1440)),
         aguardandoNodeClienteId: passo.clienteId ?? null,
         aguardandoAcumularSegundos: acumularSegundos,
       },

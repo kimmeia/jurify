@@ -495,15 +495,18 @@ function PassoNodeView({ id, data, selected }: NodeProps<PassoNode>) {
           })()}
         </div>
       ) : data.tipo === "ia_atendente" ? (
-        // Atendente IA: uma saída por ferramenta habilitada. O agente decide
-        // quando disparar cada uma; sem ferramenta, ele só conversa (sem saída).
-        ferramentasAtendente.length > 0 ? (
-          <div className="border-t bg-muted/20 pt-1 pb-3">
-            {ferramentasAtendente.map((f) => (
-              <HandleRow key={f} handleId={f} label={FERRAMENTA_ATENDENTE_LABEL[f] || f} cor="#0ea5e9" />
-            ))}
-          </div>
-        ) : null
+        // Atendente IA: uma saída por ferramenta habilitada + a saída
+        // "não respondeu" (timeout, sempre presente — sem seta ligada o
+        // fluxo apenas termina, comportamento padrão escolhido pelo dono).
+        <div className="border-t bg-muted/20 pt-1 pb-3">
+          {ferramentasAtendente.map((f) => (
+            <HandleRow key={f} handleId={f} label={FERRAMENTA_ATENDENTE_LABEL[f] || f} cor="#0ea5e9" />
+          ))}
+          {(() => {
+            const horas = Math.max(1, Math.min(24, Math.round((Number((data.config as any)?.timeoutMinutos) || 1440) / 60)));
+            return <HandleRow handleId="nao_respondeu" label={`não respondeu (${horas}h)`} italic cor="#f59e0b" />;
+          })()}
+        </div>
       ) : data.tipo === "distribuir_atendimento" ? (
         // Distribuir: "atribuído" (achou atendente) e "sem atendente" (ninguém elegível).
         <div className="border-t bg-muted/20 pt-1 pb-3">
@@ -686,7 +689,7 @@ function corDaEdge(sourceHandle?: string | null): string {
   if (sourceHandle.startsWith("cond_")) return "#22c55e";
   if (sourceHandle === "default") return "#22c55e";
   if (sourceHandle === "depois") return "#3b82f6";
-  if (sourceHandle === "fallback" || sourceHandle === "timeout" || sourceHandle === "corpo") return "#f59e0b";
+  if (sourceHandle === "fallback" || sourceHandle === "timeout" || sourceHandle === "corpo" || sourceHandle === "nao_respondeu") return "#f59e0b";
   return "#0ea5e9";
 }
 
@@ -3089,6 +3092,34 @@ function ConfigIaAtendenteFields({
           </div>
         )}
         <p className="text-[10px] text-muted-foreground mt-1">A consulta <strong>não vira saída</strong> — o agente busca os horários, oferece ao cliente e, quando ele escolher, usa a ação "Agendar".</p>
+      </div>
+
+      <div className="rounded-md border border-sky-200 dark:border-sky-900 bg-sky-50/60 dark:bg-sky-950/20 p-2.5 space-y-1.5">
+        <p className="text-[10px] uppercase tracking-wider font-bold text-sky-700 dark:text-sky-300">
+          Se o cliente sumir no meio da conversa
+        </p>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-foreground">Esperar por</span>
+          <Input
+            type="number"
+            min={1}
+            max={24}
+            className="h-8 w-20"
+            value={Math.max(1, Math.min(24, Math.round((Number(cfg.timeoutMinutos) || 1440) / 60)))}
+            onChange={(e) => {
+              const horas = Math.max(1, Math.min(24, Math.floor(Number(e.target.value) || 24)));
+              onChange({ timeoutMinutos: horas * 60 });
+            }}
+          />
+          <span className="text-xs text-foreground">horas</span>
+          <span className="text-[10px] text-muted-foreground">→ saída "não respondeu"</span>
+        </div>
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          Estourando o prazo, o fluxo segue pela saída <strong>"não respondeu"</strong> do bloco no canvas —
+          ligue nela um Encerrar, um Transferir ou o follow-up. <strong>Sem seta ligada, o fluxo apenas
+          termina</strong> (comportamento de sempre; 24h é o padrão). Máximo de 24h pra ficar dentro da
+          janela do WhatsApp.
+        </p>
       </div>
 
       <div>
