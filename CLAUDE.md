@@ -320,6 +320,14 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
    de conformidade + botão "cliente autorizou WhatsApp") — dono foi
    lembrado em 23/08; segue sem implementar até ele pedir.
    Relatório completo em `docs/auditoria-meta-whatsapp-2026-08-19.md`.
+   Refinamento do opt-out (27/08, decisão do dono): SAIR continua
+   bloqueando disparo frio até VOLTAR, MAS se o contato voltou a escrever
+   DEPOIS do SAIR e a última entrada dele no canal tem <24h, ele mesmo
+   reabriu a conversa (é a mensagem dele que abre a janela da Meta) — o
+   envio proativo do fluxo passa. `optOutVigente` (pura) em
+   whatsapp-optout.ts; comparação ESTRITA (a mensagem do próprio SAIR não
+   reabre; registro sem data não reabre). Qualidade RED/teto/rate/restrito
+   seguem valendo sempre. Amarras em whatsapp-envio-guard.test.ts.
 1. **Robô de jornada varre em 32s** — dono já disse que está errado. A
    instrumentação (tempos por tela + "X de 19 mostraram esqueleto") já grava;
    olhar a primeira medição real e agir.
