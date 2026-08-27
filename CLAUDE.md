@@ -258,6 +258,31 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
    (CPF/CNPJ) hoje é SÓ TJCE
    — LP promete sem ressalva.
 
+-0.5. **SmartFlow: botão que "não dispara" + follow-up por template (27/08)**
+   — caso real do dono (fluxo #TESTE, clique em "Podemos sim" sem efeito).
+   Diagnóstico: seta do botão não ligada → `resolverProximo` devolve null e
+   o fluxo encerra EM SILÊNCIO. Entregue 27/08: validarGrafo agora dá ERRO
+   pra Pergunta com opções sem nenhuma saída e AVISO nomeando botão sem
+   seta; walker loga o ramo morto; parseMensagemCloud ganhou case "button"
+   (resposta de botão de TEMPLATE — {payload, text}) que antes virava
+   "[button]" e nunca retomava o fluxo. Pedir ao dono: reabrir o fluxo,
+   conferir a seta do "Podemos sim" e salvar (a validação acusa na hora).
+   Bloco "Enviar template" (follow-up fora da janela de 24h): **ENTREGUE
+   27/08** (aprovado com a condição "se respeita a documentação da Meta").
+   Tipo novo `whatsapp_enviar_template`: reusa o builder do modo template
+   do Enviar mensagem (`ConfigWhatsappTemplateBuilder` com `comOpcoes` —
+   grava categoria + snapshot dos quick-replies) e o envio
+   `enviarTemplateWhatsApp`; payload estável `qr<index>` vai no envio
+   (sub_type quick_reply) e volta no clique (case "button" do parse) →
+   saídas `cond_qr<N>` + outra_resposta + sem_resposta (timeout default
+   1440min); template SEM botão não pausa (saída default). Anti-punição:
+   MARKETING recusa envio sem `confirmoMarketing` (checkbox com aviso no
+   painel; validação do editor acusa); o guard existente já força
+   opt-in (= contato iniciou conversa), honra opt-out, pausa proativo em
+   qualidade RED e aplica teto diário/rate limit. validarGrafo cobre o
+   bloco (erro sem nenhuma saída com botões; aviso nomeando botão solto;
+   ciclo por ele é seguro). Amarras em `smartflow-template-opcoes.test.ts`.
+
 0. **Avisos de spam da Meta (19/08 E 22/08)** — SEGUNDO aviso chegou em
    22/08 (prazo de análise 20/11), três dias após as correções de 19/08
    (opt-out ampliado, opt-in em envio frio manual, executarManual

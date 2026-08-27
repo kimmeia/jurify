@@ -73,6 +73,7 @@ export type TipoPasso =
   | "whatsapp_enviar"
   | "whatsapp_aguardar_resposta"
   | "whatsapp_pergunta_opcoes"
+  | "whatsapp_enviar_template"
   | "transferir"
   | "encerrar_conversa"
   | "distribuir_atendimento"
@@ -478,6 +479,53 @@ export interface ConfigWhatsappPerguntaOpcoes {
   fallbackTexto?: "fuzzy" | "ignorar";
 }
 
+/**
+ * Config do passo `whatsapp_enviar_template` — envia um template (HSM)
+ * APROVADO da Meta e pausa o fluxo esperando a resposta. É o par do
+ * "Pergunta com opções" pra FORA da janela de 24h: template é a única
+ * mensagem que a Meta entrega quando o cliente está há mais de 24h sem
+ * escrever (follow-up, lembrete, cobrança).
+ *
+ * Cada botão quick-reply do template vira uma saída do nó (`cond_<id>`),
+ * mais as 2 universais: `outra_resposta` (digitou texto) e `sem_resposta`
+ * (timeout). O payload do botão é gravado no envio (sub_type quick_reply)
+ * e volta no webhook como type "button" → o parse injeta `respostaOpcao`.
+ *
+ * Anti-punição (política Meta): o envio SEMPRE respeita opt-out/opt-in
+ * (executor força exigirOptin) e template de categoria MARKETING só sai
+ * com `confirmoMarketing` — a Meta limita marketing por contato/dia e
+ * denúncia derruba a qualidade do número.
+ *
+ * Campos `templateNome/Idioma/Header/Corpo/CorpoTexto` têm o MESMO shape
+ * do modo template do `whatsapp_enviar` — o builder de config é reusado.
+ */
+export interface ConfigWhatsappEnviarTemplate {
+  templateNome?: string;
+  templateIdioma?: string;
+  templateHeader?: {
+    formato?: "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
+    valor?: string;
+    nomeArquivo?: string;
+  };
+  templateCorpo?: string[];
+  /** Corpo aprovado (com {{1}}..{{n}}) — prévia e timeline. */
+  templateCorpoTexto?: string;
+  /** Categoria na Meta (snapshot da listagem): UTILITY | MARKETING | AUTHENTICATION. */
+  templateCategoria?: string;
+  /** Obrigatório quando a categoria é MARKETING — sem ele o passo recusa o envio. */
+  confirmoMarketing?: boolean;
+  /**
+   * Botões quick-reply do template (snapshot da listagem). `id` é o payload
+   * enviado/recebido (estável, ex. "qr0"); `titulo` é o texto aprovado;
+   * `index` é a posição do botão no template (a Meta exige no envio).
+   */
+  opcoes?: Array<{ id: string; titulo: string; index: number }>;
+  /** Quanto tempo aguardar a resposta. Default 1440 (24h). Range 1min~7d. */
+  timeoutMinutos?: number;
+  /** Texto livre: "fuzzy" (default) tenta match por título; "ignorar" → outra_resposta. */
+  fallbackTexto?: "fuzzy" | "ignorar";
+}
+
 export interface ConfigTransferir {
   /** reservado */
 }
@@ -766,6 +814,7 @@ export type PassoConfigByTipo =
   | { tipo: "whatsapp_enviar"; config: ConfigWhatsappEnviar }
   | { tipo: "whatsapp_aguardar_resposta"; config: ConfigWhatsappAguardarResposta }
   | { tipo: "whatsapp_pergunta_opcoes"; config: ConfigWhatsappPerguntaOpcoes }
+  | { tipo: "whatsapp_enviar_template"; config: ConfigWhatsappEnviarTemplate }
   | { tipo: "transferir"; config: ConfigTransferir }
   | { tipo: "encerrar_conversa"; config: ConfigEncerrarConversa }
   | { tipo: "distribuir_atendimento"; config: ConfigDistribuirAtendimento }
@@ -934,6 +983,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "whatsapp_enviar", label: "Enviar mensagem", descricao: "Envia mensagem pelo WhatsApp.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
   { id: "whatsapp_aguardar_resposta", label: "Aguardar resposta", descricao: "Pausa o fluxo até o cliente responder (com timeout). Use pra menus ('digite 1'), confirmações e coletar UMA resposta. Não precisa dele depois do Atendente IA — esse já espera o cliente sozinho.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
   { id: "whatsapp_pergunta_opcoes", label: "Pergunta com opções", descricao: "Envia BOTÕES clicáveis (até 3) ou LISTA suspensa (até 10) pelo WhatsApp oficial. Cliente clica em vez de digitar — cada opção vira uma saída do bloco. Saídas extras: 'outra_resposta' (digitou texto) e 'sem_resposta' (timeout). SÓ funciona em canal Cloud API oficial.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
+  { id: "whatsapp_enviar_template", label: "Enviar template", descricao: "Envia um template APROVADO da Meta e espera a resposta — é o único jeito de alcançar quem está há mais de 24h sem escrever (follow-up, lembrete). Cada botão do template vira uma saída do bloco; extras: 'outra_resposta' (digitou texto) e 'sem_resposta' (timeout). Use categoria Utility pra follow-up — Marketing exige confirmação extra e conta no limite da Meta. SÓ funciona em canal Cloud API oficial.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
   { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e PARA o bot de responder (conversa fica 'em atendimento'). Use no fim de um caminho pra passar pro atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
   { id: "encerrar_conversa", label: "Encerrar conversa", descricao: "Fecha o atendimento: manda a despedida e marca a conversa como resolvida. Diferente de Transferir — aqui NINGUÉM assume, o assunto acabou. Se o cliente escrever de novo, o bot atende normalmente. Ligue na saída \"Encerrar conversa\" do Atendente IA.", cor: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300", grupo: "mensagem" },
   { id: "distribuir_atendimento", label: "Distribuir atendimento", descricao: "Atribui um atendente à conversa. Dois modos: SETOR (rotação dentro de um setor — Comercial, Financeiro… — menor carga / online primeiro) ou ATENDENTE FIXO (atribui sempre a pessoa escolhida). O bot SEGUE o fluxo — só para quando o atendente responder no inbox. Saídas: atribuído / sem atendente.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },

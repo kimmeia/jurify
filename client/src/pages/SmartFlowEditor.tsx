@@ -132,6 +132,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   whatsapp_enviar: MessageCircle,
   whatsapp_aguardar_resposta: Pause,
   whatsapp_pergunta_opcoes: MessageCircleQuestion,
+  whatsapp_enviar_template: FileText,
   transferir: PhoneCall,
   encerrar_conversa: CheckCircle2,
   distribuir_atendimento: Users,
@@ -245,6 +246,7 @@ const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
   whatsapp_enviar: { grad: "from-teal-500 to-cyan-600", border: "border-teal-300 dark:border-teal-800" },
   whatsapp_aguardar_resposta: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
   whatsapp_pergunta_opcoes: { grad: "from-cyan-500 to-teal-500", border: "border-cyan-300 dark:border-cyan-800" },
+  whatsapp_enviar_template: { grad: "from-teal-500 to-cyan-600", border: "border-teal-300 dark:border-teal-800" },
   transferir: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
   encerrar_conversa: { grad: "from-slate-500 to-slate-700", border: "border-slate-300 dark:border-slate-700" },
   distribuir_atendimento: { grad: "from-teal-500 to-emerald-600", border: "border-teal-300 dark:border-teal-800" },
@@ -439,6 +441,28 @@ function PassoNodeView({ id, data, selected }: NodeProps<PassoNode>) {
               <>
                 {itens.map((o) => (
                   <HandleRow key={o.id} handleId={`cond_${o.id}`} label={o.titulo || o.id} cor="#06b6d4" />
+                ))}
+                <HandleRow handleId="outra_resposta" label="texto livre (sem match)" italic cor="#a16207" />
+                <HandleRow handleId="sem_resposta" label="não respondeu (tempo)" italic cor="#f59e0b" />
+              </>
+            );
+          })()}
+        </div>
+      ) : data.tipo === "whatsapp_enviar_template" ? (
+        // Enviar template: 1 saída por botão quick-reply do template
+        // (cond_<id>) + 2 universais. Template sem botão = envio simples
+        // com a saída "default".
+        <div className="border-t bg-muted/20 pt-1 pb-3">
+          {(() => {
+            const cfg = (data.config || {}) as { opcoes?: Array<{ id: string; titulo: string }> };
+            const itens = Array.isArray(cfg.opcoes) ? cfg.opcoes : [];
+            if (itens.length === 0) {
+              return <HandleRow handleId="default" label="enviado →" cor="#22c55e" />;
+            }
+            return (
+              <>
+                {itens.map((o) => (
+                  <HandleRow key={o.id} handleId={`cond_${o.id}`} label={o.titulo || o.id} cor="#0d9488" />
                 ))}
                 <HandleRow handleId="outra_resposta" label="texto livre (sem match)" italic cor="#a16207" />
                 <HandleRow handleId="sem_resposta" label="não respondeu (tempo)" italic cor="#f59e0b" />
@@ -1070,6 +1094,12 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
         return nome ? `📋 template: ${truncar(nome, 32)}` : "📋 template (escolha um)";
       }
       return typeof config.template === "string" ? truncar(config.template, 50) : "";
+    case "whatsapp_enviar_template": {
+      const nome = String(config.templateNome || "").trim();
+      const cat = String(config.templateCategoria || "").trim();
+      if (!nome) return "escolha um template aprovado";
+      return cat ? `${truncar(nome, 26)} · ${cat.toLowerCase()}` : truncar(nome, 32);
+    }
     case "condicional": {
       const cs = Array.isArray(config.condicoes) ? (config.condicoes as any[]) : [];
       if (cs.length > 0) {
@@ -4304,6 +4334,88 @@ function ConfigWhatsappEnviarFields({
 }
 
 /**
+ * Campos do bloco "Enviar template" — template aprovado (HSM) que ALCANÇA o
+ * cliente fora da janela de 24h e ESPERA a resposta: cada botão quick-reply
+ * vira uma saída do nó. Reusa o ConfigWhatsappTemplateBuilder (modo
+ * comOpcoes) e adiciona timeout, fallback de texto e o gate de Marketing.
+ */
+function ConfigWhatsappEnviarTemplateFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const categoria = String(cfg.templateCategoria || "").toUpperCase();
+  const opcoes = Array.isArray(cfg.opcoes) ? (cfg.opcoes as Array<{ id: string; titulo: string }>) : [];
+  return (
+    <div className="space-y-3">
+      <ConfigWhatsappTemplateBuilder cfg={cfg} onChange={onChange} comOpcoes />
+
+      {opcoes.length > 0 && (
+        <p className="text-[10px] text-muted-foreground">
+          Ligue no canvas a seta de cada botão ({opcoes.map((o) => `"${o.titulo}"`).join(", ")}) e das saídas
+          "texto livre"/"não respondeu" — botão sem seta encerra o fluxo sem resposta (a validação avisa).
+        </p>
+      )}
+
+      {categoria === "MARKETING" && (
+        <div className="rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-2.5 space-y-1.5">
+          <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-200 flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3" /> Template de MARKETING
+          </p>
+          <p className="text-[10.5px] text-amber-800/90 dark:text-amber-200/90 leading-relaxed">
+            A Meta limita marketing por contato/dia e denúncias derrubam a qualidade do número. Pra follow-up de
+            atendimento, prefira um template <b>Utility</b>. Sem a confirmação abaixo, o passo NÃO envia.
+          </p>
+          <label className="flex items-start gap-2 text-[11px] text-amber-900 dark:text-amber-100 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={cfg.confirmoMarketing === true}
+              onChange={(e) => onChange({ confirmoMarketing: e.target.checked })}
+            />
+            <span>Entendo os riscos e confirmo o envio deste template de marketing.</span>
+          </label>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-xs">Esperar resposta por (min)</Label>
+          <Input
+            type="number"
+            min={1}
+            max={7 * 24 * 60}
+            value={Number(cfg.timeoutMinutos || 1440)}
+            onChange={(e) => onChange({ timeoutMinutos: Number(e.target.value) || 1440 })}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">Vencendo o prazo, segue pela saída "não respondeu". Padrão 1440 (24h).</p>
+        </div>
+        <div>
+          <Label className="text-xs">Se digitar texto livre</Label>
+          <Select
+            value={String(cfg.fallbackTexto || "fuzzy")}
+            onValueChange={(v) => onChange({ fallbackTexto: v })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="fuzzy">Tentar casar com um botão</SelectItem>
+              <SelectItem value="ignorar">Ir direto pra "texto livre"</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <p className="text-[10px] text-muted-foreground">
+        Follow-up sem punição: 1 por contato (use "Roda por contato" no fluxo), categoria Utility, e sempre pra quem
+        já conversou com o escritório. O envio respeita opt-out automaticamente.
+      </p>
+    </div>
+  );
+}
+
+/**
  * Config do passo `transferir`. Pausa o bot (marca a conversa como
  * "em_atendimento") e, opcionalmente, envia uma mensagem de despedida antes
  * de pausar. Campo vazio = pausa em silêncio.
@@ -6302,6 +6414,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigAgendaCriarFields cfg={cfg} onChange={onChange} />;
     case "whatsapp_enviar":
       return <ConfigWhatsappEnviarFields cfg={cfg} onChange={onChange} />;
+    case "whatsapp_enviar_template":
+      return <ConfigWhatsappEnviarTemplateFields cfg={cfg} onChange={onChange} />;
     case "transferir":
       return <ConfigTransferirFields cfg={cfg} onChange={onChange} />;
     case "encerrar_conversa":
