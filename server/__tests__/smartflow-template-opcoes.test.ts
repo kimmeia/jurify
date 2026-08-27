@@ -194,6 +194,44 @@ describe("whatsapp_enviar_template — retomada", () => {
   });
 });
 
+describe("pergunta com opções — motivo real do envio barrado", () => {
+  // Caso real (execução #5391, 27/08): o timeout do Atendente IA disparou,
+  // a Pergunta com opções tentou o envio proativo, o guard barrou — e o
+  // painel só dizia "verifique canal Cloud API conectado". O executor agora
+  // devolve { ok, erro } e o erro persistido carrega o motivo.
+  it("erro do guard aparece no erro da execução (não o genérico)", async () => {
+    const exec = mockExec({
+      enviarWhatsAppInteractive: vi.fn().mockResolvedValue({
+        ok: false,
+        erro: "Qualidade do número está VERMELHA na Meta — disparos proativos pausados automaticamente até a qualidade se recuperar.",
+      }),
+    } as any);
+    const passos: Passo[] = [
+      {
+        id: 1, ordem: 1, tipo: "whatsapp_pergunta_opcoes", clienteId: "n1",
+        config: { modo: "botoes", body: "Pode prosseguir?", opcoes: [{ id: "b1", titulo: "Sim" }] },
+      },
+    ];
+    const r = await executarCenario(passos, ctxEnvio, exec);
+    expect(r.sucesso).toBe(false);
+    expect(r.erro).toContain("VERMELHA");
+    expect(r.erro).not.toContain("verifique canal Cloud API conectado");
+  });
+
+  it("executor booleano (mock antigo) continua aceito", async () => {
+    const exec = mockExec({ enviarWhatsAppInteractive: vi.fn().mockResolvedValue(true) } as any);
+    const passos: Passo[] = [
+      {
+        id: 1, ordem: 1, tipo: "whatsapp_pergunta_opcoes", clienteId: "n1",
+        config: { modo: "botoes", body: "Pode prosseguir?", opcoes: [{ id: "b1", titulo: "Sim" }] },
+      },
+    ];
+    const r = await executarCenario(passos, ctxEnvio, exec);
+    expect(r.sucesso).toBe(true);
+    expect((r.contexto as any).aguardandoMensagem).toBe(true);
+  });
+});
+
 describe("amarras de UI e catálogo", () => {
   const raiz = join(__dirname, "..", "..");
   const ler = (p: string) => readFileSync(join(raiz, p), "utf8");
