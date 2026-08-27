@@ -282,6 +282,21 @@ export function parseMensagemCloud(message: any, telefone: string): MensagemClou
       tipo = "texto";
       break;
     }
+    case "button": {
+      // Resposta a botão de TEMPLATE (quick reply) — a Meta manda type
+      // "button" com {payload, text}, diferente do "interactive" acima
+      // (botões de mensagem interativa de sessão). Sem este case, o clique
+      // caía no default como "[button]" e o fluxo nunca retomava.
+      const btn = (message as any).button;
+      const id = String(btn?.payload ?? "");
+      const titulo = String(btn?.text ?? "");
+      if (id || titulo) {
+        interactiveReply = { tipo: "button", id: id || titulo, titulo: titulo || id };
+      }
+      conteudo = interactiveReply?.titulo || "[button]";
+      tipo = "texto";
+      break;
+    }
     case "image":
       conteudo = message.image?.caption || "Imagem";
       mediaId = message.image?.id || "";
