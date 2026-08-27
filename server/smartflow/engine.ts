@@ -3276,6 +3276,21 @@ async function walkInterno(opts: {
       modoGrafo,
       passos,
     );
+
+    // Handler escolheu um ramo mas a seta não existe no grafo → o fluxo vai
+    // encerrar AQUI sem resposta nenhuma. É legítimo (fim intencional), mas é
+    // também o jeito clássico de "cliquei no botão e nada aconteceu" — deixa
+    // rastro no log pro diagnóstico não depender de reproduzir.
+    if (
+      atual === null &&
+      resultado.proximoRamoId &&
+      passoAtual.proximoSe &&
+      !passoAtual.proximoSe[resultado.proximoRamoId]
+    ) {
+      console.warn(
+        `[smartflow] fluxo encerrou sem seta pro ramo "${resultado.proximoRamoId}" no passo ${passoAtual.tipo} (id=${passoAtual.id}) — se era pra responder algo, ligue a saída desse ramo no editor`,
+      );
+    }
   }
 
   return { sucesso: true, contexto, passosExecutados: estadoGlobal.passosExecutados, respostas };

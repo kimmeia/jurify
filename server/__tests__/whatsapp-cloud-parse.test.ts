@@ -86,6 +86,23 @@ describe("parseMensagemCloud — tipos normais (sanidade da extração)", () => 
     expect(r.interactiveReply).toMatchObject({ tipo: "button", id: "b1", titulo: "Quero agendar" });
   });
 
+  it("resposta de botão de TEMPLATE (type 'button') vira interactiveReply — não '[button]'", () => {
+    // Quick reply de template chega como type "button" com {payload, text} —
+    // formato DIFERENTE do interactive.button_reply. Sem esse case, o clique
+    // virava "[button]" sem interactiveReply e o fluxo pausado nunca retomava.
+    const r = parseMensagemCloud(
+      { type: "button", button: { payload: "b1", text: "Podemos sim" } },
+      "x",
+    );
+    expect(r.conteudo).toBe("Podemos sim");
+    expect(r.interactiveReply).toMatchObject({ tipo: "button", id: "b1", titulo: "Podemos sim" });
+  });
+
+  it("botão de template sem payload usa o texto como id (roteável por fuzzy/título)", () => {
+    const r = parseMensagemCloud({ type: "button", button: { text: "Sim" } }, "x");
+    expect(r.interactiveReply).toMatchObject({ tipo: "button", id: "Sim", titulo: "Sim" });
+  });
+
   it("documento carrega mediaId e nome original do arquivo", () => {
     const r = parseMensagemCloud(
       { type: "document", document: { id: "media-1", filename: "contrato.pdf" } },
