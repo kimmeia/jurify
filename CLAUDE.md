@@ -258,6 +258,25 @@ Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
    (CPF/CNPJ) hoje é SÓ TJCE
    — LP promete sem ressalva.
 
+-0.5. **SmartFlow: botão que "não dispara" + follow-up por template (27/08)**
+   — caso real do dono (fluxo #TESTE, clique em "Podemos sim" sem efeito).
+   Diagnóstico: seta do botão não ligada → `resolverProximo` devolve null e
+   o fluxo encerra EM SILÊNCIO. Entregue 27/08: validarGrafo agora dá ERRO
+   pra Pergunta com opções sem nenhuma saída e AVISO nomeando botão sem
+   seta; walker loga o ramo morto; parseMensagemCloud ganhou case "button"
+   (resposta de botão de TEMPLATE — {payload, text}) que antes virava
+   "[button]" e nunca retomava o fluxo. Pedir ao dono: reabrir o fluxo,
+   conferir a seta do "Podemos sim" e salvar (a validação acusa na hora).
+   PRÓXIMO PASSO: bloco "Enviar template" pro follow-up fora da janela de
+   24h — mockup `mockup-followup-template.html` entregue 27/08, AGUARDANDO
+   aprovação. Desenho: lista templates aprovados do WhatsApp Manager
+   (badge Utility/Marketing + status), botões do template viram saídas
+   `cond_<payload>` (mesma amarração da Pergunta com opções, retomada já
+   funciona com o case novo), variáveis mapeadas, timeout "sem resposta".
+   Anti-punição (conta com 2 avisos!): follow-up = categoria UTILITY;
+   Marketing só com confirmação extra (Meta limita ~2 marketing/contato/
+   dia e denúncia derruba qualidade); 1 follow-up por contato.
+
 0. **Avisos de spam da Meta (19/08 E 22/08)** — SEGUNDO aviso chegou em
    22/08 (prazo de análise 20/11), três dias após as correções de 19/08
    (opt-out ampliado, opt-in em envio frio manual, executarManual
