@@ -244,11 +244,22 @@ export default function AssinarDocumento({ token }: { token: string }) {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Link do documento */}
+            {/* Link do documento — SEMPRE pela rota por token, nunca pelo
+                path /uploads que `doc.documentoUrl` carrega: /uploads exige
+                sessão, e quem assina é o cliente do escritório, que não tem
+                login (via celular dele isso virava {"error":"Não autenticado"}).
+                Âncora de verdade em vez de window.open: iOS/Android bloqueiam
+                pop-up aberto por JS em alguns contextos. */}
             {doc.documentoUrl && (
-              <Button variant="outline" className="w-full justify-start gap-2 h-10" onClick={() => window.open(doc.documentoUrl, "_blank")}>
-                <ExternalLink className="h-4 w-4" />
-                <span className="text-sm">Abrir documento para leitura</span>
+              <Button asChild variant="outline" className="w-full justify-start gap-2 h-10">
+                <a
+                  href={`/api/assinatura/pdf/token/${token}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  <span className="text-sm">Abrir documento para leitura</span>
+                </a>
               </Button>
             )}
 
