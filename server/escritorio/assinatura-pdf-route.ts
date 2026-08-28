@@ -8,10 +8,9 @@
  *  - Helmet seta `Cross-Origin-Resource-Policy: same-origin` no static.
  *    pdfjs faz fetch em contexto de Web Worker, que algumas combinações
  *    de browser tratam como cross-origin → bloqueia.
- *  - Não dá pra autorizar por token: /uploads é totalmente público
- *    (qualquer um com URL acessa). OK pra docs já assinados via link
- *    público, mas pro EDITOR (operador antes do envio) queremos
- *    auth de sessão.
+ *  - /uploads exige sessão + mesmo escritório desde 10/08. Quem assina é
+ *    cliente do escritório, nunca teve login: pra ele o único caminho é a
+ *    rota por token abaixo — o token no link É a credencial.
  *
  * Esta rota:
  *  - GET /api/assinatura/pdf/:id  (com cookie de sessão → operador)
@@ -28,6 +27,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { assinaturasDigitais } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
+import { captureError } from "../_core/sentry";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { sdk } from "../_core/sdk";
 
@@ -46,6 +46,61 @@ function resolverPathArquivo(documentoUrl: string): string {
   return path.resolve("." + documentoUrl);
 }
 
+/**
+ * Nem todo documento mora no disco: o fluxo "URL do Documento" (Google Docs,
+ * PDF de terceiro) grava endereço externo. Devolve a URL a redirecionar, ou
+ * null quando o documento é arquivo interno.
+ *
+ * Esquema fechado em http(s) de propósito: `javascript:`/`data:` gravado no
+ * cadastro viraria execução de script na aba do cliente, com o token da
+ * assinatura na própria URL.
+ */
+function urlExternaSegura(documentoUrl: string): string | null {
+  if (!/^https?:\/\//i.test(documentoUrl)) return null;
+  try {
+    const u = new URL(documentoUrl);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    // Endereço completo do próprio sistema apontando pro /uploads é arquivo
+    // interno — redirecionar pra lá devolveria o 401 que esta rota existe
+    // pra evitar.
+    if (u.pathname.startsWith("/uploads/")) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** Path de disco do documento, aceitando também a URL absoluta do próprio app. */
+function caminhoInterno(documentoUrl: string): string | null {
+  if (documentoUrl.startsWith("/uploads/")) return documentoUrl;
+  try {
+    const p = new URL(documentoUrl).pathname;
+    return p.startsWith("/uploads/") ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Nome que o cliente vê ao salvar. O Chrome no Android não tem visualizador
+ * embutido: mesmo com `inline` ele baixa, e o arquivo caía na pasta como
+ * "1756389423911_a1b2c3d4.pdf" — ninguém reconhece o próprio contrato depois.
+ * `titulo` é texto livre do operador: CR/LF em header derruba a resposta
+ * (ERR_INVALID_CHAR), por isso o ASCII vai sanitizado e o acento viaja no
+ * `filename*`.
+ */
+function cabecalhoNome(titulo: string | null | undefined, filepath: string): string {
+  const ext = path.extname(filepath) || ".pdf";
+  const base = String(titulo || "").trim() || path.basename(filepath, ext);
+  const limpo = base.replace(/[\r\n"\\]/g, " ").slice(0, 80).trim() || "documento";
+  const ascii = limpo
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9 ._-]/g, "")
+    .trim() || "documento";
+  return `inline; filename="${ascii}${ext}"; filename*=UTF-8''${encodeURIComponent(limpo + ext)}`;
+}
+
 /** Content-Type pela extensão — o documento nem sempre é PDF (docx/imagem). */
 const MIME_POR_EXT: Record<string, string> = {
   ".pdf": "application/pdf",
@@ -57,7 +112,7 @@ const MIME_POR_EXT: Record<string, string> = {
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
 
-function streamPdf(res: Response, filepath: string, filename: string): void {
+function streamPdf(res: Response, filepath: string, filename: string, titulo?: string | null): void {
   // Headers permissivos: pdfjs worker pode rodar em contexto cross-origin
   // virtual mesmo dentro do mesmo domínio. CORP cross-origin permite o
   // fetch. Content-Type explícito evita pdfjs rejeitar por sniffing.
@@ -65,7 +120,10 @@ function streamPdf(res: Response, filepath: string, filename: string): void {
   res.setHeader("Content-Type", mime);
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   res.setHeader("Cache-Control", "private, max-age=300");
-  res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+  res.setHeader(
+    "Content-Disposition",
+    titulo ? cabecalhoNome(titulo, filepath) : `inline; filename="${filename}"`,
+  );
   // sendFile em vez de createReadStream: implementa Range/206, ETag e
   // Last-Modified. O visualizador de PDF do iOS Safari pede faixas de bytes
   // antes de renderizar — com stream simples ele fica na tela branca.
@@ -175,16 +233,58 @@ export function registerAssinaturaPdfRoute(app: Express): void {
     if (!a.documentoUrl) {
       return res.status(404).json({ erro: "Documento não disponível" });
     }
+    // Documento cadastrado como link externo (Google Docs, PDF de terceiro)
+    // não mora no disco: redireciona, que é o que o botão fazia antes de a
+    // leitura passar por aqui.
+    const externa = urlExternaSegura(a.documentoUrl);
+    if (externa) {
+      return res.redirect(302, externa);
+    }
+    const interno = caminhoInterno(a.documentoUrl);
+    if (!interno) {
+      log.warn({ tokenPrefix: token.slice(0, 8) }, "PDF cliente: documentoUrl não navegável");
+      return res.status(400).json({ erro: "Endereço do documento é inválido" });
+    }
+    // Espelha a trava de tenancy do middleware de /uploads. Hoje nenhum
+    // writer produz divergência — a checagem é o que garante que continue,
+    // já que esta é a rota mais exposta do sistema (sem sessão).
+    const marcador = interno.match(/escritorio_(\d+)/);
+    if (marcador && Number(marcador[1]) !== a.escritorioId) {
+      log.error(
+        { tokenPrefix: token.slice(0, 8), escritorioDoPath: marcador[1], escritorioDoDoc: a.escritorioId },
+        "PDF cliente: path de outro escritório",
+      );
+      return res.status(403).json({ erro: "Sem acesso a este arquivo" });
+    }
     let filepath: string;
     try {
-      filepath = resolverPathArquivo(a.documentoUrl);
+      filepath = resolverPathArquivo(interno);
     } catch {
       return res.status(400).json({ erro: "Path inválido" });
     }
     if (!fs.existsSync(filepath)) {
       log.error({ tokenPrefix: token.slice(0, 8), documentoUrl: a.documentoUrl, filepath }, "PDF cliente: arquivo não existe");
+      // Sem isto o sumiço só aparece no stdout do Railway: quem sofre é o
+      // cliente do escritório, e ninguém aqui fica sabendo.
+      captureError(new Error("Documento de assinatura ausente no disco"), {
+        kind: "assinatura-pdf-ausente",
+        assinaturaId: a.id,
+        escritorioId: a.escritorioId,
+        documentoUrl: a.documentoUrl,
+      });
+      // Cliente abre em aba nova: JSON cru num celular é um beco sem saída.
+      if (req.accepts("html")) {
+        return res.status(404).type("html").send(
+          `<!doctype html><meta charset="utf-8">` +
+            `<meta name="viewport" content="width=device-width, initial-scale=1">` +
+            `<div style="font-family:system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1.5rem;text-align:center;color:#0f172a">` +
+            `<h1 style="font-size:1.1rem">Documento indisponível</h1>` +
+            `<p style="font-size:.9rem;color:#475569;line-height:1.6">Não conseguimos abrir o arquivo desta assinatura. ` +
+            `Entre em contato com o escritório para receber o documento novamente.</p></div>`,
+        );
+      }
       return res.status(404).json({ erro: "Arquivo do PDF não foi encontrado" });
     }
-    streamPdf(res, filepath, path.basename(filepath));
+    streamPdf(res, filepath, path.basename(filepath), a.titulo);
   });
 }

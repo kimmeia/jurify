@@ -37,7 +37,11 @@ import "react-pdf/dist/Page/TextLayer.css";
 // motivo o worker carregava em estado parcial — Page tentava render
 // antes de transport pronto e estourava sendWithPromise null. Worker
 // local servido pelo próprio Vite no mesmo origem é mais previsível.
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+//
+// Variante LEGACY porque o alias do vite.config resolve `pdfjs-dist` pro
+// legacy: biblioteca e worker têm que casar, e worker moderno junto de
+// biblioteca legacy é a forma sutil do "sendWithPromise null" acima.
+import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
