@@ -145,9 +145,15 @@ async function startServer() {
   );
   app.use(express.urlencoded({ limit: "3gb", extended: true }));
   // /uploads AUTENTICADO. Antes era express.static puro — documento jurídico
-  // com PII acessível por URL sem login (LGPD). O assinante EXTERNO não usa
-  // este caminho (tem rota própria por token — assinatura-pdf-route); todo
-  // consumidor interno é same-origin e manda o cookie de sessão sozinho.
+  // com PII acessível por URL sem login (LGPD). Todo consumidor interno é
+  // same-origin e manda o cookie de sessão sozinho.
+  //
+  // Destinatário EXTERNO (cliente do escritório, sem login) só chega a
+  // arquivo por rota com capability própria — hoje /api/assinatura/pdf/token/
+  // e /uploads/pareceres/. Isso é premissa, não garantia: em 10/08 esta
+  // trava entrou junto com a suposição de que a tela /assinar não usava
+  // /uploads, e ela usava — o cliente levava 401 no celular. Quem quebrar
+  // isso de novo esbarra em `assinatura-link-publico.test.ts`.
   // Tenancy pelo path: `escritorio_<id>` (uploads/assinaturas/modelos) ou
   // `whatsapp-cloud/<escritorioId>/...` (mídia recebida). Path sem marcador
   // de escritório (legado) exige só login.
@@ -201,6 +207,13 @@ async function startServer() {
   app.use(
     "/api/trpc/assinaturas.assinarPorToken",
     rateLimit({ name: "sign-submit", max: 5 }),
+  );
+  // Documento servido pelo token (cliente sem login abre pra ler). Teto alto
+  // de propósito: leitor de PDF do iOS pede o arquivo em faixas de bytes —
+  // uma única abertura vira dezenas de requisições.
+  app.use(
+    "/api/assinatura/pdf/token",
+    rateLimit({ name: "sign-doc", max: 120 }),
   );
   // Webhooks públicos também precisam de limite
   app.use("/api/webhooks/asaas-billing", rateLimit({ name: "webhook-asaas-billing", max: 120 }));
