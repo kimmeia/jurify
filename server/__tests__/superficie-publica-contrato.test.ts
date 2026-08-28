@@ -166,25 +166,21 @@ describe("procedure tRPC que a tela pública chama", () => {
 });
 
 /**
- * Campos de `assinaturas_digitais` que guardam caminho interno de arquivo.
- * O payload público pode CONTINUAR trazendo (nada removido), mas cada um
- * precisa dizer como a tela sem login tem direito de usá-lo.
+ * Campos de caminho de arquivo que o payload público PODE trazer.
+ *
+ * Hoje: nenhum. O dono autorizou tirar documentoUrl e documentoAssinadoUrl
+ * (28/08) — a tela recebe só `temDocumento` e busca o conteúdo pela rota por
+ * token. Quem quiser reintroduzir um campo de endereço aqui declara o motivo,
+ * e o teste cobra que exista rota pública capaz de servi-lo.
  */
-const CAMPOS_DE_ARQUIVO: Record<string, string> = {
-  documentoUrl:
-    "só presença ('existe documento?'); o conteúdo sai por /api/assinatura/pdf/token/:token",
-  documentoAssinadoUrl:
-    "só presença; NÃO existe rota pública que sirva o assinado — quem for oferecer " +
-    "download pro cliente precisa criar a rota por token antes",
-};
+const CAMPOS_DE_ARQUIVO: Record<string, string> = {};
 
 describe("payload público não entrega caminho navegável", () => {
   const router = ler("server/escritorio/router-assinaturas.ts");
-  const mapDoc = router.slice(router.indexOf("function mapDoc("), router.indexOf("function mapDoc(") + 500);
+  const mapDoc = router.slice(router.indexOf("function mapDoc("), router.indexOf("function mapDoc(") + 700);
 
   it("todo campo *Url exposto pela procedure pública está declarado", () => {
     const expostos = [...mapDoc.matchAll(/^\s*(\w*[Uu]rl):/gm)].map((m) => m[1]);
-    expect(expostos.length).toBeGreaterThan(0);
     for (const campo of expostos) {
       expect(
         CAMPOS_DE_ARQUIVO[campo],
@@ -192,6 +188,23 @@ describe("payload público não entrega caminho navegável", () => {
           `Declare em CAMPOS_DE_ARQUIVO — e confira se existe rota por token que sirva isso.`,
       ).toBeDefined();
     }
+  });
+
+  it("a tela sabe se há documento sem receber o endereço dele", () => {
+    // Âncora: sem isto, um mapDoc esvaziado por engano passaria no teste acima
+    // por não ter nenhum campo pra reprovar.
+    expect(mapDoc).toContain("temDocumento");
+    expect(mapDoc).not.toContain("documentoUrl:");
+    expect(mapDoc).not.toContain("documentoAssinadoUrl:");
+  });
+
+  it("o mapper do OPERADOR continua com os dois campos (tem sessão e usa)", () => {
+    // A tela do escritório oferece "ver documento" e "baixar PDF assinado".
+    // Uma limpeza por tabela que aplicasse a regra da tela pública aqui
+    // apagaria os dois botões sem nada ficar vermelho.
+    const listar = router.slice(router.indexOf("listarPorCliente"), router.indexOf("function mapDoc("));
+    expect(listar).toContain("documentoUrl: r.documentoUrl");
+    expect(listar).toContain("documentoAssinadoUrl: r.documentoAssinadoUrl");
   });
 
   it("visualizarPorToken continua pública e usando o mapper declarado", () => {

@@ -15,6 +15,7 @@ import { assinaturasDigitais, assinaturaCampos, contatos } from "../../drizzle/s
 import { eq, and, desc, sql, asc } from "drizzle-orm";
 import { toIsoString } from "../_core/dates";
 import crypto from "crypto";
+import { caminhoInterno, urlExternaSegura } from "./assinatura-pdf-route";
 import { estamparAssinatura } from "./pdf-stamp-assinatura";
 import { converterDocxParaPdf } from "./docx-to-pdf";
 import { TRPCError } from "@trpc/server";
@@ -426,8 +427,13 @@ export const assinaturasRouter = router({
 
       if (!doc) return null;
 
-      // Verificar expiração
-      if (doc.expiracaoAt && new Date(doc.expiracaoAt) < new Date()) {
+      // Verificar expiração. A guarda de status é a mesma do cron
+      // (expirarAssinaturas): sem ela, documento ASSINADO virava "expirado" no
+      // banco, porque a validade padrão é de 30 dias e assinar não a limpa —
+      // bastava o cliente reabrir o link no 31º dia pra perder o "assinado".
+      const aindaAberto =
+        doc.status === "pendente" || doc.status === "enviado" || doc.status === "visualizado";
+      if (aindaAberto && doc.expiracaoAt && new Date(doc.expiracaoAt) < new Date()) {
         await db.update(assinaturasDigitais)
           .set({ status: "expirado" })
           .where(eq(assinaturasDigitais.id, doc.id));
@@ -589,14 +595,26 @@ export const assinaturasRouter = router({
     }),
 });
 
+/**
+ * Payload da tela pública (cliente sem login).
+ *
+ * Sem caminho de arquivo: quem abre esta tela não tem sessão, e endereço no
+ * payload é endereço que vaza. O conteúdo sai por
+ * /api/assinatura/pdf/token/:token, onde o token é a credencial.
+ *
+ * `temDocumento` responde só "dá pra abrir?", com as MESMAS regras da rota —
+ * daí o import, em vez de `!!documentoUrl`: `criar` aceita qualquer
+ * `z.string().url()`, inclusive `mailto:`/`data:`, e o botão apareceria pra
+ * cair num erro.
+ */
 function mapDoc(doc: any) {
+  const url = String(doc.documentoUrl || "");
   return {
     id: doc.id,
     titulo: doc.titulo,
     descricao: doc.descricao,
     status: doc.status,
-    documentoUrl: doc.documentoUrl,
-    documentoAssinadoUrl: doc.documentoAssinadoUrl ?? null,
+    temDocumento: !!url && (!!urlExternaSegura(url) || !!caminhoInterno(url)),
     assinantNome: doc.assinantNome,
     expiracaoAt: toIsoString(doc.expiracaoAt),
   };
