@@ -194,6 +194,38 @@ Erros em integrações externas (Resend, Sentry) NÃO podem viver só no respons
 
 Caso clássico: validação inicial passou → integração quebrou depois → painel admin mostrava "ok" estagnado. Fix em `admin_integracoes.status` + persist em cada chamada.
 
+### Tela pública não pode depender de rota autenticada (28/08)
+
+Em 10/08 `/uploads` deixou de ser estático e passou a exigir sessão +
+tenancy (LGPD). O commit escreveu no comentário "o assinante EXTERNO não
+usa este caminho" — **usava**: o botão "Abrir documento para leitura" de
+`/assinar/:token` fazia `window.open(doc.documentoUrl)`, e documentoUrl é
+`/uploads/assinaturas/escritorio_<id>/...`. O cliente do escritório, que
+nunca teve login, levava `{"error":"Não autenticado"}` no celular. No
+computador do advogado abria (cookie presente) — **por isso passou 18 dias
+sem ninguém ver: quem testa está logado**.
+
+Regras que ficam:
+- Fechar rota que já existe = varrer QUEM chama, não afirmar por dedução.
+  Comentário não é prova; nesse caso ele documentou a premissa errada.
+- Numa tela sem login, campo de resposta do tRPC **não vira destino de
+  navegação** — do lado do client é string opaca e ninguém revisa a rota
+  que a serve. Sirva por rota com capability própria (o token do link É a
+  credencial). Caso legítimo (link externo do cadastro) se declara com o
+  marcador `url-do-servidor-ok: <motivo>` na linha de cima.
+- Amarras: `pagina-publica-url-autenticada.test.ts` (proveniência, lista
+  de páginas públicas DERIVADA do App.tsx — rota pública nova entra
+  sozinha), `assinatura-link-publico.test.ts` (contrato da rota por
+  token), `superficie-publica-contrato.test.ts`.
+
+Compatibilidade de celular que saiu junto: rota por token serve com
+Range/ETag (visualizador do iOS pede faixas de bytes antes de renderizar),
+`pdfjs` no build **legacy** nas duas telas (o moderno usa
+`Promise.withResolvers`, ausente em iOS < 17.4 e Samsung Internet antigo —
+biblioteca e worker TÊM que ser da mesma variante, misturar dá
+"sendWithPromise null"), e o canvas da assinatura preserva os traços em
+resize (teclado do Android apagava a assinatura desenhada).
+
 ### Migration safety
 
 - ALTER TABLE ADD COLUMN sempre com default pra cobrir rows antigas non-destrutivamente
