@@ -55,7 +55,7 @@ function resolverPathArquivo(documentoUrl: string): string {
  * cadastro viraria execução de script na aba do cliente, com o token da
  * assinatura na própria URL.
  */
-function urlExternaSegura(documentoUrl: string): string | null {
+export function urlExternaSegura(documentoUrl: string): string | null {
   if (!/^https?:\/\//i.test(documentoUrl)) return null;
   try {
     const u = new URL(documentoUrl);
@@ -71,7 +71,7 @@ function urlExternaSegura(documentoUrl: string): string | null {
 }
 
 /** Path de disco do documento, aceitando também a URL absoluta do próprio app. */
-function caminhoInterno(documentoUrl: string): string | null {
+export function caminhoInterno(documentoUrl: string): string | null {
   if (documentoUrl.startsWith("/uploads/")) return documentoUrl;
   try {
     const p = new URL(documentoUrl).pathname;
@@ -99,6 +99,31 @@ function cabecalhoNome(titulo: string | null | undefined, filepath: string): str
     .replace(/[^A-Za-z0-9 ._-]/g, "")
     .trim() || "documento";
   return `inline; filename="${ascii}${ext}"; filename*=UTF-8''${encodeURIComponent(limpo + ext)}`;
+}
+
+/**
+ * Documento cancelado ou vencido para de abrir pelo link público. A tela já
+ * barrava; quem guardou o endereço do arquivo, não.
+ *
+ * `assinadoAt` decide primeiro, e não o status, porque o status mente: a
+ * validade padrão é de 30 dias e ninguém a limpa ao assinar, então todo
+ * documento assinado tem `expiracaoAt` no passado a partir do 31º dia. Quem
+ * assinou continua podendo reler o que assinou — bloquear isso tiraria um
+ * acesso que existe hoje.
+ */
+export function motivoBloqueioPublico(a: {
+  status?: string | null;
+  assinadoAt?: Date | string | null;
+  expiracaoAt?: Date | string | null;
+}): "cancelado" | "vencido" | null {
+  if (a.assinadoAt) return null;
+  if (a.status === "recusado") return "cancelado";
+  if (a.status === "expirado") return "vencido";
+  // Comparar a data, e não só o rótulo: a virada pra "expirado" é preguiçosa
+  // (cron horário + abertura da tela). Link guardado e nunca reaberto fica
+  // "enviado" com a validade já vencida — é justamente o caso mais comum.
+  if (a.expiracaoAt && new Date(a.expiracaoAt) < new Date()) return "vencido";
+  return null;
 }
 
 /** Content-Type pela extensão — o documento nem sempre é PDF (docx/imagem). */
@@ -229,6 +254,31 @@ export function registerAssinaturaPdfRoute(app: Express): void {
     const a = await carregarAssinaturaPorToken(token);
     if (!a) {
       return res.status(404).json({ erro: "Documento não encontrado" });
+    }
+    // Antes do redirect de propósito: documento cancelado cadastrado como link
+    // externo passaria batido se o 302 viesse primeiro.
+    const bloqueio = motivoBloqueioPublico(a);
+    if (bloqueio) {
+      log.info({ tokenPrefix: token.slice(0, 8), assinaturaId: a.id, bloqueio }, "PDF cliente: documento bloqueado");
+      // Cancelamento é reversível (`cancelar` não exige status), então nada de
+      // cache: senão o cliente segue vendo "cancelado" depois de desfeito.
+      res.setHeader("Cache-Control", "no-store");
+      const titulo = bloqueio === "cancelado" ? "Documento cancelado" : "Prazo encerrado";
+      const recado =
+        bloqueio === "cancelado"
+          ? "Este documento foi cancelado pelo escritório."
+          : "O prazo para assinatura deste documento terminou.";
+      if (req.accepts("html")) {
+        return res.status(403).type("html").send(
+          `<!doctype html><meta charset="utf-8">` +
+            `<meta name="viewport" content="width=device-width, initial-scale=1">` +
+            `<div style="font-family:system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1.5rem;text-align:center;color:#0f172a">` +
+            `<h1 style="font-size:1.1rem">${titulo}</h1>` +
+            `<p style="font-size:.9rem;color:#475569;line-height:1.6">${recado} ` +
+            `Entre em contato com o escritório para mais informações.</p></div>`,
+        );
+      }
+      return res.status(403).json({ erro: recado });
     }
     if (!a.documentoUrl) {
       return res.status(404).json({ erro: "Documento não disponível" });
