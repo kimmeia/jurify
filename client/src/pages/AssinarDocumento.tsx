@@ -6,13 +6,21 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import SignaturePad from "signature_pad";
+import * as Sentry from "@sentry/react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 // Worker do pdfjs servido localmente via Vite `?url`. Atrelado à mesma
 // versão de pdfjs-dist (5.4.296) que o react-pdf bundla — alinhar via
 // package.json é crítico, caret/range causa mismatch.
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+//
+// Build LEGACY de propósito: o build moderno usa `Promise.withResolvers`,
+// que só existe em Safari 17.4+ / Chromium 119+. Quem assina é o cliente do
+// escritório, no aparelho que ele tem — iPhone parado no iOS 16.7 e Samsung
+// Internet antigo são base instalada enorme no Brasil, e neles o preview
+// morria. O legacy traz o polyfill (o vite.config aponta o pdfjs inteiro
+// pra ele; worker e biblioteca precisam ser da MESMA variante).
+import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,12 +92,27 @@ export default function AssinarDocumento({ token }: { token: string }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ratio = Math.max(window.devicePixelRatio || 1, 1);
-    canvas.width = canvas.offsetWidth * ratio;
-    canvas.height = canvas.offsetHeight * ratio;
+    const largura = Math.round(canvas.offsetWidth * ratio);
+    const altura = Math.round(canvas.offsetHeight * ratio);
+    // No celular `resize` dispara sem o canvas mudar de tamanho: teclado do
+    // Android abrindo no campo Nome/CPF, barra de endereço do iOS colapsando
+    // na rolagem. Redimensionar à toa limpava a assinatura recém-desenhada e
+    // desabilitava o botão Assinar de novo.
+    if (canvas.width === largura && canvas.height === altura) return;
+    const tracos = padRef.current?.toData();
+    canvas.width = largura;
+    canvas.height = altura;
     const ctx = canvas.getContext("2d");
     if (ctx) ctx.scale(ratio, ratio);
     padRef.current?.clear();
-    setAssinaturaVazia(true);
+    if (tracos && tracos.length > 0) {
+      // Rotação de tela redimensiona de verdade — devolve os traços em vez
+      // de exigir que o cliente assine tudo de novo.
+      padRef.current?.fromData(tracos);
+      setAssinaturaVazia(false);
+    } else {
+      setAssinaturaVazia(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -206,6 +229,37 @@ export default function AssinarDocumento({ token }: { token: string }) {
 
   // Tela de assinatura
   const temCamposPosicionais = (campos as any[]).length > 0;
+
+  /**
+   * Para onde o botão de leitura aponta.
+   *
+   * Documento subido pelo escritório mora em /uploads, que exige sessão —
+   * e quem assina é o cliente, que nunca teve login: por isso a leitura vai
+   * pela rota por token. Documento cadastrado como LINK EXTERNO (Google
+   * Docs, PDF de terceiro) segue abrindo direto, como sempre funcionou; a
+   * rota por token não saberia servi-lo (ela lê do disco).
+   * Só http(s): `javascript:`/`data:` gravado no cadastro viraria execução
+   * de script na aba do cliente, com o token da assinatura na URL.
+   */
+  // url-do-servidor-ok: arquivo interno vai pela rota por token; o que sobra
+  // é link externo do cadastro, aceito só em http(s).
+  const urlLeitura = (() => {
+    const bruta = String(doc.documentoUrl || "").trim();
+    if (!bruta) return null;
+    const porToken = `/api/assinatura/pdf/token/${token}`;
+    if (bruta.startsWith("/uploads/")) return porToken;
+    if (/^https?:\/\//i.test(bruta)) {
+      try {
+        // Endereço completo do próprio sistema (operador que copiou a URL
+        // da barra) também é arquivo interno — vai pelo token.
+        if (new URL(bruta).pathname.startsWith("/uploads/")) return porToken;
+      } catch {
+        return null;
+      }
+      return bruta;
+    }
+    return null;
+  })();
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-slate-950 dark:to-gray-900 p-4">
       <div className={`mx-auto ${temCamposPosicionais ? "max-w-5xl" : "max-w-lg"} space-y-4`}>
@@ -244,19 +298,12 @@ export default function AssinarDocumento({ token }: { token: string }) {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Link do documento — SEMPRE pela rota por token, nunca pelo
-                path /uploads que `doc.documentoUrl` carrega: /uploads exige
-                sessão, e quem assina é o cliente do escritório, que não tem
-                login (via celular dele isso virava {"error":"Não autenticado"}).
-                Âncora de verdade em vez de window.open: iOS/Android bloqueiam
-                pop-up aberto por JS em alguns contextos. */}
-            {doc.documentoUrl && (
+            {/* Âncora de verdade em vez de window.open: navegador de celular
+                bloqueia pop-up aberto por JS em vários contextos. Destino
+                calculado em `urlLeitura` (arquivo interno → rota por token). */}
+            {urlLeitura && (
               <Button asChild variant="outline" className="w-full justify-start gap-2 h-10">
-                <a
-                  href={`/api/assinatura/pdf/token/${token}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <a href={urlLeitura} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-4 w-4" />
                   <span className="text-sm">Abrir documento para leitura</span>
                 </a>
@@ -395,6 +442,23 @@ function PreviewPdfComCampos({
   const [totalPaginas, setTotalPaginas] = useState(0);
   const [pageSizePt, setPageSizePt] = useState<{ w: number; h: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  // Largura útil da tela. Fixo em 600px, num celular de 360px o PDF
+  // transbordava dos DOIS lados (flex centralizado) — e o que sobra à
+  // esquerda não tem como ser alcançado, não existe rolagem pra lá.
+  const [larguraPagina, setLarguraPagina] = useState(600);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const medir = () => {
+      const disponivel = el.clientWidth - 16;
+      if (disponivel > 0) setLarguraPagina(Math.min(600, disponivel));
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Memoiza options pra Document não recriar transport a cada render
   // (causa "sendWithPromise null" no Page).
@@ -444,7 +508,7 @@ function PreviewPdfComCampos({
           {paginasComCampos.join(", ")}.
         </p>
       </CardHeader>
-      <CardContent className="bg-muted/20 flex justify-center pt-2">
+      <CardContent ref={boxRef} className="bg-muted/20 flex justify-start sm:justify-center overflow-x-auto pt-2">
         <Document
           // key={documentoUrl} força remount limpo se a URL mudar
           key={documentoUrl}
@@ -457,6 +521,13 @@ function PreviewPdfComCampos({
               documentoUrl,
               error: err?.message,
               name: err?.name,
+            });
+            // Sem isto a falha morre no console de um celular que ninguém
+            // aqui vai inspecionar. O user-agent é o que diz se foi aparelho
+            // velho (pdfjs sem suporte) ou arquivo/rede.
+            Sentry.captureException(err, {
+              tags: { tela: "assinar-documento" },
+              extra: { documentoUrl, ua: typeof navigator !== "undefined" ? navigator.userAgent : "" },
             });
           }}
           loading={
@@ -474,7 +545,7 @@ function PreviewPdfComCampos({
           <div ref={containerRef} className="relative inline-block shadow-md bg-white dark:bg-card">
             <Page
               pageNumber={paginaAtual}
-              width={600}
+              width={larguraPagina}
               renderTextLayer={false}
               renderAnnotationLayer={false}
               // originalWidth/Height = pontos PDF reais (não pixels
