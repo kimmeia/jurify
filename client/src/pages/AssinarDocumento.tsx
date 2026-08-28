@@ -233,33 +233,14 @@ export default function AssinarDocumento({ token }: { token: string }) {
   /**
    * Para onde o botão de leitura aponta.
    *
-   * Documento subido pelo escritório mora em /uploads, que exige sessão —
-   * e quem assina é o cliente, que nunca teve login: por isso a leitura vai
-   * pela rota por token. Documento cadastrado como LINK EXTERNO (Google
-   * Docs, PDF de terceiro) segue abrindo direto, como sempre funcionou; a
-   * rota por token não saberia servi-lo (ela lê do disco).
-   * Só http(s): `javascript:`/`data:` gravado no cadastro viraria execução
-   * de script na aba do cliente, com o token da assinatura na URL.
+   * Sempre a rota por token — inclusive para documento cadastrado como link
+   * externo (Google Docs, PDF de terceiro), que o servidor resolve com um
+   * redirect. A tela não recebe mais endereço nenhum: quem abre aqui não tem
+   * sessão, e caminho de arquivo no payload é caminho que vaza.
    */
-  // url-do-servidor-ok: arquivo interno vai pela rota por token; o que sobra
-  // é link externo do cadastro, aceito só em http(s).
-  const urlLeitura = (() => {
-    const bruta = String(doc.documentoUrl || "").trim();
-    if (!bruta) return null;
-    const porToken = `/api/assinatura/pdf/token/${token}`;
-    if (bruta.startsWith("/uploads/")) return porToken;
-    if (/^https?:\/\//i.test(bruta)) {
-      try {
-        // Endereço completo do próprio sistema (operador que copiou a URL
-        // da barra) também é arquivo interno — vai pelo token.
-        if (new URL(bruta).pathname.startsWith("/uploads/")) return porToken;
-      } catch {
-        return null;
-      }
-      return bruta;
-    }
-    return null;
-  })();
+  // url-do-servidor-ok: `temDocumento` é booleano, não endereço — o destino é
+  // sempre a rota por token, montada aqui a partir do token da própria URL.
+  const urlLeitura = doc.temDocumento ? `/api/assinatura/pdf/token/${token}` : null;
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-slate-950 dark:to-gray-900 p-4">
       <div className={`mx-auto ${temCamposPosicionais ? "max-w-5xl" : "max-w-lg"} space-y-4`}>

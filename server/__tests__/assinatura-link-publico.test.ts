@@ -2,6 +2,7 @@ import { execSync } from "child_process";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
+import { motivoBloqueioPublico } from "../escritorio/assinatura-pdf-route";
 
 /**
  * Página pública NÃO pode depender de rota autenticada.
@@ -60,10 +61,17 @@ describe("tela pública de assinatura", () => {
 
   it("abre o documento pela rota por token, não pelo path /uploads", () => {
     expect(tela).toContain("/api/assinatura/pdf/token/${token}");
-    // documentoUrl segue vindo do servidor (campo não removido), mas serve
-    // só como "existe documento?" — nunca como destino de navegação.
     expect(tela).not.toMatch(/window\.open\(\s*doc\.documentoUrl/);
     expect(tela).not.toMatch(/href=\{\s*doc\.documentoUrl/);
+  });
+
+  it("a tela nem recebe mais o endereço do arquivo", () => {
+    // A tela lê o tRPC com `(trpc as any)`: um `doc.documentoUrl` esquecido
+    // não quebra o typecheck nem nenhum teste — vira `undefined` silencioso
+    // em produção. Por isso a verificação é textual.
+    expect(tela).not.toContain("doc.documentoUrl");
+    expect(tela).not.toContain("doc.documentoAssinadoUrl");
+    expect(tela).toContain("doc.temDocumento");
   });
 
   it("usa âncora de verdade (pop-up por JS é bloqueado em celular)", () => {
@@ -75,19 +83,14 @@ describe("tela pública de assinatura", () => {
     expect(trecho).toContain("href={urlLeitura}");
   });
 
-  it("documento cadastrado como link externo continua abrindo direto", () => {
-    // Regressão fácil de introduzir: mandar TODO documento pela rota por
-    // token quebra quem usou "URL do Documento" (Google Docs), porque a rota
-    // lê do disco.
+  it("o botão só aparece quando há documento que a rota consegue servir", () => {
+    // `temDocumento` é calculado no servidor com as MESMAS regras da rota
+    // (mapDoc importa os helpers dela). Se virasse `!!documentoUrl`, o botão
+    // apareceria pra endereço que a rota recusa — JSON de erro em aba nova.
     const calculo = tela.slice(tela.indexOf("const urlLeitura"), tela.indexOf("return (", tela.indexOf("const urlLeitura")));
-    expect(calculo).toMatch(/https\?:/);
-    expect(calculo).toContain("return bruta");
-  });
-
-  it("só http(s) vira link — javascript:/data: não", () => {
-    const calculo = tela.slice(tela.indexOf("const urlLeitura"), tela.indexOf("return (", tela.indexOf("const urlLeitura")));
-    expect(calculo).toMatch(/\/\^https\?:\\\/\\\//);
-    expect(calculo).toContain("return null");
+    expect(calculo).toContain("doc.temDocumento");
+    expect(calculo).toContain("/api/assinatura/pdf/token/${token}");
+    expect(calculo).toContain("null");
   });
 });
 
@@ -167,11 +170,116 @@ describe("contrato da rota pública por token", () => {
     expect(helper).toMatch(/\[\\r\\n/);
   });
 
+  it("documento cancelado ou vencido para de abrir pelo link", () => {
+    const guard = rota.slice(rota.indexOf("export function motivoBloqueioPublico"), rota.indexOf("const MIME_POR_EXT"));
+    expect(guard).toContain('"recusado"');
+    expect(guard).toContain('"expirado"');
+    // Comparar a DATA, não só o rótulo: a virada pra "expirado" é preguiçosa
+    // (cron + abertura da tela), então link guardado e nunca reaberto fica
+    // "enviado" com a validade vencida — o caso mais comum.
+    expect(guard).toContain("expiracaoAt");
+    expect(trechoToken).toContain("motivoBloqueioPublico");
+  });
+
+  it("quem já assinou continua conseguindo reler o que assinou", () => {
+    // Assinar não limpa a validade padrão de 30 dias: todo documento assinado
+    // fica com expiracaoAt no passado depois de um mês. Um bloqueio por status
+    // ou por data tiraria um acesso que existe hoje — `assinadoAt` é o único
+    // campo que não mente, e por isso decide ANTES dos outros.
+    const guard = rota.slice(rota.indexOf("export function motivoBloqueioPublico"), rota.indexOf("const MIME_POR_EXT"));
+    const posAssinado = guard.indexOf("if (a.assinadoAt)");
+    const posRecusado = guard.indexOf('"recusado"');
+    expect(posAssinado).toBeGreaterThan(0);
+    expect(posRecusado).toBeGreaterThan(0);
+    expect(posAssinado).toBeLessThan(posRecusado);
+    expect(guard).toMatch(/if\s*\(a\.assinadoAt\)\s*return null/);
+  });
+
+  it("o bloqueio vem ANTES do redirect externo", () => {
+    // Se viesse depois, documento cancelado cadastrado como Google Docs
+    // continuaria abrindo pelo 302 e nenhum outro caso acusaria.
+    const posBloqueio = trechoToken.indexOf("motivoBloqueioPublico");
+    const posRedirect = trechoToken.indexOf("urlExternaSegura");
+    // Sem estes dois, um indexOf devolvendo -1 deixaria a comparação verde.
+    expect(posBloqueio).toBeGreaterThan(0);
+    expect(posRedirect).toBeGreaterThan(0);
+    expect(posBloqueio).toBeLessThan(posRedirect);
+  });
+
+  it("bloqueio não fica em cache (cancelar é reversível) e tem página legível", () => {
+    const bloco = trechoToken.slice(trechoToken.indexOf("motivoBloqueioPublico"), trechoToken.indexOf("if (!a.documentoUrl)"));
+    expect(bloco).toContain('"no-store"');
+    expect(bloco).toContain('req.accepts("html")');
+    expect(bloco).toContain("403");
+  });
+
+  it("a rota do OPERADOR não herda o bloqueio", () => {
+    // O escritório precisa abrir no painel o documento que ele mesmo cancelou.
+    const porId = rota.slice(rota.indexOf('app.get("/api/assinatura/pdf/:id"'), rota.indexOf('app.get("/api/assinatura/pdf/token/:token"'));
+    expect(porId.length).toBeGreaterThan(100);
+    expect(porId).not.toContain("motivoBloqueioPublico");
+  });
+
   it("tem teto de requisições (link público) sem estrangular o Range", () => {
     const boot = ler("server/_core/index.ts");
     expect(boot).toContain('"/api/assinatura/pdf/token"');
     const trecho = boot.slice(boot.indexOf('"/api/assinatura/pdf/token"'), boot.indexOf('"/api/assinatura/pdf/token"') + 200);
     expect(trecho).toMatch(/max:\s*(\d{2,})/);
+  });
+});
+
+describe("quem pode abrir o arquivo pelo link (comportamento, não texto)", () => {
+  const ONTEM = new Date(Date.now() - 86_400_000);
+  const AMANHA = new Date(Date.now() + 86_400_000);
+
+  it("documento em aberto e no prazo abre", () => {
+    expect(motivoBloqueioPublico({ status: "enviado", expiracaoAt: AMANHA })).toBeNull();
+    expect(motivoBloqueioPublico({ status: "visualizado", expiracaoAt: null })).toBeNull();
+  });
+
+  it("cancelado não abre", () => {
+    expect(motivoBloqueioPublico({ status: "recusado", expiracaoAt: AMANHA })).toBe("cancelado");
+  });
+
+  it("vencido não abre — pelo rótulo OU pela data", () => {
+    expect(motivoBloqueioPublico({ status: "expirado", expiracaoAt: AMANHA })).toBe("vencido");
+    // O caso que o rótulo sozinho perderia: link guardado, nunca reaberto, o
+    // status no banco ainda diz "enviado" mas o prazo já passou.
+    expect(motivoBloqueioPublico({ status: "enviado", expiracaoAt: ONTEM })).toBe("vencido");
+  });
+
+  it("quem assinou relê o que assinou, mesmo com o prazo vencido", () => {
+    // Assinar não limpa a validade de 30 dias: todo assinado fica com a data
+    // no passado depois de um mês. Bloquear aqui tiraria acesso que existe.
+    expect(motivoBloqueioPublico({ status: "assinado", assinadoAt: ONTEM, expiracaoAt: ONTEM })).toBeNull();
+    // Inclusive quando o rótulo já foi corrompido pelo bug antigo.
+    expect(motivoBloqueioPublico({ status: "expirado", assinadoAt: ONTEM, expiracaoAt: ONTEM })).toBeNull();
+  });
+});
+
+describe("abrir a tela não pode reescrever o status do documento", () => {
+  const router = ler("server/escritorio/router-assinaturas.ts");
+
+  it("visualizarPorToken só expira o que ainda estava aberto", () => {
+    // Sem a guarda, documento ASSINADO virava "expirado" no banco: a validade
+    // padrão é de 30 dias e assinar não a limpa, então bastava o cliente
+    // reabrir o link no 31º dia. Não existe procedure que desfaça.
+    const i = router.indexOf("visualizarPorToken: publicProcedure");
+    const trecho = router.slice(i, i + 1600);
+    const guarda = trecho.slice(0, trecho.indexOf('set({ status: "expirado" })'));
+    expect(guarda).toContain('"pendente"');
+    expect(guarda).toContain('"enviado"');
+    expect(guarda).toContain('"visualizado"');
+    // Declarar a guarda não basta — o UPDATE tem que estar CONDICIONADO a ela.
+    // (Sem esta linha, apagar só o `aindaAberto &&` do if passava batido.)
+    expect(guarda).toMatch(/if\s*\(\s*aindaAberto\s*&&/);
+  });
+
+  it("é a mesma regra que o cron já usava", () => {
+    const cron = ler("server/_core/cron-jobs.ts");
+    const trecho = cron.slice(cron.indexOf("async function expirarAssinaturas"), cron.indexOf("async function expirarAssinaturas") + 800);
+    expect(trecho).toContain('"pendente"');
+    expect(trecho).toContain('"visualizado"');
   });
 });
 
