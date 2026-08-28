@@ -237,6 +237,13 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
   const statusAtual = await pegarStatusConversa(conversaId);
   if (statusAtual !== "em_atendimento") {
     await atualizarConversa(conversaId, escritorioId, { status: "aguardando" });
+    // Cliente voltou depois de um atendimento ENCERRADO = novo atendimento.
+    // Re-carimba o início — é a data que o filtro de período do Inbox usa
+    // no modo "início do atendimento".
+    if (statusAtual === "resolvido" || statusAtual === "fechado") {
+      const { marcarInicioAtendimento } = await import("../escritorio/db-crm");
+      await marcarInicioAtendimento(conversaId);
+    }
   }
 
   // Notificar via SSE APENAS:

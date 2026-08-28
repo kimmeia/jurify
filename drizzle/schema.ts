@@ -864,6 +864,15 @@ export const conversas = mysqlTable("conversas", {
   // Pasta Arquivadas: NULL = ativa. Arquivada sai das vistas padrão sem ser
   // apagada; mensagem nova do contato limpa o campo (desarquiva sozinha).
   arquivadaEm: timestamp("arquivadaEmConv"),
+  /**
+   * Início do ATENDIMENTO atual (episódio): gravado na criação da conversa e
+   * RE-gravado quando mensagem de ENTRADA chega com a conversa
+   * resolvida/fechada — o cliente voltou = novo atendimento (regra do dono,
+   * 27/08). É a data que o filtro de período do Inbox usa no modo "início do
+   * atendimento". NULL só em linha antiga sem backfill — o filtro cobre com
+   * COALESCE(createdAt).
+   */
+  atendimentoIniciadoEm: timestamp("atendimentoIniciadoEmConv"),
   tempoEspera: int("tempoEspera"),
   tempoConclusao: int("tempoConclusao"),
   avaliacaoCliente: int("avaliacaoCliente"),
