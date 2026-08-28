@@ -7,8 +7,11 @@
  * Conversa atendida no período que seguiu recebendo mensagem depois sumia
  * do resultado, e a distorção crescia quanto mais antigo o intervalo.
  *
- * Contrato agora: o intervalo é testado contra as MENSAGENS (createdAt),
- * que são imutáveis — via EXISTS correlacionado com a conversa.
+ * Contrato desde 27/08 (aprovado pelo dono): o período conta pelo INÍCIO
+ * do atendimento (conversas.atendimentoIniciadoEm, com COALESCE em
+ * createdAt) — modo default "inicio". O comportamento anterior (qualquer
+ * mensagem na janela, via EXISTS imutável sobre mensagens.createdAt)
+ * continua disponível com modoPeriodo: "mensagens" — nada foi removido.
  *
  * Gera o SQL de verdade (drizzle real + conexão fake) em vez de inspecionar
  * objeto: o que importa aqui é o texto da query que chega no MySQL.
@@ -47,7 +50,7 @@ const FIM = "2026-07-01T21:00:00.000Z";
 
 describe("filtro de período — base é a mensagem, não a última atividade", () => {
   it("gera EXISTS em mensagens correlacionado com a conversa", async () => {
-    await listarConversas(1, { dataInicio: INICIO, dataFim: FIM });
+    await listarConversas(1, { dataInicio: INICIO, dataFim: FIM, modoPeriodo: "mensagens" });
     const s = sqlPrincipal();
     expect(s).toMatch(/exists/i);
     expect(s).toContain("`mensagens`");
@@ -66,7 +69,7 @@ describe("filtro de período — base é a mensagem, não a última atividade", 
   });
 
   it("só dataInicio: gera limite inferior, sem limite superior", async () => {
-    await listarConversas(1, { dataInicio: INICIO });
+    await listarConversas(1, { dataInicio: INICIO, modoPeriodo: "mensagens" });
     const s = sqlPrincipal();
     expect(s).toMatch(/exists/i);
     expect(s).toContain("`createdAtMsg` >=");
@@ -74,7 +77,7 @@ describe("filtro de período — base é a mensagem, não a última atividade", 
   });
 
   it("só dataFim: gera limite superior, sem limite inferior", async () => {
-    await listarConversas(1, { dataFim: FIM });
+    await listarConversas(1, { dataFim: FIM, modoPeriodo: "mensagens" });
     const s = sqlPrincipal();
     expect(s).toContain("`createdAtMsg` <=");
     expect(s).not.toContain("`createdAtMsg` >=");
@@ -101,10 +104,35 @@ describe("contadores usam a MESMA regra da lista", () => {
   it("contarConversasPorStatus também filtra por mensagem no período", async () => {
     // Contador e lista divergirem é o que fazia a aba dizer um número e a
     // lista mostrar outro.
-    await contarConversasPorStatus(1, { dataInicio: INICIO, dataFim: FIM });
+    await contarConversasPorStatus(1, { dataInicio: INICIO, dataFim: FIM, modoPeriodo: "mensagens" });
     const s = sqlPrincipal();
     expect(s).toMatch(/exists/i);
     expect(s).toContain("`createdAtMsg`");
+  });
+});
+
+describe("modo 'início do atendimento' (default desde 27/08)", () => {
+  it("sem modoPeriodo: compara o início do atendimento, não as mensagens", async () => {
+    await listarConversas(1, { dataInicio: INICIO, dataFim: FIM });
+    const s = sqlPrincipal();
+    expect(s).toContain("atendimentoIniciadoEmConv");
+    // COALESCE cobre linha antiga sem backfill (cai no createdAt da conversa).
+    expect(s).toMatch(/coalesce/i);
+    expect(s).not.toMatch(/exists/i);
+  });
+
+  it("contadores usam o MESMO critério da lista no modo início", async () => {
+    await contarConversasPorStatus(1, { dataInicio: INICIO, dataFim: FIM });
+    const s = sqlPrincipal();
+    expect(s).toContain("atendimentoIniciadoEmConv");
+    expect(s).not.toMatch(/exists/i);
+  });
+
+  it("somente primeiro contato continua funcionando no modo início", async () => {
+    await listarConversas(1, { dataInicio: INICIO, somenteNovos: true });
+    const s = sqlPrincipal();
+    expect(s).toContain("atendimentoIniciadoEmConv");
+    expect(s).toMatch(/not exists/i);
   });
 });
 
