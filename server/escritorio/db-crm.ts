@@ -423,8 +423,28 @@ export async function criarConversa(dados: {
     assunto: dados.assunto || null,
     prioridade: validarPrioridade(dados.prioridade),
     chatIdExterno: dados.chatIdExterno || null,
+    atendimentoIniciadoEm: new Date(),
   });
   return (result as { insertId: number }).insertId;
+}
+
+/**
+ * Re-carimba o início do ATENDIMENTO atual. Chamado quando mensagem de
+ * ENTRADA chega com a conversa resolvida/fechada — o cliente voltou, e o
+ * retorno conta como novo atendimento (é essa data que o filtro de período
+ * do Inbox usa no modo "início do atendimento"). Best-effort: falha aqui
+ * não pode segurar a ingestão da mensagem.
+ */
+export async function marcarInicioAtendimento(conversaId: number, quando: Date = new Date()) {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    await db.update(conversas)
+      .set({ atendimentoIniciadoEm: quando })
+      .where(eq(conversas.id, conversaId));
+  } catch {
+    /* best-effort */
+  }
 }
 
 // Condições comuns (escritório/atendente/setor/canal/período) das queries de
@@ -434,7 +454,7 @@ export async function criarConversa(dados: {
 async function condicoesConversa(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   escritorioId: number,
-  filtros?: { atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number; dataInicio?: string; dataFim?: string; arquivadas?: boolean; busca?: string; somenteNovos?: boolean },
+  filtros?: { atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number; dataInicio?: string; dataFim?: string; arquivadas?: boolean; busca?: string; somenteNovos?: boolean; modoPeriodo?: "inicio" | "mensagens" },
 ): Promise<SQL[] | null> {
   const conditions: SQL[] = [eq(conversas.escritorioId, escritorioId)];
   // Arquivadas ficam fora de TODAS as vistas padrão (lista, contadores);
@@ -534,12 +554,24 @@ async function condicoesConversa(
   const inicioOk = inicio && !isNaN(inicio.getTime()) ? inicio : null;
   const fimOk = fim && !isNaN(fim.getTime()) ? fim : null;
   if (inicioOk || fimOk) {
-    const janela: SQL[] = [eq(mensagens.conversaId, conversas.id)];
-    if (inicioOk) janela.push(gte(mensagens.createdAt, inicioOk));
-    if (fimOk) janela.push(lte(mensagens.createdAt, fimOk));
-    conditions.push(
-      exists(db.select({ um: sql`1` }).from(mensagens).where(and(...janela))),
-    );
+    // Modo do período (27/08, aprovado pelo dono): "inicio" (default) pega
+    // quem PEDIU atendimento na janela — compara o início do atendimento
+    // atual (atendimentoIniciadoEm; re-carimbado quando o cliente volta
+    // depois de resolvido/fechado). "mensagens" é o comportamento antigo
+    // (qualquer mensagem na janela), mantido como opção — nada removido.
+    // COALESCE cobre linha antiga sem backfill.
+    if (filtros?.modoPeriodo !== "mensagens") {
+      const inicioAt = sql`COALESCE(${conversas.atendimentoIniciadoEm}, ${conversas.createdAt})`;
+      if (inicioOk) conditions.push(sql`${inicioAt} >= ${inicioOk}`);
+      if (fimOk) conditions.push(sql`${inicioAt} <= ${fimOk}`);
+    } else {
+      const janela: SQL[] = [eq(mensagens.conversaId, conversas.id)];
+      if (inicioOk) janela.push(gte(mensagens.createdAt, inicioOk));
+      if (fimOk) janela.push(lte(mensagens.createdAt, fimOk));
+      conditions.push(
+        exists(db.select({ um: sql`1` }).from(mensagens).where(and(...janela))),
+      );
+    }
 
     // "Somente primeiro contato": nenhuma mensagem ANTES do início da janela.
     // Junto com o EXISTS acima, isola quem falou com o escritório pela
@@ -579,6 +611,7 @@ export async function contarConversasPorStatus(escritorioId: number, filtros?: {
   // acontecido com `canalId`.
   arquivadas?: boolean;
   busca?: string;
+  modoPeriodo?: "inicio" | "mensagens";
 }): Promise<{ todos: number; aguardando: number; em_atendimento: number; resolvido: number; fechado: number }> {
   const zero = { todos: 0, aguardando: 0, em_atendimento: 0, resolvido: 0, fechado: 0 };
   const db = await getDb();
@@ -656,6 +689,8 @@ export async function listarConversas(escritorioId: number, filtros?: {
   busca?: string;
   /** Só conversas cujo PRIMEIRO contato caiu na janela (lead novo). */
   somenteNovos?: boolean;
+  /** Como o período conta: "inicio" (default — início do atendimento) × "mensagens" (qualquer mensagem na janela). */
+  modoPeriodo?: "inicio" | "mensagens";
 }) {
   const db = await getDb();
   if (!db) return [];
@@ -689,6 +724,7 @@ export async function listarConversas(escritorioId: number, filtros?: {
       marcadaNaoLidaEm: conversas.marcadaNaoLidaEm,
       arquivadaEm: conversas.arquivadaEm,
       createdAt: conversas.createdAt,
+      atendimentoIniciadoEm: conversas.atendimentoIniciadoEm,
     })
     .from(conversas)
     .innerJoin(contatos, eq(conversas.contatoId, contatos.id))
@@ -766,7 +802,49 @@ export async function listarConversas(escritorioId: number, filtros?: {
     optOutWhatsappEm: toIsoString(r.optOutWhatsappEm) ?? undefined,
     ultimaMensagemAt: toIsoString(r.ultimaMensagemAt) ?? undefined,
     createdAt: toIsoString(r.createdAt) ?? "",
+    atendimentoIniciadoEm: toIsoString(r.atendimentoIniciadoEm) ?? undefined,
   }));
+}
+
+/**
+ * Conversas que TROCARAM mensagem no período mas cujo atendimento COMEÇOU
+ * antes dele — as que o modo "início do atendimento" deixa de fora. Alimenta
+ * a nota de transparência do Inbox ("Maria Clara e +3 ficaram fora do
+ * filtro"), pra ninguém achar que conversa sumiu.
+ */
+export async function conversasForaDoPeriodoInicio(escritorioId: number, filtros: {
+  atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number;
+  dataInicio: string; dataFim?: string; busca?: string;
+}): Promise<{ total: number; nomes: string[] }> {
+  const db = await getDb();
+  if (!db) return { total: 0, nomes: [] };
+  const inicio = new Date(filtros.dataInicio);
+  if (isNaN(inicio.getTime())) return { total: 0, nomes: [] };
+  // Mesmas condições da lista no modo ANTIGO (mensagem na janela)…
+  const base = await condicoesConversa(db, escritorioId, { ...filtros, modoPeriodo: "mensagens" });
+  if (!base) return { total: 0, nomes: [] };
+  // …restritas a quem começou ANTES da janela (fora do modo novo).
+  const inicioAt = sql`COALESCE(${conversas.atendimentoIniciadoEm}, ${conversas.createdAt})`;
+  const conds = [...base, sql`${inicioAt} < ${inicio}`];
+
+  const [{ n } = { n: 0 }] = await db
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(conversas)
+    .innerJoin(contatos, eq(conversas.contatoId, contatos.id))
+    .innerJoin(canaisIntegrados, eq(conversas.canalId, canaisIntegrados.id))
+    .where(and(...conds));
+  const total = Number(n || 0);
+  if (total === 0) return { total: 0, nomes: [] };
+
+  const rows = await db
+    .select({ nome: contatos.nome })
+    .from(conversas)
+    .innerJoin(contatos, eq(conversas.contatoId, contatos.id))
+    .innerJoin(canaisIntegrados, eq(conversas.canalId, canaisIntegrados.id))
+    .where(and(...conds))
+    .orderBy(desc(conversas.ultimaMensagemAt))
+    .limit(2);
+  return { total, nomes: rows.map((r) => r.nome || "").filter(Boolean) };
 }
 
 // ─── Arquivamento de conversas ───────────────────────────────────────────────

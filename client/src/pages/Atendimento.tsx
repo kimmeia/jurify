@@ -465,7 +465,11 @@ export default function Atendimento() {
   const [atendentesFiltro, setAtendentesFiltro] = useState<number[]>([]);
   const [setorFiltro, setSetorFiltro] = useState<number | null>(null);
   const [canalFiltro, setCanalFiltro] = useState<number | null>(null);
-  const [periodoFiltro, setPeriodoFiltro] = useState<"todos" | "7d" | "30d" | "90d">("todos");
+  const [periodoFiltro, setPeriodoFiltro] = useState<"todos" | "hoje" | "7d" | "30d" | "90d">("todos");
+  // Como o período conta (27/08): "inicio" = início do atendimento atual
+  // (novo padrão — pega quem PEDIU atendimento na janela); "mensagens" =
+  // comportamento antigo (qualquer mensagem na janela), mantido como opção.
+  const [modoPeriodo, setModoPeriodo] = useState<"inicio" | "mensagens">("inicio");
   // Período customizado (datas escolhidas pelo usuário). Quando preenchido,
   // tem prioridade sobre os presets acima. Hora é opcional: vazia, o extremo
   // assume o dia inteiro (De=00:00, Até=23:59) — comportamento antigo.
@@ -519,9 +523,18 @@ export default function Atendimento() {
     // haver mensagem". O backend também ignora sem dataInicio.
     if (somenteNovos && dataIni) f.somenteNovos = true;
     if (!dataIni && !dataFim && periodoFiltro !== "todos") {
-      const dias = periodoFiltro === "7d" ? 7 : periodoFiltro === "30d" ? 30 : 90;
-      f.dataInicio = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+      if (periodoFiltro === "hoje") {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        f.dataInicio = hoje.toISOString();
+      } else {
+        const dias = periodoFiltro === "7d" ? 7 : periodoFiltro === "30d" ? 30 : 90;
+        f.dataInicio = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+      }
     }
+    // O modo só importa quando há período; mandar sempre que houver mantém
+    // lista e contadores no MESMO critério.
+    if (f.dataInicio || f.dataFim) f.modoPeriodo = modoPeriodo;
     return Object.keys(f).length > 0 ? f : undefined;
   })();
   // Limite alto: o Inbox precisa enxergar além de 100 (escritório com muitos
@@ -543,6 +556,25 @@ export default function Atendimento() {
     { refetchInterval: 5000 },
   );
   const { data: resumoArq, refetch: rArq } = trpc.crm.resumoArquivadas.useQuery(undefined, { refetchInterval: 60000 });
+  // Nota de transparência do modo "início do atendimento": quem trocou
+  // mensagem no período mas começou antes dele fica fora da lista — a nota
+  // diz quem são, pra conversa não "sumir" em silêncio.
+  const notaForaInput = (() => {
+    const f: any = filtrosBackend;
+    if (!f?.dataInicio || f.modoPeriodo !== "inicio" || mostrarArquivadas) return null;
+    return {
+      dataInicio: f.dataInicio,
+      ...(f.dataFim ? { dataFim: f.dataFim } : {}),
+      ...(f.atendenteIds ? { atendenteIds: f.atendenteIds } : {}),
+      ...(f.setorId ? { setorId: f.setorId } : {}),
+      ...(f.canalId ? { canalId: f.canalId } : {}),
+      ...(inboxBuscaDebounced ? { busca: inboxBuscaDebounced } : {}),
+    };
+  })();
+  const { data: foraDoPeriodo } = (trpc as any).crm.conversasForaDoPeriodo.useQuery(
+    notaForaInput ?? { dataInicio: "" },
+    { enabled: !!notaForaInput, refetchInterval: 30000 },
+  );
   const arquivarMut = trpc.crm.arquivarConversa.useMutation({
     onSuccess: () => { rC(); rArq(); },
     onError: (e: any) => toast.error(e.message),
@@ -590,6 +622,7 @@ export default function Atendimento() {
     setSetorFiltro(null);
     setCanalFiltro(null);
     setPeriodoFiltro("todos");
+    setModoPeriodo("inicio");
     setSomenteNovos(false);
     setDataIni("");
     setDataFim("");
@@ -931,9 +964,9 @@ export default function Atendimento() {
                       </div>
                       <div className="space-y-1.5">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Período</p>
-                        <div className="grid grid-cols-4 gap-1.5">
-                          {(["todos", "7d", "30d", "90d"] as const).map((p) => {
-                            const label = p === "todos" ? "Todos" : p === "7d" ? "7 dias" : p === "30d" ? "30 dias" : "90 dias";
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {(["hoje", "7d", "30d", "90d", "todos"] as const).map((p) => {
+                            const label = p === "hoje" ? "Hoje" : p === "todos" ? "Todos" : p === "7d" ? "7 dias" : p === "30d" ? "30 dias" : "90 dias";
                             const ativo = periodoFiltro === p;
                             return (
                               <button
@@ -998,6 +1031,49 @@ export default function Atendimento() {
                             ? "Período exato ativo — os presets acima ficam ignorados. Hora vazia considera o dia inteiro."
                             : "Hora é opcional — em branco, o filtro considera o dia inteiro (00:00 a 23:59)."}
                         </p>
+
+                        {/* Como o período conta (27/08, aprovado): início do
+                            atendimento (novo default) × qualquer mensagem
+                            (comportamento antigo — nada removido). */}
+                        <div className="rounded-lg border border-sky-200 dark:border-sky-900 bg-sky-50/60 dark:bg-sky-950/20 p-2.5 space-y-1.5 mt-1.5">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                            O período conta pelo…
+                          </p>
+                          <label className="flex items-start gap-2 cursor-pointer select-none">
+                            <input
+                              type="radio"
+                              name="modo-periodo-inbox"
+                              checked={modoPeriodo === "inicio"}
+                              onChange={() => setModoPeriodo("inicio")}
+                              className="mt-0.5 h-3.5 w-3.5 accent-sky-600 cursor-pointer"
+                            />
+                            <span className="text-[11px] leading-snug">
+                              <span className="font-semibold">Início do atendimento</span>
+                              <span className="text-muted-foreground">
+                                {" "}— pega quem <strong>pediu atendimento</strong> no período: vale a primeira
+                                mensagem da conversa, e se um atendimento foi <strong>encerrado e o cliente
+                                voltou</strong>, o retorno conta como novo início. Conversa antiga que só
+                                continuou trocando mensagem fica fora.
+                              </span>
+                            </span>
+                          </label>
+                          <label className="flex items-start gap-2 cursor-pointer select-none">
+                            <input
+                              type="radio"
+                              name="modo-periodo-inbox"
+                              checked={modoPeriodo === "mensagens"}
+                              onChange={() => setModoPeriodo("mensagens")}
+                              className="mt-0.5 h-3.5 w-3.5 accent-sky-600 cursor-pointer"
+                            />
+                            <span className="text-[11px] leading-snug">
+                              <span className="font-semibold">Qualquer mensagem no período</span>
+                              <span className="text-muted-foreground">
+                                {" "}— como era antes: toda conversa com alguma mensagem na janela, mesmo que o
+                                atendimento tenha começado semanas atrás.
+                              </span>
+                            </span>
+                          </label>
+                        </div>
                         {/* No WhatsApp a conversa é reaproveitada pra sempre, então
                             sem este recorte não dá pra separar lead novo de cliente
                             que já falava com o escritório antes. */}
@@ -1109,6 +1185,20 @@ export default function Atendimento() {
                       {arquivarBulkMut.isPending ? <Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> : null}
                       Arquivar conversas dos canais desativados
                     </Button>
+                  </div>
+                )}
+                {notaForaInput && (foraDoPeriodo?.total ?? 0) > 0 && (
+                  <div className="mx-2 mb-1.5 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200 leading-snug">
+                    <span className="font-semibold">
+                      {(foraDoPeriodo?.nomes || []).slice(0, 2).join(", ") || "Algumas conversas"}
+                      {(foraDoPeriodo?.total ?? 0) > (foraDoPeriodo?.nomes?.length ?? 0)
+                        ? ` e +${(foraDoPeriodo!.total as number) - (foraDoPeriodo!.nomes as string[]).length}`
+                        : ""}
+                    </span>{" "}
+                    trocaram mensagem no período, mas o atendimento começou antes — fora do filtro.{" "}
+                    <button onClick={() => setModoPeriodo("mensagens")} className="font-bold underline">
+                      mostrar mesmo assim
+                    </button>
                   </div>
                 )}
                 {!convs?.length ? (
@@ -1271,6 +1361,32 @@ export default function Atendimento() {
                                   {STATUS_CONVERSA_LABELS[c.status as StatusConversa]}
                                 </span>
                               )}
+                              {/* Com período ativo no modo "início do atendimento",
+                                  a tag diz POR QUE a conversa está no filtro:
+                                  iniciada na janela ou reaberta nela (cliente
+                                  voltou depois de encerrada). */}
+                              {(filtrosBackend as any)?.dataInicio && modoPeriodo === "inicio" && (c as any).atendimentoIniciadoEm && (() => {
+                                const ini = new Date((c as any).atendimentoIniciadoEm);
+                                if (isNaN(ini.getTime())) return null;
+                                const criada = c.createdAt ? new Date(c.createdAt) : null;
+                                const reaberto = !!criada && !isNaN(criada.getTime()) && ini.getTime() - criada.getTime() > 60_000;
+                                const quando = ini.toDateString() === new Date().toDateString()
+                                  ? `hoje · ${ini.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                                  : ini.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+                                return (
+                                  <span
+                                    className={
+                                      "text-[9px] px-1.5 py-0 rounded font-bold shrink-0 " +
+                                      (reaberto
+                                        ? "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300"
+                                        : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300")
+                                    }
+                                    title={reaberto ? "Cliente voltou depois de um atendimento encerrado" : "Primeira mensagem da conversa dentro do período"}
+                                  >
+                                    {reaberto ? "reaberto" : "iniciado"} {quando}
+                                  </span>
+                                );
+                              })()}
                               {(c as any).atendenteNome && (
                                 <span className="text-[9px] px-1.5 py-0 rounded text-muted-foreground truncate max-w-[80px]" title={(c as any).atendenteNome}>
                                   · {(c as any).atendenteNome.split(" ")[0]}

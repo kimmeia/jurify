@@ -12,6 +12,7 @@ import {
   criarContato, criarOuReutilizarContato, listarContatos, atualizarContato, unificarContatos,
   buscarContatoPorTelefone,
   criarConversa, listarConversas, contarConversasPorStatus, contarAbertasPorAtendente,
+  conversasForaDoPeriodoInicio,
   atualizarConversa, excluirConversa,
   definirArquivada, resumoArquivadas as resumoArquivadasDB, arquivarConversasDeCanaisDesativados,
   enviarMensagem, listarMensagens,
@@ -244,6 +245,10 @@ export const crmRouter = router({
       busca: z.string().trim().max(120).optional(),
       // Só quem teve o PRIMEIRO contato dentro do período (lead novo).
       somenteNovos: z.boolean().optional(),
+      // Como o período conta: "inicio" (default — início do atendimento
+      // atual) × "mensagens" (qualquer mensagem na janela, comportamento
+      // antigo, mantido como opção).
+      modoPeriodo: z.enum(["inicio", "mensagens"]).optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
@@ -276,6 +281,8 @@ export const crmRouter = router({
       // lista mostrava quando havia busca ou pasta Arquivadas aberta.
       busca: z.string().optional(),
       arquivadas: z.boolean().optional(),
+      // Idem: pills têm que contar o MESMO conjunto que a lista mostra.
+      modoPeriodo: z.enum(["inicio", "mensagens"]).optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
@@ -287,6 +294,33 @@ export const crmRouter = router({
         delete filtros.setorId;
       }
       return contarConversasPorStatus(perm.escritorioId, filtros);
+    }),
+
+  /**
+   * Nota de transparência do modo "início do atendimento": conversas que
+   * trocaram mensagem no período mas cujo atendimento começou ANTES dele —
+   * a lista as deixa de fora e o Inbox avisa quem são, pra conversa não
+   * "sumir" em silêncio.
+   */
+  conversasForaDoPeriodo: protectedProcedure
+    .input(z.object({
+      atendenteIds: z.array(z.number()).optional(),
+      setorId: z.number().optional(),
+      canalId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string().optional(),
+      busca: z.string().trim().max(120).optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+      if (!perm.allowed) return { total: 0, nomes: [] as string[] };
+      const filtros: any = { ...input };
+      if (!perm.verTodos && perm.verProprios) {
+        filtros.atendenteId = perm.colaboradorId;
+        delete filtros.atendenteIds;
+        delete filtros.setorId;
+      }
+      return conversasForaDoPeriodoInicio(perm.escritorioId, filtros);
     }),
 
   /** Arquiva/desarquiva uma conversa. Arquivada sai das vistas padrão sem
