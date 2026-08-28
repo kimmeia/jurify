@@ -46,15 +46,35 @@ function resolverPathArquivo(documentoUrl: string): string {
   return path.resolve("." + documentoUrl);
 }
 
+/** Content-Type pela extensão — o documento nem sempre é PDF (docx/imagem). */
+const MIME_POR_EXT: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
+
 function streamPdf(res: Response, filepath: string, filename: string): void {
   // Headers permissivos: pdfjs worker pode rodar em contexto cross-origin
   // virtual mesmo dentro do mesmo domínio. CORP cross-origin permite o
   // fetch. Content-Type explícito evita pdfjs rejeitar por sniffing.
-  res.setHeader("Content-Type", "application/pdf");
+  const mime = MIME_POR_EXT[path.extname(filepath).toLowerCase()] || "application/octet-stream";
+  res.setHeader("Content-Type", mime);
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   res.setHeader("Cache-Control", "private, max-age=300");
   res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-  fs.createReadStream(filepath).pipe(res);
+  // sendFile em vez de createReadStream: implementa Range/206, ETag e
+  // Last-Modified. O visualizador de PDF do iOS Safari pede faixas de bytes
+  // antes de renderizar — com stream simples ele fica na tela branca.
+  res.sendFile(filepath, { acceptRanges: true }, (err) => {
+    if (err && !res.headersSent) {
+      log.error({ filepath, err: (err as Error).message }, "Falha ao enviar arquivo");
+      res.status(500).json({ erro: "Falha ao ler o arquivo" });
+    }
+  });
 }
 
 async function carregarAssinaturaPorId(id: number) {
