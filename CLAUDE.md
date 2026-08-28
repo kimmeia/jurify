@@ -218,6 +218,28 @@ Regras que ficam:
   sozinha), `assinatura-link-publico.test.ts` (contrato da rota por
   token), `superficie-publica-contrato.test.ts`.
 
+Fechamento do assunto (28/08, autorizado item a item pelo dono): documento
+cancelado/vencido para de abrir pelo link (`motivoBloqueioPublico` na rota,
+403 + `no-store` + HTML legível, **antes** do redirect externo — senão
+Google Docs cancelado passava pelo 302); e o payload público perdeu
+`documentoUrl`/`documentoAssinadoUrl`, trocados por `temDocumento`
+(calculado com os MESMOS helpers da rota, `urlExternaSegura`/`caminhoInterno`
+— booleano cru deixaria o botão aparecer pra `mailto:`/`data:`). O mapper do
+OPERADOR (`listarPorCliente`) NÃO mudou: o painel segue com os dois campos e
+os dois botões, e há teste travando isso.
+
+`assinadoAt` decide ANTES do status no bloqueio, de propósito: assinar não
+limpa a validade padrão de 30 dias, então todo assinado fica com
+`expiracaoAt` no passado depois de um mês — bloquear por status ou por data
+tiraria de quem assinou o acesso ao que assinou. Bug pré-existente corrigido
+junto: `visualizarPorToken` expirava QUALQUER status, então reabrir o link no
+31º dia gravava "expirado" por cima de "assinado" (o cron sempre teve a
+guarda certa; a leitura pública não). Registros já corrompidos continuam
+assim — reparo por SQL não foi autorizado, o dono decide.
+Amarras conferidas por mutação (quebrar o código e ver o teste ficar
+vermelho) — foi assim que se descobriu que a 1ª versão da amarra da guarda
+de expiração era vazia.
+
 Compatibilidade de celular que saiu junto: rota por token serve com
 Range/ETag (visualizador do iOS pede faixas de bytes antes de renderizar),
 `pdfjs` no build **legacy** nas duas telas (o moderno usa
