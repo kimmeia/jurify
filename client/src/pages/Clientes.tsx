@@ -30,7 +30,7 @@ import {
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
   Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello, Pencil,
-  MapPin, AlertTriangle, Briefcase, UserPlus, Ban,
+  MapPin, AlertTriangle, Briefcase, UserPlus, Ban, Lock,
 } from "lucide-react";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
 import {
@@ -2810,7 +2810,7 @@ function ClienteDetalhe({
   const [gerarContratoOpen, setGerarContratoOpen] = useState(false);
   const [fechamentoOpen, setFechamentoOpen] = useState(false);
   const utilsTrpc = trpc.useUtils();
-  const { data: cliente, refetch } = trpc.clientes.detalhe.useQuery({ id });
+  const { data: cliente, refetch, isLoading: detalheCarregando } = trpc.clientes.detalhe.useQuery({ id });
   // Resumo financeiro do Asaas — separado de `clientes.detalhe` pra reaproveitar
   // a mesma chave dos demais consumidores (FinanceiroPopover, FinanceiroBadge,
   // FinanceiroClienteTab) e cair no cache do React Query sem refetch.
@@ -2905,10 +2905,33 @@ function ClienteDetalhe({
   const situacaoServico: string | null = cliente?.situacaoServico && cliente.situacaoServico !== "ativo" ? cliente.situacaoServico : null;
   const foraDeServico = !!situacaoServico;
 
-  if (!cliente) {
+  // Carregando e "não posso ver" são coisas diferentes. `detalhe` devolve null
+  // (não erro) quando falta permissão, quando o contato é de outro escritório
+  // e quando ele não existe mais — tratar isso como "ainda não chegou" deixava
+  // a tela girando pra sempre, sem dizer nada a quem abriu.
+  if (detalheCarregando) {
     return (
       <div className="text-center py-12">
         <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+      </div>
+    );
+  }
+  if (!cliente) {
+    return (
+      <div className="mx-auto mt-12 max-w-md px-4 text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40">
+          <Lock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+        </div>
+        <h2 className="text-base font-bold">Não foi possível abrir este cadastro</h2>
+        <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+          Ou ele não está mais disponível, ou seu acesso mostra apenas os
+          clientes sob sua responsabilidade. Fale com quem coordena o escritório
+          para assumir o contato.
+        </p>
+        <Button className="mt-5" variant="outline" onClick={onVoltar}>
+          <ArrowLeft className="h-4 w-4 mr-1.5" />
+          Voltar
+        </Button>
       </div>
     );
   }

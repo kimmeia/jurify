@@ -239,11 +239,28 @@ describe("clientes.definirEstagio — troca manual reversível", () => {
   it("bloqueia user verProprios em cliente alheio", async () => {
     permState.result = { ...permState.result, verTodos: false, verProprios: true };
     lookupState.contatoRow = { id: 60, responsavelId: 99 }; // não é do colab 10
+    // Nem por lead: o acesso passou a valer também pelo responsável do LEAD
+    // (contato do WhatsApp nasce sem responsável no cadastro), então "alheio"
+    // só é alheio de verdade quando não há lead dele também. O banco falso
+    // ignora o WHERE, por isso o cenário precisa ser explícito aqui.
+    lookupState.leadRow = null;
     const caller = appRouter.createCaller(fakeCtx());
     await expect(
       caller.clientes.definirEstagio({ contatoId: 60, estagio: "cliente" }),
     ).rejects.toThrow(/não encontrado|permissão/i);
     expect(contatoUpdates()).toHaveLength(0);
+  });
+
+  it("permite quando o cadastro não é dele mas o LEAD é", async () => {
+    // O caso real: lead do WhatsApp entra com o cadastro sem responsável e o
+    // lead com quem atendeu. Antes isso era negado, e a ficha girava pra
+    // sempre na tela de quem estava atendendo.
+    permState.result = { ...permState.result, verTodos: false, verProprios: true };
+    lookupState.contatoRow = { id: 61, responsavelId: null };
+    lookupState.leadRow = { contatoId: 61, responsavelId: 10 };
+    const caller = appRouter.createCaller(fakeCtx());
+    const r = await caller.clientes.definirEstagio({ contatoId: 61, estagio: "cliente" });
+    expect(r.success).toBe(true);
   });
 
   it("permite user verProprios no próprio cliente", async () => {
