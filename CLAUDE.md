@@ -274,6 +274,62 @@ resize (teclado do Android apagava a assinatura desenhada).
 - `/uploads` é servido com auth de sessão + checagem de escritório
   (exceção pública: `/uploads/pareceres/` — capability-URL por design).
 
+## Fila combinada com o dono (31/08/2026)
+
+Ordem que ele pediu. Não pular sem ele mandar.
+
+### A. JurisIA — auditoria feita 31/08, aguardando ele escolher por onde começar
+
+Motor pronto, lado comercial inacabado (~1-2 semanas). O que IMPEDE vender,
+conferido linha a linha:
+1. **Cobrança cruzada**: `MODULO_JURISIA = "jurisia"` mas a fatura composta só
+   soma addon com prefixo `modulo:` (`PRODUTO_MODULO_PREFIXO`) — o preço
+   digitado no cartão JurisIA NUNCA entra na fatura; e conceder pelo dialog de
+   módulos avulsos cobra e NÃO libera. Corrigir aceitando `modulo:jurisia` no
+   gate (some nada) — a alternativa (tirar da lista de avulsos) é remoção e
+   precisa de autorização.
+2. **Nenhum plano libera hoje**: regra é `modulos.includes("jurisia") &&
+   jurisiaMensagensMes > 0`. Planos do superlançamento (0203) nasceram com
+   cota 0 E sem o módulo na cesta; os antigos (0200) têm o módulo mas cota 0
+   (default de 0172). Só liberação manual funciona.
+3. **Não existe como comprar**: zero menção na LP e no Pricing; a tela de
+   bloqueio não tem botão nenhum (nem wa.me comercial, que já existe).
+4. **`SeletorCaso` usa `clientes.listar`** → nos planos de Monitoramento o
+   porteiro recusa e a caixa diz "Nada encontrado" pra qualquer nome. Fix já
+   existe no repo: `useClientesVinculaveis` (usado em Processos).
+5. Risco jurídico barato: prazos do CPC cravados no prompt sem ressalva de
+   Juizado/trabalhista/prazo em dobro; DOCX sai sem aviso de minuta de IA e
+   com `[D] [F] [A]` literais; resposta sem acervo tem a mesma cara de
+   resposta fundamentada (a base do escritório tem essa guarda, o acervo não).
+6. **Zero Sentry no módulo inteiro** — erro da OpenAI vai cru pro advogado e
+   fica gravado no histórico dele; e não há visão de consumo/custo (tabela
+   `jurisia_uso` não é lida por nenhuma tela).
+Decisões pendentes do dono: tirar ou não o "beta"; JurisIA some do menu de
+quem não contratou ou vira vitrine; e se o módulo é vendido junto com
+Clientes ou ganha "anexar documento" na própria conversa (hoje "ela lê os
+documentos do cliente" não se sustenta nos planos vendidos).
+
+### B. Tribunais — cobertura de credenciais (pedido 31/08)
+
+Ele validou vinculação em OUTRO estado (TJMT ok além do TJCE) e quer cobrir
+todos. Print do Cofre: 2 validados, 10 com "login falhou". Achado dele que
+muda o desenho: **no PJe às vezes o acesso é separado por 1º e 2º grau**, e
+tem **Justiça Federal** além da estadual. Plano ainda não traçado — é o
+próximo assunto depois do que estiver em curso.
+
+### C. Nome do contato no Atendimento (mockup entregue 31/08)
+
+`mockup-nome-contato.html`. Duas coisas: (1) editar o nome inline no
+cabeçalho da conversa (lápis no hover, só com permissão `clientes.editar`);
+(2) o clique no nome que gira pra sempre. Causa do (2), confirmada:
+`clientes.detalhe` devolve `null` em QUATRO casos (sem permissão, contato de
+outro escritório, `verProprios` + responsável diferente, banco fora) e
+`ClienteDetalhe` faz `if (!cliente) return <spinner>` — "sem permissão" nunca
+deixa de ser "sem dado", então gira eternamente. Só a Milena vê porque o
+cargo dela é verProprios e o lead não é dela. Fix: separar carregando de
+vazio (vale pra tela toda). Decisão do dono em aberto: quem ATENDE a conversa
+deveria poder abrir a ficha do contato? (mudar isso mexe na regra de acesso).
+
 ## Pendências ativas (19/08/2026)
 
 Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:

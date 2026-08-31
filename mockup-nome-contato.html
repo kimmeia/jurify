@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ambar:#b45309; --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:742px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:24px 30px; height:100%; display:flex; flex-direction:column; }
+
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13px; color:var(--mudo); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+
+  .secao { margin-top:18px; flex:0 0 auto; }
+  .secao-topo { display:flex; align-items:center; gap:9px; margin-bottom:10px; }
+  .num { width:20px; height:20px; border-radius:6px; background:var(--tinta); color:#fff; font-size:11px;
+         font-weight:700; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .secao-nome { font-family:'Poppins'; font-weight:700; font-size:15px; }
+  .secao-obs { font-size:11.5px; color:var(--mudo); margin-left:2px; }
+  .novo { background:var(--acento); color:#fff; font-size:9px; font-weight:800; letter-spacing:.06em;
+          padding:2px 6px; border-radius:5px; }
+
+  .tres { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .dois { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .rot { font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+         color:var(--fraco); margin-bottom:7px; }
+  .legenda { margin-top:8px; font-size:11.5px; color:var(--mudo); line-height:1.55; }
+  .legenda b { color:var(--corpo); font-weight:600; }
+
+  /* ── cabeçalho da conversa (recorte do Inbox) ── */
+  .conv { padding:12px 15px; }
+  .l1 { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .av { width:34px; height:34px; border-radius:50%; flex:0 0 auto; display:flex; align-items:center;
+        justify-content:center; font-size:11px; font-weight:700; color:#fff; background:#8b5cf6; }
+  .topo-conv { display:flex; align-items:flex-start; gap:11px; }
+  .nome { font-size:14px; font-weight:700; color:var(--tinta); }
+  .nome.link { color:var(--acento-forte); text-decoration:underline; text-underline-offset:2px; }
+  .l2 { margin-top:4px; font-size:11px; color:var(--mudo); display:flex; gap:6px; align-items:center; }
+  .zap { color:var(--ok); font-weight:600; }
+  .pill { display:inline-flex; align-items:center; gap:4px; font-size:9.5px; font-weight:700;
+          padding:2px 7px; border-radius:999px; border:1px solid; }
+  .pill.at { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+  .pill.bot { background:var(--ambar-bg); color:var(--ambar); border-color:var(--ambar-borda); }
+
+  /* lápis */
+  .lapis { width:22px; height:22px; border-radius:6px; border:1px solid var(--borda); background:var(--surface);
+           display:inline-flex; align-items:center; justify-content:center; color:var(--mudo); font-size:11px; }
+  .lapis.on { border-color:var(--acento); background:var(--acento-bg); color:var(--acento-forte); }
+
+  /* edição inline */
+  .inp { height:31px; border:1.5px solid var(--acento); background:var(--surface); border-radius:8px;
+         padding:0 10px; font-family:'Inter'; font-size:13.5px; font-weight:600; color:var(--tinta);
+         display:flex; align-items:center; min-width:190px; box-shadow:0 0 0 3px #7c3aed1f; }
+  .caret { width:1.5px; height:15px; background:var(--tinta); margin-left:1px; }
+  .btn { height:31px; border-radius:8px; padding:0 13px; font-size:12px; font-weight:600;
+         display:inline-flex; align-items:center; gap:5px; }
+  .btn.p { background:var(--acento); color:#fff; box-shadow:0 6px 14px -7px #7c3aed99; }
+  .btn.g { background:var(--surface); border:1px solid var(--borda); color:var(--corpo); }
+  .dica { font-size:10.5px; color:var(--fraco); margin-top:6px; }
+
+  /* toast */
+  .toast { margin-top:9px; display:inline-flex; align-items:center; gap:7px; background:#ecfdf5;
+           border:1px solid #a7f3d0; color:#047857; font-size:11.5px; font-weight:600;
+           padding:7px 11px; border-radius:9px; }
+
+  /* palco de erro */
+  .palco { height:172px; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .spin { width:26px; height:26px; border-radius:50%; border:3px solid var(--hairline);
+          border-top-color:var(--fantasma); }
+  .vazio-t { font-size:13.5px; font-weight:700; color:var(--tinta); }
+  .vazio-p { font-size:11.5px; color:var(--mudo); line-height:1.6; margin-top:5px; max-width:330px; }
+  .selo { width:40px; height:40px; border-radius:12px; display:flex; align-items:center;
+          justify-content:center; margin:0 auto 10px; font-size:17px; }
+  .selo.amb { background:var(--ambar-bg); border:1px solid var(--ambar-borda); }
+
+  /* causa */
+  .causa { margin-top:18px; padding:14px 16px; flex:0 0 auto; }
+  .causa h3 { font-family:'Poppins'; font-weight:700; font-size:14px; margin-bottom:9px; }
+  .passos { display:grid; grid-template-columns:repeat(4,1fr); gap:11px; }
+  .p { border:1px solid var(--borda); border-radius:11px; padding:10px 12px; background:var(--hairline-2); }
+  .p-n { font-size:9.5px; font-weight:800; letter-spacing:.06em; color:var(--fraco); text-transform:uppercase; }
+  .p-t { font-size:11.5px; font-weight:700; color:var(--tinta-2); margin-top:3px; }
+  .p-d { font-size:10.5px; color:var(--mudo); margin-top:3px; line-height:1.5; }
+  .p.mal { background:var(--alerta-bg); border-color:var(--alerta-borda); }
+  .p.mal .p-t { color:var(--alerta-forte); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div>
+    <div class="h1">Nome do contato: editar na conversa, e parar de girar</div>
+    <div class="sub">Atendimento → cabeçalho da conversa. Duas coisas no mesmo lugar: o que você pediu, e o travamento que a Milena encontrou.</div>
+  </div>
+
+  <!-- ─────────── 1 ─────────── -->
+  <div class="secao">
+    <div class="secao-topo">
+      <span class="num">1</span><span class="secao-nome">Editar o nome sem sair da conversa</span>
+      <span class="novo">NOVO</span>
+      <span class="secao-obs">— o lápis só aparece para quem tem permissão de editar clientes</span>
+    </div>
+
+    <div class="tres">
+      <div>
+        <div class="rot">Ao passar o mouse</div>
+        <div class="card conv">
+          <div class="topo-conv">
+            <div class="av">C</div>
+            <div>
+              <div class="l1">
+                <span class="nome link">cersar</span>
+                <span class="lapis">✎</span>
+                <span class="pill at">Em atendimento</span>
+              </div>
+              <div class="l2"><span>Milena Mello Mansur</span><span>·</span><span class="zap">+55 85 8793-5555</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="legenda">O lápis aparece só no hover, para não poluir. O nome segue clicável para abrir a ficha.</div>
+      </div>
+
+      <div>
+        <div class="rot">Clicou no lápis</div>
+        <div class="card conv">
+          <div class="topo-conv">
+            <div class="av">C</div>
+            <div>
+              <div class="l1">
+                <span class="inp">César Albuquerque<span class="caret"></span></span>
+                <span class="btn p">Salvar</span>
+                <span class="btn g">Cancelar</span>
+              </div>
+              <div class="dica">Enter salva · Esc cancela</div>
+            </div>
+          </div>
+        </div>
+        <div class="legenda">Edita ali mesmo, sem abrir tela nova. <b>Só o nome</b> — o resto do cadastro continua na ficha.</div>
+      </div>
+
+      <div>
+        <div class="rot">Salvou</div>
+        <div class="card conv">
+          <div class="topo-conv">
+            <div class="av">C</div>
+            <div>
+              <div class="l1">
+                <span class="nome link">César Albuquerque</span>
+                <span class="lapis on">✎</span>
+                <span class="pill at">Em atendimento</span>
+              </div>
+              <div class="l2"><span>Milena Mello Mansur</span><span>·</span><span class="zap">+55 85 8793-5555</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="toast">✓ Nome atualizado</div>
+        <div class="legenda">Muda na hora <b>na lista de conversas e na ficha do cliente</b> — é o mesmo cadastro.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────── 2 ─────────── -->
+  <div class="secao">
+    <div class="secao-topo">
+      <span class="num">2</span><span class="secao-nome">O clique no nome que gira para sempre</span>
+      <span class="secao-obs">— o que a Milena viu, e o que passaria a ver</span>
+    </div>
+
+    <div class="dois">
+      <div>
+        <div class="rot">Hoje</div>
+        <div class="card palco">
+          <div style="text-align:center">
+            <div class="spin"></div>
+            <div style="font-size:11.5px;color:var(--fantasma);margin-top:11px">girando… sem fim, sem mensagem</div>
+          </div>
+        </div>
+        <div class="legenda">A tela abre em branco e roda para sempre. Ela não descobre que o problema é permissão — parece que o sistema travou.</div>
+      </div>
+
+      <div>
+        <div class="rot">Proposta</div>
+        <div class="card palco">
+          <div style="text-align:center">
+            <div class="selo amb">🔒</div>
+            <div class="vazio-t">Este contato é de outra pessoa</div>
+            <div class="vazio-p">Seu acesso mostra apenas os clientes sob sua responsabilidade. Peça a quem coordena para transferir o contato, ou volte para a conversa.</div>
+            <div style="margin-top:11px;display:flex;gap:8px;justify-content:center">
+              <span class="btn p">Voltar para a conversa</span>
+              <span class="btn g">Pedir acesso</span>
+            </div>
+          </div>
+        </div>
+        <div class="legenda">Diz o que houve, de quem depende, e tem saída. Vale para <b>todos</b> os motivos de recusa, não só este.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────── causa ─────────── -->
+  <div class="card causa">
+    <h3>Por que só acontece com uma funcionária</h3>
+    <div class="passos">
+      <div class="p">
+        <div class="p-n">1 · o cargo</div>
+        <div class="p-t">Milena só vê os clientes dela</div>
+        <div class="p-d">O cargo dela é "ver apenas os próprios". Os outros veem todos — por isso só ela trava.</div>
+      </div>
+      <div class="p">
+        <div class="p-n">2 · o servidor</div>
+        <div class="p-t">Responde "não pode ver"</div>
+        <div class="p-d">O lead não está sob responsabilidade dela, então o servidor devolve vazio. Está correto — é a regra de acesso funcionando.</div>
+      </div>
+      <div class="p mal">
+        <div class="p-n">3 · a tela</div>
+        <div class="p-t">Confunde vazio com carregando</div>
+        <div class="p-d">Aqui está o defeito: a tela mostra o spinner enquanto não tiver dado. "Sem permissão" nunca deixa de ser "sem dado" — então gira para sempre.</div>
+      </div>
+      <div class="p">
+        <div class="p-n">4 · o conserto</div>
+        <div class="p-t">Separar as duas coisas</div>
+        <div class="p-d">Spinner só enquanto a resposta não chegou. Chegou e veio vazio → a mensagem acima. Vale para a tela inteira, não só este caso.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
