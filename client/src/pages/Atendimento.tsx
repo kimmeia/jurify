@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/compon
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
-import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon, ChevronLeft, Archive } from "lucide-react";
+import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon, ChevronLeft, Archive, Pencil } from "lucide-react";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { TIPOS_CANAL_COMUNICACAO } from "@shared/canal-types";
@@ -1588,6 +1588,24 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const [tom, setTom] = useState<"formal" | "direto" | "empatico" | "amigavel">("empatico");
   const [confirmExcluirConversa, setConfirmExcluirConversa] = useState(false);
   const [metaParamsDialog, setMetaParamsDialog] = useState<{ template: any; preview: string } | null>(null);
+  // Renomear o contato sem sair da conversa. `null` = não está editando.
+  // O nome mora num lugar só (cadastro do contato): a lista de conversas lê
+  // dele por junção e o lead só aponta pro contato — por isso salvar aqui
+  // atualiza tudo de uma vez, sem cópia pra dessincronizar.
+  const [nomeEditando, setNomeEditando] = useState<string | null>(null);
+  const { data: permsContato } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
+    undefined,
+    { retry: false, refetchOnWindowFocus: false },
+  ) || { data: null };
+  const podeEditarContato = !!permsContato?.permissoes?.clientes?.editar;
+  const renomearContato = trpc.clientes.atualizar.useMutation({
+    onSuccess: () => {
+      toast.success("Nome atualizado");
+      setNomeEditando(null);
+      onUpdate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
   // Compor com IA — gera sugestão no tom escolhido
   const composerSugestao = trpc.atendimentoIa.composerSugestao.useMutation({
     onSuccess: (data) => {
@@ -1909,18 +1927,63 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         <div className="flex-1 min-w-0">
           {/* Linha 1: nome + status + bot (controle). Antes o nome dividia espaço
               com 5 badges coloridos; o resto do contexto foi pro subtítulo abaixo. */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {conv?.contatoId ? (
-              <button
-                type="button"
-                onClick={() => setLocation(`/clientes?id=${conv.contatoId}`)}
-                title="Abrir cadastro do contato (cliente/lead)"
-                className="text-sm font-semibold truncate text-left hover:text-violet-600 hover:underline dark:hover:text-violet-400"
-              >
-                {conv?.contatoNome || "Contato"}
-              </button>
+          <div className="group flex items-center gap-2 flex-wrap">
+            {nomeEditando !== null && conv?.contatoId ? (
+              <div className="flex items-center gap-1.5">
+                <Input
+                  autoFocus
+                  value={nomeEditando}
+                  onChange={(e) => setNomeEditando(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const nome = nomeEditando.trim();
+                      if (nome.length >= 2) renomearContato.mutate({ id: conv.contatoId, nome });
+                    }
+                    if (e.key === "Escape") setNomeEditando(null);
+                  }}
+                  maxLength={255}
+                  className="h-7 w-48 text-sm font-semibold"
+                  aria-label="Nome do contato"
+                />
+                <Button
+                  size="sm"
+                  className="h-7 px-2.5 text-xs"
+                  disabled={renomearContato.isPending || nomeEditando.trim().length < 2}
+                  onClick={() => renomearContato.mutate({ id: conv.contatoId, nome: nomeEditando.trim() })}
+                >
+                  {renomearContato.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Salvar"}
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setNomeEditando(null)}>
+                  Cancelar
+                </Button>
+              </div>
             ) : (
-              <p className="text-sm font-semibold truncate">{conv?.contatoNome || "Contato"}</p>
+              <>
+                {conv?.contatoId ? (
+                  <button
+                    type="button"
+                    onClick={() => setLocation(`/clientes?id=${conv.contatoId}`)}
+                    title="Abrir cadastro do contato (cliente/lead)"
+                    className="text-sm font-semibold truncate text-left hover:text-violet-600 hover:underline dark:hover:text-violet-400"
+                  >
+                    {conv?.contatoNome || "Contato"}
+                  </button>
+                ) : (
+                  <p className="text-sm font-semibold truncate">{conv?.contatoNome || "Contato"}</p>
+                )}
+                {conv?.contatoId && podeEditarContato && (
+                  <button
+                    type="button"
+                    onClick={() => setNomeEditando(conv?.contatoNome || "")}
+                    title="Editar o nome do contato"
+                    aria-label="Editar o nome do contato"
+                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition rounded p-0.5 text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </>
             )}
             <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
             {canalInoperante && (
