@@ -408,6 +408,32 @@ function validarPrioridade(v: string | undefined): PrioridadeConv {
   return "normal";
 }
 
+/**
+ * Contato que nasce de mensagem no WhatsApp entra SEM responsável no cadastro,
+ * e é esse campo que decide quem enxerga o cliente (cargo "ver apenas os
+ * próprios") e quem recebe a comissão das cobranças dele. Quem assume a
+ * conversa adota o contato órfão.
+ *
+ * Só preenche quando está vazio — nunca tira de quem já é responsável. E é
+ * best-effort: falhar aqui não pode derrubar o atendimento.
+ */
+async function adotarContatoSemResponsavel(contatoId: number, escritorioId: number, colaboradorId: number) {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    await db
+      .update(contatos)
+      .set({ responsavelId: colaboradorId })
+      .where(and(
+        eq(contatos.id, contatoId),
+        eq(contatos.escritorioId, escritorioId),
+        isNull(contatos.responsavelId),
+      ));
+  } catch (err) {
+    log.warn({ contatoId, escritorioId, err: (err as Error).message }, "Falha ao adotar contato sem responsável");
+  }
+}
+
 export async function criarConversa(dados: {
   escritorioId: number; contatoId: number; canalId: number;
   atendenteId?: number; assunto?: string; prioridade?: string;
@@ -425,6 +451,9 @@ export async function criarConversa(dados: {
     chatIdExterno: dados.chatIdExterno || null,
     atendimentoIniciadoEm: new Date(),
   });
+  if (dados.atendenteId) {
+    await adotarContatoSemResponsavel(dados.contatoId, dados.escritorioId, dados.atendenteId);
+  }
   return (result as { insertId: number }).insertId;
 }
 
@@ -951,6 +980,18 @@ export async function atualizarConversa(id: number, escritorioId: number, dados:
   if (Object.keys(updateData).length === 0) return;
   await db.update(conversas).set(updateData)
     .where(and(eq(conversas.id, id), eq(conversas.escritorioId, escritorioId)));
+  // Assumir/transferir a conversa também adota o contato quando ele está sem
+  // responsável — é o mesmo ato do ponto de vista de quem atende.
+  if (dados.atendenteId) {
+    const [conv] = await db
+      .select({ contatoId: conversas.contatoId })
+      .from(conversas)
+      .where(and(eq(conversas.id, id), eq(conversas.escritorioId, escritorioId)))
+      .limit(1);
+    if (conv?.contatoId) {
+      await adotarContatoSemResponsavel(conv.contatoId, escritorioId, dados.atendenteId);
+    }
+  }
 }
 
 export async function excluirConversa(id: number, escritorioId: number) {

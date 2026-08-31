@@ -54,9 +54,50 @@ function sanitizarCamposPersonalizados(
  * milhares de clientes) não justifica a complexidade.
  */
 /**
+ * "Este cliente é meu?" para quem tem `verProprios`.
+ *
+ * Responde pelo cadastro OU por lead: contato que nasce de mensagem no
+ * WhatsApp entra com `contatos.responsavelId` vazio, enquanto o lead
+ * correspondente fica com quem atendeu. Olhar só o cadastro escondia de quem
+ * tem verProprios justamente os leads que são dele — e como o campo do
+ * cadastro nasce vazio, isso valia pra quase todo lead do WhatsApp.
+ */
+async function ehResponsavelPeloContato(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  contatoId: number,
+  escritorioId: number,
+  colabId: number,
+  responsavelDoCadastro: number | null,
+): Promise<boolean> {
+  if (responsavelDoCadastro === colabId) return true;
+  const [l] = await db
+    .select({ id: leads.id })
+    .from(leads)
+    .where(and(
+      eq(leads.contatoId, contatoId),
+      eq(leads.escritorioId, escritorioId),
+      eq(leads.responsavelId, colabId),
+    ))
+    .limit(1);
+  return !!l;
+}
+
+/** Ids de contato que são "meus" por lead — para filtrar listagem em SQL. */
+function contatosMeusPorLead(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  escritorioId: number,
+  colabId: number,
+) {
+  return db
+    .select({ id: leads.contatoId })
+    .from(leads)
+    .where(and(eq(leads.escritorioId, escritorioId), eq(leads.responsavelId, colabId)));
+}
+
+/**
  * Verifica se o colaborador tem acesso ao cliente. Respeita verProprios:
  *  - verTodos: qualquer cliente do escritório passa
- *  - verProprios: só passa quando responsavelId === colaboradorId
+ *  - verProprios: passa quando é responsável pelo cadastro OU por um lead dele
  *  - retorna false quando o cliente não existe no escritório
  *
  * Usado pelas procedures que recebem `contatoId` na input — anotações,
@@ -77,7 +118,7 @@ async function podeVerCliente(
     .limit(1);
   if (!c) return false;
   if (verTodos) return true;
-  return c.responsavelId === colabId;
+  return ehResponsavelPeloContato(db, contatoId, escritorioId, colabId, c.responsavelId);
 }
 
 async function buscarClienteDuplicadoCpf(
@@ -136,8 +177,13 @@ export const clientesRouter = router({
     const db = await getDb(); if (!db) return { clientes: [], total: 0 };
     const limite = input?.limite || 50; const offset = ((input?.pagina || 1) - 1) * limite;
     let where: any = eq(contatos.escritorioId, perm.escritorioId);
-    // Se só pode ver próprios, filtra por responsável
-    if (!perm.verTodos && perm.verProprios) { where = and(where, eq(contatos.responsavelId, perm.colaboradorId)); }
+    // Se só pode ver próprios, filtra por responsável — do cadastro OU do lead
+    if (!perm.verTodos && perm.verProprios) {
+      where = and(where, or(
+        eq(contatos.responsavelId, perm.colaboradorId),
+        inArray(contatos.id, contatosMeusPorLead(db, perm.escritorioId, perm.colaboradorId)),
+      ));
+    }
     if (input?.busca) {
       const b = `%${input.busca}%`;
       // CPF e telefone são gravados só com dígitos; busca com pontuação
@@ -277,7 +323,11 @@ export const clientesRouter = router({
     const [c] = await db.select().from(contatos).where(and(eq(contatos.id, input.id), eq(contatos.escritorioId, perm.escritorioId))).limit(1);
     if (!c) return null;
     // verProprios: bloqueia acesso ao detalhe de cliente que não é seu
-    if (!perm.verTodos && perm.verProprios && c.responsavelId !== perm.colaboradorId) {
+    if (
+      !perm.verTodos &&
+      perm.verProprios &&
+      !(await ehResponsavelPeloContato(db, input.id, perm.escritorioId, perm.colaboradorId, c.responsavelId))
+    ) {
       return null;
     }
     const esc = { escritorio: { id: perm.escritorioId } };
