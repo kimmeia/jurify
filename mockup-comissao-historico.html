@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --ambar:#b45309; --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+    --ciano:#0891b2;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1128px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:24px 30px; height:100%; display:flex; flex-direction:column; }
+
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13px; color:var(--mudo); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  .secao { margin-top:17px; flex:0 0 auto; }
+  .secao-topo { display:flex; align-items:center; gap:9px; margin-bottom:9px; }
+  .num { width:20px; height:20px; border-radius:6px; background:var(--tinta); color:#fff; font-size:11px;
+         font-weight:700; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .secao-nome { font-family:'Poppins'; font-weight:700; font-size:15px; }
+  .secao-obs { font-size:11.5px; color:var(--mudo); }
+
+  /* ── linha do tempo ── */
+  .linha { padding:15px 18px 13px; }
+  .trilho { position:relative; height:56px; margin:6px 0 2px; }
+  .trilho:before { content:""; position:absolute; left:0; right:0; top:9px; height:2px; background:var(--hairline); }
+  .ev { position:absolute; top:0; width:23%; }
+  .bolinha { width:11px; height:11px; border-radius:50%; border:2.5px solid var(--surface); margin-bottom:7px;
+             box-shadow:0 0 0 1.5px currentColor; background:currentColor; }
+  .ev-data { font-size:10px; font-weight:700; color:var(--fraco); letter-spacing:.03em; }
+  .ev-t { font-size:12px; font-weight:600; color:var(--tinta-2); margin-top:2px; line-height:1.35; }
+  .c-viol { color:var(--acento); } .c-alerta { color:var(--alerta); }
+  .c-ciano { color:var(--ciano); } .c-ok { color:var(--ok); }
+
+  /* ── resultado ── */
+  .res { display:grid; grid-template-columns:150px 1fr; gap:14px; align-items:center;
+         padding:11px 18px; border-top:1px solid var(--hairline); }
+  .res-rot { font-size:12px; font-weight:700; }
+  .res-rot span { display:block; font-size:10.5px; font-weight:500; color:var(--mudo); margin-top:2px; }
+  .cobs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .cob { border:1px solid var(--borda); border-radius:10px; padding:9px 11px; background:var(--hairline-2); }
+  .cob-t { font-size:11px; color:var(--mudo); }
+  .cob-v { font-size:13px; font-weight:700; color:var(--tinta); margin-top:1px; }
+  .dono { margin-top:6px; display:inline-flex; align-items:center; gap:5px; font-size:10.5px;
+          font-weight:700; padding:2.5px 8px; border-radius:999px; border:1px solid; }
+  .dono.rafael { background:var(--acento-bg); color:var(--acento-forte); border-color:#ddd6fe; }
+  .dono.pablo { background:#ecfeff; color:#0e7490; border-color:#a5f3fc; }
+  .dono.erro { background:var(--alerta-bg); color:var(--alerta-forte); border-color:var(--alerta-borda); }
+  .dono.ninguem { background:var(--hairline); color:var(--mudo); border-color:var(--borda); }
+  .obs { font-size:10.5px; color:var(--mudo); margin-top:5px; line-height:1.45; }
+  .obs.mal { color:var(--alerta-forte); font-weight:600; }
+  .obs.bom { color:var(--ok); font-weight:600; }
+
+  /* ── cascata ── */
+  .duas { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .bloco { padding:14px 16px; }
+  .bloco h3 { font-family:'Poppins'; font-weight:700; font-size:13.5px; margin-bottom:3px; }
+  .bloco .cap { font-size:11px; color:var(--mudo); margin-bottom:10px; }
+  .deg { display:flex; gap:10px; align-items:flex-start; padding:8px 0; border-top:1px solid var(--hairline); }
+  .deg:first-of-type { border-top:0; padding-top:2px; }
+  .deg-n { width:19px; height:19px; border-radius:6px; flex:0 0 auto; display:flex; align-items:center;
+           justify-content:center; font-size:10.5px; font-weight:800; background:var(--hairline);
+           color:var(--corpo-2); margin-top:1px; }
+  .deg.novo .deg-n { background:var(--acento); color:#fff; }
+  .deg.novo .deg-t { color:var(--acento-forte); }
+  .deg-t { font-size:12px; font-weight:600; color:var(--tinta-2); }
+  .deg-d { font-size:10.5px; color:var(--mudo); margin-top:2px; line-height:1.5; }
+  .tag-novo { background:var(--acento); color:#fff; font-size:8.5px; font-weight:800; letter-spacing:.05em;
+              padding:2px 5px; border-radius:4px; margin-left:6px; vertical-align:1px; }
+  .apagado { opacity:.5; }
+
+  /* ── faixa de alerta ── */
+  .faixa { margin-top:14px; border:1px solid var(--alerta-borda); background:var(--alerta-bg);
+           border-radius:12px; padding:12px 15px; display:flex; gap:11px; align-items:flex-start; }
+  .faixa-i { width:20px; height:20px; border-radius:6px; background:var(--alerta); color:#fff; flex:0 0 auto;
+             display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; margin-top:1px; }
+  .faixa-t { font-size:12.5px; font-weight:700; color:var(--alerta-forte); }
+  .faixa-d { font-size:11px; color:#7f1d1d; margin-top:3px; line-height:1.55; }
+
+  /* ── tela do financeiro ── */
+  .tabela { padding:0 0 4px; }
+  .thead, .trow { display:grid; grid-template-columns:1.5fr 1fr 1fr 1.6fr; gap:12px; padding:9px 16px;
+                  align-items:center; }
+  .thead { border-bottom:1px solid var(--borda); }
+  .trow { border-top:1px solid var(--hairline); }
+  .td { font-size:12px; color:var(--corpo); }
+  .td.forte { font-weight:600; color:var(--tinta); }
+  .origem { display:inline-flex; align-items:center; gap:5px; font-size:10.5px; padding:2.5px 8px;
+            border-radius:999px; border:1px solid var(--borda); background:var(--hairline-2); color:var(--corpo-2); }
+  .origem.novo { background:var(--acento-bg); border-color:#ddd6fe; color:var(--acento-forte); font-weight:600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div>
+    <div class="h1">Comissão segue quem fez o negócio, não o dono do cliente</div>
+    <div class="sub">A cena que você descreveu, do jeito que o sistema resolve hoje e do jeito proposto. Cobrança já lançada não muda em nenhum dos dois.</div>
+  </div>
+
+  <!-- 1 · linha do tempo -->
+  <div class="secao">
+    <div class="secao-topo">
+      <span class="num">1</span><span class="secao-nome">O mesmo cliente, dois negócios, dois atendentes</span>
+      <span class="secao-obs">— Construtora Vale Verde</span>
+    </div>
+
+    <div class="card linha">
+      <div class="trilho">
+        <div class="ev c-viol" style="left:0">
+          <div class="bolinha"></div>
+          <div class="ev-data">12 MAR</div>
+          <div class="ev-t">Rafael atende e fecha a ação trabalhista — R$ 4.800 em 6×</div>
+        </div>
+        <div class="ev c-alerta" style="left:26%">
+          <div class="bolinha"></div>
+          <div class="ev-data">30 JUN</div>
+          <div class="ev-t">Rafael sai do escritório</div>
+        </div>
+        <div class="ev c-ciano" style="left:52%">
+          <div class="bolinha"></div>
+          <div class="ev-data">18 AGO</div>
+          <div class="ev-t">Cliente volta pelo WhatsApp — Pablo atende</div>
+        </div>
+        <div class="ev c-ok" style="left:77%">
+          <div class="bolinha"></div>
+          <div class="ev-data">26 AGO</div>
+          <div class="ev-t">Pablo fecha a ação revisional — R$ 3.000</div>
+        </div>
+      </div>
+
+      <div class="res">
+        <div class="res-rot" style="color:var(--alerta-forte)">Como está hoje<span>o dono do cliente decide</span></div>
+        <div class="cobs">
+          <div class="cob">
+            <div class="cob-t">Parcelas 1 a 6 · ação de março</div>
+            <div class="cob-v">R$ 4.800</div>
+            <div class="dono rafael">Rafael</div>
+            <div class="obs bom">✓ Certo — congelado na cobrança, não muda quando ele sai.</div>
+          </div>
+          <div class="cob">
+            <div class="cob-t">Entrada · ação de agosto</div>
+            <div class="cob-v">R$ 3.000</div>
+            <div class="dono erro">Rafael</div>
+            <div class="obs mal">✕ Errado — Pablo fez o trabalho. O campo "responsável" do cliente ficou parado no Rafael.</div>
+          </div>
+          <div class="cob">
+            <div class="cob-t">Se o cliente nunca teve responsável</div>
+            <div class="cob-v">R$ 3.000</div>
+            <div class="dono ninguem">Sem atribuição</div>
+            <div class="obs">Alguém precisa escolher na mão antes do fechamento.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="res">
+        <div class="res-rot" style="color:var(--ok)">Proposta<span>o negócio fechado decide</span></div>
+        <div class="cobs">
+          <div class="cob">
+            <div class="cob-t">Parcelas 1 a 6 · ação de março</div>
+            <div class="cob-v">R$ 4.800</div>
+            <div class="dono rafael">Rafael</div>
+            <div class="obs bom">✓ Igual — nada do passado é recalculado.</div>
+          </div>
+          <div class="cob">
+            <div class="cob-t">Entrada · ação de agosto</div>
+            <div class="cob-v">R$ 3.000</div>
+            <div class="dono pablo">Pablo</div>
+            <div class="obs bom">✓ Vai pra quem fechou o negócio mais recente deste cliente.</div>
+          </div>
+          <div class="cob">
+            <div class="cob-t">Cobrança sem negócio ligado</div>
+            <div class="cob-v">R$ 3.000</div>
+            <div class="dono ninguem">Sem atribuição</div>
+            <div class="obs">Continua caindo pra decisão humana — a rede de segurança não some.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 · cascata + tela -->
+  <div class="secao">
+    <div class="secao-topo">
+      <span class="num">2</span><span class="secao-nome">A regra que decide o dono de cada cobrança nova</span>
+      <span class="secao-obs">— muda só a ordem da decisão; nada é removido</span>
+    </div>
+
+    <div class="duas">
+      <div class="card bloco">
+        <h3>Hoje</h3>
+        <div class="cap">3 degraus, na ordem</div>
+        <div class="deg apagado">
+          <span class="deg-n">1</span>
+          <div><div class="deg-t">Marcador na própria cobrança</div>
+          <div class="deg-d">Existe no código, mas nada no sistema grava — teria que vir do Asaas. Na prática nunca dispara.</div></div>
+        </div>
+        <div class="deg">
+          <span class="deg-n">2</span>
+          <div><div class="deg-t">Responsável do cliente</div>
+          <div class="deg-d">É este que decide na vida real. É um campo de "dono atual" — envelhece quando a pessoa sai.</div></div>
+        </div>
+        <div class="deg">
+          <span class="deg-n">3</span>
+          <div><div class="deg-t">Sem atribuição</div>
+          <div class="deg-d">Fica esperando alguém escolher.</div></div>
+        </div>
+      </div>
+
+      <div class="card bloco">
+        <h3>Proposta</h3>
+        <div class="cap">um degrau novo entra em segundo lugar</div>
+        <div class="deg apagado">
+          <span class="deg-n">1</span>
+          <div><div class="deg-t">Marcador na própria cobrança</div>
+          <div class="deg-d">Sem mudança — continua sendo o mais forte, se um dia passar a ser gravado.</div></div>
+        </div>
+        <div class="deg novo">
+          <span class="deg-n">2</span>
+          <div><div class="deg-t">Quem fechou o negócio mais recente deste cliente<span class="tag-novo">NOVO</span></div>
+          <div class="deg-d">Cada ação nova cria um negócio novo, com responsável próprio e data. Por isso não envelhece: quem sai não leva os negócios futuros.</div></div>
+        </div>
+        <div class="deg">
+          <span class="deg-n">3</span>
+          <div><div class="deg-t">Responsável do cliente</div>
+          <div class="deg-d">Continua existindo, agora como segunda opção.</div></div>
+        </div>
+        <div class="deg">
+          <span class="deg-n">4</span>
+          <div><div class="deg-t">Sem atribuição</div>
+          <div class="deg-d">Mesma rede de segurança de hoje.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 · tela -->
+  <div class="secao">
+    <div class="secao-topo">
+      <span class="num">3</span><span class="secao-nome">Na tela do Financeiro: por que aquela cobrança é daquela pessoa</span>
+      <span class="secao-obs">— hoje o nome aparece sem explicação nenhuma</span>
+    </div>
+    <div class="card tabela">
+      <div class="thead">
+        <div class="micro">Cobrança</div><div class="micro">Valor</div>
+        <div class="micro">Atendente</div><div class="micro">De onde veio a atribuição</div>
+      </div>
+      <div class="trow">
+        <div class="td forte">Ação revisional · entrada</div>
+        <div class="td forte">R$ 3.000,00</div>
+        <div class="td"><span class="dono pablo">Pablo Menezes</span></div>
+        <div class="td"><span class="origem novo">Negócio fechado por Pablo em 26/08</span></div>
+      </div>
+      <div class="trow">
+        <div class="td forte">Ação trabalhista · parcela 6/6</div>
+        <div class="td forte">R$ 800,00</div>
+        <div class="td"><span class="dono rafael">Rafael Rocha</span></div>
+        <div class="td"><span class="origem">Negócio fechado por Rafael em 12/03</span></div>
+      </div>
+      <div class="trow">
+        <div class="td forte">PIX avulso recebido</div>
+        <div class="td forte">R$ 450,00</div>
+        <div class="td"><span class="dono ninguem">Sem atribuição</span></div>
+        <div class="td"><span class="origem">Nenhum negócio ligado — escolha o atendente</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="faixa">
+    <span class="faixa-i">!</span>
+    <div>
+      <div class="faixa-t">O que eu subi hoje vai contra essa regra — e por isso recomendo tirar</div>
+      <div class="faixa-d">A adoção automática grava como "responsável do cliente" a <b>primeira pessoa que abrir a conversa</b> no WhatsApp. Daí em diante, todas as cobranças futuras daquele cliente caem no degrau 2 e vão pra ela — mesmo que outro atendente feche o negócio depois. É exatamente o caso do Rafael, só que acontecendo sozinho e em escala. O acesso da Milena não depende disso: ele já funciona pelo negócio dela.</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
