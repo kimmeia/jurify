@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Relatório Comercial — desempenho e caixa separados</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --ambar:#b45309; --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+    --ciano:#0891b2;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; min-height:1180px; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:24px 30px 26px; }
+
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13px; color:var(--mudo); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  /* abas CSS puro */
+  .radios { position:absolute; opacity:0; pointer-events:none; }
+  .barra { margin-top:15px; display:flex; align-items:center; gap:12px; }
+  .tabs { display:flex; gap:4px; background:var(--hairline); padding:3px; border-radius:10px; }
+  .tabs label { padding:7px 15px; font-size:12.5px; font-weight:600; color:var(--mudo);
+                border-radius:8px; cursor:pointer; user-select:none; }
+  .dica { font-size:11.5px; color:var(--acento-forte); font-weight:600;
+          background:var(--acento-bg); border:1px solid #ddd6fe; padding:5px 11px; border-radius:8px; }
+  #p1:checked ~ .barra label[for="p1"],
+  #p2:checked ~ .barra label[for="p2"],
+  #p3:checked ~ .barra label[for="p3"] { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+  .painel { display:none; }
+  #p1:checked ~ .painel-1, #p2:checked ~ .painel-2, #p3:checked ~ .painel-3 { display:block; }
+
+  /* grupos */
+  .grupo { margin-top:16px; }
+  .g-topo { display:flex; align-items:baseline; gap:10px; margin-bottom:9px; }
+  .g-nome { font-family:'Poppins'; font-weight:700; font-size:15px; }
+  .g-obs { font-size:11.5px; color:var(--mudo); }
+  .g-ancora { font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+              padding:3px 8px; border-radius:6px; }
+  .g-ancora.fech { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+  .g-ancora.caixa { background:var(--ok-bg); color:#047857; border:1px solid var(--ok-borda); }
+
+  .kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:13px; }
+  .kpi { padding:13px 15px; }
+  .kpi-r { font-size:11.5px; font-weight:600; color:var(--mudo); }
+  .kpi-v { font-family:'Poppins'; font-weight:700; font-size:23px; margin-top:5px; letter-spacing:-.01em; }
+  .kpi-regra { margin-top:7px; font-size:10.5px; color:var(--fraco); line-height:1.45; }
+  .selo { display:inline-flex; align-items:center; gap:4px; font-size:9.5px; font-weight:700;
+          padding:2px 7px; border-radius:999px; border:1px solid; margin-top:7px; }
+  .selo.ok { background:var(--ok-bg); color:#047857; border-color:var(--ok-borda); }
+  .selo.erro { background:var(--alerta-bg); color:var(--alerta-forte); border-color:var(--alerta-borda); }
+  .selo.info { background:var(--hairline); color:var(--mudo); border-color:var(--borda); }
+  .antes { margin-top:8px; padding-top:7px; border-top:1px dashed var(--borda);
+           font-size:10.5px; color:var(--alerta-forte); }
+  .antes b { font-weight:700; }
+
+  /* ranking */
+  .rank { margin-top:14px; padding:0 0 5px; }
+  .rl { display:grid; grid-template-columns:1.5fr 1fr 1fr 1fr 1.1fr; gap:12px; padding:9px 16px; align-items:center; }
+  .rl.head { border-bottom:1px solid var(--borda); }
+  .rl + .rl { border-top:1px solid var(--hairline); }
+  .rl .c { font-size:12.5px; text-align:right; font-variant-numeric:tabular-nums; color:var(--corpo); }
+  .rl .c.rot { text-align:left; font-weight:600; color:var(--tinta); display:flex; align-items:center; gap:8px; }
+  .av { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+        font-size:9.5px; font-weight:700; color:#fff; }
+  .barra-meta { height:6px; background:var(--hairline); border-radius:999px; overflow:hidden; }
+  .barra-meta i { display:block; height:100%; background:var(--acento); border-radius:999px; }
+
+  /* exemplo */
+  .exemplo { margin-top:16px; padding:14px 17px; }
+  .exemplo h3 { font-family:'Poppins'; font-weight:700; font-size:14.5px; margin-bottom:2px; }
+  .exemplo .cap { font-size:11.5px; color:var(--mudo); margin-bottom:12px; }
+  .ex-grid { display:grid; grid-template-columns:1.1fr 1fr 1fr; gap:13px; }
+  .ex-box { border:1px solid var(--borda); border-radius:11px; padding:11px 13px; background:var(--hairline-2); }
+  .ex-t { font-size:11.5px; font-weight:700; color:var(--tinta-2); }
+  .ex-d { font-size:10.5px; color:var(--mudo); margin-top:4px; line-height:1.5; }
+  .ex-box.mal { background:var(--alerta-bg); border-color:var(--alerta-borda); }
+  .ex-box.mal .ex-t { color:var(--alerta-forte); }
+  .ex-box.bom { background:var(--ok-bg); border-color:var(--ok-borda); }
+  .ex-box.bom .ex-t { color:#047857; }
+
+  /* conferência */
+  .conf { margin-top:16px; padding:15px 18px; }
+  .conf h3 { font-family:'Poppins'; font-weight:700; font-size:14.5px; margin-bottom:2px; }
+  .conf .cap { font-size:11.5px; color:var(--mudo); margin-bottom:11px; }
+  .tab { display:grid; grid-template-columns:1.7fr 1fr 1fr 1fr 1.2fr; gap:12px; padding:8px 0;
+         align-items:center; border-top:1px solid var(--hairline); }
+  .tab.head { border-top:0; padding-top:0; }
+  .tab .c { font-size:12.5px; color:var(--corpo); text-align:right; font-variant-numeric:tabular-nums; }
+  .tab .c.rot { text-align:left; font-weight:600; color:var(--tinta); }
+  .tab .c.forte { font-weight:700; color:var(--tinta); }
+  .ver { text-align:right; font-size:11px; font-weight:700; }
+  .ver.bom { color:var(--ok); } .ver.mal { color:var(--alerta-forte); } .ver.neutro { color:var(--mudo); font-weight:600; }
+  .nota { font-size:10px; color:var(--fraco); font-style:italic; margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div>
+    <div class="h1">Relatório Comercial — desempenho e caixa, separados</div>
+    <div class="sub">Duas perguntas diferentes, dois grupos de números. Clique nas abas para conferir que as quinzenas somam o mês.</div>
+  </div>
+
+  <input class="radios" type="radio" name="per" id="p1" checked>
+  <input class="radios" type="radio" name="per" id="p2">
+  <input class="radios" type="radio" name="per" id="p3">
+
+  <div class="barra">
+    <div class="tabs">
+      <label for="p1">1ª quinzena · 01 a 15/08</label>
+      <label for="p2">2ª quinzena · 16 a 31/08</label>
+      <label for="p3">Agosto inteiro · 01 a 31/08</label>
+    </div>
+    <span class="dica">👆 clique para trocar o período</span>
+  </div>
+
+  <!-- ══ 1ª QUINZENA ══ -->
+  <div class="painel painel-1">
+    <div class="grupo">
+      <div class="g-topo"><span class="g-nome">Desempenho no período</span>
+        <span class="g-ancora fech">conta pela data do fechamento</span>
+        <span class="g-obs">o que o atendente vendeu entre 01 e 15 — já está correto hoje</span></div>
+      <div class="kpis">
+        <div class="card kpi"><div class="kpi-r">Valor fechado</div><div class="kpi-v">R$ 71.900</div>
+          <div class="kpi-regra">negócios ganhos entre 01 e 15/08</div><span class="selo ok">✓ soma com o mês</span></div>
+        <div class="card kpi"><div class="kpi-r">Contratos fechados</div><div class="kpi-v">9</div>
+          <div class="kpi-regra">negócios ganhos entre 01 e 15/08</div><span class="selo ok">✓ soma com o mês</span></div>
+        <div class="card kpi"><div class="kpi-r">Ticket do fechado</div><div class="kpi-v">R$ 7.989</div>
+          <div class="kpi-regra">valor fechado ÷ contratos</div><span class="selo info">média — não soma</span></div>
+      </div>
+    </div>
+
+    <div class="grupo">
+      <div class="g-topo"><span class="g-nome">Recebido no período</span>
+        <span class="g-ancora caixa">conta pela data do pagamento</span>
+        <span class="g-obs">o que entrou no caixa entre 01 e 15 — inclusive de negócio fechado antes</span></div>
+      <div class="kpis">
+        <div class="card kpi"><div class="kpi-r">Recebido</div><div class="kpi-v">R$ 61.400</div>
+          <div class="kpi-regra">pagamentos entre 01 e 15/08</div><span class="selo ok">✓ soma com o mês</span>
+          <div class="antes">Hoje mostra <b>R$ 54.100</b> — some R$ 7.300 de quem pagou aqui mas fechou antes.</div></div>
+        <div class="card kpi"><div class="kpi-r">Clientes pagantes</div><div class="kpi-v">14</div>
+          <div class="kpi-regra">clientes distintos que pagaram</div><span class="selo info">nunca soma — normal</span></div>
+        <div class="card kpi"><div class="kpi-r">Comissão</div><div class="kpi-v">R$ 4.100</div>
+          <div class="kpi-regra">sobre o recebido entre 01 e 15/08</div><span class="selo ok">✓ soma com o mês</span>
+          <div class="antes">Hoje mostra <b>R$ 8.400</b> — o fechamento do mês inteiro aparece aqui e de novo na 2ª quinzena.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 2ª QUINZENA ══ -->
+  <div class="painel painel-2">
+    <div class="grupo">
+      <div class="g-topo"><span class="g-nome">Desempenho no período</span>
+        <span class="g-ancora fech">conta pela data do fechamento</span>
+        <span class="g-obs">o que o atendente vendeu entre 16 e 31 — já está correto hoje</span></div>
+      <div class="kpis">
+        <div class="card kpi"><div class="kpi-r">Valor fechado</div><div class="kpi-v">R$ 44.300</div>
+          <div class="kpi-regra">negócios ganhos entre 16 e 31/08</div><span class="selo ok">✓ soma com o mês</span></div>
+        <div class="card kpi"><div class="kpi-r">Contratos fechados</div><div class="kpi-v">6</div>
+          <div class="kpi-regra">negócios ganhos entre 16 e 31/08</div><span class="selo ok">✓ soma com o mês</span></div>
+        <div class="card kpi"><div class="kpi-r">Ticket do fechado</div><div class="kpi-v">R$ 7.383</div>
+          <div class="kpi-regra">valor fechado ÷ contratos</div><span class="selo info">média — não soma</span></div>
+      </div>
+    </div>
+
+    <div class="grupo">
+      <div class="g-topo"><span class="g-nome">Recebido no período</span>
+        <span class="g-ancora caixa">conta pela data do pagamento</span>
+        <span class="g-obs">o que entrou no caixa entre 16 e 31 — inclusive de negócio fechado antes</span></div>
+      <div class="kpis">
+        <div class="card kpi"><div class="kpi-r">Recebido</div><div class="kpi-v">R$ 47.300</div>
+          <div class="kpi-regra">pagamentos entre 16 e 31/08</div><span class="selo ok">✓ soma com o mês</span>
+          <div class="antes">Hoje mostra <b>R$ 29.150</b> — somem R$ 18.150 de quem pagou aqui mas fechou antes.</div></div>
+        <div class="card kpi"><div class="kpi-r">Clientes pagantes</div><div class="kpi-v">11</div>
+          <div class="kpi-regra">clientes distintos que pagaram</div><span class="selo info">nunca soma — normal</span></div>
+        <div class="card kpi"><div class="kpi-r">Comissão</div><div class="kpi-v">R$ 4.300</div>
+          <div class="kpi-regra">sobre o recebido entre 16 e 31/08</div><span class="selo ok">✓ soma com o mês</span>
+          <div class="antes">Hoje mostra <b>R$ 8.400</b> — o mesmo fechamento contado outra vez.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ MÊS ══ -->
+  <div class="painel painel-3">
+    <div class="grupo">
+      <div class="g-topo"><span class="g-nome">Desempenho no período</span>
+        <span class="g-ancora fech">conta pela data do fechamento</span>
+        <span class="g-obs">o que o atendente vendeu em agosto — já está correto hoje</span></div>
+      <div class="kpis">
+        <div class="card kpi"><div class="kpi-r">Valor fechado</div><div class="kpi-v">R$ 116.200</div>
+          <div class="kpi-regra">negócios ganhos em agosto</div><span class="selo ok">✓ = 71.900 + 44.300</span></div>
+        <div class="card kpi"><div class="kpi-r">Contratos fechados</div><div class="kpi-v">15</div>
+          <div class="kpi-regra">negócios ganhos em agosto</div><span class="selo ok">✓ = 9 + 6</span></div>
+        <div class="card kpi"><div class="kpi-r">Ticket do fechado</div><div class="kpi-v">R$ 7.747</div>
+          <div class="kpi-regra">valor fechado ÷ contratos</div><span class="selo info">média — não soma</span></div>
+      </div>
+    </div>
+
+    <div class="grupo">
+      <div class="g-topo"><span class="g-nome">Recebido no período</span>
+        <span class="g-ancora caixa">conta pela data do pagamento</span>
+        <span class="g-obs">o que entrou no caixa em agosto — inclusive de negócio fechado antes</span></div>
+      <div class="kpis">
+        <div class="card kpi"><div class="kpi-r">Recebido</div><div class="kpi-v">R$ 108.700</div>
+          <div class="kpi-regra">pagamentos em agosto</div><span class="selo ok">✓ = 61.400 + 47.300</span>
+          <div class="antes">Hoje mostra <b>R$ 102.750</b> — some o que foi pago em agosto de negócio de outro mês.</div></div>
+        <div class="card kpi"><div class="kpi-r">Clientes pagantes</div><div class="kpi-v">21</div>
+          <div class="kpi-regra">clientes distintos que pagaram</div><span class="selo info">nunca soma — normal</span></div>
+        <div class="card kpi"><div class="kpi-r">Comissão</div><div class="kpi-v">R$ 8.400</div>
+          <div class="kpi-regra">sobre o recebido em agosto</div><span class="selo ok">✓ = 4.100 + 4.300</span>
+          <div class="antes">Hoje o total do mês já está certo — o erro aparece só quando você abre as quinzenas.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ RANKING (sempre visível) ══ -->
+  <div class="grupo">
+    <div class="g-topo"><span class="g-nome">Ranking dos atendentes — agosto</span>
+      <span class="g-obs">as duas leituras lado a lado: o que vendeu e o que entrou</span></div>
+    <div class="card rank">
+      <div class="rl head">
+        <div class="c rot micro">Atendente</div>
+        <div class="c micro">Fechado no período</div>
+        <div class="c micro">Recebido no período</div>
+        <div class="c micro">Comissão</div>
+        <div class="c micro" style="text-align:right">% da meta (fechado)</div>
+      </div>
+      <div class="rl">
+        <div class="c rot"><span class="av" style="background:#8b5cf6">PM</span>Pablo Menezes</div>
+        <div class="c">R$ 62.400</div><div class="c">R$ 51.900</div><div class="c">R$ 4.100</div>
+        <div class="c"><div class="barra-meta"><i style="width:87%"></i></div><div style="font-size:10.5px;color:var(--mudo);margin-top:3px">87% de R$ 72.000</div></div>
+      </div>
+      <div class="rl">
+        <div class="c rot"><span class="av" style="background:#0891b2">MM</span>Milena Mello</div>
+        <div class="c">R$ 38.500</div><div class="c">R$ 33.200</div><div class="c">R$ 2.600</div>
+        <div class="c"><div class="barra-meta"><i style="width:64%"></i></div><div style="font-size:10.5px;color:var(--mudo);margin-top:3px">64% de R$ 60.000</div></div>
+      </div>
+      <div class="rl">
+        <div class="c rot"><span class="av" style="background:#b45309">DS</span>Dayane Sousa</div>
+        <div class="c">R$ 15.300</div><div class="c">R$ 23.600</div><div class="c">R$ 1.700</div>
+        <div class="c"><div class="barra-meta"><i style="width:34%"></i></div><div style="font-size:10.5px;color:var(--mudo);margin-top:3px">34% de R$ 45.000</div></div>
+      </div>
+      <div class="nota" style="padding:0 16px 4px">A Dayane recebeu mais do que fechou no mês: entrou dinheiro de negócios que ela fechou antes. As duas colunas medem coisas diferentes — por isso não precisam bater entre si.</div>
+    </div>
+  </div>
+
+  <!-- ══ EXEMPLO ══ -->
+  <div class="card exemplo">
+    <h3>O seu exemplo: fechou em abril, pagou em agosto</h3>
+    <div class="cap">É o caso que mostra por que os dois grupos precisam de âncoras diferentes.</div>
+    <div class="ex-grid">
+      <div class="ex-box">
+        <div class="ex-t">O que aconteceu</div>
+        <div class="ex-d">Cliente fechou contrato em <b>12/04</b> com a Dayane. A parcela de <b>R$ 7.300</b> só foi paga em <b>08/08</b>.</div>
+      </div>
+      <div class="ex-box mal">
+        <div class="ex-t">Hoje — esse dinheiro some</div>
+        <div class="ex-d">O Recebido de agosto exige que o cliente também tenha fechado em agosto. Como ele fechou em abril, <b>os R$ 7.300 não aparecem em lugar nenhum</b>.</div>
+      </div>
+      <div class="ex-box bom">
+        <div class="ex-t">Proposta — cada um no seu lugar</div>
+        <div class="ex-d">Desempenho de <b>abril</b> registra o fechamento. Recebido de <b>agosto</b> registra os R$ 7.300. Nada se perde e nada conta duas vezes.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ CONFERÊNCIA ══ -->
+  <div class="card conf">
+    <h3>A conferência que você fez</h3>
+    <div class="cap">Quinzena + quinzena tem que dar o mês.</div>
+    <div class="tab head">
+      <div class="c rot micro">Número</div><div class="c micro">1ª quinzena</div>
+      <div class="c micro">2ª quinzena</div><div class="c micro">Soma</div>
+      <div class="c micro" style="text-align:right">Mês inteiro</div>
+    </div>
+    <div class="tab"><div class="c rot">Recebido — hoje</div>
+      <div class="c">54.100</div><div class="c">29.150</div><div class="c forte">83.250</div>
+      <div class="ver mal">102.750 ✕ faltam 19.500</div></div>
+    <div class="tab"><div class="c rot">Recebido — proposta</div>
+      <div class="c">61.400</div><div class="c">47.300</div><div class="c forte">108.700</div>
+      <div class="ver bom">108.700 ✓ fecha</div></div>
+    <div class="tab"><div class="c rot">Comissão — hoje</div>
+      <div class="c">8.400</div><div class="c">8.400</div><div class="c forte">16.800</div>
+      <div class="ver mal">8.400 ✕ conta em dobro</div></div>
+    <div class="tab"><div class="c rot">Comissão — proposta</div>
+      <div class="c">4.100</div><div class="c">4.300</div><div class="c forte">8.400</div>
+      <div class="ver bom">8.400 ✓ fecha</div></div>
+    <div class="tab"><div class="c rot">Valor fechado — não muda</div>
+      <div class="c">71.900</div><div class="c">44.300</div><div class="c forte">116.200</div>
+      <div class="ver bom">116.200 ✓ já fechava</div></div>
+    <div class="tab"><div class="c rot">Clientes pagantes</div>
+      <div class="c">14</div><div class="c">11</div><div class="c forte">25</div>
+      <div class="ver neutro">21 — normal, cliente repetido conta 1</div></div>
+    <div class="nota">Os valores de "Recebido — hoje" (54.100 / 29.150 / 102.750) são os que você mediu no sistema. Os demais são exemplos coerentes entre si — o que importa é a coluna da direita fechar.</div>
+  </div>
+
+</div>
+</body>
+</html>
