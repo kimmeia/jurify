@@ -625,7 +625,7 @@ export default function Clientes() {
            ficha ocupa a direita. Abaixo de lg a coluna some e a ficha volta
            a ser tela cheia — é a mesma quebra que o Atendimento faz, porque
            lado a lado não cabe em 390px. */
-        <div className="lg:grid lg:h-[calc(100dvh-150px)] lg:min-h-[560px] lg:grid-cols-[320px_1fr] lg:overflow-hidden lg:rounded-2xl lg:border lg:bg-card">
+        <div className="lg:grid lg:h-[calc(100dvh-140px)] lg:min-h-[480px] lg:grid-cols-[320px_1fr] lg:overflow-hidden lg:rounded-2xl lg:border lg:bg-card">
           <div className="hidden min-h-0 lg:flex lg:flex-col lg:border-r">
             <ListaCompactaClientes
               clientes={clientesFiltrados}
@@ -634,10 +634,16 @@ export default function Clientes() {
               busca={busca}
               onBusca={setBusca}
               total={(data as any)?.total ?? clientesFiltrados.length}
+              aba={aba}
+              onAba={setAba}
+              segmento={segmento}
+              onSegmento={setSegmento}
+              stats={stats}
+              clientesComDebito={clientesComDebito}
             />
           </div>
           <div className="min-h-0 lg:overflow-auto lg:p-5">
-            <ClienteDetalhe id={selId} onVoltar={() => setSelId(null)} onUpdate={refetch} />
+            <ClienteDetalhe id={selId} onVoltar={() => setSelId(null)} onUpdate={refetch} compacto />
           </div>
         </div>
       ) : (
@@ -2854,6 +2860,34 @@ function EditarLeadDialog({
 
 // ─── Coluna compacta da lista (painel lista + ficha) ────────────────────────
 
+/** Versão de 320px do ChipSegmento — mesmas cores, menos padding. */
+function ChipCompacto({
+  ativo,
+  onClick,
+  children,
+  destaque,
+}: {
+  ativo: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  destaque?: "amber" | "rose";
+}) {
+  const base =
+    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] font-medium transition-colors";
+  const tom = ativo
+    ? "bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100"
+    : destaque === "amber"
+      ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/50"
+      : destaque === "rose"
+        ? "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50"
+        : "bg-card text-muted-foreground hover:bg-muted hover:text-foreground";
+  return (
+    <button onClick={onClick} className={`${base} ${tom}`}>
+      {children}
+    </button>
+  );
+}
+
 /**
  * A mesma lista já carregada pela tela, em 320px. Não busca nada por conta
  * própria: recebe `clientesFiltrados` pronto, então o que aparece aqui é
@@ -2866,6 +2900,12 @@ function ListaCompactaClientes({
   busca,
   onBusca,
   total,
+  aba,
+  onAba,
+  segmento,
+  onSegmento,
+  stats,
+  clientesComDebito,
 }: {
   clientes: any[];
   selId: number | null;
@@ -2873,6 +2913,12 @@ function ListaCompactaClientes({
   busca: string;
   onBusca: (v: string) => void;
   total: number;
+  aba: "cliente" | "lead";
+  onAba: (v: "cliente" | "lead") => void;
+  segmento: Segmento;
+  onSegmento: (v: Segmento) => void;
+  stats: any;
+  clientesComDebito: number;
 }) {
   const refSelecionado = useRef<HTMLButtonElement | null>(null);
   // Andar com ↑↓ tem que arrastar a rolagem junto, senão a seleção some
@@ -2885,7 +2931,27 @@ function ListaCompactaClientes({
 
   return (
     <>
-      <div className="shrink-0 border-b p-3">
+      <div className="shrink-0 space-y-2.5 border-b p-3">
+        {/* Mesmas abas e mesmos filtros da lista cheia: sem eles a coluna
+            virava só uma busca, e trocar de segmento obrigava a fechar a
+            ficha pra voltar à tela inteira. */}
+        <div className="flex gap-1 rounded-lg bg-muted p-0.5">
+          {(["cliente", "lead"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => onAba(v)}
+              className={`flex-1 rounded-md px-2 py-1 text-[11.5px] font-semibold transition-colors ${
+                aba === v ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {v === "cliente" ? "Clientes" : "Leads"}
+              <span className="ml-1 tabular-nums opacity-60">
+                {v === "cliente" ? (stats?.clientesAtivos ?? "") : (stats?.totalLeads ?? "")}
+              </span>
+            </button>
+          ))}
+        </div>
+
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -2894,6 +2960,54 @@ function ListaCompactaClientes({
             placeholder="Buscar na lista..."
             className="h-9 pl-9 text-[13px]"
           />
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          <ChipCompacto ativo={segmento === "todos"} onClick={() => onSegmento("todos")}>
+            Todos
+            <span className="tabular-nums opacity-70">{total}</span>
+          </ChipCompacto>
+          {(stats?.aguardandoDocumentacao ?? 0) > 0 && (
+            <ChipCompacto
+              ativo={segmento === "aguardando_docs"}
+              onClick={() => onSegmento("aguardando_docs")}
+              destaque="amber"
+            >
+              ⚠ Docs
+              <span className="tabular-nums opacity-70">{stats.aguardandoDocumentacao}</span>
+            </ChipCompacto>
+          )}
+          {clientesComDebito > 0 && (
+            <ChipCompacto
+              ativo={segmento === "com_debito"}
+              onClick={() => onSegmento("com_debito")}
+              destaque="rose"
+            >
+              ⚠ Débito
+              <span className="tabular-nums opacity-70">{clientesComDebito}</span>
+            </ChipCompacto>
+          )}
+          <ChipCompacto ativo={segmento === "vip"} onClick={() => onSegmento("vip")}>
+            ★ VIP
+          </ChipCompacto>
+          <ChipCompacto ativo={segmento === "novos"} onClick={() => onSegmento("novos")}>
+            Novos
+          </ChipCompacto>
+          <ChipCompacto ativo={segmento === "inativo"} onClick={() => onSegmento("inativo")}>
+            Inativos
+          </ChipCompacto>
+          {(stats?.suspensos ?? 0) > 0 && (
+            <ChipCompacto ativo={segmento === "suspensos"} onClick={() => onSegmento("suspensos")}>
+              ⏸ Suspensos
+              <span className="tabular-nums opacity-70">{stats.suspensos}</span>
+            </ChipCompacto>
+          )}
+          {(stats?.encerrados ?? 0) > 0 && (
+            <ChipCompacto ativo={segmento === "encerrados"} onClick={() => onSegmento("encerrados")}>
+              ⛔ Encerrados
+              <span className="tabular-nums opacity-70">{stats.encerrados}</span>
+            </ChipCompacto>
+          )}
         </div>
       </div>
 
@@ -2954,10 +3068,13 @@ function ClienteDetalhe({
   id,
   onVoltar,
   onUpdate,
+  compacto = false,
 }: {
   id: number;
   onVoltar: () => void;
   onUpdate: () => void;
+  /** Renderizada ao lado da lista, numa coluna estreita: aperta o hero. */
+  compacto?: boolean;
 }) {
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState("visao-geral");
@@ -3130,29 +3247,33 @@ function ClienteDetalhe({
         </div>
       )}
 
-      {/* Botão "Voltar" externo ao hero pra ficar discreto */}
+      {/* Voltar é botão de verdade, com borda: como link de texto fininho
+          acima do hero ele sumia — o dono não achou. */}
       <button
         onClick={onVoltar}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
       >
-        <ArrowLeft className="h-3.5 w-3.5" /> Voltar para lista
+        <ArrowLeft className="h-3.5 w-3.5" /> Voltar para a lista
       </button>
 
       {/* ═══════════ HERO DO CLIENTE ═══════════ */}
-      <div className="rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 p-7 text-white relative overflow-hidden shadow-lg">
-        <Users className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
+      {/* No painel (lista ao lado) o hero vive numa coluna bem mais estreita:
+          sem apertar padding, avatar e título ele come metade da altura útil
+          e a tela fica desproporcional. Nada some — só encolhe. */}
+      <div className={`rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 text-white relative overflow-hidden shadow-lg ${compacto ? "p-4" : "p-7"}`}>
+        <Users className={`absolute -right-10 -bottom-12 opacity-10 ${compacto ? "w-36 h-36" : "w-56 h-56"}`} strokeWidth={1.2} />
         <div className="relative">
-          <div className="flex items-start gap-5 mb-5 flex-wrap">
+          <div className={`flex items-start flex-wrap ${compacto ? "gap-3 mb-3" : "gap-5 mb-5"}`}>
             {/* Avatar grande */}
             <div
-              className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${gradientAvatar(cliente.nome || "?")} text-white flex items-center justify-center text-2xl font-bold shrink-0 shadow-lg ring-4 ring-white/20 tracking-tight`}
+              className={`rounded-2xl bg-gradient-to-br ${gradientAvatar(cliente.nome || "?")} text-white flex items-center justify-center font-bold shrink-0 shadow-lg ring-4 ring-white/20 tracking-tight ${compacto ? "w-14 h-14 text-lg" : "w-20 h-20 text-2xl"}`}
             >
               {gerarIniciais(cliente.nome || "?")}
             </div>
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <h2 className={`text-2xl font-bold tracking-tight ${situacaoServico === "suspenso" ? "text-amber-200" : foraDeServico ? "text-rose-200" : ""}`}>{cliente.nome}</h2>
+                <h2 className={`font-bold tracking-tight ${compacto ? "text-lg" : "text-2xl"} ${situacaoServico === "suspenso" ? "text-amber-200" : foraDeServico ? "text-rose-200" : ""}`}>{cliente.nome}</h2>
                 {isVip && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-400/25 text-amber-50 border border-amber-300/30">
                     <Star className="w-3 h-3 fill-current" /> VIP
