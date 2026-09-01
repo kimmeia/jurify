@@ -79,6 +79,45 @@ describe("2º grau dos estados com endereço próprio", () => {
   });
 });
 
+describe("Justiça Federal", () => {
+  it("os TRFs no PJe entram com endereço por grau no subdomínio", () => {
+    for (const n of [1, 2, 3, 6]) {
+      const g1 = getConfigTribunal(`trf${n}`, 1)!;
+      const g2 = getConfigTribunal(`trf${n}`, 2)!;
+      expect(g1, `trf${n} precisa estar no registro`).not.toBeNull();
+      expect(g1.urlEntrada).toBe(`https://pje1g.trf${n}.jus.br/pje/login.seam`);
+      expect(g2.urlEntrada).toBe(`https://pje2g.trf${n}.jus.br/pje/login.seam`);
+      expect(segundoGrauMapeado(`trf${n}`)).toBe(true);
+    }
+  });
+
+  it("TRF5 fica fora do registro — ele roda sem credencial", () => {
+    // Entrar aqui faria o sistema exigir cofre onde o acesso é aberto.
+    expect(getConfigTribunal("trf5", 1)).toBeNull();
+  });
+
+  it("TRF4 fica fora — usa eproc, que é adapter novo e não linha de registro", () => {
+    expect(getConfigTribunal("trf4", 1)).toBeNull();
+  });
+
+  it("processo federal exige credencial, não passa por consulta pública", async () => {
+    const { sistemaCofrePorTribunal } = await import("../processos/cnj-parser");
+    // `null` significa "consulta pública" pro import de processos. Sem estas
+    // linhas ele criaria monitoramento federal sem credencial, que depois
+    // falharia todo dia por não ter sessão.
+    for (const n of [1, 2, 3, 6]) {
+      expect(sistemaCofrePorTribunal(`trf${n}`)).toBe("pje_*");
+    }
+    expect(sistemaCofrePorTribunal("trf5")).toBeNull();
+  });
+
+  it("o login nacional do PDPJ atende os TRFs", async () => {
+    const { sistemaAtendeTribunal } = await import("../processos/tribunais-pdpj");
+    expect(sistemaAtendeTribunal("pje_*", "trf1")).toBe(true);
+    expect(sistemaAtendeTribunal("pje_*", "trf5")).toBe(false);
+  });
+});
+
 describe("registro por grau no Cofre", () => {
   const helpers = fs.readFileSync(
     path.resolve(__dirname, "../escritorio/cofre-helpers.ts"),
