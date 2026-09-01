@@ -37,6 +37,7 @@ import {
 } from "../../shared/calculo-comissao";
 import { createLogger } from "../_core/logger";
 import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
+import { diaCivilEmTz } from "../_core/dates";
 
 const log = createLogger("db-comissoes");
 
@@ -157,6 +158,10 @@ export interface OpcoesGestao {
   dataCorte: string;
   /** Início do dia de `dataCorte` no fuso do escritório. */
   dataCorteEm: Date;
+  /** Mesmo fuso do corte — é o que decide em que DIA o contrato fechou.
+   *  Sem ele, um fechamento às 22h em Fortaleza viraria o dia seguinte na
+   *  tela e o operador leria uma data diferente da que a regra usou. */
+  fusoHorario: string;
   aliquotaPercent: number;
 }
 
@@ -287,6 +292,9 @@ export async function simularComissao(
       categoriaComissionavel: categoriasCobranca.comissionavel,
       descricao: asaasCobrancas.descricao,
       contatoNome: contatos.nome,
+      // Quem vendeu. Na gestão as cobranças vêm de todos os atendentes do
+      // escritório, então sem o nome não dá pra conferir a lista.
+      atendenteNome: users.name,
       asaasPaymentId: asaasCobrancas.asaasPaymentId,
       parcelaAtual: asaasCobrancas.parcelaAtual,
       parcelaTotal: asaasCobrancas.parcelaTotal,
@@ -304,6 +312,9 @@ export async function simularComissao(
       contatos,
       sql`${contatos.id} = COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId})`,
     )
+    // 1:1 pelas chaves primárias — não multiplica linha nem muda o cálculo.
+    .leftJoin(colaboradores, eq(colaboradores.id, asaasCobrancas.atendenteId))
+    .leftJoin(users, eq(users.id, colaboradores.userId))
     .where(and(...condicoes))
     .orderBy(asc(asaasCobrancas.dataPagamento));
 
@@ -348,12 +359,17 @@ export async function simularComissao(
       dataPagamento: l.dataPagamento,
       descricao: l.descricao,
       contatoNome: l.contatoNome,
+      atendenteNome: l.atendenteNome ?? null,
       categoriaNome: l.categoriaNome,
       categoriaComissionavel: l.categoriaComissionavel,
       comissionavelOverride: l.comissionavelOverride,
       parcelaAtual: l.parcelaAtual ?? null,
       parcelaTotal: l.parcelaTotal ?? null,
-      fechouEm: l.fechouEm ? new Date(l.fechouEm).toISOString() : null,
+      // "YYYY-MM-DD" como o resto da tela: dataPagamento e dataCorte chegam
+      // assim, e o formatador do client parte a string em três.
+      fechouEm: l.fechouEm && gestao
+        ? diaCivilEmTz(new Date(l.fechouEm), gestao.fusoHorario)
+        : null,
       motivoExclusao: motivo ?? null,
     };
   };
