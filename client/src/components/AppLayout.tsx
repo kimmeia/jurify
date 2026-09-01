@@ -57,6 +57,7 @@ import {
   Sun,
   Moon,
   Check,
+  Search,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -67,6 +68,7 @@ import { contratoLibera } from "@shared/modulos-contratacao";
 import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
 import { InstalarAppDialog } from "@/components/InstalarAppDialog";
+import { PaletaComandos } from "@/components/PaletaComandos";
 import { dispararInstalacao, pwaInstalado } from "@/lib/pwa-install";
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -433,6 +435,35 @@ function AppSidebarContent({
     atendimento: contConversas?.aguardando ?? 0,
   };
 
+  /**
+   * Quem aparece no menu. Vive fora do JSX porque a paleta ⌘K navega para
+   * a MESMA lista — se as duas calculassem visibilidade por conta própria,
+   * a busca ofereceria tela que o cargo/plano não abre.
+   */
+  const itemVisivelNoMenu = (i: ItemMenu) =>
+    !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) &&
+    (i.modulo ? contratoLibera(modulosContratados, i.modulo) : true) &&
+    (i.soSemModulo ? !contratoLibera(modulosContratados, i.soSemModulo) : true) &&
+    (i.ver ? i.ver(canSee, canSeeEstrito) : true);
+
+  const telasNavegaveis = GRUPOS_MENU.flatMap((g) => g.itens)
+    .filter(itemVisivelNoMenu)
+    .map((i) => ({ id: i.id, rotulo: i.rotulo, rota: i.rota, icone: i.icone }));
+
+  // Paleta de comandos (⌘K / Ctrl+K). É caminho ADICIONAL: o menu continua
+  // inteiro, e quem nunca apertar o atalho não perde nada.
+  const [paletaAberta, setPaletaAberta] = useState(false);
+  useEffect(() => {
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setPaletaAberta((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, []);
+
   // Modo "app de atendimento" no celular (opção A): quem tem o módulo
   // Atendimento abre o app focado nele, sem o menu dos outros módulos.
   // "Abrir versão completa" (no menu do perfil) sai do foco e mostra a
@@ -510,13 +541,7 @@ function AppSidebarContent({
 
           <SidebarContent className="gap-0 rolagem-menu">
             {GRUPOS_MENU.map((grupo) => {
-              const visiveis = grupo.itens.filter(
-                (i) =>
-                  !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) &&
-                  (i.modulo ? contratoLibera(modulosContratados, i.modulo) : true) &&
-                  (i.soSemModulo ? !contratoLibera(modulosContratados, i.soSemModulo) : true) &&
-                  (i.ver ? i.ver(canSee, canSeeEstrito) : true),
-              );
+              const visiveis = grupo.itens.filter(itemVisivelNoMenu);
               if (visiveis.length === 0) return null;
               return (
                 <div key={grupo.titulo} className="px-2 pb-0.5">
@@ -606,6 +631,19 @@ function AppSidebarContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3 shrink-0">
+            {/* O atalho precisa se anunciar: paleta de comandos que ninguém
+                descobre é paleta que ninguém usa. Some no modo ícone, onde
+                não há largura pro rótulo. */}
+            <button
+              onClick={() => setPaletaAberta(true)}
+              className="mb-2 flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-1.5 text-[11px] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden"
+            >
+              <Search className="h-3.5 w-3.5 shrink-0" />
+              <span className="flex-1 text-left">Buscar</span>
+              <kbd className="rounded border border-sidebar-border bg-sidebar-accent px-1 py-px font-mono text-[10px] font-semibold text-sidebar-foreground/75">
+                ⌘K
+              </kbd>
+            </button>
             <div className="flex items-center gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -786,6 +824,12 @@ function AppSidebarContent({
         </main>
       </SidebarInset>
       <InstalarAppDialog open={instalarOpen} onOpenChange={setInstalarOpen} />
+      <PaletaComandos
+        aberta={paletaAberta}
+        onOpenChange={setPaletaAberta}
+        telas={telasNavegaveis}
+        onNavegar={navigateOrBlock}
+      />
     </>
   );
 }

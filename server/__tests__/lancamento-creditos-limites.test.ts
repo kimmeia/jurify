@@ -85,7 +85,15 @@ describe("amarras no código", () => {
   it("telas do pacote processual não chamam mais clientes.listar às cegas", () => {
     const processos = ler("client/src/pages/Processos.tsx");
     expect(processos).toContain("useClientesVinculaveis");
-    expect(processos).toContain("clientesEssencial.listar");
+    // A escolha entre módulo completo e lista essencial mora no hook
+    // compartilhado — Processos e a busca ⌘K passam os dois por ele, e é
+    // aqui que se trava o fallback pra não voltar a chamar clientes.listar
+    // às cegas em plano de monitoramento.
+    const hook = ler("client/src/hooks/use-clientes-vinculaveis.ts");
+    expect(hook).toContain("clientesEssencial.listar");
+    expect(hook).toContain('contratoLibera(modulosData?.modulos ?? null, ["clientes"])');
+    const paleta = ler("client/src/components/PaletaComandos.tsx");
+    expect(paleta).toContain("useClientesVinculaveis");
     const layout = ler("client/src/components/AppLayout.tsx");
     expect(layout).toContain('contratoLibera(modulosContratados, ["agenda"])');
   });

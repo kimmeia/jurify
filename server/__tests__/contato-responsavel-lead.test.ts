@@ -104,11 +104,15 @@ describe("a ficha para de girar pra sempre", () => {
     const ini = tela.indexOf("if (detalheCarregando)");
     expect(ini).toBeGreaterThan(0);
     const trecho = tela.slice(ini, tela.indexOf("const isVip", ini));
-    expect(trecho).toContain("animate-spin");
+    // O ramo do carregando mostra esqueleto (a forma da ficha) em vez de um
+    // círculo girando — mas o que a amarra protege é que ele mostre ALGUMA
+    // coisa de carregamento, e que o ramo do vazio não mostre nenhuma.
+    expect(trecho).toContain("<Skeleton");
     expect(trecho).toContain("if (!cliente)");
     // O ramo do vazio precisa dizer algo e ter saída.
     const vazio = trecho.slice(trecho.indexOf("if (!cliente)"));
     expect(vazio).not.toContain("animate-spin");
+    expect(vazio).not.toContain("<Skeleton");
     expect(vazio).toContain("onVoltar");
   });
 });

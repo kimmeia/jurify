@@ -87,7 +87,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { marked } from "marked";
-import { contratoLibera } from "@shared/modulos-contratacao";
+import { useClientesVinculaveis } from "@/hooks/use-clientes-vinculaveis";
 import {
   SearchHistorySidebar,
   KeywordAlertsButton,
@@ -103,31 +103,6 @@ import GradeTribunais from "@/components/GradeTribunais";
 
 /** Sistema do cofre que vale em qualquer PJe. Espelha SISTEMA_PJE_NACIONAL do servidor. */
 const SISTEMA_NACIONAL = "pje_*";
-
-/**
- * Clientes pro vínculo processo↔cliente respeitando o contrato: módulo
- * Clientes completo quando contratado, senão a lista essencial do pacote
- * processual (mesma tabela). Sem isto, o plano de monitoramento chamava
- * `clientes.listar`, tomava FORBIDDEN silencioso e o seletor vinha vazio.
- */
-function useClientesVinculaveis(opts: { busca?: string; enabled?: boolean }) {
-  const habilitado = opts.enabled !== false;
-  const { data: modulosData } = trpc.subscription.modulosContratados.useQuery(undefined, {
-    staleTime: 60_000,
-    enabled: habilitado,
-  });
-  const carregouContrato = modulosData !== undefined;
-  const temModuloClientes = contratoLibera(modulosData?.modulos ?? null, ["clientes"]);
-  const completo = trpc.clientes.listar.useQuery(
-    { busca: opts.busca || undefined, limite: 100 },
-    { enabled: habilitado && carregouContrato && temModuloClientes },
-  );
-  const essencial = trpc.clientesEssencial.listar.useQuery(
-    { busca: opts.busca || undefined },
-    { enabled: habilitado && carregouContrato && !temModuloClientes },
-  );
-  return temModuloClientes ? (completo.data?.clientes ?? []) : (essencial.data?.itens ?? []);
-}
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 

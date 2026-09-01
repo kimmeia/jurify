@@ -9,7 +9,7 @@
  *  • Sub-componentes extraídos para ./clientes/detail-tabs.tsx
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,7 @@ import {
   Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello, Pencil,
   MapPin, AlertTriangle, Briefcase, UserPlus, Ban, Lock,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
 import {
   DropdownMenu,
@@ -52,7 +53,7 @@ import {
   NovoClienteDialog, RegistrarFechamentoDialog,
 } from "./clientes/detail-tabs";
 import { parseValorBR } from "@shared/valor-br";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 
 /**
  * Botão "Monitorar processos" — cria/remove um monitoramento de NOVAS
@@ -457,6 +458,19 @@ export default function Clientes() {
     setPagina(1);
   }, [aba]);
 
+  // A leitura de `?id=` acima só roda na MONTAGEM. Quem já está em
+  // /clientes e navega pra /clientes?id=X — o que a busca ⌘K faz — não
+  // remonta a tela, e sem isto a ficha não abria. Só reage quando há id
+  // na URL: apagar o parâmetro é trabalho do efeito de escrita logo
+  // abaixo, e responder aos dois lados criaria laço.
+  const queryString = useSearch();
+  useEffect(() => {
+    const idParam = new URLSearchParams(queryString).get("id");
+    if (!idParam) return;
+    const n = Number(idParam);
+    if (Number.isInteger(n) && n > 0) setSelId((atual) => (atual === n ? atual : n));
+  }, [queryString]);
+
   // Sincroniza URL com selId/segmento — sem isso, F5 / back do browser
   // perde o estado (volta sempre pra lista geral). replaceState não
   // empilha entradas no histórico (back ainda volta pra página anterior
@@ -578,10 +592,54 @@ export default function Clientes() {
   // resultando em contagem falsa pra escritórios com mais clientes.
   const clientesComDebito: number = (stats as any)?.inadimplentes ?? 0;
 
+  // ↑↓ andam na lista com a ficha aberta. Numa triagem de trinta contatos é
+  // a diferença entre trinta idas e voltas e trinta apertadas de seta. Só no
+  // painel (lg+), e nunca enquanto a pessoa digita num campo.
+  useEffect(() => {
+    if (selId == null) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      if (window.innerWidth < 1024) return;
+      const alvo = e.target as HTMLElement | null;
+      const tag = alvo?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || alvo?.isContentEditable) return;
+      const lista = clientesFiltrados as any[];
+      if (lista.length === 0) return;
+      const atual = lista.findIndex((c) => c.id === selId);
+      if (atual < 0) return;
+      e.preventDefault();
+      const proximo = e.key === "ArrowDown"
+        ? (atual + 1) % lista.length
+        : (atual - 1 + lista.length) % lista.length;
+      setSelId(lista[proximo].id);
+    };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, [selId, clientesFiltrados]);
+
   return (
     <div className="space-y-6">
       {selId ? (
-        <ClienteDetalhe id={selId} onVoltar={() => setSelId(null)} onUpdate={refetch} />
+        /* Painel lista + ficha. Abrir um cliente parava de apagar a tela: a
+           coluna da esquerda mantém a lista (e a posição nela) enquanto a
+           ficha ocupa a direita. Abaixo de lg a coluna some e a ficha volta
+           a ser tela cheia — é a mesma quebra que o Atendimento faz, porque
+           lado a lado não cabe em 390px. */
+        <div className="lg:grid lg:h-[calc(100dvh-150px)] lg:min-h-[560px] lg:grid-cols-[320px_1fr] lg:overflow-hidden lg:rounded-2xl lg:border lg:bg-card">
+          <div className="hidden min-h-0 lg:flex lg:flex-col lg:border-r">
+            <ListaCompactaClientes
+              clientes={clientesFiltrados}
+              selId={selId}
+              onSelecionar={setSelId}
+              busca={busca}
+              onBusca={setBusca}
+              total={(data as any)?.total ?? clientesFiltrados.length}
+            />
+          </div>
+          <div className="min-h-0 lg:overflow-auto lg:p-5">
+            <ClienteDetalhe id={selId} onVoltar={() => setSelId(null)} onUpdate={refetch} />
+          </div>
+        </div>
       ) : (
         <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-violet-50/20 dark:to-violet-950/20 p-6 space-y-5">
           {/* ═══════════ HERO ═══════════ */}
@@ -2794,6 +2852,102 @@ function EditarLeadDialog({
   );
 }
 
+// ─── Coluna compacta da lista (painel lista + ficha) ────────────────────────
+
+/**
+ * A mesma lista já carregada pela tela, em 320px. Não busca nada por conta
+ * própria: recebe `clientesFiltrados` pronto, então o que aparece aqui é
+ * exatamente o que a tabela mostraria com os mesmos filtros.
+ */
+function ListaCompactaClientes({
+  clientes,
+  selId,
+  onSelecionar,
+  busca,
+  onBusca,
+  total,
+}: {
+  clientes: any[];
+  selId: number | null;
+  onSelecionar: (id: number) => void;
+  busca: string;
+  onBusca: (v: string) => void;
+  total: number;
+}) {
+  const refSelecionado = useRef<HTMLButtonElement | null>(null);
+  // Andar com ↑↓ tem que arrastar a rolagem junto, senão a seleção some
+  // pra fora da coluna depois de alguns itens.
+  useEffect(() => {
+    refSelecionado.current?.scrollIntoView({ block: "nearest" });
+  }, [selId]);
+
+  const posicao = clientes.findIndex((c) => c.id === selId);
+
+  return (
+    <>
+      <div className="shrink-0 border-b p-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={busca}
+            onChange={(e) => onBusca(e.target.value)}
+            placeholder="Buscar na lista..."
+            className="h-9 pl-9 text-[13px]"
+          />
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto">
+        {clientes.length === 0 ? (
+          <p className="p-6 text-center text-[12.5px] text-muted-foreground">
+            Nenhum cliente bate com a busca.
+          </p>
+        ) : (
+          clientes.map((c: any) => {
+            const ativo = c.id === selId;
+            return (
+              <button
+                key={c.id}
+                ref={ativo ? refSelecionado : undefined}
+                onClick={() => onSelecionar(c.id)}
+                className={`flex w-full items-start gap-2.5 border-l-[3px] border-b px-3 py-2.5 text-left transition-colors ${
+                  ativo
+                    ? "border-l-primary bg-primary/5"
+                    : "border-l-transparent hover:bg-muted/50"
+                }`}
+              >
+                <span
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[11px] font-semibold text-white ${gradientAvatar(c.nome || "?")}`}
+                >
+                  {gerarIniciais(c.nome || "?")}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={`block truncate text-[12.5px] ${ativo ? "font-semibold" : "font-medium"}`}>
+                    {c.nome}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[10.5px] text-muted-foreground">
+                    {c.telefone || c.email || c.cpfCnpj || "sem contato"}
+                  </span>
+                </span>
+              </button>
+            );
+          })
+        )}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2 border-t px-3 py-2 text-[10px] text-muted-foreground">
+        <kbd className="rounded border bg-muted px-1 py-px font-mono text-[9.5px]">↑</kbd>
+        <kbd className="rounded border bg-muted px-1 py-px font-mono text-[9.5px]">↓</kbd>
+        trocar de cliente
+        <span className="ml-auto tabular-nums">
+          {posicao >= 0 ? `${posicao + 1} de ${clientes.length}` : `${clientes.length} na lista`}
+          {total > clientes.length ? ` · ${total} no total` : ""}
+        </span>
+      </div>
+    </>
+  );
+}
+
 // ─── Detalhe do Cliente ─────────────────────────────────────────────────────
 
 function ClienteDetalhe({
@@ -2910,9 +3064,23 @@ function ClienteDetalhe({
   // e quando ele não existe mais — tratar isso como "ainda não chegou" deixava
   // a tela girando pra sempre, sem dizer nada a quem abriu.
   if (detalheCarregando) {
+    // Esqueleto com a FORMA da ficha, não um círculo girando: o layout já
+    // nasce no lugar, então nada pula quando os dados chegam.
     return (
-      <div className="text-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+      <div className="space-y-4">
+        <div className="flex items-start gap-3">
+          <Skeleton className="h-11 w-11 shrink-0 rounded-full" />
+          <div className="flex-1 space-y-2 pt-1">
+            <Skeleton className="h-4 w-56" />
+            <Skeleton className="h-3 w-80 max-w-full" />
+          </div>
+        </div>
+        <Skeleton className="h-9 w-full max-w-md rounded-lg" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-28 rounded-xl" />
+        </div>
+        <Skeleton className="h-24 rounded-xl" />
       </div>
     );
   }
