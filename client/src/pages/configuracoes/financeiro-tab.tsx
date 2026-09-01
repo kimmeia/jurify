@@ -39,9 +39,254 @@ export function FinanceiroTab({ canEdit }: { canEdit: boolean }) {
   return (
     <div className="space-y-4">
       <RegraComissaoCard canEdit={canEdit} />
+      <ComissaoGestaoCard canEdit={canEdit} />
       <AgendamentoComissaoCard />
       <CategoriasCobrancaCard canEdit={canEdit} />
       <CategoriasDespesaCard canEdit={canEdit} />
+    </div>
+  );
+}
+
+// ─── Comissão de gestão ──────────────────────────────────────────────────────
+
+/**
+ * Quem ganha percentual sobre o recebido de TODOS os clientes fechados a
+ * partir de uma data, sem depender de ter vendido. Fica ao lado da regra de
+ * venda de propósito: são duas comissões que incidem sobre a mesma cobrança,
+ * e ver as duas juntas evita a leitura de que uma substitui a outra.
+ */
+function ComissaoGestaoCard({ canEdit }: { canEdit: boolean }) {
+  const utils = trpc.useUtils();
+  const { data: gestores, isLoading } = trpc.comissoes.listarGestao.useQuery(undefined, {
+    retry: false,
+  });
+  const { data: equipeData } = trpc.configuracoes.listarColaboradores.useQuery();
+  const colaboradores =
+    equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : [];
+
+  const [novoColaborador, setNovoColaborador] = useState("");
+  const [novaAliquota, setNovaAliquota] = useState("");
+  const [novoCorte, setNovoCorte] = useState("");
+
+  const salvar = trpc.comissoes.salvarGestao.useMutation({
+    onSuccess: () => {
+      utils.comissoes.listarGestao.invalidate();
+      setNovoColaborador("");
+      setNovaAliquota("");
+      setNovoCorte("");
+      toast.success("Comissão de gestão salva");
+    },
+    onError: (err) => toast.error("Erro ao salvar", { description: err.message }),
+  });
+
+  const jaConfigurados = new Set((gestores ?? []).map((g) => g.colaboradorId));
+  const disponiveis = colaboradores.filter((c) => !jaConfigurados.has(c.id));
+
+  function adicionar() {
+    const aliq = parseFloat(novaAliquota.replace(",", "."));
+    if (!novoColaborador) {
+      toast.error("Escolha o colaborador");
+      return;
+    }
+    if (!Number.isFinite(aliq) || aliq < 0 || aliq > 100) {
+      toast.error("Percentual inválido", { description: "Use um número entre 0 e 100." });
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(novoCorte)) {
+      toast.error("Informe a data de corte");
+      return;
+    }
+    salvar.mutate({
+      colaboradorId: Number(novoColaborador),
+      aliquotaPercent: aliq,
+      dataCorte: novoCorte,
+      ativo: true,
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Wallet className="h-4 w-4" />
+          Comissão de gestão
+        </CardTitle>
+        <CardDescription>
+          Quem está aqui ganha um percentual sobre <strong>tudo que for recebido</strong> de
+          clientes que fecharam contrato a partir da data de corte, independente de quem
+          vendeu. A comissão de venda do atendente continua valendo: as duas incidem sobre a
+          mesma cobrança, cada uma com o seu controle de duplicidade.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : (gestores ?? []).length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Nenhum gestor configurado. Enquanto estiver vazio, a aba Gestão em
+            Financeiro → Comissões fica sem opções.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {(gestores ?? []).map((g) => (
+              <LinhaGestor key={g.colaboradorId} gestor={g} canEdit={canEdit} />
+            ))}
+          </div>
+        )}
+
+        {canEdit && (
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end border-t pt-4">
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs">Colaborador</Label>
+              <Select value={novoColaborador} onValueChange={setNovoColaborador}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {disponiveis.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                      Todos já configurados.
+                    </div>
+                  ) : (
+                    disponiveis.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.userName ?? c.userEmail ?? `#${c.id}`} ({c.cargo})
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Percentual (%)</Label>
+              <Input
+                value={novaAliquota}
+                onChange={(e) => setNovaAliquota(e.target.value)}
+                placeholder="2,00"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Vale a partir de</Label>
+              <Input
+                type="date"
+                value={novoCorte}
+                onChange={(e) => setNovoCorte(e.target.value)}
+              />
+            </div>
+            <div className="sm:col-span-4">
+              <Button size="sm" onClick={adicionar} disabled={salvar.isPending}>
+                {salvar.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                ) : (
+                  <Plus className="h-3.5 w-3.5 mr-2" />
+                )}
+                Adicionar gestor
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function LinhaGestor({
+  gestor,
+  canEdit,
+}: {
+  gestor: {
+    colaboradorId: number;
+    nome: string | null;
+    cargo: string;
+    aliquotaPercent: number;
+    dataCorte: string;
+    ativo: boolean;
+  };
+  canEdit: boolean;
+}) {
+  const utils = trpc.useUtils();
+  const [aliquota, setAliquota] = useState(String(gestor.aliquotaPercent));
+  const [corte, setCorte] = useState(gestor.dataCorte);
+
+  useEffect(() => {
+    setAliquota(String(gestor.aliquotaPercent));
+    setCorte(gestor.dataCorte);
+  }, [gestor.aliquotaPercent, gestor.dataCorte]);
+
+  const salvar = trpc.comissoes.salvarGestao.useMutation({
+    onSuccess: () => {
+      utils.comissoes.listarGestao.invalidate();
+      toast.success("Comissão de gestão atualizada");
+    },
+    onError: (err) => toast.error("Erro ao salvar", { description: err.message }),
+  });
+
+  function aplicar(ativo: boolean) {
+    const aliq = parseFloat(aliquota.replace(",", "."));
+    if (!Number.isFinite(aliq) || aliq < 0 || aliq > 100) {
+      toast.error("Percentual inválido", { description: "Use um número entre 0 e 100." });
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(corte)) {
+      toast.error("Data de corte inválida");
+      return;
+    }
+    salvar.mutate({
+      colaboradorId: gestor.colaboradorId,
+      aliquotaPercent: aliq,
+      dataCorte: corte,
+      ativo,
+    });
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end rounded-md border p-3">
+      <div className="sm:col-span-2">
+        <p className="text-sm font-medium">{gestor.nome ?? "—"}</p>
+        <p className="text-[11px] text-muted-foreground">{gestor.cargo}</p>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-[11px]">Percentual (%)</Label>
+        <Input
+          value={aliquota}
+          onChange={(e) => setAliquota(e.target.value)}
+          disabled={!canEdit}
+          className="h-8 text-xs"
+        />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-[11px]">Vale a partir de</Label>
+        <Input
+          type="date"
+          value={corte}
+          onChange={(e) => setCorte(e.target.value)}
+          disabled={!canEdit}
+          className="h-8 text-xs"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <Switch
+          checked={gestor.ativo}
+          onCheckedChange={(v) => aplicar(v)}
+          disabled={!canEdit || salvar.isPending}
+        />
+        <span className="text-[11px] text-muted-foreground">
+          {gestor.ativo ? "Ativo" : "Desligado"}
+        </span>
+        {canEdit && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto h-8"
+            onClick={() => aplicar(gestor.ativo)}
+            disabled={salvar.isPending}
+          >
+            <Save className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

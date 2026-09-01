@@ -95,6 +95,8 @@ const MOTIVO_LABEL: Record<string, string> = {
   override_manual: "Desmarcada manualmente",
   categoria_nao_comissionavel: "Categoria não comissionável",
   abaixo_minimo: "Abaixo do valor mínimo",
+  fechou_antes_do_corte: "Cliente fechou antes do corte",
+  ja_comissionada: "Já comissionada em fechamento anterior",
 };
 
 // ─── Componente principal ────────────────────────────────────────────────────
@@ -148,19 +150,43 @@ export function CalcularSection() {
   const [periodoInicio, setPeriodoInicio] = useState<string>(trintaDiasAtrasIso());
   const [periodoFim, setPeriodoFim] = useState<string>(hojeIso());
   const [confirmFechar, setConfirmFechar] = useState(false);
+  const [tipo, setTipo] = useState<"venda" | "gestao">("venda");
+
+  // Quem está configurado pra receber comissão de gestão. No modo Gestão o
+  // seletor mostra só essa lista: escolher alguém sem configuração daria um
+  // erro do servidor, e oferecer a opção pra depois recusar é ruim.
+  const { data: gestores } = trpc.comissoes.listarGestao.useQuery(undefined, {
+    retry: false,
+  });
+  const gestoresAtivos = useMemo(
+    () => (gestores ?? []).filter((g) => g.ativo),
+    [gestores],
+  );
+  const pessoas = tipo === "gestao"
+    ? gestoresAtivos.map((g) => ({
+      id: g.colaboradorId,
+      userName: g.nome,
+      cargo: g.cargo,
+    }))
+    : atendentes;
+  const gestorSelecionado = gestoresAtivos.find(
+    (g) => String(g.colaboradorId) === atendenteId,
+  );
 
   const atendenteIdNum = atendenteId ? parseInt(atendenteId) : null;
   const podeSimular =
     atendenteIdNum !== null &&
     periodoInicio.length === 10 &&
     periodoFim.length === 10 &&
-    periodoInicio <= periodoFim;
+    periodoInicio <= periodoFim &&
+    (tipo === "venda" || !!gestorSelecionado);
 
   const sim = trpc.comissoes.simular.useQuery(
     {
       atendenteId: atendenteIdNum ?? 0,
       periodoInicio,
       periodoFim,
+      tipo,
     },
     { enabled: podeSimular, staleTime: 0 },
   );
@@ -216,7 +242,10 @@ export function CalcularSection() {
       periodoInicio,
       periodoFim,
     },
-    { enabled: podeSimular && diagOpen, staleTime: 0 },
+    // O diagnóstico explica a comissão de VENDA (compara com o que a
+    // cobrança tem de atendente). Na gestão a explicação já está na
+    // própria lista de "ficou de fora", com o motivo em cada linha.
+    { enabled: podeSimular && diagOpen && tipo === "venda", staleTime: 0 },
   );
 
   return (
@@ -224,20 +253,43 @@ export function CalcularSection() {
       {/* Controles */}
       <Card>
         <CardContent className="pt-5">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Tipo de comissão</Label>
+              <div className="flex gap-1 rounded-md bg-muted p-1">
+                {(["venda", "gestao"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => { setTipo(t); setAtendenteId(""); }}
+                    className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
+                      tipo === t
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {t === "venda" ? "Venda" : "Gestão"}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-xs">Atendente</Label>
+              <Label className="text-xs">{tipo === "gestao" ? "Gestor" : "Atendente"}</Label>
               <Select value={atendenteId} onValueChange={setAtendenteId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione um atendente" />
+                  <SelectValue
+                    placeholder={tipo === "gestao" ? "Selecione um gestor" : "Selecione um atendente"}
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {atendentes.length === 0 ? (
+                  {pessoas.length === 0 ? (
                     <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                      Nenhum atendente cadastrado.
+                      {tipo === "gestao"
+                        ? "Nenhum gestor com comissão de gestão ativa."
+                        : "Nenhum atendente cadastrado."}
                     </div>
                   ) : (
-                    atendentes.map((c) => (
+                    pessoas.map((c) => (
                       <SelectItem key={c.id} value={String(c.id)}>
                         {c.userName ?? "—"} ({c.cargo})
                       </SelectItem>
@@ -264,9 +316,27 @@ export function CalcularSection() {
             </div>
           </div>
 
-          {!podeSimular && (
+          {tipo === "gestao" && gestorSelecionado && (
+            <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
+              <strong>{gestorSelecionado.nome ?? "—"}</strong> ganha{" "}
+              <strong>{gestorSelecionado.aliquotaPercent.toFixed(2).replace(".", ",")}%</strong>{" "}
+              sobre o recebido de <strong>todos</strong> os clientes que fecharam a partir de{" "}
+              <strong>{formatData(gestorSelecionado.dataCorte)}</strong>. Quem fechou antes fica
+              de fora, mesmo pagando agora.
+            </div>
+          )}
+
+          {tipo === "gestao" && gestoresAtivos.length === 0 && (
             <p className="text-xs text-muted-foreground mt-3">
-              Selecione um atendente e um período válido para simular a comissão.
+              Nenhum gestor configurado ainda. Cadastre em{" "}
+              <strong>Configurações → Financeiro → Comissão de gestão</strong>.
+            </p>
+          )}
+
+          {!podeSimular && !(tipo === "gestao" && gestoresAtivos.length === 0) && (
+            <p className="text-xs text-muted-foreground mt-3">
+              Selecione {tipo === "gestao" ? "um gestor" : "um atendente"} e um período válido
+              para simular a comissão.
             </p>
           )}
 
@@ -324,10 +394,12 @@ export function CalcularSection() {
 
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>
-              Regra atual:{" "}
-              {modo === "faixas"
-                ? `faixas progressivas (cumulativo)`
-                : `alíquota fixa ${aliquotaAplicada}%`}
+              {tipo === "gestao" ? "Regra de gestão: " : "Regra atual: "}
+              {tipo === "gestao"
+                ? `alíquota ${aliquotaAplicada}% · corte ${formatData(sim.data.dataCorte)}`
+                : modo === "faixas"
+                  ? `faixas progressivas (cumulativo)`
+                  : `alíquota fixa ${aliquotaAplicada}%`}
               {" · "}valor mínimo {formatBRL(valorMinimo)}
             </span>
             {perms.podeCriar && (
@@ -336,7 +408,11 @@ export function CalcularSection() {
                 className="ml-auto"
                 disabled={
                   !sim.data ||
-                  sim.data.comissionaveis.length + sim.data.naoComissionaveis.length === 0
+                  sim.data.comissionaveis.length + sim.data.naoComissionaveis.length === 0 ||
+                  // Na gestão, período sem nada comissionável só criaria um
+                  // fechamento zerado — o operador já vê na lista de baixo
+                  // por que cada pagamento ficou de fora.
+                  (tipo === "gestao" && sim.data.comissionaveis.length === 0)
                 }
                 onClick={() => setConfirmFechar(true)}
               >
@@ -344,22 +420,24 @@ export function CalcularSection() {
                 Fechar período
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="outline"
-              className={perms.podeCriar ? "" : "ml-auto"}
-              onClick={() => setDiagOpen(true)}
-              title="Compara cobranças pagas no período com o que entra na comissão"
-            >
-              🔍 Diagnosticar diferença
-            </Button>
+            {tipo === "venda" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className={perms.podeCriar ? "" : "ml-auto"}
+                onClick={() => setDiagOpen(true)}
+                title="Compara cobranças pagas no período com o que entra na comissão"
+              >
+                🔍 Diagnosticar diferença
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
               disabled={!sim.data || exportarPdfMut.isPending}
               onClick={() =>
                 atendenteIdNum &&
-                exportarPdfMut.mutate({ atendenteId: atendenteIdNum, periodoInicio, periodoFim })
+                exportarPdfMut.mutate({ atendenteId: atendenteIdNum, periodoInicio, periodoFim, tipo })
               }
               title="Gerar PDF pra impressão/conferência antes de fechar"
             >
@@ -371,6 +449,17 @@ export function CalcularSection() {
               Gerar PDF
             </Button>
           </div>
+
+          {tipo === "gestao" && sim.data.comissionaveis.length === 0 &&
+            sim.data.naoComissionaveis.length > 0 && (
+            <Card className="border-blue-300 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
+              <CardContent className="py-4 text-xs text-blue-800 dark:text-blue-200">
+                Nada novo pra fechar neste período. Cada pagamento abaixo mostra por que ficou
+                de fora — <b>já comissionada</b> quer dizer que ele entrou num fechamento
+                anterior deste gestor e não conta de novo.
+              </CardContent>
+            </Card>
+          )}
 
           {sim.data.comissionaveis.length + sim.data.naoComissionaveis.length === 0 ? (
             <Card className="border-violet-300 bg-violet-50/50 dark:border-violet-800 dark:bg-violet-950/20">
@@ -392,11 +481,13 @@ export function CalcularSection() {
                 titulo="Cobranças que entram na comissão"
                 cor="emerald"
                 itens={sim.data.comissionaveis.map((c) => ({ ...c, motivo: null }))}
+                mostrarFechamento={tipo === "gestao"}
               />
               <ListaCobrancas
                 titulo="Cobranças que NÃO entram na comissão"
                 cor="slate"
                 itens={sim.data.naoComissionaveis}
+                mostrarFechamento={tipo === "gestao"}
               />
             </>
           )}
@@ -426,6 +517,7 @@ export function CalcularSection() {
                   atendenteId: atendenteIdNum,
                   periodoInicio,
                   periodoFim,
+                  tipo,
                 });
               }}
             >
@@ -505,6 +597,8 @@ export function CalcularSection() {
                         ja_fechada: l.fechamentoExistenteId
                           ? `Já fechada (#${l.fechamentoExistenteId})`
                           : "Já fechada",
+                        fechou_antes_do_corte: "Fechou antes do corte",
+                        ja_comissionada: "Já comissionada",
                       }[l.motivo];
                       return (
                         <tr key={l.id} className={`border-t ${cor}`}>
@@ -580,6 +674,7 @@ export function CalcularSection() {
                   periodoInicio,
                   periodoFim,
                   forcarDuplicado: true,
+                  tipo,
                 });
                 setDuplicadoInfo(null);
               }}
@@ -622,6 +717,7 @@ function ListaCobrancas({
   titulo,
   cor,
   itens,
+  mostrarFechamento,
 }: {
   titulo: string;
   cor: "emerald" | "slate";
@@ -634,7 +730,13 @@ function ListaCobrancas({
     categoriaNome: string | null;
     motivo?: string | null;
     motivoExclusao?: string | null;
+    fechouEm?: string | null;
+    parcelaAtual?: number | null;
+    parcelaTotal?: number | null;
   }>;
+  /** Colunas "Fechou em" e "Parcela" — o que a comissão de gestão precisa
+   *  mostrar pra o operador conferir corte e duplicidade sem sair da tela. */
+  mostrarFechamento?: boolean;
 }) {
   const headerCor =
     cor === "emerald" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground";
@@ -658,6 +760,12 @@ function ListaCobrancas({
               <TableRow>
                 <TableHead className="text-xs">Pago em</TableHead>
                 <TableHead className="text-xs">Cliente</TableHead>
+                {mostrarFechamento && (
+                  <>
+                    <TableHead className="text-xs">Fechou em</TableHead>
+                    <TableHead className="text-xs">Parcela</TableHead>
+                  </>
+                )}
                 <TableHead className="text-xs">Categoria</TableHead>
                 {cor === "slate" && (
                   <TableHead className="text-xs">Motivo</TableHead>
@@ -683,6 +791,18 @@ function ListaCobrancas({
                       <span className="truncate">{item.descricao ?? "—"}</span>
                     )}
                   </TableCell>
+                  {mostrarFechamento && (
+                    <>
+                      <TableCell className="text-xs text-muted-foreground tabular-nums">
+                        {item.fechouEm ? formatData(item.fechouEm) : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {item.parcelaAtual && item.parcelaTotal
+                          ? `${item.parcelaAtual} de ${item.parcelaTotal}`
+                          : "à vista"}
+                      </TableCell>
+                    </>
+                  )}
                   <TableCell className="text-xs">
                     {item.categoriaNome ?? (
                       <span className="text-muted-foreground italic">

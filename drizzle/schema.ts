@@ -3132,6 +3132,15 @@ export const comissoesFechadas = mysqlTable(
      *  automático e clique manual ambos tentam versao=0 → segundo INSERT
      *  cai em ER_DUP_ENTRY (capturado em db-comissoes.fecharComissao). */
     versao: int("versao").default(0).notNull(),
+    /** Trilha da comissão. 'venda' = a do atendente que vendeu (o único
+     *  tipo que existia); 'gestao' = percentual do gestor sobre o recebido
+     *  de todos os clientes fechados a partir de `dataCorteUsada`. Cada
+     *  trilha tem o seu próprio anti-duplicidade, então as duas podem
+     *  incidir sobre a MESMA cobrança sem se anular. */
+    tipo: mysqlEnum("tipoComFech", ["venda", "gestao"]).default("venda").notNull(),
+    /** Corte de fechamento aplicado, congelado junto com a alíquota.
+     *  NULL na trilha de venda (que não tem corte). */
+    dataCorteUsada: varchar("dataCorteUsadaComFech", { length: 10 }),
   },
   (t) => ({
     idxEscritorioAtendente: index("com_fech_escr_atendente_idx").on(
@@ -3145,6 +3154,7 @@ export const comissoesFechadas = mysqlTable(
     uqPeriodoVersao: uniqueIndex("com_fech_periodo_versao_uq").on(
       t.escritorioId,
       t.atendenteId,
+      t.tipo,
       t.periodoInicio,
       t.periodoFim,
       t.versao,
@@ -3154,6 +3164,43 @@ export const comissoesFechadas = mysqlTable(
 
 export type ComissaoFechada = typeof comissoesFechadas.$inferSelect;
 export type InsertComissaoFechada = typeof comissoesFechadas.$inferInsert;
+
+/**
+ * Quem recebe comissão de GESTÃO, com qual percentual e a partir de quando.
+ *
+ * Tabela separada de `regra_comissao` porque aquela é singleton por
+ * escritório (uma alíquota pra todo mundo) e aqui cada gestor tem o seu
+ * percentual e o seu corte. `dataCorte` é a data de FECHAMENTO do contrato
+ * do cliente a partir da qual os recebimentos passam a comissionar: cliente
+ * que fechou antes fica de fora para sempre, mesmo pagando depois.
+ */
+export const comissaoGestao = mysqlTable(
+  "comissao_gestao",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdComGest").notNull(),
+    colaboradorId: int("colaboradorIdComGest").notNull(),
+    aliquotaPercent: decimal("aliquotaPercentComGest", { precision: 5, scale: 2 })
+      .default("0")
+      .notNull(),
+    /** YYYY-MM-DD. Compara com `leads.fechadoEm` do cliente da cobrança. */
+    dataCorte: varchar("dataCorteComGest", { length: 10 }).notNull(),
+    /** Desliga sem perder a configuração (e sem apagar histórico). */
+    ativo: boolean("ativoComGest").default(true).notNull(),
+    criadoPorUserId: int("criadoPorUserIdComGest").notNull(),
+    criadoEm: timestamp("criadoEmComGest").defaultNow().notNull(),
+    atualizadoEm: timestamp("atualizadoEmComGest").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    uqEscritorioColaborador: uniqueIndex("comissao_gestao_escr_colab_uq").on(
+      t.escritorioId,
+      t.colaboradorId,
+    ),
+  }),
+);
+
+export type ComissaoGestao = typeof comissaoGestao.$inferSelect;
+export type InsertComissaoGestao = typeof comissaoGestao.$inferInsert;
 
 /**
  * Itens (cobranças) que entraram no snapshot de comissão fechada.
