@@ -92,9 +92,11 @@ async function resolverGestao(
         "Este colaborador não tem comissão de gestão ativa. Configure em Configurações → Financeiro.",
     });
   }
+  const fuso = fusoHorario || FUSO_HORARIO_PADRAO;
   return {
     dataCorte: cfg.dataCorte,
-    dataCorteEm: inicioDoDiaNoFuso(cfg.dataCorte, fusoHorario || FUSO_HORARIO_PADRAO),
+    dataCorteEm: inicioDoDiaNoFuso(cfg.dataCorte, fuso),
+    fusoHorario: fuso,
     aliquotaPercent: cfg.aliquotaPercent,
   };
 }

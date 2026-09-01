@@ -82,6 +82,7 @@ const { simularComissao, fecharComissao } = await import("../escritorio/db-comis
 const GESTAO = {
   dataCorte: "2026-07-01",
   dataCorteEm: new Date("2026-07-01T03:00:00.000Z"),
+  fusoHorario: "America/Sao_Paulo",
   aliquotaPercent: 2,
 };
 
@@ -99,6 +100,7 @@ function cobranca(over: Partial<Record<string, unknown>> = {}) {
     categoriaComissionavel: true,
     descricao: null,
     contatoNome: "Ana Beatriz Moreira",
+    atendenteNome: "Milena Alves Sampaio",
     asaasPaymentId: "pay_1",
     parcelaAtual: 1,
     parcelaTotal: 2,
@@ -230,7 +232,22 @@ describe("simularComissao — trilha de gestão", () => {
 
     expect(sim.comissionaveis[0].parcelaAtual).toBe(1);
     expect(sim.comissionaveis[0].parcelaTotal).toBe(2);
-    expect(sim.comissionaveis[0].fechouEm).toBe("2026-07-05T12:00:00.000Z");
+    // Na gestão as cobranças vêm de todos os vendedores — sem o nome, a
+    // lista não dá pra conferir.
+    expect(sim.comissionaveis[0].atendenteNome).toBe("Milena Alves Sampaio");
+    // Data pura, no formato que o resto da tela usa. Com ISO cheio o
+    // formatador do client parte a string em três e cospe o horário no meio.
+    expect(sim.comissionaveis[0].fechouEm).toBe("2026-07-05");
+  });
+
+  it("o dia do fechamento é o do fuso do escritório, não o de UTC", async () => {
+    // 01/07 às 22h em São Paulo já é 02/07 em UTC. Mostrar 02 faria o
+    // operador ler uma data diferente da que decidiu a elegibilidade.
+    selectQueue.push([
+      cobranca({ id: 1, fechouEm: new Date("2026-07-02T01:00:00.000Z") }),
+    ]);
+    const sim = await simularComissao(1, 50, "2026-08-01", "2026-08-31", undefined, GESTAO);
+    expect(sim.comissionaveis[0].fechouEm).toBe("2026-07-01");
   });
 });
 
