@@ -77,13 +77,62 @@ const REGISTRO: Record<string, TribunalPdpjConfig> = {
   tjdf: pdpjTjConfig("dft", 1, { tribunal: "tjdf" }),
 };
 
+/**
+ * 2º grau dos estados cujo 1º grau NÃO segue o padrão derivado.
+ *
+ * Sem este registro, pedir o 2º grau de um estado com endereço próprio caía no
+ * padrão genérico `pje.tjXX.jus.br/pje2grau/` — o mesmo host que já não
+ * resolvia no 1º grau e por isso ganhou override. O cron consulta o 2º grau
+ * quando detecta que o processo subiu (`cron-monitoramento`), engole a falha e
+ * segue só com o 1º: a movimentação do recurso sumia sem ninguém ver.
+ *
+ * Os endereços aqui vêm da MESMA transformação textual do host já validado no
+ * 1º grau (`/1g` → `/2g`, `pje1g.` → `pje2g.`) — continuam sendo candidatos até
+ * um login real passar, e é o registro por grau no Cofre que diz quando passou.
+ *
+ * `null` = não dá pra derivar com honestidade (o endereço do 1º grau não tem
+ * marca de grau nenhuma). Melhor devolver "não sei" do que mandar o robô num
+ * host inventado.
+ */
+const REGISTRO_G2: Record<string, TribunalPdpjConfig | null> = {
+  tjrj: pdpjTjConfig("rj", 2, {
+    urlEntrada: "https://tjrj.pje.jus.br/2g/login.seam",
+    urlBusca: "https://tjrj.pje.jus.br/2g/Processo/ConsultaProcesso/listView.seam",
+  }),
+  tjrn: pdpjTjConfig("rn", 2, {
+    urlEntrada: "https://pje2g.tjrn.jus.br/pje/login.seam",
+    urlBusca: "https://pje2g.tjrn.jus.br/pje/Processo/ConsultaProcesso/listView.seam",
+  }),
+  tjpe: pdpjTjConfig("pe", 2, {
+    urlEntrada: "https://pje.cloud.tjpe.jus.br/2g/login.seam",
+    urlBusca: "https://pje.cloud.tjpe.jus.br/2g/Processo/ConsultaProcesso/listView.seam",
+  }),
+  // `pje.tjpa.jus.br/pje/` e `pjepg.tjro.jus.br/pje/` não carregam grau no
+  // endereço, então não há transformação a fazer — fica mapeado como desconhecido.
+  tjpa: null,
+  tjro: null,
+  // O portal do DF vive em tjdft (com T), enquanto o código do CNJ é tjdf. Sem
+  // esta linha o 2º grau derivava `pje.tjdf.jus.br`, que não é o portal dele.
+  tjdf: pdpjTjConfig("dft", 2, { tribunal: "tjdf" }),
+};
+
+/** Estados cujo 2º grau ainda não tem endereço mapeado. */
+export function segundoGrauMapeado(tribunal: string): boolean {
+  if (!(tribunal in REGISTRO)) return false;
+  if (tribunal in REGISTRO_G2) return REGISTRO_G2[tribunal] != null;
+  return true;
+}
+
 /** Config de consulta de um tribunal (grau 1 por padrão). null = sem motor próprio. */
 export function getConfigTribunal(
   tribunal: string,
   grau: 1 | 2 = 1,
 ): TribunalPdpjConfig | null {
   if (!(tribunal in REGISTRO)) return null;
-  if (grau === 2) return pdpjTjConfig(tribunal.replace(/^tj/, ""), 2);
+  if (grau === 2) {
+    if (tribunal in REGISTRO_G2) return REGISTRO_G2[tribunal];
+    return pdpjTjConfig(tribunal.replace(/^tj/, ""), 2);
+  }
   return REGISTRO[tribunal];
 }
 

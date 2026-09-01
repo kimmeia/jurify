@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, double, uniqueIndex, primaryKey, json } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, double, tinyint, uniqueIndex, primaryKey, json } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -3597,6 +3597,9 @@ export const cofreCredencialTribunais = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     credencialId: int("credencialIdCT").notNull(),
     tribunal: varchar("tribunalCT", { length: 16 }).notNull(),
+    /** 1 ou 2. No PJe os dois graus são portais separados — endereço, sessão e
+     *  às vezes cadastro diferentes —, então cada um tem o seu resultado. */
+    grau: tinyint("grauCT").default(1).notNull(),
     status: mysqlEnum("statusCT", ["nao_testado", "ativa", "erro"]).default("nao_testado").notNull(),
     ultimoErro: text("ultimoErroCT"),
     ultimoSucessoEm: timestamp("ultimoSucessoEmCT"),
@@ -3605,7 +3608,7 @@ export const cofreCredencialTribunais = mysqlTable(
     updatedAt: timestamp("updatedAtCT").defaultNow().onUpdateNow().notNull(),
   },
   (t) => ({
-    porCredencial: uniqueIndex("uq_cofre_cred_tribunal").on(t.credencialId, t.tribunal),
+    porCredencial: uniqueIndex("uq_cofre_cred_tribunal").on(t.credencialId, t.tribunal, t.grau),
   }),
 );
 

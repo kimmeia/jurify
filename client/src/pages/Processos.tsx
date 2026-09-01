@@ -4023,12 +4023,23 @@ function GradeDaCredencial({ credencialId }: { credencialId: number }) {
   };
   const [testando, setTestando] = useState<string | null>(null);
 
-  const validar = (trpc.cofreCredenciais as any).validarMinha?.useMutation({
+  // A bateria roda no cliente, um login por vez, porque cada um leva dezenas de
+  // segundos: 24 combinações numa única chamada estouraria qualquer timeout, e
+  // paralelizar login da mesma conta é o caminho curto pro tribunal bloquear.
+  // `pararRef` existe porque o laço é assíncrono e não enxerga o estado novo.
+  const [lote, setLote] = useState<{ feitos: number; total: number; atual: string | null } | null>(null);
+  const pararRef = useRef(false);
+
+  const validarAsync = (trpc.cofreCredenciais as any).validarMinha?.useMutation() ?? null;
+
+  const avulso = (trpc.cofreCredenciais as any).validarMinha?.useMutation({
     onSuccess: (r: any) => {
       setTestando(null);
       q.refetch?.();
-      if (r?.ok) toast.success(`${String(r.tribunal ?? "").toUpperCase()}: login funcionou`);
-      else toast.error(`${String(r?.tribunal ?? "").toUpperCase()}: ${r?.mensagem ?? "login falhou"}`);
+      const alvo = `${String(r?.tribunal ?? "").toUpperCase()} ${r?.grau ?? 1}º grau`;
+      if (r?.semCobertura) toast.warning(`${alvo}: ${r.mensagem}`);
+      else if (r?.ok) toast.success(`${alvo}: login funcionou`);
+      else toast.error(`${alvo}: ${r?.mensagem ?? "login falhou"}`);
     },
     onError: (e: any) => {
       setTestando(null);
@@ -4036,14 +4047,58 @@ function GradeDaCredencial({ credencialId }: { credencialId: number }) {
     },
   }) ?? { mutate: () => {} };
 
+  async function rodarLote() {
+    const alvos = ((q.data?.tribunais ?? []) as any[]).filter((t) => !t.semCobertura);
+    if (alvos.length === 0 || !validarAsync) return;
+    pararRef.current = false;
+    setLote({ feitos: 0, total: alvos.length, atual: null });
+
+    let falhas = 0;
+    for (let i = 0; i < alvos.length; i++) {
+      if (pararRef.current) break;
+      const a = alvos[i];
+      const rotulo = `${String(a.tribunal).toUpperCase()} ${a.grau}º grau`;
+      setLote({ feitos: i, total: alvos.length, atual: rotulo });
+      try {
+        const r = await validarAsync.mutateAsync({
+          id: credencialId,
+          tribunal: a.tribunal,
+          grau: a.grau,
+        });
+        if (!r?.ok) falhas++;
+      } catch {
+        // Um portal fora do ar não pode parar a bateria — o resultado dele já
+        // ficou gravado como erro, e o resto da fila é o que interessa.
+        falhas++;
+      }
+      setLote({ feitos: i + 1, total: alvos.length, atual: null });
+      q.refetch?.();
+    }
+
+    setLote(null);
+    if (pararRef.current) toast.info("Teste interrompido");
+    else if (falhas === 0) toast.success("Todos os portais responderam");
+    else toast.warning(`${falhas} ${falhas === 1 ? "portal falhou" : "portais falharam"}`, {
+      description: "O motivo de cada um está escrito no card do estado.",
+    });
+  }
+
   if (!q.data) return null;
   return (
     <GradeTribunais
       tribunais={q.data.tribunais}
       testando={testando}
-      onTestar={(tribunal) => {
-        setTestando(tribunal);
-        validar.mutate({ id: credencialId, tribunal });
+      onTestar={(tribunal, grau) => {
+        setTestando(`${tribunal}:${grau}`);
+        avulso.mutate({ id: credencialId, tribunal, grau });
+      }}
+      lote={{
+        rodando: lote != null,
+        feitos: lote?.feitos ?? 0,
+        total: lote?.total ?? ((q.data.tribunais ?? []) as any[]).filter((t: any) => !t.semCobertura).length,
+        atual: lote?.atual ?? null,
+        onIniciar: () => { void rodarLote(); },
+        onParar: () => { pararRef.current = true; },
       }}
     />
   );
