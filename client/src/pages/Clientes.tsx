@@ -656,18 +656,18 @@ export default function Clientes() {
       ) : (
         <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-violet-50/20 dark:to-violet-950/20 p-6 space-y-5">
           {/* ═══════════ HERO ═══════════ */}
-          <div className="rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 p-7 text-white relative overflow-hidden shadow-lg">
-            <Users className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
+          <div className="rounded-2xl border bg-card text-card-foreground p-6 relative overflow-hidden shadow-sm">
+            <Users className="absolute -right-10 -bottom-12 w-56 h-56 text-muted-foreground opacity-[0.05]" strokeWidth={1.2} />
             <div className="relative">
               <div className="flex items-start justify-between mb-2 flex-wrap gap-3">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <PulseDot />
-                    <p className="text-xs font-medium text-white/85 uppercase tracking-wider">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Clientes
                     </p>
                   </div>
-                  <p className="text-xs text-white/70">
+                  <p className="text-xs text-muted-foreground">
                     Cadastro · histórico · documentos · financeiro
                   </p>
                 </div>
@@ -677,7 +677,7 @@ export default function Clientes() {
                     variant="ghost"
                     onClick={() => exportarDuplicatasMut.mutate()}
                     disabled={exportarDuplicatasMut.isPending}
-                    className="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 text-xs"
+                    className="text-foreground hover:bg-muted border border-border h-8 text-xs"
                   >
                     <Download className="h-3.5 w-3.5 mr-1" />
                     {exportarDuplicatasMut.isPending ? "Gerando..." : "Duplicatas (PDF)"}
@@ -685,7 +685,7 @@ export default function Clientes() {
                   <Button
                     size="sm"
                     onClick={() => setShowNovo(true)}
-                    className="bg-white dark:bg-card text-slate-900 dark:text-slate-100 hover:bg-slate-100 font-semibold shadow-sm h-8"
+                    className="font-semibold shadow-sm h-8"
                   >
                     <Plus className="h-4 w-4 mr-1" /> Novo cliente
                   </Button>
@@ -694,26 +694,26 @@ export default function Clientes() {
 
               <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
                 <div className="lg:col-span-6">
-                  <p className="text-sm font-medium text-white/85 mb-1">Clientes ativos</p>
+                  <p className="text-sm font-medium text-foreground mb-1">Clientes ativos</p>
                   <div className="flex items-baseline gap-3 flex-wrap">
                     <span className="text-5xl font-extrabold tracking-tight tabular-nums leading-none">
                       {stats?.clientesAtivos ?? "—"}
                     </span>
                     {stats?.novosHoje ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-400/25 text-emerald-50 border border-emerald-300/30">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-success-bg text-success-fg border border-success/30">
                         <Plus className="w-3 h-3" />
                         {stats.novosHoje} hoje
                       </span>
                     ) : null}
                   </div>
                   {stats && (
-                    <p className="text-xs text-white/70 mt-2 tabular-nums">
-                      de <b className="text-white">{stats.totalClientes}</b> clientes
+                    <p className="text-xs text-muted-foreground mt-2 tabular-nums">
+                      de <b className="text-foreground">{stats.totalClientes}</b> clientes
                       {stats.suspensos > 0 && (
-                        <> · <span className="text-amber-100 font-medium">{stats.suspensos} suspenso{stats.suspensos !== 1 ? "s" : ""}</span></>
+                        <> · <span className="text-warning-fg font-medium">{stats.suspensos} suspenso{stats.suspensos !== 1 ? "s" : ""}</span></>
                       )}
                       {stats.encerrados > 0 && (
-                        <> · <span className="text-rose-100 font-medium">{stats.encerrados} encerrado{stats.encerrados !== 1 ? "s" : ""}/cancelado{stats.encerrados !== 1 ? "s" : ""}</span></>
+                        <> · <span className="text-danger-fg font-medium">{stats.encerrados} encerrado{stats.encerrados !== 1 ? "s" : ""}/cancelado{stats.encerrados !== 1 ? "s" : ""}</span></>
                       )}
                     </p>
                   )}
@@ -721,23 +721,23 @@ export default function Clientes() {
 
                 {/* Mini stats à direita */}
                 <div className="lg:col-span-6">
-                  <p className="text-[10px] text-white/65 uppercase tracking-wider mb-2">Atenção</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Atenção</p>
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
-                      <p className="text-xs text-white/70 mb-1">Aguardando docs</p>
-                      <p className="text-2xl font-bold tabular-nums leading-none text-amber-200">
+                    <div className="bg-muted/40 rounded-lg px-3 py-2 border border-border">
+                      <p className="text-xs text-muted-foreground mb-1">Aguardando docs</p>
+                      <p className="text-2xl font-bold tabular-nums leading-none text-warning-fg">
                         {stats?.aguardandoDocumentacao ?? 0}
                       </p>
                     </div>
-                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
-                      <p className="text-xs text-white/70 mb-1">Com débito</p>
-                      <p className="text-2xl font-bold tabular-nums leading-none text-rose-200">
+                    <div className="bg-muted/40 rounded-lg px-3 py-2 border border-border">
+                      <p className="text-xs text-muted-foreground mb-1">Com débito</p>
+                      <p className="text-2xl font-bold tabular-nums leading-none text-danger-fg">
                         {clientesComDebito || "—"}
                       </p>
                     </div>
-                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
-                      <p className="text-xs text-white/70 mb-1">Sem telefone</p>
-                      <p className="text-2xl font-bold tabular-nums leading-none text-slate-200">
+                    <div className="bg-muted/40 rounded-lg px-3 py-2 border border-border">
+                      <p className="text-xs text-muted-foreground mb-1">Sem telefone</p>
+                      <p className="text-2xl font-bold tabular-nums leading-none text-muted-foreground">
                         {stats ? stats.total - stats.comTelefone : "—"}
                       </p>
                     </div>
@@ -3280,50 +3280,50 @@ function ClienteDetalhe({
       {/* No painel (lista ao lado) o hero vive numa coluna bem mais estreita:
           sem apertar padding, avatar e título ele come metade da altura útil
           e a tela fica desproporcional. Nada some — só encolhe. */}
-      <div className={`rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 text-white relative overflow-hidden shadow-lg ${compacto ? "p-4" : "p-7"}`}>
-        <Users className={`absolute -right-10 -bottom-12 opacity-10 ${compacto ? "w-36 h-36" : "w-56 h-56"}`} strokeWidth={1.2} />
+      <div className={`rounded-2xl border bg-card text-card-foreground relative overflow-hidden shadow-sm ${compacto ? "p-4" : "p-6"}`}>
+        <Users className={`absolute -right-10 -bottom-12 text-muted-foreground opacity-[0.05] ${compacto ? "w-36 h-36" : "w-56 h-56"}`} strokeWidth={1.2} />
         <div className="relative">
           <div className={`flex items-start flex-wrap ${compacto ? "gap-3 mb-3" : "gap-5 mb-5"}`}>
             {/* Avatar grande */}
             <div
-              className={`rounded-2xl bg-gradient-to-br ${gradientAvatar(cliente.nome || "?")} text-white flex items-center justify-center font-bold shrink-0 shadow-lg ring-4 ring-white/20 tracking-tight ${compacto ? "w-14 h-14 text-lg" : "w-20 h-20 text-2xl"}`}
+              className={`rounded-2xl bg-gradient-to-br ${gradientAvatar(cliente.nome || "?")} text-white flex items-center justify-center font-bold shrink-0 shadow-sm ring-1 ring-black/5 tracking-tight ${compacto ? "w-14 h-14 text-lg" : "w-20 h-20 text-2xl"}`}
             >
               {gerarIniciais(cliente.nome || "?")}
             </div>
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <h2 className={`font-bold tracking-tight ${compacto ? "text-lg" : "text-2xl"} ${situacaoServico === "suspenso" ? "text-amber-200" : foraDeServico ? "text-rose-200" : ""}`}>{cliente.nome}</h2>
+                <h2 className={`font-bold tracking-tight ${compacto ? "text-lg" : "text-2xl"} ${situacaoServico === "suspenso" ? "text-warning-fg" : foraDeServico ? "text-danger-fg" : ""}`}>{cliente.nome}</h2>
                 {isVip && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-400/25 text-amber-50 border border-amber-300/30">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-warning-bg text-warning-fg border border-warning/30">
                     <Star className="w-3 h-3 fill-current" /> VIP
                   </span>
                 )}
                 {cliente.documentacaoPendente && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-400/25 text-amber-50 border border-amber-300/30">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-warning-bg text-warning-fg border border-warning/30">
                     <AlertTriangle className="w-3 h-3" /> Docs pendentes
                   </span>
                 )}
                 {(cliente as any).estagio === "lead" ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/20 text-white border border-white/40">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-muted text-foreground border border-border">
                     <TrendingUp className="w-3 h-3" /> Lead
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-400/25 text-emerald-50 border border-emerald-300/40">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-success-bg text-success-fg border border-success/30">
                     <CheckCircle2 className="w-3 h-3" /> Cliente
                   </span>
                 )}
                 {foraDeServico && situacaoServico && (
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-                    situacaoServico === "suspenso" ? "bg-amber-500/30 text-amber-50 border-amber-300/40"
-                    : situacaoServico === "encerrado" ? "bg-slate-500/30 text-slate-50 border-slate-300/40"
-                    : "bg-rose-500/30 text-rose-50 border-rose-300/40"
+                    situacaoServico === "suspenso" ? "bg-warning-bg text-warning-fg border-warning/30"
+                    : situacaoServico === "encerrado" ? "bg-neutral-bg text-neutral-fg border-neutral/30"
+                    : "bg-danger-bg text-danger-fg border-danger/30"
                   }`}>
                     <Ban className="w-3 h-3" /> {SITUACAO_SERVICO_INFO[situacaoServico]?.label}
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-4 text-xs text-white/75 flex-wrap">
+              <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
                 {cliente.telefone && (
                   <span className="flex items-center gap-1.5">
                     <Phone className="w-3.5 h-3.5" />
@@ -3331,7 +3331,7 @@ function ClienteDetalhe({
                   </span>
                 )}
                 {(cliente as any).telefonesSecundarios?.length > 0 && (
-                  <span className="text-white/60">
+                  <span className="text-muted-foreground">
                     +{(cliente as any).telefonesSecundarios.length} tel
                   </span>
                 )}
@@ -3381,7 +3381,7 @@ function ClienteDetalhe({
                   onClick={() => definirEstagioMut.mutate({ contatoId: id, estagio: "lead" })}
                   disabled={definirEstagioMut.isPending}
                   title="Voltar este cadastro para Lead — não apaga nada, só muda o selo"
-                  className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                  className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
                 >
                   <RotateCcw className="w-3.5 h-3.5 mr-1" />
                   Voltar p/ Lead
@@ -3393,7 +3393,7 @@ function ClienteDetalhe({
                   onClick={() => definirEstagioMut.mutate({ contatoId: id, estagio: "cliente" })}
                   disabled={definirEstagioMut.isPending}
                   title="Marcar como Cliente sem registrar venda (use Fechar contrato para contar no comercial)"
-                  className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                  className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                   Marcar Cliente
@@ -3404,7 +3404,7 @@ function ClienteDetalhe({
                   variant="ghost"
                   size="sm"
                   onClick={() => setLocation(`/atendimento?contatoId=${id}`)}
-                  className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                  className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
                 >
                   <MessageCircle className="w-3.5 h-3.5 mr-1" />
                   Inbox
@@ -3420,7 +3420,7 @@ function ClienteDetalhe({
                 variant="ghost"
                 size="sm"
                 onClick={() => setGerarContratoOpen(true)}
-                className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
               >
                 <FileText className="w-3.5 h-3.5 mr-1" />
                 Gerar contrato
@@ -3430,7 +3430,7 @@ function ClienteDetalhe({
                 size="sm"
                 onClick={() => setFechamentoOpen(true)}
                 title="Marca conversão (fechado_ganho)"
-                className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
               >
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                 Fechamento
@@ -3443,7 +3443,7 @@ function ClienteDetalhe({
                     onClick={() => reativarServicoMut.mutate({ contatoId: id })}
                     disabled={reativarServicoMut.isPending}
                     title="Reativar o serviço deste cliente"
-                    className="text-emerald-100 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-300/30 backdrop-blur-sm shadow-sm h-8 text-xs"
+                    className="text-success-fg bg-success-bg hover:bg-success/15 border border-success/30 shadow-sm h-8 text-xs"
                   >
                     <RotateCcw className="w-3.5 h-3.5 mr-1" />
                     Reativar serviço
@@ -3454,7 +3454,7 @@ function ClienteDetalhe({
                     size="sm"
                     onClick={() => { setEncerrarTipo("cancelado"); setEncerrarMotivo(""); setEncerrarData(new Date().toISOString().slice(0, 10)); setEncerrarOpen(true); }}
                     title="Suspender, encerrar, cancelar, rescindir ou executar o serviço"
-                    className="text-rose-100 bg-rose-500/25 hover:bg-rose-500/35 border border-rose-300/30 backdrop-blur-sm shadow-sm h-8 text-xs"
+                    className="text-danger-fg bg-danger-bg hover:bg-danger/15 border border-danger/30 shadow-sm h-8 text-xs"
                   >
                     <Ban className="w-3.5 h-3.5 mr-1" />
                     Encerrar serviço
@@ -3465,7 +3465,7 @@ function ClienteDetalhe({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-violet-100 bg-white/10 hover:bg-violet-500/30 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                  className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
                   onClick={() => setMesclarOpen(true)}
                   title="Mesclar com outro cliente (caso de pagador secundário, ex: esposa)"
                 >
@@ -3871,15 +3871,15 @@ function KPIClienteHero({
 }) {
   const numColor =
     tone === "emerald"
-      ? "text-emerald-200"
+      ? "text-success-fg"
       : tone === "amber"
-        ? "text-amber-200"
+        ? "text-warning-fg"
         : tone === "rose"
-          ? "text-rose-200"
-          : "text-white";
+          ? "text-danger-fg"
+          : "text-foreground";
   return (
-    <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
-      <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">{label}</p>
+    <div className="bg-muted/40 rounded-lg px-3 py-2.5 border border-border">
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
       <p
         className={`${small ? "text-sm" : "text-xl"} font-bold tabular-nums leading-none ${numColor}`}
       >
