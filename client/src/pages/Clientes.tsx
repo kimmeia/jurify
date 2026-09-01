@@ -452,11 +452,13 @@ export default function Clientes() {
     setSelecionados(new Set());
   }, [segmento, buscaDebounced, pagina, aba]);
 
-  // Trocar de aba (Clientes ↔ Leads) volta pra página 1 — senão a paginação
-  // herdada da aba anterior pode cair fora do range da nova lista.
+  // Trocar de aba (Clientes ↔ Leads) ou de segmento volta pra página 1 —
+  // senão a paginação herdada pode cair fora do range da nova lista. O
+  // segmento entrou junto porque a coluna do painel troca de filtro sem ter
+  // os controles de paginação por perto pra corrigir à mão.
   useEffect(() => {
     setPagina(1);
-  }, [aba]);
+  }, [aba, segmento]);
 
   // A leitura de `?id=` acima só roda na MONTAGEM. Quem já está em
   // /clientes e navega pra /clientes?id=X — o que a busca ⌘K faz — não
@@ -606,8 +608,13 @@ export default function Clientes() {
       const lista = clientesFiltrados as any[];
       if (lista.length === 0) return;
       const atual = lista.findIndex((c) => c.id === selId);
-      if (atual < 0) return;
       e.preventDefault();
+      // Ficha aberta fora do filtro atual: a seta entra pela primeira da
+      // lista em vez de não fazer nada.
+      if (atual < 0) {
+        setSelId(lista[0].id);
+        return;
+      }
       const proximo = e.key === "ArrowDown"
         ? (atual + 1) % lista.length
         : (atual - 1 + lista.length) % lista.length;
@@ -2965,7 +2972,12 @@ function ListaCompactaClientes({
         <div className="flex flex-wrap gap-1.5">
           <ChipCompacto ativo={segmento === "todos"} onClick={() => onSegmento("todos")}>
             Todos
-            <span className="tabular-nums opacity-70">{total}</span>
+            {/* O `total` da query vem FILTRADO pelo segmento — usá-lo aqui
+                fazia "Todos" mostrar a contagem do filtro ativo. O número
+                do universo é o mesmo que a lista cheia usa. */}
+            <span className="tabular-nums opacity-70">
+              {(aba === "lead" ? stats?.totalLeads : stats?.totalClientes) ?? "—"}
+            </span>
           </ChipCompacto>
           {(stats?.aguardandoDocumentacao ?? 0) > 0 && (
             <ChipCompacto
@@ -3049,13 +3061,21 @@ function ListaCompactaClientes({
         )}
       </div>
 
+      {/* Trocar de filtro com uma ficha aberta pode deixar o cliente aberto
+          fora da lista. Sem dizer isso, a coluna fica sem nada marcado e o
+          ↑↓ parece quebrado. */}
+      {posicao < 0 && clientes.length > 0 && (
+        <p className="shrink-0 border-t bg-amber-50 px-3 py-1.5 text-[10px] leading-snug text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+          O cliente aberto não está neste filtro.
+        </p>
+      )}
       <div className="flex shrink-0 items-center gap-2 border-t px-3 py-2 text-[10px] text-muted-foreground">
         <kbd className="rounded border bg-muted px-1 py-px font-mono text-[9.5px]">↑</kbd>
         <kbd className="rounded border bg-muted px-1 py-px font-mono text-[9.5px]">↓</kbd>
         trocar de cliente
         <span className="ml-auto tabular-nums">
           {posicao >= 0 ? `${posicao + 1} de ${clientes.length}` : `${clientes.length} na lista`}
-          {total > clientes.length ? ` · ${total} no total` : ""}
+          {total > clientes.length ? ` · ${total} no filtro` : ""}
         </span>
       </div>
     </>
