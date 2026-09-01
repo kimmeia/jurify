@@ -368,6 +368,48 @@ pode não bater com o card "Contratos fechados" (o comentário no código afirma
 que batem — não batem). Sugestão barata: só rotular a seção, sem mexer no
 cálculo. Não autorizado ainda.
 
+### E. Comissão de gestão — ENTREGUE 01/09
+
+Gestor ganha % sobre o RECEBIDO de todos os clientes que fecharam a partir
+de uma data de corte, não importa quem vendeu; base é o pagamento, não o
+valor fechado (fechou 2.000 em 2x e pagou 1.000 → comissiona 1.000).
+
+O motor era mono-beneficiário: `simularComissao` descarta cobrança já
+incluída em fechamento comissionável do escritório, então rodar o gestor
+sobre o mesmo pool daria ZERO (o vendedor já consumiu). Daí
+`comissoes_fechadas.tipo` ('venda'|'gestao', migration 0211): cada trilha
+tem o seu anti-duplicidade e as duas incidem sobre a MESMA cobrança. O
+NOT EXISTS da venda ganhou `tipo='venda'` (no-op sobre o acervo, que é
+todo de venda); o da gestão é escopado também pelo GESTOR — dois gestores
+comissionam a mesma cobrança, o mesmo gestor não repete.
+
+Na gestão a cobrança já comissionada NÃO some da consulta: entra em "ficam
+de fora" com o motivo, ao lado de `fechou_antes_do_corte`. Sai do cálculo
+sem sair da tela — é assim que o dono confere que a parcela não pagou
+duas vezes. Bruto recebido segue somando tudo do período (o card não muda
+de significado entre trilhas). Percentual + corte por gestor em
+`comissao_gestao` (nova; `regra_comissao` é singleton por escritório);
+corte aplicado congela em `dataCorteUsada`. UNIQUE de dedup passou a
+incluir `tipo` — gestor que também vende tem os dois fechamentos no mesmo
+período. Elegibilidade compara `leads.fechadoEm >= corte` com o cliente
+real (COALESCE beneficiário/pagador). Amarras em `comissao-gestao.test.ts`,
+conferidas por mutação (8 quebras → 8 vermelhos).
+
+Premissas assumidas, escritas no mockup e ainda não confirmadas por ele:
+gestor ganha sobre TODOS os fechamentos do escritório (não por equipe — não
+existe hierarquia no banco); categorias não comissionáveis também ficam
+fora; base é o valor cheio da cobrança (sem descontar taxa do Asaas), igual
+à comissão de venda. Faixas progressivas do escritório NÃO valem na gestão
+(sempre flat); valor mínimo e dia de vencimento da despesa continuam os do
+escritório. O cron automático segue fechando SÓ a trilha de venda.
+
+Achados registrados e NÃO corrigidos (fora do pedido): `simular` e
+`diagnosticar` aceitam `atendenteId` de outro escritório (só enumeração —
+as cobranças continuam filtradas por escritorioId; `exportarPdf` valida);
+e o "Funil de Vendas" do Relatório Comercial conta por `leads.createdAt`,
+então a barra "Ganho" pode não bater com o card "Contratos fechados" da
+mesma tela (o comentário no código afirma que batem — não batem).
+
 ## Pendências ativas (19/08/2026)
 
 Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
