@@ -12,6 +12,7 @@
  */
 import { Button } from "@/components/ui/button";
 import { Loader2, Play, RefreshCcw, Square } from "lucide-react";
+import { resumirErroCofre } from "@shared/cofre-erros";
 
 export interface TribunalDaCredencial {
   tribunal: string;
@@ -162,11 +163,31 @@ export default function GradeTribunais({ tribunais, testando, onTestar, lote }: 
                 );
               })}
 
-              {erro?.ultimoErro && (
-                <p className="mt-1.5 text-[9.5px] leading-snug text-rose-700 dark:text-rose-400 bg-rose-50/70 dark:bg-rose-950/20 border border-dashed border-rose-200 dark:border-rose-900/50 rounded px-1.5 py-1">
-                  {erro.ultimoErro}
-                </p>
-              )}
+              {erro?.ultimoErro && (() => {
+                const r = resumirErroCofre(erro.ultimoErro);
+                if (!r) return null;
+                return (
+                  <div className="mt-1.5 text-[10px] leading-snug text-rose-700 dark:text-rose-400 bg-rose-50/70 dark:bg-rose-950/20 border border-dashed border-rose-200 dark:border-rose-900/50 rounded px-2 py-1.5">
+                    <p className="font-medium">{r.resumo}</p>
+                    {r.acao && (
+                      <p className="text-[9.5px] text-rose-600/80 dark:text-rose-400/70 mt-0.5">
+                        {r.acao}
+                      </p>
+                    )}
+                    {/* O texto cru continua acessível: é ele que diz o realm, os
+                        campos achados na página e a URL exata — o que resolve o
+                        caso quando o resumo não basta. */}
+                    <details className="mt-1">
+                      <summary className="cursor-pointer text-[9.5px] text-muted-foreground select-none">
+                        detalhe técnico
+                      </summary>
+                      <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all text-[9px] leading-snug text-muted-foreground">
+                        {erro.ultimoErro}
+                      </pre>
+                    </details>
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
