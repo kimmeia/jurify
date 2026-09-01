@@ -330,6 +330,44 @@ cargo dela é verProprios e o lead não é dela. Fix: separar carregando de
 vazio (vale pra tela toda). Decisão do dono em aberto: quem ATENDE a conversa
 deveria poder abrir a ficha do contato? (mudar isso mexe na regra de acesso).
 
+### D. Card "Recebido" do Relatório Comercial — PARADO na decisão do dono (01/09)
+
+Ele puxou 01–15/08 (54.100) + 16–31/08 (29.150) e o mês inteiro deu 102.750.
+Causa confirmada: `comercialDashboard` exige que as DUAS datas caiam na janela
+— pagamento em `asaasCobrancas.dataPagamento` E cliente com lead
+`fechado_ganho` na mesma janela (subquery `contatosFechadosAtual`, usada em 4
+queries: KPI topo, período anterior, ranking por atendente, série diária; e de
+novo em `detalheAtendenteComercial`). Cliente que fecha 01/08 e paga 20/08 dá
+0 na 1ª quinzena (pagamento fora), 0 na 2ª (fechamento fora) e o valor cheio no
+mês — os 19.500 que sumiram. O PDF sai certo sozinho: `exportarComercialPdf`
+chama as duas procedures por caller.
+
+**Impossível ter as duas coisas**: "só clientes do período" e "as quinzenas
+somam o mês" se excluem por aritmética. Âncora possível:
+- **pagamento** → soma, mas cliente de abril que pagou em agosto entra em agosto
+  (ele recusou: "fechou em agosto e pagou em setembro não conta em setembro");
+- **fechamento** (safra) → soma E só clientes do período; o pagamento conta no
+  mês do contrato. Custo: o número de um mês fechado continua subindo depois, e
+  contraria o exemplo que ele mesmo deu antes (queria o recebimento na quinzena
+  em que caiu). Desempate necessário: cobrança é ligada ao CLIENTE, não ao lead
+  — cliente com duas ações, uma em cada quinzena, não tem como saber de qual
+  contrato veio o pagamento;
+- **deixar como está** → nunca soma; só cabe uma nota na tela.
+
+Dono viu as três e não escolheu ("anote isso"). NÃO implementar antes da
+escolha. `mockup-relatorio-recebido.html` está na âncora de PAGAMENTO — refazer
+na regra escolhida antes de codar.
+
+Verificado de passagem e sem mexer: o lado "Fechado" já conta por
+`leads.fechadoEm` (aditivo, e data retroativa do lançamento grava nele);
+bordas de dia batem exatas (`fimDoDiaNoFuso` = 23:59:59.999); robô LEA-01 já
+acusa lead fechado sem `fechadoEm`. Comissão NÃO aparece nessa tela (grep em
+`Relatorios.tsx` = zero) e é do Financeiro — não tocar. Achado solto: o "Funil
+de Vendas" da mesma tela conta por `leads.createdAt`, então a barra "Ganho"
+pode não bater com o card "Contratos fechados" (o comentário no código afirma
+que batem — não batem). Sugestão barata: só rotular a seção, sem mexer no
+cálculo. Não autorizado ainda.
+
 ## Pendências ativas (19/08/2026)
 
 Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
