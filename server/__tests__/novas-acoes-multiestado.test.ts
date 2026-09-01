@@ -154,12 +154,26 @@ describe("router e telas", () => {
   });
 
   it("a grade da tela e a lista do servidor são a MESMA lista", () => {
-    // Divergirem = estado selecionável que o robô não varre.
-    expect(CODIGOS_TRIBUNAIS_PJE.length).toBe(12);
+    // Divergirem = estado selecionável que o robô não varre. A regra é essa,
+    // não o tamanho: a lista cresce (a Justiça Federal entrou em 01/09) e
+    // travar a contagem só obrigava a mexer no teste sem conferir nada.
     const pdpj = ler("server/processos/tribunais-pdpj.ts");
     for (const codigo of CODIGOS_TRIBUNAIS_PJE) {
       const chave = codigo === "tjdf" ? "tjdf:" : `${codigo}:`;
       expect(pdpj, `${codigo} precisa existir no REGISTRO do motor`).toContain(chave);
+    }
+    // Encolher a cobertura é remoção, e remoção passa por decisão explícita.
+    expect(CODIGOS_TRIBUNAIS_PJE.length).toBeGreaterThanOrEqual(16);
+  });
+
+  it("o que a tela oferece por CPF é o que o motor sabe varrer por CPF", () => {
+    // TRF5 roda por consulta pública e TRF4 usa eproc — os dois têm motor
+    // (ou terão), mas não pela via que a busca por CPF usa. Oferecer no
+    // seletor viraria opção que devolve "sem adapter de CPF" toda varredura.
+    expect(CODIGOS_TRIBUNAIS_PJE).not.toContain("trf5");
+    expect(CODIGOS_TRIBUNAIS_PJE).not.toContain("trf4");
+    for (const federal of ["trf1", "trf2", "trf3", "trf6"]) {
+      expect(CODIGOS_TRIBUNAIS_PJE).toContain(federal);
     }
   });
 });

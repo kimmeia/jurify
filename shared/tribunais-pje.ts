@@ -20,6 +20,14 @@ export const TRIBUNAIS_PJE = [
   { codigo: "tjpb", uf: "PB", sigla: "TJPB" },
   { codigo: "tjmt", uf: "MT", sigla: "TJMT" },
   { codigo: "tjrr", uf: "RR", sigla: "TJRR" },
+  // Justiça Federal. Só entram os TRFs que o motor sabe varrer por CPF —
+  // duas listas divergindo é justamente o que faz aparecer opção que o robô
+  // não visita. TRF5 fica de fora porque roda por consulta pública (é vigiado
+  // por número de processo, não por CPF), e TRF4 usa eproc, sem adapter.
+  { codigo: "trf1", uf: "TRF1", sigla: "Federal 1ª" },
+  { codigo: "trf2", uf: "TRF2", sigla: "Federal 2ª" },
+  { codigo: "trf3", uf: "TRF3", sigla: "Federal 3ª" },
+  { codigo: "trf6", uf: "TRF6", sigla: "Federal 6ª" },
 ] as const;
 
 export type CodigoTribunalPje = (typeof TRIBUNAIS_PJE)[number]["codigo"];
