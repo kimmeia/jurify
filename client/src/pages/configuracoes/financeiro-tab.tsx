@@ -203,17 +203,39 @@ function LinhaGestor({
     aliquotaPercent: number;
     dataCorte: string;
     ativo: boolean;
+    modo: Modo;
+    baseFaixa: BaseFaixa;
+    valorMinimo: number;
+    faixas: Array<{ limiteAte: number | null; aliquotaPercent: number }>;
   };
   canEdit: boolean;
 }) {
   const utils = trpc.useUtils();
   const [aliquota, setAliquota] = useState(String(gestor.aliquotaPercent));
   const [corte, setCorte] = useState(gestor.dataCorte);
+  const [modo, setModo] = useState<Modo>(gestor.modo);
+  const [baseFaixa, setBaseFaixa] = useState<BaseFaixa>(gestor.baseFaixa);
+  const [valorMinimo, setValorMinimo] = useState(String(gestor.valorMinimo));
+  const [faixas, setFaixas] = useState<FaixaUI[]>(
+    gestor.faixas.map((f) => ({
+      limiteAteText: f.limiteAte === null ? "" : String(f.limiteAte),
+      aliquotaText: String(f.aliquotaPercent),
+    })),
+  );
 
   useEffect(() => {
     setAliquota(String(gestor.aliquotaPercent));
     setCorte(gestor.dataCorte);
-  }, [gestor.aliquotaPercent, gestor.dataCorte]);
+    setModo(gestor.modo);
+    setBaseFaixa(gestor.baseFaixa);
+    setValorMinimo(String(gestor.valorMinimo));
+    setFaixas(
+      gestor.faixas.map((f) => ({
+        limiteAteText: f.limiteAte === null ? "" : String(f.limiteAte),
+        aliquotaText: String(f.aliquotaPercent),
+      })),
+    );
+  }, [gestor]);
 
   const salvar = trpc.comissoes.salvarGestao.useMutation({
     onSuccess: () => {
@@ -233,60 +255,201 @@ function LinhaGestor({
       toast.error("Data de corte inválida");
       return;
     }
+    const minimo = parseFloat(valorMinimo.replace(",", ".")) || 0;
+    if (minimo < 0) {
+      toast.error("Valor mínimo inválido");
+      return;
+    }
+
+    const faixasParsed: Array<{ limiteAte: number | null; aliquotaPercent: number }> = [];
+    if (modo === "faixas") {
+      if (faixas.length === 0) {
+        toast.error("Adicione pelo menos uma faixa", {
+          description: "Modo por faixas exige cadastrar a tabela.",
+        });
+        return;
+      }
+      for (let i = 0; i < faixas.length; i++) {
+        const f = faixas[i];
+        const pct = parseFloat(f.aliquotaText.replace(",", "."));
+        if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+          toast.error(`Faixa ${i + 1}: percentual inválido`);
+          return;
+        }
+        const semTeto = f.limiteAteText.trim() === "";
+        if (semTeto && i !== faixas.length - 1) {
+          toast.error(`Faixa ${i + 1}: só a última pode ficar sem teto`);
+          return;
+        }
+        const limite = semTeto ? null : parseFloat(f.limiteAteText.replace(",", "."));
+        if (limite !== null && (!Number.isFinite(limite) || limite < 0)) {
+          toast.error(`Faixa ${i + 1}: teto inválido`);
+          return;
+        }
+        faixasParsed.push({ limiteAte: limite, aliquotaPercent: pct });
+      }
+    }
+
     salvar.mutate({
       colaboradorId: gestor.colaboradorId,
       aliquotaPercent: aliq,
       dataCorte: corte,
       ativo,
+      modo,
+      baseFaixa,
+      valorMinimo: minimo,
+      faixas: faixasParsed,
     });
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end rounded-md border p-3">
-      <div className="sm:col-span-2">
-        <p className="text-sm font-medium">{gestor.nome ?? "—"}</p>
-        <p className="text-[11px] text-muted-foreground">{gestor.cargo}</p>
+    <div className="rounded-md border p-3 space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end">
+        <div className="sm:col-span-2">
+          <p className="text-sm font-medium">{gestor.nome ?? "—"}</p>
+          <p className="text-[11px] text-muted-foreground">{gestor.cargo}</p>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[11px]">Cálculo</Label>
+          <Select value={modo} onValueChange={(v) => setModo(v as Modo)} disabled={!canEdit}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="flat">Percentual fixo</SelectItem>
+              <SelectItem value="faixas">Faixas progressivas</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[11px]">Vale a partir de</Label>
+          <Input
+            type="date"
+            value={corte}
+            onChange={(e) => setCorte(e.target.value)}
+            disabled={!canEdit}
+            className="h-8 text-xs"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={gestor.ativo}
+            onCheckedChange={(v) => aplicar(v)}
+            disabled={!canEdit || salvar.isPending}
+          />
+          <span className="text-[11px] text-muted-foreground">
+            {gestor.ativo ? "Ativo" : "Desligado"}
+          </span>
+          {canEdit && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto h-8"
+              onClick={() => aplicar(gestor.ativo)}
+              disabled={salvar.isPending}
+            >
+              <Save className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
-      <div className="space-y-1">
-        <Label className="text-[11px]">Percentual (%)</Label>
-        <Input
-          value={aliquota}
-          onChange={(e) => setAliquota(e.target.value)}
-          disabled={!canEdit}
-          className="h-8 text-xs"
-        />
-      </div>
-      <div className="space-y-1">
-        <Label className="text-[11px]">Vale a partir de</Label>
-        <Input
-          type="date"
-          value={corte}
-          onChange={(e) => setCorte(e.target.value)}
-          disabled={!canEdit}
-          className="h-8 text-xs"
-        />
-      </div>
-      <div className="flex items-center gap-2">
-        <Switch
-          checked={gestor.ativo}
-          onCheckedChange={(v) => aplicar(v)}
-          disabled={!canEdit || salvar.isPending}
-        />
-        <span className="text-[11px] text-muted-foreground">
-          {gestor.ativo ? "Ativo" : "Desligado"}
-        </span>
-        {canEdit && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="ml-auto h-8"
-            onClick={() => aplicar(gestor.ativo)}
-            disabled={salvar.isPending}
-          >
-            <Save className="h-3.5 w-3.5" />
-          </Button>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {modo === "flat" ? (
+          <div className="space-y-1">
+            <Label className="text-[11px]">Percentual (%)</Label>
+            <Input
+              value={aliquota}
+              onChange={(e) => setAliquota(e.target.value)}
+              disabled={!canEdit}
+              className="h-8 text-xs"
+            />
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <Label className="text-[11px]">A faixa é escolhida pelo…</Label>
+            <Select
+              value={baseFaixa}
+              onValueChange={(v) => setBaseFaixa(v as BaseFaixa)}
+              disabled={!canEdit}
+            >
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="comissionavel">Recebido comissionável</SelectItem>
+                <SelectItem value="bruto">Recebido bruto</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         )}
+        <div className="space-y-1">
+          <Label className="text-[11px]">Valor mínimo da cobrança (R$)</Label>
+          <Input
+            value={valorMinimo}
+            onChange={(e) => setValorMinimo(e.target.value)}
+            disabled={!canEdit}
+            className="h-8 text-xs"
+            placeholder="0,00"
+          />
+        </div>
       </div>
+
+      {modo === "faixas" && (
+        <div className="space-y-2 rounded-md bg-muted/40 p-2.5">
+          <p className="text-[11px] text-muted-foreground">
+            A faixa cujo teto cobre o total recebido define a alíquota aplicada sobre{" "}
+            <strong>toda</strong> a base — é cumulativo, igual ao da comissão de venda.
+            Deixe o teto da última em branco para "sem teto".
+          </p>
+          {faixas.map((f, i) => (
+            <div key={i} className="flex items-end gap-2">
+              <div className="flex-1 space-y-1">
+                <Label className="text-[10px]">Até (R$)</Label>
+                <Input
+                  value={f.limiteAteText}
+                  onChange={(e) =>
+                    setFaixas(faixas.map((x, j) =>
+                      j === i ? { ...x, limiteAteText: e.target.value } : x))
+                  }
+                  disabled={!canEdit}
+                  className="h-8 text-xs"
+                  placeholder={i === faixas.length - 1 ? "sem teto" : "10000"}
+                />
+              </div>
+              <div className="w-24 space-y-1">
+                <Label className="text-[10px]">Alíquota (%)</Label>
+                <Input
+                  value={f.aliquotaText}
+                  onChange={(e) =>
+                    setFaixas(faixas.map((x, j) =>
+                      j === i ? { ...x, aliquotaText: e.target.value } : x))
+                  }
+                  disabled={!canEdit}
+                  className="h-8 text-xs"
+                />
+              </div>
+              {canEdit && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2"
+                  onClick={() => setFaixas(faixas.filter((_, j) => j !== i))}
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              )}
+            </div>
+          ))}
+          {canEdit && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={() => setFaixas([...faixas, { limiteAteText: "", aliquotaText: "" }])}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              Adicionar faixa
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

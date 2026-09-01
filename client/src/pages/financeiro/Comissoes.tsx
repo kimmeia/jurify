@@ -319,10 +319,18 @@ export function CalcularSection() {
           {tipo === "gestao" && gestorSelecionado && (
             <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
               <strong>{gestorSelecionado.nome ?? "—"}</strong> ganha{" "}
-              <strong>{gestorSelecionado.aliquotaPercent.toFixed(2).replace(".", ",")}%</strong>{" "}
+              <strong>
+                {gestorSelecionado.modo === "faixas"
+                  ? "por faixas progressivas"
+                  : `${gestorSelecionado.aliquotaPercent.toFixed(2).replace(".", ",")}%`}
+              </strong>{" "}
               sobre o recebido de <strong>todos</strong> os clientes que fecharam a partir de{" "}
               <strong>{formatData(gestorSelecionado.dataCorte)}</strong>. Quem fechou antes fica
               de fora, mesmo pagando agora.
+              {gestorSelecionado.valorMinimo > 0 && (
+                <> Cobrança abaixo de{" "}
+                  <strong>{formatBRL(gestorSelecionado.valorMinimo)}</strong> não conta.</>
+              )}
             </div>
           )}
 
@@ -395,11 +403,10 @@ export function CalcularSection() {
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>
               {tipo === "gestao" ? "Regra de gestão: " : "Regra atual: "}
-              {tipo === "gestao"
-                ? `alíquota ${aliquotaAplicada}% · corte ${formatData(sim.data.dataCorte)}`
-                : modo === "faixas"
-                  ? `faixas progressivas (cumulativo)`
-                  : `alíquota fixa ${aliquotaAplicada}%`}
+              {modo === "faixas"
+                ? `faixas progressivas (cumulativo)`
+                : `alíquota fixa ${aliquotaAplicada}%`}
+              {tipo === "gestao" && ` · corte ${formatData(sim.data.dataCorte)}`}
               {" · "}valor mínimo {formatBRL(valorMinimo)}
             </span>
             {perms.podeCriar && (

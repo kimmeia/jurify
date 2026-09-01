@@ -225,6 +225,114 @@ describe("simularComissao — trilha de gestão", () => {
     // Com a faixa do escritório (99% acima de 1000) daria 4950.
     expect(sim.totais.valorComissao).toBe(100);
   });
+});
+
+describe("gestão gradativa — faixas e mínimo do gestor", () => {
+  const COM_FAIXAS = {
+    ...GESTAO,
+    modo: "faixas" as const,
+    baseFaixa: "comissionavel" as const,
+    faixas: [
+      { limiteAte: 10000, aliquotaPercent: 1 },
+      { limiteAte: 20000, aliquotaPercent: 2 },
+      { limiteAte: null, aliquotaPercent: 3 },
+    ],
+  };
+
+  it("a faixa atingida vale sobre TODA a base (cumulativo, como na venda)", async () => {
+    selectQueue.push([cobranca({ id: 1, valor: "15000.00" })]);
+    const sim = await simularComissao(1, 50, "2026-08-01", "2026-08-31", undefined, COM_FAIXAS);
+
+    expect(sim.regra.modo).toBe("faixas");
+    expect(sim.aliquotaAplicada).toBe(2);
+    expect(sim.faixaAplicada?.limiteAte).toBe(20000);
+    expect(sim.totais.valorComissao).toBe(300);
+  });
+
+  it("estourar todos os tetos cai na faixa sem teto", async () => {
+    selectQueue.push([cobranca({ id: 1, valor: "50000.00" })]);
+    const sim = await simularComissao(1, 50, "2026-08-01", "2026-08-31", undefined, COM_FAIXAS);
+    expect(sim.aliquotaAplicada).toBe(3);
+    expect(sim.totais.valorComissao).toBe(1500);
+  });
+
+  it("o que ficou de fora por corte NÃO empurra a faixa pra cima", async () => {
+    // Base comissionável = 5.000 → 1ª faixa. Se o descartado entrasse na
+    // classificação, o gestor pularia pra 2% e receberia a mais.
+    selectQueue.push([
+      cobranca({ id: 1, valor: "5000.00" }),
+      cobranca({ id: 2, valor: "9000.00", dentroDoCorte: 0 }),
+    ]);
+    const sim = await simularComissao(1, 50, "2026-08-01", "2026-08-31", undefined, COM_FAIXAS);
+    expect(sim.aliquotaAplicada).toBe(1);
+    expect(sim.totais.valorComissao).toBe(50);
+  });
+
+  it("a base da faixa respeita a escolha do gestor (comissionável × bruto)", async () => {
+    // Elegíveis: R$ 5.000 comissionáveis + R$ 8.000 de custas (não
+    // comissionável). Pela base "comissionável" a classificação usa 5.000 e
+    // cai na 1ª faixa; pela base "bruto" usa 13.000 e sobe pra 2ª — em
+    // ambos os casos a comissão incide só sobre os 5.000.
+    const linhas = [
+      cobranca({ id: 1, valor: "5000.00" }),
+      cobranca({
+        id: 2,
+        valor: "8000.00",
+        categoriaNome: "Custas processuais",
+        categoriaComissionavel: false,
+      }),
+    ];
+
+    selectQueue.push(linhas);
+    const porComissionavel = await simularComissao(
+      1, 50, "2026-08-01", "2026-08-31", undefined, COM_FAIXAS,
+    );
+    expect(porComissionavel.aliquotaAplicada).toBe(1);
+    expect(porComissionavel.totais.valorComissao).toBe(50);
+
+    selectQueue.push(linhas);
+    const porBruto = await simularComissao(
+      1, 50, "2026-08-01", "2026-08-31", undefined,
+      { ...COM_FAIXAS, baseFaixa: "bruto" as const },
+    );
+    expect(porBruto.aliquotaAplicada).toBe(2);
+    expect(porBruto.totais.valorComissao).toBe(100);
+  });
+
+  it("cobrança abaixo do mínimo do gestor não conta", async () => {
+    selectQueue.push([
+      cobranca({ id: 1, valor: "1000.00" }),
+      cobranca({ id: 2, valor: "80.00" }),
+    ]);
+    const sim = await simularComissao(1, 50, "2026-08-01", "2026-08-31", undefined, {
+      ...GESTAO,
+      valorMinimo: 100,
+    });
+
+    expect(sim.comissionaveis.map((c) => c.id)).toEqual([1]);
+    expect(motivoDe(sim, 2)).toBe("abaixo_minimo");
+    expect(sim.regra.valorMinimo).toBe(100);
+    expect(sim.totais.valorComissao).toBe(20);
+  });
+
+  it("o mínimo é o do gestor, não o do escritório", async () => {
+    // O escritório está com mínimo 0 no mock; um gestor com 2.000 tem que
+    // cortar uma cobrança de 1.000 mesmo assim.
+    selectQueue.push([cobranca({ id: 1, valor: "1000.00" })]);
+    const sim = await simularComissao(1, 50, "2026-08-01", "2026-08-31", undefined, {
+      ...GESTAO,
+      valorMinimo: 2000,
+    });
+    expect(sim.comissionaveis).toHaveLength(0);
+    expect(motivoDe(sim, 1)).toBe("abaixo_minimo");
+  });
+
+  it("sem faixas cadastradas, gestão continua flat", async () => {
+    selectQueue.push([cobranca({ id: 1, valor: "5000.00" })]);
+    const sim = await simularComissao(1, 50, "2026-08-01", "2026-08-31", undefined, GESTAO);
+    expect(sim.regra.modo).toBe("flat");
+    expect(sim.regra.valorMinimo).toBe(0);
+  });
 
   it("expõe fechamento e parcela pra conferência na tela", async () => {
     selectQueue.push([cobranca({ id: 1, parcelaAtual: 1, parcelaTotal: 2 })]);
@@ -408,5 +516,52 @@ describe("migration 0211", () => {
     expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS comissao_gestao/);
     expect(sql).toMatch(/UNIQUE KEY comissao_gestao_escr_colab_uq \(escritorioIdComGest, colaboradorIdComGest\)/);
     expect(sql).toMatch(/dataCorteComGest VARCHAR\(10\) NOT NULL/);
+  });
+});
+
+describe("migration 0212", () => {
+  const sql = fs.readFileSync(
+    path.resolve(__dirname, "../../drizzle/0212_comissao_gestao_faixas.sql"),
+    "utf-8",
+  );
+
+  it("os defaults reproduzem o que já está no ar", () => {
+    expect(sql).toMatch(/modoComGest ENUM\('flat', 'faixas'\) NOT NULL DEFAULT 'flat'/);
+    expect(sql).toMatch(/baseFaixaComGest ENUM\('bruto', 'comissionavel'\) NOT NULL DEFAULT 'comissionavel'/);
+    expect(sql).toMatch(/valorMinimoComGest DECIMAL\(12, 2\) NOT NULL DEFAULT '0'/);
+  });
+
+  it("as faixas penduram no gestor, não no escritório", () => {
+    expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS comissao_gestao_faixas/);
+    expect(sql).toMatch(/comissaoGestaoIdFaixa INT NOT NULL/);
+    // NULL = sem teto: a coluna não pode ser NOT NULL.
+    expect(sql).toMatch(/limiteAteFaixaGest DECIMAL\(14, 2\),/);
+  });
+});
+
+describe("gravação da config de gestão", () => {
+  const fonte = fs.readFileSync(
+    path.resolve(__dirname, "../escritorio/db-comissoes.ts"),
+    "utf-8",
+  );
+  const router = fs.readFileSync(
+    path.resolve(__dirname, "../escritorio/router-comissoes.ts"),
+    "utf-8",
+  );
+
+  it("troca de faixas acontece dentro de transação", () => {
+    const bloco = fonte.slice(fonte.indexOf("export async function salvarComissaoGestao"));
+    // DELETE seguido de INSERT fora de transação deixa o gestor em
+    // modo='faixas' com zero faixas — o cálculo cai no flat em silêncio.
+    expect(bloco).toMatch(/db\.transaction\(async \(tx\) => \{/);
+    const corpo = bloco.slice(bloco.indexOf("db.transaction"));
+    expect(corpo.indexOf("tx\n      .delete(comissaoGestaoFaixas)")).toBeGreaterThan(0);
+    expect(corpo).toMatch(/tx\.insert\(comissaoGestaoFaixas\)/);
+  });
+
+  it("o servidor recusa modo por faixas com tabela vazia", () => {
+    expect(router).toMatch(
+      /input\.modo === "faixas" && input\.faixas\.length === 0[\s\S]{0,220}BAD_REQUEST/,
+    );
   });
 });

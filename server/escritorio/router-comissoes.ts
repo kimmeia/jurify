@@ -98,6 +98,10 @@ async function resolverGestao(
     dataCorteEm: inicioDoDiaNoFuso(cfg.dataCorte, fuso),
     fusoHorario: fuso,
     aliquotaPercent: cfg.aliquotaPercent,
+    modo: cfg.modo,
+    baseFaixa: cfg.baseFaixa,
+    valorMinimo: cfg.valorMinimo,
+    faixas: cfg.faixas,
   };
 }
 
@@ -320,6 +324,19 @@ export const comissoesRouter = router({
         aliquotaPercent: z.number().min(0).max(100),
         dataCorte: dataInput,
         ativo: z.boolean().default(true),
+        modo: z.enum(["flat", "faixas"]).default("flat"),
+        baseFaixa: z.enum(["bruto", "comissionavel"]).default("comissionavel"),
+        valorMinimo: z.number().min(0).default(0),
+        faixas: z
+          .array(
+            z.object({
+              // NULL = sem teto. Só faz sentido na última, e é o que o
+              // `selecionarFaixa` usa como faixa de estouro.
+              limiteAte: z.number().min(0).nullable(),
+              aliquotaPercent: z.number().min(0).max(100),
+            }),
+          )
+          .default([]),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -343,6 +360,15 @@ export const comissoesRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Colaborador não encontrado." });
       }
 
+      // Salvar "faixas" sem tabela deixaria o cálculo cair no flat com a
+      // alíquota que estiver gravada — comissão errada sem aviso.
+      if (input.modo === "faixas" && input.faixas.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Modo por faixas exige cadastrar pelo menos uma faixa.",
+        });
+      }
+
       await salvarComissaoGestao({
         escritorioId: esc.escritorio.id,
         colaboradorId: input.colaboradorId,
@@ -350,6 +376,10 @@ export const comissoesRouter = router({
         dataCorte: input.dataCorte,
         ativo: input.ativo,
         criadoPorUserId: ctx.user.id,
+        modo: input.modo,
+        baseFaixa: input.baseFaixa,
+        valorMinimo: input.valorMinimo,
+        faixas: input.faixas,
       });
       return { success: true };
     }),

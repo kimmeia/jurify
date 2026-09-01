@@ -3180,7 +3180,20 @@ export const comissaoGestao = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     escritorioId: int("escritorioIdComGest").notNull(),
     colaboradorId: int("colaboradorIdComGest").notNull(),
+    /** Alíquota do modo "flat". No modo "faixas" quem manda é a tabela. */
     aliquotaPercent: decimal("aliquotaPercentComGest", { precision: 5, scale: 2 })
+      .default("0")
+      .notNull(),
+    /** Mesma semântica da regra de venda: "flat" usa `aliquotaPercent`;
+     *  "faixas" usa `comissao_gestao_faixas` como tabela cumulativa. */
+    modo: mysqlEnum("modoComGest", ["flat", "faixas"]).default("flat").notNull(),
+    /** O que classifica a faixa: o recebido bruto ou só o comissionável. */
+    baseFaixa: mysqlEnum("baseFaixaComGest", ["bruto", "comissionavel"])
+      .default("comissionavel")
+      .notNull(),
+    /** Cobrança abaixo disso não conta, nos dois modos. Por gestor: a regra
+     *  do escritório é a da venda e pode ter um piso diferente. */
+    valorMinimo: decimal("valorMinimoComGest", { precision: 12, scale: 2 })
       .default("0")
       .notNull(),
     /** YYYY-MM-DD. Compara com `leads.fechadoEm` do cliente da cobrança. */
@@ -3201,6 +3214,33 @@ export const comissaoGestao = mysqlTable(
 
 export type ComissaoGestao = typeof comissaoGestao.$inferSelect;
 export type InsertComissaoGestao = typeof comissaoGestao.$inferInsert;
+
+/**
+ * Faixas progressivas da comissão de gestão (um gestor → N faixas).
+ *
+ * Mesma convenção da tabela de faixas da venda: lidas em ordem crescente de
+ * `ordem`, a faixa encaixa o total da base quando este é ≤ `limiteAte`, e a
+ * última pode ter `limiteAte = NULL` para representar "sem teto".
+ */
+export const comissaoGestaoFaixas = mysqlTable(
+  "comissao_gestao_faixas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    comissaoGestaoId: int("comissaoGestaoIdFaixa").notNull(),
+    ordem: int("ordemFaixaGest").notNull(),
+    /** Cota superior da faixa (inclusiva). NULL = sem teto (última faixa). */
+    limiteAte: decimal("limiteAteFaixaGest", { precision: 14, scale: 2 }),
+    aliquotaPercent: decimal("aliquotaPercentFaixaGest", { precision: 5, scale: 2 })
+      .notNull(),
+    createdAt: timestamp("createdAtFaixaGest").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxGestaoOrdem: index("comissao_gestao_faixa_idx").on(t.comissaoGestaoId, t.ordem),
+  }),
+);
+
+export type ComissaoGestaoFaixa = typeof comissaoGestaoFaixas.$inferSelect;
+export type InsertComissaoGestaoFaixa = typeof comissaoGestaoFaixas.$inferInsert;
 
 /**
  * Itens (cobranças) que entraram no snapshot de comissão fechada.

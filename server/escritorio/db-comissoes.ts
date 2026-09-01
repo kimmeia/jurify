@@ -15,6 +15,7 @@ import {
   categoriasDespesa,
   colaboradores,
   comissaoGestao,
+  comissaoGestaoFaixas,
   comissoesFechadas,
   comissoesFechadasItens,
   comissoesLancamentosLog,
@@ -163,6 +164,13 @@ export interface OpcoesGestao {
    *  tela e o operador leria uma data diferente da que a regra usou. */
   fusoHorario: string;
   aliquotaPercent: number;
+  /** Faixas progressivas do gestor, como as da venda. Ausente = flat. */
+  modo?: "flat" | "faixas";
+  baseFaixa?: "bruto" | "comissionavel";
+  faixas?: FaixaComissao[];
+  /** Piso por cobrança da trilha de gestão. Substitui o do escritório, que
+   *  é a regra da venda e pode ter um valor diferente negociado. */
+  valorMinimo?: number;
 }
 
 /** Simula comissão detalhada de um atendente em um período. Lê regra
@@ -190,16 +198,19 @@ export async function simularComissao(
   if (!db) throw new Error("Database indisponível");
 
   const regraEscritorio = regraCarregada ?? (await carregarRegraComissao(escritorioId));
-  // Na gestão o percentual é o do gestor e o modo é sempre flat — faixas
-  // progressivas são instrumento de meta de venda. Valor mínimo e dia de
-  // vencimento da despesa continuam sendo os do escritório: são regras
-  // sobre a cobrança e sobre o caixa, não sobre quem recebe.
+  // Na gestão a regra é a do GESTOR — alíquota, modo (flat ou faixas
+  // progressivas), base da faixa e piso por cobrança. Só o dia de vencimento
+  // da despesa continua sendo o do escritório: é regra de caixa, não de quem
+  // recebe. `modo='faixas'` sem tabela cadastrada cai no flat pelo próprio
+  // `calcularComissao`, igual à venda.
   const regra: RegraComissaoCarregada = gestao
     ? {
       ...regraEscritorio,
       aliquotaPercent: gestao.aliquotaPercent,
-      modo: "flat",
-      faixas: [],
+      modo: gestao.modo ?? "flat",
+      baseFaixa: gestao.baseFaixa ?? "comissionavel",
+      faixas: gestao.faixas ?? [],
+      valorMinimo: gestao.valorMinimo ?? 0,
     }
     : regraEscritorio;
   const { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas } = regra;
@@ -838,6 +849,9 @@ export async function listarComissoesGestao(escritorioId: number) {
       id: comissaoGestao.id,
       colaboradorId: comissaoGestao.colaboradorId,
       aliquotaPercent: comissaoGestao.aliquotaPercent,
+      modo: comissaoGestao.modo,
+      baseFaixa: comissaoGestao.baseFaixa,
+      valorMinimo: comissaoGestao.valorMinimo,
       dataCorte: comissaoGestao.dataCorte,
       ativo: comissaoGestao.ativo,
       nome: users.name,
@@ -849,9 +863,28 @@ export async function listarComissoesGestao(escritorioId: number) {
     .leftJoin(users, eq(users.id, colaboradores.userId))
     .where(eq(comissaoGestao.escritorioId, escritorioId))
     .orderBy(asc(comissaoGestao.id));
+  if (linhas.length === 0) return [];
+
+  const faixas = await db
+    .select({
+      comissaoGestaoId: comissaoGestaoFaixas.comissaoGestaoId,
+      limiteAte: comissaoGestaoFaixas.limiteAte,
+      aliquotaPercent: comissaoGestaoFaixas.aliquotaPercent,
+    })
+    .from(comissaoGestaoFaixas)
+    .where(inArray(comissaoGestaoFaixas.comissaoGestaoId, linhas.map((l) => l.id)))
+    .orderBy(asc(comissaoGestaoFaixas.ordem));
+
   return linhas.map((l) => ({
     ...l,
     aliquotaPercent: Number(l.aliquotaPercent),
+    valorMinimo: Number(l.valorMinimo),
+    faixas: faixas
+      .filter((f) => f.comissaoGestaoId === l.id)
+      .map((f) => ({
+        limiteAte: f.limiteAte === null ? null : Number(f.limiteAte),
+        aliquotaPercent: Number(f.aliquotaPercent),
+      })),
   }));
 }
 
@@ -860,13 +893,24 @@ export async function listarComissoesGestao(escritorioId: number) {
 export async function obterComissaoGestaoAtiva(
   escritorioId: number,
   colaboradorId: number,
-): Promise<{ aliquotaPercent: number; dataCorte: string } | null> {
+): Promise<{
+  aliquotaPercent: number;
+  dataCorte: string;
+  modo: "flat" | "faixas";
+  baseFaixa: "bruto" | "comissionavel";
+  valorMinimo: number;
+  faixas: FaixaComissao[];
+} | null> {
   const db = await getDb();
   if (!db) return null;
   const [linha] = await db
     .select({
+      id: comissaoGestao.id,
       aliquotaPercent: comissaoGestao.aliquotaPercent,
       dataCorte: comissaoGestao.dataCorte,
+      modo: comissaoGestao.modo,
+      baseFaixa: comissaoGestao.baseFaixa,
+      valorMinimo: comissaoGestao.valorMinimo,
     })
     .from(comissaoGestao)
     .where(and(
@@ -876,13 +920,39 @@ export async function obterComissaoGestaoAtiva(
     ))
     .limit(1);
   if (!linha) return null;
+
+  const faixasRows = linha.modo === "faixas"
+    ? await db
+      .select({
+        limiteAte: comissaoGestaoFaixas.limiteAte,
+        aliquotaPercent: comissaoGestaoFaixas.aliquotaPercent,
+      })
+      .from(comissaoGestaoFaixas)
+      .where(eq(comissaoGestaoFaixas.comissaoGestaoId, linha.id))
+      .orderBy(asc(comissaoGestaoFaixas.ordem))
+    : [];
+
   return {
     aliquotaPercent: Number(linha.aliquotaPercent),
     dataCorte: linha.dataCorte,
+    modo: linha.modo,
+    baseFaixa: linha.baseFaixa,
+    valorMinimo: Number(linha.valorMinimo),
+    faixas: faixasRows.map((f) => ({
+      limiteAte: f.limiteAte === null ? null : Number(f.limiteAte),
+      aliquotaPercent: Number(f.aliquotaPercent),
+    })),
   };
 }
 
-/** Cria ou atualiza a config de um gestor (UNIQUE escritório+colaborador). */
+/**
+ * Cria ou atualiza a config de um gestor (UNIQUE escritório+colaborador).
+ *
+ * Tudo numa transação pelo mesmo motivo de `salvarRegraComissao`: se o INSERT
+ * das faixas falhar depois do DELETE, o gestor ficaria com `modo='faixas'` e
+ * zero faixas, e o cálculo cairia no flat com a alíquota que estiver lá —
+ * comissão errada em silêncio até alguém conferir.
+ */
 export async function salvarComissaoGestao(params: {
   escritorioId: number;
   colaboradorId: number;
@@ -890,37 +960,67 @@ export async function salvarComissaoGestao(params: {
   dataCorte: string;
   ativo: boolean;
   criadoPorUserId: number;
+  modo: "flat" | "faixas";
+  baseFaixa: "bruto" | "comissionavel";
+  valorMinimo: number;
+  faixas: FaixaComissao[];
 }): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
-  const [existente] = await db
-    .select({ id: comissaoGestao.id })
-    .from(comissaoGestao)
-    .where(and(
-      eq(comissaoGestao.escritorioId, params.escritorioId),
-      eq(comissaoGestao.colaboradorId, params.colaboradorId),
-    ))
-    .limit(1);
 
-  if (existente) {
-    await db
-      .update(comissaoGestao)
-      .set({
+  await db.transaction(async (tx) => {
+    const [existente] = await tx
+      .select({ id: comissaoGestao.id })
+      .from(comissaoGestao)
+      .where(and(
+        eq(comissaoGestao.escritorioId, params.escritorioId),
+        eq(comissaoGestao.colaboradorId, params.colaboradorId),
+      ))
+      .limit(1);
+
+    let id: number;
+    if (existente) {
+      id = existente.id;
+      await tx
+        .update(comissaoGestao)
+        .set({
+          aliquotaPercent: params.aliquotaPercent.toFixed(2),
+          dataCorte: params.dataCorte,
+          ativo: params.ativo,
+          modo: params.modo,
+          baseFaixa: params.baseFaixa,
+          valorMinimo: params.valorMinimo.toFixed(2),
+        })
+        .where(eq(comissaoGestao.id, id));
+    } else {
+      const [novo] = await tx.insert(comissaoGestao).values({
+        escritorioId: params.escritorioId,
+        colaboradorId: params.colaboradorId,
         aliquotaPercent: params.aliquotaPercent.toFixed(2),
         dataCorte: params.dataCorte,
         ativo: params.ativo,
-      })
-      .where(eq(comissaoGestao.id, existente.id));
-    return;
-  }
+        criadoPorUserId: params.criadoPorUserId,
+        modo: params.modo,
+        baseFaixa: params.baseFaixa,
+        valorMinimo: params.valorMinimo.toFixed(2),
+      }).$returningId();
+      id = novo.id;
+    }
 
-  await db.insert(comissaoGestao).values({
-    escritorioId: params.escritorioId,
-    colaboradorId: params.colaboradorId,
-    aliquotaPercent: params.aliquotaPercent.toFixed(2),
-    dataCorte: params.dataCorte,
-    ativo: params.ativo,
-    criadoPorUserId: params.criadoPorUserId,
+    await tx
+      .delete(comissaoGestaoFaixas)
+      .where(eq(comissaoGestaoFaixas.comissaoGestaoId, id));
+
+    if (params.faixas.length > 0) {
+      await tx.insert(comissaoGestaoFaixas).values(
+        params.faixas.map((f, i) => ({
+          comissaoGestaoId: id,
+          ordem: i,
+          limiteAte: f.limiteAte === null ? null : f.limiteAte.toFixed(2),
+          aliquotaPercent: f.aliquotaPercent.toFixed(2),
+        })),
+      );
+    }
   });
 }
 
