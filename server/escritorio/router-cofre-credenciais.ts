@@ -503,7 +503,7 @@ export const cofreCredenciaisRouter = router({
         .select()
         .from(cofreCredencialTribunais)
         .where(eq(cofreCredencialTribunais.credencialId, input.id));
-      const porTribunal = new Map(registros.map((r) => [r.tribunal, r]));
+      const porTribunalGrau = new Map(registros.map((r) => [`${r.tribunal}:${r.grau}`, r]));
 
       const proprio = tribunalDoSistema(cred.sistema);
       const alcance = proprio ? [proprio] : tribunaisPjeDisponiveis();
@@ -523,18 +523,30 @@ export const cofreCredenciaisRouter = router({
         .groupBy(motorMonitoramentos.tribunal);
       const contagem = new Map(processos.map((p) => [p.tribunal, Number(p.total)]));
 
+      const { segundoGrauMapeado } = await import("../processos/tribunais-pdpj");
+
       return {
         nacional: proprio == null,
-        tribunais: alcance.map((t) => {
-          const r = porTribunal.get(t);
-          return {
-            tribunal: t,
-            status: r?.status ?? ("nao_testado" as const),
-            ultimoErro: r?.ultimoErro ?? null,
-            ultimoSucessoEm: r?.ultimoSucessoEm?.toISOString() ?? null,
-            processos: contagem.get(t) ?? 0,
-          };
-        }),
+        tribunais: alcance.flatMap((t) =>
+          ([1, 2] as const).map((grau) => {
+            const r = porTribunalGrau.get(`${t}:${grau}`);
+            // O 2º grau sem endereço mapeado é uma lacuna de cobertura, não um
+            // resultado de teste — a tela precisa dizer isso em vez de deixar
+            // um botão que só pode falhar.
+            const semCobertura = grau === 2 && !segundoGrauMapeado(t);
+            return {
+              tribunal: t,
+              grau,
+              semCobertura,
+              status: r?.status ?? ("nao_testado" as const),
+              ultimoErro: r?.ultimoErro ?? null,
+              ultimoSucessoEm: r?.ultimoSucessoEm?.toISOString() ?? null,
+              // A contagem de processos é do tribunal, não do grau — o
+              // monitoramento aponta pro estado. Fica no 1º pra não dobrar.
+              processos: grau === 1 ? (contagem.get(t) ?? 0) : 0,
+            };
+          }),
+        ),
       };
     }),
 
@@ -946,6 +958,9 @@ export const cofreCredenciaisRouter = router({
         id: z.number().int().positive(),
         /** Em qual PJe testar. Obrigatório na prática pra credencial nacional. */
         tribunal: z.string().max(16).optional(),
+        /** Qual portal. No PJe o 1º e o 2º grau são endereços separados e
+         *  podem ter sortes diferentes com a mesma credencial. */
+        grau: z.union([z.literal(1), z.literal(2)]).default(1),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -986,7 +1001,21 @@ export const cofreCredenciaisRouter = router({
       // aqui. Testar "a credencial" sem dizer onde não significa nada quando
       // ela vale em doze lugares.
       const tribunalAlvo = input.tribunal ?? tribunalDoSistema(cred.sistema) ?? "tjce";
-      const cfgTribunal = getConfigTribunal(tribunalAlvo);
+      const cfgTribunal = getConfigTribunal(tribunalAlvo, input.grau);
+      // Grau sem endereço mapeado não vira "login falhou": não é a credencial
+      // que está errada, é a cobertura que não chegou lá. Marcar como erro
+      // mandaria o operador procurar problema na senha dele.
+      if (!cfgTribunal && input.grau === 2 && getConfigTribunal(tribunalAlvo, 1)) {
+        return {
+          ok: false,
+          tribunal: tribunalAlvo,
+          grau: input.grau,
+          semCobertura: true as const,
+          mensagem: "Endereço do 2º grau deste tribunal ainda não foi mapeado.",
+          latenciaMs: 0,
+          totpSecretNovo: null,
+        };
+      }
       if (cfgTribunal) {
         const { PjeTjceScraper } = await import(
           "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/pje-tjce"
@@ -1023,9 +1052,12 @@ export const cofreCredenciaisRouter = router({
         await registrarTribunal(input.id, tribunalAlvo, {
           ok: resultado.ok,
           motivo: motivoErro ?? undefined,
-        });
+        }, input.grau);
 
-        if (resultado.ok && resultado.storageStateJson) {
+        // A sessão é guardada por tribunal, sem grau. Salvar a do 2º por cima
+        // trocaria os cookies do portal que o monitoramento usa todo dia pelo
+        // do portal que ele consulta de vez em quando.
+        if (resultado.ok && resultado.storageStateJson && input.grau === 1) {
           const expira = new Date(Date.now() + 90 * 60 * 1000);
           await salvarSessao(input.id, tribunalAlvo, resultado.storageStateJson, expira);
         }
@@ -1033,6 +1065,8 @@ export const cofreCredenciaisRouter = router({
         return {
           ok: resultado.ok,
           tribunal: tribunalAlvo,
+          grau: input.grau,
+          semCobertura: false as const,
           mensagem: resultado.mensagem,
           latenciaMs: resultado.latenciaMs,
           /**

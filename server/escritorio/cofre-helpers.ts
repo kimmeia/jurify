@@ -118,16 +118,18 @@ export function deveReligarMonitoramento(m: {
 }
 
 /**
- * Anota como a credencial se saiu NAQUELE tribunal.
+ * Anota como a credencial se saiu NAQUELE tribunal, naquele GRAU.
  *
  * É o que sustenta a grade de estados na tela: sem registro por tribunal, um
  * login que falhou em MG derrubaria a credencial inteira e o CE, que funciona,
- * apareceria quebrado junto.
+ * apareceria quebrado junto. E sem o grau, o resultado do 2º sobrescreveria o
+ * do 1º — no PJe eles são portais distintos e podem ter sortes distintas.
  */
 export async function registrarTribunal(
   credencialId: number,
   tribunal: string,
   r: { ok: boolean; motivo?: string },
+  grau: 1 | 2 = 1,
 ): Promise<void> {
   try {
     const db = await getDb();
@@ -142,7 +144,7 @@ export async function registrarTribunal(
         };
     await db
       .insert(cofreCredencialTribunais)
-      .values({ credencialId, tribunal, ...valores })
+      .values({ credencialId, tribunal, grau, ...valores })
       .onDuplicateKeyUpdate({ set: valores });
   } catch {
     /* registro de diagnóstico não derruba a operação */
