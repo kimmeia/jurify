@@ -733,9 +733,11 @@ function ListaCobrancas({
     fechouEm?: string | null;
     parcelaAtual?: number | null;
     parcelaTotal?: number | null;
+    atendenteNome?: string | null;
   }>;
-  /** Colunas "Fechou em" e "Parcela" — o que a comissão de gestão precisa
-   *  mostrar pra o operador conferir corte e duplicidade sem sair da tela. */
+  /** Colunas "Atendente", "Fechou em" e "Parcela" — o que a comissão de
+   *  gestão precisa mostrar pra o operador conferir de quem veio a venda,
+   *  o corte e a duplicidade sem sair da tela. */
   mostrarFechamento?: boolean;
 }) {
   const headerCor =
@@ -762,6 +764,7 @@ function ListaCobrancas({
                 <TableHead className="text-xs">Cliente</TableHead>
                 {mostrarFechamento && (
                   <>
+                    <TableHead className="text-xs">Atendente</TableHead>
                     <TableHead className="text-xs">Fechou em</TableHead>
                     <TableHead className="text-xs">Parcela</TableHead>
                   </>
@@ -793,6 +796,11 @@ function ListaCobrancas({
                   </TableCell>
                   {mostrarFechamento && (
                     <>
+                      <TableCell className="text-xs">
+                        {item.atendenteNome ?? (
+                          <span className="text-muted-foreground italic">Sem atendente</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground tabular-nums">
                         {item.fechouEm ? formatData(item.fechouEm) : "—"}
                       </TableCell>
