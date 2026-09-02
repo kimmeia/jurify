@@ -55,6 +55,9 @@ export const agendamentoRouter = router({
       responsavelId: z.number().optional(),
       processoId: z.number().optional(),
       contatoId: z.number().optional(),
+      // Telefone do contato no compromisso. Sem ele o evento nasce sem número
+      // e o clique no telefone da Agenda não tem pra onde ir.
+      contatoTelefone: z.string().max(64).optional(),
       corHex: z.string().max(7).optional(),
       lembretes: z.array(z.object({
         tipo: z.enum(["notificacao_app", "email", "whatsapp"]),
@@ -91,6 +94,7 @@ export const agendamentoRouter = router({
         prioridade: input.prioridade,
         processoId: input.processoId,
         contatoId: input.contatoId,
+        contatoTelefone: input.contatoTelefone,
         corHex: input.corHex,
         lembretes: input.lembretes,
       });

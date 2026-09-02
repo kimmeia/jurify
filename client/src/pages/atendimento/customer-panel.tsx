@@ -398,7 +398,8 @@ export function CustomerPanel({
         iconColor="text-amber-600 dark:text-amber-400"
         title={`Compromissos (${compromissos.length})`}
         headerAction={
-          <AbrirNovoCompromisso contatoId={contatoId} contatoNome={contato.nome} onCreated={refetch} />
+          <AbrirNovoCompromisso contatoId={contatoId} contatoNome={contato.nome}
+            contatoTelefone={contato.telefone || undefined} onCreated={refetch} />
         }
       >
         {compromissos.length === 0 ? (
@@ -945,10 +946,12 @@ function CriarLeadInline({ contatoId, onSuccess }: { contatoId: number; onSucces
 function AbrirNovoCompromisso({
   contatoId,
   contatoNome,
+  contatoTelefone,
   onCreated,
 }: {
   contatoId: number;
   contatoNome: string;
+  contatoTelefone?: string;
   onCreated: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -960,7 +963,7 @@ function AbrirNovoCompromisso({
       <NovoCompromissoDialog
         open={open}
         onOpenChange={setOpen}
-        contexto={{ contatoId, contatoNome }}
+        contexto={{ contatoId, contatoNome, contatoTelefone }}
         onCreated={onCreated}
       />
     </>

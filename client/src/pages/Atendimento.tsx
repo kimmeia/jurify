@@ -18,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/compon
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
-import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon, ChevronLeft, Archive, Pencil } from "lucide-react";
+import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon, ChevronLeft, Archive, Pencil, Lock } from "lucide-react";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { TIPOS_CANAL_COMUNICACAO } from "@shared/canal-types";
@@ -309,6 +309,140 @@ function isValidPhoneBR(value: string): boolean {
   return d.length === 10 || d.length === 11;
 }
 
+/** "há 2 h", "há 3 dias", "agora há pouco" — o bastante pro atendente saber se
+ *  a conversa está quente ou é arqueologia. */
+function haQuantoTempo(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!isFinite(ms) || ms < 0) return "";
+  const min = Math.floor(ms / 60000);
+  if (min < 2) return "agora há pouco";
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `há ${d} ${d === 1 ? "dia" : "dias"}`;
+  return `em ${new Date(iso).toLocaleDateString("pt-BR")}`;
+}
+
+type ChecagemNumero = {
+  estado: "incompleto" | "livre" | "cadastrado" | "aberta" | "encerrada" | "sem_acesso";
+  contatoNome?: string;
+  conversaId?: number;
+  status?: string;
+  atendenteNome?: string;
+  ultimaMensagemAt?: string | null;
+  totalMensagens?: number;
+};
+
+/**
+ * Aviso de "este número já tem conversa", enquanto o telefone é digitado.
+ *
+ * Serve pra não nascer uma segunda conversa com quem já está sendo atendido.
+ * Quando o atendimento é de OUTRA pessoa e quem digita só enxerga os próprios,
+ * o aviso sai seco — sem nome, sem histórico e sem botão de abrir: evitar a
+ * duplicata não é motivo pra escancarar o atendimento alheio.
+ */
+function AvisoNumeroExistente({
+  dados, carregando, onAbrir,
+}: {
+  dados?: ChecagemNumero;
+  carregando: boolean;
+  onAbrir: (conversaId: number) => void;
+}) {
+  if (carregando) {
+    return (
+      <div className="rounded-lg border border-dashed px-3 py-2 text-[11px] text-muted-foreground flex items-center gap-2">
+        <Loader2 className="h-3 w-3 animate-spin" /> Conferindo se este número já tem conversa…
+      </div>
+    );
+  }
+  if (!dados || dados.estado === "incompleto") return null;
+
+  if (dados.estado === "livre") {
+    return (
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2">
+        <p className="text-[11.5px] font-semibold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+          <Check className="h-3.5 w-3.5" /> Nenhuma conversa com este número
+        </p>
+        <p className="text-[10.5px] text-emerald-800/90 dark:text-emerald-300/90 mt-1">
+          É um contato novo pro Atendimento. Vai criar a conversa e enviar normalmente.
+        </p>
+      </div>
+    );
+  }
+
+  if (dados.estado === "cadastrado") {
+    return (
+      <div className="rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 px-3 py-2">
+        <p className="text-[11.5px] font-semibold text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+          <User className="h-3.5 w-3.5" /> Nenhuma conversa — mas o número é de um cliente cadastrado
+        </p>
+        <p className="text-[10.5px] text-blue-800/90 dark:text-blue-300/90 mt-1">
+          <strong>{dados.contatoNome}</strong> já está na sua base. O nome vem preenchido
+          sozinho, pra conversa nascer com o cadastro certo em vez de virar contato duplicado.
+        </p>
+      </div>
+    );
+  }
+
+  if (dados.estado === "sem_acesso") {
+    return (
+      <div className="rounded-lg border bg-muted/40 px-3 py-2">
+        <p className="text-[11.5px] font-semibold flex items-center gap-1.5">
+          <Lock className="h-3.5 w-3.5" /> Já existe conversa com este número
+        </p>
+        <p className="text-[10.5px] text-muted-foreground mt-1">
+          Está com outra pessoa da equipe e você não tem acesso a ela. O aviso aparece pra
+          você não abrir uma segunda conversa com o mesmo cliente.
+        </p>
+      </div>
+    );
+  }
+
+  const aberta = dados.estado === "aberta";
+  const rodape = aberta
+    ? "Se enviar por aqui, a mensagem cai nessa mesma conversa — não cria outra."
+    : dados.status === "resolvido"
+      ? "Enviar por aqui retoma esse atendimento."
+      : "Enviar por aqui abre um novo atendimento com o mesmo contato — o histórico antigo continua na ficha dele.";
+
+  return (
+    <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+      <p className="text-[11.5px] font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+        {aberta ? <MessageCircle className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+        {aberta ? "Já existe conversa com este número" : "Este número já foi atendido"}
+      </p>
+      <div className="flex items-center gap-2 mt-1.5">
+        <div className="flex-1 min-w-0 text-[11px] text-amber-900/90 dark:text-amber-200/90 leading-snug">
+          <strong>{dados.contatoNome}</strong>
+          {aberta
+            ? <> · em atendimento{dados.atendenteNome ? ` com ${dados.atendenteNome}` : ""}</>
+            : <> · atendimento {dados.status === "resolvido" ? "resolvido" : "fechado"}
+                {dados.atendenteNome ? ` por ${dados.atendenteNome}` : ""}</>}
+          <br />
+          <span className="text-[10px] opacity-75">
+            {aberta
+              ? `última mensagem ${haQuantoTempo(dados.ultimaMensagemAt)}`
+              : `${dados.totalMensagens ?? 0} mensagens no histórico`}
+          </span>
+        </div>
+        {dados.conversaId != null && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px] shrink-0 border-amber-300 dark:border-amber-800"
+            onClick={() => onAbrir(dados.conversaId!)}
+          >
+            {aberta ? "Abrir conversa" : "Ver conversa"}
+          </Button>
+        )}
+      </div>
+      <p className="text-[10.5px] text-amber-900/80 dark:text-amber-300/80 mt-1.5">{rodape}</p>
+    </div>
+  );
+}
+
 function IniciarConversaDialog({
   open,
   onOpenChange,
@@ -338,6 +472,25 @@ function IniciarConversaDialog({
       if (preencherDe.nome) setNome(preencherDe.nome);
     }
   }, [open, preencherDe]);
+
+  // Consulta "já existe conversa com este número?". Atrasada de propósito: sem
+  // isso sairia uma consulta por tecla digitada.
+  const [telChecagem, setTelChecagem] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setTelChecagem(tel), 350);
+    return () => clearTimeout(t);
+  }, [tel]);
+  const checagem = trpc.crm.conversaPorTelefone.useQuery(
+    { telefone: telChecagem },
+    { enabled: open && isValidPhoneBR(telChecagem), staleTime: 15_000 },
+  );
+  const dadosChecagem = checagem.data as ChecagemNumero | undefined;
+  // Nome só é preenchido quando está vazio — quem digitou um nome manda nele.
+  useEffect(() => {
+    const n = dadosChecagem?.contatoNome;
+    if (n) setNome((atual) => atual || n);
+  }, [dadosChecagem?.contatoNome]);
+
   const ini = trpc.crm.iniciarConversa.useMutation({ onSuccess: (r: any) => { toast.success("Conversa iniciada!"); onOpenChange(false); setTel(""); setNome(""); setMsg(""); onSuccess(r.conversaId); }, onError: (e: any) => toast.error(e.message) });
   const telDigits = tel.replace(/\D/g, "");
   const telValido = isValidPhoneBR(tel);
@@ -349,6 +502,11 @@ function IniciarConversaDialog({
   };
   return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" /> Nova Conversa</DialogTitle></DialogHeader>
     <div className="space-y-3 py-2"><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone *</Label><Input placeholder="(11) 99999-0000" value={tel} onChange={(e) => setTel(maskPhoneBR(e.target.value))} inputMode="tel" maxLength={16} className={tel && !telValido ? "border-red-400" : ""} />{tel && !telValido && <p className="text-[10px] text-red-500">DDD + número (10 ou 11 dígitos)</p>}</div><div className="space-y-1.5"><Label>Nome</Label><Input placeholder="Nome do contato" value={nome} onChange={(e) => setNome(e.target.value)} /></div></div>
+    <AvisoNumeroExistente
+      dados={dadosChecagem}
+      carregando={telValido && (checagem.isLoading || telChecagem !== tel)}
+      onAbrir={(id) => { onOpenChange(false); onSuccess(id); }}
+    />
     <div className="space-y-1.5"><Label>Mensagem *</Label><Input placeholder="Olá! Como posso ajudar?" value={msg} onChange={(e) => setMsg(e.target.value)} /></div>
     {waCh.length > 1 && (
       <div className="space-y-1.5">
@@ -2591,7 +2749,11 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       <NovoCompromissoDialog
         open={showAgendar}
         onOpenChange={setShowAgendar}
-        contexto={conv?.contatoId ? { contatoId: conv.contatoId, contatoNome: conv?.contatoNome || "" } : undefined}
+        contexto={{
+          contatoId: conv?.contatoId ?? undefined,
+          contatoNome: conv?.contatoNome || "",
+          contatoTelefone: conv?.contatoTelefone || conv?.chatIdExterno?.replace(/@.*/, "") || undefined,
+        }}
       />
     )}
 

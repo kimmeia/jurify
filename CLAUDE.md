@@ -410,6 +410,62 @@ e o "Funil de Vendas" do Relatório Comercial conta por `leads.createdAt`,
 então a barra "Ganho" pode não bater com o card "Contratos fechados" da
 mesma tela (o comentário no código afirma que batem — não batem).
 
+### F. Cofre por grau + Justiça Federal — ENTREGUE 01/09
+
+Credencial do Cofre passou a ter linha por GRAU (migration 0213,
+`cofre_credencial_tribunais.grau` na UNIQUE): no PJe o acesso de 1º e 2º
+grau costuma ser cadastro separado. `REGISTRO_G2` (tribunais-pdpj.ts) mapeia
+o 2º grau dos tribunais que fogem do padrão (tjrj `/2g/`, tjrn `pje2g.`,
+tjpe `/2g/`, tjdf host `dft`, tjpa/tjro sem 2º grau) — o cron JÁ consultava
+2º grau e, nesses seis, apontava pra URL genérica e engolia a falha em
+silêncio (movimentação de recurso sumia). Grau 2 não mapeado devolve
+`semCobertura` e nem tenta logar. Sessão só é salva no grau 1.
+Justiça Federal entrou com TRF1/2/3/6 (`pdpjTrfConfig`, padrão
+`pje{N}g.trf{N}.jus.br`); TRF4 é eproc (adapter próprio, não feito) e TRF5
+segue só consulta pública — os dois ficam FORA do seletor de CPF de
+propósito, e há teste travando isso. Erro de login na grade virou resumo
+legível (`shared/cofre-erros.ts`, `resumirErroCofre`) com o texto cru dentro
+de `<details>`; "Testar tudo" roda a bateria em série.
+**Pendente do dono**: criar os cadastros nesses tribunais e rodar "Testar
+tudo" — os endereços dos TRFs foram deduzidos do padrão e NÃO puderam ser
+conferidos daqui (o proxy do ambiente bloqueia os portais).
+
+### G. Telefone e dados do contato no Atendimento — ENTREGUE 01–02/09
+
+Três entregas encadeadas, todas a partir de print do dono:
+
+1. **Clicar no telefone abre a conversa** (01/09). `caminhoConversaDoEvento`
+   (Agenda.tsx) usa `/atendimento?contatoId=` quando há cliente vinculado e
+   a rota NOVA `/atendimento?telefone=` quando só há número. Comparação em
+   `shared/telefone.ts` (`chaveTelefoneBR` = DDD + 8 dígitos finais) — o
+   mesmo número existe gravado como "8597965706", "5585997965706" e com
+   máscara. WhatsApp Web não saiu: virou o ícone ao lado.
+2. **O compromisso passou a LEVAR os dados** (02/09). Eram duas falhas:
+   o diálogo mandava `contatoId` mas não o telefone (a coluna
+   `agendamentos.contatoTelefone` só era preenchida à mão na Agenda), e
+   `agenda.listar` devolvia `contatoNome` NAS TAREFAS e não nos
+   compromissos. Agora o compromisso resolve o nome pelo contato e usa o
+   telefone do cadastro como RESERVA (`ag.contatoTelefone ||
+   doContato?.telefone`) — **conserta retroativamente** todo compromisso já
+   gravado com cliente vinculado, sem migration. O selo do diálogo aparece
+   também sem `contatoId` (lead que ainda não é cliente).
+3. **Nova Conversa avisa número repetido** (02/09). `crm.conversaPorTelefone`
+   (leitura, gate `atendimento/ver`) usa `buscarContatoPorTelefone` — a MESMA
+   função do envio, senão o aviso mentiria. Decisão pura em
+   `shared/conversa-existente.ts` (`estadoDoNumero`): livre · cadastrado ·
+   aberta · encerrada · sem_acesso. **Decisão do dono (02/09): quando a
+   conversa é de outro atendente e a pessoa só vê as próprias, AVISAR** —
+   mas seco, sem nome, sem histórico e sem botão (o payload não os manda).
+   `mascararTelefoneBR` (shared) passou a cortar o DDI antes de formatar:
+   colar `5585997965706` virava `(55) 85997-9657` e era ESSE número que ia
+   pro envio.
+
+Amarras: `agenda-telefone-inbox.test.ts`,
+`agendar-conversa-dados-contato.test.ts` (15 mutações conferidas).
+Achado NÃO corrigido: o payload do compromisso na tela ganhou nome, mas o
+deep-link segue silencioso quando o colaborador não tem permissão no
+contato de destino.
+
 ## Pendências ativas (19/08/2026)
 
 Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
