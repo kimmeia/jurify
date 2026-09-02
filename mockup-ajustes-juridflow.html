@@ -157,22 +157,40 @@
   .nm{font-weight:600}
 
   /* ─── FILTRO NOVO ─── */
-  /* Filtro é rótulo com risco embaixo quando ativo — o mesmo desenho das abas
-     da ficha. A pílula preenchida pesava demais pra uma coisa que fica sempre
-     na tela. */
-  .ftabs{display:flex;align-items:center;gap:1px;flex-wrap:wrap;margin:10px -12px -11px;padding:0 12px}
-  .ftab{border:0;background:transparent;font-family:'Inter';font-size:12px;font-weight:600;color:var(--t3);
-        padding:8px 10px 9px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;
-        display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-  .ftab:hover{color:var(--t1)}
-  .ftab.on{color:var(--ac);border-bottom-color:var(--ac)}
-  .ftab .n{font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--t4)}
-  .ftab.on .n{color:var(--ac)}
-  /* filtro que não devolve nada não clica: dá pra cair numa lista vazia e não
-     saber se é o filtro ou se não tem cliente */
-  .ftab.zero{opacity:.42;cursor:default}
-  .ftab.zero:hover{color:var(--t3)}
-  .fdiv{width:1px;height:15px;background:var(--bd);margin:0 8px}
+  /* Filtro por CAMPO, e os campos se somam: "responsável X que está devendo"
+     é uma pergunta só. O desenho anterior era recorte único — marcar VIP
+     desmarcava Com débito. */
+  .fbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;
+        padding-top:10px;border-top:1px solid var(--bd)}
+  .fcampo{position:relative}
+  .fcampo>button{height:29px;border:1px solid var(--bd);background:var(--sup);color:var(--t2);
+        border-radius:var(--r-sm);padding:0 8px 0 10px;font-size:11.5px;font-weight:600;font-family:'Inter';
+        display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}
+  .fcampo>button:hover{border-color:var(--t4);background:var(--hl)}
+  .fcampo>button .rot2{color:var(--t3);font-weight:500}
+  .fcampo.set>button{border-color:var(--ac);color:var(--ac);background:var(--ac-bg)}
+  .fcampo.set>button .rot2{color:var(--ac);opacity:.75}
+  .fcampo .cv{display:inline-flex;align-items:center;justify-content:center;padding:2px;margin:0 -3px 0 1px;
+              border-radius:3px}
+  .fcampo .cv:hover{background:#00000014}
+  .fpop{position:absolute;left:0;top:calc(100% + 4px);z-index:40;background:var(--sup);
+        border:1px solid var(--bd);border-radius:var(--r);box-shadow:0 14px 30px -12px #16202c59;
+        min-width:206px;padding:4px}
+  .fpop.dir{left:auto;right:0}
+  .fpop button{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;
+        font-family:'Inter';font-size:12px;color:var(--t2);padding:7px 9px;border-radius:var(--r-sm);
+        cursor:pointer;text-align:left}
+  .fpop button:hover{background:var(--hl)}
+  .fpop button.on{color:var(--ac);font-weight:600;background:var(--ac-bg)}
+  .fpop button .n{margin-left:auto;font-size:10.5px;font-weight:700;color:var(--t4);
+                  font-variant-numeric:tabular-nums}
+  .fpop button.on .n{color:var(--ac)}
+  .fpop .tit2{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);
+              padding:7px 9px 4px}
+  .fpop .cx{width:13px;height:13px;border:1.5px solid var(--t4);border-radius:3px;flex:none;
+            display:inline-flex;align-items:center;justify-content:center}
+  .fpop button.on .cx{border-color:var(--ac);background:var(--ac);color:#fff}
+  .fdiv{width:1px;height:17px;background:var(--bd);margin:0 3px}
   /* Clientes × Leads é OUTRA pergunta (qual conjunto), não um recorte dele —
      por isso continua botão segmentado, e não mais uma aba sublinhada. */
   .segdados{display:flex;gap:2px;background:var(--hl);padding:2px;border-radius:var(--r-sm);flex:none}
@@ -270,8 +288,8 @@
 <div class="dica">
   <b>Dados falsos.</b> Quatro coisas que você apontou, cada uma no lugar onde aparece.<br>
   · <b>Menu</b> — no modo estreito o rótulo passa a ficar embaixo do ícone. Use <span class="k">Encolher</span> no rodapé do menu pra ver os dois.<br>
-  · <b>Clientes</b> — filtro vira rótulo com risco embaixo quando ativo; contagem em cada um, e o que dá zero não clica. <b>Clientes/Leads</b> continua sendo o botão da esquerda.<br>
-  · <b>Ficha</b> — clique num cliente: cabeçalho azul, nome numa linha só, e <span class="k">⋯ Mais</span> guarda as ações raras.<br>
+  · <b>Clientes</b> — filtro por campo (Responsável, Financeiro, Última interação, Cadastro, Origem) e <b>eles se somam</b>: tente Responsável + Financeiro. O número ao lado de cada opção já conta valendo os outros filtros.<br>
+  · <b>Ficha</b> — clique num cliente: busca por nome/CPF/telefone embaixo do <span class="k">Voltar</span>, cabeçalho azul e <span class="k">⋯ Mais</span> com as ações raras.<br>
   · <b>Consultar processo</b> — vá em <b>Processos</b> e abra o dialog; tem um botão <span class="k">antes / depois</span> nele.
 </div>
 
@@ -282,7 +300,8 @@ const $ = s => document.querySelector(s);
 const app = $("#app");
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-const S = { tela:"clientes", azul:"a", tema:"claro", menuLarga:true, filtro:"todos", dados:"clientes",
+const S = { tela:"clientes", azul:"a", tema:"claro", menuLarga:true, dados:"clientes",
+            f:{}, marcas:[], pop:null, buscaFicha:"",
             cliSel:0, ficha:false, aba:"visao", mais:false, dlg:false, dlgLargo:true, busca:"" };
 
 const ico = {
@@ -323,43 +342,90 @@ const MENU = [
 
 const CLIS = [
   { nome:"Rafael Almeida da Rocha", ini:"RR", cor:"#1a4b86", fone:"(85) 98694-2189", doc:"605.167.503-56",
-    cidade:"Fortaleza, CE", sit:"cliente", vip:false, resp:"Vendedor", inter:"111d", origem:"manual",
-    fin:{rec:"R$ 0,00", areceber:"R$ 0,00", venc:"R$ 0,00", desde:"13/05/2026"}, procs:1, docsPend:false, inativo:true },
+    cidade:"Fortaleza, CE", sit:"cliente", vip:false, resp:"Vendedor", dias:111, origem:"manual",
+    cadastro:"13/05/2026", cadDias:112, cobranca:"nenhuma", docsPend:false,
+    fin:{rec:"R$ 0,00", areceber:"R$ 0,00", venc:"R$ 0,00"}, procs:1 },
   { nome:"Mariana Albuquerque Lins", ini:"MA", cor:"#0a7245", fone:"(85) 99812-4470", doc:"084.221.933-05",
-    cidade:"Fortaleza, CE", sit:"cliente", vip:true, resp:"Dra. Camila Bastos", inter:"hoje", origem:"whatsapp",
-    fin:{rec:"R$ 4.200,00", areceber:"R$ 2.800,00", venc:"R$ 0,00", desde:"02/03/2026"}, procs:2, docsPend:false, inativo:false },
+    cidade:"Fortaleza, CE", sit:"cliente", vip:true, resp:"Dra. Camila Bastos", dias:0, origem:"whatsapp",
+    cadastro:"02/03/2026", cadDias:184, cobranca:"em_dia", docsPend:false,
+    fin:{rec:"R$ 4.200,00", areceber:"R$ 2.800,00", venc:"R$ 0,00"}, procs:2 },
   { nome:"Roberto Carvalho Menezes", ini:"RC", cor:"#8a5a09", fone:"(85) 98844-1092", doc:"512.907.844-71",
-    cidade:"Maracanaú, CE", sit:"lead", vip:false, resp:"Dr. Thiago Nunes", inter:"2d", origem:"indicação",
-    fin:{rec:"R$ 0,00", areceber:"R$ 1.500,00", venc:"R$ 0,00", desde:"20/08/2026"}, procs:1, docsPend:true, inativo:false },
+    cidade:"Maracanaú, CE", sit:"cliente", vip:false, resp:"Dr. Thiago Nunes", dias:2, origem:"indicação",
+    cadastro:"20/08/2026", cadDias:13, cobranca:"em_dia", docsPend:true,
+    fin:{rec:"R$ 0,00", areceber:"R$ 1.500,00", venc:"R$ 0,00"}, procs:1 },
   { nome:"Fernanda Sampaio Rocha", ini:"FS", cor:"#a8231b", fone:"(88) 99127-3358", doc:"41.882.007/0001-64",
-    cidade:"Sobral, CE", sit:"cliente", vip:false, resp:"Dra. Camila Bastos", inter:"6d", origem:"site",
-    fin:{rec:"R$ 9.100,00", areceber:"R$ 0,00", venc:"R$ 1.200,00", desde:"11/01/2026"}, procs:1, docsPend:false, inativo:false },
+    cidade:"Sobral, CE", sit:"cliente", vip:false, resp:"Dra. Camila Bastos", dias:6, origem:"site",
+    cadastro:"11/01/2026", cadDias:234, cobranca:"vencida", docsPend:false,
+    fin:{rec:"R$ 9.100,00", areceber:"R$ 0,00", venc:"R$ 1.200,00"}, procs:1 },
+  { nome:"Antônio Bezerra Filho", ini:"AB", cor:"#33404f", fone:"(85) 99303-1188", doc:"348.772.115-09",
+    cidade:"Fortaleza, CE", sit:"cliente", vip:false, resp:"Dr. Thiago Nunes", dias:41, origem:"indicação",
+    cadastro:"28/07/2026", cadDias:36, cobranca:"vencida", docsPend:false,
+    fin:{rec:"R$ 2.000,00", areceber:"R$ 800,00", venc:"R$ 800,00"}, procs:1 },
+  { nome:"Luciana Serpa Timbó", ini:"LS", cor:"#6b4d9e", fone:"(85) 98110-7726", doc:"219.443.601-88",
+    cidade:"Caucaia, CE", sit:"cliente", vip:true, resp:"Dra. Camila Bastos", dias:96, origem:"site",
+    cadastro:"04/02/2026", cadDias:210, cobranca:"nenhuma", docsPend:false,
+    fin:{rec:"R$ 0,00", areceber:"R$ 0,00", venc:"R$ 0,00"}, procs:0 },
 ];
 const LEADS = [
   { nome:"Paulo Ricardo Tavares", ini:"PT", cor:"#5a6b7d", fone:"(85) 99640-2213", doc:"—",
-    cidade:"Fortaleza, CE", sit:"lead", vip:false, resp:"Vendedor", inter:"1d", origem:"anúncio",
-    fin:{rec:"R$ 0,00", areceber:"R$ 0,00", venc:"R$ 0,00", desde:"01/09/2026"}, procs:0, docsPend:false, inativo:false },
-  { nome:"Juliana Freire Costa", ini:"JF", cor:"#8a5a09", fone:"(85) 98110-7726", doc:"—",
-    cidade:"Eusébio, CE", sit:"lead", vip:false, resp:"Vendedor", inter:"4d", origem:"whatsapp",
-    fin:{rec:"R$ 0,00", areceber:"R$ 0,00", venc:"R$ 0,00", desde:"29/08/2026"}, procs:0, docsPend:true, inativo:false },
+    cidade:"Fortaleza, CE", sit:"lead", vip:false, resp:"Vendedor", dias:1, origem:"anúncio",
+    cadastro:"01/09/2026", cadDias:1, cobranca:"nenhuma", docsPend:false,
+    fin:{rec:"R$ 0,00", areceber:"R$ 0,00", venc:"R$ 0,00"}, procs:0 },
+  { nome:"Juliana Freire Costa", ini:"JF", cor:"#8a5a09", fone:"(85) 98110-9921", doc:"—",
+    cidade:"Eusébio, CE", sit:"lead", vip:false, resp:"Dr. Thiago Nunes", dias:4, origem:"whatsapp",
+    cadastro:"29/08/2026", cadDias:4, cobranca:"nenhuma", docsPend:true,
+    fin:{rec:"R$ 0,00", areceber:"R$ 0,00", venc:"R$ 0,00"}, procs:0 },
 ];
 const base = () => S.dados === "leads" ? LEADS : CLIS;
-// contagem por filtro — o mesmo número que o rótulo mostra é o que a lista devolve
-const FILTROS = [
-  { id:"todos",     r:"Todos",       g:1, fn:()=>base() },
-  { id:"vip",       r:"VIP",         g:1, fn:()=>base().filter(c=>c.vip) },
-  { id:"novos",     r:"Novos (7d)",  g:1, fn:()=>base().filter(c=>["hoje","1d","2d","4d","6d"].includes(c.inter)) },
-  { id:"inativos",  r:"Inativos",    g:1, fn:()=>base().filter(c=>c.inativo) },
-  { id:"docs",      r:"Aguardando docs", g:2, fn:()=>base().filter(c=>c.docsPend) },
-  { id:"debito",    r:"Com débito",  g:2, fn:()=>base().filter(c=>c.fin.venc!=="R$ 0,00") },
-  { id:"suspensos", r:"Suspensos",   g:2, fn:()=>[] },
-  { id:"encerrados",r:"Encerrados",  g:2, fn:()=>[] },
+
+const RESPS = ["Dra. Camila Bastos", "Dr. Thiago Nunes", "Vendedor"];
+const ORIGENS = ["whatsapp", "site", "indicação", "anúncio", "manual"];
+const COBRANCA = [["vencida","Com débito (vencida)"],["em_dia","Com cobrança em dia"],
+                  ["qualquer_cobranca","Tem alguma cobrança"],["nenhuma","Sem cobrança"]];
+const DIAS = [["0","Falou hoje"],["7","Sem falar há 7+ dias"],["30","Sem falar há 30+ dias"],
+              ["90","Sem falar há 90+ dias"]];
+const CADASTRO = [["7","Últimos 7 dias"],["30","Últimos 30 dias"],["90","Últimos 3 meses"],
+                  ["365","Este ano"],["+365","Antes deste ano"]];
+const MARCAS = [["vip","VIP"],["docs","Aguardando documentos"],["semResp","Sem responsável"]];
+
+// Cada campo é uma pergunta independente; a lista é a interseção de todas.
+const CAMPOS = [
+  { id:"resp",   rot:"Responsável", opcoes:()=>RESPS.map(r=>[r,r]),
+    casa:(c,v)=>c.resp===v },
+  { id:"cobranca", rot:"Financeiro", opcoes:()=>COBRANCA,
+    casa:(c,v)=> v==="qualquer_cobranca" ? c.cobranca!=="nenhuma" : c.cobranca===v },
+  { id:"dias",   rot:"Última interação", opcoes:()=>DIAS,
+    casa:(c,v)=> v==="0" ? c.dias===0 : c.dias>=Number(v) },
+  { id:"cadastro", rot:"Cadastro", opcoes:()=>CADASTRO,
+    casa:(c,v)=> v==="+365" ? c.cadDias>365 : c.cadDias<=Number(v) },
+  { id:"origem", rot:"Origem", opcoes:()=>ORIGENS.map(o=>[o,o]),
+    casa:(c,v)=>c.origem===v },
 ];
-const listaFiltrada = () => {
-  const f = FILTROS.find(x=>x.id===S.filtro) || FILTROS[0];
-  const q = S.busca.trim().toLowerCase();
-  return f.fn().filter(c => !q || c.nome.toLowerCase().includes(q) || c.fone.includes(q) || c.doc.includes(q));
+// Marcas continuam existindo — só saíram da barra fixa pra dentro do "Mais".
+const casaMarca = (c,m) => m==="vip" ? c.vip : m==="docs" ? c.docsPend : !RESPS.includes(c.resp);
+
+const passa = (c, ignorar) => {
+  for (const campo of CAMPOS) {
+    if (campo.id === ignorar) continue;
+    const v = S.f[campo.id];
+    if (v && !campo.casa(c, v)) return false;
+  }
+  if (ignorar !== "marcas") for (const m of S.marcas) if (!casaMarca(c, m)) return false;
+  return true;
 };
+const listaFiltrada = () => {
+  const q = S.busca.trim().toLowerCase();
+  return base().filter(c => passa(c) &&
+    (!q || c.nome.toLowerCase().includes(q) || c.fone.includes(q) || c.doc.includes(q)));
+};
+// quantos sobram se ESTA opção for a escolhida — o número ao lado de cada
+// opção conta já valendo os outros filtros, senão promete o que não entrega
+const contaOpcao = (campoId, valor) => {
+  const campo = CAMPOS.find(c => c.id === campoId);
+  return base().filter(c => passa(c, campoId) && campo.casa(c, valor)).length;
+};
+const contaMarca = (m) => base().filter(c => passa(c, "marcas") && casaMarca(c, m)).length;
+const ativos = () => CAMPOS.filter(c => S.f[c.id]).length + S.marcas.length;
 
 // ══════════ menu ══════════
 function vMenu(){
@@ -384,19 +450,43 @@ function vMenu(){
 function vClientes(){
   if (S.ficha) return vFicha();
   const lista = listaFiltrada();
-  const chip = f => {
-    const n = f.fn().length;
-    const zero = n === 0 && f.id !== "todos";
-    return `<button class="ftab ${S.filtro===f.id?"on":""} ${zero?"zero":""}"
-      ${zero?"":`data-ac="filtro" data-v="${f.id}"`} ${zero?`title="Ninguém aqui agora"`:""}>
-      ${f.r}<span class="n">${n}</span></button>`;
-  };
   const qtd = quais => quais === "leads" ? LEADS.length : CLIS.length;
+  const rotuloDe = (campo, v) => (campo.opcoes().find(([id]) => id === v) || [v, v])[1];
+  const campoHtml = campo => {
+    const v = S.f[campo.id];
+    return `<span class="fcampo ${v?"set":""}">
+      <button data-ac="pop" data-v="${campo.id}">
+        <span class="rot2">${campo.rot}${v?":":""}</span>${v?esc(rotuloDe(campo,v)):""}
+        ${v ? `<span class="cv" data-ac="limpa1" data-v="${campo.id}">${ico.x()}</span>`
+            : `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg>`}
+      </button>
+      ${S.pop===campo.id?`<div class="fpop">
+        ${campo.opcoes().map(([id,r])=>{
+          const n = contaOpcao(campo.id, id);
+          return `<button class="${v===id?"on":""}" data-ac="escolhe" data-v="${campo.id}" data-o="${id}">
+            ${esc(r)}<span class="n">${n}</span></button>`;}).join("")}
+      </div>`:""}</span>`;
+  };
+  const maisHtml = () => `<span class="fcampo ${S.marcas.length?"set":""}">
+      <button data-ac="pop" data-v="marcas">
+        <span class="rot2">Mais${S.marcas.length?":":""}</span>${S.marcas.length?S.marcas.length:""}
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      ${S.pop==="marcas"?`<div class="fpop dir">
+        <div class="tit2">Marcas do cadastro</div>
+        ${MARCAS.map(([id,r])=>`<button class="${S.marcas.includes(id)?"on":""}" data-ac="marca" data-v="${id}">
+          <span class="cx">${S.marcas.includes(id)?`<svg width="9" height="9" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="3.6"><path d="M20 6 9 17l-5-5"/></svg>`:""}</span>
+          ${r}<span class="n">${contaMarca(id)}</span></button>`).join("")}
+      </div>`:""}</span>`;
   return `<div class="pad">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div><div class="h1">Clientes</div>
         <div class="sub">${CLIS.length} na carteira · ${LEADS.length} leads em atendimento ·
-          1 aguardando documento · 1 com cobrança vencida</div></div>
+          ${CLIS.filter(c=>c.docsPend).length} aguardando documento ·
+          ${CLIS.filter(c=>c.cobranca==="vencida").length} com cobrança vencida</div></div>
       <div style="display:flex;gap:6px"><button class="btn">Duplicatas (PDF)</button>
         <button class="btn pri">+ Novo cliente</button></div></div>
 
@@ -409,13 +499,13 @@ function vClientes(){
         <div class="busca" style="max-width:320px">${ico.lupa("var(--t4)")}
           <input id="bq" placeholder="Nome, telefone, e-mail ou CPF..." value="${esc(S.busca)}"></div>
         <div class="fresumo" style="margin:0;flex:1">Mostrando <b>${lista.length}</b> de <b>${base().length}</b> ·
-          ${S.filtro==="todos"&&!S.busca?"sem filtro":`filtro <b>${(FILTROS.find(f=>f.id===S.filtro)||{}).r}</b>${S.busca?` · busca “${esc(S.busca)}”`:""}`}</div>
-        ${S.filtro!=="todos"||S.busca?`<button class="flimpa" data-ac="limpa">${ico.x("var(--ac)")} limpar filtro</button>`:""}
+          ${ativos()||S.busca ? `${ativos()?`<b>${ativos()}</b> filtro${ativos()>1?"s":""}`:""}${ativos()&&S.busca?" · ":""}${S.busca?`busca “${esc(S.busca)}”`:""}` : "sem filtro"}</div>
+        ${ativos()||S.busca?`<button class="flimpa" data-ac="limpa">${ico.x("var(--ac)")} limpar tudo</button>`:""}
       </div>
-      <div class="ftabs">
-        ${FILTROS.filter(f=>f.g===1).map(chip).join("")}
+      <div class="fbar">
+        ${CAMPOS.map(campoHtml).join("")}
         <span class="fdiv"></span>
-        ${FILTROS.filter(f=>f.g===2).map(chip).join("")}
+        ${maisHtml()}
       </div>
     </div>
 
@@ -426,16 +516,16 @@ function vClientes(){
         <td><span class="av" style="background:${c.cor};width:26px;height:26px;font-size:9.5px">${c.ini}</span></td>
         <td><span class="nm">${esc(c.nome)}</span>
           ${c.vip?`<span class="tag am" style="margin-left:6px">VIP</span>`:""}
-          ${c.inativo?`<span class="tag nt" style="margin-left:6px">Inativo 111d</span>`:""}
+          ${c.dias>=90?`<span class="tag nt" style="margin-left:6px">Inativo ${c.dias}d</span>`:""}
           ${c.docsPend?`<span class="tag am" style="margin-left:6px">Aguardando docs</span>`:""}
           <div style="font-size:11px;color:var(--t3);margin-top:2px">${c.fone}</div></td>
         <td>${c.resp}</td>
-        <td>${c.fin.venc!=="R$ 0,00"?`<span style="color:var(--al);font-weight:600">${c.fin.venc} vencido</span>`
-             :c.fin.rec!=="R$ 0,00"?`<span style="color:var(--ok);font-weight:600">${c.fin.rec}</span>`
+        <td>${c.cobranca==="vencida"?`<span style="color:var(--al);font-weight:600">${c.fin.venc} vencido</span>`
+             :c.cobranca==="em_dia"?`<span style="color:var(--ok);font-weight:600">${c.fin.areceber} a receber</span>`
              :`<span style="color:var(--t3)">sem cobrança</span>`}</td>
-        <td>${c.inter}</td><td><span class="tag nt">${c.origem}</span></td></tr>`).join("")
+        <td>${c.dias===0?"hoje":c.dias+"d"}</td><td><span class="tag nt">${c.origem}</span></td></tr>`).join("")
         :`<tr><td colspan="6" style="padding:30px;text-align:center;color:var(--t3);font-size:12.5px">
-           Ninguém com esse filtro. <button class="flimpa" data-ac="limpa">limpar filtro</button></td></tr>`}
+           Ninguém com esses filtros. <button class="flimpa" data-ac="limpa">limpar tudo</button></td></tr>`}
       </tbody></table>
     </div>
   </div>`;
@@ -445,18 +535,28 @@ function vClientes(){
 function vFicha(){
   const L = base();
   const c = L[S.cliSel] || L[0];
+  // A coluna da esquerda ganha busca própria: com a ficha aberta não dá pra
+  // voltar à tela cheia só pra achar outro nome.
+  const q = S.buscaFicha.trim().toLowerCase();
+  const naLista = L.map((x,i)=>({x,i})).filter(({x}) =>
+    !q || x.nome.toLowerCase().includes(q) || x.fone.includes(q) || x.doc.includes(q));
   return `<div class="pad" style="display:flex;gap:12px;align-items:flex-start">
-    <div style="flex:none;width:238px">
+    <div style="flex:none;width:246px">
       <button class="btn" data-ac="lista" style="width:100%;justify-content:center">${ico.volta()} Voltar para a lista</button>
-      <div class="card" style="margin-top:9px;overflow:hidden">
-        ${L.map((x,i)=>`<div data-ac="sel" data-v="${i}" style="display:flex;gap:9px;align-items:center;padding:9px 11px;
+      <div class="busca" style="margin-top:7px">${ico.lupa("var(--t4)")}
+        <input id="bf" placeholder="Nome, CPF ou telefone..." value="${esc(S.buscaFicha)}"></div>
+      <div class="card" style="margin-top:7px;overflow:hidden">
+        ${naLista.length ? naLista.map(({x,i})=>`<div data-ac="sel" data-v="${i}" style="display:flex;gap:9px;align-items:center;padding:9px 11px;
           cursor:pointer;border-bottom:1px solid var(--bd);${i===S.cliSel?"background:var(--ac-bg);box-shadow:inset 3px 0 0 var(--ac)":""}">
           <span class="av" style="background:${x.cor};width:26px;height:26px;font-size:9.5px">${x.ini}</span>
           <span style="min-width:0"><span style="display:block;font-size:12px;font-weight:600;overflow:hidden;
             text-overflow:ellipsis;white-space:nowrap">${esc(x.nome)}</span>
-          <span style="display:block;font-size:10.5px;color:var(--t3)">${x.fone}</span></span></div>`).join("")}
+          <span style="display:block;font-size:10.5px;color:var(--t3)">${x.fone}</span></span></div>`).join("")
+        : `<div style="padding:18px 12px;text-align:center;font-size:11.5px;color:var(--t3)">
+             Nenhum nome com “${esc(S.buscaFicha)}”.</div>`}
       </div>
-      <div style="font-size:10px;color:var(--t3);margin-top:6px;text-align:center">${S.cliSel+1} de ${L.length} · ↑↓ trocam</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:6px;text-align:center">
+        ${q ? `${naLista.length} de ${L.length}` : `${S.cliSel+1} de ${L.length} · ↑↓ trocam`}</div>
     </div>
 
     <div style="flex:1;min-width:0">
@@ -469,7 +569,7 @@ function vFicha(){
               <span class="tag claro">${c.sit==="cliente"?"Cliente":"Lead"}</span>
               ${c.vip?`<span class="tag claro">VIP</span>`:""}
               ${c.docsPend?`<span class="tag claro">Docs pendentes</span>`:""}
-              ${c.inativo?`<span class="tag claro">Inativo há 111 dias</span>`:""}
+              ${c.dias>=90?`<span class="tag claro">Inativo há ${c.dias} dias</span>`:""}
             </div>
             <div class="meta">
               <span>${ico.tel("#ffffffcc")} ${c.fone}</span>
@@ -500,7 +600,7 @@ function vFicha(){
         <div class="kpi"><div class="micro">Recebido</div><div class="v" style="color:${c.fin.rec!=="R$ 0,00"?"var(--ok)":"var(--t1)"}">${c.fin.rec}</div></div>
         <div class="kpi"><div class="micro">A receber</div><div class="v">${c.fin.areceber}</div></div>
         <div class="kpi"><div class="micro">Vencido</div><div class="v" style="color:${c.fin.venc!=="R$ 0,00"?"var(--al)":"var(--t1)"}">${c.fin.venc}</div></div>
-        <div class="kpi"><div class="micro">Cadastrado em</div><div class="v" style="font-size:14px">${c.fin.desde}</div></div>
+        <div class="kpi"><div class="micro">Cadastrado em</div><div class="v" style="font-size:14px">${c.cadastro}</div></div>
       </div>
 
       <div class="abas">
@@ -512,7 +612,7 @@ function vFicha(){
         <div class="micro">${S.aba==="visao"?"Resumo":"Conteúdo da aba"}</div>
         <div style="font-size:12.5px;color:var(--t3);margin-top:7px;line-height:1.65">
           ${S.aba==="visao"
-            ? `Responsável <b style="color:var(--t1)">${c.resp}</b> · origem ${c.origem} · última interação ${c.inter}.<br>
+            ? `Responsável <b style="color:var(--t1)">${c.resp}</b> · origem ${c.origem} · última interação ${c.dias===0?"hoje":c.dias+" dias atrás"}.<br>
                ${c.procs} processo${c.procs>1?"s":""} vinculado${c.procs>1?"s":""}.`
             : "O conteúdo desta aba não muda com o ajuste — só o cabeçalho acima e a organização dos botões."}
         </div>
@@ -595,26 +695,30 @@ function render(){
   app.className = "app" + (S.tema==="escuro"?" escuro":"") + (S.azul==="b"?" vivo2":"");
   const conteudo = S.tela==="clientes" ? vClientes() : S.tela==="processos" ? vProcessos() : vOutra();
   app.innerHTML = vMenu() + `<div class="tela">${conteudo}</div>`;
-  const bq = app.querySelector("#bq");
-  if (bq) { bq.focus(); bq.setSelectionRange(bq.value.length, bq.value.length); }
+  const foco = app.querySelector(S.ficha ? "#bf" : "#bq");
+  if (foco && foco.dataset.tocado) { foco.focus(); foco.setSelectionRange(foco.value.length, foco.value.length); }
 }
 
 app.addEventListener("click", e => {
   const dentro = e.target.closest("[data-stop]");
   const el = e.target.closest("[data-ac]");
-  if (!el) { if (S.mais) { S.mais = false; render(); } return; }
+  if (!el) { if (S.mais || S.pop) { S.mais = false; S.pop = null; render(); } return; }
   const { ac, v } = el.dataset;
   if (ac === "fecha-veu" && !dentro) { S.dlg = false; render(); return; }
   if (ac === "tela")      { S.tela = v; S.ficha = false; S.mais = false; }
   if (ac === "encolher")  { S.menuLarga = !S.menuLarga; }
-  if (ac === "filtro")    { S.filtro = v; }
-  if (ac === "dados")     { S.dados = v; S.filtro = "todos"; S.cliSel = 0; }
-  if (ac === "limpa")     { S.filtro = "todos"; S.busca = ""; }
-  if (ac === "abrir")     { S.cliSel = +v; S.ficha = true; S.aba = "visao"; }
+  if (ac === "pop")       { S.pop = S.pop === v ? null : v; render(); e.stopPropagation(); return; }
+  if (ac === "escolhe")   { S.f[v] = S.f[v] === el.dataset.o ? undefined : el.dataset.o; S.pop = null; }
+  if (ac === "limpa1")    { S.f[v] = undefined; S.pop = null; e.stopPropagation(); }
+  if (ac === "marca")     { S.marcas = S.marcas.includes(v) ? S.marcas.filter(m=>m!==v) : [...S.marcas, v];
+                            render(); e.stopPropagation(); return; }
+  if (ac === "dados")     { S.dados = v; S.f = {}; S.marcas = []; S.cliSel = 0; S.pop = null; }
+  if (ac === "limpa")     { S.f = {}; S.marcas = []; S.busca = ""; S.pop = null; }
+  if (ac === "abrir")     { S.cliSel = +v; S.ficha = true; S.aba = "visao"; S.buscaFicha = ""; S.pop = null; }
   if (ac === "sel")       { S.cliSel = +v; S.aba = "visao"; }
   if (ac === "lista")     { S.ficha = false; }
   if (ac === "aba")       { S.aba = v; }
-  if (ac === "mais")      { S.mais = !S.mais; render(); e.stopPropagation(); return; }
+  if (ac === "mais")      { S.mais = !S.mais; S.pop = null; render(); e.stopPropagation(); return; }
   if (ac === "dlg")       { S.dlg = true; S.dlgLargo = true; }
   if (ac === "dlg-fecha") { S.dlg = false; }
   if (ac === "dlg-larg")  { S.dlgLargo = !S.dlgLargo; }
@@ -622,11 +726,13 @@ app.addEventListener("click", e => {
 });
 
 app.addEventListener("input", e => {
-  if (e.target.id === "bq") { S.busca = e.target.value; render(); }
+  if (e.target.id === "bq") { S.busca = e.target.value; e.target.dataset.tocado = "1"; render(); }
+  if (e.target.id === "bf") { S.buscaFicha = e.target.value; e.target.dataset.tocado = "1"; render(); }
 });
 
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape" && S.dlg) { S.dlg = false; render(); return; }
+  if (e.key === "Escape" && (S.dlg || S.pop || S.mais)) {
+    S.dlg = false; S.pop = null; S.mais = false; render(); return; }
   if (document.activeElement && document.activeElement.tagName === "INPUT") return;
   if (S.ficha && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
     e.preventDefault();
