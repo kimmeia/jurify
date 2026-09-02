@@ -845,7 +845,10 @@ function ClienteDetalheDialog({
       ) : data ? (
         <>
           {/* ═══════════ HERO ═══════════ */}
-          <div className="rounded-2xl bg-info p-7 text-info-on relative overflow-hidden shadow-lg">
+          <div
+                className="faixa-hero rounded-2xl p-7 text-hero-fg relative overflow-hidden shadow-lg"
+                style={{ background: "linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%)" }}
+              >
             <UsersIcon className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
             <div className="relative">
               <div className="flex items-start gap-5 mb-5 flex-wrap">
@@ -861,7 +864,7 @@ function ClienteDetalheDialog({
                       </span>
                     )}
                     {sub ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-success/25 text-success-fg border border-success/30">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-success-bg text-success-fg border border-success/40">
                         Assinatura {sub.status}
                       </span>
                     ) : (
@@ -870,7 +873,7 @@ function ClienteDetalheDialog({
                       </span>
                     )}
                     {isBloqueado && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-danger/30 text-danger-fg border border-danger/30">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-danger-bg text-danger-fg border border-danger/40">
                         <Lock className="w-3 h-3" /> Bloqueado
                       </span>
                     )}
@@ -911,7 +914,7 @@ function ClienteDetalheDialog({
                       variant="ghost" size="sm"
                       disabled={desbloquearMut.isPending}
                       onClick={() => desbloquearMut.mutate({ userId: current! })}
-                      className="text-success-fg bg-success/20 hover:bg-success/30 border border-success/30 backdrop-blur-sm shadow-sm h-8 text-xs"
+                      className="text-success-fg bg-success-bg hover:bg-success/25 border border-success/40 backdrop-blur-sm shadow-sm h-8 text-xs"
                     >
                       <Unlock className="w-3.5 h-3.5 mr-1" /> Desbloquear
                     </Button>
@@ -919,7 +922,7 @@ function ClienteDetalheDialog({
                     <Button
                       variant="ghost" size="sm"
                       onClick={() => setBloquearOpen(true)}
-                      className="text-danger-fg bg-danger/15 hover:bg-danger/30 border border-danger/30 backdrop-blur-sm shadow-sm h-8 text-xs"
+                      className="text-danger-fg bg-danger-bg hover:bg-danger/25 border border-danger/40 backdrop-blur-sm shadow-sm h-8 text-xs"
                     >
                       <Lock className="w-3.5 h-3.5 mr-1" /> Bloquear
                     </Button>
