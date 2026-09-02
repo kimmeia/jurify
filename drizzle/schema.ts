@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, double, uniqueIndex, primaryKey, json } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, double, tinyint, uniqueIndex, primaryKey, json } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -3132,6 +3132,15 @@ export const comissoesFechadas = mysqlTable(
      *  automático e clique manual ambos tentam versao=0 → segundo INSERT
      *  cai em ER_DUP_ENTRY (capturado em db-comissoes.fecharComissao). */
     versao: int("versao").default(0).notNull(),
+    /** Trilha da comissão. 'venda' = a do atendente que vendeu (o único
+     *  tipo que existia); 'gestao' = percentual do gestor sobre o recebido
+     *  de todos os clientes fechados a partir de `dataCorteUsada`. Cada
+     *  trilha tem o seu próprio anti-duplicidade, então as duas podem
+     *  incidir sobre a MESMA cobrança sem se anular. */
+    tipo: mysqlEnum("tipoComFech", ["venda", "gestao"]).default("venda").notNull(),
+    /** Corte de fechamento aplicado, congelado junto com a alíquota.
+     *  NULL na trilha de venda (que não tem corte). */
+    dataCorteUsada: varchar("dataCorteUsadaComFech", { length: 10 }),
   },
   (t) => ({
     idxEscritorioAtendente: index("com_fech_escr_atendente_idx").on(
@@ -3145,6 +3154,7 @@ export const comissoesFechadas = mysqlTable(
     uqPeriodoVersao: uniqueIndex("com_fech_periodo_versao_uq").on(
       t.escritorioId,
       t.atendenteId,
+      t.tipo,
       t.periodoInicio,
       t.periodoFim,
       t.versao,
@@ -3154,6 +3164,83 @@ export const comissoesFechadas = mysqlTable(
 
 export type ComissaoFechada = typeof comissoesFechadas.$inferSelect;
 export type InsertComissaoFechada = typeof comissoesFechadas.$inferInsert;
+
+/**
+ * Quem recebe comissão de GESTÃO, com qual percentual e a partir de quando.
+ *
+ * Tabela separada de `regra_comissao` porque aquela é singleton por
+ * escritório (uma alíquota pra todo mundo) e aqui cada gestor tem o seu
+ * percentual e o seu corte. `dataCorte` é a data de FECHAMENTO do contrato
+ * do cliente a partir da qual os recebimentos passam a comissionar: cliente
+ * que fechou antes fica de fora para sempre, mesmo pagando depois.
+ */
+export const comissaoGestao = mysqlTable(
+  "comissao_gestao",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdComGest").notNull(),
+    colaboradorId: int("colaboradorIdComGest").notNull(),
+    /** Alíquota do modo "flat". No modo "faixas" quem manda é a tabela. */
+    aliquotaPercent: decimal("aliquotaPercentComGest", { precision: 5, scale: 2 })
+      .default("0")
+      .notNull(),
+    /** Mesma semântica da regra de venda: "flat" usa `aliquotaPercent`;
+     *  "faixas" usa `comissao_gestao_faixas` como tabela cumulativa. */
+    modo: mysqlEnum("modoComGest", ["flat", "faixas"]).default("flat").notNull(),
+    /** O que classifica a faixa: o recebido bruto ou só o comissionável. */
+    baseFaixa: mysqlEnum("baseFaixaComGest", ["bruto", "comissionavel"])
+      .default("comissionavel")
+      .notNull(),
+    /** Cobrança abaixo disso não conta, nos dois modos. Por gestor: a regra
+     *  do escritório é a da venda e pode ter um piso diferente. */
+    valorMinimo: decimal("valorMinimoComGest", { precision: 12, scale: 2 })
+      .default("0")
+      .notNull(),
+    /** YYYY-MM-DD. Compara com `leads.fechadoEm` do cliente da cobrança. */
+    dataCorte: varchar("dataCorteComGest", { length: 10 }).notNull(),
+    /** Desliga sem perder a configuração (e sem apagar histórico). */
+    ativo: boolean("ativoComGest").default(true).notNull(),
+    criadoPorUserId: int("criadoPorUserIdComGest").notNull(),
+    criadoEm: timestamp("criadoEmComGest").defaultNow().notNull(),
+    atualizadoEm: timestamp("atualizadoEmComGest").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    uqEscritorioColaborador: uniqueIndex("comissao_gestao_escr_colab_uq").on(
+      t.escritorioId,
+      t.colaboradorId,
+    ),
+  }),
+);
+
+export type ComissaoGestao = typeof comissaoGestao.$inferSelect;
+export type InsertComissaoGestao = typeof comissaoGestao.$inferInsert;
+
+/**
+ * Faixas progressivas da comissão de gestão (um gestor → N faixas).
+ *
+ * Mesma convenção da tabela de faixas da venda: lidas em ordem crescente de
+ * `ordem`, a faixa encaixa o total da base quando este é ≤ `limiteAte`, e a
+ * última pode ter `limiteAte = NULL` para representar "sem teto".
+ */
+export const comissaoGestaoFaixas = mysqlTable(
+  "comissao_gestao_faixas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    comissaoGestaoId: int("comissaoGestaoIdFaixa").notNull(),
+    ordem: int("ordemFaixaGest").notNull(),
+    /** Cota superior da faixa (inclusiva). NULL = sem teto (última faixa). */
+    limiteAte: decimal("limiteAteFaixaGest", { precision: 14, scale: 2 }),
+    aliquotaPercent: decimal("aliquotaPercentFaixaGest", { precision: 5, scale: 2 })
+      .notNull(),
+    createdAt: timestamp("createdAtFaixaGest").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxGestaoOrdem: index("comissao_gestao_faixa_idx").on(t.comissaoGestaoId, t.ordem),
+  }),
+);
+
+export type ComissaoGestaoFaixa = typeof comissaoGestaoFaixas.$inferSelect;
+export type InsertComissaoGestaoFaixa = typeof comissaoGestaoFaixas.$inferInsert;
 
 /**
  * Itens (cobranças) que entraram no snapshot de comissão fechada.
@@ -3510,6 +3597,9 @@ export const cofreCredencialTribunais = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     credencialId: int("credencialIdCT").notNull(),
     tribunal: varchar("tribunalCT", { length: 16 }).notNull(),
+    /** 1 ou 2. No PJe os dois graus são portais separados — endereço, sessão e
+     *  às vezes cadastro diferentes —, então cada um tem o seu resultado. */
+    grau: tinyint("grauCT").default(1).notNull(),
     status: mysqlEnum("statusCT", ["nao_testado", "ativa", "erro"]).default("nao_testado").notNull(),
     ultimoErro: text("ultimoErroCT"),
     ultimoSucessoEm: timestamp("ultimoSucessoEmCT"),
@@ -3518,7 +3608,7 @@ export const cofreCredencialTribunais = mysqlTable(
     updatedAt: timestamp("updatedAtCT").defaultNow().onUpdateNow().notNull(),
   },
   (t) => ({
-    porCredencial: uniqueIndex("uq_cofre_cred_tribunal").on(t.credencialId, t.tribunal),
+    porCredencial: uniqueIndex("uq_cofre_cred_tribunal").on(t.credencialId, t.tribunal, t.grau),
   }),
 );
 

@@ -33,6 +33,36 @@ export function pdpjTjConfig(
   };
 }
 
+/**
+ * Config de um Tribunal Regional Federal no PJe.
+ *
+ * Os TRFs seguem o padrão de subdomínio por grau (`pje1g.trfN.jus.br`), que é
+ * diferente do padrão dos TJs (`pje.tjXX.jus.br/pjeNgrau/`) — daí o helper
+ * próprio em vez de reaproveitar `pdpjTjConfig`.
+ *
+ * ATENÇÃO: estes endereços são CANDIDATOS. Não foi possível abri-los para
+ * conferir (o ambiente de build não alcança sites externos), então eles nascem
+ * "não testado" na grade do Cofre e só ficam verdes depois de um login real.
+ * Foi exatamente por tratar endereço derivado como verdade que a cobertura
+ * estadual chegou a dez tribunais vermelhos.
+ */
+export function pdpjTrfConfig(
+  n: number,
+  grau: 1 | 2 = 1,
+  override?: Partial<TribunalPdpjConfig>,
+): TribunalPdpjConfig {
+  const tribunal = `trf${n}`;
+  const base = `https://pje${grau}g.trf${n}.jus.br/pje`;
+  return {
+    tribunal,
+    grau,
+    nome: `Tribunal Regional Federal da ${n}ª Região — PJe ${grau}º grau`,
+    urlEntrada: `${base}/login.seam`,
+    urlBusca: `${base}/Processo/ConsultaProcesso/listView.seam`,
+    ...override,
+  };
+}
+
 // Tribunais PJe habilitados (motor próprio). Adicionar um estado = uma linha.
 // Ex.: tjmg: pdpjTjConfig("mg")  — depois de validar login + consulta reais.
 //
@@ -75,7 +105,71 @@ const REGISTRO: Record<string, TribunalPdpjConfig> = {
   tjmt: pdpjTjConfig("mt"),
   tjrr: pdpjTjConfig("rr"),
   tjdf: pdpjTjConfig("dft", 1, { tribunal: "tjdf" }),
+
+  // ── Justiça Federal ──────────────────────────────────────────────────────
+  // Decisão do dono (01/09): vigiar também a Federal. Entram como CANDIDATOS
+  // — a grade do Cofre mostra "não testado" até um login real passar.
+  //
+  // Fora daqui de propósito:
+  //  - TRF5 roda por consulta pública (`TRIBUNAIS_CONSULTA_PUBLICA`), sem
+  //    credencial. Entrar aqui faria o sistema exigir cofre onde não precisa.
+  //  - TRF4 usa eproc, não PJe. Não é linha de registro, é adapter novo.
+  trf1: pdpjTrfConfig(1),
+  trf2: pdpjTrfConfig(2),
+  trf3: pdpjTrfConfig(3),
+  trf6: pdpjTrfConfig(6),
 };
+
+/**
+ * 2º grau dos estados cujo 1º grau NÃO segue o padrão derivado.
+ *
+ * Sem este registro, pedir o 2º grau de um estado com endereço próprio caía no
+ * padrão genérico `pje.tjXX.jus.br/pje2grau/` — o mesmo host que já não
+ * resolvia no 1º grau e por isso ganhou override. O cron consulta o 2º grau
+ * quando detecta que o processo subiu (`cron-monitoramento`), engole a falha e
+ * segue só com o 1º: a movimentação do recurso sumia sem ninguém ver.
+ *
+ * Os endereços aqui vêm da MESMA transformação textual do host já validado no
+ * 1º grau (`/1g` → `/2g`, `pje1g.` → `pje2g.`) — continuam sendo candidatos até
+ * um login real passar, e é o registro por grau no Cofre que diz quando passou.
+ *
+ * `null` = não dá pra derivar com honestidade (o endereço do 1º grau não tem
+ * marca de grau nenhuma). Melhor devolver "não sei" do que mandar o robô num
+ * host inventado.
+ */
+const REGISTRO_G2: Record<string, TribunalPdpjConfig | null> = {
+  tjrj: pdpjTjConfig("rj", 2, {
+    urlEntrada: "https://tjrj.pje.jus.br/2g/login.seam",
+    urlBusca: "https://tjrj.pje.jus.br/2g/Processo/ConsultaProcesso/listView.seam",
+  }),
+  tjrn: pdpjTjConfig("rn", 2, {
+    urlEntrada: "https://pje2g.tjrn.jus.br/pje/login.seam",
+    urlBusca: "https://pje2g.tjrn.jus.br/pje/Processo/ConsultaProcesso/listView.seam",
+  }),
+  tjpe: pdpjTjConfig("pe", 2, {
+    urlEntrada: "https://pje.cloud.tjpe.jus.br/2g/login.seam",
+    urlBusca: "https://pje.cloud.tjpe.jus.br/2g/Processo/ConsultaProcesso/listView.seam",
+  }),
+  // `pje.tjpa.jus.br/pje/` e `pjepg.tjro.jus.br/pje/` não carregam grau no
+  // endereço, então não há transformação a fazer — fica mapeado como desconhecido.
+  tjpa: null,
+  tjro: null,
+  // O portal do DF vive em tjdft (com T), enquanto o código do CNJ é tjdf. Sem
+  // esta linha o 2º grau derivava `pje.tjdf.jus.br`, que não é o portal dele.
+  tjdf: pdpjTjConfig("dft", 2, { tribunal: "tjdf" }),
+  // Nos TRFs o grau já está no subdomínio, então a troca é direta.
+  trf1: pdpjTrfConfig(1, 2),
+  trf2: pdpjTrfConfig(2, 2),
+  trf3: pdpjTrfConfig(3, 2),
+  trf6: pdpjTrfConfig(6, 2),
+};
+
+/** Estados cujo 2º grau ainda não tem endereço mapeado. */
+export function segundoGrauMapeado(tribunal: string): boolean {
+  if (!(tribunal in REGISTRO)) return false;
+  if (tribunal in REGISTRO_G2) return REGISTRO_G2[tribunal] != null;
+  return true;
+}
 
 /** Config de consulta de um tribunal (grau 1 por padrão). null = sem motor próprio. */
 export function getConfigTribunal(
@@ -83,7 +177,10 @@ export function getConfigTribunal(
   grau: 1 | 2 = 1,
 ): TribunalPdpjConfig | null {
   if (!(tribunal in REGISTRO)) return null;
-  if (grau === 2) return pdpjTjConfig(tribunal.replace(/^tj/, ""), 2);
+  if (grau === 2) {
+    if (tribunal in REGISTRO_G2) return REGISTRO_G2[tribunal];
+    return pdpjTjConfig(tribunal.replace(/^tj/, ""), 2);
+  }
   return REGISTRO[tribunal];
 }
 

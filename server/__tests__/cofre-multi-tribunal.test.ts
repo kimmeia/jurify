@@ -220,7 +220,9 @@ describe("a tela", () => {
 
   it("dá pra testar um estado sem esperar aparecer processo dele", () => {
     expect(grade).toContain("onTestar");
-    expect(tela).toContain("validar.mutate({ id: credencialId, tribunal })");
+    // O teste avulso passou a nomear o grau junto: no PJe o 1º e o 2º são
+    // portais separados, e testar "o estado" sem dizer qual não significa nada.
+    expect(tela).toContain("avulso.mutate({ id: credencialId, tribunal, grau })");
   });
 
   it("o alcance se troca pelo card, sem remover nada", () => {

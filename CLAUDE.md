@@ -330,6 +330,86 @@ cargo dela é verProprios e o lead não é dela. Fix: separar carregando de
 vazio (vale pra tela toda). Decisão do dono em aberto: quem ATENDE a conversa
 deveria poder abrir a ficha do contato? (mudar isso mexe na regra de acesso).
 
+### D. Card "Recebido" do Relatório Comercial — PARADO na decisão do dono (01/09)
+
+Ele puxou 01–15/08 (54.100) + 16–31/08 (29.150) e o mês inteiro deu 102.750.
+Causa confirmada: `comercialDashboard` exige que as DUAS datas caiam na janela
+— pagamento em `asaasCobrancas.dataPagamento` E cliente com lead
+`fechado_ganho` na mesma janela (subquery `contatosFechadosAtual`, usada em 4
+queries: KPI topo, período anterior, ranking por atendente, série diária; e de
+novo em `detalheAtendenteComercial`). Cliente que fecha 01/08 e paga 20/08 dá
+0 na 1ª quinzena (pagamento fora), 0 na 2ª (fechamento fora) e o valor cheio no
+mês — os 19.500 que sumiram. O PDF sai certo sozinho: `exportarComercialPdf`
+chama as duas procedures por caller.
+
+**Impossível ter as duas coisas**: "só clientes do período" e "as quinzenas
+somam o mês" se excluem por aritmética. Âncora possível:
+- **pagamento** → soma, mas cliente de abril que pagou em agosto entra em agosto
+  (ele recusou: "fechou em agosto e pagou em setembro não conta em setembro");
+- **fechamento** (safra) → soma E só clientes do período; o pagamento conta no
+  mês do contrato. Custo: o número de um mês fechado continua subindo depois, e
+  contraria o exemplo que ele mesmo deu antes (queria o recebimento na quinzena
+  em que caiu). Desempate necessário: cobrança é ligada ao CLIENTE, não ao lead
+  — cliente com duas ações, uma em cada quinzena, não tem como saber de qual
+  contrato veio o pagamento;
+- **deixar como está** → nunca soma; só cabe uma nota na tela.
+
+Dono viu as três e não escolheu ("anote isso"). NÃO implementar antes da
+escolha. `mockup-relatorio-recebido.html` está na âncora de PAGAMENTO — refazer
+na regra escolhida antes de codar.
+
+Verificado de passagem e sem mexer: o lado "Fechado" já conta por
+`leads.fechadoEm` (aditivo, e data retroativa do lançamento grava nele);
+bordas de dia batem exatas (`fimDoDiaNoFuso` = 23:59:59.999); robô LEA-01 já
+acusa lead fechado sem `fechadoEm`. Comissão NÃO aparece nessa tela (grep em
+`Relatorios.tsx` = zero) e é do Financeiro — não tocar. Achado solto: o "Funil
+de Vendas" da mesma tela conta por `leads.createdAt`, então a barra "Ganho"
+pode não bater com o card "Contratos fechados" (o comentário no código afirma
+que batem — não batem). Sugestão barata: só rotular a seção, sem mexer no
+cálculo. Não autorizado ainda.
+
+### E. Comissão de gestão — ENTREGUE 01/09
+
+Gestor ganha % sobre o RECEBIDO de todos os clientes que fecharam a partir
+de uma data de corte, não importa quem vendeu; base é o pagamento, não o
+valor fechado (fechou 2.000 em 2x e pagou 1.000 → comissiona 1.000).
+
+O motor era mono-beneficiário: `simularComissao` descarta cobrança já
+incluída em fechamento comissionável do escritório, então rodar o gestor
+sobre o mesmo pool daria ZERO (o vendedor já consumiu). Daí
+`comissoes_fechadas.tipo` ('venda'|'gestao', migration 0211): cada trilha
+tem o seu anti-duplicidade e as duas incidem sobre a MESMA cobrança. O
+NOT EXISTS da venda ganhou `tipo='venda'` (no-op sobre o acervo, que é
+todo de venda); o da gestão é escopado também pelo GESTOR — dois gestores
+comissionam a mesma cobrança, o mesmo gestor não repete.
+
+Na gestão a cobrança já comissionada NÃO some da consulta: entra em "ficam
+de fora" com o motivo, ao lado de `fechou_antes_do_corte`. Sai do cálculo
+sem sair da tela — é assim que o dono confere que a parcela não pagou
+duas vezes. Bruto recebido segue somando tudo do período (o card não muda
+de significado entre trilhas). Percentual + corte por gestor em
+`comissao_gestao` (nova; `regra_comissao` é singleton por escritório);
+corte aplicado congela em `dataCorteUsada`. UNIQUE de dedup passou a
+incluir `tipo` — gestor que também vende tem os dois fechamentos no mesmo
+período. Elegibilidade compara `leads.fechadoEm >= corte` com o cliente
+real (COALESCE beneficiário/pagador). Amarras em `comissao-gestao.test.ts`,
+conferidas por mutação (8 quebras → 8 vermelhos).
+
+Premissas assumidas, escritas no mockup e ainda não confirmadas por ele:
+gestor ganha sobre TODOS os fechamentos do escritório (não por equipe — não
+existe hierarquia no banco); categorias não comissionáveis também ficam
+fora; base é o valor cheio da cobrança (sem descontar taxa do Asaas), igual
+à comissão de venda. Faixas progressivas do escritório NÃO valem na gestão
+(sempre flat); valor mínimo e dia de vencimento da despesa continuam os do
+escritório. O cron automático segue fechando SÓ a trilha de venda.
+
+Achados registrados e NÃO corrigidos (fora do pedido): `simular` e
+`diagnosticar` aceitam `atendenteId` de outro escritório (só enumeração —
+as cobranças continuam filtradas por escritorioId; `exportarPdf` valida);
+e o "Funil de Vendas" do Relatório Comercial conta por `leads.createdAt`,
+então a barra "Ganho" pode não bater com o card "Contratos fechados" da
+mesma tela (o comentário no código afirma que batem — não batem).
+
 ## Pendências ativas (19/08/2026)
 
 Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
