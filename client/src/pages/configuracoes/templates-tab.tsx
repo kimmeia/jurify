@@ -274,7 +274,7 @@ function TemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { resetar(); onClose(); } }}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{editando ? "Editar template" : "Novo template"}</DialogTitle>
           <DialogDescription>

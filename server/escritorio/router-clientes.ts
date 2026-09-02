@@ -4,7 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { getDb } from "../db";
 import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, leads, colaboradores, users, escritorios, asaasCobrancas } from "../../drizzle/schema";
-import { eq, and, desc, like, or, sql, inArray, isNull, gte, lt } from "drizzle-orm";
+import { eq, and, desc, like, or, sql, inArray, isNull, gte, lt, lte } from "drizzle-orm";
 import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
 import { verificarLimite } from "../billing/plan-limits";
@@ -171,6 +171,28 @@ export const clientesRouter = router({
      * Agenda, vincular conversa no Atendimento).
      */
     estagio: z.enum(["lead", "cliente", "todos"]).optional(),
+    /**
+     * Filtros que se CRUZAM entre si e SOMAM por dentro: marcar dois
+     * responsáveis traz os dois (OU), e somar Responsável com Financeiro
+     * pede quem satisfaz os dois (E). Marcar duas opções do mesmo campo e
+     * receber lista vazia seria o contrário do que o clique quer dizer.
+     *
+     * Convivem com `segmento`, que é recorte único e continua servindo as
+     * outras telas — os dois se aplicam por cima do mesmo WHERE.
+     */
+    responsaveis: z.array(z.number().int().positive()).max(50).optional(),
+    /** "vencida" repete a regra do segmento com_debito; "nenhuma" é sem cobrança alguma. */
+    cobranca: z.array(z.enum(["vencida", "em_dia", "nenhuma"])).max(3).optional(),
+    origens: z.array(z.enum(["whatsapp", "instagram", "facebook", "telefone", "manual", "site", "asaas"])).max(7).optional(),
+    /**
+     * Recortes do cadastro. Os três últimos são os antigos segmentos
+     * `inativo`/`suspensos`/`encerrados`: entraram aqui pra que a barra de
+     * filtro nova não custasse a capacidade de filtrar por eles.
+     */
+    marcas: z.array(z.enum(["vip", "docs", "semResp", "inativo", "suspenso", "encerrado"])).max(6).optional(),
+    /** Data de cadastro do contato, inclusive nas duas pontas (YYYY-MM-DD). */
+    cadastroDe: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    cadastroAte: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   }).optional()).query(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
     if (!perm.allowed) return { clientes: [], total: 0 };
@@ -259,6 +281,63 @@ export const clientesRouter = router({
       where = and(where, sql`${contatos.situacaoServico} NOT IN ('ativo', 'suspenso')`);
     } else if (seg === "suspensos") {
       where = and(where, eq(contatos.situacaoServico, "suspenso"));
+    }
+
+    // ── Filtros combináveis ────────────────────────────────────────────────
+    // Cada bloco é uma pergunta; dentro dela as opções somam, entre elas
+    // cruzam. Lista vazia = campo não perguntado, então não estreita nada.
+    if (input?.responsaveis?.length) {
+      where = and(where, inArray(contatos.responsavelId, input.responsaveis));
+    }
+    if (input?.origens?.length) {
+      where = and(where, inArray(contatos.origem, input.origens));
+    }
+    if (input?.marcas?.length) {
+      const trintaDiasM = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const porMarca = input.marcas.map((m) =>
+        m === "vip" ? sql`${contatos.tags} LIKE '%vip%'`
+        : m === "docs" ? eq(contatos.documentacaoPendente, true)
+        : m === "semResp" ? sql`${contatos.responsavelId} IS NULL`
+        // Mesma definição do segmento "inativo": cadastrado há mais de 30d E
+        // sem conversa nos últimos 30d. `contatos.updatedAt` não serve porque
+        // webhook de sync toca a coluna e o filtro ficaria sempre vazio.
+        : m === "inativo" ? sql`(${contatos.createdAt} < ${trintaDiasM} AND ${contatos.id} NOT IN (
+            SELECT ${conversas.contatoId} FROM ${conversas}
+            WHERE ${conversas.escritorioId} = ${perm.escritorioId}
+              AND ${conversas.ultimaMensagemAt} >= ${trintaDiasM}))`
+        : m === "suspenso" ? eq(contatos.situacaoServico, "suspenso")
+        : sql`${contatos.situacaoServico} NOT IN ('ativo', 'suspenso')`,
+      );
+      where = and(where, or(...porMarca));
+    }
+    if (input?.cobranca?.length) {
+      const hojeCob = dataHojeBR();
+      // A mesma sub-query do segmento com_debito, escopada por escritório.
+      const vencida = sql`${contatos.id} IN (
+        SELECT ${asaasCobrancas.contatoId} FROM ${asaasCobrancas}
+        WHERE ${asaasCobrancas.escritorioId} = ${perm.escritorioId}
+          AND (${asaasCobrancas.status} = 'OVERDUE'
+               OR (${asaasCobrancas.status} = 'PENDING' AND ${asaasCobrancas.vencimento} < ${hojeCob}))
+      )`;
+      const temAlguma = sql`${contatos.id} IN (
+        SELECT ${asaasCobrancas.contatoId} FROM ${asaasCobrancas}
+        WHERE ${asaasCobrancas.escritorioId} = ${perm.escritorioId}
+      )`;
+      const porCobranca = input.cobranca.map((c) =>
+        c === "vencida" ? vencida
+        // "em dia" é ter cobrança E não ter nenhuma vencida — sem o NOT, quem
+        // deve apareceria nos dois recortes ao mesmo tempo.
+        : c === "em_dia" ? sql`(${temAlguma} AND NOT ${vencida})`
+        : sql`NOT ${temAlguma}`,
+      );
+      where = and(where, or(...porCobranca));
+    }
+    if (input?.cadastroDe) {
+      where = and(where, gte(contatos.createdAt, new Date(`${input.cadastroDe}T00:00:00`)));
+    }
+    if (input?.cadastroAte) {
+      // Inclusivo na ponta de cima: quem cadastrou às 15h do dia final entra.
+      where = and(where, lte(contatos.createdAt, new Date(`${input.cadastroAte}T23:59:59.999`)));
     }
 
     const rows = await db.select().from(contatos).where(where).orderBy(desc(contatos.createdAt)).limit(limite).offset(offset);

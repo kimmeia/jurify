@@ -483,7 +483,7 @@ export async function marcarInicioAtendimento(conversaId: number, quando: Date =
 async function condicoesConversa(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   escritorioId: number,
-  filtros?: { atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number; dataInicio?: string; dataFim?: string; arquivadas?: boolean; busca?: string; somenteNovos?: boolean; modoPeriodo?: "inicio" | "mensagens" },
+  filtros?: { ids?: number[]; atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number; dataInicio?: string; dataFim?: string; arquivadas?: boolean; busca?: string; somenteNovos?: boolean; modoPeriodo?: "inicio" | "mensagens" },
 ): Promise<SQL[] | null> {
   const conditions: SQL[] = [eq(conversas.escritorioId, escritorioId)];
   // Arquivadas ficam fora de TODAS as vistas padrão (lista, contadores);
@@ -497,7 +497,15 @@ async function condicoesConversa(
   // soltava as arquivadas na vista padrão sem filtrar nada em troca.
   const termo = filtros?.busca?.trim();
 
-  if (filtros?.arquivadas) {
+  // Busca POR ID é ponteiro, não vista: quem já tem o id da conversa está
+  // apontando pra ela, e ela tem que ser encontrada onde estiver — fora do
+  // período, arquivada, com qualquer status. Sem esta saída, a conversa
+  // aberta a partir de um link ou de um aviso chegava sem os dados do
+  // contato (a tela lia da lista, e a lista é filtrada).
+  const porId = filtros?.ids && filtros.ids.length > 0;
+  if (porId) {
+    conditions.push(inArray(conversas.id, filtros!.ids!));
+  } else if (filtros?.arquivadas) {
     conditions.push(isNotNull(conversas.arquivadaEm));
   } else if (!termo) {
     conditions.push(isNull(conversas.arquivadaEm));
@@ -578,8 +586,8 @@ async function condicoesConversa(
   //
   // Agora o intervalo é testado contra as MENSAGENS (createdAt), que são
   // imutáveis. Índice idx_mensagens_conversa_data cobre a subquery.
-  const inicio = filtros?.dataInicio ? new Date(filtros.dataInicio) : null;
-  const fim = filtros?.dataFim ? new Date(filtros.dataFim) : null;
+  const inicio = !porId && filtros?.dataInicio ? new Date(filtros.dataInicio) : null;
+  const fim = !porId && filtros?.dataFim ? new Date(filtros.dataFim) : null;
   const inicioOk = inicio && !isNaN(inicio.getTime()) ? inicio : null;
   const fimOk = fim && !isNaN(fim.getTime()) ? fim : null;
   if (inicioOk || fimOk) {
@@ -705,6 +713,9 @@ export async function contarAbertasPorAtendente(
 }
 
 export async function listarConversas(escritorioId: number, filtros?: {
+  /** Conversas específicas por id. Ignora período e pasta: quem tem o id
+   *  está apontando pra conversa, e ela tem que aparecer onde estiver. */
+  ids?: number[];
   status?: string;
   atendenteId?: number;
   atendenteIds?: number[];

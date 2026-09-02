@@ -30,9 +30,10 @@ import {
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
   Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello, Pencil,
-  MapPin, AlertTriangle, Briefcase, UserPlus, Ban, Lock,
+  MapPin, AlertTriangle, Briefcase, UserPlus, Ban, Lock, Check, ChevronDown,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
 import {
   DropdownMenu,
@@ -136,7 +137,7 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
           size="sm"
           disabled={deletarMut.isPending}
           onClick={() => setConfirmPararOpen(true)}
-          className="bg-success/15 text-success-fg border border-success/30 backdrop-blur-sm shadow-sm hover:bg-danger/25 hover:text-danger-fg hover:border-danger/30 h-8 text-xs group"
+          className="h-[30px] border border-white/25 bg-white/15 text-xs font-semibold text-hero-fg shadow-none hover:bg-white/25 hover:text-hero-fg group"
         >
           {deletarMut.isPending ? (
             <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
@@ -386,13 +387,15 @@ export default function Clientes() {
   const [, setLocation] = useLocation();
   const [busca, setBusca] = useState("");
   const [buscaDebounced, setBuscaDebounced] = useState("");
-  const [segmento, setSegmento] = useState<Segmento>(() => {
+  const [filtros, setFiltros] = useState<FiltrosClientes>(() => {
     // Dashboard linka pra `/clientes?aguardandoDocs=1` quando clica
     // no card "Aguardando documentação" — abre filtrado direto.
     const params = new URLSearchParams(window.location.search);
-    if (params.get("aguardandoDocs") === "1") return "aguardando_docs";
-    return "todos";
+    return params.get("aguardandoDocs") === "1"
+      ? { ...FILTROS_VAZIOS, marcas: ["docs"] }
+      : FILTROS_VAZIOS;
   });
+  const qtdFiltros = contarFiltros(filtros);
   const [pagina, setPagina] = useState(1);
   const [selId, setSelId] = useState<number | null>(() => {
     // Se veio com ?id=X na URL, abre direto no detalhe.
@@ -450,7 +453,7 @@ export default function Clientes() {
   // pra "Inativos" → bulk action exportava mix ou nada (IDs invisíveis).
   useEffect(() => {
     setSelecionados(new Set());
-  }, [segmento, buscaDebounced, pagina, aba]);
+  }, [filtros, buscaDebounced, pagina, aba]);
 
   // Trocar de aba (Clientes ↔ Leads) ou de segmento volta pra página 1 —
   // senão a paginação herdada pode cair fora do range da nova lista. O
@@ -458,7 +461,7 @@ export default function Clientes() {
   // os controles de paginação por perto pra corrigir à mão.
   useEffect(() => {
     setPagina(1);
-  }, [aba, segmento]);
+  }, [aba, filtros]);
 
   // A leitura de `?id=` acima só roda na MONTAGEM. Quem já está em
   // /clientes e navega pra /clientes?id=X — o que a busca ⌘K faz — não
@@ -480,11 +483,11 @@ export default function Clientes() {
   useEffect(() => {
     const params = new URLSearchParams();
     if (selId) params.set("id", String(selId));
-    if (segmento === "aguardando_docs") params.set("aguardandoDocs", "1");
+    if (filtros.marcas.includes("docs")) params.set("aguardandoDocs", "1");
     const search = params.toString();
     const url = `${window.location.pathname}${search ? "?" + search : ""}`;
     window.history.replaceState({}, "", url);
-  }, [selId, segmento]);
+  }, [selId, filtros]);
 
   const { data: stats, refetch: refetchStats } = trpc.clientes.estatisticas.useQuery();
   // Todos os segmentos (incluindo com_debito) filtram no servidor — antes
@@ -494,9 +497,29 @@ export default function Clientes() {
     busca: buscaDebounced || undefined,
     pagina,
     limite: 50,
-    segmento,
     estagio: aba,
+    // Lista vazia = campo não perguntado. Mandar `[]` faria o servidor
+    // procurar "responsável em nenhum", que devolveria zero.
+    responsaveis: filtros.responsaveis.length ? filtros.responsaveis : undefined,
+    cobranca: filtros.cobranca.length ? filtros.cobranca : undefined,
+    origens: filtros.origens.length ? filtros.origens : undefined,
+    marcas: filtros.marcas.length ? filtros.marcas : undefined,
+    cadastroDe: filtros.cadastroDe || undefined,
+    cadastroAte: filtros.cadastroAte || undefined,
   });
+
+  // Nomes pro filtro "Responsável" — a mesma procedure dos outros filtros do
+  // sistema, que já esconde a equipe de quem só enxerga os próprios.
+  const { data: equipe } = trpc.configuracoes.listarColaboradoresParaFiltro.useQuery(
+    { modulo: "clientes" },
+    { staleTime: 5 * 60_000, retry: false },
+  );
+  const responsaveis = useMemo(
+    () => ((equipe as any)?.colaboradores ?? [])
+      .map((c: any) => ({ id: c.id, nome: c.nome ?? c.userName ?? `#${c.id}` }))
+      .sort((a: any, b: any) => a.nome.localeCompare(b.nome, "pt-BR")),
+    [equipe],
+  );
 
   // Permissões pra mostrar/esconder ícone de excluir na row.
   // Default: se não carregou ainda, esconde (defesa em profundidade).
@@ -534,12 +557,9 @@ export default function Clientes() {
     },
   ) || { data: null };
 
-  // Filtragem: para segmentos server-side é idempotente (backend já filtrou).
-  // Para "com_debito", filtra em cima do resumoFinanceiroBatch.
-  const clientesFiltrados = useMemo(() => {
-    const base = data?.clientes || [];
-    return aplicarSegmento(base, segmento, resumoFinanceiroBatch ?? null);
-  }, [data, segmento, resumoFinanceiroBatch]);
+  // Os filtros novos são todos server-side (inclusive cobrança, que vira
+  // sub-query em asaas_cobrancas). Nada a refiltrar aqui.
+  const clientesFiltrados = useMemo(() => data?.clientes || [], [data]);
 
   const totalPaginas = (data as any)?.totalPaginas || 1;
 
@@ -641,12 +661,7 @@ export default function Clientes() {
               busca={busca}
               onBusca={setBusca}
               total={(data as any)?.total ?? clientesFiltrados.length}
-              aba={aba}
-              onAba={setAba}
-              segmento={segmento}
-              onSegmento={setSegmento}
-              stats={stats}
-              clientesComDebito={clientesComDebito}
+              onVoltar={() => setSelId(null)}
             />
           </div>
           <div className="min-h-0 lg:overflow-auto lg:p-5">
@@ -770,72 +785,51 @@ export default function Clientes() {
             </button>
           </div>
 
-          {/* ═══════════ BUSCA + CHIPS ═══════════ */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[260px] max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-              <Input
-                placeholder="Buscar por nome, telefone, e-mail ou CPF..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="pl-10 h-10 bg-card"
-              />
+          {/* ═══════════ BUSCA + FILTROS ═══════════ */}
+          {/* Os filtros ficam ao lado da busca e se cruzam entre si; o resumo
+              embaixo diz quantos sobraram e por quê. */}
+          <div className="rounded-2xl border bg-card p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[170px] flex-[0_1_260px]">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+                <Input
+                  placeholder="Nome, telefone, e-mail ou CPF..."
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  className="h-[29px] bg-card pl-9 text-xs"
+                />
+              </div>
+              <span className="mx-1 h-[17px] w-px bg-border" />
+              <FiltroClientes filtros={filtros} onFiltros={setFiltros} responsaveis={responsaveis} />
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <ChipSegmento ativo={segmento === "todos"} onClick={() => setSegmento("todos")}>
-                Todos
-                <CountPill ativo={segmento === "todos"}>{(aba === "lead" ? stats?.totalLeads : stats?.totalClientes) ?? "—"}</CountPill>
-              </ChipSegmento>
-              {(stats?.aguardandoDocumentacao ?? 0) > 0 && (
-                <ChipSegmento
-                  ativo={segmento === "aguardando_docs"}
-                  onClick={() => setSegmento("aguardando_docs")}
-                  destaque="amber"
-                >
-                  ⚠ Aguardando docs
-                  <CountPill ativo={segmento === "aguardando_docs"} tom="amber">
-                    {stats?.aguardandoDocumentacao}
-                  </CountPill>
-                </ChipSegmento>
-              )}
-              {clientesComDebito > 0 && (
-                <ChipSegmento
-                  ativo={segmento === "com_debito"}
-                  onClick={() => setSegmento("com_debito")}
-                  destaque="rose"
-                >
-                  ⚠ Com débito
-                  <CountPill ativo={segmento === "com_debito"} tom="rose">
-                    {clientesComDebito}
-                  </CountPill>
-                </ChipSegmento>
-              )}
-              <ChipSegmento ativo={segmento === "vip"} onClick={() => setSegmento("vip")}>
-                <Star className="h-3 w-3 text-warning" />
-                VIP
-              </ChipSegmento>
-              <ChipSegmento ativo={segmento === "novos"} onClick={() => setSegmento("novos")}>
-                Novos (7d)
-              </ChipSegmento>
-              <ChipSegmento ativo={segmento === "inativo"} onClick={() => setSegmento("inativo")}>
-                Inativos (30d+)
-              </ChipSegmento>
-              <ChipSegmento ativo={segmento === "suspensos"} onClick={() => setSegmento("suspensos")}>
-                ⏸ Suspensos
-                {(stats?.suspensos ?? 0) > 0 && (
-                  <CountPill ativo={segmento === "suspensos"} tom="amber">
-                    {stats?.suspensos}
-                  </CountPill>
+            <div className="mt-2.5 flex items-center gap-1.5 border-t pt-2.5 text-[11.5px] text-muted-foreground">
+              <span>
+                Mostrando <b className="font-semibold text-foreground">{clientesFiltrados.length}</b> de{" "}
+                <b className="font-semibold text-foreground">{(data as any)?.total ?? clientesFiltrados.length}</b>
+                {" · "}
+                {qtdFiltros || busca ? (
+                  <>
+                    {qtdFiltros ? (
+                      <>
+                        <b className="font-semibold text-foreground">{qtdFiltros}</b> filtro{qtdFiltros > 1 ? "s" : ""}
+                      </>
+                    ) : null}
+                    {qtdFiltros && busca ? " · " : ""}
+                    {busca ? `busca “${busca}”` : ""}
+                  </>
+                ) : (
+                  "sem filtro"
                 )}
-              </ChipSegmento>
-              <ChipSegmento ativo={segmento === "encerrados"} onClick={() => setSegmento("encerrados")}>
-                ⛔ Encerrados/Cancelados
-                {(stats?.encerrados ?? 0) > 0 && (
-                  <CountPill ativo={segmento === "encerrados"} tom="rose">
-                    {stats?.encerrados}
-                  </CountPill>
-                )}
-              </ChipSegmento>
+              </span>
+              {(qtdFiltros || busca) && (
+                <button
+                  type="button"
+                  onClick={() => { setFiltros(FILTROS_VAZIOS); setBusca(""); }}
+                  className="ml-1 inline-flex items-center gap-1 font-semibold text-info-fg hover:underline"
+                >
+                  <X className="h-3 w-3" /> limpar tudo
+                </button>
+              )}
             </div>
           </div>
 
@@ -872,13 +866,13 @@ export default function Clientes() {
               <CardContent className="py-16 text-center">
                 <Users className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">
-                  {segmento !== "todos"
-                    ? `Nenhum ${aba === "lead" ? "lead" : "cliente"} neste filtro.`
+                  {qtdFiltros || busca
+                    ? `Nenhum ${aba === "lead" ? "lead" : "cliente"} com esses filtros.`
                     : aba === "lead"
                       ? "Nenhum lead em atendimento. Leads aparecem aqui quando alguém entra em contato."
                       : "Nenhum cliente encontrado."}
                 </p>
-                {segmento === "todos" && aba === "cliente" ? (
+                {!qtdFiltros && !busca && aba === "cliente" ? (
                   <Button
                     variant="outline"
                     size="sm"
@@ -894,7 +888,7 @@ export default function Clientes() {
                     className="mt-3 text-xs"
                     onClick={() => {
                       setBusca("");
-                      setSegmento("todos");
+                      setFiltros(FILTROS_VAZIOS);
                     }}
                   >
                     Limpar filtros
@@ -1029,6 +1023,352 @@ export default function Clientes() {
 }
 
 // ─── Sub-componentes da lista ────────────────────────────────────────────────
+
+/**
+ * Filtro da lista de clientes.
+ *
+ * Cada campo é uma pergunta. Dentro de um campo as marcações SOMAM (Camila ou
+ * Thiago); entre campos elas CRUZAM (Camila E com débito). Marcar dois
+ * responsáveis e receber lista vazia seria o contrário do que o clique quer
+ * dizer — por isso o servidor recebe uma lista por campo, e não um recorte só.
+ *
+ * Cadastro é faixa, não marcação, então tem forma própria: atalhos + De/Até.
+ */
+export type FiltrosClientes = {
+  responsaveis: number[];
+  cobranca: Array<"vencida" | "em_dia" | "nenhuma">;
+  origens: Array<"whatsapp" | "instagram" | "facebook" | "telefone" | "manual" | "site" | "asaas">;
+  marcas: Array<"vip" | "docs" | "semResp" | "inativo" | "suspenso" | "encerrado">;
+  cadastroDe: string;
+  cadastroAte: string;
+};
+
+export const FILTROS_VAZIOS: FiltrosClientes = {
+  responsaveis: [], cobranca: [], origens: [], marcas: [], cadastroDe: "", cadastroAte: "",
+};
+
+const OPCOES_COBRANCA: Array<[FiltrosClientes["cobranca"][number], string]> = [
+  ["vencida", "Com débito (vencida)"],
+  ["em_dia", "Com cobrança em dia"],
+  ["nenhuma", "Sem cobrança"],
+];
+const OPCOES_ORIGEM: Array<[FiltrosClientes["origens"][number], string]> = [
+  ["whatsapp", "WhatsApp"], ["site", "Site"], ["instagram", "Instagram"],
+  ["facebook", "Facebook"], ["telefone", "Telefone"], ["manual", "Manual"], ["asaas", "Asaas"],
+];
+const OPCOES_MARCA: Array<[FiltrosClientes["marcas"][number], string]> = [
+  ["vip", "VIP"],
+  ["docs", "Aguardando documentos"],
+  ["semResp", "Sem responsável"],
+  ["inativo", "Inativos (30d+)"],
+  ["suspenso", "Suspensos"],
+  ["encerrado", "Encerrados"],
+];
+
+const ATALHOS_CADASTRO: Array<[string, string, number]> = [
+  ["7", "Últimos 7 dias", 7],
+  ["30", "Últimos 30 dias", 30],
+  ["90", "Últimos 3 meses", 90],
+  ["ano", "Este ano", -1],
+];
+
+function isoMenosDias(dias: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - dias);
+  return d.toISOString().slice(0, 10);
+}
+function brParaIso(br: string) {
+  const m = br.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return "";
+  const [, dd, mm, aaaa] = m;
+  const d = new Date(`${aaaa}-${mm}-${dd}T12:00:00`);
+  // 31/02 não vira 03/03 calado: data que não existe não filtra nada.
+  return d.getDate() === Number(dd) && d.getMonth() + 1 === Number(mm) ? `${aaaa}-${mm}-${dd}` : "";
+}
+function isoParaBr(iso: string) {
+  return iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "";
+}
+function mascararData(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 8);
+  if (d.length > 4) return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+  if (d.length > 2) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return d;
+}
+
+function contarFiltros(f: FiltrosClientes) {
+  return (f.responsaveis.length ? 1 : 0) + (f.cobranca.length ? 1 : 0)
+    + (f.origens.length ? 1 : 0) + (f.marcas.length ? 1 : 0)
+    + (f.cadastroDe || f.cadastroAte ? 1 : 0);
+}
+
+function BotaoFiltro({
+  rotulo, valor, aberto, onAberto, children, largo,
+}: {
+  rotulo: string;
+  valor: string | null;
+  aberto: boolean;
+  onAberto: (v: boolean) => void;
+  children: React.ReactNode;
+  largo?: boolean;
+}) {
+  return (
+    <Popover open={aberto} onOpenChange={onAberto}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`h-[29px] rounded-md border px-2.5 text-[11.5px] font-semibold inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+            valor
+              ? "border-info bg-info-bg text-info-fg"
+              : "border-border bg-card text-foreground/85 hover:border-muted-foreground/60 hover:bg-muted"
+          }`}
+        >
+          <span className={valor ? "font-medium opacity-75" : "font-medium text-muted-foreground"}>
+            {rotulo}{valor ? ":" : ""}
+          </span>
+          {valor}
+          <ChevronDown className="h-3 w-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className={`p-1 ${largo ? "w-[282px]" : "w-[218px]"}`}>
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function OpcaoMarcavel({
+  marcado, onToggle, children, contagem,
+}: {
+  marcado: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+  contagem?: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+        marcado ? "bg-info-bg font-semibold text-info-fg" : "text-foreground/85 hover:bg-muted"
+      }`}
+    >
+      <span
+        className={`flex h-[13px] w-[13px] shrink-0 items-center justify-center rounded-[3px] border-[1.5px] ${
+          marcado ? "border-info bg-info text-info-on" : "border-muted-foreground/60"
+        }`}
+      >
+        {marcado && <Check className="h-2.5 w-2.5" strokeWidth={3.5} />}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {contagem !== undefined && (
+        <span className="tabular-nums text-[10.5px] font-bold text-muted-foreground/70">{contagem}</span>
+      )}
+    </button>
+  );
+}
+
+function FiltroClientes({
+  filtros, onFiltros, responsaveis,
+}: {
+  filtros: FiltrosClientes;
+  onFiltros: (f: FiltrosClientes) => void;
+  responsaveis: Array<{ id: number; nome: string }>;
+}) {
+  const [aberto, setAberto] = useState<string | null>(null);
+  // O que está no campo enquanto se digita; só vira filtro quando a data fecha.
+  const [rascunho, setRascunho] = useState({ de: "", ate: "" });
+
+  useEffect(() => {
+    setRascunho({ de: isoParaBr(filtros.cadastroDe), ate: isoParaBr(filtros.cadastroAte) });
+  }, [filtros.cadastroDe, filtros.cadastroAte]);
+
+  const alternar = <K extends "responsaveis" | "cobranca" | "origens" | "marcas">(campo: K, v: any) => {
+    const atual = filtros[campo] as any[];
+    onFiltros({
+      ...filtros,
+      [campo]: atual.includes(v) ? atual.filter((x) => x !== v) : [...atual, v],
+    } as FiltrosClientes);
+  };
+
+  const rotuloLista = (ids: any[], nomeDe: (v: any) => string) =>
+    ids.length === 0 ? null : ids.length === 1 ? nomeDe(ids[0]) : String(ids.length);
+
+  const faixa = filtros.cadastroDe || filtros.cadastroAte;
+  const rotuloCadastro = !faixa
+    ? null
+    : `${filtros.cadastroDe ? isoParaBr(filtros.cadastroDe) : "…"} – ${filtros.cadastroAte ? isoParaBr(filtros.cadastroAte) : "…"}`;
+
+  const digitarData = (qual: "de" | "ate", bruto: string) => {
+    const texto = mascararData(bruto);
+    setRascunho((r) => ({ ...r, [qual]: texto }));
+    const iso = brParaIso(texto);
+    if (iso || texto === "") {
+      onFiltros({ ...filtros, [qual === "de" ? "cadastroDe" : "cadastroAte"]: iso });
+    }
+  };
+
+  const aplicarAtalho = (id: string, dias: number) => {
+    const de = dias < 0 ? `${new Date().getFullYear()}-01-01` : isoMenosDias(dias);
+    const ate = new Date().toISOString().slice(0, 10);
+    const jaEsse = filtros.cadastroDe === de && filtros.cadastroAte === ate;
+    onFiltros({ ...filtros, cadastroDe: jaEsse ? "" : de, cadastroAte: jaEsse ? "" : ate });
+  };
+
+  return (
+    <>
+      <BotaoFiltro
+        rotulo="Responsável"
+        valor={rotuloLista(filtros.responsaveis, (id) => responsaveis.find((r) => r.id === id)?.nome ?? String(id))}
+        aberto={aberto === "resp"}
+        onAberto={(v) => setAberto(v ? "resp" : null)}
+      >
+        {responsaveis.length === 0 ? (
+          <p className="px-2 py-2 text-xs text-muted-foreground">Nenhum colaborador ativo.</p>
+        ) : (
+          responsaveis.map((r) => (
+            <OpcaoMarcavel key={r.id} marcado={filtros.responsaveis.includes(r.id)} onToggle={() => alternar("responsaveis", r.id)}>
+              {r.nome}
+            </OpcaoMarcavel>
+          ))
+        )}
+      </BotaoFiltro>
+
+      <BotaoFiltro
+        rotulo="Financeiro"
+        valor={rotuloLista(filtros.cobranca, (v) => OPCOES_COBRANCA.find(([id]) => id === v)?.[1] ?? v)}
+        aberto={aberto === "cobranca"}
+        onAberto={(v) => setAberto(v ? "cobranca" : null)}
+      >
+        {OPCOES_COBRANCA.map(([id, r]) => (
+          <OpcaoMarcavel key={id} marcado={filtros.cobranca.includes(id)} onToggle={() => alternar("cobranca", id)}>
+            {r}
+          </OpcaoMarcavel>
+        ))}
+      </BotaoFiltro>
+
+      <BotaoFiltro
+        rotulo="Origem"
+        valor={rotuloLista(filtros.origens, (v) => OPCOES_ORIGEM.find(([id]) => id === v)?.[1] ?? v)}
+        aberto={aberto === "origem"}
+        onAberto={(v) => setAberto(v ? "origem" : null)}
+      >
+        {OPCOES_ORIGEM.map(([id, r]) => (
+          <OpcaoMarcavel key={id} marcado={filtros.origens.includes(id)} onToggle={() => alternar("origens", id)}>
+            {r}
+          </OpcaoMarcavel>
+        ))}
+      </BotaoFiltro>
+
+      <BotaoFiltro
+        rotulo="Cadastro"
+        valor={rotuloCadastro}
+        aberto={aberto === "cadastro"}
+        onAberto={(v) => setAberto(v ? "cadastro" : null)}
+        largo
+      >
+        <p className="px-2 pb-1 pt-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-muted-foreground">Atalhos</p>
+        <div className="grid grid-cols-2 gap-0.5">
+          {ATALHOS_CADASTRO.map(([id, r, dias]) => {
+            const de = dias < 0 ? `${new Date().getFullYear()}-01-01` : isoMenosDias(dias);
+            const ativo = filtros.cadastroDe === de;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => aplicarAtalho(id, dias)}
+                className={`whitespace-nowrap rounded-md px-2 py-1.5 text-left text-[11.5px] transition-colors ${
+                  ativo ? "bg-info-bg font-semibold text-info-fg" : "text-foreground/85 hover:bg-muted"
+                }`}
+              >
+                {r}
+              </button>
+            );
+          })}
+        </div>
+        <p className="px-2 pb-1 pt-2.5 text-[9px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+          Período personalizado
+        </p>
+        <div className="flex gap-2 px-2 pb-2">
+          {(["de", "ate"] as const).map((qual) => {
+            const texto = rascunho[qual];
+            const invalido = texto.length === 10 && !brParaIso(texto);
+            return (
+              <label key={qual} className="flex flex-1 flex-col gap-1 text-[9px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+                {qual === "de" ? "De" : "Até"}
+                {/* Texto mascarado, não `input type=date`: o campo nativo
+                    desenha no idioma do NAVEGADOR, e num Chrome em inglês
+                    "03/04" fica ambíguo — risco real num sistema jurídico. */}
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={10}
+                  placeholder="dd/mm/aaaa"
+                  value={texto}
+                  onChange={(e) => digitarData(qual, e.target.value)}
+                  className={`h-[29px] w-full rounded-md border bg-card px-2 text-[11.5px] font-medium normal-case tracking-normal outline-none focus:ring-2 focus:ring-ring/30 ${
+                    invalido ? "border-danger text-danger-fg" : "border-border text-foreground focus:border-ring"
+                  }`}
+                />
+              </label>
+            );
+          })}
+        </div>
+        <p className="border-t px-2 pb-1 pt-2 text-[10.5px] leading-snug text-muted-foreground">
+          Conta pela data de cadastro do contato.
+        </p>
+      </BotaoFiltro>
+
+      <BotaoFiltro
+        rotulo="Mais"
+        valor={filtros.marcas.length ? String(filtros.marcas.length) : null}
+        aberto={aberto === "marcas"}
+        onAberto={(v) => setAberto(v ? "marcas" : null)}
+      >
+        <p className="px-2 pb-1 pt-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+          Marcas do cadastro
+        </p>
+        {OPCOES_MARCA.map(([id, r]) => (
+          <OpcaoMarcavel key={id} marcado={filtros.marcas.includes(id)} onToggle={() => alternar("marcas", id)}>
+            {r}
+          </OpcaoMarcavel>
+        ))}
+      </BotaoFiltro>
+    </>
+  );
+}
+
+/** Selo sobre a faixa azul: vidro, não cor — cor semântica em cima de navy
+ *  vira sopa, e o que o selo diz já está no texto. */
+function SeloHero({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-[3px] border border-white/25 bg-white/15 px-2 py-0.5 text-[11px] font-semibold">
+      {children}
+    </span>
+  );
+}
+
+/** Botão de ação sobre a faixa azul. */
+function BotaoHero({
+  children, onClick, disabled, title, className = "",
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  title?: string;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`inline-flex h-[30px] items-center gap-1.5 rounded-md border border-white/25 bg-white/15 px-2.5 text-xs font-semibold text-hero-fg transition-colors hover:bg-white/25 disabled:opacity-50 ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
 
 function ChipSegmento({
   ativo,
@@ -2907,12 +3247,7 @@ function ListaCompactaClientes({
   busca,
   onBusca,
   total,
-  aba,
-  onAba,
-  segmento,
-  onSegmento,
-  stats,
-  clientesComDebito,
+  onVoltar,
 }: {
   clientes: any[];
   selId: number | null;
@@ -2920,12 +3255,7 @@ function ListaCompactaClientes({
   busca: string;
   onBusca: (v: string) => void;
   total: number;
-  aba: "cliente" | "lead";
-  onAba: (v: "cliente" | "lead") => void;
-  segmento: Segmento;
-  onSegmento: (v: Segmento) => void;
-  stats: any;
-  clientesComDebito: number;
+  onVoltar: () => void;
 }) {
   const refSelecionado = useRef<HTMLButtonElement | null>(null);
   // Andar com ↑↓ tem que arrastar a rolagem junto, senão a seleção some
@@ -2938,88 +3268,20 @@ function ListaCompactaClientes({
 
   return (
     <>
-      <div className="shrink-0 space-y-2.5 border-b p-3">
-        {/* Mesmas abas e mesmos filtros da lista cheia: sem eles a coluna
-            virava só uma busca, e trocar de segmento obrigava a fechar a
-            ficha pra voltar à tela inteira. */}
-        <div className="flex gap-1 rounded-lg bg-muted p-0.5">
-          {(["cliente", "lead"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => onAba(v)}
-              className={`flex-1 rounded-md px-2 py-1 text-[11.5px] font-semibold transition-colors ${
-                aba === v ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {v === "cliente" ? "Clientes" : "Leads"}
-              <span className="ml-1 tabular-nums opacity-60">
-                {v === "cliente" ? (stats?.clientesAtivos ?? "") : (stats?.totalLeads ?? "")}
-              </span>
-            </button>
-          ))}
-        </div>
-
+      <div className="shrink-0 space-y-2 border-b p-3">
+        {/* Voltar em cima, busca logo abaixo: com a ficha aberta não dá pra
+            fechar a tela inteira só pra achar outro nome. */}
+        <Button variant="outline" size="sm" onClick={onVoltar} className="h-8 w-full justify-center text-xs">
+          <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> Voltar para a lista
+        </Button>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={busca}
             onChange={(e) => onBusca(e.target.value)}
-            placeholder="Buscar na lista..."
-            className="h-9 pl-9 text-[13px]"
+            placeholder="Nome, CPF ou telefone..."
+            className="h-8 pl-9 text-xs"
           />
-        </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          <ChipCompacto ativo={segmento === "todos"} onClick={() => onSegmento("todos")}>
-            Todos
-            {/* O `total` da query vem FILTRADO pelo segmento — usá-lo aqui
-                fazia "Todos" mostrar a contagem do filtro ativo. O número
-                do universo é o mesmo que a lista cheia usa. */}
-            <span className="tabular-nums opacity-70">
-              {(aba === "lead" ? stats?.totalLeads : stats?.totalClientes) ?? "—"}
-            </span>
-          </ChipCompacto>
-          {(stats?.aguardandoDocumentacao ?? 0) > 0 && (
-            <ChipCompacto
-              ativo={segmento === "aguardando_docs"}
-              onClick={() => onSegmento("aguardando_docs")}
-              destaque="amber"
-            >
-              ⚠ Docs
-              <span className="tabular-nums opacity-70">{stats.aguardandoDocumentacao}</span>
-            </ChipCompacto>
-          )}
-          {clientesComDebito > 0 && (
-            <ChipCompacto
-              ativo={segmento === "com_debito"}
-              onClick={() => onSegmento("com_debito")}
-              destaque="rose"
-            >
-              ⚠ Débito
-              <span className="tabular-nums opacity-70">{clientesComDebito}</span>
-            </ChipCompacto>
-          )}
-          <ChipCompacto ativo={segmento === "vip"} onClick={() => onSegmento("vip")}>
-            ★ VIP
-          </ChipCompacto>
-          <ChipCompacto ativo={segmento === "novos"} onClick={() => onSegmento("novos")}>
-            Novos
-          </ChipCompacto>
-          <ChipCompacto ativo={segmento === "inativo"} onClick={() => onSegmento("inativo")}>
-            Inativos
-          </ChipCompacto>
-          {(stats?.suspensos ?? 0) > 0 && (
-            <ChipCompacto ativo={segmento === "suspensos"} onClick={() => onSegmento("suspensos")}>
-              ⏸ Suspensos
-              <span className="tabular-nums opacity-70">{stats.suspensos}</span>
-            </ChipCompacto>
-          )}
-          {(stats?.encerrados ?? 0) > 0 && (
-            <ChipCompacto ativo={segmento === "encerrados"} onClick={() => onSegmento("encerrados")}>
-              ⛔ Encerrados
-              <span className="tabular-nums opacity-70">{stats.encerrados}</span>
-            </ChipCompacto>
-          )}
         </div>
       </div>
 
@@ -3267,258 +3529,203 @@ function ClienteDetalhe({
         </div>
       )}
 
-      {/* Voltar é botão de verdade, com borda: como link de texto fininho
-          acima do hero ele sumia — o dono não achou. */}
-      <button
-        onClick={onVoltar}
-        className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" /> Voltar para a lista
-      </button>
+      {/* No painel a coluna da esquerda já tem o Voltar; na tela cheia ele
+          fica aqui, dentro do cabeçalho. */}
+      {!compacto && (
+        <button
+          onClick={onVoltar}
+          className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Voltar para a lista
+        </button>
+      )}
 
       {/* ═══════════ HERO DO CLIENTE ═══════════ */}
       {/* No painel (lista ao lado) o hero vive numa coluna bem mais estreita:
           sem apertar padding, avatar e título ele come metade da altura útil
           e a tela fica desproporcional. Nada some — só encolhe. */}
-      <div className={`rounded-2xl border bg-card text-card-foreground relative overflow-hidden shadow-sm ${compacto ? "p-4" : "p-6"}`}>
-        <Users className={`absolute -right-10 -bottom-12 text-muted-foreground opacity-[0.05] ${compacto ? "w-36 h-36" : "w-56 h-56"}`} strokeWidth={1.2} />
+      <div
+        className={`relative rounded-2xl text-hero-fg shadow-sm ${compacto ? "p-4" : "p-5"}`}
+        style={{ background: "linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%)" }}
+      >
         <div className="relative">
-          <div className={`flex items-start flex-wrap ${compacto ? "gap-3 mb-3" : "gap-5 mb-5"}`}>
+          <div className={`flex items-start ${compacto ? "gap-3 mb-3" : "gap-4 mb-4"}`}>
             {/* Avatar grande */}
             <div
-              className={`rounded-2xl bg-gradient-to-br ${gradientAvatar(cliente.nome || "?")} text-white flex items-center justify-center font-bold shrink-0 shadow-sm ring-1 ring-black/5 tracking-tight ${compacto ? "w-14 h-14 text-lg" : "w-20 h-20 text-2xl"}`}
+              className={`flex shrink-0 items-center justify-center rounded-xl border border-white/25 bg-white/15 font-bold tracking-tight ${compacto ? "w-11 h-11 text-sm" : "w-14 h-14 text-lg"}`}
             >
               {gerarIniciais(cliente.nome || "?")}
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <h2 className={`font-bold tracking-tight ${compacto ? "text-lg" : "text-2xl"} ${situacaoServico === "suspenso" ? "text-warning-fg" : foraDeServico ? "text-danger-fg" : ""}`}>{cliente.nome}</h2>
-                {isVip && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-warning-bg text-warning-fg border border-warning/30">
-                    <Star className="w-3 h-3 fill-current" /> VIP
-                  </span>
-                )}
-                {cliente.documentacaoPendente && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-warning-bg text-warning-fg border border-warning/30">
-                    <AlertTriangle className="w-3 h-3" /> Docs pendentes
-                  </span>
-                )}
-                {(cliente as any).estagio === "lead" ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-muted text-foreground border border-border">
-                    <TrendingUp className="w-3 h-3" /> Lead
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-success-bg text-success-fg border border-success/30">
-                    <CheckCircle2 className="w-3 h-3" /> Cliente
-                  </span>
-                )}
+              {/* Nome numa linha só. Antes ele dividia a linha com os selos e
+                  com os oito botões `shrink-0` ao lado, e sobrava tão pouca
+                  largura que quebrava uma palavra por linha. */}
+              <h2 className={`font-bold tracking-tight leading-tight ${compacto ? "text-lg" : "text-xl"}`}>
+                {cliente.nome}
+              </h2>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <SeloHero>{(cliente as any).estagio === "lead" ? <><TrendingUp className="h-3 w-3" /> Lead</> : <><CheckCircle2 className="h-3 w-3" /> Cliente</>}</SeloHero>
+                {isVip && <SeloHero><Star className="h-3 w-3 fill-current" /> VIP</SeloHero>}
+                {cliente.documentacaoPendente && <SeloHero><AlertTriangle className="h-3 w-3" /> Docs pendentes</SeloHero>}
                 {foraDeServico && situacaoServico && (
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-                    situacaoServico === "suspenso" ? "bg-warning-bg text-warning-fg border-warning/30"
-                    : situacaoServico === "encerrado" ? "bg-neutral-bg text-neutral-fg border-neutral/30"
-                    : "bg-danger-bg text-danger-fg border-danger/30"
-                  }`}>
-                    <Ban className="w-3 h-3" /> {SITUACAO_SERVICO_INFO[situacaoServico]?.label}
-                  </span>
+                  <SeloHero>
+                    <Ban className="h-3 w-3" />
+                    Serviço {SITUACAO_SERVICO_INFO[situacaoServico]?.label.toLowerCase()}
+                    {(cliente as any).servicoEncerradoEm ? ` em ${new Date((cliente as any).servicoEncerradoEm).toLocaleDateString("pt-BR")}` : ""}
+                  </SeloHero>
                 )}
               </div>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-hero-fg/80">
                 {cliente.telefone && (
-                  <span className="flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5" />
-                    {cliente.telefone}
-                  </span>
+                  <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{cliente.telefone}</span>
                 )}
                 {(cliente as any).telefonesSecundarios?.length > 0 && (
-                  <span className="text-muted-foreground">
-                    +{(cliente as any).telefonesSecundarios.length} tel
-                  </span>
+                  <span>+{(cliente as any).telefonesSecundarios.length} tel</span>
                 )}
                 {cliente.email && (
-                  <span className="flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5" />
-                    {cliente.email}
-                  </span>
+                  <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />{cliente.email}</span>
                 )}
                 {cliente.cpfCnpj && (
-                  <span className="flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5" />
-                    {cliente.cpfCnpj}
-                  </span>
+                  <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />{cliente.cpfCnpj}</span>
                 )}
                 {(cliente as any).cidade && (
                   <span className="flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5" />
-                    {(cliente as any).cidade}
-                    {(cliente as any).uf ? `, ${(cliente as any).uf}` : ""}
+                    <MapPin className="h-3.5 w-3.5" />
+                    {(cliente as any).cidade}{(cliente as any).uf ? `, ${(cliente as any).uf}` : ""}
                   </span>
                 )}
               </div>
-              {foraDeServico && situacaoServico && (
-                <div className={`mt-2 inline-flex items-start gap-2 rounded-lg px-3 py-1.5 text-xs border ${
-                  situacaoServico === "suspenso" ? "bg-warning/20 border-warning/30 text-warning-fg"
-                  : situacaoServico === "encerrado" ? "bg-muted-foreground/25 border-border/30 text-muted-foreground/70"
-                  : "bg-danger/20 border-danger/30 text-danger-fg"
-                }`}>
-                  <Ban className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  <span>
-                    Serviço {SITUACAO_SERVICO_INFO[situacaoServico]?.label.toLowerCase()}
-                    {(cliente as any).servicoEncerradoEm ? ` em ${new Date((cliente as any).servicoEncerradoEm).toLocaleDateString("pt-BR")}` : ""}
-                    {(cliente as any).servicoEncerradoPorNome ? ` por ${(cliente as any).servicoEncerradoPorNome}` : ""}
-                    {(cliente as any).servicoEncerradoMotivo ? ` — ${(cliente as any).servicoEncerradoMotivo}` : ""}
-                  </span>
-                </div>
+              {/* O motivo do encerramento é longo demais pro selo — fica na
+                  linha de baixo, mas só quando existe. */}
+              {foraDeServico && ((cliente as any).servicoEncerradoPorNome || (cliente as any).servicoEncerradoMotivo) && (
+                <p className="mt-2 text-[11.5px] text-hero-fg/70">
+                  {(cliente as any).servicoEncerradoPorNome ? `Por ${(cliente as any).servicoEncerradoPorNome}` : ""}
+                  {(cliente as any).servicoEncerradoMotivo ? ` — ${(cliente as any).servicoEncerradoMotivo}` : ""}
+                </p>
               )}
             </div>
 
-            {/* Ações */}
-            <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-              {(cliente as any).estagio === "cliente" ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => definirEstagioMut.mutate({ contatoId: id, estagio: "lead" })}
-                  disabled={definirEstagioMut.isPending}
-                  title="Voltar este cadastro para Lead — não apaga nada, só muda o selo"
-                  className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
+            {/* Ações: as quatro do dia a dia ficam à vista e o resto vai pro
+                "Mais". Oito botões `shrink-0` na mesma linha do nome deixavam
+                a coluna do nome com o que sobrava, e ele quebrava palavra por
+                palavra. Nada saiu — só mudou de lugar. */}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-white/20 pt-3">
+            {cliente.telefone && (
+              <BotaoHero onClick={() => setLocation(`/atendimento?contatoId=${id}`)} title="Abrir a conversa no Atendimento">
+                <MessageCircle className="h-3.5 w-3.5" /> Inbox
+              </BotaoHero>
+            )}
+            {cliente.cpfCnpj && (
+              <MonitorarProcessosButton cpfCnpj={cliente.cpfCnpj} nome={cliente.nome || cliente.cpfCnpj} />
+            )}
+            <BotaoHero onClick={() => setGerarContratoOpen(true)}>
+              <FileText className="h-3.5 w-3.5" /> Gerar contrato
+            </BotaoHero>
+            <BotaoHero onClick={() => setFechamentoOpen(true)} title="Marca conversão (fechado_ganho)">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Fechamento
+            </BotaoHero>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="ml-auto inline-flex h-[30px] items-center gap-1.5 rounded-md border border-white/25 bg-white/15 px-2.5 text-xs font-semibold text-hero-fg transition-colors hover:bg-white/25"
                 >
-                  <RotateCcw className="w-3.5 h-3.5 mr-1" />
-                  Voltar p/ Lead
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => definirEstagioMut.mutate({ contatoId: id, estagio: "cliente" })}
-                  disabled={definirEstagioMut.isPending}
-                  title="Marcar como Cliente sem registrar venda (use Fechar contrato para contar no comercial)"
-                  className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                  Marcar Cliente
-                </Button>
-              )}
-              {cliente.telefone && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setLocation(`/atendimento?contatoId=${id}`)}
-                  className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
-                >
-                  <MessageCircle className="w-3.5 h-3.5 mr-1" />
-                  Inbox
-                </Button>
-              )}
-              {cliente.cpfCnpj && (
-                <MonitorarProcessosButton
-                  cpfCnpj={cliente.cpfCnpj}
-                  nome={cliente.nome || cliente.cpfCnpj}
-                />
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setGerarContratoOpen(true)}
-                className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
-              >
-                <FileText className="w-3.5 h-3.5 mr-1" />
-                Gerar contrato
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setFechamentoOpen(true)}
-                title="Marca conversão (fechado_ganho)"
-                className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                Fechamento
-              </Button>
-              {podeEditarCliente && (
-                foraDeServico ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => reativarServicoMut.mutate({ contatoId: id })}
-                    disabled={reativarServicoMut.isPending}
-                    title="Reativar o serviço deste cliente"
-                    className="text-success-fg bg-success-bg hover:bg-success/15 border border-success/30 shadow-sm h-8 text-xs"
+                  <MoreVertical className="h-3.5 w-3.5" /> Mais
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {(cliente as any).estagio === "cliente" ? (
+                  <DropdownMenuItem
+                    onClick={() => definirEstagioMut.mutate({ contatoId: id, estagio: "lead" })}
+                    disabled={definirEstagioMut.isPending}
                   >
-                    <RotateCcw className="w-3.5 h-3.5 mr-1" />
-                    Reativar serviço
-                  </Button>
+                    <RotateCcw className="h-3.5 w-3.5" /> Voltar para Lead
+                  </DropdownMenuItem>
                 ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { setEncerrarTipo("cancelado"); setEncerrarMotivo(""); setEncerrarData(new Date().toISOString().slice(0, 10)); setEncerrarOpen(true); }}
-                    title="Suspender, encerrar, cancelar, rescindir ou executar o serviço"
-                    className="text-danger-fg bg-danger-bg hover:bg-danger/15 border border-danger/30 shadow-sm h-8 text-xs"
+                  <DropdownMenuItem
+                    onClick={() => definirEstagioMut.mutate({ contatoId: id, estagio: "cliente" })}
+                    disabled={definirEstagioMut.isPending}
                   >
-                    <Ban className="w-3.5 h-3.5 mr-1" />
-                    Encerrar serviço
-                  </Button>
-                )
-              )}
-              {podeExcluirCliente && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
-                  onClick={() => setMesclarOpen(true)}
-                  title="Mesclar com outro cliente (caso de pagador secundário, ex: esposa)"
-                >
-                  <UserPlus className="w-3.5 h-3.5 mr-1" />
-                  Mesclar
-                </Button>
-              )}
-              {podeExcluirCliente && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-danger-fg bg-danger/15 hover:bg-danger/30 border border-danger/30 backdrop-blur-sm shadow-sm h-8 w-8 p-0"
-                  onClick={() => setExcluirConfirmAlvo(true)}
-                  title="Excluir cliente"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              )}
-            </div>
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Marcar como Cliente
+                  </DropdownMenuItem>
+                )}
+                {podeExcluirCliente && (
+                  <DropdownMenuItem onClick={() => setMesclarOpen(true)}>
+                    <UserPlus className="h-3.5 w-3.5" /> Mesclar com outro cliente
+                  </DropdownMenuItem>
+                )}
+                {podeEditarCliente && (
+                  foraDeServico ? (
+                    <DropdownMenuItem
+                      onClick={() => reativarServicoMut.mutate({ contatoId: id })}
+                      disabled={reativarServicoMut.isPending}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> Reativar serviço
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setEncerrarTipo("cancelado");
+                        setEncerrarMotivo("");
+                        setEncerrarData(new Date().toISOString().slice(0, 10));
+                        setEncerrarOpen(true);
+                      }}
+                    >
+                      <Ban className="h-3.5 w-3.5" /> Encerrar serviço
+                    </DropdownMenuItem>
+                  )
+                )}
+                {podeExcluirCliente && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setExcluirConfirmAlvo(true)}
+                      className="text-danger-fg focus:text-danger-fg"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Excluir cliente
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
-          {/* Mini KPIs do cliente */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <KPIClienteHero
-              label="Recebido"
-              value={fmtBRLShort(Number(asaasResumo?.pago ?? 0))}
-              tone={Number(asaasResumo?.pago ?? 0) > 0 ? "emerald" : "neutral"}
-            />
-            <KPIClienteHero
-              label="A receber"
-              value={fmtBRLShort(Number(asaasResumo?.pendente ?? 0))}
-              tone={Number(asaasResumo?.pendente ?? 0) > 0 ? "amber" : "neutral"}
-            />
-            <KPIClienteHero
-              label="Vencido"
-              value={fmtBRLShort(Number(asaasResumo?.vencido ?? 0))}
-              tone={Number(asaasResumo?.vencido ?? 0) > 0 ? "rose" : "neutral"}
-            />
-            <KPIClienteHero
-              label="Cadastrado em"
-              value={fmtData(cliente.createdAt as any) || "—"}
-              tone="neutral"
-              small
-            />
-          </div>
-
-          {/* Botão financeiro popover (mantém pra manter UX existente) */}
-          <div className="mt-3 flex justify-end">
-            <FinanceiroPopover contatoId={id} />
-          </div>
         </div>
       </div>
 
+      {/* Mini KPIs do cliente */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <KPIClienteHero
+          label="Recebido"
+          value={fmtBRLShort(Number(asaasResumo?.pago ?? 0))}
+          tone={Number(asaasResumo?.pago ?? 0) > 0 ? "emerald" : "neutral"}
+        />
+        <KPIClienteHero
+          label="A receber"
+          value={fmtBRLShort(Number(asaasResumo?.pendente ?? 0))}
+          tone={Number(asaasResumo?.pendente ?? 0) > 0 ? "amber" : "neutral"}
+        />
+        <KPIClienteHero
+          label="Vencido"
+          value={fmtBRLShort(Number(asaasResumo?.vencido ?? 0))}
+          tone={Number(asaasResumo?.vencido ?? 0) > 0 ? "rose" : "neutral"}
+        />
+        <KPIClienteHero
+          label="Cadastrado em"
+          value={fmtData(cliente.createdAt as any) || "—"}
+          tone="neutral"
+          small
+        />
+      </div>
+
+      {/* Botão financeiro popover (mantém pra manter UX existente) */}
+      <div className="mt-3 flex justify-end">
+        <FinanceiroPopover contatoId={id} />
+      </div>
       <MesclarClienteDialog
         open={mesclarOpen}
         onOpenChange={setMesclarOpen}

@@ -2434,7 +2434,7 @@ export default function Processos() {
       {/* A consulta avulsa saiu da barra de abas: é tarefa ocasional, não
           lugar onde se fica. Vira modal aberto pelo botão do cabeçalho. */}
       <Dialog open={consultarAberto} onOpenChange={(v) => !v && setConsultarAberto(false)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Consultar processo</DialogTitle>
             <DialogDescription>
