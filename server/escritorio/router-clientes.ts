@@ -82,6 +82,38 @@ async function ehResponsavelPeloContato(
   return !!l;
 }
 
+/**
+ * Quem ATENDE uma conversa deste contato pode operar o cadastro dele.
+ *
+ * Decisão do dono (02/09): a pessoa que está falando com o cliente precisa
+ * abrir a ficha, corrigir o cadastro e registrar o fechamento — sem depender
+ * de alguém lhe atribuir o cliente antes. O contato que nasce do WhatsApp
+ * nasce sem responsável, e a distribuição automática não preenche esse campo
+ * de propósito (preencher grudaria o cliente no primeiro atendente e mataria
+ * o rodízio), então sem isto o atendente fica trancado do lado de fora do
+ * cadastro de quem ele está atendendo.
+ *
+ * Concede ACESSO, não posse: nada é gravado, o responsável do cadastro
+ * continua como está e a comissão — que vive na cobrança — não é tocada.
+ */
+async function atendeConversaDoContato(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  contatoId: number,
+  escritorioId: number,
+  colabId: number,
+): Promise<boolean> {
+  const [c] = await db
+    .select({ id: conversas.id })
+    .from(conversas)
+    .where(and(
+      eq(conversas.contatoId, contatoId),
+      eq(conversas.escritorioId, escritorioId),
+      eq(conversas.atendenteId, colabId),
+    ))
+    .limit(1);
+  return !!c;
+}
+
 /** Ids de contato que são "meus" por lead — para filtrar listagem em SQL. */
 function contatosMeusPorLead(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
@@ -326,7 +358,8 @@ export const clientesRouter = router({
     if (
       !perm.verTodos &&
       perm.verProprios &&
-      !(await ehResponsavelPeloContato(db, input.id, perm.escritorioId, perm.colaboradorId, c.responsavelId))
+      !(await ehResponsavelPeloContato(db, input.id, perm.escritorioId, perm.colaboradorId, c.responsavelId)) &&
+      !(await atendeConversaDoContato(db, input.id, perm.escritorioId, perm.colaboradorId))
     ) {
       return null;
     }
@@ -472,11 +505,15 @@ export const clientesRouter = router({
         )
         .limit(1);
       if (!contato) throw new Error("Cliente não encontrado.");
-      if (
-        !perm.verTodos &&
-        perm.verProprios &&
-        contato.responsavelId !== perm.colaboradorId
-      ) {
+      // Sem esta saída havia um impasse: o atendente que fechou a venda não
+      // conseguia registrá-la, porque registrar é o que criaria o lead que
+      // lhe daria acesso ao cadastro.
+      const podeFechar =
+        perm.verTodos ||
+        !perm.verProprios ||
+        contato.responsavelId === perm.colaboradorId ||
+        (await atendeConversaDoContato(db, input.contatoId, perm.escritorioId, perm.colaboradorId));
+      if (!podeFechar) {
         throw new Error("Sem permissão para registrar fechamento neste cliente.");
       }
 
@@ -553,7 +590,12 @@ export const clientesRouter = router({
       if (!db) throw new Error("Database indisponível");
 
       // verProprios: atendente só mexe no estágio de quem é responsável.
-      const pode = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+      // "Transformar em cliente" é o outro caminho da conversão (o selo do
+      // cadastro). Quem atende entra aqui pelo mesmo motivo que entra no
+      // registrar fechamento.
+      const pode =
+        (await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos)) ||
+        (await atendeConversaDoContato(db, input.contatoId, perm.escritorioId, perm.colaboradorId));
       if (!pode) throw new Error("Cliente não encontrado ou sem permissão.");
 
       await db
@@ -646,7 +688,13 @@ export const clientesRouter = router({
         .where(and(eq(contatos.id, input.id), eq(contatos.escritorioId, perm.escritorioId)))
         .limit(1);
       if (!contatoAtual) throw new Error("Cliente não encontrado.");
-      if (!perm.verTodos && perm.verProprios && contatoAtual.responsavelId !== perm.colaboradorId) {
+      // Quem atende a conversa também edita o cadastro de quem está atendendo.
+      const podeEditar =
+        perm.verTodos ||
+        !perm.verProprios ||
+        contatoAtual.responsavelId === perm.colaboradorId ||
+        (await atendeConversaDoContato(db, input.id, perm.escritorioId, perm.colaboradorId));
+      if (!podeEditar) {
         // Snapshot do estado real pra diagnóstico — sem isso, dono fica
         // travado quando a UI mostra "Ver todos ✓" e o backend bloqueia.
         // Aparece no AdminErros via logger error.
