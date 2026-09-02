@@ -160,8 +160,7 @@
   /* Filtro por CAMPO, e os campos se somam: "responsável X que está devendo"
      é uma pergunta só. O desenho anterior era recorte único — marcar VIP
      desmarcava Com débito. */
-  .fbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;
-        padding-top:10px;border-top:1px solid var(--bd)}
+  .fbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
   .fcampo{position:relative}
   .fcampo>button{height:29px;border:1px solid var(--bd);background:var(--sup);color:var(--t2);
         border-radius:var(--r-sm);padding:0 8px 0 10px;font-size:11.5px;font-weight:600;font-family:'Inter';
@@ -182,6 +181,21 @@
         cursor:pointer;text-align:left}
   .fpop button:hover{background:var(--hl)}
   .fpop button.on{color:var(--ac);font-weight:600;background:var(--ac-bg)}
+  .fpop .rodape{font-size:10.5px;color:var(--t3);padding:7px 9px 4px;border-top:1px solid var(--bd);
+                margin-top:4px;line-height:1.5}
+  .fpop .rodape b{color:var(--t1);font-weight:600}
+  .fpop.per{min-width:282px}
+  .fpop .atalhos{display:grid;grid-template-columns:1fr 1fr;gap:2px}
+  .fpop .atalhos button{font-size:11.5px;padding:6px 8px;white-space:nowrap}
+  .fpop .datas{display:flex;gap:7px;padding:4px 9px 8px}
+  .fpop .datas label{flex:1;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                     color:var(--t3);display:flex;flex-direction:column;gap:3px}
+  .fpop .datas input{height:29px;border:1px solid var(--bd);border-radius:var(--r-sm);background:var(--sup);
+                     font-family:'Inter';font-size:11.5px;color:var(--t1);padding:0 7px;outline:none;
+                     letter-spacing:0;text-transform:none;font-weight:500;width:100%}
+  .fpop .datas input:focus{border-color:var(--ac);box-shadow:0 0 0 2px var(--ac-bg)}
+  .fpop .datas input::placeholder{color:var(--t4);font-weight:500}
+  .fpop .datas input.ruim{border-color:var(--al);color:var(--al)}
   .fpop button .n{margin-left:auto;font-size:10.5px;font-weight:700;color:var(--t4);
                   font-variant-numeric:tabular-nums}
   .fpop button.on .n{color:var(--ac)}
@@ -201,7 +215,8 @@
   .flimpa{border:0;background:transparent;color:var(--ac);font-size:11.5px;font-weight:600;cursor:pointer;
           font-family:'Inter';display:inline-flex;align-items:center;gap:4px;padding:0 4px}
   .flimpa:hover{text-decoration:underline}
-  .fresumo{font-size:11.5px;color:var(--t3);margin-top:8px}
+  .fresumo{font-size:11.5px;color:var(--t3);margin-top:9px;padding-top:9px;border-top:1px solid var(--bd);
+           display:flex;align-items:center;gap:2px}
   .fresumo b{color:var(--t1);font-weight:600}
 
   /* ─── FICHA: cabeçalho azul ─── */
@@ -288,7 +303,7 @@
 <div class="dica">
   <b>Dados falsos.</b> Quatro coisas que você apontou, cada uma no lugar onde aparece.<br>
   · <b>Menu</b> — no modo estreito o rótulo passa a ficar embaixo do ícone. Use <span class="k">Encolher</span> no rodapé do menu pra ver os dois.<br>
-  · <b>Clientes</b> — filtro por campo (Responsável, Financeiro, Última interação, Cadastro, Origem) e <b>eles se somam</b>: tente Responsável + Financeiro. O número ao lado de cada opção já conta valendo os outros filtros.<br>
+  · <b>Clientes</b> — filtros do lado da busca, todos de marcar (dá pra marcar vários) e <b>Cadastro</b> abre período personalizado. Tente marcar dois responsáveis, depois some com Financeiro.<br>
   · <b>Ficha</b> — clique num cliente: busca por nome/CPF/telefone embaixo do <span class="k">Voltar</span>, cabeçalho azul e <span class="k">⋯ Mais</span> com as ações raras.<br>
   · <b>Consultar processo</b> — vá em <b>Processos</b> e abra o dialog; tem um botão <span class="k">antes / depois</span> nele.
 </div>
@@ -301,7 +316,7 @@ const app = $("#app");
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 const S = { tela:"clientes", azul:"a", tema:"claro", menuLarga:true, dados:"clientes",
-            f:{}, marcas:[], pop:null, buscaFicha:"",
+            f:{}, cad:{de:"",ate:"",preset:null}, pop:null, buscaFicha:"",
             cliSel:0, ficha:false, aba:"visao", mais:false, dlg:false, dlgLargo:true, busca:"" };
 
 const ico = {
@@ -343,89 +358,101 @@ const MENU = [
 const CLIS = [
   { nome:"Rafael Almeida da Rocha", ini:"RR", cor:"#1a4b86", fone:"(85) 98694-2189", doc:"605.167.503-56",
     cidade:"Fortaleza, CE", sit:"cliente", vip:false, resp:"Vendedor", dias:111, origem:"manual",
-    cadastro:"13/05/2026", cadDias:112, cobranca:"nenhuma", docsPend:false,
+    cadastro:"13/05/2026", cadISO:"2026-05-13", cobranca:"nenhuma", docsPend:false,
     fin:{rec:"R$ 0,00", areceber:"R$ 0,00", venc:"R$ 0,00"}, procs:1 },
   { nome:"Mariana Albuquerque Lins", ini:"MA", cor:"#0a7245", fone:"(85) 99812-4470", doc:"084.221.933-05",
     cidade:"Fortaleza, CE", sit:"cliente", vip:true, resp:"Dra. Camila Bastos", dias:0, origem:"whatsapp",
-    cadastro:"02/03/2026", cadDias:184, cobranca:"em_dia", docsPend:false,
+    cadastro:"02/03/2026", cadISO:"2026-03-02", cobranca:"em_dia", docsPend:false,
     fin:{rec:"R$ 4.200,00", areceber:"R$ 2.800,00", venc:"R$ 0,00"}, procs:2 },
   { nome:"Roberto Carvalho Menezes", ini:"RC", cor:"#8a5a09", fone:"(85) 98844-1092", doc:"512.907.844-71",
     cidade:"Maracanaú, CE", sit:"cliente", vip:false, resp:"Dr. Thiago Nunes", dias:2, origem:"indicação",
-    cadastro:"20/08/2026", cadDias:13, cobranca:"em_dia", docsPend:true,
+    cadastro:"20/08/2026", cadISO:"2026-08-20", cobranca:"em_dia", docsPend:true,
     fin:{rec:"R$ 0,00", areceber:"R$ 1.500,00", venc:"R$ 0,00"}, procs:1 },
   { nome:"Fernanda Sampaio Rocha", ini:"FS", cor:"#a8231b", fone:"(88) 99127-3358", doc:"41.882.007/0001-64",
     cidade:"Sobral, CE", sit:"cliente", vip:false, resp:"Dra. Camila Bastos", dias:6, origem:"site",
-    cadastro:"11/01/2026", cadDias:234, cobranca:"vencida", docsPend:false,
+    cadastro:"11/01/2026", cadISO:"2026-01-11", cobranca:"vencida", docsPend:false,
     fin:{rec:"R$ 9.100,00", areceber:"R$ 0,00", venc:"R$ 1.200,00"}, procs:1 },
   { nome:"Antônio Bezerra Filho", ini:"AB", cor:"#33404f", fone:"(85) 99303-1188", doc:"348.772.115-09",
     cidade:"Fortaleza, CE", sit:"cliente", vip:false, resp:"Dr. Thiago Nunes", dias:41, origem:"indicação",
-    cadastro:"28/07/2026", cadDias:36, cobranca:"vencida", docsPend:false,
+    cadastro:"28/07/2026", cadISO:"2026-07-28", cobranca:"vencida", docsPend:false,
     fin:{rec:"R$ 2.000,00", areceber:"R$ 800,00", venc:"R$ 800,00"}, procs:1 },
   { nome:"Luciana Serpa Timbó", ini:"LS", cor:"#6b4d9e", fone:"(85) 98110-7726", doc:"219.443.601-88",
     cidade:"Caucaia, CE", sit:"cliente", vip:true, resp:"Dra. Camila Bastos", dias:96, origem:"site",
-    cadastro:"04/02/2026", cadDias:210, cobranca:"nenhuma", docsPend:false,
+    cadastro:"04/02/2026", cadISO:"2026-02-04", cobranca:"nenhuma", docsPend:false,
     fin:{rec:"R$ 0,00", areceber:"R$ 0,00", venc:"R$ 0,00"}, procs:0 },
 ];
 const LEADS = [
   { nome:"Paulo Ricardo Tavares", ini:"PT", cor:"#5a6b7d", fone:"(85) 99640-2213", doc:"—",
     cidade:"Fortaleza, CE", sit:"lead", vip:false, resp:"Vendedor", dias:1, origem:"anúncio",
-    cadastro:"01/09/2026", cadDias:1, cobranca:"nenhuma", docsPend:false,
+    cadastro:"01/09/2026", cadISO:"2026-09-01", cobranca:"nenhuma", docsPend:false,
     fin:{rec:"R$ 0,00", areceber:"R$ 0,00", venc:"R$ 0,00"}, procs:0 },
   { nome:"Juliana Freire Costa", ini:"JF", cor:"#8a5a09", fone:"(85) 98110-9921", doc:"—",
     cidade:"Eusébio, CE", sit:"lead", vip:false, resp:"Dr. Thiago Nunes", dias:4, origem:"whatsapp",
-    cadastro:"29/08/2026", cadDias:4, cobranca:"nenhuma", docsPend:true,
+    cadastro:"29/08/2026", cadISO:"2026-08-29", cobranca:"nenhuma", docsPend:true,
     fin:{rec:"R$ 0,00", areceber:"R$ 0,00", venc:"R$ 0,00"}, procs:0 },
 ];
 const base = () => S.dados === "leads" ? LEADS : CLIS;
 
 const RESPS = ["Dra. Camila Bastos", "Dr. Thiago Nunes", "Vendedor"];
 const ORIGENS = ["whatsapp", "site", "indicação", "anúncio", "manual"];
-const COBRANCA = [["vencida","Com débito (vencida)"],["em_dia","Com cobrança em dia"],
-                  ["qualquer_cobranca","Tem alguma cobrança"],["nenhuma","Sem cobrança"]];
-const DIAS = [["0","Falou hoje"],["7","Sem falar há 7+ dias"],["30","Sem falar há 30+ dias"],
-              ["90","Sem falar há 90+ dias"]];
-const CADASTRO = [["7","Últimos 7 dias"],["30","Últimos 30 dias"],["90","Últimos 3 meses"],
-                  ["365","Este ano"],["+365","Antes deste ano"]];
+const COBRANCA = [["vencida","Com débito (vencida)"],["em_dia","Com cobrança em dia"],["nenhuma","Sem cobrança"]];
 const MARCAS = [["vip","VIP"],["docs","Aguardando documentos"],["semResp","Sem responsável"]];
 
-// Cada campo é uma pergunta independente; a lista é a interseção de todas.
-const CAMPOS = [
-  { id:"resp",   rot:"Responsável", opcoes:()=>RESPS.map(r=>[r,r]),
-    casa:(c,v)=>c.resp===v },
-  { id:"cobranca", rot:"Financeiro", opcoes:()=>COBRANCA,
-    casa:(c,v)=> v==="qualquer_cobranca" ? c.cobranca!=="nenhuma" : c.cobranca===v },
-  { id:"dias",   rot:"Última interação", opcoes:()=>DIAS,
-    casa:(c,v)=> v==="0" ? c.dias===0 : c.dias>=Number(v) },
-  { id:"cadastro", rot:"Cadastro", opcoes:()=>CADASTRO,
-    casa:(c,v)=> v==="+365" ? c.cadDias>365 : c.cadDias<=Number(v) },
-  { id:"origem", rot:"Origem", opcoes:()=>ORIGENS.map(o=>[o,o]),
-    casa:(c,v)=>c.origem===v },
-];
-// Marcas continuam existindo — só saíram da barra fixa pra dentro do "Mais".
-const casaMarca = (c,m) => m==="vip" ? c.vip : m==="docs" ? c.docsPend : !RESPS.includes(c.resp);
+const HOJE = "2026-09-02";
+const menos = d => { const t = new Date(HOJE + "T12:00:00"); t.setDate(t.getDate() - d);
+                     return t.toISOString().slice(0,10); };
+const PRESETS = [["7","Últimos 7 dias"],["30","Últimos 30 dias"],["90","Últimos 3 meses"],["ano","Este ano"]];
+const faixaPreset = p => p === "ano" ? [HOJE.slice(0,4) + "-01-01", HOJE] : [menos(Number(p)), HOJE];
+const brData = iso => iso ? iso.slice(8,10) + "/" + iso.slice(5,7) + "/" + iso.slice(0,4) : "";
+const mascaraData = v => { const d = v.replace(/\D/g, "").slice(0,8);
+  return d.length > 4 ? `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`
+       : d.length > 2 ? `${d.slice(0,2)}/${d.slice(2)}` : d; };
+// Só vira filtro quando a data existe de verdade: 31/02 não passa.
+const paraISO = br => { const m = br.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); if (!m) return "";
+  const [, dd, mm, aaaa] = m, dt = new Date(`${aaaa}-${mm}-${dd}T12:00:00`);
+  return dt.getDate() === +dd && dt.getMonth() + 1 === +mm ? `${aaaa}-${mm}-${dd}` : ""; };
 
+// Cada campo é uma pergunta. Dentro dele as marcações SOMAM (Camila ou Thiago);
+// entre campos elas se cruzam (Camila E com débito). Marcar dois responsáveis
+// e receber lista vazia seria o contrário do que o clique quer dizer.
+const CAMPOS = [
+  { id:"resp",     rot:"Responsável", opcoes:()=>RESPS.map(r=>[r,r]), valor:c=>c.resp },
+  { id:"cobranca", rot:"Financeiro",  opcoes:()=>COBRANCA,            valor:c=>c.cobranca },
+  { id:"origem",   rot:"Origem",      opcoes:()=>ORIGENS.map(o=>[o,o]), valor:c=>c.origem },
+  { id:"marcas",   rot:"Mais",        opcoes:()=>MARCAS, marca:true, tit:"Marcas do cadastro" },
+];
+const casaMarca = (c,m) => m === "vip" ? c.vip : m === "docs" ? c.docsPend : !RESPS.includes(c.resp);
+const casaCampo = (campo, c) => {
+  const sel = S.f[campo.id] || [];
+  if (!sel.length) return true;
+  return campo.marca ? sel.some(m => casaMarca(c, m)) : sel.includes(campo.valor(c));
+};
+const faixaCad = () => {
+  if (S.cad.preset) return faixaPreset(S.cad.preset);
+  if (S.cad.de || S.cad.ate) return [S.cad.de || "0000-01-01", S.cad.ate || "9999-12-31"];
+  return null;
+};
+const casaCadastro = c => { const f = faixaCad(); return !f || (c.cadISO >= f[0] && c.cadISO <= f[1]); };
 const passa = (c, ignorar) => {
-  for (const campo of CAMPOS) {
-    if (campo.id === ignorar) continue;
-    const v = S.f[campo.id];
-    if (v && !campo.casa(c, v)) return false;
-  }
-  if (ignorar !== "marcas") for (const m of S.marcas) if (!casaMarca(c, m)) return false;
-  return true;
+  for (const campo of CAMPOS) if (campo.id !== ignorar && !casaCampo(campo, c)) return false;
+  return ignorar === "cadastro" || casaCadastro(c);
 };
 const listaFiltrada = () => {
   const q = S.busca.trim().toLowerCase();
   return base().filter(c => passa(c) &&
     (!q || c.nome.toLowerCase().includes(q) || c.fone.includes(q) || c.doc.includes(q)));
 };
-// quantos sobram se ESTA opção for a escolhida — o número ao lado de cada
-// opção conta já valendo os outros filtros, senão promete o que não entrega
+// Quantos sobram se ESTA opção entrar — já valendo os outros campos, senão o
+// número promete o que a lista não entrega. O próprio campo sai da conta,
+// porque marcar duas opções dele soma em vez de cruzar.
 const contaOpcao = (campoId, valor) => {
   const campo = CAMPOS.find(c => c.id === campoId);
-  return base().filter(c => passa(c, campoId) && campo.casa(c, valor)).length;
+  return base().filter(c => passa(c, campoId) &&
+    (campo.marca ? casaMarca(c, valor) : campo.valor(c) === valor)).length;
 };
-const contaMarca = (m) => base().filter(c => passa(c, "marcas") && casaMarca(c, m)).length;
-const ativos = () => CAMPOS.filter(c => S.f[c.id]).length + S.marcas.length;
+const contaPreset = pr => { const [de, ate] = faixaPreset(pr);
+  return base().filter(c => passa(c, "cadastro") && c.cadISO >= de && c.cadISO <= ate).length; };
+const ativos = () => CAMPOS.reduce((n, c) => n + ((S.f[c.id] || []).length ? 1 : 0), 0) + (faixaCad() ? 1 : 0);
 
 // ══════════ menu ══════════
 function vMenu(){
@@ -451,36 +478,57 @@ function vClientes(){
   if (S.ficha) return vFicha();
   const lista = listaFiltrada();
   const qtd = quais => quais === "leads" ? LEADS.length : CLIS.length;
-  const rotuloDe = (campo, v) => (campo.opcoes().find(([id]) => id === v) || [v, v])[1];
+  const seta = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg>`;
+  const caixa = marcado => `<span class="cx">${marcado?`<svg width="9" height="9" viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" stroke-width="3.6"><path d="M20 6 9 17l-5-5"/></svg>`:""}</span>`;
+
   const campoHtml = campo => {
-    const v = S.f[campo.id];
-    return `<span class="fcampo ${v?"set":""}">
+    const sel = S.f[campo.id] || [];
+    const rotulo = sel.length === 1
+      ? esc((campo.opcoes().find(([id]) => id === sel[0]) || [sel[0], sel[0]])[1])
+      : sel.length ? String(sel.length) : "";
+    return `<span class="fcampo ${sel.length?"set":""}">
       <button data-ac="pop" data-v="${campo.id}">
-        <span class="rot2">${campo.rot}${v?":":""}</span>${v?esc(rotuloDe(campo,v)):""}
-        ${v ? `<span class="cv" data-ac="limpa1" data-v="${campo.id}">${ico.x()}</span>`
-            : `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg>`}
+        <span class="rot2">${campo.rot}${sel.length?":":""}</span>${rotulo}
+        ${sel.length ? `<span class="cv" data-ac="limpa1" data-v="${campo.id}">${ico.x()}</span>` : seta}
       </button>
-      ${S.pop===campo.id?`<div class="fpop">
-        ${campo.opcoes().map(([id,r])=>{
-          const n = contaOpcao(campo.id, id);
-          return `<button class="${v===id?"on":""}" data-ac="escolhe" data-v="${campo.id}" data-o="${id}">
-            ${esc(r)}<span class="n">${n}</span></button>`;}).join("")}
+      ${S.pop===campo.id?`<div class="fpop ${campo.id==="marcas"?"dir":""}">
+        ${campo.tit?`<div class="tit2">${campo.tit}</div>`:""}
+        ${campo.opcoes().map(([id,r])=>`<button class="${sel.includes(id)?"on":""}"
+            data-ac="marca" data-v="${campo.id}" data-o="${esc(id)}">
+            ${caixa(sel.includes(id))}${esc(r)}<span class="n">${contaOpcao(campo.id,id)}</span></button>`).join("")}
+        ${sel.length>1?`<div class="rodape">Quem tem <b>qualquer uma</b> das marcadas.</div>`:""}
       </div>`:""}</span>`;
   };
-  const maisHtml = () => `<span class="fcampo ${S.marcas.length?"set":""}">
-      <button data-ac="pop" data-v="marcas">
-        <span class="rot2">Mais${S.marcas.length?":":""}</span>${S.marcas.length?S.marcas.length:""}
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg>
+
+  // Período é faixa, não marcação: os atalhos só preenchem os dois campos.
+  const cadHtml = () => {
+    const f = faixaCad();
+    const rotulo = !f ? "" : S.cad.preset
+      ? (PRESETS.find(([p])=>p===S.cad.preset)||["",""])[1].toLowerCase()
+      : `${S.cad.de?brData(S.cad.de):"…"} – ${S.cad.ate?brData(S.cad.ate):"…"}`;
+    return `<span class="fcampo ${f?"set":""}">
+      <button data-ac="pop" data-v="cadastro">
+        <span class="rot2">Cadastro${f?":":""}</span>${esc(rotulo)}
+        ${f ? `<span class="cv" data-ac="limpa1" data-v="cadastro">${ico.x()}</span>` : seta}
       </button>
-      ${S.pop==="marcas"?`<div class="fpop dir">
-        <div class="tit2">Marcas do cadastro</div>
-        ${MARCAS.map(([id,r])=>`<button class="${S.marcas.includes(id)?"on":""}" data-ac="marca" data-v="${id}">
-          <span class="cx">${S.marcas.includes(id)?`<svg width="9" height="9" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="3.6"><path d="M20 6 9 17l-5-5"/></svg>`:""}</span>
-          ${r}<span class="n">${contaMarca(id)}</span></button>`).join("")}
+      ${S.pop==="cadastro"?`<div class="fpop per">
+        <div class="tit2">Atalhos</div>
+        <div class="atalhos">${PRESETS.map(([p,r])=>
+          `<button class="${S.cad.preset===p?"on":""}" data-ac="preset" data-v="${p}">${r}
+            <span class="n">${contaPreset(p)}</span></button>`).join("")}</div>
+        <div class="tit2">Período personalizado</div>
+        <div class="datas">
+          <label>De<input type="text" inputmode="numeric" maxlength="10" id="cadDe"
+            placeholder="dd/mm/aaaa" value="${brData(S.cad.de)}"></label>
+          <label>Até<input type="text" inputmode="numeric" maxlength="10" id="cadAte"
+            placeholder="dd/mm/aaaa" value="${brData(S.cad.ate)}"></label>
+        </div>
+        <div class="rodape">Conta pela data de cadastro do contato.</div>
       </div>`:""}</span>`;
+  };
+
   return `<div class="pad">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div><div class="h1">Clientes</div>
@@ -491,22 +539,22 @@ function vClientes(){
         <button class="btn pri">+ Novo cliente</button></div></div>
 
     <div class="card" style="margin-top:13px;padding:11px 12px">
-      <div style="display:flex;gap:10px;align-items:center">
+      <div class="fbar">
         <div class="segdados">
           ${[["clientes","Clientes"],["leads","Leads"]].map(([id,r])=>
             `<button class="${S.dados===id?"on":""}" data-ac="dados" data-v="${id}">${r}<span class="n">${qtd(id)}</span></button>`).join("")}
         </div>
-        <div class="busca" style="max-width:320px">${ico.lupa("var(--t4)")}
+        <div class="busca" style="flex:0 1 250px;min-width:170px">${ico.lupa("var(--t4)")}
           <input id="bq" placeholder="Nome, telefone, e-mail ou CPF..." value="${esc(S.busca)}"></div>
-        <div class="fresumo" style="margin:0;flex:1">Mostrando <b>${lista.length}</b> de <b>${base().length}</b> ·
-          ${ativos()||S.busca ? `${ativos()?`<b>${ativos()}</b> filtro${ativos()>1?"s":""}`:""}${ativos()&&S.busca?" · ":""}${S.busca?`busca “${esc(S.busca)}”`:""}` : "sem filtro"}</div>
-        ${ativos()||S.busca?`<button class="flimpa" data-ac="limpa">${ico.x("var(--ac)")} limpar tudo</button>`:""}
-      </div>
-      <div class="fbar">
-        ${CAMPOS.map(campoHtml).join("")}
         <span class="fdiv"></span>
-        ${maisHtml()}
+        ${CAMPOS.filter(c=>c.id!=="marcas").map(campoHtml).join("")}
+        ${cadHtml()}
+        ${campoHtml(CAMPOS.find(c=>c.id==="marcas"))}
       </div>
+      <div class="fresumo">Mostrando <b>${lista.length}</b> de <b>${base().length}</b> ·
+        ${ativos()||S.busca ? `${ativos()?`<b>${ativos()}</b> filtro${ativos()>1?"s":""}`:""}${ativos()&&S.busca?" · ":""}${S.busca?`busca “${esc(S.busca)}”`:""}` : "sem filtro"}
+        ${ativos()||S.busca?`<button class="flimpa" data-ac="limpa" style="margin-left:6px">${ico.x("var(--ac)")} limpar tudo</button>`:""}</div>
+
     </div>
 
     <div class="card" style="margin-top:10px;overflow:hidden">
@@ -702,18 +750,27 @@ function render(){
 app.addEventListener("click", e => {
   const dentro = e.target.closest("[data-stop]");
   const el = e.target.closest("[data-ac]");
-  if (!el) { if (S.mais || S.pop) { S.mais = false; S.pop = null; render(); } return; }
+  // Clicar DENTRO da caixa não a fecha — os campos de data moram nela, e
+  // fechar no primeiro clique tornava impossível digitar a data.
+  if (!el) { if ((S.mais || S.pop) && !e.target.closest(".fpop, .drop")) {
+    S.mais = false; S.pop = null; render(); } return; }
   const { ac, v } = el.dataset;
   if (ac === "fecha-veu" && !dentro) { S.dlg = false; render(); return; }
   if (ac === "tela")      { S.tela = v; S.ficha = false; S.mais = false; }
   if (ac === "encolher")  { S.menuLarga = !S.menuLarga; }
   if (ac === "pop")       { S.pop = S.pop === v ? null : v; render(); e.stopPropagation(); return; }
-  if (ac === "escolhe")   { S.f[v] = S.f[v] === el.dataset.o ? undefined : el.dataset.o; S.pop = null; }
-  if (ac === "limpa1")    { S.f[v] = undefined; S.pop = null; e.stopPropagation(); }
-  if (ac === "marca")     { S.marcas = S.marcas.includes(v) ? S.marcas.filter(m=>m!==v) : [...S.marcas, v];
+  // marcar não fecha a caixa: a graça é marcar vários de uma vez
+  if (ac === "marca")     { const o = el.dataset.o, atual = S.f[v] || [];
+                            S.f[v] = atual.includes(o) ? atual.filter(x => x !== o) : [...atual, o];
                             render(); e.stopPropagation(); return; }
-  if (ac === "dados")     { S.dados = v; S.f = {}; S.marcas = []; S.cliSel = 0; S.pop = null; }
-  if (ac === "limpa")     { S.f = {}; S.marcas = []; S.busca = ""; S.pop = null; }
+  if (ac === "preset")    { S.cad = S.cad.preset === v ? {de:"",ate:"",preset:null}
+                                                       : {de:"",ate:"",preset:v};
+                            render(); e.stopPropagation(); return; }
+  if (ac === "limpa1")    { if (v === "cadastro") S.cad = {de:"",ate:"",preset:null}; else S.f[v] = [];
+                            S.pop = null; e.stopPropagation(); }
+  if (ac === "dados")     { S.dados = v; S.f = {}; S.cad = {de:"",ate:"",preset:null};
+                            S.cliSel = 0; S.pop = null; }
+  if (ac === "limpa")     { S.f = {}; S.cad = {de:"",ate:"",preset:null}; S.busca = ""; S.pop = null; }
   if (ac === "abrir")     { S.cliSel = +v; S.ficha = true; S.aba = "visao"; S.buscaFicha = ""; S.pop = null; }
   if (ac === "sel")       { S.cliSel = +v; S.aba = "visao"; }
   if (ac === "lista")     { S.ficha = false; }
@@ -728,6 +785,18 @@ app.addEventListener("click", e => {
 app.addEventListener("input", e => {
   if (e.target.id === "bq") { S.busca = e.target.value; e.target.dataset.tocado = "1"; render(); }
   if (e.target.id === "bf") { S.buscaFicha = e.target.value; e.target.dataset.tocado = "1"; render(); }
+});
+// A máscara escreve no próprio campo, sem remontar a tela: remontar a cada
+// tecla jogaria o cursor pro fim antes de a data fechar. Só recalcula a lista
+// quando a data fica completa e válida — ou quando o campo esvazia.
+app.addEventListener("input", e => {
+  const qual = e.target.id === "cadDe" ? "de" : e.target.id === "cadAte" ? "ate" : null;
+  if (!qual) return;
+  e.target.value = mascaraData(e.target.value);
+  const iso = paraISO(e.target.value);
+  const vazio = e.target.value === "";
+  e.target.classList.toggle("ruim", e.target.value.length === 10 && !iso);
+  if (iso || vazio) { S.cad = { ...S.cad, [qual]: iso, preset: null }; render(); }
 });
 
 document.addEventListener("keydown", e => {
