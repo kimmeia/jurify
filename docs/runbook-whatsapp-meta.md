@@ -150,9 +150,12 @@ simultaneamente na Cloud API. Ground truth: `is_on_biz_app` do
 
 ## Pendências externas (estado em 26/ago/2026)
 
-- [x] Acesso avançado do app `1295...` (Análise do App) — **ENVIADO em
-      26/08/2026**, status "Análise em andamento" (prazo típico Meta: até
-      20 dias). Pacote: `whatsapp_business_messaging` +
+- [x] Acesso avançado do app `1295...` (Análise do App) — **APROVADO em
+      01/09/2026** ("Envio aprovado", as 3 permissões Approved). O Embedded
+      Signup de 1 clique passou a funcionar pra QUALQUER conta Facebook
+      (a restrição "só conta atrelada à Devular" era o acesso padrão).
+      Data Use Checkup anual também dado como concluído em 01/09.
+      Pacote enviado em 26/08: `whatsapp_business_messaging` +
       `whatsapp_business_management` + `public_profile` (manage_app_solution
       e whatsapp_business_manage_events foram removidos do pedido — sem uso
       no código). Evidências: 2 screencasts (envio de mensagem; criação de
