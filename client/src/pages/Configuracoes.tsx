@@ -407,7 +407,7 @@ export default function Configuracoes() {
   return (
     <div className="space-y-5">
       {/* ─── HERO ─────────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-2xl p-6 text-white shadow-lg"
+      <div className="faixa-hero relative overflow-hidden rounded-2xl p-6 text-white shadow-lg"
            style={{ background: "linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%)" }}>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/10 blur-3xl pointer-events-none" />
         <div className="relative flex items-start justify-between gap-4 flex-wrap">

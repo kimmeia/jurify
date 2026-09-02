@@ -3375,7 +3375,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
   return (<div className="space-y-4">
     {/* Hero gradient com 4 KPIs */}
     <div
-      className="relative overflow-hidden rounded-2xl px-6 py-5 text-white shadow-lg"
+      className="faixa-hero relative overflow-hidden rounded-2xl px-6 py-5 text-white shadow-lg"
       style={{
         background:
           "radial-gradient(circle at 20% 0%, rgba(255,255,255,0.18), transparent 40%), " +

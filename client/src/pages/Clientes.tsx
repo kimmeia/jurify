@@ -3545,7 +3545,7 @@ function ClienteDetalhe({
           sem apertar padding, avatar e título ele come metade da altura útil
           e a tela fica desproporcional. Nada some — só encolhe. */}
       <div
-        className={`relative rounded-2xl text-hero-fg shadow-sm ${compacto ? "p-4" : "p-5"}`}
+        className={`faixa-hero relative rounded-2xl text-hero-fg shadow-sm ${compacto ? "p-4" : "p-5"}`}
         style={{ background: "linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%)" }}
       >
         <div className="relative">
