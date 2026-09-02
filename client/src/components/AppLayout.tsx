@@ -513,7 +513,7 @@ function AppSidebarContent({
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
-          className="border-r-0 menu-rotulado"
+          className="border-r-0"
           disableTransition={isResizing}
         >
           {/* `shrink-0` não é decorativo: a regra global `.flex{min-height:0}`
@@ -574,10 +574,22 @@ function AppSidebarContent({
                             isActive={ativo}
                             onClick={() => navigateOrBlock(item.rota)}
                             tooltip={item.rotulo}
-                            className={`h-[34px] relative transition-all ${ativo ? "font-semibold" : "font-normal"} ${itemsLocked ? "opacity-50" : ""}`}
+                            className={`relative h-[34px] transition-all
+                              group-data-[collapsible=icon]:h-auto! group-data-[collapsible=icon]:w-full!
+                              group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:justify-center
+                              group-data-[collapsible=icon]:gap-0.5 group-data-[collapsible=icon]:px-0.5!
+                              group-data-[collapsible=icon]:py-1.5!
+                              ${ativo ? "font-semibold" : "font-normal"} ${itemsLocked ? "opacity-50" : ""}`}
                           >
                             <Icone className={`h-4 w-4 ${ativo ? "text-sidebar-primary" : ""}`} />
-                            <span className="flex-1 rotulo-item">{item.rotulo}</span>
+                            {/* Recolhido o rótulo desce pra baixo do ícone em vez de
+                                sumir: eram 16 ícones sem nome nenhum. */}
+                            <span className="flex-1 rotulo-item group-data-[collapsible=icon]:w-full
+                              group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:text-center
+                              group-data-[collapsible=icon]:text-[8.5px] group-data-[collapsible=icon]:font-semibold
+                              group-data-[collapsible=icon]:leading-[1.1]">
+                              {item.rotulo}
+                            </span>
                             {item.selo && contagem === 0 && (
                               <span className="ml-auto rounded-full border border-warning/30 bg-warning/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-warning-fg group-data-[collapsible=icon]:hidden">
                                 {item.selo}
@@ -597,7 +609,7 @@ function AppSidebarContent({
                                 {/* Recolhido o número não cabe; o ponto ainda
                                     responde "tem algo esperando aqui?". */}
                                 <span
-                                  className={`absolute right-1.5 top-1.5 hidden h-1.5 w-1.5 rounded-full group-data-[collapsible=icon]:block ${
+                                  className={`absolute right-1.5 top-1.5 hidden h-1.5 w-1.5 rounded-full group-data-[collapsible=icon]:block group-data-[collapsible=icon]:left-1/2 group-data-[collapsible=icon]:right-auto group-data-[collapsible=icon]:ml-1 group-data-[collapsible=icon]:top-1 ${
                                     item.tomBadge === "alerta" ? "bg-danger" : "bg-sidebar-primary"
                                   }`}
                                 />

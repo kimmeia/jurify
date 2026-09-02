@@ -449,42 +449,6 @@
 @media (prefers-reduced-motion: reduce) {
   .lp-drift-a, .lp-drift-b, .lp-drift-c, .lp-bob, .lp-flow-line { animation: none; }
 }
-/* ═══════════════════════════════════════════════════════════════════════════
- * Menu estreito com rótulo
- *
- * O `SidebarMenuButton` do shadcn força `size-8!` e esconde o texto quando o
- * menu recolhe — vira uma parede de ícones anônimos, que foi a queixa. Aqui o
- * botão vira coluna (ícone em cima, nome embaixo) só neste menu; o AdminLayout
- * e o DashboardLayout usam o mesmo componente e continuam como estavam.
- *
- * Precisa de `!important` porque as regras de origem também usam — não é
- * capricho, é o que empata a especificidade.
- * ═════════════════════════════════════════════════════════════════════════ */
-.menu-rotulado[data-collapsible="icon"] [data-sidebar="menu-button"] {
-  flex-direction: column;
-  gap: 0.19rem;
-  height: auto !important;
-  width: 100% !important;
-  padding: 0.44rem 0.12rem !important;
-  justify-content: center;
-}
-.menu-rotulado[data-collapsible="icon"] [data-sidebar="menu-button"] .rotulo-item {
-  display: block;
-  flex: none;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 8.5px;
-  line-height: 1.1;
-  font-weight: 600;
-  text-align: center;
-}
-/* O trilho do ativo encosta na borda do menu; no rail o botão tem menos
- * margem lateral, então ele precisa recuar junto. */
-.menu-rotulado[data-collapsible="icon"] [data-sidebar="menu-item"] > span:first-child {
-  left: -0.25rem;
-}
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * Faixa de destaque: a tinta semântica inverte dentro dela

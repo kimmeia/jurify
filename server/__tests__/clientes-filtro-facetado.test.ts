@@ -156,17 +156,61 @@ describe("o dialog abre na largura que o código pede", () => {
 });
 
 describe("o menu estreito continua dizendo o nome de cada item", () => {
-  it("o rótulo desce pra baixo do ícone em vez de sumir", () => {
-    // Recolhido, o padrão do shadcn esconde o texto — viravam 16 ícones
-    // anônimos, que foi a queixa.
-    const css = ler("client/src/index.css");
-    expect(css).toContain('.menu-rotulado[data-collapsible="icon"]');
-    expect(css).toMatch(/\.rotulo-item\s*\{[^}]*display:\s*block/s);
-    const layout = ler("client/src/components/AppLayout.tsx");
-    expect(layout).toContain("menu-rotulado");
-    expect(layout).toContain('className="flex-1 rotulo-item"');
-    // 3rem só cabe o ícone.
+  const layout = ler("client/src/components/AppLayout.tsx");
+  const css = ler("client/src/index.css");
+
+  it("o rail é estilizado pelo className do botão, não por CSS solto", () => {
+    /*
+     * A primeira tentativa foi uma regra em index.css:
+     *
+     *   .menu-rotulado[data-collapsible="icon"] [data-sidebar="menu-button"]
+     *
+     * Ela NUNCA casou. `data-collapsible` fica no <div> externo do Sidebar e o
+     * className passado ao componente vai parar no container interno — o
+     * seletor pedia os dois no MESMO elemento. Resultado no ar: rail de 4.5rem
+     * com botões de 32px encostados à esquerda (12px fora do centro) e sem
+     * rótulo nenhum. A amarra anterior conferia a STRING do seletor, então
+     * passou verde o tempo todo.
+     *
+     * Pelo className do botão não há seletor pra morrer: `SidebarMenuButton`
+     * faz `cn(variants, className)` e o `cn` é `twMerge`, então o que vem do
+     * AppLayout vence o `size-8!`/`p-2!` de origem por construção.
+     */
+    expect(css).not.toContain("data-collapsible");
+    expect(css).not.toContain("[data-sidebar=");
+  });
+
+  it("o botão deixa de ser 32px e vira coluna quando o menu recolhe", () => {
+    // Sem vencer `size-8!` o botão fica 32px dentro de um rail de 72px e
+    // encosta na esquerda — é exatamente o desalinhamento relatado.
+    for (const classe of [
+      "group-data-[collapsible=icon]:h-auto!",
+      "group-data-[collapsible=icon]:w-full!",
+      "group-data-[collapsible=icon]:flex-col",
+      "group-data-[collapsible=icon]:justify-center",
+    ]) {
+      expect(layout, classe).toContain(classe);
+    }
+  });
+
+  it("o rótulo continua na tela, menor, embaixo do ícone", () => {
+    const ini = layout.indexOf("rotulo-item");
+    const rotulo = layout.slice(ini, layout.indexOf("</span>", ini));
+    expect(rotulo).toContain("group-data-[collapsible=icon]:text-[8.5px]");
+    expect(rotulo).toContain("group-data-[collapsible=icon]:text-center");
+    expect(rotulo).toContain("group-data-[collapsible=icon]:w-full");
+  });
+
+  it("o rail cabe um nome — 3rem só cabe o ícone", () => {
     expect(layout).toContain('"--sidebar-width-icon": "4.5rem"');
+  });
+
+  it("o ponto do badge se ancora no ícone, não no canto do botão", () => {
+    // `right-1.5` era relativo ao botão; com ele ocupando a largura do rail o
+    // ponto ficava 7,5px longe do ícone que ele anota.
+    const ponto = layout.slice(layout.indexOf("absolute right-1.5 top-1.5 hidden"), layout.indexOf("item.tomBadge === \"alerta\" ? \"bg-danger\""));
+    expect(ponto).toContain("group-data-[collapsible=icon]:left-1/2");
+    expect(ponto).toContain("group-data-[collapsible=icon]:right-auto");
   });
 });
 
