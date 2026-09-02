@@ -18,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/compon
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
-import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon, ChevronLeft, Archive, Pencil, Lock } from "lucide-react";
+import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon, ChevronLeft, Archive, Pencil, Lock, Pin } from "lucide-react";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { TIPOS_CANAL_COMUNICACAO } from "@shared/canal-types";
@@ -857,12 +857,29 @@ export default function Atendimento() {
   // (contatoUrlConsumido evita reabrir o diálogo se o usuário navegar depois).
   // Telefone na URL: mesma ideia do contatoId, mas casando pelo número. Roda
   // antes do outro efeito porque os dois parâmetros nunca vêm juntos.
+  // "Existe conversa com esse número?" perguntado ao SERVIDOR. A lista
+  // carregada é filtrada por período: procurar só nela fazia a tela concluir
+  // que não havia conversa e oferecer criar outra — justamente o que este
+  // caminho deveria evitar.
+  const checagemUrl = trpc.crm.conversaPorTelefone.useQuery(
+    { telefone: telefoneUrl || "" },
+    { enabled: !!telefoneUrl && !contatoUrlConsumido },
+  );
   useEffect(() => {
     if (contatoUrlConsumido || !telefoneUrl || !convs) return;
-    const conv = convs.find((c: any) => mesmoTelefone(c.contatoTelefone, telefoneUrl));
-    if (conv) {
-      setSelId(conv.id);
+    const naLista = convs.find((c: any) => mesmoTelefone(c.contatoTelefone, telefoneUrl));
+    const doServidor = checagemUrl.data as any;
+    // Espera a resposta antes de decidir: sem isso a decisão sai no primeiro
+    // render, com a lista ainda sendo o único dado disponível.
+    if (!naLista && checagemUrl.isLoading) return;
+    const idAchado = naLista?.id ?? doServidor?.conversaId;
+    if (idAchado) {
+      setSelId(idAchado);
       setTab("inbox");
+    } else if (doServidor?.estado === "sem_acesso") {
+      // A conversa existe, mas é de outra pessoa e você só vê as suas. Criar
+      // outra seria abrir uma segunda conversa com o mesmo cliente.
+      toast.info("Já existe conversa com este número, com outra pessoa da equipe.");
     } else {
       // Nenhuma conversa com esse número — abre o diálogo já preenchido em vez
       // de deixar o atendente numa lista que não explica por que ele veio parar
@@ -875,11 +892,17 @@ export default function Atendimento() {
     const url = new URL(window.location.href);
     url.searchParams.delete("telefone");
     window.history.replaceState({}, "", url.toString());
-  }, [telefoneUrl, convs, contatoUrlConsumido]);
+  }, [telefoneUrl, convs, contatoUrlConsumido, checagemUrl.data, checagemUrl.isLoading]);
 
+  const convDoContatoUrl = trpc.crm.conversaDoContato.useQuery(
+    { contatoId: contatoIdUrl || 0 },
+    { enabled: !!contatoIdUrl && !contatoUrlConsumido },
+  );
   useEffect(() => {
     if (contatoUrlConsumido || !contatoIdUrl || !convs) return;
-    const conv = convs.find((c: any) => c.contatoId === contatoIdUrl);
+    const naLista = convs.find((c: any) => c.contatoId === contatoIdUrl);
+    if (!naLista && convDoContatoUrl.isLoading) return;
+    const conv = naLista ?? (convDoContatoUrl.data as any);
     if (conv) {
       setSelId(conv.id);
       setTab("inbox");
@@ -895,7 +918,7 @@ export default function Atendimento() {
     const url = new URL(window.location.href);
     url.searchParams.delete("contatoId");
     window.history.replaceState({}, "", url.toString());
-  }, [contatoIdUrl, convs, contatoUrl, contatoUrlConsumido]);
+  }, [contatoIdUrl, convs, contatoUrl, contatoUrlConsumido, convDoContatoUrl.data, convDoContatoUrl.isLoading]);
 
   const goToConversaFromLead = useCallback((conversaId: number) => {
     setSelId(conversaId);
@@ -1660,6 +1683,14 @@ export default function Atendimento() {
                   cid={selId}
                   convs={convsAll || []}
                   onVoltar={isMobile ? () => setSelId(null) : undefined}
+                  onMostrarNaLista={(tel) => {
+                    // A busca por número varre o banco inteiro — período,
+                    // status e arquivadas incluídos. É o caminho mais curto
+                    // pra conversa aparecer na lista sem mexer nos filtros
+                    // que a pessoa escolheu.
+                    setInboxBusca(tel);
+                    setFiltro("todos");
+                  }}
                   onUpdate={rC}
                   onLeadUpdate={rL}
                   onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined}
@@ -1754,7 +1785,7 @@ export default function Atendimento() {
   );
 }
 
-function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onTransferido, onMarcadaNaoLida, onAbrirLinhaTempo, onLigarWhatsApp, onVoltar }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onTransferido?: () => void; onMarcadaNaoLida?: () => void; onAbrirLinhaTempo?: () => void; onLigarWhatsApp?: (info: { canalId: number; telefone: string; contatoId?: number; contatoNome?: string; conversaId: number }) => void; onVoltar?: () => void }) {
+function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onTransferido, onMarcadaNaoLida, onAbrirLinhaTempo, onLigarWhatsApp, onVoltar, onMostrarNaLista }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onTransferido?: () => void; onMarcadaNaoLida?: () => void; onAbrirLinhaTempo?: () => void; onLigarWhatsApp?: (info: { canalId: number; telefone: string; contatoId?: number; contatoNome?: string; conversaId: number }) => void; onVoltar?: () => void; onMostrarNaLista?: (telefone: string) => void }) {
   const [msg, setMsg] = useState(""); const ref = useRef<HTMLDivElement>(null);
   // Mídia "pendente": foi anexada via template (ou upload manual no futuro)
   // mas ainda não foi enviada. Renderiza preview acima do composer e é
@@ -1826,7 +1857,20 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const convCacheRef = useRef<any>(null);
   const convEncontrada = convs.find((c: any) => c.id === cid);
   if (convEncontrada) convCacheRef.current = convEncontrada;
-  const conv = convEncontrada ?? (convCacheRef.current?.id === cid ? convCacheRef.current : undefined);
+  // A conversa aberta responde por si quando não está na lista: aberta por
+  // link, pelo aviso de número repetido ou pela pasta Arquivadas, ela não
+  // aparece no array filtrado por período — e o cabeçalho chegava "Contato ·
+  // Sem atendente" com o cliente vinculado o tempo todo.
+  const { data: convAvulsa } = trpc.crm.conversaPorId.useQuery(
+    { id: cid },
+    { enabled: !!cid && !convEncontrada, staleTime: 30_000 },
+  );
+  const conv = convEncontrada
+    ?? (convAvulsa && (convAvulsa as any).id === cid ? convAvulsa : undefined)
+    ?? (convCacheRef.current?.id === cid ? convCacheRef.current : undefined);
+  // Está aberta mas fora do recorte atual do Inbox: a lista ao lado não a
+  // mostra, e sem dizer isso a tela parece quebrada.
+  const foraDoFiltro = !!conv && !convEncontrada;
   const bot = botStatusInfo(conv?.status);
   const botToggle = useBotToggle(onUpdate);
   // Templates Meta (HSM) — só faz query quando o canal da conversa é
@@ -2289,6 +2333,30 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         </DropdownMenu>
       </div>
     </div>
+    )}
+    {/* Aberta por link, por aviso de número repetido ou pela pasta Arquivadas:
+        a conversa existe e está inteira, mas o recorte atual do Inbox não a
+        lista. Sem dizer isso, a tela parece ter perdido a conversa. */}
+    {foraDoFiltro && (
+      <div className="mx-3 mt-2 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning-bg px-3 py-2 text-[11px] text-warning-fg leading-snug">
+        <Pin className="h-3.5 w-3.5 shrink-0" />
+        <span className="flex-1">
+          Esta conversa está <strong>fora do filtro atual</strong> do Inbox — por isso ela
+          não aparece na lista ao lado.
+        </span>
+        {onMostrarNaLista && (conv?.contatoTelefone || conv?.chatIdExterno) && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 text-[10.5px] shrink-0 border-warning/30"
+            onClick={() => onMostrarNaLista(
+              String(conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "") || ""),
+            )}
+          >
+            Mostrar na lista
+          </Button>
+        )}
+      </div>
     )}
     {/* Diff + Action Cards. O Brief foi pro Customer 360° (rail); aqui ficam só
         o "o que mudou" e os cards de ação, que já aparecem só quando há conteúdo. */}
