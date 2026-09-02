@@ -157,20 +157,29 @@
   .nm{font-weight:600}
 
   /* ─── FILTRO NOVO ─── */
-  .filtros{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-  .fchip{border:1px solid var(--bd);background:var(--sup);color:var(--t2);border-radius:var(--r-sm);
-         padding:0 9px;height:28px;font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:6px;
-         cursor:pointer;font-family:'Inter'}
-  .fchip:hover{border-color:var(--t4);background:var(--hl)}
-  .fchip .n{font-variant-numeric:tabular-nums;font-weight:700;font-size:10.5px;background:var(--hl);
-            border-radius:3px;padding:0 4px;color:var(--t3);min-width:17px;text-align:center}
-  .fchip.on{background:var(--ac);border-color:var(--ac);color:#fff}
-  .fchip.on .n{background:#ffffff2e;color:#fff}
-  /* filtro que não devolve nada não fica clicável: hoje dá pra cair numa
-     lista vazia e não saber se é filtro ou se não tem cliente */
-  .fchip.zero{opacity:.45;cursor:default;background:transparent}
-  .fchip.zero:hover{border-color:var(--bd);background:transparent}
-  .fdiv{width:1px;height:18px;background:var(--bd);margin:0 3px}
+  /* Filtro é rótulo com risco embaixo quando ativo — o mesmo desenho das abas
+     da ficha. A pílula preenchida pesava demais pra uma coisa que fica sempre
+     na tela. */
+  .ftabs{display:flex;align-items:center;gap:1px;flex-wrap:wrap;margin:10px -12px -11px;padding:0 12px}
+  .ftab{border:0;background:transparent;font-family:'Inter';font-size:12px;font-weight:600;color:var(--t3);
+        padding:8px 10px 9px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;
+        display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .ftab:hover{color:var(--t1)}
+  .ftab.on{color:var(--ac);border-bottom-color:var(--ac)}
+  .ftab .n{font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--t4)}
+  .ftab.on .n{color:var(--ac)}
+  /* filtro que não devolve nada não clica: dá pra cair numa lista vazia e não
+     saber se é o filtro ou se não tem cliente */
+  .ftab.zero{opacity:.42;cursor:default}
+  .ftab.zero:hover{color:var(--t3)}
+  .fdiv{width:1px;height:15px;background:var(--bd);margin:0 8px}
+  /* Clientes × Leads é OUTRA pergunta (qual conjunto), não um recorte dele —
+     por isso continua botão segmentado, e não mais uma aba sublinhada. */
+  .segdados{display:flex;gap:2px;background:var(--hl);padding:2px;border-radius:var(--r-sm);flex:none}
+  .segdados button{border:0;background:transparent;font-family:'Inter';font-size:11.5px;font-weight:600;
+                   color:var(--t3);padding:5px 11px;border-radius:3px;cursor:pointer;display:inline-flex;gap:5px}
+  .segdados button.on{background:var(--sup);color:var(--t1);box-shadow:0 1px 2px #16202c1f}
+  .segdados button .n{opacity:.6;font-variant-numeric:tabular-nums}
   .flimpa{border:0;background:transparent;color:var(--ac);font-size:11.5px;font-weight:600;cursor:pointer;
           font-family:'Inter';display:inline-flex;align-items:center;gap:4px;padding:0 4px}
   .flimpa:hover{text-decoration:underline}
@@ -261,7 +270,7 @@
 <div class="dica">
   <b>Dados falsos.</b> Quatro coisas que você apontou, cada uma no lugar onde aparece.<br>
   · <b>Menu</b> — no modo estreito o rótulo passa a ficar embaixo do ícone. Use <span class="k">Encolher</span> no rodapé do menu pra ver os dois.<br>
-  · <b>Clientes</b> — a barra de filtro tem contagem em cada chip; o que dá zero fica apagado e não clica.<br>
+  · <b>Clientes</b> — filtro vira rótulo com risco embaixo quando ativo; contagem em cada um, e o que dá zero não clica. <b>Clientes/Leads</b> continua sendo o botão da esquerda.<br>
   · <b>Ficha</b> — clique num cliente: cabeçalho azul, nome numa linha só, e <span class="k">⋯ Mais</span> guarda as ações raras.<br>
   · <b>Consultar processo</b> — vá em <b>Processos</b> e abra o dialog; tem um botão <span class="k">antes / depois</span> nele.
 </div>
@@ -273,7 +282,7 @@ const $ = s => document.querySelector(s);
 const app = $("#app");
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-const S = { tela:"clientes", azul:"a", tema:"claro", menuLarga:true, filtro:"todos",
+const S = { tela:"clientes", azul:"a", tema:"claro", menuLarga:true, filtro:"todos", dados:"clientes",
             cliSel:0, ficha:false, aba:"visao", mais:false, dlg:false, dlgLargo:true, busca:"" };
 
 const ico = {
@@ -326,14 +335,23 @@ const CLIS = [
     cidade:"Sobral, CE", sit:"cliente", vip:false, resp:"Dra. Camila Bastos", inter:"6d", origem:"site",
     fin:{rec:"R$ 9.100,00", areceber:"R$ 0,00", venc:"R$ 1.200,00", desde:"11/01/2026"}, procs:1, docsPend:false, inativo:false },
 ];
-// contagem por filtro — o mesmo número que o chip mostra é o que a lista devolve
+const LEADS = [
+  { nome:"Paulo Ricardo Tavares", ini:"PT", cor:"#5a6b7d", fone:"(85) 99640-2213", doc:"—",
+    cidade:"Fortaleza, CE", sit:"lead", vip:false, resp:"Vendedor", inter:"1d", origem:"anúncio",
+    fin:{rec:"R$ 0,00", areceber:"R$ 0,00", venc:"R$ 0,00", desde:"01/09/2026"}, procs:0, docsPend:false, inativo:false },
+  { nome:"Juliana Freire Costa", ini:"JF", cor:"#8a5a09", fone:"(85) 98110-7726", doc:"—",
+    cidade:"Eusébio, CE", sit:"lead", vip:false, resp:"Vendedor", inter:"4d", origem:"whatsapp",
+    fin:{rec:"R$ 0,00", areceber:"R$ 0,00", venc:"R$ 0,00", desde:"29/08/2026"}, procs:0, docsPend:true, inativo:false },
+];
+const base = () => S.dados === "leads" ? LEADS : CLIS;
+// contagem por filtro — o mesmo número que o rótulo mostra é o que a lista devolve
 const FILTROS = [
-  { id:"todos",     r:"Todos",       g:1, fn:()=>CLIS },
-  { id:"vip",       r:"VIP",         g:1, fn:()=>CLIS.filter(c=>c.vip) },
-  { id:"novos",     r:"Novos (7d)",  g:1, fn:()=>CLIS.filter(c=>["hoje","2d","6d"].includes(c.inter)) },
-  { id:"inativos",  r:"Inativos",    g:1, fn:()=>CLIS.filter(c=>c.inativo) },
-  { id:"docs",      r:"Aguardando docs", g:2, fn:()=>CLIS.filter(c=>c.docsPend) },
-  { id:"debito",    r:"Com débito",  g:2, fn:()=>CLIS.filter(c=>c.fin.venc!=="R$ 0,00") },
+  { id:"todos",     r:"Todos",       g:1, fn:()=>base() },
+  { id:"vip",       r:"VIP",         g:1, fn:()=>base().filter(c=>c.vip) },
+  { id:"novos",     r:"Novos (7d)",  g:1, fn:()=>base().filter(c=>["hoje","1d","2d","4d","6d"].includes(c.inter)) },
+  { id:"inativos",  r:"Inativos",    g:1, fn:()=>base().filter(c=>c.inativo) },
+  { id:"docs",      r:"Aguardando docs", g:2, fn:()=>base().filter(c=>c.docsPend) },
+  { id:"debito",    r:"Com débito",  g:2, fn:()=>base().filter(c=>c.fin.venc!=="R$ 0,00") },
   { id:"suspensos", r:"Suspensos",   g:2, fn:()=>[] },
   { id:"encerrados",r:"Encerrados",  g:2, fn:()=>[] },
 ];
@@ -369,26 +387,32 @@ function vClientes(){
   const chip = f => {
     const n = f.fn().length;
     const zero = n === 0 && f.id !== "todos";
-    return `<button class="fchip ${S.filtro===f.id?"on":""} ${zero?"zero":""}"
-      ${zero?"":`data-ac="filtro" data-v="${f.id}"`} ${zero?`title="Nenhum cliente aqui agora"`:""}>
+    return `<button class="ftab ${S.filtro===f.id?"on":""} ${zero?"zero":""}"
+      ${zero?"":`data-ac="filtro" data-v="${f.id}"`} ${zero?`title="Ninguém aqui agora"`:""}>
       ${f.r}<span class="n">${n}</span></button>`;
   };
+  const qtd = quais => quais === "leads" ? LEADS.length : CLIS.length;
   return `<div class="pad">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div><div class="h1">Clientes</div>
-        <div class="sub">4 na carteira · 1 aguardando documento · 1 com cobrança vencida</div></div>
+        <div class="sub">${CLIS.length} na carteira · ${LEADS.length} leads em atendimento ·
+          1 aguardando documento · 1 com cobrança vencida</div></div>
       <div style="display:flex;gap:6px"><button class="btn">Duplicatas (PDF)</button>
         <button class="btn pri">+ Novo cliente</button></div></div>
 
     <div class="card" style="margin-top:13px;padding:11px 12px">
       <div style="display:flex;gap:10px;align-items:center">
-        <div class="busca" style="max-width:340px">${ico.lupa("var(--t4)")}
+        <div class="segdados">
+          ${[["clientes","Clientes"],["leads","Leads"]].map(([id,r])=>
+            `<button class="${S.dados===id?"on":""}" data-ac="dados" data-v="${id}">${r}<span class="n">${qtd(id)}</span></button>`).join("")}
+        </div>
+        <div class="busca" style="max-width:320px">${ico.lupa("var(--t4)")}
           <input id="bq" placeholder="Nome, telefone, e-mail ou CPF..." value="${esc(S.busca)}"></div>
-        <div class="fresumo" style="margin:0;flex:1">Mostrando <b>${lista.length}</b> de <b>${CLIS.length}</b> ·
+        <div class="fresumo" style="margin:0;flex:1">Mostrando <b>${lista.length}</b> de <b>${base().length}</b> ·
           ${S.filtro==="todos"&&!S.busca?"sem filtro":`filtro <b>${(FILTROS.find(f=>f.id===S.filtro)||{}).r}</b>${S.busca?` · busca “${esc(S.busca)}”`:""}`}</div>
         ${S.filtro!=="todos"||S.busca?`<button class="flimpa" data-ac="limpa">${ico.x("var(--ac)")} limpar filtro</button>`:""}
       </div>
-      <div class="filtros" style="margin-top:9px;padding-top:9px;border-top:1px solid var(--bd)">
+      <div class="ftabs">
         ${FILTROS.filter(f=>f.g===1).map(chip).join("")}
         <span class="fdiv"></span>
         ${FILTROS.filter(f=>f.g===2).map(chip).join("")}
@@ -398,7 +422,7 @@ function vClientes(){
     <div class="card" style="margin-top:10px;overflow:hidden">
       <table><thead><tr><th style="width:36px"></th><th>Nome</th><th>Responsável</th><th>Financeiro</th>
         <th>Última interação</th><th>Origem</th></tr></thead>
-      <tbody>${lista.length?lista.map((c,i)=>`<tr data-ac="abrir" data-v="${CLIS.indexOf(c)}">
+      <tbody>${lista.length?lista.map((c,i)=>`<tr data-ac="abrir" data-v="${base().indexOf(c)}">
         <td><span class="av" style="background:${c.cor};width:26px;height:26px;font-size:9.5px">${c.ini}</span></td>
         <td><span class="nm">${esc(c.nome)}</span>
           ${c.vip?`<span class="tag am" style="margin-left:6px">VIP</span>`:""}
@@ -411,7 +435,7 @@ function vClientes(){
              :`<span style="color:var(--t3)">sem cobrança</span>`}</td>
         <td>${c.inter}</td><td><span class="tag nt">${c.origem}</span></td></tr>`).join("")
         :`<tr><td colspan="6" style="padding:30px;text-align:center;color:var(--t3);font-size:12.5px">
-           Nenhum cliente com esse filtro. <button class="flimpa" data-ac="limpa">limpar filtro</button></td></tr>`}
+           Ninguém com esse filtro. <button class="flimpa" data-ac="limpa">limpar filtro</button></td></tr>`}
       </tbody></table>
     </div>
   </div>`;
@@ -419,19 +443,20 @@ function vClientes(){
 
 // ══════════ Ficha do cliente ══════════
 function vFicha(){
-  const c = CLIS[S.cliSel];
+  const L = base();
+  const c = L[S.cliSel] || L[0];
   return `<div class="pad" style="display:flex;gap:12px;align-items:flex-start">
     <div style="flex:none;width:238px">
       <button class="btn" data-ac="lista" style="width:100%;justify-content:center">${ico.volta()} Voltar para a lista</button>
       <div class="card" style="margin-top:9px;overflow:hidden">
-        ${CLIS.map((x,i)=>`<div data-ac="sel" data-v="${i}" style="display:flex;gap:9px;align-items:center;padding:9px 11px;
+        ${L.map((x,i)=>`<div data-ac="sel" data-v="${i}" style="display:flex;gap:9px;align-items:center;padding:9px 11px;
           cursor:pointer;border-bottom:1px solid var(--bd);${i===S.cliSel?"background:var(--ac-bg);box-shadow:inset 3px 0 0 var(--ac)":""}">
           <span class="av" style="background:${x.cor};width:26px;height:26px;font-size:9.5px">${x.ini}</span>
           <span style="min-width:0"><span style="display:block;font-size:12px;font-weight:600;overflow:hidden;
             text-overflow:ellipsis;white-space:nowrap">${esc(x.nome)}</span>
           <span style="display:block;font-size:10.5px;color:var(--t3)">${x.fone}</span></span></div>`).join("")}
       </div>
-      <div style="font-size:10px;color:var(--t3);margin-top:6px;text-align:center">${S.cliSel+1} de ${CLIS.length} · ↑↓ trocam</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:6px;text-align:center">${S.cliSel+1} de ${L.length} · ↑↓ trocam</div>
     </div>
 
     <div style="flex:1;min-width:0">
@@ -583,6 +608,7 @@ app.addEventListener("click", e => {
   if (ac === "tela")      { S.tela = v; S.ficha = false; S.mais = false; }
   if (ac === "encolher")  { S.menuLarga = !S.menuLarga; }
   if (ac === "filtro")    { S.filtro = v; }
+  if (ac === "dados")     { S.dados = v; S.filtro = "todos"; S.cliSel = 0; }
   if (ac === "limpa")     { S.filtro = "todos"; S.busca = ""; }
   if (ac === "abrir")     { S.cliSel = +v; S.ficha = true; S.aba = "visao"; }
   if (ac === "sel")       { S.cliSel = +v; S.aba = "visao"; }
@@ -604,7 +630,8 @@ document.addEventListener("keydown", e => {
   if (document.activeElement && document.activeElement.tagName === "INPUT") return;
   if (S.ficha && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
     e.preventDefault();
-    S.cliSel = (S.cliSel + (e.key === "ArrowDown" ? 1 : CLIS.length - 1)) % CLIS.length;
+    const n = base().length;
+    S.cliSel = (S.cliSel + (e.key === "ArrowDown" ? 1 : n - 1)) % n;
     render();
   }
 });
