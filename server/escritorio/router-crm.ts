@@ -421,6 +421,59 @@ export const crmRouter = router({
       };
     }),
 
+  /**
+   * Uma conversa específica, com os MESMOS campos que a lista devolve.
+   *
+   * A tela lia os dados do contato de dentro da lista já carregada do Inbox —
+   * que é filtrada por período. Conversa aberta por link, por aviso de número
+   * repetido ou pela pasta Arquivadas não está nessa lista, e o cabeçalho
+   * chegava "Contato · Sem atendente" com o cliente ali, vinculado, o tempo
+   * todo. Aqui a conversa responde por si.
+   */
+  conversaPorId: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+      if (!perm.allowed) return null;
+      const filtros: any = { ids: [input.id], limite: 1 };
+      // verProprios continua valendo: não é porque tem o id que passa a ver
+      // o atendimento de outra pessoa.
+      if (!perm.verTodos && perm.verProprios) filtros.atendenteId = perm.colaboradorId;
+      const [conv] = await listarConversas(perm.escritorioId, filtros);
+      return conv ?? null;
+    }),
+
+  /**
+   * Conversa mais recente de um contato — o que o link `?contatoId=` precisa
+   * saber antes de concluir que "não existe conversa".
+   *
+   * Procurar só na lista carregada fazia a tela oferecer criar uma segunda
+   * conversa com quem já tinha uma, bastando ela estar fora do período.
+   */
+  conversaDoContato: protectedProcedure
+    .input(z.object({ contatoId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+      if (!perm.allowed) return null;
+      const db = await getDb();
+      if (!db) return null;
+      const { desc: descOrd } = await import("drizzle-orm");
+      const [achada] = await db
+        .select({ id: conversas.id })
+        .from(conversas)
+        .where(and(
+          eq(conversas.escritorioId, perm.escritorioId),
+          eq(conversas.contatoId, input.contatoId),
+        ))
+        .orderBy(descOrd(conversas.ultimaMensagemAt), descOrd(conversas.id))
+        .limit(1);
+      if (!achada) return null;
+      const filtros: any = { ids: [achada.id], limite: 1 };
+      if (!perm.verTodos && perm.verProprios) filtros.atendenteId = perm.colaboradorId;
+      const [conv] = await listarConversas(perm.escritorioId, filtros);
+      return conv ?? null;
+    }),
+
   /** Arquiva/desarquiva uma conversa. Arquivada sai das vistas padrão sem
    *  ser apagada; mensagem nova do contato desarquiva sozinha. */
   arquivarConversa: protectedProcedure
