@@ -156,17 +156,111 @@ describe("o dialog abre na largura que o código pede", () => {
 });
 
 describe("o menu estreito continua dizendo o nome de cada item", () => {
-  it("o rótulo desce pra baixo do ícone em vez de sumir", () => {
-    // Recolhido, o padrão do shadcn esconde o texto — viravam 16 ícones
-    // anônimos, que foi a queixa.
-    const css = ler("client/src/index.css");
-    expect(css).toContain('.menu-rotulado[data-collapsible="icon"]');
-    expect(css).toMatch(/\.rotulo-item\s*\{[^}]*display:\s*block/s);
-    const layout = ler("client/src/components/AppLayout.tsx");
-    expect(layout).toContain("menu-rotulado");
-    expect(layout).toContain('className="flex-1 rotulo-item"');
-    // 3rem só cabe o ícone.
+  const layout = ler("client/src/components/AppLayout.tsx");
+  const css = ler("client/src/index.css");
+
+  const trecho = (de: string, ate: string) => {
+    const i = layout.indexOf(de);
+    expect(i, `âncora sumiu do AppLayout: ${de}`).toBeGreaterThan(-1);
+    const f = layout.indexOf(ate, i);
+    expect(f, `fim do trecho sumiu: ${ate}`).toBeGreaterThan(-1);
+    return layout.slice(i, f);
+  };
+
+  it("o rail é estilizado pelo className do botão, não por CSS solto", () => {
+    /*
+     * A primeira tentativa foi uma regra em index.css:
+     *
+     *   .menu-rotulado[data-collapsible="icon"] [data-sidebar="menu-button"]
+     *
+     * Ela NUNCA casou. `data-collapsible` fica no <div> externo do Sidebar e o
+     * className passado ao componente vai parar no container interno — o
+     * seletor pedia os dois no MESMO elemento. Resultado no ar: rail de 4.5rem
+     * com botões de 32px encostados à esquerda (12px fora do centro) e sem
+     * rótulo nenhum. A amarra anterior conferia a STRING do seletor, então
+     * passou verde o tempo todo.
+     *
+     * Daí a proibição ser só de `data-collapsible` no CSS: é o atributo que
+     * nenhuma classe nossa alcança. `[data-sidebar=...]` sozinho casa e não
+     * tem culpa nenhuma.
+     */
+    expect(css).not.toContain("data-collapsible");
+  });
+
+  it("o botão deixa de ser 32px e vira coluna quando o menu recolhe", () => {
+    // Sem vencer `size-8!` o botão fica 32px dentro de um rail de 72px e
+    // encosta na esquerda — é exatamente o desalinhamento relatado.
+    //
+    // Empate de especificidade entre dois `!important`: quem desempata é a
+    // ordem de emissão, e o Tailwind emite shorthand antes de longhand. Por
+    // isso é `h-auto`/`w-full` contra `size-8` e `px`/`py` contra `p` —
+    // `size-*`/`p-*` aqui empatariam e o override voltaria a perder.
+    const geometria = trecho("const CLASSES_ITEM_RAIL", ";");
+    for (const classe of [
+      "group-data-[collapsible=icon]:h-auto!",
+      "group-data-[collapsible=icon]:w-full!",
+      "group-data-[collapsible=icon]:flex-col",
+      "group-data-[collapsible=icon]:justify-center",
+      "group-data-[collapsible=icon]:px-0.5!",
+      "group-data-[collapsible=icon]:py-1.5!",
+    ]) {
+      expect(geometria, classe).toContain(classe);
+    }
+    expect(geometria).not.toContain("group-data-[collapsible=icon]:size-");
+    expect(geometria).not.toMatch(/group-data-\[collapsible=icon\]:p-[\d.]/);
+  });
+
+  it("todo item do rail usa a MESMA geometria", () => {
+    // O "Assinar plano" ficou 32px de fundo chapado ao lado de itens de 39px
+    // enquanto tinha className próprio. Compartilhar a constante é o que
+    // impede a segunda cópia de envelhecer sozinha.
+    expect(layout.match(/\$\{CLASSES_ITEM_RAIL\}/g) ?? []).toHaveLength(2);
+    // 1 definição + 1 rótulo do menu + 1 do "Assinar plano"
+    expect(layout.match(/CLASSES_ROTULO_RAIL/g) ?? []).toHaveLength(3);
+  });
+
+  it("o rótulo continua na tela, menor, embaixo do ícone", () => {
+    const rotulo = trecho("const CLASSES_ROTULO_RAIL", ";");
+    expect(rotulo).toContain("group-data-[collapsible=icon]:text-[8.5px]");
+    expect(rotulo).toContain("group-data-[collapsible=icon]:text-center");
+    expect(rotulo).toContain("group-data-[collapsible=icon]:w-full");
+    // O `truncate` do shadcn mira `>span:last-child`, que num item com badge
+    // é o CONTADOR. O rótulo precisa do seu.
+    expect(rotulo).toContain("group-data-[collapsible=icon]:truncate");
+  });
+
+  it("o rail cabe um nome — 3rem só cabe o ícone", () => {
     expect(layout).toContain('"--sidebar-width-icon": "4.5rem"');
+  });
+
+  it("o item que ficou embaixo da dobra continua alcançável", () => {
+    // Item mais alto × 16 itens: o menu passa da tela. O shadcn poda a rolagem
+    // no modo ícone (`group-data-[collapsible=icon]:overflow-hidden`), então
+    // sem isto os últimos itens somem sem nem barra pra revelá-los.
+    const conteudo = trecho("<SidebarContent", ">");
+    expect(conteudo).toContain("group-data-[collapsible=icon]:overflow-y-auto");
+  });
+
+  it("a borda do rail some de verdade", () => {
+    // `border-r-0` sem `!` perde pro `group-data-[side=left]:border-r` do
+    // shadcn (mais específico) e sobra um fio à direita do rail.
+    expect(trecho('collapsible="icon"', ">")).toContain('className="border-r-0!"');
+  });
+
+  it("o ponto do badge se ancora no ícone, não no canto do botão", () => {
+    // `right-1.5` era relativo ao botão; com ele ocupando a largura do rail o
+    // ponto ficava 7,5px longe do ícone que ele anota.
+    const ponto = trecho("absolute right-1.5 top-1.5 hidden", 'item.tomBadge === "alerta" ? "bg-danger"');
+    expect(ponto).toContain("group-data-[collapsible=icon]:left-1/2");
+    expect(ponto).toContain("group-data-[collapsible=icon]:right-auto");
+  });
+
+  it("o selo do Assinar plano não vira uma terceira linha", () => {
+    // Em coluna, um selo no fluxo empilha embaixo do rótulo e só ESTE item
+    // fica mais alto que o rail inteiro.
+    const selo = trecho('<span className={CLASSES_ROTULO_RAIL}>Assinar plano</span>', "</Badge>");
+    expect(selo).toContain("group-data-[collapsible=icon]:absolute");
+    expect(selo).toContain("group-data-[collapsible=icon]:ml-0");
   });
 });
 

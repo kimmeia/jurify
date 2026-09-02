@@ -114,6 +114,32 @@ type ItemMenu = {
   soSemModulo?: string[];
 };
 
+/**
+ * Geometria do item quando o menu está recolhido.
+ *
+ * Precisa vencer o `group-data-[collapsible=icon]:size-8!` e o `p-2!` que o
+ * `SidebarMenuButton` do shadcn aplica. Os dois lados têm a MESMA
+ * especificidade e ambos sao `!important`, e o `twMerge` NAO desempata: ele
+ * nao reconhece o `!` posfixado do Tailwind v4 e mantem as duas classes.
+ * Quem desempata e a ordem de emissao, e ela esta a nosso favor por contrato
+ * do framework: shorthand sai antes de longhand. Por isso aqui e
+ * `h-auto`/`w-full` contra `size-8`, e `px`/`py` contra `p` — trocar por
+ * `size-*` ou `p-*` empataria de novo e o override voltaria a perder.
+ */
+const CLASSES_ITEM_RAIL =
+  "group-data-[collapsible=icon]:h-auto! group-data-[collapsible=icon]:w-full! " +
+  "group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:justify-center " +
+  "group-data-[collapsible=icon]:gap-0.5 group-data-[collapsible=icon]:px-0.5! " +
+  "group-data-[collapsible=icon]:py-1.5!";
+
+/** O rotulo desce pra baixo do icone. `truncate` proprio porque o do shadcn
+ *  mira `>span:last-child`, que e o CONTADOR quando o item tem badge. */
+const CLASSES_ROTULO_RAIL =
+  "group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:flex-none " +
+  "group-data-[collapsible=icon]:text-center group-data-[collapsible=icon]:text-[8.5px] " +
+  "group-data-[collapsible=icon]:font-semibold group-data-[collapsible=icon]:leading-[1.1] " +
+  "group-data-[collapsible=icon]:truncate";
+
 const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
   {
     titulo: "Dia a dia",
@@ -513,7 +539,7 @@ function AppSidebarContent({
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
-          className="border-r-0 menu-rotulado"
+          className="border-r-0!"
           disableTransition={isResizing}
         >
           {/* `shrink-0` não é decorativo: a regra global `.flex{min-height:0}`
@@ -542,7 +568,7 @@ function AppSidebarContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0 rolagem-menu">
+          <SidebarContent className="gap-0 rolagem-menu group-data-[collapsible=icon]:overflow-y-auto">
             {GRUPOS_MENU.map((grupo) => {
               const visiveis = grupo.itens.filter(itemVisivelNoMenu);
               if (visiveis.length === 0) return null;
@@ -574,10 +600,20 @@ function AppSidebarContent({
                             isActive={ativo}
                             onClick={() => navigateOrBlock(item.rota)}
                             tooltip={item.rotulo}
-                            className={`h-[34px] relative transition-all ${ativo ? "font-semibold" : "font-normal"} ${itemsLocked ? "opacity-50" : ""}`}
+                            className={`relative h-[34px] transition-all ${CLASSES_ITEM_RAIL} ${
+                              ativo ? "font-semibold" : "font-normal"
+                            } ${itemsLocked ? "opacity-50" : ""}`}
                           >
                             <Icone className={`h-4 w-4 ${ativo ? "text-sidebar-primary" : ""}`} />
-                            <span className="flex-1 rotulo-item">{item.rotulo}</span>
+                            {/* Recolhido o rótulo desce pra baixo do ícone em vez de
+                                sumir: eram 16 ícones sem nome nenhum. O estilo
+                                vive no className e não em CSS porque a regra em
+                                CSS não casava com o DOM (ver CLASSES_ITEM_RAIL).
+                                `rotulo-item` não tem regra nenhuma: é âncora de
+                                leitura e de teste. */}
+                            <span className={`flex-1 rotulo-item ${CLASSES_ROTULO_RAIL}`}>
+                              {item.rotulo}
+                            </span>
                             {item.selo && contagem === 0 && (
                               <span className="ml-auto rounded-full border border-warning/30 bg-warning/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-warning-fg group-data-[collapsible=icon]:hidden">
                                 {item.selo}
@@ -597,7 +633,7 @@ function AppSidebarContent({
                                 {/* Recolhido o número não cabe; o ponto ainda
                                     responde "tem algo esperando aqui?". */}
                                 <span
-                                  className={`absolute right-1.5 top-1.5 hidden h-1.5 w-1.5 rounded-full group-data-[collapsible=icon]:block ${
+                                  className={`absolute right-1.5 top-1.5 hidden h-1.5 w-1.5 rounded-full group-data-[collapsible=icon]:block group-data-[collapsible=icon]:left-1/2 group-data-[collapsible=icon]:right-auto group-data-[collapsible=icon]:ml-1 group-data-[collapsible=icon]:top-1 ${
                                     item.tomBadge === "alerta" ? "bg-danger" : "bg-sidebar-primary"
                                   }`}
                                 />
@@ -620,11 +656,17 @@ function AppSidebarContent({
                     <SidebarMenuButton
                       onClick={() => setLocation("/configuracoes?tab=meu-plano")}
                       tooltip="Assinar plano"
-                      className="h-9 transition-all font-normal"
+                      className={`relative h-9 transition-all font-normal ${CLASSES_ITEM_RAIL}`}
                     >
                       <CreditCard className="h-4 w-4" />
-                      <span>Assinar plano</span>
-                      <Badge variant="destructive" className="text-[9px] px-1.5 py-0 ml-auto">
+                      <span className={CLASSES_ROTULO_RAIL}>Assinar plano</span>
+                      {/* Recolhido o selo sai do fluxo: em coluna ele viraria
+                          uma terceira linha e este item ficaria mais alto que
+                          todos os outros do rail. */}
+                      <Badge
+                        variant="destructive"
+                        className="text-[9px] px-1.5 py-0 ml-auto group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:right-0.5 group-data-[collapsible=icon]:top-0.5 group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:px-1"
+                      >
                         !
                       </Badge>
                     </SidebarMenuButton>
