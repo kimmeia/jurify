@@ -24,7 +24,7 @@ import {
   CalendarDays, Plus, Loader2, Clock, CheckCircle, ChevronLeft, ChevronRight,
   Trash2, ListTodo, CalendarClock, Sun, AlertTriangle, Search,
   Briefcase, Scale, Users, PhoneCall, MoreHorizontal, Check, MapPin, Bell,
-  Pencil, FileText, Paperclip, ExternalLink, XCircle, RotateCcw, MessageSquareText,
+  Pencil, FileText, Paperclip, ExternalLink, XCircle, RotateCcw, MessageSquareText, MessageCircle,
   Ban, CalendarOff, Download, ChevronDown, User, X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -141,6 +141,32 @@ const TIPO_BADGE: Record<string, string> = {
   follow_up: "bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800/50",
   outro: "bg-muted text-muted-foreground border-border",
 };
+
+/**
+ * Caminho do Atendimento para o contato de um compromisso.
+ *
+ * Dois caminhos porque o compromisso pode estar ligado a um cliente do cadastro
+ * ou trazer só o número que alguém digitou. Com `contatoId` usamos a rota que
+ * já existe (a mesma do botão "Inbox" da ficha); sem ele, a busca é pelo
+ * telefone. As duas abrem a conversa existente ou o diálogo de nova conversa
+ * já preenchido — nunca uma tela vazia.
+ */
+export function caminhoConversaDoEvento(ev: {
+  contatoId?: number | null;
+  contatoTelefone?: string | null;
+}): string | null {
+  if (ev.contatoId) return `/atendimento?contatoId=${ev.contatoId}`;
+  const tel = String(ev.contatoTelefone ?? "").replace(/\D/g, "");
+  if (!tel) return null;
+  return `/atendimento?telefone=${tel}`;
+}
+
+/** Navegação com recarga: o Atendimento lê o parâmetro na montagem, e vir de
+ *  outra página garante que ele monte. */
+function irParaConversa(ev: { contatoId?: number | null; contatoTelefone?: string | null }) {
+  const destino = caminhoConversaDoEvento(ev);
+  if (destino) window.location.assign(destino);
+}
 
 function corDoEvento(ev: any): string {
   if (ev.fonte === "tarefa") return COR_TIPO.tarefa;
@@ -449,16 +475,24 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
               {ev.contatoTelefone && (
                 <>
                   {contato && <span className="text-muted-foreground/50">·</span>}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); irParaConversa(ev); }}
+                    className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                    title="Abrir a conversa no Atendimento"
+                  >
+                    <PhoneCall className="w-3 h-3" />
+                    {ev.contatoTelefone}
+                  </button>
                   <a
                     href={`https://wa.me/55${String(ev.contatoTelefone).replace(/\D/g, "")}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 hover:underline font-medium"
-                    title="Abrir WhatsApp"
+                    className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-300 hover:underline"
+                    title="Abrir no WhatsApp Web"
                   >
-                    <PhoneCall className="w-3 h-3" />
-                    {ev.contatoTelefone}
+                    <ExternalLink className="w-2.5 h-2.5" />
                   </a>
                 </>
               )}
@@ -2275,15 +2309,30 @@ function DetalhesEventoDialog({
               <PhoneCall className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Telefone / WhatsApp</p>
-                <a
-                  href={`https://wa.me/55${String(evento.contatoTelefone).replace(/\D/g, "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm font-medium text-emerald-700 dark:text-emerald-300 hover:underline inline-flex items-center gap-1"
-                >
-                  {evento.contatoTelefone}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* O número leva pro atendimento dentro do sistema: é lá que
+                      está o histórico da conversa. O WhatsApp Web continua a um
+                      clique, ao lado — o atalho não foi removido, mudou de lugar. */}
+                  <button
+                    type="button"
+                    onClick={() => irParaConversa(evento)}
+                    className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
+                    title="Abrir a conversa no Atendimento"
+                  >
+                    {evento.contatoTelefone}
+                    <MessageCircle className="h-3.5 w-3.5" />
+                  </button>
+                  <a
+                    href={`https://wa.me/55${String(evento.contatoTelefone).replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10.5px] font-medium text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 rounded px-1.5 py-0.5 inline-flex items-center gap-1"
+                    title="Abrir no WhatsApp Web"
+                  >
+                    WhatsApp Web
+                    <ExternalLink className="h-2.5 w-2.5" />
+                  </a>
+                </div>
               </div>
             </div>
           )}
