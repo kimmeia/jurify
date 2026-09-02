@@ -33,20 +33,20 @@ export function CartaoLigacao({ m, tz }: { m: any; tz: string }) {
     : (m.conteudo || "").replace(/^📞\s*/, "") || "Ligação";
 
   const tom = perdida
-    ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50 text-red-800 dark:text-red-200"
+    ? "bg-danger-bg border-danger/30 text-danger-fg"
     : recusada
-      ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-200"
+      ? "bg-warning-bg border-warning/30 text-warning-fg"
       : andamento
-        ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/50 text-blue-800 dark:text-blue-200"
-        : "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-200";
+        ? "bg-info-bg border-info/30 text-info-fg"
+        : "bg-success-bg border-success/30 text-success-fg";
 
   const iconeTom = perdida
-    ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+    ? "bg-danger-bg text-danger-fg"
     : recusada
-      ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
+      ? "bg-warning-bg text-warning-fg"
       : andamento
-        ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-        : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400";
+        ? "bg-info-bg text-info-fg"
+        : "bg-success-bg text-success-fg";
 
   const Icone = perdida ? PhoneMissed : direcao === "saida" ? PhoneOutgoing : PhoneIncoming;
   const mostrarAtendente = !!p.atendenteNome && status === "encerrada";

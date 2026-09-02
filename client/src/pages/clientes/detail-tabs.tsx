@@ -130,8 +130,8 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
     <Card>
       <CardContent className="pt-4 space-y-4">
         {todosFaltando.length > 0 && (
-          <div className={`rounded-md border p-3 text-xs ${ehLead ? "border-blue-300/60 bg-blue-50/50 dark:bg-blue-950/20" : "border-warning/40 bg-warning-bg/40"}`}>
-            <p className={`font-medium ${ehLead ? "text-blue-700 dark:text-blue-300" : "text-warning-fg"}`}>
+          <div className={`rounded-md border p-3 text-xs ${ehLead ? "border-info/30 bg-info-bg/50" : "border-warning/40 bg-warning-bg/40"}`}>
+            <p className={`font-medium ${ehLead ? "text-info-fg" : "text-warning-fg"}`}>
               {ehLead
                 ? `Dica: ${todosFaltando.length} campo(s) ainda incompleto(s). Você pode salvar mesmo assim — só serão obrigatórios quando virar cliente.`
                 : `Faltam ${todosFaltando.length} campo(s) obrigatório(s) pra gerar contratos:`}
@@ -195,7 +195,7 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
               type="checkbox"
               checked={docPendente}
               onChange={(e) => setDocPendente(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-violet-600 cursor-pointer"
+              className="mt-0.5 h-4 w-4 accent-info cursor-pointer"
             />
             <div>
               <span className="text-sm font-medium">Documentação pendente</span>
@@ -276,7 +276,7 @@ export function AnotacoesTab({ contatoId, anotacoes, onRefresh }: { contatoId: n
     onSuccess: () => { onRefresh(); },
     onError: (e) => toast.error(e.message),
   });
-  return (<Card><CardContent className="pt-4 space-y-4"><div className="space-y-2 p-3 rounded-lg border bg-muted/20"><Input placeholder="Título (opcional)" value={titulo} onChange={e => setTitulo(e.target.value)} className="h-8 text-sm" /><Textarea placeholder="Escreva..." value={conteudo} onChange={e => setConteudo(e.target.value)} rows={2} /><Button size="sm" onClick={() => criar.mutate({ contatoId, titulo: titulo || undefined, conteudo })} disabled={!conteudo || criar.isPending}><Plus className="h-3 w-3 mr-1" /> Adicionar</Button></div>{!anotacoes.length ? <p className="text-sm text-muted-foreground text-center py-4">Nenhuma anotação.</p> : <div className="space-y-2">{anotacoes.map((n: any) => (<div key={n.id} className="flex gap-3 p-3 rounded-lg border"><StickyNote className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" /><div className="flex-1 min-w-0">{n.titulo && <p className="text-sm font-medium">{n.titulo}</p>}<p className="text-sm text-muted-foreground whitespace-pre-wrap">{n.conteudo}</p><p className="text-[10px] text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleDateString("pt-BR")}</p></div>{n.podeExcluir && <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" onClick={() => excluir.mutate({ id: n.id })}><Trash2 className="h-3 w-3" /></Button>}</div>))}</div>}</CardContent></Card>);
+  return (<Card><CardContent className="pt-4 space-y-4"><div className="space-y-2 p-3 rounded-lg border bg-muted/20"><Input placeholder="Título (opcional)" value={titulo} onChange={e => setTitulo(e.target.value)} className="h-8 text-sm" /><Textarea placeholder="Escreva..." value={conteudo} onChange={e => setConteudo(e.target.value)} rows={2} /><Button size="sm" onClick={() => criar.mutate({ contatoId, titulo: titulo || undefined, conteudo })} disabled={!conteudo || criar.isPending}><Plus className="h-3 w-3 mr-1" /> Adicionar</Button></div>{!anotacoes.length ? <p className="text-sm text-muted-foreground text-center py-4">Nenhuma anotação.</p> : <div className="space-y-2">{anotacoes.map((n: any) => (<div key={n.id} className="flex gap-3 p-3 rounded-lg border"><StickyNote className="h-4 w-4 text-warning mt-0.5 shrink-0" /><div className="flex-1 min-w-0">{n.titulo && <p className="text-sm font-medium">{n.titulo}</p>}<p className="text-sm text-muted-foreground whitespace-pre-wrap">{n.conteudo}</p><p className="text-[10px] text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleDateString("pt-BR")}</p></div>{n.podeExcluir && <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" onClick={() => excluir.mutate({ id: n.id })}><Trash2 className="h-3 w-3" /></Button>}</div>))}</div>}</CardContent></Card>);
 }
 
 type Breadcrumb = Array<{ id: number | null; nome: string }>;
@@ -560,7 +560,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
                   <div key={p.id} className="relative rounded-xl border hover:bg-muted/30 transition-colors group p-3 text-center">
                     {estaRenomeando && r ? (
                       <div className="space-y-1.5">
-                        <Folder className="h-8 w-8 text-amber-500 mx-auto" />
+                        <Folder className="h-8 w-8 text-warning mx-auto" />
                         <Input
                           value={r.nome}
                           onChange={(e) => setRenomeando({ id: p.id, nome: e.target.value })}
@@ -577,7 +577,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
                     ) : (
                       <>
                         <button className="w-full" onClick={() => entrarNaPasta(p.id, p.nome)}>
-                          <Folder className="h-8 w-8 text-amber-500 mx-auto" />
+                          <Folder className="h-8 w-8 text-warning mx-auto" />
                           <p className="text-xs font-semibold mt-1.5 line-clamp-2 leading-snug">{p.nome}</p>
                           <p className="text-[9.5px] text-muted-foreground mt-0.5">
                             {p.totalSubpastas > 0 ? `${p.totalSubpastas} pasta(s) · ` : ""}{p.totalArquivos} arquivo(s)
@@ -629,7 +629,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
                   <div key={a.id} className="relative rounded-xl border hover:bg-muted/30 transition-colors group p-3 text-center">
                     {estaRenomeando && r ? (
                       <div className="space-y-1.5">
-                        <FileText className="h-8 w-8 text-blue-500 mx-auto" />
+                        <FileText className="h-8 w-8 text-info mx-auto" />
                         <Input
                           value={r.nome}
                           onChange={(e) => setRenomeandoArq({ id: a.id, nome: e.target.value })}
@@ -651,7 +651,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
                               <img src={a.url} alt={a.nome} className="h-full w-full object-cover" onError={(e) => { (e.target as any).style.display = "none"; }} />
                             </div>
                           ) : (
-                            <FileText className={`h-8 w-8 mx-auto ${(a.tipo || "").includes("pdf") || /\.pdf$/i.test(a.nome || "") ? "text-rose-500" : "text-blue-500"}`} />
+                            <FileText className={`h-8 w-8 mx-auto ${(a.tipo || "").includes("pdf") || /\.pdf$/i.test(a.nome || "") ? "text-danger" : "text-info"}`} />
                           )}
                           <p className="text-xs font-semibold mt-1.5 line-clamp-2 leading-snug break-all">{a.nome}</p>
                           <p className="text-[9.5px] text-muted-foreground mt-0.5">
@@ -683,7 +683,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
                               </DropdownMenuItem>
                               {todasPastas.filter((p: any) => p.id !== a.pastaId).map((p: any) => (
                                 <DropdownMenuItem key={p.id} onClick={() => moverArq.mutate({ id: a.id, pastaId: p.id })}>
-                                  <Folder className="h-3.5 w-3.5 mr-2 text-amber-500" /> {p.nome}
+                                  <Folder className="h-3.5 w-3.5 mr-2 text-warning" /> {p.nome}
                                 </DropdownMenuItem>
                               ))}
                               <DropdownMenuSeparator />
@@ -739,7 +739,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
                     <DialogTitle className="text-sm font-bold truncate flex items-center gap-2 flex-1 min-w-0">
                       <span className="truncate">{a.nome}</span>
                       <button
-                        className="text-violet-700 dark:text-violet-400 shrink-0"
+                        className="text-info-fg shrink-0"
                         title="Renomear arquivo"
                         onClick={() => setRenomeandoArq({ id: a.id, nome: a.nome })}
                       >
@@ -800,13 +800,13 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
                       onClick={() => setViewerIdx(i)}
                       title={f.nome}
                       className={`shrink-0 w-14 h-16 rounded-md border-2 flex flex-col items-center justify-center gap-1 overflow-hidden transition-colors ${
-                        i === viewerIdx ? "border-violet-500 bg-violet-50 dark:bg-violet-950/40" : "border-border bg-card hover:bg-muted"
+                        i === viewerIdx ? "border-info/30 bg-info-bg" : "border-border bg-card hover:bg-muted"
                       }`}
                     >
                       {isImage(f.tipo) ? (
                         <img src={f.url} alt={f.nome} className="h-9 w-11 object-cover rounded-sm" onError={(e) => { (e.target as any).style.display = "none"; }} />
                       ) : (
-                        <FileText className={`h-5 w-5 ${(f.tipo || "").includes("pdf") || /\.pdf$/i.test(f.nome || "") ? "text-rose-500" : "text-blue-500"}`} />
+                        <FileText className={`h-5 w-5 ${(f.tipo || "").includes("pdf") || /\.pdf$/i.test(f.nome || "") ? "text-danger" : "text-info"}`} />
                       )}
                       <span className="text-[7.5px] text-muted-foreground max-w-[48px] truncate px-0.5">{f.nome}</span>
                     </button>
@@ -831,7 +831,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-danger hover:bg-danger"
               onClick={() => {
                 if (excluirPastaAlvo) {
                   excluirPastaMut.mutate({ id: excluirPastaAlvo.id });
@@ -1002,9 +1002,9 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
   };
 
   return (<><Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader><div className="space-y-3 py-2">
-    <div className="space-y-1.5"><Label>Nome <span className="text-destructive">*</span></Label><Input placeholder="Nome completo" value={nome} onChange={e => setNome(e.target.value)} className={erros.nome ? "border-red-400" : ""} />{erros.nome && <p className="text-[10px] text-red-500">{erros.nome}</p>}</div>
-    <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone <span className="text-destructive">*</span></Label><Input placeholder="(85) 99999-0000" value={tel} onChange={e => setTel(formatTel(e.target.value))} className={erros.tel ? "border-red-400" : ""} />{erros.tel && <p className="text-[10px] text-red-500">{erros.tel}</p>}</div><div className="space-y-1.5"><Label>Email</Label><Input placeholder="opcional" value={email} onChange={e => setEmail(e.target.value)} className={erros.email ? "border-red-400" : ""} />{erros.email && <p className="text-[10px] text-red-500">{erros.email}</p>}</div></div>
-    <div className="space-y-1.5"><Label>CPF/CNPJ <span className="text-destructive">*</span></Label><Input placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(formatCpfCnpj(e.target.value))} className={erros.cpf ? "border-red-400" : ""} />{erros.cpf && <p className="text-[10px] text-red-500">{erros.cpf}</p>}</div>
+    <div className="space-y-1.5"><Label>Nome <span className="text-destructive">*</span></Label><Input placeholder="Nome completo" value={nome} onChange={e => setNome(e.target.value)} className={erros.nome ? "border-danger/30" : ""} />{erros.nome && <p className="text-[10px] text-danger">{erros.nome}</p>}</div>
+    <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone <span className="text-destructive">*</span></Label><Input placeholder="(85) 99999-0000" value={tel} onChange={e => setTel(formatTel(e.target.value))} className={erros.tel ? "border-danger/30" : ""} />{erros.tel && <p className="text-[10px] text-danger">{erros.tel}</p>}</div><div className="space-y-1.5"><Label>Email</Label><Input placeholder="opcional" value={email} onChange={e => setEmail(e.target.value)} className={erros.email ? "border-danger/30" : ""} />{erros.email && <p className="text-[10px] text-danger">{erros.email}</p>}</div></div>
+    <div className="space-y-1.5"><Label>CPF/CNPJ <span className="text-destructive">*</span></Label><Input placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(formatCpfCnpj(e.target.value))} className={erros.cpf ? "border-danger/30" : ""} />{erros.cpf && <p className="text-[10px] text-danger">{erros.cpf}</p>}</div>
     <CamposQualificacaoEndereco
       obrigatorios
       value={qualif}
@@ -1038,7 +1038,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
           type="checkbox"
           checked={jaFechado}
           onChange={(e) => setJaFechado(e.target.checked)}
-          className="mt-0.5 h-4 w-4 accent-emerald-600 cursor-pointer"
+          className="mt-0.5 h-4 w-4 accent-success cursor-pointer"
         />
         <div>
           <span className="text-sm font-medium">✅ Cliente já fechou contrato</span>
@@ -1087,7 +1087,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
           type="checkbox"
           checked={docPendente}
           onChange={(e) => setDocPendente(e.target.checked)}
-          className="mt-0.5 h-4 w-4 accent-violet-600 cursor-pointer"
+          className="mt-0.5 h-4 w-4 accent-info cursor-pointer"
         />
         <div>
           <span className="text-sm font-medium">Documentação pendente</span>
@@ -1104,7 +1104,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
           onChange={(e) => setDocObs(e.target.value)}
           maxLength={1000}
           rows={2}
-          className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+          className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-info"
         />
       )}
     </div>
@@ -1203,7 +1203,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const STATUS_ASSINATURA_LABELS: Record<string, string> = { pendente: "Pendente", enviado: "Enviado", visualizado: "Visualizado", assinado: "Assinado", recusado: "Recusado", expirado: "Expirado" };
-const STATUS_ASSINATURA_CORES: Record<string, string> = { pendente: "text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-800/60", enviado: "text-blue-600 bg-blue-100", visualizado: "text-amber-600 bg-amber-100", assinado: "text-emerald-600 bg-emerald-100", recusado: "text-red-600 bg-red-100", expirado: "text-gray-500 bg-gray-100 dark:bg-slate-800/60" };
+const STATUS_ASSINATURA_CORES: Record<string, string> = { pendente: "text-muted-foreground bg-muted", enviado: "text-info-fg bg-info-bg", visualizado: "text-warning-fg bg-warning-bg", assinado: "text-success-fg bg-success-bg", recusado: "text-danger-fg bg-danger-bg", expirado: "text-muted-foreground bg-muted" };
 
 export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: { contatoId: number; cliente: any; assinaturas: any[]; onRefresh: () => void }) {
   const [showNovo, setShowNovo] = useState(false);
@@ -1286,9 +1286,9 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
       </div>
 
       {linkCopiado && (
-        <div className="p-3 rounded-lg border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/20 space-y-2">
-          <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Link de assinatura criado:</p>
-          <div className="flex gap-2"><Input value={linkCopiado} readOnly className="h-8 text-xs bg-white dark:bg-card" /><Button size="sm" variant="outline" className="h-8" onClick={() => { navigator.clipboard.writeText(linkCopiado); toast.success("Copiado!"); }}>Copiar</Button></div>
+        <div className="p-3 rounded-lg border border-success/30 bg-success-bg space-y-2">
+          <p className="text-xs font-medium text-success-fg">Link de assinatura criado:</p>
+          <div className="flex gap-2"><Input value={linkCopiado} readOnly className="h-8 text-xs bg-card" /><Button size="sm" variant="outline" className="h-8" onClick={() => { navigator.clipboard.writeText(linkCopiado); toast.success("Copiado!"); }}>Copiar</Button></div>
           <Button size="sm" variant="outline" className="h-7 text-xs w-full" onClick={() => setLinkCopiado(null)}>Fechar</Button>
         </div>
       )}
@@ -1314,7 +1314,7 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
         <div className="space-y-2">
           {assinaturas.map((a: any) => (
             <div key={a.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/20 transition-colors">
-              <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-rose-100 dark:from-rose-950/40 to-pink-100 dark:to-pink-950/20 flex items-center justify-center shrink-0"><PenLine className="h-4 w-4 text-rose-600 dark:text-rose-400" /></div>
+              <div className="h-9 w-9 rounded-lg bg-danger-bg flex items-center justify-center shrink-0"><PenLine className="h-4 w-4 text-danger-fg" /></div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{a.titulo}</p>
                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
@@ -1327,13 +1327,13 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
               <div className="flex gap-1 shrink-0">
                 {a.documentoUrl && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Ver documento original" onClick={() => abrirArquivoOuAvisar(a.documentoUrl, "Documento original indisponível")}><ExternalLink className="h-3 w-3" /></Button>}
                 {a.status === "assinado" && a.documentoAssinadoUrl && (
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400" title="Baixar PDF assinado (com carimbo + página de certificação)" onClick={() => abrirArquivoOuAvisar(a.documentoAssinadoUrl, "PDF assinado indisponível")}>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success-fg" title="Baixar PDF assinado (com carimbo + página de certificação)" onClick={() => abrirArquivoOuAvisar(a.documentoAssinadoUrl, "PDF assinado indisponível")}>
                     <Download className="h-3 w-3" />
                   </Button>
                 )}
                 {a.tokenAssinatura && a.status !== "assinado" && a.status !== "expirado" && (<>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 dark:text-blue-400" title="Copiar link" onClick={() => copiarLink(a.tokenAssinatura)}><FileText className="h-3 w-3" /></Button>
-                  {cliente.telefone && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400" title="Enviar WhatsApp" onClick={() => enviarWhatsApp(a.tokenAssinatura)}><Send className="h-3 w-3" /></Button>}
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-info-fg" title="Copiar link" onClick={() => copiarLink(a.tokenAssinatura)}><FileText className="h-3 w-3" /></Button>
+                  {cliente.telefone && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success-fg" title="Enviar WhatsApp" onClick={() => enviarWhatsApp(a.tokenAssinatura)}><Send className="h-3 w-3" /></Button>}
                 </>)}
                 {a.status !== "assinado" && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setExcluirAssinAlvo({ id: a.id, titulo: a.titulo || "Documento sem título" })}><Trash2 className="h-3 w-3" /></Button>}
               </div>
@@ -1355,7 +1355,7 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
           <AlertDialogAction
-            className="bg-red-600 hover:bg-red-700"
+            className="bg-danger hover:bg-danger"
             onClick={() => {
               if (excluirAssinAlvo) {
                 excluirMut.mutate({ id: excluirAssinAlvo.id });
@@ -1377,8 +1377,8 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
 // Aba Tarefas do Cliente
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const PRIOR_DOT: Record<string, string> = { urgente: "bg-red-500", alta: "bg-orange-400", normal: "bg-blue-400", baixa: "bg-gray-300" };
-const ST_COR: Record<string, string> = { pendente: "bg-amber-100 text-amber-700 dark:text-amber-300", em_andamento: "bg-blue-100 text-blue-700 dark:text-blue-300", concluida: "bg-emerald-100 text-emerald-700 dark:text-emerald-300", cancelada: "bg-gray-100 dark:bg-slate-800/60 text-gray-500" };
+const PRIOR_DOT: Record<string, string> = { urgente: "bg-danger", alta: "bg-warning", normal: "bg-info", baixa: "bg-muted-foreground/50" };
+const ST_COR: Record<string, string> = { pendente: "bg-warning-bg text-warning-fg", em_andamento: "bg-info-bg text-info-fg", concluida: "bg-success-bg text-success-fg", cancelada: "bg-muted text-muted-foreground" };
 const ST_LBL: Record<string, string> = { pendente: "Pendente", em_andamento: "Em andamento", concluida: "Concluída", cancelada: "Cancelada" };
 
 export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
@@ -1423,14 +1423,14 @@ export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
     {!lista.length ? <div className="text-center py-6"><CheckSquare className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" /><p className="text-sm text-muted-foreground">Nenhuma tarefa.</p></div> : (
       <div className="space-y-1.5">{lista.map((t: any) => (
         <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg border hover:bg-muted/20 group">
-          <button className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${t.status === "concluida" ? "bg-emerald-500 border-emerald-500 text-white" : "border-muted-foreground/30 hover:border-emerald-400"}`}
+          <button className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${t.status === "concluida" ? "bg-success border-success/30 text-success-on" : "border-muted-foreground/30 hover:border-success/30"}`}
             onClick={() => atualizar.mutate({ id: t.id, status: t.status === "concluida" ? "pendente" : "concluida" })}>
             {t.status === "concluida" && <Check className="h-2.5 w-2.5" />}
           </button>
-          <div className={`w-0.5 h-5 rounded-full ${PRIOR_DOT[t.prioridade] || "bg-gray-300"}`} />
+          <div className={`w-0.5 h-5 rounded-full ${PRIOR_DOT[t.prioridade] || "bg-muted-foreground/50"}`} />
           <div className="flex-1 min-w-0">
             <p className={`text-xs font-medium truncate ${t.status === "concluida" ? "line-through text-muted-foreground" : ""}`}>{t.titulo}</p>
-            {t.dataVencimento && <p className={`text-[9px] flex items-center gap-0.5 ${t.vencida ? "text-red-500" : "text-muted-foreground"}`}><Calendar className="h-2 w-2" />{new Date(t.dataVencimento).toLocaleDateString("pt-BR")}</p>}
+            {t.dataVencimento && <p className={`text-[9px] flex items-center gap-0.5 ${t.vencida ? "text-danger" : "text-muted-foreground"}`}><Calendar className="h-2 w-2" />{new Date(t.dataVencimento).toLocaleDateString("pt-BR")}</p>}
           </div>
           <Badge className={`text-[8px] px-1 py-0 ${ST_COR[t.status] || ""}`}>{ST_LBL[t.status]}</Badge>
           <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive opacity-0 group-hover:opacity-100" onClick={() => setExcluirTarefaAlvo({ id: t.id, titulo: t.titulo })}><Trash2 className="h-2.5 w-2.5" /></Button>
@@ -1451,7 +1451,7 @@ export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
           <AlertDialogAction
-            className="bg-red-600 hover:bg-red-700"
+            className="bg-danger hover:bg-danger"
             onClick={() => {
               if (excluirTarefaAlvo) {
                 excluir.mutate({ id: excluirTarefaAlvo.id });
@@ -1553,7 +1553,7 @@ export function RegistrarFechamentoDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+            <CheckCircle2 className="h-5 w-5 text-success-fg" />
             Registrar fechamento
           </DialogTitle>
         </DialogHeader>
@@ -1565,11 +1565,11 @@ export function RegistrarFechamentoDialog({
           </p>
 
           {fechamentosExistentes.length > 0 && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900 p-2.5 space-y-1">
-              <p className="text-[11px] font-medium text-emerald-800 dark:text-emerald-200">
+            <div className="rounded-md border border-success/30 bg-success-bg dark:border-success/30 p-2.5 space-y-1">
+              <p className="text-[11px] font-medium text-success-fg">
                 Já registrados: {fechamentosExistentes.length} fechamento(s)
               </p>
-              <ul className="text-[10px] text-emerald-700/90 dark:text-emerald-300/90 space-y-0.5">
+              <ul className="text-[10px] text-success-fg/90 space-y-0.5">
                 {fechamentosExistentes.slice(0, 5).map((f, i) => (
                   <li key={i}>
                     {f.valorEstimado

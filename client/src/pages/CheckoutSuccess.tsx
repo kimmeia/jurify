@@ -64,7 +64,7 @@ export default function CheckoutSuccess() {
         <Card className="max-w-md w-full text-center">
           <CardHeader className="pb-4">
             <div className="mx-auto mb-4">
-              <CheckCircle2 className="h-16 w-16 text-emerald-500" />
+              <CheckCircle2 className="h-16 w-16 text-success" />
             </div>
             <CardTitle className="text-2xl">Pagamento Confirmado! 🎉</CardTitle>
             <CardDescription className="text-base">
@@ -93,8 +93,8 @@ export default function CheckoutSuccess() {
         <Card className="max-w-md w-full text-center">
           <CardHeader className="pb-4">
             <div className="mx-auto mb-4 relative">
-              <Clock className="h-16 w-16 text-blue-500" />
-              <Loader2 className="h-6 w-6 text-blue-500 absolute -bottom-1 -right-1 animate-spin" />
+              <Clock className="h-16 w-16 text-info" />
+              <Loader2 className="h-6 w-6 text-info absolute -bottom-1 -right-1 animate-spin" />
             </div>
             <CardTitle className="text-2xl">Confirmando pagamento...</CardTitle>
             <CardDescription className="text-base">
@@ -120,7 +120,7 @@ export default function CheckoutSuccess() {
       <Card className="max-w-md w-full text-center">
         <CardHeader className="pb-4">
           <div className="mx-auto mb-4">
-            <CheckCircle2 className="h-16 w-16 text-amber-500" />
+            <CheckCircle2 className="h-16 w-16 text-warning" />
           </div>
           <CardTitle className="text-2xl">Pagamento recebido</CardTitle>
           <CardDescription className="text-base">
@@ -129,11 +129,11 @@ export default function CheckoutSuccess() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/50 p-3 text-xs text-left space-y-1">
-            <p className="font-semibold text-amber-900 dark:text-amber-200">
+          <div className="rounded-lg bg-warning-bg border border-warning/30 p-3 text-xs text-left space-y-1">
+            <p className="font-semibold text-warning-fg">
               Por que pode estar demorando?
             </p>
-            <ul className="text-amber-800/90 dark:text-amber-200/80 space-y-0.5 list-disc pl-4">
+            <ul className="text-warning-fg/90 space-y-0.5 list-disc pl-4">
               <li>
                 <strong>Boleto</strong>: compensação leva 1-2 dias úteis
               </li>

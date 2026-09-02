@@ -63,11 +63,11 @@ interface PessoaDaEquipe {
 type EstadoAgora = "trabalhando" | "almoco" | "encerrou" | "ausente" | "fora";
 
 const ROTULO_AGORA: Record<EstadoAgora, { texto: string; ponto: string; cor: string }> = {
-  trabalhando: { texto: "Trabalhando", ponto: "bg-emerald-500", cor: "text-emerald-700 dark:text-emerald-400" },
-  almoco: { texto: "Em almoço", ponto: "bg-amber-500", cor: "text-amber-700 dark:text-amber-400" },
-  encerrou: { texto: "Encerrou", ponto: "bg-slate-400", cor: "text-muted-foreground" },
-  ausente: { texto: "Ausência lançada", ponto: "bg-violet-500", cor: "text-violet-700 dark:text-violet-400" },
-  fora: { texto: "Sem registro hoje", ponto: "bg-slate-300", cor: "text-muted-foreground" },
+  trabalhando: { texto: "Trabalhando", ponto: "bg-success", cor: "text-success-fg" },
+  almoco: { texto: "Em almoço", ponto: "bg-warning", cor: "text-warning-fg" },
+  encerrou: { texto: "Encerrou", ponto: "bg-muted-foreground/50", cor: "text-muted-foreground" },
+  ausente: { texto: "Ausência lançada", ponto: "bg-info", cor: "text-info-fg" },
+  fora: { texto: "Sem registro hoje", ponto: "bg-muted-foreground/50", cor: "text-muted-foreground" },
 };
 
 /**
@@ -86,7 +86,7 @@ function estadoAgora(j: JornadaComparada | undefined): EstadoAgora {
 }
 
 function Avatar({ nome, indice }: { nome: string; indice: number }) {
-  const cores = ["bg-violet-600", "bg-cyan-600", "bg-amber-600", "bg-emerald-600", "bg-pink-600"];
+  const cores = ["bg-info", "bg-info", "bg-warning", "bg-success", "bg-danger"];
   const iniciais = nome
     .split(/\s+/)
     .filter(Boolean)
@@ -109,7 +109,7 @@ function BarraJornada({ feito, previsto }: { feito: number; previsto: number }) 
   return (
     <span className="mt-1 block h-1.5 w-full overflow-hidden rounded-full bg-muted">
       <span
-        className={`block h-full rounded-full ${faltando ? "bg-orange-500" : "bg-blue-600"}`}
+        className={`block h-full rounded-full ${faltando ? "bg-warning" : "bg-info"}`}
         style={{ width: `${previsto > 0 ? pct : 0}%` }}
       />
     </span>
@@ -175,7 +175,7 @@ function LinhaPessoa({
           </span>
           {p.total.previstoMin > 0 && p.total.diasFechados > 0 && (
             <span
-              className={`ml-auto text-[11px] font-bold tabular-nums ${p.total.saldoMin >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
+              className={`ml-auto text-[11px] font-bold tabular-nums ${p.total.saldoMin >= 0 ? "text-success-fg" : "text-danger-fg"}`}
             >
               {p.total.saldoMin >= 0 ? "+" : "−"}
               {formatarDuracao(Math.abs(p.total.saldoMin))}
@@ -229,7 +229,7 @@ function LinhaPessoa({
         <Button variant="ghost" size="sm" className="h-8 px-2" title="Avaliar" onClick={aoAvaliar}>
           <ShieldCheck className="h-3.5 w-3.5" />
         </Button>
-        <button type="button" onClick={aoAbrir} className="text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400" title="Abrir ficha">
+        <button type="button" onClick={aoAbrir} className="text-muted-foreground hover:text-info-fg" title="Abrir ficha">
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
@@ -465,7 +465,7 @@ export default function Ponto() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Clock className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+        <Clock className="h-5 w-5 text-info-fg" />
         <h1 className="text-lg font-extrabold">
           RH{" "}
           <span className="font-medium text-muted-foreground">

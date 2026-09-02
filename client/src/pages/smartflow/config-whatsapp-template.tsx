@@ -99,7 +99,7 @@ function PreviewBox({ titulo, texto }: { titulo: string; texto: string }) {
       <div className="text-[11px] whitespace-pre-wrap rounded bg-background border p-2 text-foreground/80 leading-relaxed">
         {partes.map((p, i) =>
           /^\{\{[^}]+\}\}$/.test(p) ? (
-            <span key={i} className="px-1 rounded bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 font-mono text-[10px]">{p}</span>
+            <span key={i} className="px-1 rounded bg-info-bg text-info-fg dark:text-info font-mono text-[10px]">{p}</span>
           ) : (
             <span key={i}>{p}</span>
           ),
@@ -233,10 +233,10 @@ export function ConfigWhatsappTemplateBuilder({
       {isLoading && <p className="text-xs text-muted-foreground">Carregando templates da sua conta WhatsApp…</p>}
 
       {!isLoading && !disponivel && (
-        <div className="rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-2.5 text-[11px] text-amber-800 dark:text-amber-200 space-y-1">
+        <div className="rounded border border-warning/30 bg-warning-bg p-2.5 text-[11px] text-warning-fg space-y-1">
           <p className="font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Não consegui listar seus templates</p>
           <p>{motivo || "Verifique o canal WhatsApp oficial."}</p>
-          <p className="text-amber-700/80 dark:text-amber-300/80">Dá pra informar o template manualmente abaixo mesmo assim.</p>
+          <p className="text-warning-fg/80">Dá pra informar o template manualmente abaixo mesmo assim.</p>
         </div>
       )}
 
@@ -339,7 +339,7 @@ export function ConfigWhatsappTemplateBuilder({
                     <span className="font-medium">{b.text || "(sem texto)"}</span>
                     <span className="text-muted-foreground"> · {rotuloBotao(b)}</span>
                     {comOpcoes && b.tipo === "QUICK_REPLY" && (
-                      <span className="text-teal-600 dark:text-teal-400"> → vira uma saída do bloco no canvas</span>
+                      <span className="text-success-fg"> → vira uma saída do bloco no canvas</span>
                     )}
                   </p>
                   {b.dinamico && b.tipo === "URL" && (

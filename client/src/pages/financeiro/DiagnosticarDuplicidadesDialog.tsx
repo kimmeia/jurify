@@ -35,7 +35,7 @@ export function DiagnosticarDuplicidadesDialog({
       <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <AlertTriangle className="h-5 w-5 text-warning" />
             Diagnóstico de pagamentos duplicados
           </DialogTitle>
           <DialogDescription>
@@ -54,10 +54,10 @@ export function DiagnosticarDuplicidadesDialog({
             <div className="grid grid-cols-3 gap-3">
               <div className="border rounded-lg p-3 space-y-1">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5 text-amber-500" />
+                  <Clock className="h-3.5 w-3.5 text-warning" />
                   Órfãs pagas
                 </div>
-                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 tabular-nums">
+                <p className="text-2xl font-bold text-warning-fg tabular-nums">
                   {data.orfasRecebidas.count}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
@@ -68,12 +68,12 @@ export function DiagnosticarDuplicidadesDialog({
                 </p>
               </div>
 
-              <div className="border-2 border-red-200 dark:border-red-800/50 rounded-lg p-3 space-y-1">
+              <div className="border-2 border-danger/30 rounded-lg p-3 space-y-1">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+                  <AlertTriangle className="h-3.5 w-3.5 text-danger" />
                   Pares suspeitos
                 </div>
-                <p className="text-2xl font-bold text-red-600 dark:text-red-400 tabular-nums">
+                <p className="text-2xl font-bold text-danger-fg tabular-nums">
                   {data.paresSuspeitos.count}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
@@ -86,10 +86,10 @@ export function DiagnosticarDuplicidadesDialog({
 
               <div className="border rounded-lg p-3 space-y-1">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <FileText className="h-3.5 w-3.5 text-blue-500" />
+                  <FileText className="h-3.5 w-3.5 text-info" />
                   Manuais já-pagas
                 </div>
-                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 tabular-nums">
+                <p className="text-2xl font-bold text-info-fg tabular-nums">
                   {data.manuaisJaPagas.count}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
@@ -137,9 +137,9 @@ export function DiagnosticarDuplicidadesDialog({
             )}
 
             {/* Interpretação */}
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs space-y-2 dark:bg-amber-950/30 dark:border-amber-900">
+            <div className="bg-warning-bg border border-warning/30 rounded-lg p-3 text-xs space-y-2 dark:bg-warning/30">
               <p className="font-semibold">Como ler os números:</p>
-              <ul className="list-disc list-inside space-y-1 ml-2 text-slate-700 dark:text-slate-300">
+              <ul className="list-disc list-inside space-y-1 ml-2 text-foreground">
                 <li>
                   <strong>Órfãs pagas</strong> são candidatas a serem vinculadas
                   manualmente a clientes existentes (Pix em nome de terceiro).
@@ -155,7 +155,7 @@ export function DiagnosticarDuplicidadesDialog({
                 </li>
               </ul>
               {data.paresSuspeitos.count === 0 && data.orfasRecebidas.count === 0 && (
-                <p className="text-emerald-700 dark:text-emerald-300 font-medium pt-2 border-t">
+                <p className="text-success-fg font-medium pt-2 border-t">
                   ✓ Nenhuma duplicação ou órfã encontrada no momento.
                 </p>
               )}

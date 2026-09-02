@@ -290,7 +290,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
   return (
     <div className="w-full max-w-md mx-auto">
       {logoutMotivo && (
-        <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200">
+        <div className="mb-4 p-3 rounded-lg bg-warning-bg border border-warning/30 text-sm text-warning-fg dark:border-warning/30">
           <div className="flex items-start gap-2">
             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
             <span>{logoutMotivo}</span>
@@ -298,10 +298,10 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
         </div>
       )}
       {emailNaoConfirmadoLogin && (
-        <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
+        <div className="mb-4 p-3 rounded-lg bg-warning-bg border border-warning/30 dark:border-warning/30">
           <div className="flex items-start gap-2 mb-2">
-            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-amber-700 dark:text-amber-200" />
-            <span className="text-sm text-amber-800 dark:text-amber-200">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-warning-fg" />
+            <span className="text-sm text-warning-fg">
               Confirme seu email antes de entrar. Não recebeu o link?
             </span>
           </div>
@@ -353,7 +353,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
                 <Label htmlFor="login-password" className="text-xs">
                   Senha
                 </Label>
-                <a href="/esqueci-senha" className="text-[11px] text-violet-600 dark:text-violet-400 hover:underline">
+                <a href="/esqueci-senha" className="text-[11px] text-info-fg hover:underline">
                   Esqueci minha senha
                 </a>
               </div>
@@ -486,8 +486,8 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
                 <p
                   className={`text-[10px] flex items-center gap-1 ${
                     signupPassword === signupPasswordConfirm
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-red-600 dark:text-red-400"
+                      ? "text-success-fg"
+                      : "text-danger-fg"
                   }`}
                 >
                   {signupPassword === signupPasswordConfirm ? (
@@ -508,16 +508,16 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
                 type="checkbox"
                 checked={aceitouTermos}
                 onChange={(e) => setAceitouTermos(e.target.checked)}
-                className="mt-0.5 h-3.5 w-3.5 accent-violet-600 cursor-pointer"
+                className="mt-0.5 h-3.5 w-3.5 accent-info cursor-pointer"
                 required
               />
               <span>
                 Li e aceito os{" "}
-                <a href="/termos" target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 hover:underline">
+                <a href="/termos" target="_blank" rel="noopener noreferrer" className="text-info-fg hover:underline">
                   Termos de Uso
                 </a>{" "}
                 e a{" "}
-                <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 hover:underline">
+                <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="text-info-fg hover:underline">
                   Política de Privacidade
                 </a>
                 , e declaro que o escritório é o responsável pelos dados de terceiros que inserir na plataforma.

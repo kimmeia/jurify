@@ -42,7 +42,7 @@ export function EditorCanvasToolbar({
 }) {
   return (
     <div
-      className="absolute bottom-4 z-10 bg-card rounded-lg border border-slate-200 dark:border-slate-800 shadow-lg p-1 flex items-center gap-0.5 transition-[right]"
+      className="absolute bottom-4 z-10 bg-card rounded-lg border border-border shadow-lg p-1 flex items-center gap-0.5 transition-[right]"
       style={{ right: 16 + recuoDireita }}
     >
       {/* Desfazer vem primeiro de propósito: quem apagou um bloco sem querer
@@ -97,7 +97,7 @@ export function EditorCanvasToolbar({
       <Button
         variant="ghost"
         size="sm"
-        className="w-7 h-7 p-0 text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30"
+        className="w-7 h-7 p-0 text-info-fg hover:text-info-fg hover:bg-info-bg"
         onClick={onAutoArranjar}
         title="Reorganizar os nós automaticamente"
       >
@@ -107,7 +107,7 @@ export function EditorCanvasToolbar({
       <Button
         variant="ghost"
         size="sm"
-        className="h-7 px-2 gap-1 text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+        className="h-7 px-2 gap-1 text-success-fg hover:text-success-fg hover:bg-success-bg"
         onClick={onValidar}
         title="Verificar se o fluxo está bem montado (sem ciclos, sem condicional órfão)"
       >

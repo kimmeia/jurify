@@ -74,12 +74,12 @@ const ETAPA_LABELS: Record<string, string> = {
   fechado_perdido: "Perdido",
 };
 const ETAPA_CORES: Record<string, string> = {
-  novo: "bg-slate-500",
-  qualificado: "bg-blue-500",
-  proposta: "bg-violet-500",
-  negociacao: "bg-amber-500",
-  fechado_ganho: "bg-emerald-500",
-  fechado_perdido: "bg-red-500",
+  novo: "bg-muted-foreground/50",
+  qualificado: "bg-info",
+  proposta: "bg-info",
+  negociacao: "bg-warning",
+  fechado_ganho: "bg-success",
+  fechado_perdido: "bg-danger",
 };
 const ORIGEM_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
@@ -412,7 +412,7 @@ function AbaAtendimento() {
             type="button"
             onClick={() => setUf(null)}
             title="Voltar a ver todos os estados"
-            className="flex h-9 items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-2.5 text-xs font-semibold text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300"
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-info/30 bg-info-bg px-2.5 text-xs font-semibold text-info-fg"
           >
             Estado: {uf}
             <X className="h-3.5 w-3.5" />
@@ -561,7 +561,7 @@ function AbaAtendimentoConteudo({
               : undefined
           }
         >
-          <BarrasDiarias dados={volumeConversas} cor="bg-violet-500" />
+          <BarrasDiarias dados={volumeConversas} cor="bg-info" />
         </CardRel>
 
         <CardRel
@@ -612,7 +612,7 @@ function AbaAtendimentoConteudo({
                 rotulo: m.motivo,
                 valor: m.total,
               }))}
-              cor="bg-rose-300 dark:bg-rose-800"
+              cor="bg-danger"
               mostrarPercentual={false}
             />
           )}
@@ -696,7 +696,7 @@ function AbaAtendimentoConteudo({
                     )}
                   </TableCell>
                   <TableCell className="text-center text-xs font-semibold tabular-nums">{a.iniciados}</TableCell>
-                  <TableCell className="text-center text-xs tabular-nums text-emerald-600 dark:text-emerald-400">{a.resolvidos}</TableCell>
+                  <TableCell className="text-center text-xs tabular-nums text-success-fg">{a.resolvidos}</TableCell>
                   <TableCell className="text-center text-xs tabular-nums text-muted-foreground">{a.emAndamento}</TableCell>
                   <TableCell className="text-center text-xs tabular-nums">
                     {a.segPriResp != null ? fmtTempoResposta(a.segPriResp) : "—"}
@@ -710,7 +710,7 @@ function AbaAtendimentoConteudo({
                 <TableRow className="bg-muted/40 hover:bg-muted/40 font-semibold">
                   <TableCell className="text-xs">Total</TableCell>
                   <TableCell className="text-center text-xs tabular-nums">{totalIniciados}</TableCell>
-                  <TableCell className="text-center text-xs tabular-nums text-emerald-600 dark:text-emerald-400">
+                  <TableCell className="text-center text-xs tabular-nums text-success-fg">
                     {tabAtd.reduce((s: number, a: any) => s + a.resolvidos, 0)}
                   </TableCell>
                   <TableCell className="text-center text-xs tabular-nums text-muted-foreground">
@@ -771,10 +771,10 @@ function AbaAtendimentoConteudo({
                     </span>
                   </TableCell>
                   <TableCell className="text-center text-xs tabular-nums">{a.leadsTotal}</TableCell>
-                  <TableCell className="text-center text-xs font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                  <TableCell className="text-center text-xs font-semibold tabular-nums text-success-fg">
                     {a.ganhos}
                   </TableCell>
-                  <TableCell className="text-center text-xs font-semibold tabular-nums text-rose-600 dark:text-rose-400">
+                  <TableCell className="text-center text-xs font-semibold tabular-nums text-danger-fg">
                     {a.perdidos}
                   </TableCell>
                   <TableCell className="text-center text-xs tabular-nums text-muted-foreground">
@@ -792,10 +792,10 @@ function AbaAtendimentoConteudo({
                 <TableRow className="bg-muted/40 hover:bg-muted/40 font-semibold">
                   <TableCell className="text-xs">Total</TableCell>
                   <TableCell className="text-center text-xs tabular-nums">{totais.leadsTotal}</TableCell>
-                  <TableCell className="text-center text-xs tabular-nums text-emerald-600 dark:text-emerald-400">
+                  <TableCell className="text-center text-xs tabular-nums text-success-fg">
                     {totais.ganhos}
                   </TableCell>
-                  <TableCell className="text-center text-xs tabular-nums text-rose-600 dark:text-rose-400">
+                  <TableCell className="text-center text-xs tabular-nums text-danger-fg">
                     {totais.perdidos}
                   </TableCell>
                   <TableCell className="text-center text-xs tabular-nums text-muted-foreground">
@@ -815,8 +815,8 @@ function AbaAtendimentoConteudo({
       </CardRel>
 
       {data.estoqueConversas && (
-        <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3 text-[11.5px] leading-relaxed text-muted-foreground dark:border-violet-900 dark:bg-violet-950/30">
-          <b className="text-violet-700 dark:text-violet-300">Por que estes números não batem com o Inbox:</b>{" "}
+        <div className="rounded-xl border border-info/30 bg-info-bg/60 px-4 py-3 text-[11.5px] leading-relaxed text-muted-foreground dark:border-info/30">
+          <b className="text-info-fg">Por que estes números não batem com o Inbox:</b>{" "}
           os cartões do Atendimento (Todas {data.estoqueConversas.todas.toLocaleString("pt-BR")} · Em
           atendimento {data.estoqueConversas.emAtendimento.toLocaleString("pt-BR")} · Resolvidas{" "}
           {data.estoqueConversas.resolvidas.toLocaleString("pt-BR")}) são o <b>estoque de hoje</b> — tudo que
@@ -869,7 +869,7 @@ function AbaAtendimentoConteudo({
               titulo="Volume diário de ligações"
               aviso={`${totalChamadas.toLocaleString("pt-BR")} chamadas no período`}
             >
-              <BarrasDiarias dados={ligacoesPorDia} cor="bg-teal-500" />
+              <BarrasDiarias dados={ligacoesPorDia} cor="bg-success" />
             </CardRel>
 
             <CardRel
@@ -902,7 +902,7 @@ function AbaAtendimentoConteudo({
                         <TableCell className="text-xs font-medium truncate max-w-[140px]">{a.nome}</TableCell>
                         <TableCell className="text-center text-xs tabular-nums">{a.feitas}</TableCell>
                         <TableCell className="text-center text-xs tabular-nums">{a.recebidas}</TableCell>
-                        <TableCell className="text-center text-xs font-semibold tabular-nums text-rose-600 dark:text-rose-400">
+                        <TableCell className="text-center text-xs font-semibold tabular-nums text-danger-fg">
                           {a.perdidas}
                         </TableCell>
                         <TableCell className="text-right text-xs tabular-nums">
@@ -922,8 +922,8 @@ function AbaAtendimentoConteudo({
 }
 
 const CORES_CANAL = [
-  "bg-emerald-500", "bg-green-500", "bg-rose-500",
-  "bg-sky-500", "bg-violet-500", "bg-amber-500",
+  "bg-success", "bg-success", "bg-danger",
+  "bg-info", "bg-info", "bg-warning",
 ];
 
 // ───────────────────── aba: Comercial ─────────────────────
@@ -961,7 +961,7 @@ function VariacaoBadge({ pct }: { pct: number }) {
     );
   }
   const up = pct > 0;
-  const cor = up ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400";
+  const cor = up ? "text-success-fg" : "text-danger-fg";
   return (
     <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium ${cor}`}>
       {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
@@ -971,10 +971,10 @@ function VariacaoBadge({ pct }: { pct: number }) {
 }
 
 function corBarraMeta(progresso: number): string {
-  if (progresso >= 100) return "bg-emerald-500";
-  if (progresso >= 70) return "bg-blue-500";
-  if (progresso >= 40) return "bg-amber-500";
-  return "bg-red-500";
+  if (progresso >= 100) return "bg-success";
+  if (progresso >= 70) return "bg-info";
+  if (progresso >= 40) return "bg-warning";
+  return "bg-danger";
 }
 
 function RankingPodioTabela({
@@ -987,9 +987,9 @@ function RankingPodioTabela({
   const topTres = ranking.slice(0, 3);
   const resto = ranking.slice(3);
   const bgsPodio = [
-    "bg-amber-50 border-amber-300 dark:bg-amber-950/30",
-    "bg-slate-100 border-slate-300 dark:bg-slate-800/40",
-    "bg-orange-50 border-orange-300 dark:bg-orange-950/30",
+    "bg-warning-bg border-warning/30",
+    "bg-muted border-border",
+    "bg-warning-bg border-warning/30",
   ];
 
   return (
@@ -1018,16 +1018,16 @@ function RankingPodioTabela({
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-md bg-blue-500/5 border border-blue-500/20 p-2">
+                <div className="rounded-md bg-info/5 border border-info/30 p-2">
                   <p className="text-[10px] text-muted-foreground">Fechado</p>
-                  <p className="text-sm font-bold text-blue-700 dark:text-blue-300">{formatBRL(r.valorFechado || 0)}</p>
+                  <p className="text-sm font-bold text-info-fg">{formatBRL(r.valorFechado || 0)}</p>
                   <p className="text-[10px] text-muted-foreground">
                     {r.contratosFechados || 0} contrato(s)
                   </p>
                 </div>
-                <div className="rounded-md bg-emerald-500/5 border border-emerald-500/20 p-2">
+                <div className="rounded-md bg-success/5 border border-success/30 p-2">
                   <p className="text-[10px] text-muted-foreground">Recebido</p>
-                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{formatBRL(r.faturado)}</p>
+                  <p className="text-sm font-bold text-success-fg">{formatBRL(r.faturado)}</p>
                 </div>
               </div>
               <p className="text-[10px] text-muted-foreground text-right">
@@ -1091,13 +1091,13 @@ function RankingPodioTabela({
                       <p className="text-[10px] text-muted-foreground">{r.setorNome}</p>
                     )}
                   </TableCell>
-                  <TableCell className="text-xs text-right font-medium text-blue-700 dark:text-blue-300 tabular-nums">
+                  <TableCell className="text-xs text-right font-medium text-info-fg tabular-nums">
                     {formatBRL(r.valorFechado || 0)}
                   </TableCell>
                   <TableCell className="text-xs text-right text-muted-foreground tabular-nums">
                     {r.contratosFechados || 0}
                   </TableCell>
-                  <TableCell className="text-xs text-right font-medium text-emerald-700 dark:text-emerald-300 tabular-nums">
+                  <TableCell className="text-xs text-right font-medium text-success-fg tabular-nums">
                     {formatBRL(r.faturado)}
                   </TableCell>
                   <TableCell className="text-xs text-right text-muted-foreground tabular-nums">
@@ -1160,23 +1160,23 @@ function FechamentosPorOrigemCard({ itens }: { itens: any[] }) {
                   key={o.origem}
                   type="button"
                   className={
-                    "rounded-lg border p-3 text-center transition-all hover:border-emerald-300 hover:shadow-sm " +
-                    (origemAberta === o.origem ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 ring-1 ring-emerald-500" : "")
+                    "rounded-lg border p-3 text-center transition-all hover:border-success/30 hover:shadow-sm " +
+                    (origemAberta === o.origem ? "border-success/30 bg-success-bg ring-1 ring-success" : "")
                   }
                   onClick={() => setOrigemAberta(origemAberta === o.origem ? null : o.origem)}
                 >
-                  <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{o.total}</p>
+                  <p className="text-xl font-bold text-success-fg">{o.total}</p>
                   <p className="text-xs text-muted-foreground truncate" title={o.origem}>{o.origem}</p>
                 </button>
               ))}
             </div>
             {aberta && (aberta.fechamentos?.length ?? 0) > 0 && (
-              <div className="mt-3 rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-950/30 overflow-hidden">
+              <div className="mt-3 rounded-xl border border-success/30 bg-success-bg/50 overflow-hidden">
                 <div className="flex items-center gap-2 px-3.5 py-2 text-xs flex-wrap">
                   <span>
-                    <strong className="text-emerald-900 dark:text-emerald-200">{aberta.origem}</strong> · {aberta.total} fechamento(s) no período
+                    <strong className="text-success-fg">{aberta.origem}</strong> · {aberta.total} fechamento(s) no período
                   </span>
-                  <span className="ml-auto font-bold text-emerald-700 dark:text-emerald-300">{formatBRL(aberta.valorTotal || 0)}</span>
+                  <span className="ml-auto font-bold text-success-fg">{formatBRL(aberta.valorTotal || 0)}</span>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1187,9 +1187,9 @@ function FechamentosPorOrigemCard({ itens }: { itens: any[] }) {
                   </Button>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs bg-white dark:bg-card">
+                  <table className="w-full text-xs bg-card">
                     <thead>
-                      <tr className="text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/30">
+                      <tr className="text-[10px] uppercase tracking-wide text-success-fg bg-success-bg/80">
                         <th className="text-left px-3.5 py-1.5 font-semibold">Cliente</th>
                         <th className="text-left px-3.5 py-1.5 font-semibold">Fechado em</th>
                         <th className="text-right px-3.5 py-1.5 font-semibold">Valor</th>
@@ -1201,7 +1201,7 @@ function FechamentosPorOrigemCard({ itens }: { itens: any[] }) {
                         <tr key={i} className="border-t">
                           <td className="px-3.5 py-1.5">
                             {f.contatoId ? (
-                              <a href={`/clientes?id=${f.contatoId}`} className="text-blue-600 dark:text-blue-400 font-medium hover:underline">
+                              <a href={`/clientes?id=${f.contatoId}`} className="text-info-fg font-medium hover:underline">
                                 {f.cliente}
                               </a>
                             ) : (
@@ -1410,21 +1410,21 @@ function DashboardComercial() {
             const ticketMedioPago = data.kpis.ticketMedio || 0;
             return (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <Card className="border-2 border-emerald-200 dark:border-emerald-800/50">
+                <Card className="border-2 border-success/30">
                   <CardContent className="pt-4 space-y-1.5">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
+                      <DollarSign className="h-3.5 w-3.5 text-success" />
                       Recebido
                     </div>
-                    <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{formatBRL(faturado)}</p>
+                    <p className="text-2xl font-bold text-success-fg tabular-nums">{formatBRL(faturado)}</p>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] text-muted-foreground">vs anterior</span>
                       <VariacaoBadge pct={data.kpis.variacaoFaturado} />
                     </div>
-                    <div className="rounded bg-emerald-50 border border-emerald-200 dark:border-emerald-800/50 px-1.5 py-1 dark:bg-emerald-950/30">
+                    <div className="rounded bg-success-bg border border-success/30 px-1.5 py-1 dark:bg-success/30">
                       {pctRecebidoDoFechado != null ? (
                         <>
-                          <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold">
+                          <p className="text-[10px] text-success-fg font-semibold">
                             {pctRecebidoDoFechado.toFixed(1).replace(".", ",")}% do total fechado
                           </p>
                           <p className="text-[9px] text-muted-foreground">
@@ -1441,13 +1441,13 @@ function DashboardComercial() {
                   </CardContent>
                 </Card>
 
-                <Card className="border-2 border-blue-200 dark:border-blue-800/50">
+                <Card className="border-2 border-info/30">
                   <CardContent className="pt-4 space-y-1.5">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-blue-500" />
+                      <CheckCircle2 className="h-3.5 w-3.5 text-info" />
                       Contratos fechados
                     </div>
-                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 tabular-nums">{contratosFechados}</p>
+                    <p className="text-2xl font-bold text-info-fg tabular-nums">{contratosFechados}</p>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] text-muted-foreground">vs anterior</span>
                       <VariacaoBadge pct={data.kpis.variacaoContratosFechados} />
@@ -1458,21 +1458,21 @@ function DashboardComercial() {
                   </CardContent>
                 </Card>
 
-                <Card className="border-2 border-indigo-200 dark:border-indigo-800/50">
+                <Card className="border-2 border-info/30">
                   <CardContent className="pt-4 space-y-1.5">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-indigo-500" />
+                      <CheckCircle2 className="h-3.5 w-3.5 text-info" />
                       Clientes que pagaram
                     </div>
-                    <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{clientesPagantes}</p>
+                    <p className="text-2xl font-bold text-info-fg tabular-nums">{clientesPagantes}</p>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] text-muted-foreground">vs anterior</span>
                       <VariacaoBadge pct={data.kpis.variacaoClientesPagantes} />
                     </div>
-                    <div className="rounded bg-indigo-50 border border-indigo-200 dark:border-indigo-800/50 px-1.5 py-1 dark:bg-indigo-950/30">
+                    <div className="rounded bg-info-bg border border-info/30 px-1.5 py-1 dark:bg-info/30">
                       {pctPagantesDosFechados != null ? (
                         <>
-                          <p className="text-[10px] text-indigo-700 dark:text-indigo-300 font-semibold">
+                          <p className="text-[10px] text-info-fg font-semibold">
                             {pctPagantesDosFechados.toFixed(1).replace(".", ",")}% dos que fecharam
                           </p>
                           <p className="text-[9px] text-muted-foreground">
@@ -1489,18 +1489,18 @@ function DashboardComercial() {
                   </CardContent>
                 </Card>
 
-                <Card className="border-2 border-violet-200 dark:border-violet-800/50">
+                <Card className="border-2 border-info/30">
                   <CardContent className="pt-4 space-y-1.5">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Activity className="h-3.5 w-3.5 text-violet-500" />
+                      <Activity className="h-3.5 w-3.5 text-info" />
                       Ticket médio
                     </div>
-                    <p className="text-2xl font-bold text-violet-600 dark:text-violet-400 tabular-nums">{formatBRL(ticketMedioFechado)}</p>
+                    <p className="text-2xl font-bold text-info-fg tabular-nums">{formatBRL(ticketMedioFechado)}</p>
                     <p className="text-[10px] text-muted-foreground">
                       fechado ÷ contratos fechados
                     </p>
-                    <div className="rounded bg-violet-50 border border-violet-200 dark:border-violet-800/50 px-1.5 py-1 dark:bg-violet-950/30">
-                      <p className="text-[10px] text-violet-700 dark:text-violet-300 font-semibold tabular-nums">
+                    <div className="rounded bg-info-bg border border-info/30 px-1.5 py-1 dark:bg-info/30">
+                      <p className="text-[10px] text-info-fg font-semibold tabular-nums">
                         {formatBRL(ticketMedioPago)} recebido
                       </p>
                       <p className="text-[9px] text-muted-foreground">
@@ -1517,7 +1517,7 @@ function DashboardComercial() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Target className="h-4 w-4 text-amber-500" />
+                <Target className="h-4 w-4 text-warning" />
                 Ranking de atendentes
               </CardTitle>
             </CardHeader>
@@ -1618,7 +1618,7 @@ function DashboardComercial() {
                         <div className="flex-1 h-7 bg-muted/40 rounded-full overflow-hidden relative">
                           {info.total > 0 && (
                             <div
-                              className={`h-full rounded-full ${ETAPA_CORES[e] || "bg-gray-400"}`}
+                              className={`h-full rounded-full ${ETAPA_CORES[e] || "bg-muted-foreground/50"}`}
                               style={{ width: `${Math.max(pct, 3)}%` }}
                             />
                           )}
@@ -1695,23 +1695,23 @@ function DashboardComercial() {
             {!loadingDetalhe && detalheAtendente && detalheAtendente.itens?.length > 0 && (
               <>
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded-md bg-blue-500/5 border border-blue-500/20 p-2">
+                  <div className="rounded-md bg-info/5 border border-info/30 p-2">
                     <p className="text-[10px] text-muted-foreground">Total fechado</p>
-                    <p className="text-sm font-bold text-blue-700 dark:text-blue-300">{formatBRL(detalheAtendente.totalFechado || 0)}</p>
+                    <p className="text-sm font-bold text-info-fg">{formatBRL(detalheAtendente.totalFechado || 0)}</p>
                   </div>
-                  <div className="rounded-md bg-emerald-500/5 border border-emerald-500/20 p-2">
+                  <div className="rounded-md bg-success/5 border border-success/30 p-2">
                     <p className="text-[10px] text-muted-foreground">Total recebido</p>
-                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{formatBRL(detalheAtendente.totalRecebido || 0)}</p>
+                    <p className="text-sm font-bold text-success-fg">{formatBRL(detalheAtendente.totalRecebido || 0)}</p>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   {detalheAtendente.itens.map((it: any) => {
                     const statusInfo: Record<string, { label: string; cor: string }> = {
-                      pago: { label: "Pago integral", cor: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" },
-                      parcial: { label: "Parcial", cor: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" },
-                      aguardando: { label: "Aguardando", cor: "bg-gray-100 dark:bg-slate-800/60 text-gray-700 dark:text-slate-200" },
-                      so_pago: { label: "Pago s/ oportunidade", cor: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" },
+                      pago: { label: "Pago integral", cor: "bg-success-bg text-success-fg" },
+                      parcial: { label: "Parcial", cor: "bg-warning-bg text-warning-fg" },
+                      aguardando: { label: "Aguardando", cor: "bg-muted text-foreground" },
+                      so_pago: { label: "Pago s/ oportunidade", cor: "bg-info-bg text-info-fg" },
                     };
                     const s = statusInfo[it.status] || statusInfo.aguardando;
                     return (
@@ -1725,14 +1725,14 @@ function DashboardComercial() {
                         <div className="grid grid-cols-2 gap-1.5 text-xs">
                           <div>
                             <p className="text-[10px] text-muted-foreground">Fechado</p>
-                            <p className="font-medium text-blue-700 dark:text-blue-300">{formatBRL(it.valorFechado)}</p>
+                            <p className="font-medium text-info-fg">{formatBRL(it.valorFechado)}</p>
                             {it.contratosFechados > 0 && (
                               <p className="text-[10px] text-muted-foreground">{it.contratosFechados} contrato(s)</p>
                             )}
                           </div>
                           <div>
                             <p className="text-[10px] text-muted-foreground">Recebido</p>
-                            <p className="font-medium text-emerald-700 dark:text-emerald-300">{formatBRL(it.valorRecebido)}</p>
+                            <p className="font-medium text-success-fg">{formatBRL(it.valorRecebido)}</p>
                             {it.contratosPagos > 0 && (
                               <p className="text-[10px] text-muted-foreground">{it.contratosPagos} pago(s)</p>
                             )}
@@ -1833,10 +1833,10 @@ function ProducaoConteudo({ data }: { data: any }) {
     : null;
 
   const LINHAS_MOV = [
-    { rotulo: "Entraram", valor: mov?.entraram ?? 0, cor: "bg-indigo-500" },
-    { rotulo: "Avançaram de etapa", valor: mov?.avancaram ?? 0, cor: "bg-violet-500" },
-    { rotulo: "Concluídos", valor: mov?.concluidos ?? 0, cor: "bg-emerald-600" },
-    { rotulo: "Voltaram de etapa", valor: mov?.voltaram ?? 0, cor: "bg-amber-500" },
+    { rotulo: "Entraram", valor: mov?.entraram ?? 0, cor: "bg-info" },
+    { rotulo: "Avançaram de etapa", valor: mov?.avancaram ?? 0, cor: "bg-info" },
+    { rotulo: "Concluídos", valor: mov?.concluidos ?? 0, cor: "bg-success" },
+    { rotulo: "Voltaram de etapa", valor: mov?.voltaram ?? 0, cor: "bg-warning" },
   ];
 
   return (
@@ -1851,14 +1851,14 @@ function ProducaoConteudo({ data }: { data: any }) {
         <KpiRel
           label="Dentro do prazo"
           valor={data.cardsDentroPrazo.toLocaleString("pt-BR")}
-          cor="text-emerald-600 dark:text-emerald-400"
+          cor="text-success-fg"
           delta={ant ? calcularDelta(data.cardsDentroPrazo, ant.cardsDentroPrazo) : undefined}
           anterior={ant ? `${ant.cardsDentroPrazo.toLocaleString("pt-BR")} no período anterior` : null}
         />
         <KpiRel
           label="Atrasados"
           valor={data.cardsAtrasados.toLocaleString("pt-BR")}
-          cor={data.cardsAtrasados > 0 ? "text-red-600 dark:text-red-400" : undefined}
+          cor={data.cardsAtrasados > 0 ? "text-danger-fg" : undefined}
           delta={ant ? calcularDelta(data.cardsAtrasados, ant.cardsAtrasados, true) : undefined}
           anterior={ant ? `${ant.cardsAtrasados.toLocaleString("pt-BR")} no período anterior` : null}
         />
@@ -1894,7 +1894,7 @@ function ProducaoConteudo({ data }: { data: any }) {
                   <span className="w-[38%] shrink-0 truncate text-xs">{c.coluna}</span>
                   <div className="flex-1 h-2.5 rounded-full bg-muted overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${c.conclusao ? "bg-emerald-600" : "bg-indigo-500"}`}
+                      className={`h-full rounded-full ${c.conclusao ? "bg-success" : "bg-info"}`}
                       style={{ width: `${Math.max((c.total / maxColuna) * 100, 2)}%` }}
                     />
                   </div>
@@ -1974,10 +1974,10 @@ function ProducaoConteudo({ data }: { data: any }) {
                     </span>
                   </TableCell>
                   <TableCell className="text-center text-xs tabular-nums">{r.total}</TableCell>
-                  <TableCell className="text-center text-xs font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                  <TableCell className="text-center text-xs font-semibold tabular-nums text-success-fg">
                     {r.noPrazo}
                   </TableCell>
-                  <TableCell className="text-center text-xs font-semibold tabular-nums text-rose-600 dark:text-rose-400">
+                  <TableCell className="text-center text-xs font-semibold tabular-nums text-danger-fg">
                     {r.atrasados}
                   </TableCell>
                   <TableCell className="text-right">
@@ -1989,10 +1989,10 @@ function ProducaoConteudo({ data }: { data: any }) {
                 <TableRow className="bg-muted/40 hover:bg-muted/40 font-semibold">
                   <TableCell className="text-xs">Total</TableCell>
                   <TableCell className="text-center text-xs tabular-nums">{totaisResp.total}</TableCell>
-                  <TableCell className="text-center text-xs tabular-nums text-emerald-600 dark:text-emerald-400">
+                  <TableCell className="text-center text-xs tabular-nums text-success-fg">
                     {totaisResp.noPrazo}
                   </TableCell>
-                  <TableCell className="text-center text-xs tabular-nums text-rose-600 dark:text-rose-400">
+                  <TableCell className="text-center text-xs tabular-nums text-danger-fg">
                     {totaisResp.atrasados}
                   </TableCell>
                   <TableCell className="text-right">
@@ -2155,16 +2155,16 @@ function AgendaConteudo({ data }: { data: any }) {
     <div className="space-y-4">
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon={<CalendarCheck className="h-5 w-5 text-slate-500" />} label="Agendamentos no período" value={t.total} />
-        <Kpi icon={<CheckCircle2 className="h-5 w-5 text-emerald-500" />} label="Compareceram" value={t.compareceu} highlight="text-emerald-600 dark:text-emerald-400" />
-        <Kpi icon={<XCircle className="h-5 w-5 text-rose-500" />} label="Não vieram" value={t.naoCompareceu} highlight="text-rose-600 dark:text-rose-400" />
-        <Kpi icon={<Repeat className="h-5 w-5 text-amber-500" />} label="Remarcaram" value={t.remarcado} highlight="text-amber-600 dark:text-amber-400" />
-        <Kpi icon={<Hourglass className="h-5 w-5 text-slate-400" />} label="Sem resultado" value={t.pendente} />
+        <Kpi icon={<CalendarCheck className="h-5 w-5 text-muted-foreground" />} label="Agendamentos no período" value={t.total} />
+        <Kpi icon={<CheckCircle2 className="h-5 w-5 text-success" />} label="Compareceram" value={t.compareceu} highlight="text-success-fg" />
+        <Kpi icon={<XCircle className="h-5 w-5 text-danger" />} label="Não vieram" value={t.naoCompareceu} highlight="text-danger-fg" />
+        <Kpi icon={<Repeat className="h-5 w-5 text-warning" />} label="Remarcaram" value={t.remarcado} highlight="text-warning-fg" />
+        <Kpi icon={<Hourglass className="h-5 w-5 text-muted-foreground/70" />} label="Sem resultado" value={t.pendente} />
         <Kpi
-          icon={<Target className="h-5 w-5 text-violet-500" />}
+          icon={<Target className="h-5 w-5 text-info" />}
           label="Taxa de comparecimento"
           value={t.taxaComparecimento == null ? "—" : `${t.taxaComparecimento}%`}
-          highlight="text-violet-600 dark:text-violet-400"
+          highlight="text-info-fg"
         />
       </div>
 
@@ -2174,9 +2174,9 @@ function AgendaConteudo({ data }: { data: any }) {
           <CardTitle className="text-sm flex items-center justify-between gap-2 flex-wrap">
             <span>Agendamentos por período</span>
             <span className="flex items-center gap-3 text-[11px] font-normal text-muted-foreground">
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />Compareceu</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-rose-500" />Não veio</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500" />Remarcou</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-success" />Compareceu</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-danger" />Não veio</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-warning" />Remarcou</span>
             </span>
           </CardTitle>
         </CardHeader>
@@ -2214,7 +2214,7 @@ function AgendaConteudo({ data }: { data: any }) {
                   <div key={x.tipo} className="flex items-center gap-3 text-sm">
                     <span className="w-36 shrink-0 truncate text-muted-foreground">{TIPO_AGENDA_LABELS[x.tipo] || x.tipo}</span>
                     <div className="flex-1 h-5 rounded bg-muted overflow-hidden">
-                      <div className="h-full bg-violet-500" style={{ width: `${(x.total / maxTipo) * 100}%` }} />
+                      <div className="h-full bg-info" style={{ width: `${(x.total / maxTipo) * 100}%` }} />
                     </div>
                     <span className="w-8 text-right font-bold tabular-nums">{x.total}</span>
                   </div>
@@ -2227,7 +2227,7 @@ function AgendaConteudo({ data }: { data: any }) {
         {/* Ranking por atendente */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4 text-violet-500" /> Por atendente</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4 text-info" /> Por atendente</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {(data.porAtendente || []).length === 0 ? (
@@ -2249,9 +2249,9 @@ function AgendaConteudo({ data }: { data: any }) {
                     <TableRow key={a.colabId}>
                       <TableCell className="text-xs font-medium max-w-[160px] truncate">{a.nome}</TableCell>
                       <TableCell className="text-xs text-right tabular-nums font-bold">{a.total}</TableCell>
-                      <TableCell className="text-xs text-right tabular-nums text-emerald-600 dark:text-emerald-400">{a.compareceu}</TableCell>
-                      <TableCell className="text-xs text-right tabular-nums text-rose-600 dark:text-rose-400">{a.naoCompareceu}</TableCell>
-                      <TableCell className="text-xs text-right tabular-nums text-amber-600 dark:text-amber-400">{a.remarcado}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums text-success-fg">{a.compareceu}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums text-danger-fg">{a.naoCompareceu}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums text-warning-fg">{a.remarcado}</TableCell>
                       <TableCell className="text-xs text-right tabular-nums font-semibold">{a.taxaComparecimento == null ? "—" : `${a.taxaComparecimento}%`}</TableCell>
                     </TableRow>
                   ))}
@@ -2305,9 +2305,9 @@ function AbaCalculosConteudo({ data }: { data: any }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <Kpi icon={<BarChart3 className="h-5 w-5 text-blue-500" />} label="Total de Cálculos" value={data.totalCalculos} />
+        <Kpi icon={<BarChart3 className="h-5 w-5 text-info" />} label="Total de Cálculos" value={data.totalCalculos} />
         <Kpi
-          icon={<Activity className="h-5 w-5 text-emerald-500" />}
+          icon={<Activity className="h-5 w-5 text-success" />}
           label="Tipos usados"
           value={Object.keys(data.calculosPorTipo).length}
         />
@@ -2336,7 +2336,7 @@ function AbaCalculosConteudo({ data }: { data: any }) {
                       </div>
                       <div className="flex-1 h-6 bg-muted/40 rounded-full overflow-hidden relative">
                         <div
-                          className="h-full rounded-full bg-blue-500/80"
+                          className="h-full rounded-full bg-info/80"
                           style={{ width: `${Math.max(((v as number) / max) * 100, 5)}%` }}
                         />
                         <span className="absolute inset-0 flex items-center justify-center text-[11px] font-medium">
@@ -2362,7 +2362,7 @@ function AbaCalculosConteudo({ data }: { data: any }) {
                 label: `${d.mes.slice(5)}/${d.mes.slice(2, 4)}`,
                 value: d.total,
               }))}
-              cor="bg-blue-500/80"
+              cor="bg-info/80"
             />
           )}
         </CardContent>

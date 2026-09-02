@@ -142,10 +142,10 @@ export function ParecerEditor({
   return (
     <div className="space-y-4">
       {/* Revisão profissional */}
-      <Card className="border-blue-200 bg-blue-50/40 dark:border-blue-900 dark:bg-blue-950/20">
+      <Card className="border-info/30 bg-info-bg/40 dark:bg-info/20">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <User className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Revisão profissional
+            <User className="h-4 w-4 text-info-fg" /> Revisão profissional
           </CardTitle>
           <CardDescription>
             Identifique o(a) advogado(a) responsável pela revisão. O nome será incluído no PDF
@@ -257,7 +257,7 @@ export function ParecerEditor({
                     size="sm"
                     disabled={isShareLoading}
                     onClick={() => compartilhar("whatsapp")}
-                    className="text-muted-foreground hover:text-green-600 dark:hover:text-green-400 flex items-center gap-1"
+                    className="text-muted-foreground hover:text-success-fg flex items-center gap-1"
                   >
                     {isShareLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Share2 className="h-4 w-4" /> WhatsApp</>}
                   </Button>
@@ -282,7 +282,7 @@ export function ParecerEditor({
             </ScrollArea>
           )}
           {parecerFoiEditado && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-3 flex items-center gap-1.5">
+            <p className="text-xs text-warning-fg mt-3 flex items-center gap-1.5">
               <Pencil className="h-3 w-3" /> Parecer modificado em relação ao original gerado pelo sistema.
             </p>
           )}

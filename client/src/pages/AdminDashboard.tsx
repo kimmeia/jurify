@@ -67,13 +67,13 @@ function AlertaCard({
   onAcao: () => void;
 }) {
   const borda =
-    tom === "ambar" ? "border-l-amber-500" : tom === "violeta" ? "border-l-violet-500" : "border-l-rose-500";
+    tom === "ambar" ? "border-l-warning" : tom === "violeta" ? "border-l-info" : "border-l-danger";
   const pill =
     tom === "ambar"
-      ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+      ? "bg-warning-bg text-warning-fg border-warning/30 dark:text-warning"
       : tom === "violeta"
-        ? "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800"
-        : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800";
+        ? "bg-info-bg text-info-fg border-info/30 dark:text-info"
+        : "bg-danger-bg text-danger-fg border-danger/30 dark:text-danger";
   return (
     <Card className={`border-l-4 ${borda}`}>
       <CardContent className="pt-4 pb-4 space-y-2">
@@ -81,7 +81,7 @@ function AlertaCard({
           <Badge variant="outline" className={`text-[10px] font-bold ${pill}`}>{selo}</Badge>
           <span className="text-sm font-bold">{titulo}</span>
           <button
-            className="ml-auto text-xs font-semibold text-violet-700 dark:text-violet-400 hover:underline whitespace-nowrap"
+            className="ml-auto text-xs font-semibold text-info-fg hover:underline whitespace-nowrap"
             onClick={onAcao}
           >
             {acaoLabel} →
@@ -107,15 +107,15 @@ function AlertaEmails({ dados, onVerLog }: { dados: any; onVerLog: () => void })
   const estourou = dados.nivel === "estouro";
   const pct = dados.limite > 0 ? Math.min(100, Math.round((dados.usadosHoje / dados.limite) * 100)) : 100;
   return (
-    <Card className={`border-l-4 lg:col-span-2 ${estourou ? "border-l-rose-500" : "border-l-amber-500"}`}>
+    <Card className={`border-l-4 lg:col-span-2 ${estourou ? "border-l-danger" : "border-l-warning"}`}>
       <CardContent className="pt-4 pb-4 space-y-2">
         <div className="flex items-center gap-2">
           <Badge
             variant="outline"
             className={`text-[10px] font-bold ${
               estourou
-                ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800"
-                : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                ? "bg-danger-bg text-danger-fg border-danger/30 dark:text-danger"
+                : "bg-warning-bg text-warning-fg border-warning/30 dark:text-warning"
             }`}
           >
             {estourou ? "E-MAILS NO LIMITE" : `E-MAILS · ${pct}% DO LIMITE`}
@@ -126,7 +126,7 @@ function AlertaEmails({ dados, onVerLog }: { dados: any; onVerLog: () => void })
               : "tá chegando no teto do plano grátis"}
           </span>
           <button
-            className="ml-auto text-xs font-semibold text-violet-700 dark:text-violet-400 hover:underline whitespace-nowrap"
+            className="ml-auto text-xs font-semibold text-info-fg hover:underline whitespace-nowrap"
             onClick={onVerLog}
           >
             {estourou ? "ver quem falhou" : "abrir log de e-mails"} →
@@ -134,7 +134,7 @@ function AlertaEmails({ dados, onVerLog }: { dados: any; onVerLog: () => void })
         </div>
         <div>
           <div className="flex items-baseline gap-2">
-            <span className={`text-lg font-extrabold tabular-nums ${estourou ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`}>
+            <span className={`text-lg font-extrabold tabular-nums ${estourou ? "text-danger-fg" : "text-warning-fg"}`}>
               {dados.usadosHoje}
             </span>
             <span className="text-[11px] text-muted-foreground">de {dados.limite} e-mails do dia usados</span>
@@ -142,7 +142,7 @@ function AlertaEmails({ dados, onVerLog }: { dados: any; onVerLog: () => void })
           </div>
           <div className="mt-1 h-2 rounded-full bg-muted overflow-hidden">
             <div
-              className={`h-full rounded-full ${estourou ? "bg-rose-500" : "bg-amber-500"}`}
+              className={`h-full rounded-full ${estourou ? "bg-danger" : "bg-warning"}`}
               style={{ width: `${Math.max(2, pct)}%` }}
             />
           </div>
@@ -158,7 +158,7 @@ function AlertaEmails({ dados, onVerLog }: { dados: any; onVerLog: () => void })
           <Button size="sm" onClick={() => window.open("https://resend.com/settings/billing", "_blank")}>
             Fazer upgrade no Resend ↗
           </Button>
-          <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+          <span className="text-[11px] font-medium text-success-fg">
             {estourou
               ? "✓ quando a cota zerar: os que falharam são reenviados sozinhos e o aviso chega no seu e-mail"
               : "✓ aviso enviado pro seu e-mail (no máximo 1 por dia)"}
@@ -213,10 +213,10 @@ function PrecisaDeVoce() {
 
   if (totalPendencias === 0) {
     return (
-      <Card className="border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20">
+      <Card className="border-success/30 bg-success-bg/50 dark:bg-success/20">
         <CardContent className="flex items-center gap-3 py-4">
-          <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-          <p className="text-sm text-emerald-900 dark:text-emerald-200">
+          <CheckCircle2 className="h-5 w-5 text-success-fg" />
+          <p className="text-sm text-success-fg">
             <span className="font-semibold">Tudo em dia.</span> Nenhum teste grátis vencendo,
             nenhum cadastro esperando contato, sem inadimplência, sem erros abertos e
             e-mails dentro do limite.
@@ -330,12 +330,12 @@ function AssinantesPorPlano() {
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-sm font-bold">{p.nome}</span>
                   {p.precoSobConsulta && (
-                    <Badge variant="outline" className="text-[9px] font-bold border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300">
+                    <Badge variant="outline" className="text-[9px] font-bold border-info/30 bg-info-bg text-info-fg">
                       SOB CONSULTA
                     </Badge>
                   )}
                   {p.popular && (
-                    <Badge variant="outline" className="text-[9px] font-bold border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                    <Badge variant="outline" className="text-[9px] font-bold border-warning/30 bg-warning-bg text-warning-fg">
                       ★ POPULAR
                     </Badge>
                   )}
@@ -346,7 +346,7 @@ function AssinantesPorPlano() {
                     <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">assinando</p>
                   </div>
                   <div>
-                    <p className="text-xl font-bold tabular-nums text-violet-700 dark:text-violet-400">{p.emTeste}</p>
+                    <p className="text-xl font-bold tabular-nums text-info-fg">{p.emTeste}</p>
                     <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">em teste</p>
                   </div>
                 </div>
@@ -453,15 +453,15 @@ export default function AdminDashboard() {
           label="Receita mensal (MRR)"
           value={statsLoading ? <Skeleton className="h-7 w-24" /> : formatBRL(mrr / 100)}
           icon={DollarSign}
-          iconBg="bg-emerald-500/10"
-          iconFg="text-emerald-600 dark:text-emerald-400"
+          iconBg="bg-success/10"
+          iconFg="text-success-fg"
         />
         <KPICard
           label="Assinaturas pagas"
           value={statsLoading ? <Skeleton className="h-7 w-16" /> : assinantesPagantes}
           icon={CreditCard}
-          iconBg="bg-indigo-500/10"
-          iconFg="text-indigo-600 dark:text-indigo-400"
+          iconBg="bg-info/10"
+          iconFg="text-info-fg"
           hint={
             (stats?.cortesiasAtivas ?? 0) > 0
               ? `cortesia não conta — ${stats?.cortesiasAtivas} ${(stats?.cortesiasAtivas ?? 0) === 1 ? "cortesia ativa" : "cortesias ativas"}`
@@ -472,11 +472,11 @@ export default function AdminDashboard() {
           label="Em teste grátis agora"
           value={statsLoading ? <Skeleton className="h-7 w-16" /> : emTeste}
           icon={Hourglass}
-          iconBg="bg-violet-500/10"
-          iconFg="text-violet-600 dark:text-violet-400"
+          iconBg="bg-info/10"
+          iconFg="text-info-fg"
           badge={
             vencendo > 0 ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-warning-bg text-warning-fg">
                 {vencendo} {vencendo === 1 ? "vence" : "vencem"} esta semana
               </span>
             ) : undefined
@@ -486,8 +486,8 @@ export default function AdminDashboard() {
           label="Conversão trial → pago"
           value={statsLoading ? <Skeleton className="h-7 w-16" /> : `${conversao}%`}
           icon={Target}
-          iconBg="bg-amber-500/10"
-          iconFg="text-amber-600 dark:text-amber-400"
+          iconBg="bg-warning/10"
+          iconFg="text-warning-fg"
           hint="Clientes com plano ativo"
         />
       </div>
@@ -511,8 +511,8 @@ export default function AdminDashboard() {
               )
             }
             icon={TrendingDown}
-            iconBg="bg-rose-500/10"
-            iconFg="text-rose-600 dark:text-rose-400"
+            iconBg="bg-danger/10"
+            iconFg="text-danger-fg"
             valueColor={churnColor(churn?.churnAtual ?? 0)}
             hint="Churn (últimos 3 meses)"
           />
@@ -520,16 +520,16 @@ export default function AdminDashboard() {
             label="ARPU ÷ churn rate mensal"
             value={churnLoading ? <Skeleton className="h-7 w-28" /> : formatBRL((churn?.ltvEstimado ?? 0) / 100)}
             icon={Target}
-            iconBg="bg-violet-500/10"
-            iconFg="text-violet-600 dark:text-violet-400"
+            iconBg="bg-info/10"
+            iconFg="text-info-fg"
             hint="LTV estimado"
           />
           <KPICard
             label="Clientes antigos ainda ativos"
             value={churnLoading ? <Skeleton className="h-7 w-20" /> : `${retencao}%`}
             icon={Activity}
-            iconBg="bg-indigo-500/10"
-            iconFg="text-indigo-600 dark:text-indigo-400"
+            iconBg="bg-info/10"
+            iconFg="text-info-fg"
             hint="Retenção 12 meses"
           />
         </div>
@@ -621,9 +621,9 @@ export default function AdminDashboard() {
 }
 
 function churnColor(rate: number): string {
-  if (rate < 3) return "text-emerald-600 dark:text-emerald-400";
-  if (rate < 7) return "text-amber-600 dark:text-amber-400";
-  return "text-rose-600 dark:text-rose-400";
+  if (rate < 3) return "text-success-fg";
+  if (rate < 7) return "text-warning-fg";
+  return "text-danger-fg";
 }
 
 function EmptyState({ texto }: { texto: string }) {

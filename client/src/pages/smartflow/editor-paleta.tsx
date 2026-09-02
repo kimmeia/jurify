@@ -103,12 +103,12 @@ const GRUPO_ICON: Record<GrupoSmartflow, LucideIcon> = {
 };
 
 const GRUPO_COR_ICONE: Record<GrupoSmartflow, string> = {
-  mensagem: "text-blue-600 dark:text-blue-400",
-  asaas: "text-emerald-600 dark:text-emerald-400",
-  crm: "text-violet-600 dark:text-violet-400",
-  ia: "text-violet-600 dark:text-violet-400",
-  acoes: "text-indigo-600 dark:text-indigo-400",
-  fluxo: "text-amber-600 dark:text-amber-400",
+  mensagem: "text-info-fg",
+  asaas: "text-success-fg",
+  crm: "text-info-fg",
+  ia: "text-info-fg",
+  acoes: "text-info-fg",
+  fluxo: "text-warning-fg",
 };
 
 const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
@@ -122,13 +122,13 @@ const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
 };
 
 const GATILHO_GRADIENT: Record<GatilhoSmartflow, { from: string; to: string; bg: string; border: string }> = {
-  whatsapp_mensagem: { from: "from-blue-500", to: "to-cyan-500", bg: "from-blue-50 to-cyan-50 dark:from-blue-950/40 dark:to-cyan-950/40", border: "border-blue-200 dark:border-blue-900" },
-  mensagem_canal: { from: "from-blue-500", to: "to-cyan-500", bg: "from-blue-50 to-cyan-50 dark:from-blue-950/40 dark:to-cyan-950/40", border: "border-blue-200 dark:border-blue-900" },
-  pagamento_recebido: { from: "from-emerald-500", to: "to-teal-600", bg: "from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40", border: "border-emerald-200 dark:border-emerald-900" },
-  pagamento_vencido: { from: "from-amber-500", to: "to-red-500", bg: "from-amber-50 to-red-50 dark:from-amber-950/40 dark:to-red-950/40", border: "border-amber-200 dark:border-amber-900" },
-  pagamento_proximo_vencimento: { from: "from-amber-400", to: "to-orange-500", bg: "from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40", border: "border-amber-200 dark:border-amber-900" },
-  novo_lead: { from: "from-violet-500", to: "to-pink-500", bg: "from-violet-50 to-pink-50 dark:from-violet-950/40 dark:to-pink-950/40", border: "border-violet-200 dark:border-violet-900" },
-  manual: { from: "from-slate-600", to: "to-slate-800", bg: "from-slate-100 to-slate-200 dark:from-slate-900/60 dark:to-slate-800", border: "border-slate-300 dark:border-slate-700" },
+  whatsapp_mensagem: { from: "from-info", to: "to-info", bg: "from-info-bg to-info-bg dark:to-info/40", border: "border-info/30" },
+  mensagem_canal: { from: "from-info", to: "to-info", bg: "from-info-bg to-info-bg dark:to-info/40", border: "border-info/30" },
+  pagamento_recebido: { from: "from-success", to: "to-success", bg: "from-success-bg to-success-bg dark:to-success/40", border: "border-success/30" },
+  pagamento_vencido: { from: "from-warning", to: "to-danger", bg: "from-warning-bg to-danger-bg dark:to-danger/40", border: "border-warning/30" },
+  pagamento_proximo_vencimento: { from: "from-warning", to: "to-warning", bg: "from-warning-bg to-warning-bg dark:to-warning/40", border: "border-warning/30" },
+  novo_lead: { from: "from-info", to: "to-danger", bg: "from-info-bg to-danger-bg dark:to-danger/40", border: "border-info/30" },
+  manual: { from: "from-muted", to: "to-muted", bg: "from-muted to-muted dark:to-muted", border: "border-border" },
 };
 
 interface PaletaProps {
@@ -219,11 +219,11 @@ export function EditorPaleta({
 
   if (recolhida) {
     return (
-      <aside className="w-[60px] shrink-0 border-r bg-slate-50/60 dark:bg-slate-900/30 flex flex-col items-center gap-1.5 py-3">
+      <aside className="w-[60px] shrink-0 border-r bg-muted/60 flex flex-col items-center gap-1.5 py-3">
         <button
           onClick={onExpandir}
           title="Abrir paleta de passos"
-          className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-sm hover:from-violet-700 hover:to-indigo-700 transition-colors"
+          className="w-9 h-9 rounded-xl bg-info text-info-on flex items-center justify-center shadow-sm hover:from-info hover:to-info transition-colors"
         >
           <Plus className="h-4.5 w-4.5" />
         </button>
@@ -249,7 +249,7 @@ export function EditorPaleta({
               title={g.label}
               className="w-9 h-9 rounded-lg border bg-card flex items-center justify-center hover:bg-accent transition-colors"
             >
-              <Icon className={`h-4 w-4 ${GRUPO_COR_ICONE[g.id] ?? "text-slate-500"}`} />
+              <Icon className={`h-4 w-4 ${GRUPO_COR_ICONE[g.id] ?? "text-muted-foreground"}`} />
             </button>
           );
         })}
@@ -262,8 +262,8 @@ export function EditorPaleta({
   }
 
   return (
-    <aside className="absolute left-0 top-0 bottom-0 z-20 w-72 border-r bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur overflow-y-auto shadow-xl">
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-slate-50/95 px-3 py-1.5 backdrop-blur dark:bg-slate-900/95">
+    <aside className="absolute left-0 top-0 bottom-0 z-20 w-72 border-r bg-muted/95 backdrop-blur overflow-y-auto shadow-xl">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-muted/95 px-3 py-1.5 backdrop-blur dark:bg-foreground/95">
         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
           Paleta
         </span>
@@ -274,7 +274,7 @@ export function EditorPaleta({
       {/* ─── GATILHO em destaque ─── */}
       <div className="p-3">
         <div className="flex items-center gap-1.5 mb-2">
-          <Zap className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+          <Zap className="w-3 h-3 text-warning-fg" />
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
             Gatilho do fluxo
           </p>
@@ -314,7 +314,7 @@ export function EditorPaleta({
       {/* ─── AÇÕES (passos) ─── */}
       <div className="p-3 space-y-3">
         <div className="flex items-center gap-1.5">
-          <Layers className="w-3 h-3 text-violet-600 dark:text-violet-400" />
+          <Layers className="w-3 h-3 text-info-fg" />
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
             Ações disponíveis
           </p>
@@ -348,7 +348,7 @@ export function EditorPaleta({
 
         {grupos.map((g) => {
           const GrupoIcon = GRUPO_ICON[g.grupo] ?? Sparkles;
-          const corIcone = GRUPO_COR_ICONE[g.grupo] ?? "text-slate-500";
+          const corIcone = GRUPO_COR_ICONE[g.grupo] ?? "text-muted-foreground";
           const aberto = estaExpandido(g.grupo);
           // Categorias do grupo (popovers tipo "Kanban", "Asaas")
           const categorias = CATEGORIAS_PASSO.filter((c) => c.grupo === g.grupo);
@@ -358,15 +358,15 @@ export function EditorPaleta({
           if (diretos.length === 0 && categorias.length === 0) return null;
 
           return (
-            <div key={g.grupo} className="border border-slate-200 dark:border-slate-800 rounded-lg bg-card overflow-hidden">
+            <div key={g.grupo} className="border border-border rounded-lg bg-card overflow-hidden">
               <button
                 onClick={() => toggleGrupoComFoco(g.grupo)}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
+                className="w-full flex items-center justify-between px-2.5 py-1.5 text-left hover:bg-muted transition-colors"
               >
                 <div className="flex items-center gap-1.5">
                   <GrupoIcon className={`w-3.5 h-3.5 ${corIcone}`} />
                   <span className="text-xs font-bold">{g.label}</span>
-                  <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-muted-foreground px-1.5 py-0.5 rounded font-semibold">
+                  <span className="text-[9px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-semibold">
                     {diretos.length + categorias.reduce((s, c) => s + c.tipos.length, 0)}
                   </span>
                 </div>
@@ -378,7 +378,7 @@ export function EditorPaleta({
               </button>
 
               {aberto && (
-                <div className="px-1 pb-1 space-y-0.5 border-t border-slate-100 dark:border-slate-900">
+                <div className="px-1 pb-1 space-y-0.5 border-t border-border">
                   {diretos.map((t) => (
                     <PassoItem key={t.id} tipo={t} onAdicionar={onAdicionarPasso} />
                   ))}
@@ -416,7 +416,7 @@ function PassoItem({
   return (
     <button
       onClick={() => onAdicionar(tipo.id)}
-      className="w-full flex items-start gap-2 px-2 py-1.5 rounded text-left hover:bg-violet-50 dark:hover:bg-violet-950/30 transition-colors group"
+      className="w-full flex items-start gap-2 px-2 py-1.5 rounded text-left hover:bg-info-bg transition-colors group"
       title={tipo.descricao}
     >
       <div className={`p-1 rounded ${tipo.cor} shrink-0 mt-0.5`}>
@@ -464,7 +464,7 @@ function CategoriaSubgrupo({
     <div>
       <button
         onClick={() => setAberto((a) => !a)}
-        className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-900/50 text-left"
+        className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded hover:bg-muted text-left"
       >
         {expandido ? (
           <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
@@ -475,7 +475,7 @@ function CategoriaSubgrupo({
         <span className="text-[9px] text-muted-foreground">{categoria.tipos.length}</span>
       </button>
       {expandido && (
-        <div className="ml-3 mt-0.5 space-y-0.5 border-l border-slate-200 dark:border-slate-800 pl-1">
+        <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-1">
           {subtipos.map((t) => (
             <PassoItem key={t.id} tipo={t} onAdicionar={onAdicionar} />
           ))}
@@ -516,7 +516,7 @@ function TrocarGatilhoPopover({
         <Button
           variant="outline"
           size="sm"
-          className="w-full mt-2 text-[11px] h-7 gap-1.5 bg-white dark:bg-slate-950"
+          className="w-full mt-2 text-[11px] h-7 gap-1.5 bg-white dark:bg-muted"
         >
           <Repeat className="w-3 h-3" />
           Trocar gatilho
@@ -530,7 +530,7 @@ function TrocarGatilhoPopover({
           {porGrupo.map(([grupo, gatilhos]) => {
             const grupoMeta = GRUPO_META.find((g) => g.id === grupo);
             const GIcon = GRUPO_ICON[grupo] ?? Sparkles;
-            const corIcone = GRUPO_COR_ICONE[grupo] ?? "text-slate-500";
+            const corIcone = GRUPO_COR_ICONE[grupo] ?? "text-muted-foreground";
             return (
               <div key={grupo}>
                 <div className="flex items-center gap-1.5 px-1 mb-1">
@@ -552,19 +552,19 @@ function TrocarGatilhoPopover({
                         }}
                         className={`w-full flex items-start gap-2 px-2 py-1.5 rounded text-left transition-colors ${
                           ativo
-                            ? "bg-violet-100 dark:bg-violet-950/40 border border-violet-300 dark:border-violet-800"
-                            : "hover:bg-slate-100 dark:hover:bg-slate-900/50"
+                            ? "bg-info-bg border border-info/30"
+                            : "hover:bg-muted"
                         }`}
                       >
-                        <GatIcon className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${ativo ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground"}`} />
+                        <GatIcon className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${ativo ? "text-info-fg" : "text-muted-foreground"}`} />
                         <div className="flex-1 min-w-0">
-                          <p className={`text-[11px] font-semibold leading-tight ${ativo ? "text-violet-700 dark:text-violet-300" : ""}`}>
+                          <p className={`text-[11px] font-semibold leading-tight ${ativo ? "text-info-fg" : ""}`}>
                             {g.label}
                           </p>
                           <p className="text-[9px] text-muted-foreground line-clamp-1 mt-0.5">{g.descricao}</p>
                         </div>
                         {ativo && (
-                          <CheckCircle2 className="w-3 h-3 text-violet-600 dark:text-violet-400 shrink-0 mt-1" />
+                          <CheckCircle2 className="w-3 h-3 text-info-fg shrink-0 mt-1" />
                         )}
                       </button>
                     );

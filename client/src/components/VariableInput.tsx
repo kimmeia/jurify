@@ -170,7 +170,7 @@ export function VariableTrigger({
           setFiltro("");
         }}
         title="Inserir informação"
-        className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-950/30 transition-colors"
+        className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] font-medium text-info-fg hover:bg-info-bg transition-colors"
       >
         <Braces className="h-3 w-3" />
         Inserir
@@ -184,7 +184,7 @@ export function VariableTrigger({
               placeholder="Buscar informação (ex: nome, cpf...)"
               value={filtro}
               onChange={(e) => setFiltro(e.target.value)}
-              className="w-full text-xs px-2 py-1 rounded border bg-background outline-none focus:ring-1 focus:ring-violet-400"
+              className="w-full text-xs px-2 py-1 rounded border bg-background outline-none focus:ring-1 focus:ring-info"
             />
           </div>
           {total === 0 ? (
@@ -203,7 +203,7 @@ export function VariableTrigger({
                       onInsert(v.path);
                       setOpen(false);
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-violet-50 dark:hover:bg-violet-950/20 transition-colors"
+                    className="w-full text-left px-3 py-1.5 hover:bg-info-bg transition-colors"
                   >
                     <p className="text-[11.5px] text-foreground font-medium">{v.label}</p>
                     {v.exemplo && <p className="text-[10px] text-muted-foreground italic">ex: {v.exemplo}</p>}
@@ -359,7 +359,7 @@ export function VariableInput({
                 p.tipo === "var" ? (
                   <span
                     key={i}
-                    className="rounded bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 ring-1 ring-violet-300/50"
+                    className="rounded bg-info-bg text-info-fg dark:text-info ring-1 ring-info/50"
                   >
                     {p.valor}
                   </span>
@@ -379,7 +379,7 @@ export function VariableInput({
               onScroll={syncScroll}
               onBlur={() => setTimeout(() => setAutocompleteOpen(false), 150)}
               placeholder={placeholder}
-              className={`${className ?? ""} relative bg-transparent text-transparent caret-foreground selection:bg-violet-200/40 dark:bg-violet-900/20`}
+              className={`${className ?? ""} relative bg-transparent text-transparent caret-foreground selection:bg-info-bg/40`}
               rows={rows}
               maxLength={maxLength}
             />
@@ -413,7 +413,7 @@ export function VariableInput({
       )}
 
       {preview && temVariavel && (
-        <div className="mt-1.5 rounded-md border border-slate-200 dark:border-slate-800 bg-muted/40 px-2.5 py-1.5">
+        <div className="mt-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1.5">
           <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold mb-0.5">
             👁 Como vai sair pro cliente
           </p>
@@ -432,7 +432,7 @@ export function VariableInput({
                 type="button"
                 onMouseDown={(e) => e.preventDefault()} // evita blur do input
                 onClick={() => inserirVariavel(v.path)}
-                className="w-full text-left px-3 py-1.5 hover:bg-violet-50 dark:hover:bg-violet-950/20 transition-colors"
+                className="w-full text-left px-3 py-1.5 hover:bg-info-bg transition-colors"
               >
                 <p className="text-[11.5px] text-foreground font-medium">{v.label}</p>
                 {v.exemplo && <p className="text-[10px] text-muted-foreground italic">ex: {v.exemplo}</p>}

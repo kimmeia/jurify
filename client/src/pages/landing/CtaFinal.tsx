@@ -27,7 +27,7 @@ export function CtaFinal({ onCta }: Props) {
             <h2 className="font-display text-3xl font-extrabold tracking-tight text-white md:text-5xl">
               Comece em 5 minutos.
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-lg text-violet-100/85">
+            <p className="mx-auto mt-4 max-w-xl text-lg text-info/85">
               14 dias grátis em qualquer plano. Sem cartão de crédito pra começar. Cancele quando
               quiser.
             </p>

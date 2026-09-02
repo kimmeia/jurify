@@ -40,9 +40,9 @@ export default function RedefinirSenha() {
     !mut.isPending;
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-b from-muted to-white dark:from-muted">
       <div className="w-full max-w-md">
-        <Link href="/" className="text-sm text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-1 mb-6">
+        <Link href="/" className="text-sm text-info-fg hover:underline inline-flex items-center gap-1 mb-6">
           <ArrowLeft className="h-3.5 w-3.5" /> Voltar ao login
         </Link>
 
@@ -54,18 +54,18 @@ export default function RedefinirSenha() {
           <CardContent>
             {!token ? (
               <div className="text-center py-4">
-                <AlertCircle className="h-12 w-12 mx-auto text-amber-500 mb-3" />
+                <AlertCircle className="h-12 w-12 mx-auto text-warning mb-3" />
                 <p className="font-medium">Link inválido</p>
                 <p className="text-sm text-muted-foreground mt-1">
                   O link de redefinição parece estar incompleto ou foi quebrado pelo email.
                 </p>
-                <Link href="/esqueci-senha" className="inline-block mt-6 text-sm text-violet-600 dark:text-violet-400 hover:underline">
+                <Link href="/esqueci-senha" className="inline-block mt-6 text-sm text-info-fg hover:underline">
                   Solicitar novo link
                 </Link>
               </div>
             ) : sucesso ? (
               <div className="text-center py-4">
-                <CheckCircle2 className="h-12 w-12 mx-auto text-emerald-500 mb-3" />
+                <CheckCircle2 className="h-12 w-12 mx-auto text-success mb-3" />
                 <p className="font-medium">Senha redefinida.</p>
                 <p className="text-sm text-muted-foreground mt-1">
                   Você será redirecionado para o login em instantes.
@@ -118,7 +118,7 @@ export default function RedefinirSenha() {
                     />
                   </div>
                   {confirmar.length > 0 && confirmar !== novaSenha && (
-                    <p className="text-xs text-red-600 dark:text-red-400">As senhas não conferem.</p>
+                    <p className="text-xs text-danger-fg">As senhas não conferem.</p>
                   )}
                 </div>
                 <Button type="submit" className="w-full" disabled={!podeSubmeter}>

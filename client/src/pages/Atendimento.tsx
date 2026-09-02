@@ -71,14 +71,14 @@ function initials(n: string) { return n.split(" ").map(w => w[0]).slice(0, 2).jo
 // qualquer device. Inspirado em Slack/Linear: ajuda atendente reconhecer
 // cliente recorrente sem ler o nome.
 const AVATAR_PALETTE = [
-  "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
-  "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
-  "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
-  "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
-  "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
-  "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300",
-  "bg-teal-100 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300",
-  "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300",
+  "bg-danger-bg text-danger-fg dark:text-danger",
+  "bg-warning-bg text-warning-fg dark:text-warning",
+  "bg-success-bg text-success-fg dark:text-success",
+  "bg-info-bg text-info-fg dark:text-info",
+  "bg-info-bg text-info-fg dark:text-info",
+  "bg-danger-bg text-danger-fg dark:text-danger",
+  "bg-success-bg text-success-fg dark:text-success",
+  "bg-info-bg text-info-fg dark:text-info",
 ];
 function colorFromName(name: string) {
   let h = 0;
@@ -149,12 +149,12 @@ function previewMensagem(c: any): string {
 }
 
 const EST: Record<EtapaFunil, { bg: string; border: string; header: string; dot: string; text: string }> = {
-  novo: { bg: "bg-slate-100 dark:bg-slate-800/60", border: "border-slate-200 dark:border-slate-700/80", header: "bg-slate-100 dark:bg-slate-800/60", dot: "bg-slate-400", text: "text-slate-700 dark:text-slate-200" },
-  qualificado: { bg: "bg-blue-100 dark:bg-blue-900/30", border: "border-blue-200 dark:border-blue-800/50", header: "bg-blue-100 dark:bg-blue-900/30", dot: "bg-blue-500", text: "text-blue-700 dark:text-blue-300" },
-  proposta: { bg: "bg-violet-100 dark:bg-violet-900/30", border: "border-violet-200 dark:border-violet-800/50", header: "bg-violet-100 dark:bg-violet-900/30", dot: "bg-violet-500", text: "text-violet-700 dark:text-violet-300" },
-  negociacao: { bg: "bg-amber-100 dark:bg-amber-900/30", border: "border-amber-200 dark:border-amber-800/50", header: "bg-amber-100 dark:bg-amber-900/30", dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-300" },
-  fechado_ganho: { bg: "bg-emerald-100 dark:bg-emerald-900/30", border: "border-emerald-200 dark:border-emerald-800/50", header: "bg-emerald-100 dark:bg-emerald-900/30", dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300" },
-  fechado_perdido: { bg: "bg-red-100 dark:bg-red-900/30", border: "border-red-200 dark:border-red-800/50", header: "bg-red-100 dark:bg-red-900/30", dot: "bg-red-400", text: "text-red-700 dark:text-red-300" },
+  novo: { bg: "bg-muted", border: "border-border", header: "bg-muted", dot: "bg-muted-foreground/50", text: "text-foreground" },
+  qualificado: { bg: "bg-info-bg", border: "border-info/30", header: "bg-info-bg", dot: "bg-info", text: "text-info-fg" },
+  proposta: { bg: "bg-info-bg", border: "border-info/30", header: "bg-info-bg", dot: "bg-info", text: "text-info-fg" },
+  negociacao: { bg: "bg-warning-bg", border: "border-warning/30", header: "bg-warning-bg", dot: "bg-warning", text: "text-warning-fg" },
+  fechado_ganho: { bg: "bg-success-bg", border: "border-success/30", header: "bg-success-bg", dot: "bg-success", text: "text-success-fg" },
+  fechado_perdido: { bg: "bg-danger-bg", border: "border-danger/30", header: "bg-danger-bg", dot: "bg-danger", text: "text-danger-fg" },
 };
 const ETAPAS: EtapaFunil[] = ["novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido"];
 
@@ -262,15 +262,15 @@ function TwilioCallPopup({ phone, onClose }: { phone: string; onClose: () => voi
   const fmt = (s: number) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
 
   return (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"><div className="bg-background rounded-2xl shadow-2xl w-[340px] p-8 text-center space-y-6">
-    <div className={"h-20 w-20 rounded-full flex items-center justify-center mx-auto shadow-lg " + (status === "em_chamada" ? "bg-gradient-to-br from-green-500 to-emerald-600 animate-pulse" : "bg-gradient-to-br from-blue-500 to-blue-600")}><Phone className="h-10 w-10 text-white" /></div>
+    <div className={"h-20 w-20 rounded-full flex items-center justify-center mx-auto shadow-lg " + (status === "em_chamada" ? "bg-success animate-pulse" : "bg-info")}><Phone className="h-10 w-10 text-white" /></div>
     <div>
       <p className="text-lg font-bold">+{clean}</p>
       <p className="text-sm text-muted-foreground mt-1">
         {status === "iniciando" ? "Conectando..." : status === "discando" ? "Discando..." : status === "em_chamada" ? fmt(dur) : status === "erro" ? "Erro na chamada" : "Chamada encerrada"}
       </p>
-      {erroMsg && <p className="text-xs text-red-500 mt-2">{erroMsg}</p>}
+      {erroMsg && <p className="text-xs text-danger mt-2">{erroMsg}</p>}
     </div>
-    {(status === "iniciando" || status === "discando") && <Loader2 className="h-6 w-6 animate-spin text-blue-500 mx-auto" />}
+    {(status === "iniciando" || status === "discando") && <Loader2 className="h-6 w-6 animate-spin text-info mx-auto" />}
     <div className="flex justify-center gap-4">
       {status !== "encerrada" && status !== "erro" ? (
         <Button variant="destructive" size="lg" className="rounded-full h-14 w-14 p-0" onClick={handleDesligar} disabled={encerrarMut.isPending}>
@@ -346,8 +346,8 @@ function IniciarConversaDialog({
     // Envia só os dígitos — o servidor adiciona DDI 55 e converte para JID
     ini.mutate({ telefone: telDigits, nome: nome || undefined, mensagem: msg, canalId });
   };
-  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" /> Nova Conversa</DialogTitle></DialogHeader>
-    <div className="space-y-3 py-2"><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone *</Label><Input placeholder="(11) 99999-0000" value={tel} onChange={(e) => setTel(maskPhoneBR(e.target.value))} inputMode="tel" maxLength={16} className={tel && !telValido ? "border-red-400" : ""} />{tel && !telValido && <p className="text-[10px] text-red-500">DDD + número (10 ou 11 dígitos)</p>}</div><div className="space-y-1.5"><Label>Nome</Label><Input placeholder="Nome do contato" value={nome} onChange={(e) => setNome(e.target.value)} /></div></div>
+  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-success-fg" /> Nova Conversa</DialogTitle></DialogHeader>
+    <div className="space-y-3 py-2"><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone *</Label><Input placeholder="(11) 99999-0000" value={tel} onChange={(e) => setTel(maskPhoneBR(e.target.value))} inputMode="tel" maxLength={16} className={tel && !telValido ? "border-danger/30" : ""} />{tel && !telValido && <p className="text-[10px] text-danger">DDD + número (10 ou 11 dígitos)</p>}</div><div className="space-y-1.5"><Label>Nome</Label><Input placeholder="Nome do contato" value={nome} onChange={(e) => setNome(e.target.value)} /></div></div>
     <div className="space-y-1.5"><Label>Mensagem *</Label><Input placeholder="Olá! Como posso ajudar?" value={msg} onChange={(e) => setMsg(e.target.value)} /></div>
     {waCh.length > 1 && (
       <div className="space-y-1.5">
@@ -365,7 +365,7 @@ function IniciarConversaDialog({
         </select>
       </div>
     )}
-    {waCh.length === 0 && <p className="text-xs text-red-600 dark:text-red-400">Nenhum WhatsApp conectado.</p>}</div>
+    {waCh.length === 0 && <p className="text-xs text-danger-fg">Nenhum WhatsApp conectado.</p>}</div>
     <DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={handleEnviar} disabled={!telValido || !msg || !canalId || ini.isPending}>{ini.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />} Enviar</Button></DialogFooter>
   </DialogContent></Dialog>);
 }
@@ -381,7 +381,7 @@ function NovoLeadDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOp
       await criarLead.mutateAsync({ contatoId: contato.id, valorEstimado: valor || undefined, origemLead: origem || undefined });
     } catch (e: any) { toast.error(e.message); }
   };
-  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-violet-600 dark:text-violet-400" /> Novo Lead</DialogTitle></DialogHeader>
+  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-info-fg" /> Novo Lead</DialogTitle></DialogHeader>
     <div className="space-y-3 py-2">
       <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Nome *</Label><Input placeholder="Nome do lead" value={nome} onChange={(e) => setNome(e.target.value)} /></div><div className="space-y-1.5"><Label>Telefone</Label><Input placeholder="(85) 99999-0000" value={tel} onChange={(e) => setTel(e.target.value)} /></div></div>
       <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Valor estimado</Label><Input placeholder="5000" value={valor} onChange={(e) => setValor(e.target.value)} /></div><div className="space-y-1.5"><Label>Origem</Label><Input placeholder="Indicação, Site..." value={origem} onChange={(e) => setOrigem(e.target.value)} /></div></div>
@@ -409,10 +409,10 @@ function AddLeadFromConversaDialog({ open, onOpenChange, conversaId, atendentes,
     onSuccess: () => { toast.success("Lead adicionado ao Pipeline!"); onOpenChange(false); setValor(""); onSuccess(); },
     onError: (e: any) => toast.error(e.message),
   });
-  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-violet-600 dark:text-violet-400" /> Adicionar ao Pipeline</DialogTitle></DialogHeader>
+  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-info-fg" /> Adicionar ao Pipeline</DialogTitle></DialogHeader>
     <div className="space-y-3 py-2">
       <div className="space-y-1.5">
-        <Label className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" /> Responsável</Label>
+        <Label className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-info-fg" /> Responsável</Label>
         <Select value={responsavelId != null ? String(responsavelId) : undefined} onValueChange={(v) => setResponsavelId(Number(v))}>
           <SelectTrigger><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
           <SelectContent>
@@ -767,7 +767,7 @@ export default function Atendimento() {
             <TabsTrigger value="chamadas" className="text-xs sm:text-sm gap-1.5 px-4">
               <Phone className="h-3.5 w-3.5" /> Chamadas
               {chamadaWa.filaAoVivo.length > 0 && (
-                <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
+                <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-success text-success-on text-[10px] font-bold flex items-center justify-center animate-pulse">
                   {chamadaWa.filaAoVivo.length}
                 </span>
               )}
@@ -778,7 +778,7 @@ export default function Atendimento() {
             <Button
               size="sm"
               onClick={() => setShowIniciar(true)}
-              className="h-10 bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-md shadow-emerald-500/20"
+              className="h-10 bg-success shadow-md shadow-emerald-500/20"
             >
               <MessageCircle className="h-4 w-4 mr-1.5" /> Nova Conversa
             </Button>
@@ -1035,8 +1035,8 @@ export default function Atendimento() {
                         {/* Como o período conta (27/08, aprovado): início do
                             atendimento (novo default) × qualquer mensagem
                             (comportamento antigo — nada removido). */}
-                        <div className="rounded-lg border border-sky-200 dark:border-sky-900 bg-sky-50/60 dark:bg-sky-950/20 p-2.5 space-y-1.5 mt-1.5">
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                        <div className="rounded-lg border border-info/30 bg-info-bg/60 p-2.5 space-y-1.5 mt-1.5">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-info-fg">
                             O período conta pelo…
                           </p>
                           <label className="flex items-start gap-2 cursor-pointer select-none">
@@ -1045,7 +1045,7 @@ export default function Atendimento() {
                               name="modo-periodo-inbox"
                               checked={modoPeriodo === "inicio"}
                               onChange={() => setModoPeriodo("inicio")}
-                              className="mt-0.5 h-3.5 w-3.5 accent-sky-600 cursor-pointer"
+                              className="mt-0.5 h-3.5 w-3.5 accent-info cursor-pointer"
                             />
                             <span className="text-[11px] leading-snug">
                               <span className="font-semibold">Início do atendimento</span>
@@ -1063,7 +1063,7 @@ export default function Atendimento() {
                               name="modo-periodo-inbox"
                               checked={modoPeriodo === "mensagens"}
                               onChange={() => setModoPeriodo("mensagens")}
-                              className="mt-0.5 h-3.5 w-3.5 accent-sky-600 cursor-pointer"
+                              className="mt-0.5 h-3.5 w-3.5 accent-info cursor-pointer"
                             />
                             <span className="text-[11px] leading-snug">
                               <span className="font-semibold">Qualquer mensagem no período</span>
@@ -1083,7 +1083,7 @@ export default function Atendimento() {
                             checked={somenteNovos}
                             disabled={!dataIni}
                             onChange={(e) => setSomenteNovos(e.target.checked)}
-                            className="mt-0.5 h-3.5 w-3.5 accent-violet-600 cursor-pointer disabled:opacity-40"
+                            className="mt-0.5 h-3.5 w-3.5 accent-info cursor-pointer disabled:opacity-40"
                           />
                           <span className="text-[11px] leading-snug">
                             <span className="font-semibold">Somente primeiro contato</span>
@@ -1144,7 +1144,7 @@ export default function Atendimento() {
                         <span
                           className={
                             "block text-[10px] font-semibold leading-tight truncate " +
-                            (ativo ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground")
+                            (ativo ? "text-info-fg" : "text-muted-foreground")
                           }
                         >
                           {p.l}
@@ -1152,7 +1152,7 @@ export default function Atendimento() {
                         <span
                           className={
                             "block text-[12.5px] font-extrabold tabular-nums leading-tight " +
-                            (ativo ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground/70")
+                            (ativo ? "text-info-fg" : "text-muted-foreground/70")
                           }
                         >
                           {p.n}
@@ -1188,7 +1188,7 @@ export default function Atendimento() {
                   </div>
                 )}
                 {notaForaInput && (foraDoPeriodo?.total ?? 0) > 0 && (
-                  <div className="mx-2 mb-1.5 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200 leading-snug">
+                  <div className="mx-2 mb-1.5 rounded-lg border border-warning/30 bg-warning-bg px-3 py-2 text-[11px] text-warning-fg leading-snug">
                     <span className="font-semibold">
                       {(foraDoPeriodo?.nomes || []).slice(0, 2).join(", ") || "Algumas conversas"}
                       {(foraDoPeriodo?.total ?? 0) > (foraDoPeriodo?.nomes?.length ?? 0)
@@ -1248,22 +1248,22 @@ export default function Atendimento() {
                         className={
                           "w-full text-left px-3 py-3 border-b transition-colors relative " +
                           (selecionada
-                            ? "bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/30 dark:hover:bg-violet-950/40"
+                            ? "bg-info-bg hover:bg-info-bg dark:hover:bg-info/40"
                             : destaqueNaoLida
                               // Mensagem nova (ou marcação manual): card inteiro
                               // destacado até abrir a conversa — preto translúcido
                               // (pedido do dono; o violeta confundia com a selecionada)
                               ? "bg-black/[0.07] hover:bg-black/[0.10] dark:bg-white/10 dark:hover:bg-white/[0.14]"
                               : canalCaiu
-                                ? "bg-rose-50/70 hover:bg-rose-100/60 dark:bg-rose-950/20 dark:hover:bg-rose-950/30"
+                                ? "bg-danger-bg/70 hover:bg-danger-bg/60 dark:hover:bg-danger/30"
                                 : "hover:bg-muted/40")
                         }
                         onClick={() => setSelId(c.id)}
                       >
                         {selecionada ? (
-                          <span className="absolute left-0 top-3 bottom-3 w-1 bg-violet-600 rounded-r" aria-hidden />
+                          <span className="absolute left-0 top-3 bottom-3 w-1 bg-info rounded-r" aria-hidden />
                         ) : destaqueNaoLida ? (
-                          <span className="absolute left-0 top-3 bottom-3 w-[3px] bg-slate-600 dark:bg-slate-300 rounded-r" aria-hidden />
+                          <span className="absolute left-0 top-3 bottom-3 w-[3px] bg-foreground/80 rounded-r" aria-hidden />
                         ) : null}
                         <div className="flex items-start gap-2.5">
                           <div className="relative shrink-0">
@@ -1280,7 +1280,7 @@ export default function Atendimento() {
                               <div
                                 className={
                                   "absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] border-2 " +
-                                  (canalCaiu ? "bg-red-100 border-red-500 dark:bg-red-950" : "bg-background border-background")
+                                  (canalCaiu ? "bg-danger-bg border-danger/30" : "bg-background border-background")
                                 }
                                 title={
                                   canalCaiu
@@ -1293,7 +1293,7 @@ export default function Atendimento() {
                             )}
                             {canalCaiu && (
                               <span
-                                className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-background animate-pulse"
+                                className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-danger border-2 border-background animate-pulse"
                                 aria-hidden
                               />
                             )}
@@ -1311,7 +1311,7 @@ export default function Atendimento() {
                               <span
                                 className={
                                   "text-[10px] shrink-0 tabular-nums " +
-                                  (destaqueNaoLida ? "text-violet-600 dark:text-violet-400 font-bold" : "text-muted-foreground")
+                                  (destaqueNaoLida ? "text-info-fg font-bold" : "text-muted-foreground")
                                 }
                               >
                                 {timeAgo(c.ultimaMensagemAt)}
@@ -1327,19 +1327,19 @@ export default function Atendimento() {
                                 {previewMensagem(c)}
                               </p>
                               {naoLidas > 0 ? (
-                                <span className="shrink-0 inline-flex items-center justify-center min-w-[19px] h-[19px] px-1 rounded-full bg-emerald-500 text-white text-[10.5px] font-extrabold tabular-nums">
+                                <span className="shrink-0 inline-flex items-center justify-center min-w-[19px] h-[19px] px-1 rounded-full bg-success text-success-on text-[10.5px] font-extrabold tabular-nums">
                                   {naoLidas > 99 ? "99+" : naoLidas}
                                 </span>
                               ) : marcadaNaoLida ? (
                                 <span
-                                  className="shrink-0 w-[11px] h-[11px] rounded-full bg-emerald-500"
+                                  className="shrink-0 w-[11px] h-[11px] rounded-full bg-success"
                                   title="Marcada como não lida"
                                 />
                               ) : null}
                             </div>
                             <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                               {(c as any).temAtraso ? (
-                                <span className="text-[9px] px-1.5 py-0 rounded font-bold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/50 inline-flex items-center gap-0.5">
+                                <span className="text-[9px] px-1.5 py-0 rounded font-bold bg-danger-bg text-danger-fg border border-danger/30 inline-flex items-center gap-0.5">
                                   <AlertTriangle className="h-2.5 w-2.5" /> SLA crítico
                                 </span>
                               ) : (
@@ -1352,10 +1352,10 @@ export default function Atendimento() {
                                   <span
                                     className={
                                       "w-1.5 h-1.5 rounded-full " +
-                                      (c.status === "aguardando" ? "bg-amber-500"
-                                        : c.status === "em_atendimento" ? "bg-blue-500"
-                                        : c.status === "resolvido" ? "bg-emerald-500"
-                                        : "bg-slate-400")
+                                      (c.status === "aguardando" ? "bg-warning"
+                                        : c.status === "em_atendimento" ? "bg-info"
+                                        : c.status === "resolvido" ? "bg-success"
+                                        : "bg-muted-foreground/50")
                                     }
                                   />
                                   {STATUS_CONVERSA_LABELS[c.status as StatusConversa]}
@@ -1378,8 +1378,8 @@ export default function Atendimento() {
                                     className={
                                       "text-[9px] px-1.5 py-0 rounded font-bold shrink-0 " +
                                       (reaberto
-                                        ? "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300"
-                                        : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300")
+                                        ? "bg-info-bg text-info-fg"
+                                        : "bg-success-bg text-success-fg")
                                     }
                                     title={reaberto ? "Cliente voltou depois de um atendimento encerrado" : "Primeira mensagem da conversa dentro do período"}
                                   >
@@ -1536,7 +1536,7 @@ export default function Atendimento() {
         <button
           onClick={() => setShowIniciar(true)}
           aria-label="Nova conversa"
-          className="fixed right-5 z-40 h-14 w-14 rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/40 flex items-center justify-center active:scale-95 transition"
+          className="fixed right-5 z-40 h-14 w-14 rounded-full bg-success text-success-on shadow-lg shadow-emerald-500/40 flex items-center justify-center active:scale-95 transition"
           style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
         >
           <SquarePen className="h-6 w-6" />
@@ -1865,15 +1865,15 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             {STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status || ""}
             {(conv?.contatoTelefone || conv?.chatIdExterno) ? ` · ${conv?.contatoTelefone || conv?.chatIdExterno?.replace(/@.*/, "")}` : ""}
             {(conv as any)?.optOutWhatsapp ? " · 🔕 Avisos desativados" : ""}
-            {canalInoperante && <span className="text-red-600 dark:text-red-400 font-semibold"> · ⛔ Canal inoperante</span>}
+            {canalInoperante && <span className="text-danger-fg font-semibold"> · ⛔ Canal inoperante</span>}
           </p>
         </div>
         {(() => {
           const tel = conv?.contatoTelefone || conv?.chatIdExterno?.replace(/@.*/, "") || "";
           const podeLigarWa = !!onLigarWhatsApp && conv?.canalTipo === "whatsapp_api" && !!conv?.canalId && !!tel;
           return (<>
-            {onWA && tel && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 dark:text-emerald-400 shrink-0" title="Abrir no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-4 w-4" /></Button>}
-            {podeLigarWa && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-green-600 dark:text-green-400 shrink-0" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-4 w-4" /></Button>}
+            {onWA && tel && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-success-fg shrink-0" title="Abrir no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-4 w-4" /></Button>}
+            {podeLigarWa && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-success-fg shrink-0" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-4 w-4" /></Button>}
           </>);
         })()}
         <DropdownMenu>
@@ -1902,7 +1902,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             <DropdownMenuItem onClick={() => setShowVincular(true)}><Link2 className="h-4 w-4 mr-2" />Vincular</DropdownMenuItem>
             <DropdownMenuItem onClick={() => marcarNaoLidaMut.mutate({ conversaId: cid })}><CircleDot className="h-4 w-4 mr-2" />Marcar como não lida</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-400" />Resolver</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-4 w-4 mr-2 text-success-fg" />Resolver</DropdownMenuItem>
             <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-4 w-4 mr-2" />Fechar</DropdownMenuItem>
             <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive"><Trash2 className="h-4 w-4 mr-2" />Excluir</DropdownMenuItem>
           </DropdownMenuContent>
@@ -1965,7 +1965,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                     type="button"
                     onClick={() => setLocation(`/clientes?id=${conv.contatoId}`)}
                     title="Abrir cadastro do contato (cliente/lead)"
-                    className="text-sm font-semibold truncate text-left hover:text-violet-600 hover:underline dark:hover:text-violet-400"
+                    className="text-sm font-semibold truncate text-left hover:text-info-fg hover:underline dark:hover:text-info"
                   >
                     {conv?.contatoNome || "Contato"}
                   </button>
@@ -1978,7 +1978,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                     onClick={() => setNomeEditando(conv?.contatoNome || "")}
                     title="Editar o nome do contato"
                     aria-label="Editar o nome do contato"
-                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition rounded p-0.5 text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400"
+                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition rounded p-0.5 text-muted-foreground hover:text-info-fg"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -1988,16 +1988,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
             {canalInoperante && (
               <span
-                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-danger-bg text-danger-fg border-danger/30 dark:text-danger"
                 title={`Canal fora do ar: ${canalInoperanteDetalhe}. Nenhuma mensagem sai por ele.`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-danger animate-pulse" />
                 Canal inoperante
               </span>
             )}
             {(conv as any)?.optOutWhatsapp && (
               <span
-                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-danger-bg text-danger-fg border-danger/30 dark:text-danger"
                 title={
                   "Contato pediu pra não receber cobranças e avisos automáticos no WhatsApp" +
                   ((conv as any)?.optOutWhatsappEm ? ` (desde ${new Date((conv as any).optOutWhatsappEm).toLocaleDateString("pt-BR")})` : "")
@@ -2017,11 +2017,11 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 className={
                   "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold transition disabled:opacity-50 " +
                   (bot.pausado
-                    ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800"
-                    : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800")
+                    ? "bg-warning-bg text-warning-fg border-warning/30 hover:bg-warning-bg dark:text-warning"
+                    : "bg-success-bg text-success-fg border-success/30 hover:bg-success-bg dark:text-success")
                 }
               >
-                <span className={"w-1.5 h-1.5 rounded-full " + (bot.pausado ? "bg-amber-500" : "bg-emerald-500")} />
+                <span className={"w-1.5 h-1.5 rounded-full " + (bot.pausado ? "bg-warning" : "bg-success")} />
                 <Bot className="h-3 w-3" />
                 {bot.pausado ? "Bot pausado" : "Bot ativo"}
               </button>
@@ -2035,7 +2035,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 <User className="h-3 w-3" />{(conv as any).atendenteNome}
               </span>
             ) : (
-              <span className="text-amber-600 dark:text-amber-400 font-medium">Sem atendente</span>
+              <span className="text-warning-fg font-medium">Sem atendente</span>
             )}
             {(conv as any)?.canalNome && (
               <span
@@ -2048,7 +2048,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               >
                 <span className="text-muted-foreground/40">·</span>
                 <CanalLogo tipo={(conv as any).canalTipo} className="w-3.5 h-3.5" />
-                <span className={canalInoperante ? "text-red-600 dark:text-red-400 font-semibold line-through decoration-red-400" : undefined}>
+                <span className={canalInoperante ? "text-danger-fg font-semibold line-through decoration-danger" : undefined}>
                   {(conv as any).canalTelefone || (conv as any).canalNome}
                 </span>
                 {canalInoperante && <span aria-hidden>⛔</span>}
@@ -2068,9 +2068,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           const podeLigarWa = !!onLigarWhatsApp && conv?.canalTipo === "whatsapp_api" && !!conv?.canalId && !!tel;
           return (
             <div className="flex items-center gap-1 shrink-0">
-              {onWA && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400" title="Abrir conversa no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-3.5 w-3.5" /></Button>}
-              {podeLigarWa && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-green-600 dark:text-green-400" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-3.5 w-3.5" /></Button>}
-              {onTel && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 dark:text-blue-400" title="Ligar (Twilio)" onClick={() => onTel(tel)}><Phone className="h-3.5 w-3.5" /></Button>}
+              {onWA && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success-fg" title="Abrir conversa no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-3.5 w-3.5" /></Button>}
+              {podeLigarWa && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success-fg" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-3.5 w-3.5" /></Button>}
+              {onTel && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-info-fg" title="Ligar (Twilio)" onClick={() => onTel(tel)}><Phone className="h-3.5 w-3.5" /></Button>}
             </div>
           );
         })()}
@@ -2083,7 +2083,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         {conv?.contatoId && <FinanceiroPopover contatoId={conv.contatoId} />}
         <div className="flex-1" />
         <Button variant="ghost" size="sm" className="h-7 text-[11px] px-2.5 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowTransferir(true)}><ArrowRightLeft className="h-3.5 w-3.5 mr-1" />Transferir</Button>
-        <Button variant="ghost" size="sm" className="h-7 text-[11px] px-3 shrink-0 font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800 dark:text-emerald-300 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60" onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-3.5 w-3.5 mr-1" />Resolver</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-[11px] px-3 shrink-0 font-semibold text-success-fg bg-success-bg hover:bg-success-bg hover:text-success-fg dark:bg-success/40" onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-3.5 w-3.5 mr-1" />Resolver</Button>
         <Button variant="ghost" size="sm" className="h-7 text-[11px] px-2.5 text-muted-foreground hover:text-foreground shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-3.5 w-3.5 mr-1" />Fechar</Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -2156,12 +2156,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                       {m.direcao === "saida" && (m.status === "enviada" || m.status === "entregue" || m.status === "lida") && <Check className="h-3 w-3" aria-label="Enviada" />}
                       {m.direcao === "saida" && m.status === "falha" && (
                         <span title={(m as any).erroEntrega || "Falha no envio — veja logs do WhatsApp"}>
-                          <AlertTriangle className="h-3 w-3 text-red-200" aria-label="Falha no envio" />
+                          <AlertTriangle className="h-3 w-3 text-danger" aria-label="Falha no envio" />
                         </span>
                       )}
                     </div>
                     {m.direcao === "saida" && m.status === "falha" && (m as any).erroEntrega && (
-                      <p className="text-[10px] mt-1 text-red-100/90 leading-snug break-words">
+                      <p className="text-[10px] mt-1 text-danger/90 leading-snug break-words">
                         ⚠ Não entregue — {(m as any).erroEntrega}
                       </p>
                     )}
@@ -2189,7 +2189,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-[11px] border-violet-300 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:text-violet-700 dark:hover:text-violet-300 px-2.5"
+          className="h-7 text-[11px] border-info/30 text-info-fg hover:bg-info-bg hover:text-info-fg px-2.5"
           disabled={composerSugestao.isPending || composerBloqueado}
           onClick={() => composerSugestao.mutate({ conversaId: cid, tom })}
           title={composerBloqueado ? "Envio de texto livre bloqueado nesta conversa" : "Gerar resposta com IA no tom selecionado"}
@@ -2214,7 +2214,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <DropdownMenuItem
                 key={t}
                 onClick={() => setTom(t)}
-                className={tom === t ? "font-semibold text-violet-700 dark:text-violet-300" : ""}
+                className={tom === t ? "font-semibold text-info-fg" : ""}
               >
                 {t === "formal" ? "Formal" : t === "direto" ? "Direto" : t === "empatico" ? "Empático" : "Amigável"}
                 {tom === t && <Check className="ml-auto h-3.5 w-3.5" />}
@@ -2229,16 +2229,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
 
       {/* Preview de mídia anexada (vinda do template). Some ao enviar. */}
       {pendingMedia && (
-        <div className="mx-3 mb-1 flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-md px-2.5 py-1.5">
-          {pendingMedia.tipo === "imagem" ? <ImageIcon className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300 shrink-0" /> :
-           pendingMedia.tipo === "video" ? <VideoIcon className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300 shrink-0" /> :
-           pendingMedia.tipo === "documento" ? <FileText className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300 shrink-0" /> :
-           <Paperclip className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300 shrink-0" />}
+        <div className="mx-3 mb-1 flex items-center gap-2 bg-success-bg border border-success/30 rounded-md px-2.5 py-1.5">
+          {pendingMedia.tipo === "imagem" ? <ImageIcon className="h-3.5 w-3.5 text-success-fg shrink-0" /> :
+           pendingMedia.tipo === "video" ? <VideoIcon className="h-3.5 w-3.5 text-success-fg shrink-0" /> :
+           pendingMedia.tipo === "documento" ? <FileText className="h-3.5 w-3.5 text-success-fg shrink-0" /> :
+           <Paperclip className="h-3.5 w-3.5 text-success-fg shrink-0" />}
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200 truncate">
+            <p className="text-xs font-medium text-success-fg truncate">
               {pendingMedia.nome || pendingMedia.tipo}
             </p>
-            <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 truncate">
+            <p className="text-[10px] text-success-fg/80 truncate">
               {pendingMedia.tamanho
                 ? `${(pendingMedia.tamanho / 1024 / 1024).toFixed(1)} MB · o texto digitado vira a legenda`
                 : pendingMedia.url}
@@ -2246,7 +2246,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           </div>
           <button
             onClick={() => setPendingMedia(null)}
-            className="text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-200 shrink-0"
+            className="text-success-fg hover:text-success-fg shrink-0"
             title="Remover anexo"
           >
             <X className="h-3.5 w-3.5" />
@@ -2255,7 +2255,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       )}
 
       {canalInoperante ? (
-        <div className="mx-3 mt-2 mb-1 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-md px-2.5 py-2 text-[11px] leading-snug text-red-800 dark:text-red-200">
+        <div className="mx-3 mt-2 mb-1 bg-danger-bg border border-danger/30 rounded-md px-2.5 py-2 text-[11px] leading-snug text-danger-fg">
           <div className="flex items-start gap-1.5">
             <span className="shrink-0">⛔</span>
             <span>
@@ -2269,7 +2269,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             <Button
               variant="outline"
               size="sm"
-              className="h-6 text-[11px] px-2 border-red-300 text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-800 dark:border-red-800 dark:text-red-300"
+              className="h-6 text-[11px] px-2 border-danger/30 text-danger-fg hover:bg-danger-bg hover:text-danger-fg dark:text-danger"
               onClick={() => setLocation("/configuracoes?tab=canais")}
             >
               Ver status do canal
@@ -2277,7 +2277,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           </div>
         </div>
       ) : janela24hFechada ? (
-        <div className="mx-3 mt-2 mb-1 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-md px-2.5 py-2 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+        <div className="mx-3 mt-2 mb-1 bg-warning-bg border border-warning/30 rounded-md px-2.5 py-2 text-[11px] leading-snug text-warning-fg">
           <div className="flex items-start gap-1.5">
             <span className="shrink-0">🔒</span>
             <span>
@@ -2288,7 +2288,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           <div className="flex items-center gap-2 mt-1.5 pl-5">
             <Button
               size="sm"
-              className="h-6 text-[11px] px-2.5 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+              className="h-6 text-[11px] px-2.5 bg-info"
               onClick={() => setShowTemplates(true)}
             >
               <Zap className="h-3 w-3 mr-1" /> Enviar template aprovado
@@ -2305,7 +2305,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <Button
                 variant="ghost"
                 size="sm"
-                className={"h-9 w-9 p-0 shrink-0 rounded-full transition-transform " + (maisMenuAberto ? "bg-gradient-to-br from-violet-600 to-indigo-600 text-white rotate-45" : "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300")}
+                className={"h-9 w-9 p-0 shrink-0 rounded-full transition-transform " + (maisMenuAberto ? "bg-info text-info-on rotate-45" : "bg-info-bg text-info-fg dark:text-info")}
                 title="Mais ações"
                 aria-label="Mais ações"
               >
@@ -2319,7 +2319,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 onClick={() => { setMaisMenuAberto(false); composerSugestao.mutate({ conversaId: cid, tom }); }}
                 className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left disabled:opacity-60"
               >
-                <span className="h-9 w-9 rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 flex items-center justify-center shrink-0">
+                <span className="h-9 w-9 rounded-xl bg-info-bg text-info-fg dark:text-info flex items-center justify-center shrink-0">
                   {composerSugestao.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 </span>
                 <span className="min-w-0"><span className="block text-sm font-semibold">Compor com IA</span><span className="block text-[11px] text-muted-foreground">Gera a resposta no tom escolhido</span></span>
@@ -2330,7 +2330,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 onClick={() => { setMaisMenuAberto(false); setShowTemplates(true); }}
                 className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left disabled:opacity-60"
               >
-                <span className="h-9 w-9 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                <span className="h-9 w-9 rounded-xl bg-success-bg text-success-fg dark:text-success flex items-center justify-center shrink-0">
                   <Zap className="h-4 w-4" />
                 </span>
                 <span className="min-w-0"><span className="block text-sm font-semibold">Respostas rápidas / Templates</span><span className="block text-[11px] text-muted-foreground">Atalho “/” e templates da Meta</span></span>
@@ -2339,7 +2339,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 onAnexar={(m) => { setPendingMedia(m); setMaisMenuAberto(false); }}
                 trigger={
                   <button type="button" disabled={composerBloqueado} className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left disabled:opacity-60">
-                    <span className="h-9 w-9 rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300 flex items-center justify-center shrink-0">
+                    <span className="h-9 w-9 rounded-xl bg-info-bg text-info-fg dark:text-info flex items-center justify-center shrink-0">
                       <Paperclip className="h-4 w-4" />
                     </span>
                     <span className="min-w-0"><span className="block text-sm font-semibold">Anexar</span><span className="block text-[11px] text-muted-foreground">Foto, vídeo ou documento</span></span>
@@ -2386,12 +2386,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium text-xs">{t.titulo}</p>
                           {t.atalho && (
-                            <span className="font-mono text-[10px] bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 px-1 py-0.5 rounded">
+                            <span className="font-mono text-[10px] bg-info-bg text-info-fg px-1 py-0.5 rounded">
                               /{t.atalho}
                             </span>
                           )}
                           {t.midiaTipo && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-1 py-0.5 rounded">
+                            <span className="inline-flex items-center gap-0.5 text-[10px] bg-success-bg text-success-fg px-1 py-0.5 rounded">
                               {t.midiaTipo === "imagem" ? <ImageIcon className="h-2.5 w-2.5" /> :
                                t.midiaTipo === "documento" ? <FileText className="h-2.5 w-2.5" /> :
                                <Paperclip className="h-2.5 w-2.5" />}
@@ -2431,9 +2431,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                           >
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-mono text-xs">{t.name}</p>
-                              <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1 py-0.5 rounded">{t.language}</span>
+                              <span className="text-[10px] bg-info-bg text-info-fg px-1 py-0.5 rounded">{t.language}</span>
                               {totalVars > 0 && (
-                                <span className="text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1 py-0.5 rounded">
+                                <span className="text-[10px] bg-warning-bg text-warning-fg px-1 py-0.5 rounded">
                                   {totalVars} {totalVars === 1 ? "var" : "vars"}
                                 </span>
                               )}
@@ -2492,7 +2492,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           onClick={send}
           disabled={!msg.trim() || enviar.isPending || composerBloqueado}
           title={composerBloqueado ? (canalInoperante ? "Canal inoperante — envio desativado" : "Janela de 24h fechada — use um template") : undefined}
-          className="px-4 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+          className="px-4 bg-info"
         >
           {enviar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
@@ -2507,7 +2507,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           <kbd className="font-mono bg-background px-1 py-0.5 rounded border text-[10px]">Enter</kbd> enviar
         </span>
         {composerSugestao.data?.ia === false && (
-          <span className="text-amber-600 dark:text-amber-400 text-[10px]">⚠ IA não configurada — usando template</span>
+          <span className="text-warning-fg text-[10px]">⚠ IA não configurada — usando template</span>
         )}
       </div>
       )}
@@ -2535,7 +2535,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
     {showVincular && (
       <Dialog open={showVincular} onOpenChange={(v) => { setShowVincular(v); setBuscaVincular(""); }}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Link2 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> Vincular a cliente</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Link2 className="h-5 w-5 text-info-fg" /> Vincular a cliente</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">Busque o cliente cadastrado para vincular esta conversa:</p>
             <Input placeholder="Buscar por nome, CPF..." value={buscaVincular} onChange={(e) => setBuscaVincular(e.target.value)} />
@@ -2545,7 +2545,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                   className="w-full flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/50 text-left transition-colors"
                   disabled={vincularMut.isPending}
                 >
-                  <User className="h-4 w-4 text-violet-500 shrink-0" />
+                  <User className="h-4 w-4 text-info shrink-0" />
                   <div className="flex-1 min-w-0"><p className="text-xs font-medium truncate">{c.nome}</p>{c.cpfCnpj && <p className="text-[9px] text-muted-foreground font-mono">{c.cpfCnpj}</p>}</div>
                 </button>
               ))}
@@ -2747,8 +2747,8 @@ function AudioRecordButton({ onSend, disabled }: { onSend: (args: EnvioComposer)
         >
           <X className="h-4 w-4" />
         </Button>
-        <span className="text-xs font-mono tabular-nums text-rose-600 dark:text-rose-400 flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-rose-600 animate-pulse" />
+        <span className="text-xs font-mono tabular-nums text-danger-fg flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full bg-danger animate-pulse" />
           {fmtDur(duracao)}
         </span>
         <Button
@@ -2905,21 +2905,21 @@ function AnexoButton({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" side="top" className="w-56">
           <DropdownMenuItem onClick={() => escolher("imagem")}>
-            <ImageIcon className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-400" />
+            <ImageIcon className="h-4 w-4 mr-2 text-success-fg" />
             <span className="text-sm">
               Foto
               <span className="block text-[10px] text-muted-foreground">JPG, PNG, GIF, WebP · até 5 MB</span>
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => escolher("video")}>
-            <VideoIcon className="h-4 w-4 mr-2 text-violet-600 dark:text-violet-400" />
+            <VideoIcon className="h-4 w-4 mr-2 text-info-fg" />
             <span className="text-sm">
               Vídeo
               <span className="block text-[10px] text-muted-foreground">MP4 · até 16 MB (WhatsApp)</span>
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => escolher("documento")}>
-            <FileText className="h-4 w-4 mr-2 text-blue-600 dark:text-blue-400" />
+            <FileText className="h-4 w-4 mr-2 text-info-fg" />
             <span className="text-sm">
               Documento
               <span className="block text-[10px] text-muted-foreground">PDF, Word, Excel, CSV · até 95 MB</span>
@@ -3120,7 +3120,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
         background:
           "radial-gradient(circle at 20% 0%, rgba(255,255,255,0.18), transparent 40%), " +
           "radial-gradient(circle at 80% 100%, rgba(255,255,255,0.12), transparent 50%), " +
-          "linear-gradient(135deg, #4338ca 0%, #4f46e5 40%, #06b6d4 100%)",
+          "linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%)",
       }}
     >
       <div className="flex items-start gap-3">
@@ -3128,7 +3128,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           <h2 className="text-xl font-extrabold tracking-tight leading-tight">Pipeline de Vendas</h2>
           <p className="text-xs text-white/85 mt-1 flex items-center gap-2">
             <span className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-semibold">
-              <span className="h-1.5 w-1.5 rounded-full bg-white dark:bg-card animate-pulse" />
+              <span className="h-1.5 w-1.5 rounded-full bg-card animate-pulse" />
               Atualização ao vivo
             </span>
             Negociações em andamento · arraste os cards entre etapas
@@ -3163,7 +3163,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
         className={
           "relative h-9 px-3 inline-flex items-center gap-1.5 rounded-md border text-xs font-semibold transition " +
           (filtrosAtivos > 0 || showFiltros
-            ? "border-violet-500 text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/30"
+            ? "border-info/30 text-info-fg bg-info-bg"
             : "text-muted-foreground hover:bg-muted")
         }
         title="Filtros: atendente, setor, período, valor"
@@ -3171,7 +3171,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
         <Filter className="h-3.5 w-3.5" />
         Filtros
         {filtrosAtivos > 0 && (
-          <span className="inline-flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-violet-600 text-white text-[9px] font-bold">
+          <span className="inline-flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-info text-info-on text-[9px] font-bold">
             {filtrosAtivos}
           </span>
         )}
@@ -3183,7 +3183,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           onClick={() => setCompacto(false)}
           className={
             "px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition " +
-            (!compacto ? "bg-background text-violet-600 dark:text-violet-400 shadow-sm" : "text-muted-foreground hover:text-foreground")
+            (!compacto ? "bg-background text-info-fg shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Cards no tamanho normal"
         >
@@ -3194,7 +3194,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           onClick={() => setCompacto(true)}
           className={
             "px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition " +
-            (compacto ? "bg-background text-violet-600 dark:text-violet-400 shadow-sm" : "text-muted-foreground hover:text-foreground")
+            (compacto ? "bg-background text-info-fg shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Cards menores — cabem mais por coluna"
         >
@@ -3207,7 +3207,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           onClick={() => setView("kanban")}
           className={
             "px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition " +
-            (view === "kanban" ? "bg-background text-violet-600 dark:text-violet-400 shadow-sm" : "text-muted-foreground hover:text-foreground")
+            (view === "kanban" ? "bg-background text-info-fg shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Visualização Kanban"
         >
@@ -3218,14 +3218,14 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           onClick={() => setView("lista")}
           className={
             "px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition " +
-            (view === "lista" ? "bg-background text-violet-600 dark:text-violet-400 shadow-sm" : "text-muted-foreground hover:text-foreground")
+            (view === "lista" ? "bg-background text-info-fg shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Visualização Lista"
         >
           <List className="h-3.5 w-3.5" /> Lista
         </button>
       </div>
-      <Button size="sm" onClick={onAddLead} className="bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-md h-9">
+      <Button size="sm" onClick={onAddLead} className="bg-info shadow-md h-9">
         <Plus className="h-4 w-4 mr-1" /> Novo Lead
       </Button>
     </div>
@@ -3236,7 +3236,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           <DialogTitle className="flex items-center gap-2">
             Filtros do pipeline
             {filtrosAtivos > 0 && (
-              <span className="rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold px-2 py-0.5 dark:bg-violet-950 dark:text-violet-300">
+              <span className="rounded-full bg-info-bg text-info-fg text-[11px] font-bold px-2 py-0.5">
                 {filtrosAtivos} {filtrosAtivos === 1 ? "ativo" : "ativos"}
               </span>
             )}
@@ -3278,13 +3278,13 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                         onClick={() => setResponsaveisFiltro((p) => ativo ? p.filter((x) => x !== a.id) : [...p, a.id])}
                         className={
                           "flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-left border-b border-muted/40 " +
-                          (ativo ? "bg-violet-50 text-violet-700 font-medium dark:bg-violet-950 dark:text-violet-300" : "text-foreground/80 hover:bg-muted/40")
+                          (ativo ? "bg-info-bg text-info-fg font-medium" : "text-foreground/80 hover:bg-muted/40")
                         }
                       >
                         <span
                           className={
                             "h-4 w-4 shrink-0 rounded border flex items-center justify-center text-[10px] " +
-                            (ativo ? "bg-violet-600 border-violet-600 text-white" : "border-muted-foreground/40")
+                            (ativo ? "bg-info border-info/30 text-info-on" : "border-muted-foreground/40")
                           }
                         >
                           {ativo ? "✓" : ""}
@@ -3302,7 +3302,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                 <button
                   onClick={() => setResponsaveisFiltro([])}
                   disabled={responsaveisFiltro.length === 0}
-                  className="font-semibold text-violet-600 dark:text-violet-400 hover:underline disabled:opacity-40 disabled:no-underline"
+                  className="font-semibold text-info-fg hover:underline disabled:opacity-40 disabled:no-underline"
                 >
                   Limpar seleção
                 </button>
@@ -3360,7 +3360,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                   <button
                     key={p}
                     onClick={() => setPeriodoFiltro(p)}
-                    className={"h-8 rounded-md text-xs border " + (ativo ? "bg-violet-600 text-white border-violet-600" : "bg-muted/30 hover:bg-muted")}
+                    className={"h-8 rounded-md text-xs border " + (ativo ? "bg-info text-info-on border-info/30" : "bg-muted/30 hover:bg-muted")}
                   >
                     {label}
                   </button>
@@ -3381,7 +3381,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           <button
             onClick={limparFiltrosAv}
             disabled={filtrosAtivos === 0}
-            className="text-xs font-semibold text-violet-600 dark:text-violet-400 hover:underline disabled:opacity-40 disabled:no-underline"
+            className="text-xs font-semibold text-info-fg hover:underline disabled:opacity-40 disabled:no-underline"
           >
             Limpar filtros
           </button>
@@ -3418,15 +3418,15 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
               >
                 <div className="flex items-center gap-2">
                   <span className={"h-2.5 w-2.5 rounded-full shrink-0 " + (isGanho ? st.dot + " animate-pulse" : st.dot)} />
-                  <span className={"text-xs font-bold uppercase tracking-wide flex-1 truncate " + (isGanho ? "text-emerald-800 dark:text-emerald-200" : "text-foreground")}>
+                  <span className={"text-xs font-bold uppercase tracking-wide flex-1 truncate " + (isGanho ? "text-success-fg" : "text-foreground")}>
                     {ETAPA_FUNIL_LABELS[etapa]}
                   </span>
-                  <Badge variant="outline" className={"text-[10px] h-5 px-1.5 shrink-0 " + (isGanho ? "bg-emerald-600 text-white border-emerald-600" : "")}>
+                  <Badge variant="outline" className={"text-[10px] h-5 px-1.5 shrink-0 " + (isGanho ? "bg-success text-success-on border-success/30" : "")}>
                     {items.length}
                   </Badge>
                 </div>
                 {val > 0 && (
-                  <p className={"text-[11px] font-semibold mt-1 ml-[18px] " + (isGanho ? "text-emerald-700 dark:text-emerald-300" : "text-muted-foreground")}>
+                  <p className={"text-[11px] font-semibold mt-1 ml-[18px] " + (isGanho ? "text-success-fg" : "text-muted-foreground")}>
                     {formatBRL(val)} {isGanho ? "fechado" : "estimado"}
                   </p>
                 )}
@@ -3439,8 +3439,8 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                     className={
                       "rounded-lg flex items-center justify-center text-[11px] py-6 transition-colors " +
                       (isOver
-                        ? "border-2 border-dashed border-violet-400 bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300"
-                        : "border border-dashed border-slate-300 text-muted-foreground/60")
+                        ? "border-2 border-dashed border-info/30 bg-info-bg text-info-fg"
+                        : "border border-dashed border-border text-muted-foreground/60")
                     }
                   >
                     {isOver ? "soltar aqui" : "arraste aqui"}
@@ -3627,7 +3627,7 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                 {lead.conversaId ? (
                   <button
                     onClick={() => onGoToConversa(lead.conversaId)}
-                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50 text-[12.5px] font-semibold hover:bg-blue-100"
+                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-info-bg text-info-fg border border-info/30 text-[12.5px] font-semibold hover:bg-info-bg"
                   >
                     <Inbox className="h-3.5 w-3.5" /> Ir pra conversa
                   </button>
@@ -3637,7 +3637,7 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                 {lead.contatoTelefone && onWA ? (
                   <button
                     onClick={() => onWA(lead.contatoTelefone)}
-                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 text-[12.5px] font-semibold hover:bg-emerald-100"
+                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-success-bg text-success-fg border border-success/30 text-[12.5px] font-semibold hover:bg-success-bg"
                   >
                     <PhoneCall className="h-3.5 w-3.5" /> WhatsApp
                   </button>
@@ -3687,7 +3687,7 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                           onChange={(e) => { setProbEdit(Number(e.target.value)); setDirty(true); }}
                           className="flex-1"
                         />
-                        <span className="text-[13px] font-bold text-violet-700 dark:text-violet-300 tabular-nums w-9 text-right">{probEdit}%</span>
+                        <span className="text-[13px] font-bold text-info-fg tabular-nums w-9 text-right">{probEdit}%</span>
                       </div>
                     </div>
                   </div>
@@ -3731,7 +3731,7 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
               <Button
                 onClick={salvar}
                 disabled={!dirty || mutEdit.isPending}
-                className="flex-1 h-10 bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 font-bold shadow-md shadow-indigo-500/25"
+                className="flex-1 h-10 bg-info font-bold shadow-md shadow-indigo-500/25"
               >
                 {mutEdit.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Check className="h-4 w-4 mr-1.5" />}
                 Salvar alterações
@@ -3775,12 +3775,12 @@ function KanbanLista({ leads, onWA, onDelete, onGoToConversa }: {
         <tbody className="divide-y">
           {leads.map((l: any) => {
             const v = parseValorBR(l.valorEstimado);
-            const corBg = l.etapaFunil === "fechado_ganho" ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300"
-              : l.etapaFunil === "fechado_perdido" ? "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300"
-              : l.etapaFunil === "negociacao" ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
-              : l.etapaFunil === "proposta" ? "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300"
-              : l.etapaFunil === "qualificado" ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-              : "bg-slate-100 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200";
+            const corBg = l.etapaFunil === "fechado_ganho" ? "bg-success-bg text-success-fg"
+              : l.etapaFunil === "fechado_perdido" ? "bg-danger-bg text-danger-fg"
+              : l.etapaFunil === "negociacao" ? "bg-warning-bg text-warning-fg"
+              : l.etapaFunil === "proposta" ? "bg-info-bg text-info-fg"
+              : l.etapaFunil === "qualificado" ? "bg-info-bg text-info-fg"
+              : "bg-muted text-foreground";
             return (
               <tr key={l.id} className="hover:bg-muted/20 transition-colors">
                 <td className="px-3 py-2">
@@ -3798,17 +3798,17 @@ function KanbanLista({ leads, onWA, onDelete, onGoToConversa }: {
                     {ETAPA_FUNIL_LABELS[l.etapaFunil as EtapaFunil]}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-right font-bold text-emerald-700 dark:text-emerald-300 text-xs">{v > 0 ? formatBRL(v) : "—"}</td>
+                <td className="px-3 py-2 text-right font-bold text-success-fg text-xs">{v > 0 ? formatBRL(v) : "—"}</td>
                 <td className="px-3 py-2 text-right text-xs text-muted-foreground tabular-nums">{l.probabilidade ? `${l.probabilidade}%` : "—"}</td>
                 <td className="px-3 py-2">
                   <div className="flex items-center justify-end gap-0.5">
                     {l.conversaId && (
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 dark:text-blue-400" title="Ir para conversa" onClick={() => onGoToConversa(l.conversaId)}>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-info-fg" title="Ir para conversa" onClick={() => onGoToConversa(l.conversaId)}>
                         <Inbox className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     {l.contatoTelefone && onWA && (
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400" title="WhatsApp" onClick={() => onWA(l.contatoTelefone)}>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success-fg" title="WhatsApp" onClick={() => onWA(l.contatoTelefone)}>
                         <PhoneCall className="h-3.5 w-3.5" />
                       </Button>
                     )}
@@ -3838,13 +3838,13 @@ const ETAPA_HEX: Record<EtapaFunil, string> = {
 
 /** Gradients de avatar determinístico por hash do nome — paleta consistente. */
 const AVATAR_GRADIENTS = [
-  "bg-gradient-to-br from-violet-500 to-pink-500",
-  "bg-gradient-to-br from-blue-500 to-cyan-500",
-  "bg-gradient-to-br from-amber-500 to-red-500",
-  "bg-gradient-to-br from-emerald-500 to-teal-600",
-  "bg-gradient-to-br from-indigo-500 to-violet-500",
-  "bg-gradient-to-br from-pink-500 to-rose-500",
-  "bg-gradient-to-br from-teal-500 to-emerald-500",
+  "bg-gradient-to-br from-info to-danger",
+  "bg-info",
+  "bg-gradient-to-br from-warning to-danger",
+  "bg-success",
+  "bg-info",
+  "bg-danger",
+  "bg-success",
 ];
 function gradientFromName(name: string) {
   let h = 0;
@@ -3865,13 +3865,13 @@ function KpiCard({ label, value, hint }: { label: string; value: string; hint?: 
 /** Cor do chip baseada na origem do lead (paleta segura, fallback cinza). */
 function corOrigem(origem: string): { bg: string; text: string; dot: string } {
   const s = (origem || "").toLowerCase();
-  if (s.includes("indica")) return { bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" };
-  if (s.includes("facebook") || s.includes("fb") || s.includes("instagram") || s.includes("meta")) return { bg: "bg-violet-100 dark:bg-violet-900/30", text: "text-violet-700 dark:text-violet-300", dot: "bg-violet-500" };
-  if (s.includes("google")) return { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-300", dot: "bg-blue-500" };
-  if (s.includes("site") || s.includes("organico")) return { bg: "bg-cyan-100 dark:bg-cyan-900/30", text: "text-cyan-700 dark:text-cyan-300", dot: "bg-cyan-500" };
-  if (s.includes("ligac") || s.includes("telefone") || s.includes("call")) return { bg: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300", dot: "bg-amber-500" };
-  if (s.includes("evento") || s.includes("present")) return { bg: "bg-pink-100 dark:bg-pink-900/30", text: "text-pink-700 dark:text-pink-300", dot: "bg-pink-500" };
-  return { bg: "bg-slate-100 dark:bg-slate-800/60", text: "text-slate-700 dark:text-slate-200", dot: "bg-slate-400" };
+  if (s.includes("indica")) return { bg: "bg-success-bg", text: "text-success-fg", dot: "bg-success" };
+  if (s.includes("facebook") || s.includes("fb") || s.includes("instagram") || s.includes("meta")) return { bg: "bg-info-bg", text: "text-info-fg", dot: "bg-info" };
+  if (s.includes("google")) return { bg: "bg-info-bg", text: "text-info-fg", dot: "bg-info" };
+  if (s.includes("site") || s.includes("organico")) return { bg: "bg-info-bg", text: "text-info-fg", dot: "bg-info" };
+  if (s.includes("ligac") || s.includes("telefone") || s.includes("call")) return { bg: "bg-warning-bg", text: "text-warning-fg", dot: "bg-warning" };
+  if (s.includes("evento") || s.includes("present")) return { bg: "bg-danger-bg", text: "text-danger-fg", dot: "bg-danger" };
+  return { bg: "bg-muted", text: "text-foreground", dot: "bg-muted-foreground/50" };
 }
 
 /** Badge contextual por etapa: diz o próximo passo pro atendente. */
@@ -3908,8 +3908,8 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
   const diasParado = lead.updatedAt ? Math.floor((Date.now() - new Date(lead.updatedAt).getTime()) / (24 * 60 * 60 * 1000)) : null;
   const paradoCls = diasParado === null || isGanho || isPerd
     ? "text-muted-foreground"
-    : diasParado > 7 ? "text-red-700 dark:text-red-300 font-semibold"
-    : diasParado > 3 ? "text-orange-700 dark:text-orange-300 font-semibold"
+    : diasParado > 7 ? "text-danger-fg font-semibold"
+    : diasParado > 3 ? "text-warning-fg font-semibold"
     : "text-muted-foreground";
 
   const acao = ACAO_POR_ETAPA[etapa];
@@ -3917,10 +3917,10 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
 
   // Background sutil pra Ganho/Perdido (mostra status do card só de bater o olho)
   const cardBg = isGanho
-    ? "bg-gradient-to-br from-emerald-50/70 dark:from-emerald-950/40 to-white dark:to-slate-900"
+    ? "bg-gradient-to-br from-success-bg/70 to-white dark:to-muted"
     : isPerd
-    ? "bg-gradient-to-br from-rose-50/70 dark:from-rose-950/40 to-white dark:to-slate-900"
-    : "bg-white dark:bg-card";
+    ? "bg-gradient-to-br from-danger-bg/70 to-white dark:to-muted"
+    : "bg-card";
 
   return (
     <div
@@ -3942,9 +3942,9 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
       style={{ borderLeftColor: hex, opacity: isDragging ? 0.4 : 1 }}
       onClick={() => { if (!isDragging) onOpen?.(); }}
       className={
-        "relative rounded-xl border border-l-[3px] shadow-sm hover:shadow-md hover:border-slate-400 transition-all cursor-pointer active:cursor-grabbing group " +
+        "relative rounded-xl border border-l-[3px] shadow-sm hover:shadow-md hover:border-border transition-all cursor-pointer active:cursor-grabbing group " +
         cardBg +
-        (isOver ? " ring-2 ring-violet-500 ring-offset-1 border-violet-300" : " border-slate-200 dark:border-slate-700/80") +
+        (isOver ? " ring-2 ring-info ring-offset-1 border-info/30" : " border-border") +
         (compacto ? " px-2.5 py-2" : " p-3")
       }
     >
@@ -3973,7 +3973,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
           {/* Valor + probabilidade */}
           <div className="flex items-center justify-between mt-1.5 gap-2">
             {v > 0 ? (
-              <span className={(compacto ? "text-[12px]" : "text-[13.5px]") + " font-extrabold text-emerald-700 dark:text-emerald-300 tabular-nums -tracking-tight"}>{formatBRL(v)}</span>
+              <span className={(compacto ? "text-[12px]" : "text-[13.5px]") + " font-extrabold text-success-fg tabular-nums -tracking-tight"}>{formatBRL(v)}</span>
             ) : (
               <span className="text-[10px] text-muted-foreground italic">sem valor</span>
             )}
@@ -3986,7 +3986,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
           {!compacto && lead.probabilidade > 0 && (
             <div className="h-1 rounded-full bg-muted overflow-hidden mt-1">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-amber-400 to-emerald-500 transition-all"
+                className="h-full rounded-full bg-gradient-to-r from-warning to-success transition-all"
                 style={{ width: lead.probabilidade + "%" }}
               />
             </div>
@@ -3997,8 +3997,8 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
             <div className={
               "mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase tracking-wide border " +
               (acao.tone === "emerald"
-                ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800/50"
-                : "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 border-amber-200 dark:border-amber-800/50")
+                ? "bg-success-bg text-success-fg border-success/30"
+                : "bg-warning-bg text-warning-fg border-warning/30")
             }>
               <span>{acao.emoji}</span> {acao.label}
             </div>
@@ -4035,7 +4035,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
             {lead.conversaId && (
               <Button
                 variant="ghost" size="sm"
-                className="h-6 px-1.5 text-[10px] text-blue-600 dark:text-blue-400"
+                className="h-6 px-1.5 text-[10px] text-info-fg"
                 title="Ir para conversa"
                 onClick={(e) => { e.stopPropagation(); onGoToConversa(lead.conversaId); }}
               >
@@ -4045,7 +4045,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
             {lead.contatoTelefone && onWA && (
               <Button
                 variant="ghost" size="sm"
-                className="h-6 w-6 p-0 text-emerald-600 dark:text-emerald-400"
+                className="h-6 w-6 p-0 text-success-fg"
                 title="WhatsApp"
                 onClick={(e) => { e.stopPropagation(); onWA(lead.contatoTelefone); }}
               >
@@ -4120,13 +4120,13 @@ function MotivoPerdaDialog({
               onClick={() => setEscolha(m.id)}
               className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-md border text-sm transition-colors ${
                 escolha === m.id
-                  ? "border-rose-400 bg-rose-50 dark:bg-rose-950/30 font-medium"
-                  : "border-slate-200 dark:border-slate-800 hover:bg-muted/40"
+                  ? "border-danger/30 bg-danger-bg font-medium"
+                  : "border-border hover:bg-muted/40"
               }`}
             >
               <span className="text-lg">{m.emoji}</span>
               <span className="flex-1">{m.label}</span>
-              {escolha === m.id && <Check className="h-4 w-4 text-rose-600 dark:text-rose-400" />}
+              {escolha === m.id && <Check className="h-4 w-4 text-danger-fg" />}
             </button>
           ))}
           <button
@@ -4134,13 +4134,13 @@ function MotivoPerdaDialog({
             onClick={() => setEscolha("outro")}
             className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-md border text-sm transition-colors ${
               escolha === "outro"
-                ? "border-rose-400 bg-rose-50 dark:bg-rose-950/30 font-medium"
-                : "border-slate-200 dark:border-slate-800 hover:bg-muted/40"
+                ? "border-danger/30 bg-danger-bg font-medium"
+                : "border-border hover:bg-muted/40"
             }`}
           >
             <span className="text-lg">✏️</span>
             <span className="flex-1">Outro motivo</span>
-            {escolha === "outro" && <Check className="h-4 w-4 text-rose-600 dark:text-rose-400" />}
+            {escolha === "outro" && <Check className="h-4 w-4 text-danger-fg" />}
           </button>
           {escolha === "outro" && (
             <Input
@@ -4159,7 +4159,7 @@ function MotivoPerdaDialog({
           <AlertDialogAction
             disabled={!podeConfirmar}
             onClick={(e) => { e.preventDefault(); if (podeConfirmar) onConfirm(motivoFinal); }}
-            className="bg-rose-600 text-white hover:bg-rose-700"
+            className="bg-danger text-danger-on hover:bg-danger"
           >
             Marcar como perdido
           </AlertDialogAction>

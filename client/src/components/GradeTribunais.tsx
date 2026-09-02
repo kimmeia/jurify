@@ -28,22 +28,22 @@ interface Props {
 
 const ESTILO = {
   ativa: {
-    caixa: "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/50 dark:bg-emerald-950/20",
-    nome: "text-emerald-900 dark:text-emerald-300",
-    texto: "text-emerald-700 dark:text-emerald-400",
-    ponto: "bg-emerald-500",
+    caixa: "border-success/30 bg-success-bg/70 dark:bg-success/20",
+    nome: "text-success-fg",
+    texto: "text-success-fg",
+    ponto: "bg-success",
   },
   erro: {
-    caixa: "border-rose-200 bg-rose-50/70 dark:border-rose-900/50 dark:bg-rose-950/20",
-    nome: "text-rose-800 dark:text-rose-300",
-    texto: "text-rose-700 dark:text-rose-400",
-    ponto: "bg-rose-500",
+    caixa: "border-danger/30 bg-danger-bg/70 dark:bg-danger/20",
+    nome: "text-danger-fg",
+    texto: "text-danger-fg",
+    ponto: "bg-danger",
   },
   nao_testado: {
-    caixa: "border-slate-200 dark:border-slate-800",
+    caixa: "border-border",
     nome: "",
     texto: "text-muted-foreground",
-    ponto: "bg-slate-300",
+    ponto: "bg-muted-foreground/50",
   },
 } as const;
 
@@ -94,15 +94,15 @@ export default function GradeTribunais({ tribunais, testando, onTestar }: Props)
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 pt-2.5 border-t text-[11px] text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span className="h-1.5 w-1.5 rounded-full bg-success" />
           {conta("ativa")} validados com login real
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+          <span className="h-1.5 w-1.5 rounded-full bg-danger" />
           {conta("erro")} falharam
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
           {conta("nao_testado")} nunca usados
         </span>
       </div>

@@ -68,7 +68,7 @@ function RoleBadge({
       <TooltipProvider delayDuration={150}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/15 cursor-help">
+            <Badge className="bg-success/15 text-success-fg border-success/30 hover:bg-success/15 cursor-help">
               <UsersIcon className="h-3 w-3 mr-1" />Colaborador
             </Badge>
           </TooltipTrigger>
@@ -85,7 +85,7 @@ function RoleBadge({
 
 function SubBadge({ active }: { active: boolean }) {
   return active
-    ? <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/15 text-[10px]">Ativa</Badge>
+    ? <Badge className="bg-success/15 text-success-fg border-success/30 hover:bg-success/15 text-[10px]">Ativa</Badge>
     : <Badge variant="outline" className="text-[10px]">Sem plano</Badge>;
 }
 
@@ -132,7 +132,7 @@ function SituacaoBadge({ u }: { u: any }) {
     case "ativa":
       return (
         <div>
-          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/15 text-[10px] font-bold">ATIVA</Badge>
+          <Badge className="bg-success/15 text-success-fg border-success/30 hover:bg-success/15 text-[10px] font-bold">ATIVA</Badge>
           {u.planNome && sub(`${u.planNome}${valor}`)}
         </div>
       );
@@ -151,14 +151,14 @@ function SituacaoBadge({ u }: { u: any }) {
     case "em_teste":
       return (
         <div>
-          <Badge className="bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/25 hover:bg-cyan-500/15 text-[10px] font-bold">EM TESTE</Badge>
+          <Badge className="bg-info/15 text-info-fg border-info/30 hover:bg-info/15 text-[10px] font-bold">EM TESTE</Badge>
           {sub(`${u.planNome ?? "trial"}${diaTrial}`)}
         </div>
       );
     case "teste_vencendo":
       return (
         <div>
-          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/15 text-[10px] font-bold uppercase">
+          <Badge className="bg-warning/15 text-warning-fg border-warning/30 hover:bg-warning/15 text-[10px] font-bold uppercase">
             Teste {venceCurto(u.trialExpiraEm)}
           </Badge>
           {sub(`${u.planNome ?? "trial"}${diaTrial}`)}
@@ -168,7 +168,7 @@ function SituacaoBadge({ u }: { u: any }) {
       const d = u.trialExpiraEm ? diasDesde(u.trialExpiraEm) : 0;
       return (
         <div>
-          <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30 hover:bg-rose-500/15 text-[10px] font-bold">
+          <Badge className="bg-danger/15 text-danger-fg border-danger/30 hover:bg-danger/15 text-[10px] font-bold">
             TESTE VENCEU{d > 0 ? ` HÁ ${d}D` : " HOJE"}
           </Badge>
           {sub("não virou cliente — remarketing")}
@@ -179,7 +179,7 @@ function SituacaoBadge({ u }: { u: any }) {
       const d = diasDesde(u.createdAt);
       return (
         <div>
-          <Badge className="bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30 hover:bg-violet-500/15 text-[10px] font-bold">
+          <Badge className="bg-info/15 text-info-fg border-info/30 hover:bg-info/15 text-[10px] font-bold">
             CADASTROU · NUNCA ATIVOU
           </Badge>
           {sub(d === 0 ? "cadastrou hoje" : d === 1 ? "cadastrou ontem" : `cadastrou há ${d} dias`)}
@@ -222,7 +222,7 @@ function ContatoComercialCell({ u, onSalvo }: { u: any; onSalvo: () => void }) {
         <Button
           size="sm"
           variant="outline"
-          className={`h-7 text-[11px] ${jaFalou ? "border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300" : ""}`}
+          className={`h-7 text-[11px] ${jaFalou ? "border-success/30 text-success-fg" : ""}`}
           onClick={(e) => e.stopPropagation()}
         >
           {jaFalou
@@ -238,7 +238,7 @@ function ContatoComercialCell({ u, onSalvo }: { u: any; onSalvo: () => void }) {
               key={c}
               className={`flex-1 rounded-lg border px-1 py-1.5 text-[10px] font-bold ${
                 canal === c
-                  ? "border-violet-400 bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                  ? "border-info/30 bg-info-bg text-info-fg dark:text-info"
                   : "text-muted-foreground"
               }`}
               onClick={() => setCanal(c)}
@@ -399,11 +399,11 @@ function CriarClienteDialog({ open, onOpenChange, onCriado }: {
                       key={o.k}
                       type="button"
                       className={`rounded-xl border p-2.5 text-left ${
-                        acesso === o.k ? "border-violet-400 bg-violet-50 dark:bg-violet-950/30" : ""
+                        acesso === o.k ? "border-info/30 bg-info-bg" : ""
                       }`}
                       onClick={() => setAcesso(o.k)}
                     >
-                      <p className={`text-xs font-bold ${acesso === o.k ? "text-violet-700 dark:text-violet-300" : ""}`}>{o.t}</p>
+                      <p className={`text-xs font-bold ${acesso === o.k ? "text-info-fg" : ""}`}>{o.t}</p>
                       <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{o.d}</p>
                     </button>
                   ))}
@@ -431,9 +431,9 @@ function CriarClienteDialog({ open, onOpenChange, onCriado }: {
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle className="text-emerald-700 dark:text-emerald-400">✅ Conta criada — pronta pra usar</DialogTitle>
+              <DialogTitle className="text-success-fg">✅ Conta criada — pronta pra usar</DialogTitle>
             </DialogHeader>
-            <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/20 p-3 space-y-2">
+            <div className="rounded-xl border border-success/30 bg-success-bg/60 p-3 space-y-2">
               {[
                 { rotulo: "Link", valor: linkApp },
                 { rotulo: "Login", valor: email.trim().toLowerCase() },
@@ -473,24 +473,24 @@ function FunilCards({ funil, onEscolher }: { funil: FunilKey | undefined; onEsco
       n: data?.nuncaAtivou.total ?? 0,
       titulo: "Cadastraram e não ativaram",
       desc: "criaram conta e pararam — o contato de boas-vindas fecha venda",
-      cor: "border-l-violet-500",
-      corNum: "text-violet-700 dark:text-violet-300",
+      cor: "border-l-info",
+      corNum: "text-info-fg",
     },
     {
       key: "teste_vencendo",
       n: data?.testeVencendo.total ?? 0,
       titulo: "Teste vencendo esta semana",
       desc: "é a melhor hora de fechar o valor",
-      cor: "border-l-amber-500",
-      corNum: "text-amber-600 dark:text-amber-400",
+      cor: "border-l-warning",
+      corNum: "text-warning-fg",
     },
     {
       key: "teste_vencido",
       n: data?.testeVencido.total ?? 0,
       titulo: "Teste venceu sem virar cliente",
       desc: "remarketing — marcar contato tira da conta",
-      cor: "border-l-rose-500",
-      corNum: "text-rose-600 dark:text-rose-400",
+      cor: "border-l-danger",
+      corNum: "text-danger-fg",
     },
   ];
   const totalEsperando = cards.reduce((s, c) => s + c.n, 0);
@@ -505,7 +505,7 @@ function FunilCards({ funil, onEscolher }: { funil: FunilKey | undefined; onEsco
           <Card
             key={c.key}
             className={`border-l-4 ${c.cor} cursor-pointer transition-shadow hover:shadow-sm ${
-              funil === c.key ? "ring-2 ring-violet-500" : ""
+              funil === c.key ? "ring-2 ring-info" : ""
             } ${c.n === 0 ? "opacity-60" : ""}`}
             onClick={() => onEscolher(funil === c.key ? undefined : c.key)}
           >
@@ -541,11 +541,11 @@ const CATEGORIA_LABELS: Record<string, string> = {
 };
 
 const CATEGORIA_CORES: Record<string, string> = {
-  geral: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
-  financeiro: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  suporte: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
-  comercial: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
-  alerta: "bg-red-500/15 text-red-700 dark:text-red-300",
+  geral: "bg-muted-foreground/15 text-foreground",
+  financeiro: "bg-success/15 text-success-fg",
+  suporte: "bg-info/15 text-info-fg",
+  comercial: "bg-info/15 text-info-fg",
+  alerta: "bg-danger/15 text-danger-fg",
 };
 
 function fmtBRLAdmin(v: number): string {
@@ -845,11 +845,11 @@ function ClienteDetalheDialog({
       ) : data ? (
         <>
           {/* ═══════════ HERO ═══════════ */}
-          <div className="rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 p-7 text-white relative overflow-hidden shadow-lg">
+          <div className="rounded-2xl bg-info p-7 text-info-on relative overflow-hidden shadow-lg">
             <UsersIcon className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
             <div className="relative">
               <div className="flex items-start gap-5 mb-5 flex-wrap">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-2xl font-bold shrink-0 shadow-lg ring-4 ring-white/20 tracking-tight">
+                <div className="w-20 h-20 rounded-2xl bg-info text-info-on flex items-center justify-center text-2xl font-bold shrink-0 shadow-lg ring-4 ring-white/20 tracking-tight">
                   {iniciais}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -861,7 +861,7 @@ function ClienteDetalheDialog({
                       </span>
                     )}
                     {sub ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-400/25 text-emerald-50 border border-emerald-300/30">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-success/25 text-success-fg border border-success/30">
                         Assinatura {sub.status}
                       </span>
                     ) : (
@@ -870,7 +870,7 @@ function ClienteDetalheDialog({
                       </span>
                     )}
                     {isBloqueado && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-400/30 text-rose-50 border border-rose-300/40">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-danger/30 text-danger-fg border border-danger/30">
                         <Lock className="w-3 h-3" /> Bloqueado
                       </span>
                     )}
@@ -911,7 +911,7 @@ function ClienteDetalheDialog({
                       variant="ghost" size="sm"
                       disabled={desbloquearMut.isPending}
                       onClick={() => desbloquearMut.mutate({ userId: current! })}
-                      className="text-emerald-50 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-300/35 backdrop-blur-sm shadow-sm h-8 text-xs"
+                      className="text-success-fg bg-success/20 hover:bg-success/30 border border-success/30 backdrop-blur-sm shadow-sm h-8 text-xs"
                     >
                       <Unlock className="w-3.5 h-3.5 mr-1" /> Desbloquear
                     </Button>
@@ -919,7 +919,7 @@ function ClienteDetalheDialog({
                     <Button
                       variant="ghost" size="sm"
                       onClick={() => setBloquearOpen(true)}
-                      className="text-rose-100 bg-rose-500/15 hover:bg-rose-500/30 border border-rose-300/35 backdrop-blur-sm shadow-sm h-8 text-xs"
+                      className="text-danger-fg bg-danger/15 hover:bg-danger/30 border border-danger/30 backdrop-blur-sm shadow-sm h-8 text-xs"
                     >
                       <Lock className="w-3.5 h-3.5 mr-1" /> Bloquear
                     </Button>
@@ -950,35 +950,35 @@ function ClienteDetalheDialog({
           </div>
 
           {isBloqueado && user?.motivoBloqueio && (
-            <div className="flex items-start gap-2 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-700 dark:text-red-300">
+            <div className="flex items-start gap-2 rounded-lg bg-danger/10 border border-danger/30 p-3 text-xs text-danger-fg">
               <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
               <div>
                 <strong>Bloqueado:</strong> {user.motivoBloqueio}
                 {user.bloqueadoEm && (
-                  <span className="text-red-600/70 dark:text-red-400 ml-1">({new Date(user.bloqueadoEm).toLocaleDateString("pt-BR")})</span>
+                  <span className="text-danger-fg/70 ml-1">({new Date(user.bloqueadoEm).toLocaleDateString("pt-BR")})</span>
                 )}
               </div>
             </div>
           )}
 
           <Tabs defaultValue="detalhes" className="w-full">
-            <div className="bg-slate-50/80 dark:bg-slate-900/70 backdrop-blur-sm border border-slate-200 dark:border-slate-700/80 rounded-xl p-1.5 inline-flex">
+            <div className="bg-muted/80 backdrop-blur-sm border border-border rounded-xl p-1.5 inline-flex">
               <TabsList className="bg-transparent gap-1 p-0 h-auto flex-wrap">
-                <TabsTrigger value="detalhes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg">
+                <TabsTrigger value="detalhes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-foreground/80 data-[state=active]:shadow-sm rounded-lg">
                   <User className="h-3.5 w-3.5" /> Detalhes
                 </TabsTrigger>
                 {temEquipe && (
-                  <TabsTrigger value="equipe" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg">
+                  <TabsTrigger value="equipe" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-foreground/80 data-[state=active]:shadow-sm rounded-lg">
                     <UsersIcon className="h-3.5 w-3.5" /> Equipe ({data.colaboradores!.length})
                   </TabsTrigger>
                 )}
-                <TabsTrigger value="assinatura" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg">
+                <TabsTrigger value="assinatura" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-foreground/80 data-[state=active]:shadow-sm rounded-lg">
                   <CreditCard className="h-3.5 w-3.5" /> Assinatura
                 </TabsTrigger>
-                <TabsTrigger value="notas" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg">
+                <TabsTrigger value="notas" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-foreground/80 data-[state=active]:shadow-sm rounded-lg">
                   <MessageSquarePlus className="h-3.5 w-3.5" /> Notas {notas && notas.length > 0 ? `(${notas.length})` : ""}
                 </TabsTrigger>
-                <TabsTrigger value="acoes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg">
+                <TabsTrigger value="acoes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-foreground/80 data-[state=active]:shadow-sm rounded-lg">
                   <ShieldCheck className="h-3.5 w-3.5" /> Ações
                 </TabsTrigger>
               </TabsList>
@@ -1015,7 +1015,7 @@ function ClienteDetalheDialog({
                       {(sub as any).valorNegociadoCentavos != null && (
                         <div>
                           <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Valor fechado</p>
-                          <p className="font-semibold mt-0.5 text-violet-700 dark:text-violet-300">
+                          <p className="font-semibold mt-0.5 text-info-fg">
                             {fmtBRLAdmin((sub as any).valorNegociadoCentavos / 100)}/mês
                           </p>
                         </div>
@@ -1031,12 +1031,12 @@ function ClienteDetalheDialog({
                         <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Trocar plano
                       </Button>
                       {!sub.cortesia && (
-                        <Button size="sm" variant="outline" className="border-emerald-500/50 text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-emerald-200 hover:bg-emerald-500/10" onClick={() => setCortesiaOpen(true)}>
+                        <Button size="sm" variant="outline" className="border-success/30 text-success-fg hover:text-success-fg hover:bg-success/10" onClick={() => setCortesiaOpen(true)}>
                           <Gift className="h-3.5 w-3.5 mr-1.5" /> Marcar cortesia
                         </Button>
                       )}
                       {sub.status !== "canceled" && (
-                        <Button size="sm" variant="outline" className="border-rose-500/50 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-500/10" onClick={() => setCancelarOpen(true)}>
+                        <Button size="sm" variant="outline" className="border-danger/30 text-danger-fg hover:text-danger-fg hover:bg-danger/10" onClick={() => setCancelarOpen(true)}>
                           <AlertCircle className="h-3.5 w-3.5 mr-1.5" /> Cancelar assinatura
                         </Button>
                       )}
@@ -1051,7 +1051,7 @@ function ClienteDetalheDialog({
                       <Button size="sm" onClick={() => setAtivarOpen(true)}>
                         <DollarSign className="h-3.5 w-3.5 mr-1.5" /> Ativar assinatura paga
                       </Button>
-                      <Button size="sm" variant="outline" className="border-emerald-500/50 text-emerald-700 dark:text-emerald-300" onClick={() => setCortesiaOpen(true)}>
+                      <Button size="sm" variant="outline" className="border-success/30 text-success-fg" onClick={() => setCortesiaOpen(true)}>
                         <Gift className="h-3.5 w-3.5 mr-1.5" /> Marcar cortesia
                       </Button>
                     </div>
@@ -1085,9 +1085,9 @@ function ClienteDetalheDialog({
                   <>
                     {cobrancasData.resumo && (
                       <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="rounded-lg bg-emerald-500/10 p-2"><p className="text-[10px] text-emerald-700 dark:text-emerald-300 uppercase">Pago</p><p className="text-sm font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.pago)}</p></div>
-                        <div className="rounded-lg bg-amber-500/10 p-2"><p className="text-[10px] text-amber-700 dark:text-amber-300 uppercase">Pendente</p><p className="text-sm font-bold text-amber-700 dark:text-amber-300 tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.pendente)}</p></div>
-                        <div className="rounded-lg bg-rose-500/10 p-2"><p className="text-[10px] text-rose-700 dark:text-rose-300 uppercase">Vencido</p><p className="text-sm font-bold text-rose-700 dark:text-rose-300 tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.vencido)}</p></div>
+                        <div className="rounded-lg bg-success/10 p-2"><p className="text-[10px] text-success-fg uppercase">Pago</p><p className="text-sm font-bold text-success-fg tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.pago)}</p></div>
+                        <div className="rounded-lg bg-warning/10 p-2"><p className="text-[10px] text-warning-fg uppercase">Pendente</p><p className="text-sm font-bold text-warning-fg tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.pendente)}</p></div>
+                        <div className="rounded-lg bg-danger/10 p-2"><p className="text-[10px] text-danger-fg uppercase">Vencido</p><p className="text-sm font-bold text-danger-fg tabular-nums">{fmtBRLAdmin(cobrancasData.resumo.vencido)}</p></div>
                       </div>
                     )}
                     {cobrancasData.cobrancas.length > 0 ? (
@@ -1137,7 +1137,7 @@ function ClienteDetalheDialog({
                         <div className="flex items-center gap-1.5">
                           <p className="text-sm font-medium truncate">{c.name || "—"}</p>
                           {c.ehDono && (
-                            <Badge className="bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/25 text-[9px] px-1">
+                            <Badge className="bg-info/15 text-info-fg border-info/30 text-[9px] px-1">
                               <Crown className="h-2 w-2 mr-0.5" /> Dono
                             </Badge>
                           )}
@@ -1189,14 +1189,14 @@ function ClienteDetalheDialog({
                     <Badge variant="outline" className="text-[9px] ml-auto">Escritório</Badge>
                   )}
                   {(data as any)?.creditsSource === "legacy" && (
-                    <Badge variant="outline" className="text-[9px] ml-auto bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50">Legacy</Badge>
+                    <Badge variant="outline" className="text-[9px] ml-auto bg-warning-bg text-warning-fg border-warning/30">Legacy</Badge>
                   )}
                 </div>
                 {credits ? (
                   <div className="text-sm space-y-1">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Disponíveis:</span>
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                      <span className="font-bold text-success-fg">
                         {(credits as any).saldo ?? ((credits.creditsTotal ?? 0) - (credits.creditsUsed ?? 0))}
                       </span>
                     </div>
@@ -1418,9 +1418,9 @@ function ClienteDetalheDialog({
 
             {/* TAB 3: AÇÕES (impersonate, bloquear) */}
             <TabsContent value="acoes" className="space-y-3 py-3">
-              <div className={`border rounded-lg p-4 space-y-2 ${sub?.cortesia ? "border-emerald-500/40 bg-emerald-500/5" : ""}`}>
+              <div className={`border rounded-lg p-4 space-y-2 ${sub?.cortesia ? "border-success/30 bg-success/5" : ""}`}>
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <Gift className={`h-4 w-4 ${sub?.cortesia ? "text-emerald-600 dark:text-emerald-400" : "text-emerald-700 dark:text-emerald-300"}`} />
+                  <Gift className={`h-4 w-4 ${sub?.cortesia ? "text-success-fg" : "text-success-fg"}`} />
                   {sub?.cortesia ? "Cortesia ativa" : "Marcar como cortesia"}
                 </div>
                 {sub?.cortesia ? (
@@ -1448,7 +1448,7 @@ function ClienteDetalheDialog({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full border-amber-500/50 text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 hover:bg-amber-500/10"
+                    className="w-full border-warning/30 text-warning-fg hover:text-warning-fg hover:bg-warning/10"
                     onClick={() => setRemoverCortesiaOpen(true)}
                   >
                     <Gift className="h-3.5 w-3.5 mr-1.5" />
@@ -1458,7 +1458,7 @@ function ClienteDetalheDialog({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full border-emerald-500/50 text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-emerald-200 hover:bg-emerald-500/10"
+                    className="w-full border-success/30 text-success-fg hover:text-success-fg hover:bg-success/10"
                     onClick={() => setCortesiaOpen(true)}
                   >
                     <Gift className="h-3.5 w-3.5 mr-1.5" />
@@ -1469,7 +1469,7 @@ function ClienteDetalheDialog({
 
               <div className="border rounded-lg p-4 space-y-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <LogIn className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <LogIn className="h-4 w-4 text-info-fg" />
                   Entrar como este cliente
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -1496,7 +1496,7 @@ function ClienteDetalheDialog({
 
               <div className="border rounded-lg p-4 space-y-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <RotateCcw className="h-4 w-4 text-warning-fg" />
                   Resetar senha
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -1535,7 +1535,7 @@ function ClienteDetalheDialog({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full border-emerald-600/50 text-emerald-700 dark:text-emerald-300"
+                    className="w-full border-success/30 text-success-fg"
                     disabled={desbloquearMut.isPending}
                     onClick={() => desbloquearMut.mutate({ userId: current! })}
                   >
@@ -1713,17 +1713,17 @@ function ClienteDetalheDialog({
               <div className="space-y-2">
                 <p>Libera acesso sem mexer no Asaas.</p>
                 {!sub && (
-                  <p className="text-amber-700 dark:text-amber-300">
+                  <p className="text-warning-fg">
                     Cliente não tem assinatura — uma será criada virtualmente, marcada como cortesia.
                   </p>
                 )}
                 {data?.isDonoEscritorio && (data?.colabsCount ?? 0) > 1 && (
-                  <p className="rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-200 p-2 text-xs">
+                  <p className="rounded-md bg-success-bg border border-success/30 text-success-fg p-2 text-xs">
                     <b>Afeta o escritório inteiro:</b> este user é o dono. Cortesia aqui libera acesso pra todos os <b>{data.colabsCount} colaboradores</b> do escritório.
                   </p>
                 )}
                 {!data?.isDonoEscritorio && data?.donoDoEscritorio && (
-                  <p className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-200 p-2 text-xs">
+                  <p className="rounded-md bg-warning-bg border border-warning/30 text-warning-fg p-2 text-xs">
                     <b>Cortesia individual:</b> este user é colaborador. Vai liberar acesso só pra ele. Pra liberar o escritório todo, ative a cortesia no dono <b>{data.donoDoEscritorio.name || data.donoDoEscritorio.email}</b>.
                   </p>
                 )}
@@ -1752,7 +1752,7 @@ function ClienteDetalheDialog({
           <AlertDialogFooter>
             <AlertDialogCancel>Voltar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="bg-success hover:bg-success text-success-on"
               disabled={motivoCortesia.trim().length < 3 || marcarCortesiaUserMut.isPending}
               onClick={() => {
                 const expira = expiraEmCortesia
@@ -1791,7 +1791,7 @@ function ClienteDetalheDialog({
           <AlertDialogFooter>
             <AlertDialogCancel>Voltar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-amber-600 hover:bg-amber-700 text-white"
+              className="bg-warning hover:bg-warning text-warning-on"
               disabled={motivoRemocaoCortesia.trim().length < 3 || removerCortesiaUserMut.isPending}
               onClick={() => {
                 removerCortesiaUserMut.mutate({
@@ -1828,7 +1828,7 @@ function ClienteDetalheDialog({
             <AlertDialogCancel disabled={cancelarSubMut.isPending}>Voltar</AlertDialogCancel>
             <AlertDialogAction
               disabled={cancelarSubMut.isPending || motivoCancelamento.trim().length < 3 || !sub?.id}
-              className="bg-rose-600 hover:bg-rose-700"
+              className="bg-danger hover:bg-danger"
               onClick={(e) => {
                 e.preventDefault();
                 if (!sub?.id) return;
@@ -1923,7 +1923,7 @@ function ClienteDetalheDialog({
                 <Button size="sm" variant={ativarCiclo === "yearly" ? "default" : "ghost"} className="h-7 text-xs" onClick={() => setAtivarCiclo("yearly")}>Anual</Button>
               </div>
             </div>
-            <div className="rounded-lg border border-violet-200 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-950/30 p-3 text-xs text-violet-900 dark:text-violet-200 leading-relaxed">
+            <div className="rounded-lg border border-info/30 bg-info-bg/70 p-3 text-xs text-info-fg leading-relaxed">
               <b>O que acontece ao confirmar:</b> o cliente ganha 7 dias pra pagar sem perder o
               acesso; o pagamento ativa a assinatura de vez. O valor fica gravado como o preço{" "}
               <b>deste</b> cliente — o painel calcula receita e divergência com ele, não com o
@@ -2046,7 +2046,7 @@ export default function AdminClients() {
               <CardDescription>
                 {total.toLocaleString("pt-BR")} {funil ? (total === 1 ? "advogado · " : "advogados · ") : ""}
                 {funil ? (
-                  <button className="text-violet-700 dark:text-violet-400 font-semibold hover:underline" onClick={() => { setFunil(undefined); setPagina(0); }}>
+                  <button className="text-info-fg font-semibold hover:underline" onClick={() => { setFunil(undefined); setPagina(0); }}>
                     limpar filtro
                   </button>
                 ) : (
@@ -2120,7 +2120,7 @@ export default function AdminClients() {
                       <div className="flex items-center gap-2">
                         {/* Ponto roxo = cadastro dos últimos 7 dias: o olho acha o novo. */}
                         {u.tipoUsuario === "cliente" && diasDesde(u.createdAt) < 7 && (
-                          <span className="h-2 w-2 rounded-full bg-violet-500 shrink-0" />
+                          <span className="h-2 w-2 rounded-full bg-info shrink-0" />
                         )}
                         <span className="font-medium">{u.name || "—"}</span>
                         {u.tipoUsuario !== "cliente" && (

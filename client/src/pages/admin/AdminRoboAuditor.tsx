@@ -35,17 +35,17 @@ const SEVERIDADE_LABEL: Record<Severidade, string> = {
 };
 
 const SEVERIDADE_COR: Record<Severidade, string> = {
-  critico: "text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20",
-  alto: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20",
-  medio: "text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
-  baixo: "text-slate-500 bg-slate-500/10 border-slate-500/20",
+  critico: "text-danger-fg bg-danger/10 border-danger/30",
+  alto: "text-warning-fg bg-warning/10 border-warning/30",
+  medio: "text-info-fg bg-info/10 border-info/30",
+  baixo: "text-muted-foreground bg-muted-foreground/10 border-border/20",
 };
 
 const SEVERIDADE_PONTO: Record<Severidade, string> = {
-  critico: "bg-red-500",
-  alto: "bg-amber-500",
-  medio: "bg-cyan-500",
-  baixo: "bg-slate-300",
+  critico: "bg-danger",
+  alto: "bg-warning",
+  medio: "bg-info",
+  baixo: "bg-muted-foreground/50",
 };
 
 const NIVEL_TEXTO: Record<string, string> = {
@@ -103,8 +103,8 @@ export default function AdminRoboAuditor() {
         </Button>
       </div>
 
-      <div className="flex items-start gap-3 rounded-lg border border-violet-500/20 bg-violet-500/5 px-4 py-3">
-        <Eye className="h-4 w-4 text-violet-600 dark:text-violet-400 mt-0.5 shrink-0" />
+      <div className="flex items-start gap-3 rounded-lg border border-info/30 bg-info/5 px-4 py-3">
+        <Eye className="h-4 w-4 text-info-fg mt-0.5 shrink-0" />
         <div className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">Shadow mode.</span> Todas as regras estão em
           observação: o robô só relata. A correção fica descrita em cada achado, mas não existe
@@ -120,13 +120,13 @@ export default function AdminRoboAuditor() {
           <Tile
             titulo="Invariantes violadas"
             valor={resumo.achados}
-            cor={resumo.achados > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}
+            cor={resumo.achados > 0 ? "text-warning-fg" : "text-success-fg"}
           />
           <Tile titulo="Linhas afetadas" valor={resumo.linhasAfetadas} />
           <Tile
             titulo="Regras com erro"
             valor={resumo.regrasComErro}
-            cor={resumo.regrasComErro > 0 ? "text-red-600 dark:text-red-400" : undefined}
+            cor={resumo.regrasComErro > 0 ? "text-danger-fg" : undefined}
           />
         </div>
       )}
@@ -157,14 +157,14 @@ export default function AdminRoboAuditor() {
                         onClick={() => setSelecionado(a.regra.id)}
                         className={cn(
                           "w-full text-left px-4 py-3 border-b flex items-start gap-3 transition-colors",
-                          ativo ? "bg-violet-500/5" : "hover:bg-muted/50",
+                          ativo ? "bg-info/5" : "hover:bg-muted/50",
                         )}
                       >
                         <span
                           className={cn(
                             "h-2 w-2 rounded-full mt-1.5 shrink-0",
                             a.ok
-                              ? "bg-emerald-500"
+                              ? "bg-success"
                               : SEVERIDADE_PONTO[a.regra.severidade as Severidade],
                           )}
                         />
@@ -230,8 +230,8 @@ function UltimaAutomatica({
 
   if (!varredura) {
     return (
-      <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
-        <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+      <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3">
+        <Clock className="h-4 w-4 text-warning-fg mt-0.5 shrink-0" />
         <div className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">Nenhuma varredura automática registrada.</span>{" "}
           O robô roda 2 min após a partida do servidor e de hora em hora. Se isso persistir depois de
@@ -255,18 +255,18 @@ function UltimaAutomatica({
         {varredura.regrasExecutadas} regras em {varredura.latenciaMs} ms
       </span>
       {limpo ? (
-        <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20">
+        <Badge variant="outline" className="text-success-fg bg-success/10 border-success/30">
           <CheckCircle2 className="h-3 w-3 mr-1" />
           Sem achados
         </Badge>
       ) : (
         <>
-          <Badge variant="outline" className="text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20">
+          <Badge variant="outline" className="text-warning-fg bg-warning/10 border-warning/30">
             {varredura.achados} {varredura.achados === 1 ? "invariante violada" : "invariantes violadas"} ·{" "}
             {varredura.linhasAfetadas} linhas
           </Badge>
           {varredura.regrasComErro > 0 && (
-            <Badge variant="outline" className="text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20">
+            <Badge variant="outline" className="text-danger-fg bg-danger/10 border-danger/30">
               <XCircle className="h-3 w-3 mr-1" />
               {varredura.regrasComErro} regra(s) falhando
             </Badge>
@@ -292,7 +292,7 @@ function Tile({ titulo, valor, cor }: { titulo: string; valor: number; cor?: str
 function EstadoBadge({ ok, erro, total }: { ok: boolean; erro: boolean; total: number }) {
   if (erro) {
     return (
-      <Badge variant="outline" className="text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20 shrink-0">
+      <Badge variant="outline" className="text-danger-fg bg-danger/10 border-danger/30 shrink-0">
         <XCircle className="h-3 w-3 mr-1" />
         Falhou
       </Badge>
@@ -302,7 +302,7 @@ function EstadoBadge({ ok, erro, total }: { ok: boolean; erro: boolean; total: n
     return (
       <Badge
         variant="outline"
-        className="text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20 shrink-0"
+        className="text-success-fg bg-success/10 border-success/30 shrink-0"
       >
         <CheckCircle2 className="h-3 w-3 mr-1" />
         Limpo
@@ -310,7 +310,7 @@ function EstadoBadge({ ok, erro, total }: { ok: boolean; erro: boolean; total: n
     );
   }
   return (
-    <Badge variant="outline" className="text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20 shrink-0">
+    <Badge variant="outline" className="text-warning-fg bg-warning/10 border-warning/30 shrink-0">
       {total} {total === 1 ? "linha" : "linhas"}
     </Badge>
   );
@@ -341,8 +341,8 @@ function Detalhe({ achado }: { achado: Achado }) {
               <code className="font-medium">{regra.tabela}</code>
             </p>
           </div>
-          <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 px-3 py-2 text-right">
-            <div className="text-xs font-semibold text-violet-700 dark:text-violet-300">
+          <div className="rounded-lg border border-info/30 bg-info/5 px-3 py-2 text-right">
+            <div className="text-xs font-semibold text-info-fg">
               {NIVEL_TEXTO[regra.nivel] ?? regra.nivel}
             </div>
             {regra.shadow && (
@@ -362,8 +362,8 @@ function Detalhe({ achado }: { achado: Achado }) {
         </Secao>
 
         {erro ? (
-          <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-red-600 dark:text-red-400">
+          <div className="rounded-lg border border-danger/30 bg-danger/5 p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-danger-fg">
               <ShieldAlert className="h-4 w-4" />A regra falhou ao executar
             </div>
             <p className="text-xs text-muted-foreground mt-2 font-mono break-all">{erro}</p>
@@ -373,14 +373,14 @@ function Detalhe({ achado }: { achado: Achado }) {
             </p>
           </div>
         ) : ok ? (
-          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
+          <div className="rounded-lg border border-success/30 bg-success/5 p-4 flex items-center gap-2 text-sm text-success-fg">
             <CheckCircle2 className="h-4 w-4" />
             Nenhuma linha viola essa invariante.
           </div>
         ) : (
           <Secao titulo={`Linhas em violação (${linhas.length}${truncado ? "+" : ""})`}>
             {truncado && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
+              <p className="text-xs text-warning-fg mb-2">
                 A consulta bateu no limite de linhas. Volume alto costuma ser bug de código, não dado
                 sujo pontual.
               </p>

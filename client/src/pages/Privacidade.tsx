@@ -11,7 +11,7 @@ const ATUALIZADO_EM = "24 de agosto de 2026";
 export default function Privacidade() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
-      <Link href="/" className="text-sm text-violet-600 hover:underline">&larr; Voltar</Link>
+      <Link href="/" className="text-sm text-info-fg hover:underline">&larr; Voltar</Link>
       <h1 className="text-3xl font-bold mt-4 mb-2">Política de Privacidade</h1>
       <p className="text-sm text-muted-foreground mb-8">Última atualização: {ATUALIZADO_EM}</p>
 
@@ -96,7 +96,7 @@ export default function Privacidade() {
           automações configuradas por você. Não os usamos pra publicidade,
           não os vendemos e não os compartilhamos com terceiros fora dos
           operadores listados acima. O tratamento segue os{" "}
-          <a href="https://developers.facebook.com/terms/" target="_blank" rel="noreferrer" className="text-violet-600 hover:underline">Termos da Plataforma Meta</a>.
+          <a href="https://developers.facebook.com/terms/" target="_blank" rel="noreferrer" className="text-info-fg hover:underline">Termos da Plataforma Meta</a>.
           Ao desconectar o canal, os tokens de acesso são revogados e
           excluídos; o histórico de conversas segue a política de retenção
           da sua conta (seção 8).
@@ -113,14 +113,14 @@ export default function Privacidade() {
           <li>Solicitar portabilidade pra outro fornecedor.</li>
         </ul>
         <p>
-          Pra exercer: envie email pra <a href="mailto:privacidade@juridflow.com.br" className="text-violet-600 hover:underline">privacidade@juridflow.com.br</a>.
+          Pra exercer: envie email pra <a href="mailto:privacidade@juridflow.com.br" className="text-info-fg hover:underline">privacidade@juridflow.com.br</a>.
           Atendemos em até 15 dias úteis.
         </p>
 
         <h2 id="exclusao-de-dados" className="text-xl font-semibold pt-4">7. Exclusão de dados</h2>
         <p>Pra solicitar a exclusão dos seus dados (incluindo dados obtidos via WhatsApp/Meta):</p>
         <ol className="list-decimal pl-6">
-          <li>Envie um email pra <a href="mailto:privacidade@juridflow.com.br" className="text-violet-600 hover:underline">privacidade@juridflow.com.br</a> com o assunto &ldquo;Exclusão de dados&rdquo;, a partir do email cadastrado na conta; ou</li>
+          <li>Envie um email pra <a href="mailto:privacidade@juridflow.com.br" className="text-info-fg hover:underline">privacidade@juridflow.com.br</a> com o assunto &ldquo;Exclusão de dados&rdquo;, a partir do email cadastrado na conta; ou</li>
           <li>Cancele sua conta em Configurações &gt; Meu Plano &mdash; após o período de exportação de 60 dias, todos os dados são excluídos automaticamente.</li>
         </ol>
         <p>
@@ -160,7 +160,7 @@ export default function Privacidade() {
         <h2 className="text-xl font-semibold pt-4">12. Encarregado de Dados (DPO)</h2>
         <p>
           Encarregado: <em>a definir</em>. Contato:{" "}
-          <a href="mailto:privacidade@juridflow.com.br" className="text-violet-600 hover:underline">privacidade@juridflow.com.br</a>.
+          <a href="mailto:privacidade@juridflow.com.br" className="text-info-fg hover:underline">privacidade@juridflow.com.br</a>.
         </p>
 
         <h2 className="text-xl font-semibold pt-4">13. ANPD</h2>

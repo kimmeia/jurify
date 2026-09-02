@@ -73,7 +73,7 @@ export default function RevisarOrfasPage() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <AlertTriangle className="h-4 w-4 text-warning-fg" />
             Como isso aconteceu?
           </CardTitle>
         </CardHeader>
@@ -101,7 +101,7 @@ export default function RevisarOrfasPage() {
       {!isLoading && orfas.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            <UserPlus className="h-10 w-10 mx-auto mb-3 text-emerald-500 opacity-60" />
+            <UserPlus className="h-10 w-10 mx-auto mb-3 text-success opacity-60" />
             Nenhuma cobrança órfã. 🎉
             <p className="text-xs mt-2">
               Toda cobrança recebida está vinculada a um cliente do CRM.
@@ -221,7 +221,7 @@ function GrupoOrfa({
                   onClick={() => setSelecionado({ id: c.id, nome: c.nome })}
                   className={
                     "w-full text-left p-2 text-xs hover:bg-accent border-b last:border-b-0 " +
-                    (selecionado?.id === c.id ? "bg-emerald-50 dark:bg-emerald-950/30" : "")
+                    (selecionado?.id === c.id ? "bg-success-bg" : "")
                   }
                 >
                   <div className="font-medium">{c.nome}</div>

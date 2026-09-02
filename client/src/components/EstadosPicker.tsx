@@ -31,7 +31,7 @@ export function EstadosPicker({
         </span>
         <button
           type="button"
-          className="text-[11px] font-semibold text-violet-700 dark:text-violet-400 hover:underline"
+          className="text-[11px] font-semibold text-info-fg hover:underline"
           onClick={() =>
             onChange(todosMarcados ? [TRIBUNAL_SEDE] : TRIBUNAIS_PJE.map((t) => t.codigo))
           }
@@ -51,22 +51,22 @@ export function EstadosPicker({
               onClick={() => alternar(t.codigo)}
               className={`relative rounded-[10px] border-[1.5px] px-2 py-2 text-center transition-colors ${
                 on
-                  ? "border-violet-400 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/40"
+                  ? "border-info/30 bg-info-bg dark:bg-info/40"
                   : "border-border bg-card hover:bg-muted/50"
               } ${sede ? "cursor-default" : ""}`}
             >
               {sede && (
-                <span className="absolute -top-[7px] right-1.5 rounded bg-violet-600 px-1 text-[7.5px] font-extrabold tracking-wide text-white">
+                <span className="absolute -top-[7px] right-1.5 rounded bg-info px-1 text-[7.5px] font-extrabold tracking-wide text-info-on">
                   SEDE
                 </span>
               )}
               <span
-                className={`block text-[13px] font-extrabold ${on ? "text-violet-800 dark:text-violet-200" : ""}`}
+                className={`block text-[13px] font-extrabold ${on ? "text-info-fg" : ""}`}
               >
                 {t.uf}
               </span>
               <span
-                className={`block text-[9px] mt-0.5 ${on ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground"}`}
+                className={`block text-[9px] mt-0.5 ${on ? "text-info-fg" : "text-muted-foreground"}`}
               >
                 {t.sigla}
               </span>

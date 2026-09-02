@@ -87,10 +87,10 @@ function resumirGatilho(c: any): string | null {
 }
 
 const STATUS_EXEC: Record<StatusExecucao, { label: string; cor: string; icon: LucideIcon }> = {
-  rodando: { label: "Rodando", cor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", icon: Activity },
-  concluido: { label: "Concluído", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", icon: CheckCircle2 },
-  erro: { label: "Erro", cor: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300", icon: XCircle },
-  cancelado: { label: "Cancelado", cor: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300", icon: AlertTriangle },
+  rodando: { label: "Rodando", cor: "bg-info-bg text-info-fg dark:text-info", icon: Activity },
+  concluido: { label: "Concluído", cor: "bg-success-bg text-success-fg dark:text-success", icon: CheckCircle2 },
+  erro: { label: "Erro", cor: "bg-danger-bg text-danger-fg dark:text-danger", icon: XCircle },
+  cancelado: { label: "Cancelado", cor: "bg-muted text-foreground dark:text-muted-foreground/70", icon: AlertTriangle },
 };
 
 type FiltroCategoria = "todas" | "mensagem" | "asaas" | "crm" | "manual";
@@ -209,7 +209,7 @@ export default function SmartFlow() {
           <TabsTrigger value="cenarios" className="text-xs gap-1">
             <Zap className="h-3 w-3" /> Cenários
             {lista.length > 0 && (
-              <span className="bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300 px-1.5 py-0.5 rounded text-[10px] ml-0.5">
+              <span className="bg-info-bg text-info-fg dark:text-info px-1.5 py-0.5 rounded text-[10px] ml-0.5">
                 {lista.length}
               </span>
             )}
@@ -273,7 +273,7 @@ export default function SmartFlow() {
                 </p>
                 <Button
                   size="sm"
-                  className="mt-4 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+                  className="mt-4 bg-info"
                   onClick={() => setGaleriaOpen(true)}
                 >
                   <Zap className="h-3.5 w-3.5 mr-1.5" />
@@ -392,7 +392,7 @@ export default function SmartFlow() {
           ) : (
             <div className="space-y-2">
               {execucoesVisiveis.map((e: any) => {
-                const st = STATUS_EXEC[e.status as StatusExecucao] || { label: e.status, cor: "bg-gray-100 dark:bg-slate-800/60", icon: Clock };
+                const st = STATUS_EXEC[e.status as StatusExecucao] || { label: e.status, cor: "bg-muted", icon: Clock };
                 const StIcon = st.icon;
                 const nomeCenario = nomePorCenario.get(e.cenarioId) || `Cenário #${e.cenarioId}`;
                 return (
@@ -415,12 +415,12 @@ export default function SmartFlow() {
                             </span>
                             <span className="text-xs text-muted-foreground">Passo {e.passoAtual}</span>
                             {e.retomarEm && (
-                              <Badge variant="outline" className="text-[9px] gap-1 border-amber-500/30 text-amber-700 dark:text-amber-300">
+                              <Badge variant="outline" className="text-[9px] gap-1 border-warning/30 text-warning-fg">
                                 <Clock className="h-2.5 w-2.5" /> Aguardando
                               </Badge>
                             )}
                           </div>
-                          {e.erro && <p className="text-[10px] text-red-600 dark:text-red-400 mt-0.5 line-clamp-1">{e.erro}</p>}
+                          {e.erro && <p className="text-[10px] text-danger-fg mt-0.5 line-clamp-1">{e.erro}</p>}
                         </div>
                         <span className="text-[10px] text-muted-foreground shrink-0">
                           {new Date(e.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
@@ -503,7 +503,7 @@ function ExecucaoDetalheDialog({ id, onClose }: { id: number | null; onClose: ()
 
   const ctx = data?.contexto || {};
   const status = (data?.status || "rodando") as StatusExecucao;
-  const st = STATUS_EXEC[status] || { label: status, cor: "bg-gray-100 dark:bg-slate-800/60", icon: Clock };
+  const st = STATUS_EXEC[status] || { label: status, cor: "bg-muted", icon: Clock };
 
   return (
     <Dialog open={id != null} onOpenChange={(o) => !o && onClose()}>
@@ -540,9 +540,9 @@ function ExecucaoDetalheDialog({ id, onClose }: { id: number | null; onClose: ()
             </div>
 
             {data.erro && (
-              <div className="rounded-md border border-red-500/30 bg-red-50 dark:bg-red-900/20 p-3">
-                <p className="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">Erro</p>
-                <p className="text-xs text-red-700 dark:text-red-300">{data.erro}</p>
+              <div className="rounded-md border border-danger/30 bg-danger-bg p-3">
+                <p className="text-xs font-semibold text-danger-fg mb-1">Erro</p>
+                <p className="text-xs text-danger-fg">{data.erro}</p>
               </div>
             )}
 

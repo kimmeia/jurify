@@ -53,7 +53,7 @@ const CHANNEL_META: Record<
   whatsapp: {
     title: "WhatsApp Business",
     emoji: "💬",
-    gradient: "from-emerald-500 to-green-600",
+    gradient: "from-success to-success",
     description:
       "Conecte seu número de WhatsApp Business com a API oficial da Meta. Receba e envie mensagens direto pelo Inbox, sem risco de banimento.",
     benefits: ["API oficial Meta", "Sem risco de banimento", "Mensagens ilimitadas", "Chatbot e IA"],
@@ -63,7 +63,7 @@ const CHANNEL_META: Record<
   instagram: {
     title: "Instagram Business",
     emoji: "📸",
-    gradient: "from-pink-500 to-rose-600",
+    gradient: "from-danger to-danger",
     description:
       "Receba e responda Direct Messages do Instagram Business. Pré-requisito: sua conta do Instagram precisa estar configurada como Business e vinculada a uma página do Facebook.",
     benefits: ["DMs no Inbox", "Resposta rápida", "Histórico completo", "Compatível com Stories"],
@@ -72,7 +72,7 @@ const CHANNEL_META: Record<
   messenger: {
     title: "Facebook Messenger",
     emoji: "💙",
-    gradient: "from-blue-500 to-indigo-600",
+    gradient: "from-info to-info",
     description:
       "Conecte sua página do Facebook para receber mensagens do Messenger diretamente no Inbox.",
     benefits: ["Multi-páginas", "Botões interativos", "Notificações em tempo real", "Templates"],
@@ -448,13 +448,13 @@ export function MetaConnectDialog({
             <div>
               <span>{meta.title}</span>
               {conectado && (
-                <Badge className="ml-2 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 text-[10px]">
+                <Badge className="ml-2 bg-success/15 text-success-fg border-success/30 text-[10px]">
                   <Wifi className="h-3 w-3 mr-1" />
                   Conectado
                 </Badge>
               )}
               {comErro && (
-                <Badge className="ml-2 bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/25 text-[10px]">
+                <Badge className="ml-2 bg-danger/15 text-danger-fg border-danger/30 text-[10px]">
                   <AlertTriangle className="h-3 w-3 mr-1" />
                   Erro
                 </Badge>
@@ -482,11 +482,11 @@ export function MetaConnectDialog({
           {/* Estado: conectado */}
           {conectado && (
             <div className="space-y-3">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50">
-                <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-success-bg border border-success/30">
+                <CheckCircle className="h-5 w-5 text-success-fg shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">Conectado</p>
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400 truncate">
+                  <p className="text-sm font-medium text-success-fg">Conectado</p>
+                  <p className="text-xs text-success-fg truncate">
                     {canal?.telefone || canal?.nome || meta.title}
                   </p>
                 </div>
@@ -570,13 +570,13 @@ export function MetaConnectDialog({
 
           {/* Estado: com erro */}
           {comErro && (
-            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 space-y-2">
+            <div className="p-3 rounded-lg bg-danger-bg border border-danger/30 space-y-2">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                <p className="text-sm font-medium text-red-800 dark:text-red-200">Conexão falhou</p>
+                <AlertTriangle className="h-4 w-4 text-danger-fg" />
+                <p className="text-sm font-medium text-danger-fg">Conexão falhou</p>
               </div>
               {mensagemErro && (
-                <p className="text-xs text-red-700 dark:text-red-300">{mensagemErro}</p>
+                <p className="text-xs text-danger-fg">{mensagemErro}</p>
               )}
               <Button
                 size="sm"
@@ -592,21 +592,21 @@ export function MetaConnectDialog({
 
           {/* Estado: vinculado mas falta registrar na Cloud API */}
           {whatsappPrecisaRegistrar && !comErro && (
-            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 space-y-3">
+            <div className="p-3 rounded-lg bg-warning-bg border border-warning/30 space-y-3">
               <div className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <AlertTriangle className="h-4 w-4 text-warning-fg shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                  <p className="text-sm font-medium text-warning-fg">
                     Falta registrar na Cloud API
                   </p>
-                  <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+                  <p className="text-xs text-warning-fg leading-relaxed">
                     O número{" "}
-                    <code className="bg-amber-100 dark:bg-amber-900/30 px-1 py-0.5 rounded">{canal?.telefone}</code>{" "}
+                    <code className="bg-warning-bg px-1 py-0.5 rounded">{canal?.telefone}</code>{" "}
                     foi vinculado à sua conta WhatsApp Business, mas a Meta exige uma
                     última etapa pra ativar o envio de mensagens: registrar o número
                     na Cloud API com um PIN de 6 dígitos (verificação em duas etapas).
                   </p>
-                  <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+                  <p className="text-xs text-warning-fg leading-relaxed">
                     Este PIN será o seu PIN de 2FA do WhatsApp Business — guarde-o em
                     local seguro. Se já definiu um PIN no WhatsApp Manager, use ele.
                   </p>
@@ -627,7 +627,7 @@ export function MetaConnectDialog({
               </div>
               <Button
                 size="sm"
-                className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                className="w-full bg-warning hover:bg-warning text-warning-on"
                 onClick={() => registerMut.mutate({ canalId: canal.id, pin })}
                 disabled={registerMut.isPending || pin.length !== 6}
               >
@@ -639,15 +639,15 @@ export function MetaConnectDialog({
                 Registrar na Cloud API
               </Button>
 
-              <div className="pt-2 border-t border-amber-200 dark:border-amber-800/50">
-                <p className="text-[11px] text-amber-800 dark:text-amber-200 leading-relaxed mb-1.5">
+              <div className="pt-2 border-t border-warning/30">
+                <p className="text-[11px] text-warning-fg leading-relaxed mb-1.5">
                   Este número <strong>já envia e recebe mensagens</strong> normalmente? Então ele já
                   está registrado — só a marcação ficou pendente. Pule o PIN:
                 </p>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full bg-white dark:bg-card"
+                  className="w-full bg-card"
                   onClick={() =>
                     verificarMut.mutate(
                       { canalId: canal.id, forcar: true },
@@ -675,7 +675,7 @@ export function MetaConnectDialog({
           {/* Estado: Meta API não configurada pelo admin */}
           {!conectado && !comErro && !metaConfig?.appId && (
             <div className="text-center py-6 space-y-2">
-              <AlertTriangle className="h-8 w-8 text-amber-400 mx-auto" />
+              <AlertTriangle className="h-8 w-8 text-warning mx-auto" />
               <p className="text-sm font-medium">Meta API não configurada</p>
               <p className="text-xs text-muted-foreground">
                 O administrador do sistema precisa cadastrar o App Meta em

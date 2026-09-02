@@ -17,17 +17,17 @@ export const ANCORA: Record<string, { rotulo: string; classe: string }> = {
   D: {
     rotulo: "documento do caso",
     classe:
-      "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600",
+      "bg-muted text-foreground border-border dark:text-muted-foreground/70",
   },
   F: {
     rotulo: "fonte do escritório",
     classe:
-      "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
+      "bg-warning-bg text-warning-fg border-warning/30 dark:text-warning",
   },
   A: {
     rotulo: "acervo público",
     classe:
-      "bg-violet-50 text-violet-700 border-violet-300 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800",
+      "bg-info-bg text-info-fg border-info/30 dark:text-info",
   },
 };
 

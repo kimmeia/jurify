@@ -57,7 +57,7 @@ const SUBMODULOS: Array<{
     descricao: "Revisão de financiamento",
     fundamentacao: "PRICE · SAC · CET · Anatocismo",
     icone: Landmark,
-    cor: { bg: "bg-blue-100", iconBg: "bg-blue-100", iconFg: "text-blue-600 dark:text-blue-400", hoverBorder: "hover:border-blue-400", hoverFg: "group-hover:text-blue-600 dark:group-hover:text-blue-400", chipBg: "bg-blue-50 dark:bg-blue-950/30", chipFg: "text-blue-700 dark:text-blue-300" },
+    cor: { bg: "bg-info-bg", iconBg: "bg-info-bg", iconFg: "text-info-fg", hoverBorder: "hover:border-info/30", hoverFg: "group-hover:text-info-fg", chipBg: "bg-info-bg", chipFg: "text-info-fg" },
     path: "/calculos/bancario",
   },
   {
@@ -66,7 +66,7 @@ const SUBMODULOS: Array<{
     descricao: "Rescisão · HE · FGTS",
     fundamentacao: "CLT · Lei 12.506 · Súmulas TST",
     icone: Briefcase,
-    cor: { bg: "bg-amber-100", iconBg: "bg-amber-100", iconFg: "text-amber-600 dark:text-amber-400", hoverBorder: "hover:border-amber-400", hoverFg: "group-hover:text-amber-600 dark:group-hover:text-amber-400", chipBg: "bg-amber-50 dark:bg-amber-950/30", chipFg: "text-amber-700 dark:text-amber-300" },
+    cor: { bg: "bg-warning-bg", iconBg: "bg-warning-bg", iconFg: "text-warning-fg", hoverBorder: "hover:border-warning/30", hoverFg: "group-hover:text-warning-fg", chipBg: "bg-warning-bg", chipFg: "text-warning-fg" },
     path: "/calculos/trabalhista",
   },
   {
@@ -75,7 +75,7 @@ const SUBMODULOS: Array<{
     descricao: "Financiamento habitacional",
     fundamentacao: "SFH · SFI · MIP · DFI · Indexadores",
     icone: Building2,
-    cor: { bg: "bg-emerald-100", iconBg: "bg-emerald-100", iconFg: "text-emerald-600 dark:text-emerald-400", hoverBorder: "hover:border-emerald-400", hoverFg: "group-hover:text-emerald-600 dark:group-hover:text-emerald-400", chipBg: "bg-emerald-50 dark:bg-emerald-950/30", chipFg: "text-emerald-700 dark:text-emerald-300" },
+    cor: { bg: "bg-success-bg", iconBg: "bg-success-bg", iconFg: "text-success-fg", hoverBorder: "hover:border-success/30", hoverFg: "group-hover:text-success-fg", chipBg: "bg-success-bg", chipFg: "text-success-fg" },
     path: "/calculos/imobiliario",
   },
   {
@@ -84,7 +84,7 @@ const SUBMODULOS: Array<{
     descricao: "Aposentadoria · RMI · GPS",
     fundamentacao: "EC 103 · 10 regras de aposentadoria",
     icone: ShieldCheck,
-    cor: { bg: "bg-violet-100", iconBg: "bg-violet-100", iconFg: "text-violet-600 dark:text-violet-400", hoverBorder: "hover:border-violet-400", hoverFg: "group-hover:text-violet-600 dark:group-hover:text-violet-400", chipBg: "bg-violet-50 dark:bg-violet-950/30", chipFg: "text-violet-700 dark:text-violet-300" },
+    cor: { bg: "bg-info-bg", iconBg: "bg-info-bg", iconFg: "text-info-fg", hoverBorder: "hover:border-info/30", hoverFg: "group-hover:text-info-fg", chipBg: "bg-info-bg", chipFg: "text-info-fg" },
     path: "/calculos/previdenciario",
   },
   {
@@ -93,7 +93,7 @@ const SUBMODULOS: Array<{
     descricao: "Taxas · Juros · Atualização · Prazos",
     fundamentacao: "IPCA · IGPM · SELIC · CDI · Prescrição",
     icone: TrendingUp,
-    cor: { bg: "bg-teal-100", iconBg: "bg-teal-100", iconFg: "text-teal-600 dark:text-teal-400", hoverBorder: "hover:border-teal-400", hoverFg: "group-hover:text-teal-600 dark:group-hover:text-teal-400", chipBg: "bg-teal-50 dark:bg-teal-950/30", chipFg: "text-teal-700 dark:text-teal-300" },
+    cor: { bg: "bg-success-bg", iconBg: "bg-success-bg", iconFg: "text-success-fg", hoverBorder: "hover:border-success/30", hoverFg: "group-hover:text-success-fg", chipBg: "bg-success-bg", chipFg: "text-success-fg" },
     path: "/calculos/atualizacao-monetaria",
     livre: true,
   },
@@ -103,7 +103,7 @@ const SUBMODULOS: Array<{
     descricao: "CTN · Repetição de indébito",
     fundamentacao: "Em breve",
     icone: Receipt,
-    cor: { bg: "bg-purple-100", iconBg: "bg-purple-100", iconFg: "text-purple-600 dark:text-purple-400", hoverBorder: "", hoverFg: "", chipBg: "bg-purple-50 dark:bg-purple-950/30", chipFg: "text-purple-700 dark:text-purple-300" },
+    cor: { bg: "bg-info-bg", iconBg: "bg-info-bg", iconFg: "text-info-fg", hoverBorder: "", hoverFg: "", chipBg: "bg-info-bg", chipFg: "text-info-fg" },
     path: "/calculos/tributario",
     emBreve: true,
   },
@@ -189,9 +189,9 @@ export default function Calculos() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-amber-50/20 dark:to-amber-950/20 p-6 space-y-5">
+      <div className="rounded-2xl bg-gradient-to-br from-muted/40 via-white dark:via-muted to-warning-bg/20 p-6 space-y-5">
         {/* ═══════════ HERO ═══════════ */}
-        <div className="rounded-2xl bg-gradient-to-br from-amber-600 via-orange-600 to-rose-700 p-7 text-white relative overflow-hidden shadow-lg">
+        <div className="rounded-2xl bg-gradient-to-br from-warning via-warning to-danger p-7 text-white relative overflow-hidden shadow-lg">
           <Calculator className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
           <TrendingUp className="absolute right-12 top-6 w-20 h-20 opacity-10" strokeWidth={1.2} />
           <div className="relative">
@@ -232,7 +232,7 @@ export default function Calculos() {
                 <div className="grid grid-cols-3 gap-2">
                   <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
                     <p className="text-xs text-white/70 mb-1">Disponíveis</p>
-                    <p className="text-2xl font-bold tabular-nums leading-none text-emerald-200">
+                    <p className="text-2xl font-bold tabular-nums leading-none text-success">
                       {credits?.creditsRemaining ?? "—"}
                     </p>
                   </div>
@@ -257,12 +257,12 @@ export default function Calculos() {
         {/* ═══════════ BUSCA + CHIPS ═══════════ */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[260px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
             <Input
               placeholder="Buscar no histórico de cálculos..."
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              className="pl-10 h-10 bg-white dark:bg-card"
+              className="pl-10 h-10 bg-card"
             />
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -285,7 +285,7 @@ export default function Calculos() {
 
         {/* ═══════════ CARDS DOS SUBMÓDULOS ═══════════ */}
         <div>
-          <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-3">
+          <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground mb-3">
             Tipos de cálculo
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -298,17 +298,17 @@ export default function Calculos() {
                 return (
                   <div
                     key={s.tipo}
-                    className="bg-slate-50 dark:bg-slate-900/70 rounded-xl p-5 border border-dashed border-slate-300 opacity-60"
+                    className="bg-muted rounded-xl p-5 border border-dashed border-border opacity-60"
                   >
                     <div className="flex items-start gap-3 mb-3">
                       <div className={`p-2.5 ${s.cor.iconBg} rounded-lg`}>
                         <Icone className={`w-5 h-5 ${s.cor.iconFg}`} />
                       </div>
                       <div className="flex-1">
-                        <p className="font-semibold text-slate-900 dark:text-slate-100">{s.label}</p>
+                        <p className="font-semibold text-foreground">{s.label}</p>
                       </div>
                     </div>
-                    <div className="text-xs text-slate-500">{s.descricao}</div>
+                    <div className="text-xs text-muted-foreground">{s.descricao}</div>
                   </div>
                 );
               }
@@ -316,7 +316,7 @@ export default function Calculos() {
                 <button
                   key={s.tipo}
                   onClick={() => setLocation(s.path)}
-                  className={`group text-left bg-white dark:bg-card rounded-xl p-5 border border-slate-200 dark:border-slate-700/80 ${s.cor.hoverBorder} hover:shadow-lg transition-all`}
+                  className={`group text-left bg-card rounded-xl p-5 border border-border ${s.cor.hoverBorder} hover:shadow-lg transition-all`}
                 >
                   <div className="flex items-start gap-3 mb-3">
                     <div
@@ -325,20 +325,20 @@ export default function Calculos() {
                       <Icone className={`w-5 h-5 ${s.cor.iconFg} group-hover:text-white`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-slate-900 dark:text-slate-100">{s.label}</p>
-                      <p className="text-xs text-slate-500 truncate">{s.descricao}</p>
+                      <p className="font-semibold text-foreground">{s.label}</p>
+                      <p className="text-xs text-muted-foreground truncate">{s.descricao}</p>
                     </div>
-                    <ArrowRight className={`w-4 h-4 text-slate-300 ${s.cor.hoverFg} group-hover:translate-x-1 transition-all`} />
+                    <ArrowRight className={`w-4 h-4 text-muted-foreground/70 ${s.cor.hoverFg} group-hover:translate-x-1 transition-all`} />
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     {s.livre ? (
-                      <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                      <span className="text-success-fg font-medium flex items-center gap-1">
                         <Gift className="w-3 h-3" /> Grátis (sem créditos)
                       </span>
                     ) : (
-                      <span className="text-slate-500 truncate">{s.fundamentacao}</span>
+                      <span className="text-muted-foreground truncate">{s.fundamentacao}</span>
                     )}
-                    <span className="font-bold tabular-nums text-slate-700 dark:text-slate-200">{count}</span>
+                    <span className="font-bold tabular-nums text-foreground">{count}</span>
                   </div>
                 </button>
               );
@@ -349,11 +349,11 @@ export default function Calculos() {
         {/* ═══════════ HISTÓRICO RECENTE ═══════════ */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+            <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
               Cálculos recentes
             </p>
             {totalCalculos > (historico?.length ?? 0) && (
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted-foreground">
                 Mostrando {historico?.length ?? 0} de {totalCalculos}
               </span>
             )}
@@ -370,7 +370,7 @@ export default function Calculos() {
                 {totalCalculos === 0 && (
                   <button
                     onClick={() => setLocation("/calculos/trabalhista")}
-                    className="mt-3 inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-md bg-amber-600 text-white hover:bg-amber-700"
+                    className="mt-3 inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-md bg-warning text-warning-on hover:bg-warning"
                   >
                     <Plus className="h-3.5 w-3.5" /> Fazer primeiro cálculo
                   </button>
@@ -378,7 +378,7 @@ export default function Calculos() {
               </CardContent>
             </Card>
           ) : (
-            <div className="bg-white dark:bg-card rounded-xl border border-slate-200 dark:border-slate-700/80 divide-y divide-slate-100 dark:divide-slate-800">
+            <div className="bg-card rounded-xl border border-border divide-y divide-border">
               {historicoFiltrado.map((h) => {
                 const sub = submoduloPorTipo[h.tipo];
                 if (!sub) return null;
@@ -388,23 +388,23 @@ export default function Calculos() {
                   <button
                     key={h.id}
                     onClick={() => setLocation(sub.path)}
-                    className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-900/70 text-left"
+                    className="w-full flex items-center gap-3 p-4 hover:bg-muted text-left"
                   >
                     <div className={`p-2 ${sub.cor.iconBg} rounded-lg shrink-0`}>
                       <Icone className={`w-4 h-4 ${sub.cor.iconFg}`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{h.titulo}</p>
-                      <p className="text-xs text-slate-500 truncate">
+                      <p className="text-xs text-muted-foreground truncate">
                         {tempoRelativo(h.createdAt)}
                         {h.protocolo ? ` · ${h.protocolo}` : ""}
                         {h.temParecer ? " · com parecer" : ""}
                       </p>
                     </div>
                     {valor && (
-                      <span className="text-sm font-bold tabular-nums text-slate-800 dark:text-slate-200">{valor}</span>
+                      <span className="text-sm font-bold tabular-nums text-foreground">{valor}</span>
                     )}
-                    <MoreVertical className="w-4 h-4 text-slate-300 shrink-0" />
+                    <MoreVertical className="w-4 h-4 text-muted-foreground/70 shrink-0" />
                   </button>
                 );
               })}
@@ -431,7 +431,7 @@ function ChipFiltro({
     "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all";
   if (ativo) {
     return (
-      <button onClick={onClick} className={`${base} bg-slate-900 text-white border-slate-900`}>
+      <button onClick={onClick} className={`${base} bg-foreground/80 text-white border-border`}>
         {children}
       </button>
     );
@@ -439,7 +439,7 @@ function ChipFiltro({
   return (
     <button
       onClick={onClick}
-      className={`${base} bg-white dark:bg-card border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 hover:border-slate-300 hover:text-slate-900 dark:hover:text-slate-100`}
+      className={`${base} bg-card border-border text-muted-foreground hover:border-border hover:text-foreground`}
     >
       {children}
     </button>
@@ -453,7 +453,7 @@ function CountPill({ children, ativo }: { children: React.ReactNode; ativo: bool
     );
   }
   return (
-    <span className="bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 px-1.5 rounded-full text-[10px] tabular-nums">
+    <span className="bg-muted text-muted-foreground px-1.5 rounded-full text-[10px] tabular-nums">
       {children}
     </span>
   );

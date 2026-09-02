@@ -39,13 +39,13 @@ function nomeDe(a: AtendenteTransferencia): string {
 
 function Carga({ n }: { n: number }) {
   if (n === 0) {
-    return <span className="text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0">livre</span>;
+    return <span className="text-[10.5px] font-bold text-success-fg shrink-0">livre</span>;
   }
   const cheio = n >= CARGA_ALTA;
   return (
     <span
       className={`text-[10.5px] tabular-nums shrink-0 inline-flex items-center gap-1 ${
-        cheio ? "font-bold text-rose-600 dark:text-rose-400" : "text-muted-foreground"
+        cheio ? "font-bold text-danger-fg" : "text-muted-foreground"
       }`}
     >
       <MessageSquare className="h-3 w-3" />
@@ -171,11 +171,11 @@ export function TransferirConversaDialog({
               onClick={() => setEscolhido(eu!.id)}
               className={`w-full h-10 rounded-lg border-2 border-dashed flex items-center gap-2.5 px-3 transition-colors ${
                 escolhido === eu!.id
-                  ? "border-violet-400 bg-violet-50 dark:bg-violet-950/40"
+                  ? "border-info/30 bg-info-bg"
                   : "hover:bg-muted/50"
               }`}
             >
-              <UserRound className="h-4 w-4 text-violet-600 dark:text-violet-400 shrink-0" />
+              <UserRound className="h-4 w-4 text-info-fg shrink-0" />
               <span className="text-[12.5px] font-bold flex-1 text-left">Assumir eu mesmo</span>
               <span className="text-[10.5px] text-muted-foreground truncate max-w-[140px]">
                 {nomeDe(eu!)}
@@ -214,7 +214,7 @@ export function TransferirConversaDialog({
                         ehAtual
                           ? "opacity-55 cursor-default"
                           : sel
-                            ? "bg-violet-50 dark:bg-violet-950/40"
+                            ? "bg-info-bg"
                             : "hover:bg-muted/50"
                       }`}
                     >
@@ -227,7 +227,7 @@ export function TransferirConversaDialog({
                       <span className="flex-1 min-w-0">
                         <span
                           className={`block text-[12.5px] font-semibold truncate ${
-                            sel ? "text-violet-900 dark:text-violet-200" : ""
+                            sel ? "text-info-fg" : ""
                           }`}
                         >
                           {nome}
@@ -244,7 +244,7 @@ export function TransferirConversaDialog({
                         <>
                           <Carga n={a.conversasAbertas ?? 0} />
                           {sel && (
-                            <span className="h-[18px] w-[18px] rounded-full bg-violet-600 text-white flex items-center justify-center shrink-0">
+                            <span className="h-[18px] w-[18px] rounded-full bg-info text-info-on flex items-center justify-center shrink-0">
                               <Check className="h-3 w-3" />
                             </span>
                           )}

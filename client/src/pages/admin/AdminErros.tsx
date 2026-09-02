@@ -24,11 +24,11 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const NIVEL_COR: Record<string, string> = {
-  fatal: "text-red-600 dark:text-red-400 bg-red-500/10",
-  error: "text-red-600 dark:text-red-400 bg-red-500/10",
-  warning: "text-amber-600 dark:text-amber-400 bg-amber-500/10",
-  info: "text-sky-600 dark:text-sky-400 bg-sky-500/10",
-  debug: "text-slate-500 bg-slate-500/10",
+  fatal: "text-danger-fg bg-danger/10",
+  error: "text-danger-fg bg-danger/10",
+  warning: "text-warning-fg bg-warning/10",
+  info: "text-info-fg bg-info/10",
+  debug: "text-muted-foreground bg-muted-foreground/10",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -63,10 +63,10 @@ export default function AdminErros() {
       </p>
 
       {!configurado && (
-        <Card className="border-amber-500/30 bg-amber-50/30 dark:bg-amber-500/5">
+        <Card className="border-warning/30 bg-warning-bg/30">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <AlertTriangle className="h-5 w-5 text-warning-fg" />
               Sentry não configurado
             </CardTitle>
             <CardDescription>
@@ -141,11 +141,11 @@ export default function AdminErros() {
                     : `Sentry retornou HTTP ${httpStatus}.`;
 
                 return (
-                  <Card className="border-red-500/40 bg-red-50/40 dark:bg-red-500/5">
+                  <Card className="border-danger/30 bg-danger-bg/40">
                     <CardContent className="py-8 text-center space-y-3">
-                      <AlertTriangle className="h-12 w-12 mx-auto text-red-500" />
+                      <AlertTriangle className="h-12 w-12 mx-auto text-danger" />
                       <div>
-                        <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+                        <p className="text-sm font-semibold text-danger-fg">
                           Não foi possível buscar erros do Sentry
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">{mensagemFalha}</p>
@@ -172,7 +172,7 @@ export default function AdminErros() {
               return (
                 <Card>
                   <CardContent className="py-12 text-center">
-                    <CheckCircle2 className="h-12 w-12 mx-auto text-emerald-500 mb-3" />
+                    <CheckCircle2 className="h-12 w-12 mx-auto text-success mb-3" />
                     <p className="text-sm text-muted-foreground">
                       Nenhum erro encontrado nos filtros atuais. Bom sinal.
                     </p>

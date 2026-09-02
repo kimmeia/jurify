@@ -118,7 +118,7 @@ function CatalogoModulos({
               ) : (
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 text-sm tabular-nums shrink-0 hover:text-violet-600 dark:hover:text-violet-400 group"
+                  className="flex items-center gap-1.5 text-sm tabular-nums shrink-0 hover:text-info-fg group"
                   onClick={() => {
                     setEditandoId(m.id);
                     setValor(m.precoMensalCentavos > 0 ? (m.precoMensalCentavos / 100).toFixed(2).replace(".", ",") : "");
@@ -261,17 +261,17 @@ function LinhaPlano({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-semibold text-sm">{plano.nome}</span>
           {plano.precoSobConsulta && (
-            <Badge variant="outline" className="text-[10px] font-bold border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300">
+            <Badge variant="outline" className="text-[10px] font-bold border-info/30 bg-info-bg text-info-fg">
               SOB CONSULTA
             </Badge>
           )}
           {plano.popular && (
-            <Badge variant="outline" className="text-[10px] font-bold border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+            <Badge variant="outline" className="text-[10px] font-bold border-warning/30 bg-warning-bg text-warning-fg">
               <Star className="h-2.5 w-2.5 mr-0.5" /> MAIS POPULAR
             </Badge>
           )}
           {plano.ctaDemonstracao && (
-            <Badge variant="outline" className="text-[10px] font-bold border-cyan-300 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-300">
+            <Badge variant="outline" className="text-[10px] font-bold border-info/30 bg-info-bg text-info-fg">
               DEMONSTRAÇÃO
             </Badge>
           )}
@@ -293,7 +293,7 @@ function LinhaPlano({
           <Copy className="h-3 w-3 mr-1" /> Duplicar
         </Button>
         <Button size="sm" variant="outline"
-          className="h-8 text-xs border-violet-300 text-violet-700 hover:text-violet-800 dark:border-violet-800 dark:text-violet-300"
+          className="h-8 text-xs border-info/30 text-info-fg hover:text-info-fg dark:text-info"
           onClick={() => setLocation(`/admin/planos/${plano.slug}`)}>
           Editar
         </Button>
@@ -374,7 +374,7 @@ export function PlanosSection() {
             <CardHeader className="pb-2 flex flex-row flex-wrap items-center gap-3 space-y-0">
               <div>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                  <Sparkles className="h-4 w-4 text-info-fg" />
                   Na vitrine do site
                 </CardTitle>
                 <CardDescription className="text-xs mt-1">
