@@ -82,23 +82,24 @@
 }
 
 :root {
-  /* Navy #1e3a5f no lugar do violeta. Croma 0.074 — cor de autoridade que
-   * não vibra quando ocupa área grande, que era a queixa de "cor que dói na
-   * vista". Vale a regra que veio junto: verde é "em dia", âmbar é "tem
-   * coisa nova" e vermelho fica reservado ao que exige ação hoje (prazo
-   * correndo, falha de credencial). Vermelho decorativo cansa quem lê a
-   * tela o dia inteiro e faz o alarme real passar batido. */
-  --primary: oklch(0.346 0.074 256);
+  /* Navy #1a4b86. Croma 0.112 — mais vivo que o #1e3a5f da primeira volta,
+   * que ficou "calmo demais", e ainda longe do violeta que doía na vista.
+   *
+   * Vale a regra que veio junto: verde é "em dia", âmbar é "tem coisa nova" e
+   * vermelho fica reservado ao que exige ação hoje (prazo correndo, falha de
+   * credencial). Vermelho decorativo cansa quem lê a tela o dia inteiro e faz
+   * o alarme real passar batido. */
+  --primary: oklch(0.413 0.112 255);
   --primary-foreground: oklch(0.98 0 0);
   /* Mais claro que `--primary` do tema claro: o acento agora vive sobre
    * fundo escuro, e o tom original sumiria. */
-  --sidebar-primary: oklch(0.714 0.081 250);
+  --sidebar-primary: oklch(0.707 0.100 250);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --chart-1: oklch(0.346 0.074 256);
-  --chart-2: oklch(0.470 0.070 250);
-  --chart-3: oklch(0.600 0.062 245);
-  --chart-4: oklch(0.720 0.052 242);
-  --chart-5: oklch(0.830 0.038 240);
+  --chart-1: oklch(0.413 0.112 255);
+  --chart-2: oklch(0.520 0.100 250);
+  --chart-3: oklch(0.630 0.088 247);
+  --chart-4: oklch(0.740 0.070 245);
+  --chart-5: oklch(0.850 0.048 243);
   /* 6px. Era 10px, e com o `rounded-2xl` caindo no padrão do Tailwind os
    * cards ficavam em 16px — arredondado demais para uma tela densa de
    * trabalho. Daqui saem 4/5/6/8/10px. */
@@ -127,13 +128,13 @@
   --secondary-foreground: oklch(0.366 0.031 252);
   --muted: oklch(0.957 0.005 248);
   --muted-foreground: oklch(0.520 0.035 250);
-  --accent: oklch(0.952 0.010 248);
-  --accent-foreground: oklch(0.346 0.074 256);
+  --accent: oklch(0.955 0.012 248);
+  --accent-foreground: oklch(0.413 0.112 255);
   --destructive: oklch(0.478 0.170 29);
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(0.917 0.010 253);
   --input: oklch(0.917 0.010 253);
-  --ring: oklch(0.346 0.074 256);
+  --ring: oklch(0.413 0.112 255);
   /* Menu SEMPRE escuro, inclusive no tema claro.
    *
    * O contraste é o ponto: barra escura à esquerda faz o conteúdo claro
@@ -148,14 +149,14 @@
    * fazendo o trabalho, e a barra para de pesar na tela. */
   --sidebar: oklch(0.240 0.027 253);
   --sidebar-foreground: oklch(0.847 0.018 248);
-  --sidebar-accent: oklch(0.331 0.041 252);
+  --sidebar-accent: oklch(0.335 0.048 253);
   --sidebar-accent-foreground: oklch(0.99 0 0);
   --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.714 0.081 250);
+  --sidebar-ring: oklch(0.707 0.100 250);
   /* Paleta semântica — light. OKLCH consistente com o restante do tema. */
-  --info: oklch(0.346 0.074 256);
-  --info-bg: oklch(0.952 0.010 248);
-  --info-fg: oklch(0.346 0.074 256);
+  --info: oklch(0.413 0.112 255);
+  --info-bg: oklch(0.955 0.012 248);
+  --info-fg: oklch(0.413 0.112 255);
   --warning: oklch(0.508 0.105 72);
   --warning-bg: oklch(0.975 0.021 86);
   --warning-fg: oklch(0.508 0.105 72);
@@ -180,17 +181,17 @@
   --neutral-on: oklch(0.98 0 0);
   /* Faixa de destaque: navy → grafite. Escura nos dois temas — o conteúdo em
    * cima dela é branco. */
-  --hero: oklch(0.346 0.074 256);
-  --hero-2: oklch(0.240 0.027 253);
+  --hero: oklch(0.413 0.112 255);
+  --hero-2: oklch(0.318 0.084 256);
   --hero-fg: oklch(0.98 0 0);
 }
 
 .dark {
   /* O navy do tema claro invertido pro fundo escuro: mesma matiz (~246), mais
    * claro, senão o acento sumiria no fundo. */
-  --primary: oklch(0.625 0.085 246);
+  --primary: oklch(0.700 0.103 250);
   --primary-foreground: oklch(0.198 0.014 253);
-  --sidebar-primary: oklch(0.714 0.081 250);
+  --sidebar-primary: oklch(0.707 0.100 250);
   --sidebar-primary-foreground: oklch(0.98 0 0);
   /* Mesmas cinco matizes, re-escalonadas pra superfície escura — não é o
      inverso automático das claras. */
@@ -211,28 +212,28 @@
   --secondary-foreground: oklch(0.843 0.017 245);
   --muted: oklch(0.264 0.020 245);
   --muted-foreground: oklch(0.702 0.024 244);
-  --accent: oklch(0.254 0.028 245);
+  --accent: oklch(0.268 0.042 252);
   --accent-foreground:  oklch(0.938 0.009 248);
   --destructive: oklch(0.661 0.152 26);
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(0.320 0.021 246);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.625 0.085 246);
-  --chart-1: oklch(0.780 0.070 246);
-  --chart-2: oklch(0.690 0.078 246);
-  --chart-3: oklch(0.600 0.080 246);
-  --chart-4: oklch(0.500 0.075 248);
-  --chart-5: oklch(0.400 0.065 250);
+  --ring: oklch(0.700 0.103 250);
+  --chart-1: oklch(0.800 0.090 248);
+  --chart-2: oklch(0.700 0.103 250);
+  --chart-3: oklch(0.600 0.100 250);
+  --chart-4: oklch(0.500 0.095 252);
+  --chart-5: oklch(0.400 0.080 254);
   --sidebar: oklch(0.180 0.015 253);
   --sidebar-foreground: oklch(0.843 0.017 245);
-  --sidebar-accent: oklch(0.264 0.020 245);
+  --sidebar-accent: oklch(0.268 0.042 252);
   --sidebar-accent-foreground:  oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.714 0.081 250);
+  --sidebar-ring: oklch(0.707 0.100 250);
   /* Paleta semântica — dark. Mesmo hue do light, lightness ajustada. */
-  --info: oklch(0.625 0.085 246);
-  --info-bg: oklch(0.254 0.028 245);
-  --info-fg: oklch(0.675 0.078 245);
+  --info: oklch(0.700 0.103 250);
+  --info-bg: oklch(0.268 0.042 252);
+  --info-fg: oklch(0.700 0.103 250);
   --warning: oklch(0.751 0.130 80);
   --warning-bg: oklch(0.235 0.025 82);
   --warning-fg: oklch(0.751 0.130 80);
@@ -255,8 +256,8 @@
   --success-on: oklch(0.198 0.014 253);
   --danger-on: oklch(0.198 0.014 253);
   --neutral-on: oklch(0.938 0.009 248);
-  --hero: oklch(0.290 0.062 252);
-  --hero-2: oklch(0.198 0.014 253);
+  --hero: oklch(0.373 0.091 254);
+  --hero-2: oklch(0.237 0.044 256);
   --hero-fg: oklch(0.98 0 0);
 }
 
@@ -447,4 +448,40 @@
 
 @media (prefers-reduced-motion: reduce) {
   .lp-drift-a, .lp-drift-b, .lp-drift-c, .lp-bob, .lp-flow-line { animation: none; }
+}
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Menu estreito com rótulo
+ *
+ * O `SidebarMenuButton` do shadcn força `size-8!` e esconde o texto quando o
+ * menu recolhe — vira uma parede de ícones anônimos, que foi a queixa. Aqui o
+ * botão vira coluna (ícone em cima, nome embaixo) só neste menu; o AdminLayout
+ * e o DashboardLayout usam o mesmo componente e continuam como estavam.
+ *
+ * Precisa de `!important` porque as regras de origem também usam — não é
+ * capricho, é o que empata a especificidade.
+ * ═════════════════════════════════════════════════════════════════════════ */
+.menu-rotulado[data-collapsible="icon"] [data-sidebar="menu-button"] {
+  flex-direction: column;
+  gap: 0.19rem;
+  height: auto !important;
+  width: 100% !important;
+  padding: 0.44rem 0.12rem !important;
+  justify-content: center;
+}
+.menu-rotulado[data-collapsible="icon"] [data-sidebar="menu-button"] .rotulo-item {
+  display: block;
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8.5px;
+  line-height: 1.1;
+  font-weight: 600;
+  text-align: center;
+}
+/* O trilho do ativo encosta na borda do menu; no rail o botão tem menos
+ * margem lateral, então ele precisa recuar junto. */
+.menu-rotulado[data-collapsible="icon"] [data-sidebar="menu-item"] > span:first-child {
+  left: -0.25rem;
 }

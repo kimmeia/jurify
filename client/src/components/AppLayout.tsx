@@ -224,6 +224,9 @@ export default function AppLayout({
       style={
         {
           "--sidebar-width": `${sidebarWidth}px`,
+          // 4.5rem no lugar de 3rem: no modo estreito o rótulo desce pra
+          // baixo do ícone, e em 48px não caberia nome nenhum.
+          "--sidebar-width-icon": "4.5rem",
         } as CSSProperties
       }
     >
@@ -510,7 +513,7 @@ function AppSidebarContent({
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
-          className="border-r-0"
+          className="border-r-0 menu-rotulado"
           disableTransition={isResizing}
         >
           {/* `shrink-0` não é decorativo: a regra global `.flex{min-height:0}`
@@ -546,7 +549,8 @@ function AppSidebarContent({
               return (
                 <div key={grupo.titulo} className="px-2 pb-0.5">
                   {/* O rótulo some no modo ícone — sobra o separador, que já
-                      diz onde um grupo termina. */}
+                      diz onde um grupo termina; abreviado ele viraria "DIA",
+                      "CART", "FERR", que não querem dizer nada. */}
                   <p className="px-2 pt-2 pb-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
                     {grupo.titulo}
                   </p>
@@ -564,7 +568,7 @@ function AppSidebarContent({
                               tem overflow-hidden, e dentro dele o marcador
                               seria cortado. */}
                           {ativo && (
-                            <span className="absolute left-0 top-1.5 bottom-1.5 z-10 w-[3px] rounded-r bg-sidebar-primary group-data-[collapsible=icon]:hidden" />
+                            <span className="absolute left-0 top-1.5 bottom-1.5 z-10 w-[3px] rounded-r bg-sidebar-primary" />
                           )}
                           <SidebarMenuButton
                             isActive={ativo}
@@ -573,7 +577,7 @@ function AppSidebarContent({
                             className={`h-[34px] relative transition-all ${ativo ? "font-semibold" : "font-normal"} ${itemsLocked ? "opacity-50" : ""}`}
                           >
                             <Icone className={`h-4 w-4 ${ativo ? "text-sidebar-primary" : ""}`} />
-                            <span className="flex-1">{item.rotulo}</span>
+                            <span className="flex-1 rotulo-item">{item.rotulo}</span>
                             {item.selo && contagem === 0 && (
                               <span className="ml-auto rounded-full border border-warning/30 bg-warning/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-warning-fg group-data-[collapsible=icon]:hidden">
                                 {item.selo}
