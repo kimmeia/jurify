@@ -195,28 +195,28 @@ export function RelatoriosTab() {
             <KpiRel
               label="Receita total"
               valor={formatBRL(receitaCaixa)}
-              cor="text-emerald-600 dark:text-emerald-400"
+              cor="text-success-fg"
               delta={dreAnt ? calcularDelta(receitaCaixa, receitaAnt) : undefined}
               anterior={dreAnt ? `${formatBRL(receitaAnt ?? 0)} no período anterior` : null}
             />
             <KpiRel
               label="Despesa total"
               valor={formatBRL(despesaTotal)}
-              cor="text-red-600 dark:text-red-400"
+              cor="text-danger-fg"
               delta={dreAnt ? calcularDelta(despesaTotal, despesaAnt, true) : undefined}
               anterior={dreAnt ? `${formatBRL(despesaAnt ?? 0)} no período anterior` : null}
             />
             <KpiRel
               label="Resultado líquido"
               valor={formatBRL(resultado)}
-              cor={positivo ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}
+              cor={positivo ? "text-success-fg" : "text-danger-fg"}
               delta={dreAnt ? calcularDelta(resultado, resultadoAnt) : undefined}
               anterior={dreAnt ? `${formatBRL(resultadoAnt ?? 0)} no período anterior` : null}
             />
             <KpiRel
               label="Margem"
               valor={isNaN(margemCaixa) ? "—" : `${margemCaixa.toFixed(1)}%`}
-              cor={positivo ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}
+              cor={positivo ? "text-success-fg" : "text-danger-fg"}
               delta={dreAnt ? calcularDeltaPontos(margemCaixa, margemAnt) : undefined}
               anterior={
                 margemAnt != null ? `${margemAnt.toFixed(1)}% no período anterior` : null
@@ -231,12 +231,12 @@ export function RelatoriosTab() {
           >
             <div className="px-4 pb-4 space-y-2.5">
               {[
-                { rotulo: "Receita", valor: receitaCaixa, cor: "bg-emerald-600" },
-                { rotulo: "Despesa", valor: despesaTotal, cor: "bg-red-600" },
+                { rotulo: "Receita", valor: receitaCaixa, cor: "bg-success" },
+                { rotulo: "Despesa", valor: despesaTotal, cor: "bg-danger" },
                 {
                   rotulo: "Resultado",
                   valor: resultado,
-                  cor: positivo ? "bg-violet-600" : "bg-red-700",
+                  cor: positivo ? "bg-info" : "bg-danger",
                 },
               ].map((l) => (
                 <div key={l.rotulo} className="flex items-center gap-3">
@@ -364,7 +364,7 @@ function TabelaDre({
   const temOutros = !!outrosMeses && outrosMeses.valor > 0;
   const totalCaixa = total + (temOutros ? outrosMeses.valor : 0);
   const pct = (v: number) => (totalCaixa > 0 ? Math.round((v / totalCaixa) * 100) : 0);
-  const corTitulo = accent === "emerald" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400";
+  const corTitulo = accent === "emerald" ? "text-success-fg" : "text-danger-fg";
 
   return (
     <div className="rounded-xl border bg-card">
@@ -412,18 +412,18 @@ function TabelaDre({
                 </TableRow>
               ))}
               {temOutros && (
-                <TableRow className="bg-amber-50/50 dark:bg-amber-950/10">
-                  <TableCell className="text-xs text-amber-800 dark:text-amber-300">
+                <TableRow className="bg-warning-bg/50">
+                  <TableCell className="text-xs text-warning-fg">
                     + Recebido de outros meses{" "}
-                    <span className="text-[10px] text-amber-600 dark:text-amber-400">(venceu antes, pago agora)</span>
+                    <span className="text-[10px] text-warning-fg">(venceu antes, pago agora)</span>
                   </TableCell>
-                  <TableCell className="text-center text-xs tabular-nums text-amber-700 dark:text-amber-300">
+                  <TableCell className="text-center text-xs tabular-nums text-warning-fg">
                     {outrosMeses.count}
                   </TableCell>
-                  <TableCell className="text-center text-xs tabular-nums text-amber-700 dark:text-amber-300">
+                  <TableCell className="text-center text-xs tabular-nums text-warning-fg">
                     {pct(outrosMeses.valor)}%
                   </TableCell>
-                  <TableCell className="text-right text-xs font-semibold tabular-nums text-amber-700 dark:text-amber-300">
+                  <TableCell className="text-right text-xs font-semibold tabular-nums text-warning-fg">
                     {formatBRL(outrosMeses.valor)}
                   </TableCell>
                 </TableRow>
@@ -440,7 +440,7 @@ function TabelaDre({
                 </TableCell>
                 <TableCell
                   className={`text-right text-xs tabular-nums ${
-                    accent === "emerald" ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"
+                    accent === "emerald" ? "text-success-fg" : "text-danger-fg"
                   }`}
                 >
                   {formatBRL(totalCaixa)}
@@ -497,22 +497,22 @@ function DiagnosticoDivergenciaDialog({
 
         {q?.isLoading && (
           <div className="flex justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/70" />
           </div>
         )}
 
         {data && (
           <div className="space-y-6">
-            <p className="text-xs text-slate-600 dark:text-slate-300">
+            <p className="text-xs text-muted-foreground">
               Período: <strong>{data.periodo.inicio}</strong> a{" "}
               <strong>{data.periodo.fim}</strong>. Compare cada bloco abaixo
               com o painel Asaas pra identificar a causa da diferença.
             </p>
 
             {/* Comparação ao vivo com o Asaas */}
-            <section className="rounded-lg border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/40 dark:bg-indigo-950/20 p-3">
+            <section className="rounded-lg border border-info/30 bg-info-bg/40 p-3">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">
+                <h3 className="text-sm font-semibold text-info-fg">
                   Comparação ao vivo com o Asaas
                 </h3>
                 <Button
@@ -529,7 +529,7 @@ function DiagnosticoDivergenciaDialog({
                   Comparar agora
                 </Button>
               </div>
-              <p className="text-[11px] text-indigo-800 dark:text-indigo-200 mb-2">
+              <p className="text-[11px] text-info-fg mb-2">
                 Consulta o Asaas ao vivo (gasta cota) e cruza cobrança-a-cobrança.
                 Identifica as cobranças que o JuridFlow conta como recebidas mas o
                 Asaas não retorna — a causa do bruto estar maior aqui.
@@ -539,28 +539,28 @@ function DiagnosticoDivergenciaDialog({
                 <div className="space-y-3">
                   <div className="grid grid-cols-3 gap-2 text-xs">
                     <div>
-                      <p className="text-indigo-700 dark:text-indigo-300">Asaas (paymentDate)</p>
+                      <p className="text-info-fg">Asaas (paymentDate)</p>
                       <p className="font-bold tabular-nums">{formatBRL(comp.totalAsaas.value)}</p>
-                      <p className="text-[10px] text-slate-500">{comp.totalAsaas.count} cobranças</p>
+                      <p className="text-[10px] text-muted-foreground">{comp.totalAsaas.count} cobranças</p>
                     </div>
                     <div>
-                      <p className="text-indigo-700 dark:text-indigo-300">JuridFlow (dataPagamento)</p>
+                      <p className="text-info-fg">JuridFlow (dataPagamento)</p>
                       <p className="font-bold tabular-nums">{formatBRL(comp.totalJurify.value)}</p>
-                      <p className="text-[10px] text-slate-500">{comp.totalJurify.count} cobranças</p>
+                      <p className="text-[10px] text-muted-foreground">{comp.totalJurify.count} cobranças</p>
                     </div>
                     <div>
-                      <p className="text-indigo-700 dark:text-indigo-300">Diferença</p>
-                      <p className="font-bold tabular-nums text-red-600 dark:text-red-400">{formatBRL(comp.diferenca)}</p>
+                      <p className="text-info-fg">Diferença</p>
+                      <p className="font-bold tabular-nums text-danger-fg">{formatBRL(comp.diferenca)}</p>
                     </div>
                   </div>
 
                   {comp.creditoMesDiferente && comp.creditoMesDiferente.count > 0 && (
-                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded p-2 text-xs">
-                      <p className="font-semibold text-amber-900 dark:text-amber-100">
+                    <div className="bg-warning-bg border border-warning/30 rounded p-2 text-xs">
+                      <p className="font-semibold text-warning-fg">
                         Crédito em mês diferente do pagamento: {comp.creditoMesDiferente.count} cobranças
                         ({formatBRL(comp.creditoMesDiferente.total)})
                       </p>
-                      <p className="text-[11px] text-amber-800 dark:text-amber-200 mt-1">
+                      <p className="text-[11px] text-warning-fg mt-1">
                         Pagas neste mês mas creditadas em outro (boleto D+1 pago no fim do mês).
                         O painel "Recebidas" do Asaas filtra por data de crédito — por isso não
                         conta essas. Se este número bate com a diferença, mistério resolvido.
@@ -569,8 +569,8 @@ function DiagnosticoDivergenciaDialog({
                   )}
 
                   {comp.asaasPorStatus && comp.asaasPorStatus.length > 0 && (
-                    <div className="bg-white dark:bg-slate-900 rounded p-2">
-                      <p className="text-[11px] font-semibold text-indigo-900 dark:text-indigo-100 mb-1">
+                    <div className="bg-white dark:bg-muted rounded p-2">
+                      <p className="text-[11px] font-semibold text-info-fg mb-1">
                         Cobranças da API por status — o painel "Recebidas" do Asaas conta só RECEIVED.
                         RECEIVED_IN_CASH (pago manual) fica de fora lá, mas conta no Caixa Asaas aqui.
                       </p>
@@ -588,7 +588,7 @@ function DiagnosticoDivergenciaDialog({
                               <TableCell className="text-[10px] font-mono">
                                 {s.status}
                                 {s.status === "RECEIVED_IN_CASH" && (
-                                  <span className="ml-1 text-[9px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 px-1 rounded">
+                                  <span className="ml-1 text-[9px] text-warning-fg bg-warning-bg px-1 rounded">
                                     fora do painel
                                   </span>
                                 )}
@@ -602,7 +602,7 @@ function DiagnosticoDivergenciaDialog({
                     </div>
                   )}
 
-                  <div className="text-xs bg-white dark:bg-slate-900 rounded p-2 space-y-1">
+                  <div className="text-xs bg-white dark:bg-muted rounded p-2 space-y-1">
                     <p>
                       <strong>{comp.soNoJurify.count}</strong> cobranças só no JuridFlow
                       (total <strong>{formatBRL(comp.soNoJurify.total)}</strong>) — o
@@ -621,7 +621,7 @@ function DiagnosticoDivergenciaDialog({
 
                   {comp.soNoJurify.itens.length > 0 && (
                     <div>
-                      <p className="text-[11px] font-semibold text-indigo-900 dark:text-indigo-100 mb-1">
+                      <p className="text-[11px] font-semibold text-info-fg mb-1">
                         Cobranças só no JuridFlow (sobrando)
                       </p>
                       <Table>
@@ -640,7 +640,7 @@ function DiagnosticoDivergenciaDialog({
                               <TableCell className="text-[10px]">{c.dataPagamento ?? "—"}</TableCell>
                               <TableCell className="text-[10px] font-mono">{c.status}</TableCell>
                               <TableCell className="text-[10px] max-w-[140px] truncate">{c.descricao ?? "—"}</TableCell>
-                              <TableCell className="text-[9px] font-mono text-slate-500">{c.asaasPaymentId ?? "(manual)"}</TableCell>
+                              <TableCell className="text-[9px] font-mono text-muted-foreground">{c.asaasPaymentId ?? "(manual)"}</TableCell>
                               <TableCell className="text-[10px] text-right tabular-nums">{formatBRL(Number(c.valor || 0))}</TableCell>
                             </TableRow>
                           ))}
@@ -651,7 +651,7 @@ function DiagnosticoDivergenciaDialog({
 
                   {comp.statusDivergente.itens.length > 0 && (
                     <div>
-                      <p className="text-[11px] font-semibold text-indigo-900 dark:text-indigo-100 mb-1">
+                      <p className="text-[11px] font-semibold text-info-fg mb-1">
                         Status divergente (JuridFlow ≠ Asaas)
                       </p>
                       <Table>
@@ -668,7 +668,7 @@ function DiagnosticoDivergenciaDialog({
                             <TableRow key={d.row.id}>
                               <TableCell className="text-[10px] max-w-[140px] truncate">{d.row.descricao ?? "—"}</TableCell>
                               <TableCell className="text-[10px] font-mono">{d.row.status}</TableCell>
-                              <TableCell className="text-[10px] font-mono text-red-600 dark:text-red-400">{d.statusAsaas}</TableCell>
+                              <TableCell className="text-[10px] font-mono text-danger-fg">{d.statusAsaas}</TableCell>
                               <TableCell className="text-[10px] text-right tabular-nums">{formatBRL(Number(d.row.valor || 0))}</TableCell>
                             </TableRow>
                           ))}
@@ -681,35 +681,35 @@ function DiagnosticoDivergenciaDialog({
             </section>
 
             {data.resumo && (
-              <section className="rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50/40 dark:bg-amber-950/20 p-3">
-                <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2">
+              <section className="rounded-lg border border-warning/30 bg-warning-bg/40 p-3">
+                <h3 className="text-sm font-semibold text-warning-fg mb-2">
                   Resumo bruto vs líquido (hipótese: taxas Asaas)
                 </h3>
                 <div className="grid grid-cols-3 gap-3 text-xs">
                   <div>
-                    <p className="text-amber-700 dark:text-amber-300">Total bruto (JuridFlow)</p>
-                    <p className="text-base font-bold text-amber-900 dark:text-amber-100 tabular-nums">
+                    <p className="text-warning-fg">Total bruto (JuridFlow)</p>
+                    <p className="text-base font-bold text-warning-fg tabular-nums">
                       {formatBRL(data.resumo.totalBruto)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-amber-700 dark:text-amber-300">Total líquido (após taxas)</p>
-                    <p className="text-base font-bold text-amber-900 dark:text-amber-100 tabular-nums">
+                    <p className="text-warning-fg">Total líquido (após taxas)</p>
+                    <p className="text-base font-bold text-warning-fg tabular-nums">
                       {formatBRL(data.resumo.totalLiquido)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-amber-700 dark:text-amber-300">Taxas (bruto − líquido)</p>
-                    <p className="text-base font-bold text-amber-900 dark:text-amber-100 tabular-nums">
+                    <p className="text-warning-fg">Taxas (bruto − líquido)</p>
+                    <p className="text-base font-bold text-warning-fg tabular-nums">
                       {formatBRL(data.resumo.totalTaxas)}
                     </p>
                   </div>
                 </div>
-                <p className="text-[11px] text-amber-800 dark:text-amber-200 mt-2 leading-relaxed">
+                <p className="text-[11px] text-warning-fg mt-2 leading-relaxed">
                   Se o "Total líquido" bate com o "Recebidos" do painel Asaas, o painel deles mostra
                   valor pós-taxas e nosso "Caixa Asaas" mostra bruto.{" "}
                   {data.resumo.comValorLiquido < data.resumo.totalCount && (
-                    <span className="block mt-1 text-amber-700 dark:text-amber-300">
+                    <span className="block mt-1 text-warning-fg">
                       ⚠ Apenas {data.resumo.comValorLiquido} de {data.resumo.totalCount} cobranças
                       têm valor líquido preenchido — sync incompleto pode estar mascarando a taxa real.
                     </span>
@@ -719,10 +719,10 @@ function DiagnosticoDivergenciaDialog({
             )}
 
             <section>
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">
+              <h3 className="text-sm font-semibold text-foreground mb-2">
                 1. Total por status (JuridFlow) — bruto vs líquido por forma de pagamento
               </h3>
-              <p className="text-[11px] text-slate-500 mb-2">
+              <p className="text-[11px] text-muted-foreground mb-2">
                 Se a soma de <code>RECEIVED_IN_CASH</code> bate com a
                 diferença que você está vendo, é hipótese A. Se a coluna "Taxa"
                 bate, é hipótese das taxas (Asaas mostra líquido, JuridFlow mostra bruto).
@@ -742,7 +742,7 @@ function DiagnosticoDivergenciaDialog({
                 <TableBody>
                   {data.porStatus.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-xs text-slate-500 text-center">
+                      <TableCell colSpan={7} className="text-xs text-muted-foreground text-center">
                         Sem dados no período.
                       </TableCell>
                     </TableRow>
@@ -752,7 +752,7 @@ function DiagnosticoDivergenciaDialog({
                       <TableCell className="text-xs font-mono">
                         {r.status}
                         {r.status === "RECEIVED_IN_CASH" && (
-                          <span className="ml-1 text-[9px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 px-1 rounded">
+                          <span className="ml-1 text-[9px] text-warning-fg bg-warning-bg px-1 rounded">
                             cash
                           </span>
                         )}
@@ -768,7 +768,7 @@ function DiagnosticoDivergenciaDialog({
                       <TableCell className="text-xs text-right tabular-nums">
                         {formatBRL(r.valorLiquido)}
                       </TableCell>
-                      <TableCell className="text-xs text-right tabular-nums font-medium text-amber-700 dark:text-amber-300">
+                      <TableCell className="text-xs text-right tabular-nums font-medium text-warning-fg">
                         {formatBRL(r.taxa)}
                       </TableCell>
                     </TableRow>
@@ -778,29 +778,29 @@ function DiagnosticoDivergenciaDialog({
             </section>
 
             {data.saudeValorLiquido && (
-              <section className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50/40 dark:bg-red-950/20 p-3">
-                <h3 className="text-sm font-semibold text-red-900 dark:text-red-100 mb-2">
+              <section className="rounded-lg border border-danger/30 bg-danger-bg/40 p-3">
+                <h3 className="text-sm font-semibold text-danger-fg mb-2">
                   Saúde do valor líquido (netValue)
                 </h3>
                 <div className="grid grid-cols-4 gap-2 text-xs mb-3">
                   <div>
-                    <p className="text-red-700 dark:text-red-300">Sem líquido (null)</p>
+                    <p className="text-danger-fg">Sem líquido (null)</p>
                     <p className="font-bold tabular-nums">{data.saudeValorLiquido.nLiquidoNull}</p>
                   </div>
                   <div>
-                    <p className="text-red-700 dark:text-red-300">Líquido = 0</p>
+                    <p className="text-danger-fg">Líquido = 0</p>
                     <p className="font-bold tabular-nums">{data.saudeValorLiquido.nLiquidoZero}</p>
                   </div>
                   <div>
-                    <p className="text-red-700 dark:text-red-300">Suspeitos (&lt;80% do bruto)</p>
+                    <p className="text-danger-fg">Suspeitos (&lt;80% do bruto)</p>
                     <p className="font-bold tabular-nums">{data.saudeValorLiquido.nLiquidoSuspeito}</p>
                   </div>
                   <div>
-                    <p className="text-red-700 dark:text-red-300">OK</p>
+                    <p className="text-danger-fg">OK</p>
                     <p className="font-bold tabular-nums">{data.saudeValorLiquido.nLiquidoOk}</p>
                   </div>
                 </div>
-                <p className="text-[11px] text-red-800 dark:text-red-200 mb-2">
+                <p className="text-[11px] text-danger-fg mb-2">
                   Se "Suspeitos" for alto, o netValue desses está corrompido (gravado errado no
                   sync/webhook). Top 20 cobranças com maior diferença bruto−líquido:
                 </p>
@@ -823,7 +823,7 @@ function DiagnosticoDivergenciaDialog({
                         <TableCell className="text-[10px] max-w-[160px] truncate">{o.descricao ?? "—"}</TableCell>
                         <TableCell className="text-[10px] text-right tabular-nums">{formatBRL(o.valor)}</TableCell>
                         <TableCell className="text-[10px] text-right tabular-nums">{formatBRL(o.valorLiquido ?? 0)}</TableCell>
-                        <TableCell className="text-[10px] text-right tabular-nums font-medium text-red-700 dark:text-red-300">
+                        <TableCell className="text-[10px] text-right tabular-nums font-medium text-danger-fg">
                           {o.gapPercent.toFixed(1)}%
                         </TableCell>
                       </TableRow>
@@ -835,10 +835,10 @@ function DiagnosticoDivergenciaDialog({
 
             {data.recebidoEmCash.count > 0 && (
               <section>
-                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">
+                <h3 className="text-sm font-semibold text-foreground mb-2">
                   2. Cobranças RECEIVED_IN_CASH no período
                 </h3>
-                <p className="text-[11px] text-slate-500 mb-2">
+                <p className="text-[11px] text-muted-foreground mb-2">
                   Cobranças marcadas como "pago em dinheiro/manual" (via
                   JuridFlow ou direto no Asaas). Total:{" "}
                   <strong>{formatBRL(data.recebidoEmCash.total)}</strong> em{" "}
@@ -858,7 +858,7 @@ function DiagnosticoDivergenciaDialog({
                       <TableRow key={c.id}>
                         <TableCell className="text-xs">{c.dataPagamento ?? "—"}</TableCell>
                         <TableCell className="text-xs">{c.descricao ?? "—"}</TableCell>
-                        <TableCell className="text-[10px] font-mono text-slate-500">
+                        <TableCell className="text-[10px] font-mono text-muted-foreground">
                           {c.asaasPaymentId ?? "—"}
                         </TableCell>
                         <TableCell className="text-xs text-right tabular-nums">
@@ -872,10 +872,10 @@ function DiagnosticoDivergenciaDialog({
             )}
 
             <section>
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">
+              <h3 className="text-sm font-semibold text-foreground mb-2">
                 3. Cobranças nas bordas do período (±2 dias)
               </h3>
-              <p className="text-[11px] text-slate-500 mb-2">
+              <p className="text-[11px] text-muted-foreground mb-2">
                 Se aparecer cobrança paga no <strong>último dia do mês
                 anterior</strong> ou no <strong>primeiro dia do próximo
                 mês</strong>, pode ser timezone (UTC vs Brasília). Asaas
@@ -883,7 +883,7 @@ function DiagnosticoDivergenciaDialog({
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-1">
+                  <p className="text-[11px] font-semibold text-foreground mb-1">
                     Borda do início ({dataInicio} ±2d)
                   </p>
                   <Table>
@@ -897,7 +897,7 @@ function DiagnosticoDivergenciaDialog({
                     <TableBody>
                       {data.bordaInicio.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={3} className="text-[11px] text-slate-500 text-center">
+                          <TableCell colSpan={3} className="text-[11px] text-muted-foreground text-center">
                             Nada na borda.
                           </TableCell>
                         </TableRow>
@@ -915,7 +915,7 @@ function DiagnosticoDivergenciaDialog({
                   </Table>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-1">
+                  <p className="text-[11px] font-semibold text-foreground mb-1">
                     Borda do fim ({dataFim} ±2d)
                   </p>
                   <Table>
@@ -929,7 +929,7 @@ function DiagnosticoDivergenciaDialog({
                     <TableBody>
                       {data.bordaFim.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={3} className="text-[11px] text-slate-500 text-center">
+                          <TableCell colSpan={3} className="text-[11px] text-muted-foreground text-center">
                             Nada na borda.
                           </TableCell>
                         </TableRow>
@@ -977,36 +977,36 @@ function ComposicaoRecebidoSection({ kpis }: { kpis: any }) {
       </CardHeader>
       <CardContent className="pt-0">
         <table className="w-full text-sm">
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+          <tbody className="divide-y divide-border">
             <tr>
               <td className="py-2.5">
-                <span className="inline-flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="inline-flex items-center gap-2 text-foreground">
+                  <span className="w-2 h-2 rounded-full bg-success" />
                   Com vencimento neste mês
-                  <span className="text-[11px] text-slate-400">(competência = tabelas abaixo = Asaas)</span>
+                  <span className="text-[11px] text-muted-foreground/70">(competência = tabelas abaixo = Asaas)</span>
                 </span>
               </td>
-              <td className="py-2.5 text-right tabular-nums text-slate-500">{competenciaCount}</td>
+              <td className="py-2.5 text-right tabular-nums text-muted-foreground">{competenciaCount}</td>
               <td className="py-2.5 text-right tabular-nums font-medium">{formatBRL(competencia)}</td>
             </tr>
-            <tr className="bg-amber-50/40 dark:bg-amber-950/10">
+            <tr className="bg-warning-bg/40">
               <td className="py-2.5 px-1">
-                <span className="inline-flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                <span className="inline-flex items-center gap-2 text-foreground">
+                  <span className="w-2 h-2 rounded-full bg-warning" />
                   + Recebido de outros meses
-                  <span className="text-[11px] text-slate-400">(venceu antes, pago agora)</span>
+                  <span className="text-[11px] text-muted-foreground/70">(venceu antes, pago agora)</span>
                 </span>
               </td>
-              <td className="py-2.5 text-right tabular-nums text-slate-500">{outrosMesesCount}</td>
-              <td className="py-2.5 text-right tabular-nums font-medium text-amber-700 dark:text-amber-300">{formatBRL(outrosMeses)}</td>
+              <td className="py-2.5 text-right tabular-nums text-muted-foreground">{outrosMesesCount}</td>
+              <td className="py-2.5 text-right tabular-nums font-medium text-warning-fg">{formatBRL(outrosMeses)}</td>
             </tr>
-            <tr className="bg-emerald-50/60 dark:bg-emerald-950/20 font-semibold border-t-2 border-emerald-200 dark:border-emerald-800/50">
-              <td className="py-2.5 px-1 text-slate-900 dark:text-slate-100">
+            <tr className="bg-success-bg/60 font-semibold border-t-2 border-success/30">
+              <td className="py-2.5 px-1 text-foreground">
                 = Entrou no caixa no período
-                <span className="text-[11px] font-normal text-slate-400 ml-1">(= Financeiro)</span>
+                <span className="text-[11px] font-normal text-muted-foreground/70 ml-1">(= Financeiro)</span>
               </td>
-              <td className="py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{caixaCount}</td>
-              <td className="py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{formatBRL(caixa)}</td>
+              <td className="py-2.5 text-right tabular-nums text-muted-foreground">{caixaCount}</td>
+              <td className="py-2.5 text-right tabular-nums text-success-fg">{formatBRL(caixa)}</td>
             </tr>
           </tbody>
         </table>
@@ -1024,10 +1024,10 @@ function ComposicaoRecebidoSection({ kpis }: { kpis: any }) {
 function ConferenciaAsaasSection({ situacao, kpis, formaVenc }: { situacao: any; kpis?: any; formaVenc?: any }) {
   const fmt = (v: number) => formatBRL(v);
   const cards = [
-    { key: "recebidas", label: "Recebidas", cor: "text-emerald-600 dark:text-emerald-400", data: situacao.recebidas },
-    { key: "confirmadas", label: "Confirmadas", cor: "text-sky-600 dark:text-sky-400", data: situacao.confirmadas },
-    { key: "aguardando", label: "Aguardando pagam.", cor: "text-amber-600 dark:text-amber-400", data: situacao.aguardando },
-    { key: "vencidas", label: "Vencidas", cor: "text-rose-600 dark:text-rose-400", data: situacao.vencidas },
+    { key: "recebidas", label: "Recebidas", cor: "text-success-fg", data: situacao.recebidas },
+    { key: "confirmadas", label: "Confirmadas", cor: "text-info-fg", data: situacao.confirmadas },
+    { key: "aguardando", label: "Aguardando pagam.", cor: "text-warning-fg", data: situacao.aguardando },
+    { key: "vencidas", label: "Vencidas", cor: "text-danger-fg", data: situacao.vencidas },
   ];
   const manual = kpis?.recebidoManual ?? 0;
   const manualCount = kpis?.recebidoManualCount ?? 0;
@@ -1037,31 +1037,31 @@ function ConferenciaAsaasSection({ situacao, kpis, formaVenc }: { situacao: any;
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <span className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">✓</span>
+          <span className="w-5 h-5 rounded-full bg-success text-success-on flex items-center justify-center text-xs font-bold">✓</span>
           Conferência com o Asaas
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           Abra o Asaas em "Situação das cobranças → Este mês" e compare card a card.
           Mesmos valores (bruto e líquido), mesmo critério (por vencimento).
         </p>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {cards.map((c) => (
-            <div key={c.key} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
-              <p className="text-xs text-slate-500">{c.label}</p>
+            <div key={c.key} className="rounded-xl border border-border p-3">
+              <p className="text-xs text-muted-foreground">{c.label}</p>
               <p className={`text-lg font-bold tabular-nums ${c.cor}`}>{fmt(c.data.bruto)}</p>
-              <p className="text-[11px] text-slate-400">{fmt(c.data.liquido)} líquido</p>
-              <p className="text-[10px] text-slate-400 mt-1">{c.data.count} cobranças</p>
+              <p className="text-[11px] text-muted-foreground/70">{fmt(c.data.liquido)} líquido</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-1">{c.data.count} cobranças</p>
             </div>
           ))}
         </div>
 
         {manual > 0 && (
-          <div className="rounded-lg bg-slate-50 dark:bg-slate-900/40 p-3 flex items-center justify-between text-xs">
-            <span className="text-slate-600 dark:text-slate-300">
-              <strong>Caixa Manual</strong> <span className="text-slate-400">(recebido por fora do Asaas — não aparece no painel deles)</span>
+          <div className="rounded-lg bg-muted p-3 flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">
+              <strong>Caixa Manual</strong> <span className="text-muted-foreground/70">(recebido por fora do Asaas — não aparece no painel deles)</span>
             </span>
             <span className="font-semibold tabular-nums">{fmt(manual)} · {manualCount}</span>
           </div>
@@ -1069,22 +1069,22 @@ function ConferenciaAsaasSection({ situacao, kpis, formaVenc }: { situacao: any;
 
         <button
           onClick={() => setDetalhe((d) => !d)}
-          className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+          className="text-xs text-info-fg hover:underline"
         >
           {detalhe ? "Ocultar detalhe por forma ›" : "Ver detalhe por forma de pagamento ›"}
         </button>
 
         {detalhe && formaVenc?.itens?.length > 0 && (
-          <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-            <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800">
-              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Recebidas por forma de pagamento (bate com Asaas)</p>
+          <div className="rounded-lg border border-border overflow-hidden">
+            <div className="px-4 py-2 bg-muted border-b border-border">
+              <p className="text-xs font-semibold text-foreground">Recebidas por forma de pagamento (bate com Asaas)</p>
             </div>
             <table className="w-full text-xs">
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-border">
                 {formaVenc.itens.map((f: any) => (
                   <tr key={f.forma}>
-                    <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{f.forma}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-500">{f.count} cobr.</td>
+                    <td className="px-4 py-2 text-foreground">{f.forma}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">{f.count} cobr.</td>
                     <td className="px-4 py-2 text-right font-semibold tabular-nums">{fmt(f.valor)}</td>
                   </tr>
                 ))}

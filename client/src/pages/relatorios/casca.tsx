@@ -243,14 +243,14 @@ export function FiltroMulti({
         <button
           type="button"
           className={`flex h-8 items-center gap-1.5 rounded-lg border pl-2.5 pr-2 text-xs transition-colors ${
-            selecionados.length ? "border-violet-400 dark:border-violet-700" : ""
+            selecionados.length ? "border-info/30" : ""
           }`}
         >
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             {rotulo}
           </span>
           {selecionados.length > 0 && (
-            <span className="rounded-full bg-violet-600 px-1.5 text-[10px] font-bold text-white">
+            <span className="rounded-full bg-info px-1.5 text-[10px] font-bold text-info-on">
               {selecionados.length}
             </span>
           )}
@@ -271,7 +271,7 @@ export function FiltroMulti({
           <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
             {rotulo}
           </span>
-          <span className="text-[11px] font-semibold text-violet-600 dark:text-violet-400">
+          <span className="text-[11px] font-semibold text-info-fg">
             <button type="button" onClick={() => setRascunho(new Set(opcoes.map((o) => o.id)))}>
               marcar todos
             </button>
@@ -287,7 +287,7 @@ export function FiltroMulti({
             <label
               key={o.id}
               className={`flex cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1.5 ${
-                rascunho.has(o.id) ? "bg-violet-50 dark:bg-violet-950/40" : "hover:bg-muted/60"
+                rascunho.has(o.id) ? "bg-info-bg" : "hover:bg-muted/60"
               }`}
             >
               <Checkbox
@@ -354,8 +354,8 @@ export function Delta({ delta }: { delta: DeltaKpi | null }) {
     <span
       className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
         delta.bom
-          ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400"
-          : "bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400"
+          ? "bg-success-bg text-success-fg dark:text-success"
+          : "bg-danger-bg text-danger-fg dark:text-danger"
       }`}
     >
       <Icone className="h-3 w-3" />
@@ -523,8 +523,8 @@ export function iniciais(nome: string): string {
 }
 
 const CORES_AVATAR = [
-  "bg-violet-500", "bg-sky-500", "bg-amber-500",
-  "bg-emerald-500", "bg-rose-500", "bg-indigo-500",
+  "bg-info", "bg-info", "bg-warning",
+  "bg-success", "bg-danger", "bg-info",
 ];
 
 export function Avatar({ nome, indice }: { nome: string; indice: number }) {
@@ -552,10 +552,10 @@ export function PastilhaTaxa({ taxa, referencia }: { taxa: number | null; refere
     referencia == null || referencia === 0
       ? "bg-muted text-foreground"
       : taxa >= referencia
-        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
+        ? "bg-success-bg text-success-fg dark:text-success"
         : taxa >= referencia * 0.7
-          ? "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
-          : "bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400";
+          ? "bg-warning-bg text-warning-fg dark:text-warning"
+          : "bg-danger-bg text-danger-fg dark:text-danger";
   return (
     <span
       className={`inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${classe}`}

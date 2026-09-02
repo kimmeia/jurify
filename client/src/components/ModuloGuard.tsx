@@ -19,8 +19,8 @@ function ModuloBloqueado({ modulos }: { modulos: string[] }) {
   const nome = MODULOS_APP.find((m) => m.id === modulos[0])?.nome ?? modulos[0];
   return (
     <div className="mx-auto mt-16 max-w-lg px-4 text-center">
-      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-violet-200 bg-violet-50 dark:border-violet-900 dark:bg-violet-950/40">
-        <Lock className="h-7 w-7 text-violet-600 dark:text-violet-400" />
+      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-info/30 bg-info-bg dark:bg-info/40">
+        <Lock className="h-7 w-7 text-info-fg" />
       </div>
       <h2 className="text-lg font-bold">{nome} não faz parte do seu plano</h2>
       <p className="mt-2 text-sm text-muted-foreground leading-relaxed">

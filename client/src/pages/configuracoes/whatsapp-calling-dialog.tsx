@@ -50,7 +50,7 @@ export function WhatsAppCallingDialog({ open, onClose, canalId, canEdit }: Props
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Phone className="h-5 w-5 text-green-600 dark:text-green-400" />
+            <Phone className="h-5 w-5 text-success-fg" />
             Ligação de voz
           </DialogTitle>
           <DialogDescription>
@@ -65,13 +65,13 @@ export function WhatsAppCallingDialog({ open, onClose, canalId, canEdit }: Props
         )}
 
         {statusQuery.error && (
-          <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-700 dark:text-red-300">
+          <div className="rounded-lg border border-danger/30 bg-danger-bg p-3 text-sm text-danger-fg">
             {(statusQuery.error as any).message}
           </div>
         )}
 
         {!statusQuery.isLoading && !statusQuery.error && coexBloqueado && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200 space-y-1.5">
+          <div className="rounded-lg border border-warning/30 bg-warning-bg p-3 text-sm text-warning-fg space-y-1.5">
             <p className="flex items-start gap-1.5 font-medium">
               <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
               Número em modo coexistência
@@ -102,7 +102,7 @@ export function WhatsAppCallingDialog({ open, onClose, canalId, canEdit }: Props
 
             <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground space-y-1.5">
               <p className="flex items-start gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-500" />
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-warning" />
                 <span>
                   No painel do Facebook App, assine o campo de webhook <strong>calls</strong> — sem
                   isso as chamadas não chegam.

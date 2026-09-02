@@ -30,28 +30,28 @@ import {
 import { naturezaDoGrau } from "@shared/jurisia-grau";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
-  fila: { label: "na fila", cls: "text-slate-500 bg-slate-500/10 border-slate-500/20" },
-  rodando: { label: "rodando", cls: "text-violet-600 dark:text-violet-400 bg-violet-500/10 border-violet-500/20" },
-  completo: { label: "completo", cls: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
-  erro: { label: "erro", cls: "text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20" },
+  fila: { label: "na fila", cls: "text-muted-foreground bg-muted-foreground/10 border-border/20" },
+  rodando: { label: "rodando", cls: "text-info-fg bg-info/10 border-info/30" },
+  completo: { label: "completo", cls: "text-success-fg bg-success/10 border-success/30" },
+  erro: { label: "erro", cls: "text-danger-fg bg-danger/10 border-danger/30" },
 };
 
 const nf = new Intl.NumberFormat("pt-BR");
 
 const VEREDITO: Record<string, { rotulo: string; cls: string }> = {
-  "responde-json": { rotulo: "JSON", cls: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
-  "responde-html": { rotulo: "HTML", cls: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20" },
-  bloqueado: { rotulo: "bloqueado", cls: "text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20" },
-  vazio: { rotulo: "vazio", cls: "text-slate-500 bg-slate-500/10 border-slate-500/20" },
-  erro: { rotulo: "erro", cls: "text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20" },
+  "responde-json": { rotulo: "JSON", cls: "text-success-fg bg-success/10 border-success/30" },
+  "responde-html": { rotulo: "HTML", cls: "text-warning-fg bg-warning/10 border-warning/30" },
+  bloqueado: { rotulo: "bloqueado", cls: "text-danger-fg bg-danger/10 border-danger/30" },
+  vazio: { rotulo: "vazio", cls: "text-muted-foreground bg-muted-foreground/10 border-border/20" },
+  erro: { rotulo: "erro", cls: "text-danger-fg bg-danger/10 border-danger/30" },
 };
 
 const STATUS_TAREFA: Record<string, { label: string; cls: string }> = {
-  fila: { label: "na fila", cls: "text-slate-500 bg-slate-500/10 border-slate-500/20" },
-  rodando: { label: "rodando", cls: "text-violet-600 dark:text-violet-400 bg-violet-500/10 border-violet-500/20" },
-  concluida: { label: "concluída", cls: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
-  cancelada: { label: "cancelada", cls: "text-slate-500 bg-slate-500/10 border-slate-500/20" },
-  erro: { label: "erro", cls: "text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20" },
+  fila: { label: "na fila", cls: "text-muted-foreground bg-muted-foreground/10 border-border/20" },
+  rodando: { label: "rodando", cls: "text-info-fg bg-info/10 border-info/30" },
+  concluida: { label: "concluída", cls: "text-success-fg bg-success/10 border-success/30" },
+  cancelada: { label: "cancelada", cls: "text-muted-foreground bg-muted-foreground/10 border-border/20" },
+  erro: { label: "erro", cls: "text-danger-fg bg-danger/10 border-danger/30" },
 };
 
 /**
@@ -204,14 +204,14 @@ function FilaIngestao({ tribunais }: { tribunais: Array<{ sigla: string; nome: s
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                     <div
-                      className="h-1.5 rounded-full bg-violet-500"
+                      className="h-1.5 rounded-full bg-info"
                       style={{ width: `${pct}%` }}
                     />
                   </div>
                   {/* O erro não mata a tarefa: um tribunal fora do ar é motivo
                       pra tentar outro no próximo ciclo, não pra desistir. */}
                   {t.ultimoErro && (
-                    <p className="mt-1.5 text-[11px] text-red-600 dark:text-red-400">{t.ultimoErro}</p>
+                    <p className="mt-1.5 text-[11px] text-danger-fg">{t.ultimoErro}</p>
                   )}
                 </div>
               );
@@ -255,9 +255,9 @@ function ZerarIngestao() {
   const vazio = !c || c.processos + c.movimentos + c.tribunaisComEstado === 0;
 
   return (
-    <Card className="border-red-500/30">
+    <Card className="border-danger/30">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base text-red-600 dark:text-red-400">
+        <CardTitle className="flex items-center gap-2 text-base text-danger-fg">
           <TriangleAlert className="h-4 w-4" />
           Recomeçar a ingestão do zero
         </CardTitle>
@@ -329,7 +329,7 @@ function ZerarIngestao() {
                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => zerar.mutate({ confirmacao: "ZERAR" })}
-                  className="bg-red-600 text-white hover:bg-red-700"
+                  className="bg-danger text-danger-on hover:bg-danger"
                 >
                   Apagar e recomeçar
                 </AlertDialogAction>
@@ -415,7 +415,7 @@ function PainelSondagem() {
         {s && (
           <div className="space-y-3">
             {s.bloqueioDeRede && (
-              <p className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+              <p className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-fg">
                 <TriangleAlert className="mt-px h-4 w-4 shrink-0" />
                 Quase tudo voltou 403 curto, de domínios diferentes. Isso é padrão de proxy
                 bloqueando a saída deste servidor — não dos tribunais recusando.
@@ -465,22 +465,22 @@ function PainelSondagem() {
                           {r.temEmenta === null ? (
                             <span className="text-xs text-muted-foreground">—</span>
                           ) : r.temEmenta ? (
-                            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">sim</span>
+                            <span className="text-xs font-semibold text-success-fg">sim</span>
                           ) : (
                             <span className="text-xs text-muted-foreground">não</span>
                           )}
                         </TableCell>
                         <TableCell>
                           {r.retryNavegador === "passou" && (
-                            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                            <span className="text-xs font-semibold text-warning-fg">
                               é o cabeçalho
                             </span>
                           )}
                           {r.retryNavegador === "persistiu" && (
-                            <span className="text-xs font-semibold text-red-600 dark:text-red-400">é o IP</span>
+                            <span className="text-xs font-semibold text-danger-fg">é o IP</span>
                           )}
                           {r.causa && (
-                            <span className="text-xs font-semibold text-red-600 dark:text-red-400">{r.causa}</span>
+                            <span className="text-xs font-semibold text-danger-fg">{r.causa}</span>
                           )}
                           {!r.retryNavegador && !r.causa && (
                             <span className="text-xs text-muted-foreground">—</span>
@@ -491,7 +491,7 @@ function PainelSondagem() {
                         <TableRow>
                           <TableCell colSpan={6} className="bg-muted/40">
                             {r.erro && (
-                              <p className="mb-2 text-xs text-red-600 dark:text-red-400">erro: {r.erro}</p>
+                              <p className="mb-2 text-xs text-danger-fg">erro: {r.erro}</p>
                             )}
                             {r.forma && (
                               <p className="mb-2 text-xs">
@@ -506,7 +506,7 @@ function PainelSondagem() {
                                   <span
                                     className={
                                       r.datajud.grau
-                                        ? "font-bold text-violet-600 dark:text-violet-400"
+                                        ? "font-bold text-info-fg"
                                         : "text-muted-foreground"
                                     }
                                   >
@@ -610,10 +610,10 @@ function PainelNatureza({
       <CardContent className="space-y-3">
         <div className="flex h-2 overflow-hidden rounded-full bg-muted">
           {jurisprudencia > 0 && (
-            <div className="bg-violet-500" style={{ width: `${pct(jurisprudencia)}%` }} />
+            <div className="bg-info" style={{ width: `${pct(jurisprudencia)}%` }} />
           )}
           {estatistica > 0 && (
-            <div className="bg-slate-400" style={{ width: `${pct(estatistica)}%` }} />
+            <div className="bg-muted-foreground/50" style={{ width: `${pct(estatistica)}%` }} />
           )}
           {indefinido > 0 && (
             <div className="bg-muted-foreground/30" style={{ width: `${pct(indefinido)}%` }} />
@@ -622,7 +622,7 @@ function PainelNatureza({
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
-            <p className="text-xl font-bold tabular-nums text-violet-600 dark:text-violet-400">
+            <p className="text-xl font-bold tabular-nums text-info-fg">
               {nf.format(jurisprudencia)}
             </p>
             <p className="text-[11px] text-muted-foreground">
@@ -644,7 +644,7 @@ function PainelNatureza({
         </div>
 
         {jurisprudencia === 0 && (
-          <p className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+          <p className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-fg">
             <TriangleAlert className="mt-px h-4 w-4 shrink-0" />
             O acervo não tem uma única decisão colegiada. Colete um alias de 2º grau antes de
             liberar o módulo para novos clientes.
@@ -680,7 +680,7 @@ function PainelNatureza({
                 </p>
               </div>
               <div>
-                <p className="text-lg font-bold tabular-nums text-violet-600 dark:text-violet-400">
+                <p className="text-lg font-bold tabular-nums text-info-fg">
                   {nf.format(c.comRecurso)}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
@@ -690,7 +690,7 @@ function PainelNatureza({
               <div>
                 <p
                   className={`text-lg font-bold tabular-nums ${
-                    c.semNada > c.total / 2 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
+                    c.semNada > c.total / 2 ? "text-warning-fg" : "text-muted-foreground"
                   }`}
                 >
                   {nf.format(c.semNada)}
@@ -706,7 +706,7 @@ function PainelNatureza({
                 {c.porRecurso.map((f) => (
                   <span
                     key={f.resultado}
-                    className="rounded border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] text-violet-900 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-200"
+                    className="rounded border border-info/30 bg-info-bg px-2 py-0.5 text-[11px] text-info-fg"
                   >
                     {f.resultado.replace(/_/g, " ")}{" "}
                     <b className="tabular-nums">{nf.format(f.quantidade)}</b>
@@ -716,7 +716,7 @@ function PainelNatureza({
             )}
 
             {c.semNada > c.total / 2 && (
-              <p className="mt-2 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+              <p className="mt-2 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-fg">
                 <TriangleAlert className="mt-px h-4 w-4 shrink-0" />
                 Mais da metade do acervo entrou sem desfecho. Rode a Amostra no tribunal que mais
                 pesa e veja em "último movimento dos não classificados" qual nome a regra não
@@ -812,7 +812,7 @@ export default function AdminJurisIa() {
             <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
               Completos
             </p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{completos}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-success-fg">{completos}</p>
             <p className="text-[11px] text-muted-foreground">de {linhas.length} tribunais</p>
           </CardContent>
         </Card>
@@ -878,7 +878,7 @@ export default function AdminJurisIa() {
                             de código que já foi corrigido, me fez concluir
                             que o bug tinha voltado. */}
                         {l.ultimoErro && (
-                          <div className="mt-0.5 flex items-start gap-1 text-[11px] text-red-600 dark:text-red-400">
+                          <div className="mt-0.5 flex items-start gap-1 text-[11px] text-danger-fg">
                             <TriangleAlert className="mt-px h-3 w-3 shrink-0" />
                             <p className="min-w-0">
                               {l.ultimaExecucao && (
@@ -969,7 +969,7 @@ export default function AdminJurisIa() {
       <p className="pt-2 text-xs text-muted-foreground">
         🔧{" "}
         <button
-          className="font-bold text-violet-700 dark:text-violet-400 underline underline-offset-2"
+          className="font-bold text-info-fg underline underline-offset-2"
           onClick={() => setMostrarFerramentas((v) => !v)}
         >
           {mostrarFerramentas ? "Esconder ferramentas técnicas ▴" : "Mostrar ferramentas técnicas ▸"}
@@ -1009,10 +1009,10 @@ function ResultadoAmostra({ dados }: { dados: any }) {
   const recursos = Object.values(rec).reduce((s: number, n) => s + Number(n), 0) as number;
 
   return (
-    <Card className="border-violet-200 dark:border-violet-800/50">
+    <Card className="border-info/30">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <FlaskConical className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+          <FlaskConical className="h-4 w-4 text-info-fg" />
           Amostra — nada foi gravado
         </CardTitle>
         <CardDescription>
@@ -1062,7 +1062,7 @@ function ResultadoAmostra({ dados }: { dados: any }) {
                 .map(([k, v]) => (
                   <span
                     key={k}
-                    className="rounded border border-violet-200 bg-violet-50 px-2 py-1 text-xs text-violet-900 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-200"
+                    className="rounded border border-info/30 bg-info-bg px-2 py-1 text-xs text-info-fg"
                   >
                     {k.replace(/_/g, " ")}{" "}
                     <b className="tabular-nums">{nf.format(Number(v))}</b>
@@ -1108,7 +1108,7 @@ function ResultadoAmostra({ dados }: { dados: any }) {
                     {e.assunto ?? "— sem assunto —"} · {e.orgao ?? "— sem órgão —"} ·{" "}
                     {e.movimentos} movimento(s)
                     {e.resultado && (
-                      <> · <b className="text-emerald-600 dark:text-emerald-400">{e.resultado.replace(/_/g, " ")}</b> ({e.movimentoDecisivo})</>
+                      <> · <b className="text-success-fg">{e.resultado.replace(/_/g, " ")}</b> ({e.movimentoDecisivo})</>
                     )}
                   </p>
                 </div>

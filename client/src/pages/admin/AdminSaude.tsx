@@ -38,9 +38,9 @@ function duracaoCurta(ms: number | null): string {
 
 function SeloStatus({ tom, children }: { tom: "ok" | "atencao" | "erro"; children: React.ReactNode }) {
   const classes = {
-    ok: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800",
-    atencao: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
-    erro: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800",
+    ok: "bg-success-bg text-success-fg border-success/30 dark:text-success",
+    atencao: "bg-warning-bg text-warning-fg border-warning/30 dark:text-warning",
+    erro: "bg-danger-bg text-danger-fg border-danger/30 dark:text-danger",
   } as const;
   return (
     <Badge variant="outline" className={`text-[10px] font-bold ${classes[tom]}`}>
@@ -123,7 +123,7 @@ function VisaoRapida({ irParaAba }: { irParaAba: (aba: Aba) => void }) {
               <Skeleton className="h-8 w-16" />
             ) : (
               <>
-                <p className={`text-2xl font-bold ${errosAbertos > 0 ? "text-rose-600 dark:text-rose-400" : ""}`}>
+                <p className={`text-2xl font-bold ${errosAbertos > 0 ? "text-danger-fg" : ""}`}>
                   {erros.data?.configurado === false ? "—" : errosAbertos}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -216,7 +216,7 @@ function VisaoRapida({ irParaAba }: { irParaAba: (aba: Aba) => void }) {
                 <p className="text-xs text-muted-foreground mt-1">
                   enviados
                   {(emails.data?.falha24h ?? 0) > 0 && (
-                    <span className="text-rose-600 dark:text-rose-400 font-medium">
+                    <span className="text-danger-fg font-medium">
                       {" "}· {emails.data?.falha24h} falharam
                     </span>
                   )}
@@ -232,7 +232,7 @@ function VisaoRapida({ irParaAba }: { irParaAba: (aba: Aba) => void }) {
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">Últimos erros</CardTitle>
             <button
-              className="text-xs font-medium text-violet-700 dark:text-violet-400 hover:underline"
+              className="text-xs font-medium text-info-fg hover:underline"
               onClick={() => irParaAba("erros")}
             >
               abrir aba Erros →

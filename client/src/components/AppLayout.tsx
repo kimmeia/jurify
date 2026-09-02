@@ -575,7 +575,7 @@ function AppSidebarContent({
                             <Icone className={`h-4 w-4 ${ativo ? "text-sidebar-primary" : ""}`} />
                             <span className="flex-1">{item.rotulo}</span>
                             {item.selo && contagem === 0 && (
-                              <span className="ml-auto rounded-full border border-amber-400/40 bg-amber-400/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-amber-300 group-data-[collapsible=icon]:hidden">
+                              <span className="ml-auto rounded-full border border-warning/30 bg-warning/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-warning-fg group-data-[collapsible=icon]:hidden">
                                 {item.selo}
                               </span>
                             )}
@@ -584,7 +584,7 @@ function AppSidebarContent({
                                 <span
                                   className={`ml-auto rounded-full px-1.5 py-px text-[10px] font-extrabold tabular-nums group-data-[collapsible=icon]:hidden ${
                                     item.tomBadge === "alerta"
-                                      ? "bg-rose-500/20 text-rose-200"
+                                      ? "bg-danger/20 text-danger-fg"
                                       : "bg-sidebar-primary/20 text-sidebar-primary"
                                   }`}
                                 >
@@ -594,7 +594,7 @@ function AppSidebarContent({
                                     responde "tem algo esperando aqui?". */}
                                 <span
                                   className={`absolute right-1.5 top-1.5 hidden h-1.5 w-1.5 rounded-full group-data-[collapsible=icon]:block ${
-                                    item.tomBadge === "alerta" ? "bg-rose-400" : "bg-sidebar-primary"
+                                    item.tomBadge === "alerta" ? "bg-danger" : "bg-sidebar-primary"
                                   }`}
                                 />
                               </>
@@ -730,7 +730,7 @@ function AppSidebarContent({
                 onClick={logout}
                 title="Sair"
                 aria-label="Sair"
-                className="h-8 w-8 shrink-0 rounded-lg border border-rose-400/40 bg-rose-500/10 flex items-center justify-center text-rose-300 hover:bg-rose-500/20 transition-colors"
+                className="h-8 w-8 shrink-0 rounded-lg border border-danger/30 bg-danger/10 flex items-center justify-center text-danger-fg hover:bg-danger/20 transition-colors"
               >
                 <LogOut className="h-4 w-4" />
               </button>
@@ -760,10 +760,10 @@ function AppSidebarContent({
             <div className="flex items-center gap-2">
               <span
                 className="inline-flex items-center justify-center font-display font-extrabold text-white shrink-0 select-none"
-                style={{ width: 30, height: 30, borderRadius: 8, fontSize: 16, lineHeight: 1, background: "linear-gradient(135deg,#7c3aed,#4f46e5)" }}
+                style={{ width: 30, height: 30, borderRadius: 8, fontSize: 16, lineHeight: 1, background: "linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%)" }}
                 aria-hidden
               >
-                J<span style={{ color: "#c4b5fd" }}>.</span>
+                J<span style={{ color: "var(--sidebar-primary)" }}>.</span>
               </span>
               <span className="font-bold tracking-tight text-foreground">Atendimento</span>
             </div>
@@ -876,9 +876,9 @@ function TrialBanner() {
   };
 
   const cor =
-    dias >= 4 ? "bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200" :
-    dias >= 2 ? "bg-orange-50 border-orange-200 text-orange-900 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-200" :
-                "bg-red-50 border-red-200 text-red-900 dark:bg-red-950/30 dark:border-red-800 dark:text-red-200";
+    dias >= 4 ? "bg-warning-bg border-warning/30 text-warning-fg dark:border-warning/30" :
+    dias >= 2 ? "bg-warning-bg border-warning/30 text-warning-fg dark:border-warning/30" :
+                "bg-danger-bg border-danger/30 text-danger-fg dark:border-danger/30";
 
   const texto =
     dias === 0 ? "Seu trial termina hoje." :

@@ -123,7 +123,7 @@ export function AgendamentoComissaoCard() {
               type="checkbox"
               checked={ativo}
               onChange={(e) => setAtivo(e.target.checked)}
-              className="h-5 w-9 accent-violet-600 cursor-pointer"
+              className="h-5 w-9 accent-info cursor-pointer"
             />
           </div>
 
@@ -157,8 +157,8 @@ export function AgendamentoComissaoCard() {
           </div>
 
           {proximaExecucao && (
-            <div className="rounded-md border border-violet-200 bg-violet-50 dark:bg-violet-950/30 dark:border-violet-900 p-3">
-              <p className="text-xs text-violet-900 dark:text-violet-200">
+            <div className="rounded-md border border-info/30 bg-info-bg dark:border-info/30 p-3">
+              <p className="text-xs text-info-fg">
                 <strong>Próximo lançamento:</strong>{" "}
                 {proximaExecucao.toLocaleDateString("pt-BR", {
                   day: "2-digit",
@@ -167,7 +167,7 @@ export function AgendamentoComissaoCard() {
                 })}{" "}
                 às {horaLocal}
               </p>
-              <p className="text-[10px] text-violet-700 dark:text-violet-400 mt-1">
+              <p className="text-[10px] text-info-fg mt-1">
                 Vai fechar o mês anterior completo (1 ao último dia).
               </p>
             </div>
@@ -213,17 +213,17 @@ export function AgendamentoComissaoCard() {
                   <TableRow key={row.id}>
                     <TableCell className="text-xs">
                       {row.status === "concluido" && (
-                        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                        <span className="inline-flex items-center gap-1 text-success-fg">
                           <CheckCircle2 className="h-3.5 w-3.5" /> Concluído
                         </span>
                       )}
                       {row.status === "falhou" && (
-                        <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400">
+                        <span className="inline-flex items-center gap-1 text-danger-fg">
                           <XCircle className="h-3.5 w-3.5" /> Falhou
                         </span>
                       )}
                       {row.status === "em_andamento" && (
-                        <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                        <span className="inline-flex items-center gap-1 text-warning-fg">
                           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Em andamento
                         </span>
                       )}
@@ -243,7 +243,7 @@ export function AgendamentoComissaoCard() {
                           })
                         : "—"}
                     </TableCell>
-                    <TableCell className="text-xs text-red-600 dark:text-red-400 max-w-[300px] truncate">
+                    <TableCell className="text-xs text-danger-fg max-w-[300px] truncate">
                       {row.mensagemErro || "—"}
                     </TableCell>
                   </TableRow>

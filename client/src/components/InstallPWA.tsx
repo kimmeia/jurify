@@ -44,12 +44,12 @@ function IconeJ({ size = 40 }: { size?: number }) {
         height: size,
         fontSize: size * 0.55,
         borderRadius: size * 0.23,
-        background: "linear-gradient(135deg,#7c3aed 0%,#4f46e5 100%)",
+        background: "linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%)",
         lineHeight: 1,
       }}
       aria-hidden
     >
-      J<span style={{ color: "#c4b5fd" }}>.</span>
+      J<span style={{ color: "var(--sidebar-primary)" }}>.</span>
     </span>
   );
 }
@@ -118,17 +118,17 @@ export function InstallPWA() {
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-[60] p-3 pointer-events-none sm:flex sm:justify-center">
-      <div className="pointer-events-auto mx-auto sm:mx-0 max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-3 flex items-center gap-3">
+      <div className="pointer-events-auto mx-auto sm:mx-0 max-w-md w-full bg-white dark:bg-muted border border-border rounded-2xl shadow-2xl p-3 flex items-center gap-3">
         <IconeJ size={44} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Instalar o JuridFlow</p>
+          <p className="text-sm font-bold text-foreground">Instalar o JuridFlow</p>
           {mostrarIOS ? (
-            <p className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-snug">
+            <p className="text-[11.5px] text-muted-foreground leading-snug">
               Toque em <Share className="inline h-3 w-3 -mt-0.5" /> <span className="font-medium">Compartilhar</span> e depois em{" "}
               <span className="font-medium">"Adicionar à Tela de Início"</span>.
             </p>
           ) : (
-            <p className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-snug">
+            <p className="text-[11.5px] text-muted-foreground leading-snug">
               Acesso rápido na tela inicial, em tela cheia.
             </p>
           )}
@@ -137,12 +137,12 @@ export function InstallPWA() {
           <button
             onClick={instalar}
             className="shrink-0 rounded-lg px-4 py-2 text-xs font-bold text-white"
-            style={{ background: "linear-gradient(135deg,#7c3aed 0%,#4f46e5 100%)" }}
+            style={{ background: "linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%)" }}
           >
             Instalar
           </button>
         )}
-        <button onClick={dispensar} className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" aria-label="Dispensar">
+        <button onClick={dispensar} className="shrink-0 text-muted-foreground/70 hover:text-muted-foreground" aria-label="Dispensar">
           <X className="h-4 w-4" />
         </button>
       </div>

@@ -10,8 +10,8 @@ import { toast } from "sonner";
 import { CheckSquare, Plus, Loader2, Search, Calendar, Clock, AlertTriangle, User, Trash2, Check, X } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = { pendente: "Pendente", em_andamento: "Em andamento", concluida: "Concluída", cancelada: "Cancelada" };
-const STATUS_CORES: Record<string, string> = { pendente: "bg-amber-100 text-amber-700 dark:text-amber-300", em_andamento: "bg-blue-100 text-blue-700 dark:text-blue-300", concluida: "bg-emerald-100 text-emerald-700 dark:text-emerald-300", cancelada: "bg-gray-100 dark:bg-slate-800/60 text-gray-500" };
-const PRIOR_CORES: Record<string, string> = { urgente: "bg-red-500", alta: "bg-orange-400", normal: "bg-blue-400", baixa: "bg-gray-300" };
+const STATUS_CORES: Record<string, string> = { pendente: "bg-warning-bg text-warning-fg", em_andamento: "bg-info-bg text-info-fg", concluida: "bg-success-bg text-success-fg", cancelada: "bg-muted text-muted-foreground" };
+const PRIOR_CORES: Record<string, string> = { urgente: "bg-danger", alta: "bg-warning", normal: "bg-info", baixa: "bg-muted-foreground/50" };
 
 export default function Tarefas() {
   const [filtroStatus, setFiltroStatus] = useState<string>("todas");
@@ -69,22 +69,22 @@ export default function Tarefas() {
             <div key={t.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/20 transition-colors group">
               {/* Checkbox para concluir */}
               <button
-                className={`h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${t.status === "concluida" ? "bg-emerald-500 border-emerald-500 text-white" : "border-muted-foreground/30 hover:border-emerald-400"}`}
+                className={`h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${t.status === "concluida" ? "bg-success border-success/30 text-success-on" : "border-muted-foreground/30 hover:border-success/30"}`}
                 onClick={() => atualizarMut.mutate({ id: t.id, status: t.status === "concluida" ? "pendente" : "concluida" })}
               >
                 {t.status === "concluida" && <Check className="h-3 w-3" />}
               </button>
 
               {/* Barra de prioridade */}
-              <div className={`w-1 h-8 rounded-full ${PRIOR_CORES[t.prioridade] || "bg-gray-300"}`} />
+              <div className={`w-1 h-8 rounded-full ${PRIOR_CORES[t.prioridade] || "bg-muted-foreground/50"}`} />
 
               {/* Conteúdo */}
               <div className="flex-1 min-w-0">
                 <p className={`text-sm font-medium truncate ${t.status === "concluida" ? "line-through text-muted-foreground" : ""}`}>{t.titulo}</p>
                 <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">
                   {t.responsavelNome && <span className="flex items-center gap-0.5"><User className="h-2.5 w-2.5" /> {t.responsavelNome}</span>}
-                  {t.dataVencimento && <span className={`flex items-center gap-0.5 ${t.vencida ? "text-red-500 font-medium" : ""}`}><Calendar className="h-2.5 w-2.5" /> {new Date(t.dataVencimento).toLocaleDateString("pt-BR")}</span>}
-                  {t.vencida && <AlertTriangle className="h-3 w-3 text-red-500" />}
+                  {t.dataVencimento && <span className={`flex items-center gap-0.5 ${t.vencida ? "text-danger font-medium" : ""}`}><Calendar className="h-2.5 w-2.5" /> {new Date(t.dataVencimento).toLocaleDateString("pt-BR")}</span>}
+                  {t.vencida && <AlertTriangle className="h-3 w-3 text-danger" />}
                 </div>
               </div>
 
@@ -94,7 +94,7 @@ export default function Tarefas() {
               {/* Ações */}
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                 {t.status !== "em_andamento" && t.status !== "concluida" && (
-                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600 dark:text-blue-400" title="Iniciar" onClick={() => atualizarMut.mutate({ id: t.id, status: "em_andamento" })}><Clock className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-info-fg" title="Iniciar" onClick={() => atualizarMut.mutate({ id: t.id, status: "em_andamento" })}><Clock className="h-3 w-3" /></Button>
                 )}
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => { if (confirm("Excluir tarefa?")) excluirMut.mutate({ id: t.id }); }}><Trash2 className="h-3 w-3" /></Button>
               </div>

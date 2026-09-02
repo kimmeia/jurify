@@ -37,8 +37,8 @@ interface Resultado {
 
 function Numero({ valor, rotulo, destaque }: { valor: number; rotulo: string; destaque?: boolean }) {
   return (
-    <div className={`rounded-xl border p-3 ${destaque ? "border-violet-500/30 bg-violet-500/5" : "border-slate-200 dark:border-slate-800"}`}>
-      <p className={`text-xl font-semibold tabular-nums ${destaque ? "text-violet-600 dark:text-violet-400" : ""}`}>
+    <div className={`rounded-xl border p-3 ${destaque ? "border-info/30 bg-info/5" : "border-border"}`}>
+      <p className={`text-xl font-semibold tabular-nums ${destaque ? "text-info-fg" : ""}`}>
         {valor.toLocaleString("pt-BR")}
       </p>
       <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">{rotulo}</p>
@@ -113,7 +113,7 @@ export default function AdminManutencao() {
               </div>
               <Progress value={pct} className="h-2" />
               {!pendente && (s?.totalConversas ?? 0) > 0 && (
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 pt-1">
+                <p className="text-xs text-success-fg flex items-center gap-1.5 pt-1">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Histórico completo: {(s?.episodios ?? 0).toLocaleString("pt-BR")} atendimentos registrados.
                 </p>
@@ -169,7 +169,7 @@ export default function AdminManutencao() {
           )}
 
           {resultado && (
-            <div className="rounded-xl border border-slate-200 p-4 space-y-3 dark:border-slate-800">
+            <div className="rounded-xl border border-border p-4 space-y-3 dark:border-border">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 {resultado.aplicado ? "Resultado" : "Simulação — nada foi gravado"}
               </p>
@@ -189,7 +189,7 @@ export default function AdminManutencao() {
 
               {resultado.conversasComMaisDeUm > 0 && (
                 <p className="text-xs text-muted-foreground flex items-start gap-1.5">
-                  <Users className="h-3.5 w-3.5 mt-0.5 shrink-0 text-violet-500" />
+                  <Users className="h-3.5 w-3.5 mt-0.5 shrink-0 text-info" />
                   <span>
                     Essas {resultado.conversasComMaisDeUm.toLocaleString("pt-BR")} são clientes que
                     voltaram depois de um tempo. Cada volta era um atendimento que sumia da
@@ -200,7 +200,7 @@ export default function AdminManutencao() {
 
               {resultado.historicoRecuperado > 0 && (
                 <p className="text-xs text-muted-foreground flex items-start gap-1.5">
-                  <History className="h-3.5 w-3.5 mt-0.5 shrink-0 text-violet-500" />
+                  <History className="h-3.5 w-3.5 mt-0.5 shrink-0 text-info" />
                   <span>
                     {resultado.historicoRecuperado.toLocaleString("pt-BR")} conversas já tinham
                     atendimento aberto quando o módulo subiu e estavam sem o começo:{" "}
@@ -214,7 +214,7 @@ export default function AdminManutencao() {
               )}
 
               {!resultado.completo && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
+                <p className="text-xs text-warning-fg">
                   Parou em {resultado.restantes.toLocaleString("pt-BR")} conversas restantes pra não
                   travar a página. {resultado.aplicado ? "Clique em “Reconstruir agora” de novo pra continuar de onde parou." : "A simulação cobriu só o começo."}
                 </p>

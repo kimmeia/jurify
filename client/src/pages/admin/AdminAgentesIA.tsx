@@ -439,7 +439,7 @@ function TreinamentoDialog({
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <BrainCircuit className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+            <BrainCircuit className="h-5 w-5 text-info-fg" />
             Treinamento: {agente?.nome || "..."}
           </DialogTitle>
           <DialogDescription>
@@ -494,11 +494,11 @@ function TreinamentoDialog({
                     className="flex items-center gap-2 border rounded-md p-2 text-xs"
                   >
                     {d.tipo === "arquivo" ? (
-                      <FileIcon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                      <FileIcon className="h-3.5 w-3.5 text-info-fg shrink-0" />
                     ) : d.tipo === "link" ? (
-                      <Link2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <Link2 className="h-3.5 w-3.5 text-success-fg shrink-0" />
                     ) : (
-                      <FileText className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400 shrink-0" />
+                      <FileText className="h-3.5 w-3.5 text-info-fg shrink-0" />
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{d.nome}</p>
@@ -675,9 +675,9 @@ function TreinamentoDialog({
             </div>
 
             {testeResposta && (
-              <div className="border rounded-lg p-4 bg-violet-500/5 border-violet-500/20 space-y-2">
+              <div className="border rounded-lg p-4 bg-info/5 border-info/30 space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-1.5 text-violet-700 dark:text-violet-300">
+                  <Label className="flex items-center gap-1.5 text-info-fg">
                     <Sparkles className="h-3.5 w-3.5" />
                     Resposta do agente
                   </Label>
@@ -738,7 +738,7 @@ export default function AdminAgentesIA() {
         <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
           {agentes?.length ?? 0} {(agentes?.length ?? 0) === 1 ? "agente" : "agentes"}
           {status && (status.openaiConfigurado || status.anthropicConfigurado) && (
-            <span className="ml-2 normal-case tracking-normal font-semibold text-emerald-700 dark:text-emerald-400">
+            <span className="ml-2 normal-case tracking-normal font-semibold text-success-fg">
               ✓ {status.openaiConfigurado && status.anthropicConfigurado
                 ? "OpenAI + Claude conectados"
                 : status.openaiConfigurado
@@ -755,9 +755,9 @@ export default function AdminAgentesIA() {
 
       {/* Aviso se nenhuma IA estiver configurada */}
       {status && !status.openaiConfigurado && !status.anthropicConfigurado && (
-        <Card className="border-amber-500/30 bg-amber-50/30 dark:bg-amber-950/10">
+        <Card className="border-warning/30 bg-warning-bg/30">
           <CardContent className="pt-6 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="h-5 w-5 text-warning-fg shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-foreground">Nenhuma IA configurada</p>
               <p className="text-sm text-muted-foreground mt-1">
@@ -805,7 +805,7 @@ export default function AdminAgentesIA() {
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-2 min-w-0">
-                    <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white shrink-0">
+                    <div className="h-9 w-9 rounded-lg bg-info flex items-center justify-center text-info-on shrink-0">
                       <Bot className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
@@ -831,7 +831,7 @@ export default function AdminAgentesIA() {
                   {(a.modulosPermitidos || []).slice(0, 3).map((m: string) => (
                     <span
                       key={m}
-                      className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-300"
+                      className="text-[9px] px-1.5 py-0.5 rounded-full bg-info/10 text-info-fg"
                     >
                       {m}
                     </span>

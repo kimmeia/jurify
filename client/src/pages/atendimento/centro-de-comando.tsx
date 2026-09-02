@@ -25,13 +25,13 @@ type Conv = {
 };
 
 const AVATAR_GRADIENTS = [
-  "from-violet-500 to-pink-500",
-  "from-blue-500 to-cyan-500",
-  "from-amber-500 to-red-500",
-  "from-emerald-500 to-teal-600",
-  "from-indigo-500 to-violet-500",
-  "from-pink-500 to-rose-500",
-  "from-teal-500 to-emerald-500",
+  "from-info to-danger",
+  "from-info to-info",
+  "from-warning to-danger",
+  "from-success to-success",
+  "from-info to-info",
+  "from-danger to-danger",
+  "from-success to-success",
 ];
 function gradientFromName(name: string) {
   let h = 0;
@@ -98,7 +98,7 @@ export function CentroDeComando({
           className="relative overflow-hidden rounded-2xl p-5 border"
           style={{
             background:
-              "linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 50%, rgba(236,72,153,0.06) 100%)",
+              "color-mix(in oklab, var(--primary) 7%, transparent)",
             borderColor: "rgba(139,92,246,0.18)",
           }}
         >
@@ -107,8 +107,8 @@ export function CentroDeComando({
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
             Você tem <strong className="text-foreground">{convs.length}</strong> conversa{convs.length === 1 ? "" : "s"}
-            {aguardando > 0 && <> · <strong className="text-amber-600 dark:text-amber-400">{aguardando} aguardando</strong></>}
-            {slaCritico > 0 && <> · <strong className="text-red-600 dark:text-red-400">{slaCritico} com SLA crítico</strong></>}
+            {aguardando > 0 && <> · <strong className="text-warning-fg">{aguardando} aguardando</strong></>}
+            {slaCritico > 0 && <> · <strong className="text-danger-fg">{slaCritico} com SLA crítico</strong></>}
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
@@ -162,14 +162,14 @@ export function CentroDeComando({
             <Button
               size="sm"
               onClick={onIniciar}
-              className="bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-sm"
+              className="bg-success shadow-sm"
             >
               <Plus className="h-3.5 w-3.5 mr-1" /> Nova conversa
             </Button>
             <ShortcutPill icon={<Search className="h-3 w-3" />} label="Buscar tudo" kbd="⌘ K" />
             <ShortcutPill icon="/" label="Respostas rápidas" />
-            <ShortcutPill icon={<Sparkles className="h-3 w-3 text-violet-500" />} label="Brief Instantâneo (auto)" />
-            <ShortcutPill icon={<Shield className="h-3 w-3 text-rose-500" />} label="Compliance Guard (auto)" />
+            <ShortcutPill icon={<Sparkles className="h-3 w-3 text-info" />} label="Brief Instantâneo (auto)" />
+            <ShortcutPill icon={<Shield className="h-3 w-3 text-danger" />} label="Compliance Guard (auto)" />
           </div>
         </div>
 
@@ -196,10 +196,10 @@ function KpiCard({
   label: string;
 }) {
   const corMap = {
-    amber: { bg: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300", valor: "text-amber-700 dark:text-amber-300" },
-    rose: { bg: "bg-rose-100 dark:bg-rose-900/30", text: "text-rose-700 dark:text-rose-300", valor: "text-rose-700 dark:text-rose-300" },
-    violet: { bg: "bg-violet-100 dark:bg-violet-900/30", text: "text-violet-700 dark:text-violet-300", valor: "text-violet-700 dark:text-violet-300" },
-    emerald: { bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-300", valor: "text-emerald-700 dark:text-emerald-300" },
+    amber: { bg: "bg-warning-bg", text: "text-warning-fg", valor: "text-warning-fg" },
+    rose: { bg: "bg-danger-bg", text: "text-danger-fg", valor: "text-danger-fg" },
+    violet: { bg: "bg-info-bg", text: "text-info-fg", valor: "text-info-fg" },
+    emerald: { bg: "bg-success-bg", text: "text-success-fg", valor: "text-success-fg" },
   } as const;
   const c = corMap[cor];
   return (
@@ -225,10 +225,10 @@ function SectionTitle({ icon, children }: { icon: string; children: React.ReactN
 
 function PriorityRow({ conv, onClick }: { conv: Conv; onClick: () => void }) {
   const nome = conv.contatoNome || "Cliente";
-  const corBorda = conv.temAtraso ? "border-l-rose-500" : "border-l-amber-500";
+  const corBorda = conv.temAtraso ? "border-l-danger" : "border-l-warning";
   const razao = conv.temAtraso
-    ? <span className="text-red-700 dark:text-red-300 font-semibold">⏰ SLA crítico</span>
-    : <span className="text-amber-700 dark:text-amber-300">Aguardando resposta</span>;
+    ? <span className="text-danger-fg font-semibold">⏰ SLA crítico</span>
+    : <span className="text-warning-fg">Aguardando resposta</span>;
   return (
     <button
       onClick={onClick}
@@ -266,7 +266,7 @@ function ShortcutPill({
         </kbd>
       )}
       {typeof icon === "string"
-        ? <span className="font-mono text-violet-600 dark:text-violet-400 font-bold">{icon}</span>
+        ? <span className="font-mono text-info-fg font-bold">{icon}</span>
         : icon}
       <span className="text-foreground/80">{label}</span>
     </span>

@@ -44,20 +44,20 @@ export default function TermosGate() {
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 flex-wrap">
-            <ScrollText className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+            <ScrollText className="h-5 w-5 text-info-fg" />
             Atualizamos os Termos de Uso
-            <Badge variant="outline" className="text-[10px] border-violet-500/40 text-violet-700 dark:text-violet-300">
+            <Badge variant="outline" className="text-[10px] border-info/30 text-info-fg">
               versão {data.versaoAtual} · {data.atualizadoEm}
             </Badge>
           </DialogTitle>
           <DialogDescription>
             Pra continuar usando o JuridFlow, o responsável pelo escritório precisa ler e aceitar
             a nova versão dos{" "}
-            <a href="/termos" target="_blank" rel="noopener noreferrer" className="font-semibold text-violet-700 dark:text-violet-300 underline">
+            <a href="/termos" target="_blank" rel="noopener noreferrer" className="font-semibold text-info-fg underline">
               Termos de Uso
             </a>{" "}
             e da{" "}
-            <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="font-semibold text-violet-700 dark:text-violet-300 underline">
+            <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="font-semibold text-info-fg underline">
               Política de Privacidade
             </a>.
           </DialogDescription>

@@ -268,7 +268,7 @@ export function ValidacaoPassoPanel({ itens }: { itens: ItemValidacao[] }) {
       {erros.map((i, idx) => (
         <div
           key={`e-${idx}`}
-          className="flex items-start gap-1.5 text-[11px] rounded-md border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-2 py-1.5 text-red-900 dark:text-red-200"
+          className="flex items-start gap-1.5 text-[11px] rounded-md border border-danger/30 bg-danger-bg px-2 py-1.5 text-danger-fg"
         >
           <AlertCircle className="h-3 w-3 shrink-0 mt-0.5" />
           <span className="leading-snug">{i.mensagem}</span>
@@ -277,7 +277,7 @@ export function ValidacaoPassoPanel({ itens }: { itens: ItemValidacao[] }) {
       {avisos.map((i, idx) => (
         <div
           key={`a-${idx}`}
-          className="flex items-start gap-1.5 text-[11px] rounded-md border border-amber-300 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-amber-900 dark:text-amber-200"
+          className="flex items-start gap-1.5 text-[11px] rounded-md border border-warning/30 bg-warning-bg px-2 py-1.5 text-warning-fg"
         >
           <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
           <span className="leading-snug">{i.mensagem}</span>
@@ -286,7 +286,7 @@ export function ValidacaoPassoPanel({ itens }: { itens: ItemValidacao[] }) {
       {infos.map((i, idx) => (
         <div
           key={`i-${idx}`}
-          className="flex items-start gap-1.5 text-[11px] rounded-md border border-blue-300 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 px-2 py-1.5 text-blue-900 dark:text-blue-200"
+          className="flex items-start gap-1.5 text-[11px] rounded-md border border-info/30 bg-info-bg px-2 py-1.5 text-info-fg"
         >
           <Info className="h-3 w-3 shrink-0 mt-0.5" />
           <span className="leading-snug">{i.mensagem}</span>

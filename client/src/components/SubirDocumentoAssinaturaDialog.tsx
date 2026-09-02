@@ -161,7 +161,7 @@ export function SubirDocumentoAssinaturaDialog({
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+            <Upload className="h-5 w-5 text-success-fg" />
             Subir documento p/ assinatura
           </DialogTitle>
           <DialogDescription>
@@ -171,8 +171,8 @@ export function SubirDocumentoAssinaturaDialog({
 
         {linkGerado ? (
           <div className="space-y-4 py-2">
-            <div className="rounded-md border-2 border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
-              <p className="text-sm font-medium flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
+            <div className="rounded-md border-2 border-success/30 bg-success/5 p-4 space-y-2">
+              <p className="text-sm font-medium flex items-center gap-1.5 text-success-fg">
                 <PenLine className="h-4 w-4" /> Documento pronto para assinatura
               </p>
               <p className="text-xs text-muted-foreground">Link copiado pro clipboard. Envie pro cliente via WhatsApp ou email.</p>
@@ -211,7 +211,7 @@ export function SubirDocumentoAssinaturaDialog({
               />
               {arquivo ? (
                 <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
-                  <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <FileText className="h-4 w-4 text-success-fg shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{arquivo.name}</p>
                     <p className="text-[10px] text-muted-foreground">{(arquivo.size / 1024 / 1024).toFixed(1)} MB</p>
@@ -223,9 +223,9 @@ export function SubirDocumentoAssinaturaDialog({
               ) : (
                 <button
                   onClick={() => inputRef.current?.click()}
-                  className="w-full rounded-md border-2 border-dashed border-violet-200 dark:border-violet-800/50 bg-violet-50/40 dark:bg-violet-950/30 hover:bg-violet-50 dark:hover:bg-violet-950/30 py-6 text-center"
+                  className="w-full rounded-md border-2 border-dashed border-info/30 bg-info-bg/40 hover:bg-info-bg py-6 text-center"
                 >
-                  <Upload className="h-6 w-6 mx-auto text-violet-500" />
+                  <Upload className="h-6 w-6 mx-auto text-info" />
                   <p className="text-xs font-medium mt-1.5">Clique para escolher o arquivo</p>
                   <p className="text-[10px] text-muted-foreground">PDF ou Word (.docx) · até {MAX_MB} MB · Word vira PDF</p>
                 </button>

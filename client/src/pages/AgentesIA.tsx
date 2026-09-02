@@ -530,7 +530,7 @@ function AgenteFormDialog({
         {/* Header simples */}
         <DialogHeader className="px-5 py-3 border-b">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white">
+            <div className="w-7 h-7 rounded-lg bg-info flex items-center justify-center text-info-on">
               <Sparkles className="h-3.5 w-3.5" />
             </div>
             {agenteId ? "Editar agente" : "Criar novo agente"}
@@ -552,7 +552,7 @@ function AgenteFormDialog({
                     key={t.id}
                     type="button"
                     onClick={() => aplicarTemplate(t)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-card text-xs hover:border-violet-300 hover:bg-violet-50/40 dark:hover:bg-violet-950/20 transition"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-card text-xs hover:border-info/30 hover:bg-info-bg/40 transition"
                   >
                     <span className="text-sm">{t.icon}</span>
                     <span>{t.label}</span>
@@ -567,7 +567,7 @@ function AgenteFormDialog({
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Identidade</p>
             <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <Label className="text-xs">Nome <span className="text-red-500">*</span></Label>
+                <Label className="text-xs">Nome <span className="text-danger">*</span></Label>
                 <Input
                   placeholder="Ex: Especialista Trabalhista"
                   value={form.nome}
@@ -616,12 +616,12 @@ function AgenteFormDialog({
                         className={
                           "relative text-left rounded-lg border-2 px-2.5 py-2 transition " +
                           (active
-                            ? "border-violet-500 bg-violet-50/40 dark:bg-violet-950/30"
-                            : "border-border bg-card hover:border-violet-300")
+                            ? "border-info/30 bg-info-bg/40"
+                            : "border-border bg-card hover:border-info/30")
                         }
                       >
                         {active && (
-                          <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-violet-600 text-white text-[9px] font-bold flex items-center justify-center">✓</span>
+                          <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-info text-info-on text-[9px] font-bold flex items-center justify-center">✓</span>
                         )}
                         <p className="text-xs font-bold leading-tight">{m.nome}</p>
                         <p className="text-[10px] text-muted-foreground mt-0.5">{m.tier}</p>
@@ -634,13 +634,13 @@ function AgenteFormDialog({
                     );
                   })}
                 </div>
-                <p className="text-[10px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 mt-1.5">
+                <p className="text-[10px] text-success-fg flex items-center gap-1 mt-1.5">
                   <CheckCircle2 className="h-3 w-3" />
                   {ambosConfigurados ? "OpenAI e Anthropic configurados" : chatgptConfigurado ? "OpenAI configurada · Integrações → ChatGPT" : "Anthropic configurada · Integrações → Claude"}
                 </p>
               </>
             ) : (
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 p-3 text-xs text-amber-900 dark:text-amber-200">
+              <div className="rounded-lg bg-warning-bg border border-warning/30 p-3 text-xs text-warning-fg">
                 <p className="font-semibold">Nenhuma IA configurada</p>
                 <p className="mt-0.5">Vá em <strong>Configurações → Integrações</strong> e cadastre a API Key do ChatGPT ou Claude antes de criar agentes.</p>
               </div>
@@ -650,7 +650,7 @@ function AgenteFormDialog({
           {/* Prompt + Sugerir */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Prompt de sistema <span className="text-red-500">*</span></p>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Prompt de sistema <span className="text-danger">*</span></p>
               <button
                 type="button"
                 onClick={() => {
@@ -665,7 +665,7 @@ function AgenteFormDialog({
                     toast.info("Selecione uma área de conhecimento primeiro");
                   }
                 }}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-950/30 text-[10px] font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-950/50"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-info/30 bg-info-bg text-[10px] font-semibold text-info-fg hover:bg-info-bg"
               >
                 <Sparkles className="h-2.5 w-2.5" /> Sugerir
               </button>
@@ -686,7 +686,7 @@ function AgenteFormDialog({
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <Label className="text-xs">Tom da resposta</Label>
-                <span className="text-[10px] font-bold text-violet-700 dark:text-violet-300">
+                <span className="text-[10px] font-bold text-info-fg">
                   {temperaturaNum.toFixed(1)} · {describeTemperatura(temperaturaNum)}
                 </span>
               </div>
@@ -697,7 +697,7 @@ function AgenteFormDialog({
                 step={0.1}
                 value={temperaturaNum}
                 onChange={(e) => setForm({ ...form, temperatura: e.target.value })}
-                className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-violet-600"
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-info"
                 style={{ background: "linear-gradient(90deg, #3b82f6, #8b5cf6 50%, #ef4444)" }}
               />
               <div className="flex justify-between text-[9px] text-muted-foreground mt-1">
@@ -741,8 +741,8 @@ function AgenteFormDialog({
                     className={
                       "flex items-center gap-1.5 px-2 py-1.5 rounded-lg border-2 text-xs transition " +
                       (active
-                        ? "border-violet-500 bg-violet-50/40 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 font-semibold"
-                        : "border-border bg-card hover:border-violet-300")
+                        ? "border-info/30 bg-info-bg/40 text-info-fg font-semibold"
+                        : "border-border bg-card hover:border-info/30")
                     }
                     title={m.label}
                   >
@@ -765,7 +765,7 @@ function AgenteFormDialog({
                   <button
                     type="button"
                     onClick={analisarManual}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/30 text-[10px] font-semibold text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-950/50"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-info/30 bg-info-bg text-[10px] font-semibold text-info-fg hover:bg-info-bg"
                     title="Detecta [chaves] no prompt que ainda não existem e oferece criar de uma vez"
                   >
                     <Sparkles className="h-2.5 w-2.5" /> Analisar prompt
@@ -773,7 +773,7 @@ function AgenteFormDialog({
                   <button
                     type="button"
                     onClick={adicionarVariavel}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-950/30 text-[10px] font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-950/50"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-info/30 bg-info-bg text-[10px] font-semibold text-info-fg hover:bg-info-bg"
                   >
                     <Plus className="h-2.5 w-2.5" /> Adicionar variável
                   </button>
@@ -806,7 +806,7 @@ function AgenteFormDialog({
                         className={
                           "rounded-lg border bg-card/50 p-2.5 space-y-2 relative " +
                           (atributoDuplicado
-                            ? "border-amber-400 bg-amber-50/30 dark:bg-amber-950/10"
+                            ? "border-warning/30 bg-warning-bg/30"
                             : "border-border")
                         }
                       >
@@ -827,16 +827,16 @@ function AgenteFormDialog({
                               onChange={(e) => atualizarVariavel(idx, { atributo: e.target.value })}
                               className={
                                 "h-7 text-xs mt-0.5 " +
-                                (inputAlerta ? "border-amber-400" : "")
+                                (inputAlerta ? "border-warning/30" : "")
                               }
                               maxLength={48}
                             />
                             {atributoDuplicado ? (
-                              <p className="text-[9px] text-amber-700 dark:text-amber-400 mt-0.5 font-medium">
+                              <p className="text-[9px] text-warning-fg mt-0.5 font-medium">
                                 ⚠ Outra variável já usa esse atributo
                               </p>
                             ) : atributoInvalido ? (
-                              <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
+                              <p className="text-[9px] text-warning-fg mt-0.5">
                                 Use letras, números e underscore. Comece com letra.
                               </p>
                             ) : null}
@@ -899,7 +899,7 @@ function AgenteFormDialog({
               <button
                 type="button"
                 onClick={analisarManual}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/30 text-[11px] font-semibold text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-950/50"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-info/30 bg-info-bg text-[11px] font-semibold text-info-fg hover:bg-info-bg"
                 title="Detecta [chaves] no prompt e oferece criar de uma vez"
               >
                 <Sparkles className="h-3 w-3" /> Analisar prompt e criar campos
@@ -920,7 +920,7 @@ function AgenteFormDialog({
         {/* Footer */}
         <DialogFooter className="px-5 py-3 border-t bg-muted/30 gap-1 flex items-center justify-between sm:justify-between">
           {temDuplicata && (
-            <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1 mr-auto">
+            <p className="text-[11px] text-warning-fg font-medium flex items-center gap-1 mr-auto">
               ⚠ Resolva os atributos duplicados antes de salvar
             </p>
           )}
@@ -936,7 +936,7 @@ function AgenteFormDialog({
                 !algumIAConfigurado ||
                 temDuplicata
               }
-              className="h-8 text-xs bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+              className="h-8 text-xs bg-info"
             >
               {(criarMut.isPending || atualizarMut.isPending) && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
               {!(criarMut.isPending || atualizarMut.isPending) && <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
@@ -952,15 +952,15 @@ function AgenteFormDialog({
       <DialogContent className="sm:max-w-3xl max-h-[88vh] overflow-y-auto p-0 gap-0">
         <DialogHeader className="px-5 pt-5 pb-3 border-b">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="h-4 w-4 text-sky-500" />
+            <Sparkles className="h-4 w-4 text-info" />
             Criar os campos que o seu prompt usa
           </DialogTitle>
           <DialogDescription className="space-y-2 pt-1">
             <span className="block text-[12px] leading-relaxed">
               Encontrei <strong>{sugestoes.length}</strong> anotação(ões) no seu prompt no formato <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded border">[chave]</code> que ainda não existem no cadastro do cliente.
             </span>
-            <span className="block text-[12px] leading-relaxed text-foreground/80 bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 rounded p-2">
-              <strong className="text-sky-700 dark:text-sky-300">O que vai acontecer:</strong> ao confirmar, cada chave vira um <strong>campo personalizado</strong> no cadastro do cliente E é linkada nas <strong>"variáveis a capturar"</strong> do agente. Aí a IA passa a extrair esses valores da conversa <em>sozinha</em> e salvá-los na ficha de cada cliente.
+            <span className="block text-[12px] leading-relaxed text-foreground/80 bg-info-bg border border-info/30 rounded p-2">
+              <strong className="text-info-fg">O que vai acontecer:</strong> ao confirmar, cada chave vira um <strong>campo personalizado</strong> no cadastro do cliente E é linkada nas <strong>"variáveis a capturar"</strong> do agente. Aí a IA passa a extrair esses valores da conversa <em>sozinha</em> e salvá-los na ficha de cada cliente.
             </span>
           </DialogDescription>
         </DialogHeader>
@@ -1037,7 +1037,7 @@ function AgenteFormDialog({
 
                 {/* Opções (só pra select) */}
                 {s.tipo === "select" && (
-                  <div className="ml-2 pl-3 border-l-2 border-sky-300 dark:border-sky-700">
+                  <div className="ml-2 pl-3 border-l-2 border-info/30">
                     <Label className="text-[10px] text-muted-foreground">Opções da lista (a IA escolhe UMA)</Label>
                     <Input
                       className="h-8 text-sm mt-0.5"
@@ -1057,7 +1057,7 @@ function AgenteFormDialog({
           <Button variant="ghost" onClick={() => setAnaliseOpen(false)} disabled={criandoCampos}>
             Cancelar
           </Button>
-          <Button onClick={criarTodosDoModal} disabled={criandoCampos || sugestoes.length === 0} className="bg-gradient-to-br from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700">
+          <Button onClick={criarTodosDoModal} disabled={criandoCampos || sugestoes.length === 0} className="bg-info">
             {criandoCampos
               ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Criando…</>
               : <><Sparkles className="h-3.5 w-3.5 mr-1.5" />Criar {sugestoes.length} campos e linkar{salvarAposCriar ? " (e salvar agente)" : ""}</>
@@ -1195,7 +1195,7 @@ function TreinamentoDialog({
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <BrainCircuit className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+            <BrainCircuit className="h-5 w-5 text-info-fg" />
             Treinamento: {agente?.nome || "..."}
           </DialogTitle>
           <DialogDescription>
@@ -1249,15 +1249,15 @@ function TreinamentoDialog({
                       key={d.id}
                       className={
                         "flex items-center gap-2 border rounded-md p-2 text-xs " +
-                        (semConteudo ? "border-amber-300 bg-amber-50/30 dark:bg-amber-950/10" : "")
+                        (semConteudo ? "border-warning/30 bg-warning-bg/30" : "")
                       }
                     >
                       {ehArquivo ? (
-                        <FileIcon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                        <FileIcon className="h-3.5 w-3.5 text-info-fg shrink-0" />
                       ) : d.tipo === "link" ? (
-                        <Link2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <Link2 className="h-3.5 w-3.5 text-success-fg shrink-0" />
                       ) : (
-                        <FileText className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400 shrink-0" />
+                        <FileText className="h-3.5 w-3.5 text-info-fg shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -1266,7 +1266,7 @@ function TreinamentoDialog({
                             d.temConteudoExtraido ? (
                               <span
                                 title={`Texto extraído (${d.tamanhoConteudo} caracteres)`}
-                                className="text-[9px] px-1 py-0 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-semibold inline-flex items-center gap-0.5 shrink-0"
+                                className="text-[9px] px-1 py-0 rounded bg-success-bg text-success-fg font-semibold inline-flex items-center gap-0.5 shrink-0"
                               >
                                 <CheckCircle2 className="h-2.5 w-2.5" />
                                 texto OK
@@ -1274,7 +1274,7 @@ function TreinamentoDialog({
                             ) : (
                               <span
                                 title="Sem texto extraído — a IA não vai ver o conteúdo deste arquivo. Clique em reprocessar."
-                                className="text-[9px] px-1 py-0 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-semibold inline-flex items-center gap-0.5 shrink-0"
+                                className="text-[9px] px-1 py-0 rounded bg-warning-bg text-warning-fg font-semibold inline-flex items-center gap-0.5 shrink-0"
                               >
                                 <AlertTriangle className="h-2.5 w-2.5" />
                                 sem texto
@@ -1295,7 +1295,7 @@ function TreinamentoDialog({
                           onClick={() => reprocessarMut.mutate({ id: d.id })}
                           disabled={reprocessarMut.isPending}
                           title="Reextrair texto do arquivo"
-                          className="text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 disabled:opacity-50"
+                          className="text-muted-foreground hover:text-info-fg disabled:opacity-50"
                         >
                           {reprocessarMut.isPending && reprocessarMut.variables?.id === d.id
                             ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -1440,9 +1440,9 @@ function TreinamentoDialog({
             </div>
 
             {testeResposta && (
-              <div className="border rounded-lg p-4 bg-violet-500/5 border-violet-500/20 space-y-2">
+              <div className="border rounded-lg p-4 bg-info/5 border-info/30 space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-1.5 text-violet-700 dark:text-violet-300">
+                  <Label className="flex items-center gap-1.5 text-info-fg">
                     <Sparkles className="h-3.5 w-3.5" />
                     Resposta do agente
                   </Label>
@@ -1601,21 +1601,21 @@ export default function AgentesIA() {
           cliente/processo real). Vive aqui em Agentes IA, com tela própria. */}
       <Link href="/jurisia">
         <a className="block group">
-          <Card className="border-violet-200 dark:border-violet-800/50 bg-gradient-to-br from-violet-50 dark:from-violet-950/40 to-white dark:to-slate-900 hover:shadow-md transition-shadow cursor-pointer">
+          <Card className="border-info/30 bg-gradient-to-br from-info-bg to-white dark:to-muted hover:shadow-md transition-shadow cursor-pointer">
             <CardContent className="flex items-center gap-4 py-4">
-              <div className="h-11 w-11 rounded-xl bg-violet-600 text-white flex items-center justify-center shrink-0">
+              <div className="h-11 w-11 rounded-xl bg-info text-info-on flex items-center justify-center shrink-0">
                 <Scale className="h-6 w-6" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <p className="font-semibold">Agente Jurídico</p>
-                  <Badge className="bg-violet-600 text-white text-[10px]">Uma conversa só</Badge>
+                  <Badge className="bg-info text-info-on text-[10px]">Uma conversa só</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Lê o processo e os documentos do cliente, mede como o tribunal decide casos como aquele e redige a peça no padrão forense. Você revisa e assina.
                 </p>
               </div>
-              <ArrowRight className="h-5 w-5 text-violet-600 dark:text-violet-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+              <ArrowRight className="h-5 w-5 text-info-fg shrink-0 group-hover:translate-x-0.5 transition-transform" />
             </CardContent>
           </Card>
         </a>
@@ -1673,19 +1673,19 @@ export default function AgentesIA() {
 
       {/* Banner contextual da aba atual */}
       {tab === "templates" && (templates?.length ?? 0) > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900/40 px-4 py-2.5 flex items-start gap-2.5">
-          <Store className="h-4 w-4 text-amber-700 dark:text-amber-300 mt-0.5 shrink-0" />
+        <div className="rounded-xl border border-warning/30 bg-warning-bg/50 dark:border-warning/30 px-4 py-2.5 flex items-start gap-2.5">
+          <Store className="h-4 w-4 text-warning-fg mt-0.5 shrink-0" />
           <div className="text-xs">
-            <p className="font-semibold text-amber-900 dark:text-amber-200">Catálogo do JuridFlow</p>
-            <p className="text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+            <p className="font-semibold text-warning-fg">Catálogo do JuridFlow</p>
+            <p className="text-warning-fg/80 mt-0.5">
               Agentes pré-construídos pela equipe JuridFlow. Clique em <strong>Clonar p/ escritório</strong> para customizar com seus documentos e prompts.
             </p>
           </div>
         </div>
       )}
       {tab === "meus" && totalAgentes === 0 && (
-        <div className="rounded-xl border border-violet-200 bg-violet-50/50 dark:bg-violet-950/20 dark:border-violet-900/40 px-4 py-2.5 flex items-start gap-2.5">
-          <Sparkles className="h-4 w-4 text-violet-700 dark:text-violet-300 mt-0.5 shrink-0" />
+        <div className="rounded-xl border border-info/30 bg-info-bg/50 dark:border-info/30 px-4 py-2.5 flex items-start gap-2.5">
+          <Sparkles className="h-4 w-4 text-info-fg mt-0.5 shrink-0" />
           <div className="text-xs">
             <p className="font-semibold">Comece com um template</p>
             <p className="text-muted-foreground mt-0.5">
@@ -1723,7 +1723,7 @@ export default function AgentesIA() {
             {tab === "meus" && !busca && (
               <Button
                 onClick={() => { setEditandoId(null); setFormOpen(true); }}
-                className="bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 mt-2"
+                className="bg-info mt-2"
               >
                 <Plus className="h-4 w-4 mr-1.5" />
                 Criar primeiro agente
@@ -1803,13 +1803,13 @@ function TabButton({
       className={
         "px-3 py-1.5 rounded-lg text-sm font-medium inline-flex items-center gap-1.5 transition " +
         (active
-          ? "bg-background text-violet-700 dark:text-violet-300 font-semibold shadow-sm ring-1 ring-violet-300/30"
+          ? "bg-background text-info-fg font-semibold shadow-sm ring-1 ring-info/30"
           : "text-muted-foreground hover:text-foreground")
       }
     >
       {icon}
       {label}
-      <span className={"text-[10px] font-bold px-1.5 py-0.5 rounded-full " + (active ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" : "bg-muted text-muted-foreground")}>
+      <span className={"text-[10px] font-bold px-1.5 py-0.5 rounded-full " + (active ? "bg-info-bg text-info-fg dark:text-info" : "bg-muted text-muted-foreground")}>
         {count}
       </span>
     </button>

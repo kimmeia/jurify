@@ -41,10 +41,10 @@ const TIPO_ICONE: Record<CampoTipo, any> = {
   ASSINATURA: PenLine, DATA: Calendar, NOME: User, CPF: IdCard,
 };
 const TIPO_COR: Record<CampoTipo, string> = {
-  ASSINATURA: "bg-amber-200/70 dark:bg-amber-900/20 border-amber-500 text-amber-900 dark:text-amber-200",
-  DATA: "bg-blue-200/70 dark:bg-blue-900/20 border-blue-500 text-blue-900 dark:text-blue-200",
-  NOME: "bg-emerald-200/70 dark:bg-emerald-900/20 border-emerald-500 text-emerald-900 dark:text-emerald-200",
-  CPF: "bg-violet-200/70 dark:bg-violet-900/20 border-violet-500 text-violet-900 dark:text-violet-200",
+  ASSINATURA: "bg-warning-bg/70 border-warning/30 text-warning-fg",
+  DATA: "bg-info-bg/70 border-info/30 text-info-fg",
+  NOME: "bg-success-bg/70 border-success/30 text-success-fg",
+  CPF: "bg-info-bg/70 border-info/30 text-info-fg",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -162,7 +162,7 @@ export default function AssinarDocumento({ token }: { token: string }) {
   // Loading
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100 dark:from-slate-950 dark:to-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-muted">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -171,10 +171,10 @@ export default function AssinarDocumento({ token }: { token: string }) {
   // Não encontrado
   if (!doc || error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100 dark:from-slate-950 dark:to-gray-900 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-muted p-4">
         <Card className="w-full max-w-md text-center">
           <CardContent className="pt-8 pb-8">
-            <XCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+            <XCircle className="h-12 w-12 text-danger mx-auto mb-4" />
             <h2 className="text-xl font-bold mb-2">Documento não encontrado</h2>
             <p className="text-sm text-muted-foreground">O link pode estar incorreto ou o documento foi removido.</p>
           </CardContent>
@@ -192,13 +192,13 @@ export default function AssinarDocumento({ token }: { token: string }) {
   // Já assinado
   if (jaAssinado) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950 dark:to-green-950 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-success-bg to-success-bg dark:to-success p-4">
         <Card className="w-full max-w-md text-center">
           <CardContent className="pt-8 pb-8">
-            <div className="h-16 w-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+            <div className="h-16 w-16 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="h-8 w-8 text-success-fg" />
             </div>
-            <h2 className="text-xl font-bold text-emerald-800 dark:text-emerald-200 mb-2">Documento Assinado!</h2>
+            <h2 className="text-xl font-bold text-success-fg mb-2">Documento Assinado!</h2>
             <p className="text-sm text-muted-foreground mb-4">{doc.titulo}</p>
             <p className="text-xs text-muted-foreground">Sua assinatura digital foi registrada com sucesso. Você pode fechar esta página.</p>
           </CardContent>
@@ -210,10 +210,10 @@ export default function AssinarDocumento({ token }: { token: string }) {
   // Expirado ou cancelado
   if (expirado || cancelado) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100 dark:from-slate-950 dark:to-gray-900 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-muted p-4">
         <Card className="w-full max-w-md text-center">
           <CardContent className="pt-8 pb-8">
-            <AlertTriangle className="h-12 w-12 text-amber-400 mx-auto mb-4" />
+            <AlertTriangle className="h-12 w-12 text-warning mx-auto mb-4" />
             <h2 className="text-xl font-bold mb-2">{expirado ? "Documento Expirado" : "Documento Cancelado"}</h2>
             <p className="text-sm text-muted-foreground">{doc.titulo}</p>
             <p className="text-xs text-muted-foreground mt-2">
@@ -242,11 +242,11 @@ export default function AssinarDocumento({ token }: { token: string }) {
   // sempre a rota por token, montada aqui a partir do token da própria URL.
   const urlLeitura = doc.temDocumento ? `/api/assinatura/pdf/token/${token}` : null;
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-slate-950 dark:to-gray-900 p-4">
+    <div className="min-h-screen bg-muted p-4">
       <div className={`mx-auto ${temCamposPosicionais ? "max-w-5xl" : "max-w-lg"} space-y-4`}>
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center mx-auto shadow-lg">
+          <div className="h-14 w-14 rounded-2xl bg-danger flex items-center justify-center mx-auto shadow-lg">
             <PenLine className="h-7 w-7 text-white" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">Assinatura Digital</h1>
@@ -270,7 +270,7 @@ export default function AssinarDocumento({ token }: { token: string }) {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-blue-500 shrink-0" />
+              <FileText className="h-5 w-5 text-info shrink-0" />
               <div className="flex-1">
                 <CardTitle className="text-base">{doc.titulo}</CardTitle>
                 {doc.descricao && <p className="text-xs text-muted-foreground mt-0.5">{doc.descricao}</p>}
@@ -340,7 +340,7 @@ export default function AssinarDocumento({ token }: { token: string }) {
                       Limpar
                     </Button>
                   </div>
-                  <div className="rounded-lg border-2 border-dashed bg-white dark:bg-card">
+                  <div className="rounded-lg border-2 border-dashed bg-card">
                     {/* touch-none é crítico em mobile: sem ele o scroll do
                         navegador captura o gesto e não dá pra desenhar. */}
                     <canvas
@@ -369,7 +369,7 @@ export default function AssinarDocumento({ token }: { token: string }) {
                 </label>
 
                 <Button
-                  className="w-full h-11 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-semibold"
+                  className="w-full h-11 bg-danger text-danger-on font-semibold"
                   onClick={handleAssinar}
                   disabled={
                     !nomeCompleto ||
@@ -456,7 +456,7 @@ function PreviewPdfComCampos({
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="text-sm flex items-center gap-2">
-            <FileText className="h-4 w-4 text-amber-500" />
+            <FileText className="h-4 w-4 text-warning" />
             Onde sua assinatura vai aparecer
           </CardTitle>
           {totalPaginas > 0 && (
@@ -518,12 +518,12 @@ function PreviewPdfComCampos({
             </div>
           }
           error={
-            <div className="p-12 text-center text-sm text-red-600 dark:text-red-400">
+            <div className="p-12 text-center text-sm text-danger-fg">
               Não foi possível exibir o documento.
             </div>
           }
         >
-          <div ref={containerRef} className="relative inline-block shadow-md bg-white dark:bg-card">
+          <div ref={containerRef} className="relative inline-block shadow-md bg-card">
             <Page
               pageNumber={paginaAtual}
               width={larguraPagina}

@@ -102,16 +102,16 @@ function StepIndicator({ steps, current }: { steps: string[]; current: number })
           <div key={nome} className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <div className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[11px] ${
-                concluido ? "bg-emerald-600 text-white"
-                : ativo ? "bg-emerald-700 text-white"
-                : "bg-slate-200 text-slate-600 dark:text-slate-300"
+                concluido ? "bg-success text-success-on"
+                : ativo ? "bg-success text-success-on"
+                : "bg-muted text-muted-foreground"
               }`}>
                 {concluido ? <Check className="w-3 h-3" /> : num}
               </div>
-              <span className={ativo ? "font-medium text-slate-900 dark:text-slate-100" : "text-slate-500"}>{nome}</span>
+              <span className={ativo ? "font-medium text-foreground" : "text-muted-foreground"}>{nome}</span>
             </div>
             {i < steps.length - 1 && (
-              <div className={`w-8 h-px ${concluido ? "bg-emerald-300" : "bg-slate-300"}`} />
+              <div className={`w-8 h-px ${concluido ? "bg-success" : "bg-muted-foreground/50"}`} />
             )}
           </div>
         );
@@ -125,7 +125,7 @@ function ImobHero({ titulo, descricao, passoAtual, totalPassos }: {
   titulo?: string; descricao?: string; passoAtual?: number; totalPassos?: number;
 }) {
   return (
-    <div className="rounded-2xl bg-gradient-to-br from-emerald-700 via-teal-700 to-cyan-800 p-6 text-white relative overflow-hidden shadow-lg">
+    <div className="rounded-2xl bg-gradient-to-br from-success via-success to-info p-6 text-white relative overflow-hidden shadow-lg">
       <Building2 className="absolute -right-6 -bottom-8 w-40 h-40 opacity-10" strokeWidth={1.2} />
       <div className="relative">
         {passoAtual && totalPassos ? (
@@ -410,7 +410,7 @@ export default function Imobiliario() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-emerald-50/20 dark:to-emerald-950/20 p-6 space-y-5">
+      <div className="rounded-2xl bg-gradient-to-br from-muted/40 via-white dark:via-muted to-success-bg/20 p-6 space-y-5">
         {step !== 4 && <StepIndicator steps={stepLabels} current={step} />}
         {step !== 4 && (
           <ImobHero
@@ -426,7 +426,7 @@ export default function Imobiliario() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Home className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              <Home className="h-5 w-5 text-success-fg" />
               Dados do Imóvel e Financiamento
             </CardTitle>
             <CardDescription>Informe os dados básicos do imóvel e do financiamento</CardDescription>
@@ -446,7 +446,7 @@ export default function Imobiliario() {
             </div>
 
             {form.valorImovel && form.valorFinanciado && parseFloat(form.valorFinanciado) <= parseFloat(form.valorImovel) && (
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg text-sm">
+              <div className="p-3 bg-success-bg rounded-lg text-sm">
                 <strong>Entrada:</strong> {formatBRL(parseFloat(form.valorImovel) - parseFloat(form.valorFinanciado))} ({((parseFloat(form.valorImovel) - parseFloat(form.valorFinanciado)) / parseFloat(form.valorImovel) * 100).toFixed(1)}%)
               </div>
             )}
@@ -516,7 +516,7 @@ export default function Imobiliario() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              <Building2 className="h-5 w-5 text-success-fg" />
               Enquadramento do Contrato
             </CardTitle>
             <CardDescription>Identifique o sistema e o tipo de credor do financiamento</CardDescription>
@@ -524,8 +524,8 @@ export default function Imobiliario() {
           <CardContent className="space-y-6">
             {/* Auto-detecção */}
             {form.valorImovel && (
-              <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg text-sm flex items-center gap-2">
-                <Info className="h-4 w-4 text-blue-500 flex-shrink-0" />
+              <div className="p-3 bg-info-bg rounded-lg text-sm flex items-center gap-2">
+                <Info className="h-4 w-4 text-info flex-shrink-0" />
                 <span>
                   Com imóvel de {formatBRL(parseFloat(form.valorImovel))}, o enquadramento sugerido é{" "}
                   <strong>{parseFloat(form.valorImovel) <= 2250000 ? "SFH" : "SFI"}</strong>.
@@ -633,7 +633,7 @@ export default function Imobiliario() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              <FileText className="h-5 w-5 text-success-fg" />
               Dados do Contrato
             </CardTitle>
             <CardDescription>Informe as datas, indexador e configurações do contrato</CardDescription>
@@ -688,7 +688,7 @@ export default function Imobiliario() {
                   </Button>
                 </div>
                 {indexadorInfo && (
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <p className="text-xs text-success-fg flex items-center gap-1">
                     <CheckCircle className="h-3 w-3" /> {indexadorInfo}
                   </p>
                 )}
@@ -802,7 +802,7 @@ export default function Imobiliario() {
                   handleSubmit();
                 }}
                 disabled={calcularMutation.isPending}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="bg-success hover:bg-success text-success-on"
               >
                 {calcularMutation.isPending ? (
                   <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Calculando...</>
@@ -827,8 +827,8 @@ export default function Imobiliario() {
             return (
               <div className={`rounded-2xl p-7 text-white relative overflow-hidden shadow-lg ${
                 temProblema
-                  ? "bg-gradient-to-br from-rose-600 via-red-600 to-pink-700"
-                  : "bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800"
+                  ? "bg-danger"
+                  : "bg-success"
               }`}>
                 {temProblema
                   ? <AlertTriangle className="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" strokeWidth={1.2} />
@@ -848,7 +848,7 @@ export default function Imobiliario() {
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <Button size="sm" onClick={() => { setStep(1); setResultado(null); setForm(initialForm); }}
-                        className="bg-white dark:bg-card text-slate-900 dark:text-slate-100 hover:bg-slate-100 font-semibold shadow-sm h-8">
+                        className="bg-card text-foreground hover:bg-muted font-semibold shadow-sm h-8">
                         <Copy className="h-3.5 w-3.5 mr-1" /> Novo cálculo
                       </Button>
                     </div>
@@ -863,7 +863,7 @@ export default function Imobiliario() {
                           {formatBRL(resumo.diferencaTotal)}
                         </span>
                         {temProblema && resumo.repeticaoIndebito > 0 && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-400/25 text-amber-100 border border-amber-300/30">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-warning/25 text-warning-fg border border-warning/30">
                             + {formatBRL(resumo.repeticaoIndebito)} em repetição de indébito (2×)
                           </span>
                         )}
@@ -882,7 +882,7 @@ export default function Imobiliario() {
                         </div>
                         <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
                           <p className="text-xs text-white/70 mb-1">Total justo</p>
-                          <p className="text-sm font-bold tabular-nums leading-none text-emerald-200">{formatBRL(resumo.totalPagoRecalculado)}</p>
+                          <p className="text-sm font-bold tabular-nums leading-none text-success">{formatBRL(resumo.totalPagoRecalculado)}</p>
                         </div>
                         <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
                           <p className="text-xs text-white/70 mb-1">Irregularidades</p>
@@ -923,12 +923,12 @@ export default function Imobiliario() {
                   </div>
 
                   {/* Taxa de Juros */}
-                  <div className={`p-4 rounded-lg border space-y-2 ${analise.taxaAbusiva ? "border-amber-300 dark:border-amber-800" : ""}`}>
+                  <div className={`p-4 rounded-lg border space-y-2 ${analise.taxaAbusiva ? "border-warning/30" : ""}`}>
                     <div className="flex items-center justify-between">
                       <h4 className="font-semibold text-sm flex items-center gap-2">
                         <DollarSign className="h-4 w-4" /> Taxa de Juros
                       </h4>
-                      <Badge variant={analise.taxaAbusiva ? "outline" : "secondary"} className={analise.taxaAbusiva ? "border-amber-500 text-amber-700 dark:text-amber-400" : ""}>
+                      <Badge variant={analise.taxaAbusiva ? "outline" : "secondary"} className={analise.taxaAbusiva ? "border-warning/30 text-warning-fg" : ""}>
                         {analise.violaTetoSFH ? "Potencial Ilegalidade" : analise.taxaAbusiva ? "Potencialmente Abusiva" : "Regular"}
                       </Badge>
                     </div>
@@ -939,17 +939,17 @@ export default function Imobiliario() {
                       <p>Diferença: <strong>{analise.percentualAcimaDaMedia > 0 ? "+" : ""}{formatPercent(analise.percentualAcimaDaMedia, 1)} da média</strong></p>
                     </div>
                     {analise.violaTetoSFH && (
-                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                      <p className="text-xs text-warning-fg mt-1">
                         Teto SFH de {formatPercent(analise.tetoSFH_anual, 0)} a.a. (Lei 8.692/1993, art. 25) — Súmula 422/STJ afasta limitação pelo art. 6º da Lei 4.380/1964.
                       </p>
                     )}
                   </div>
 
                   {/* Capitalização */}
-                  <div className={`p-4 rounded-lg border space-y-2 ${analise.capitalizacao.irregular ? "border-amber-300 dark:border-amber-800" : ""}`}>
+                  <div className={`p-4 rounded-lg border space-y-2 ${analise.capitalizacao.irregular ? "border-warning/30" : ""}`}>
                     <div className="flex items-center justify-between">
                       <h4 className="font-semibold text-sm">Capitalização de Juros</h4>
-                      <Badge variant={analise.capitalizacao.irregular ? "outline" : "secondary"} className={analise.capitalizacao.irregular ? "border-amber-500 text-amber-700 dark:text-amber-400" : ""}>
+                      <Badge variant={analise.capitalizacao.irregular ? "outline" : "secondary"} className={analise.capitalizacao.irregular ? "border-warning/30 text-warning-fg" : ""}>
                         {analise.capitalizacao.irregular ? "Potencialmente Irregular" : "Regular"}
                       </Badge>
                     </div>
@@ -966,7 +966,7 @@ export default function Imobiliario() {
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center justify-between">
                         <span>MIP (Morte e Invalidez)</span>
-                        <Badge variant={analise.mipAbusivo ? "outline" : "secondary"} className={analise.mipAbusivo ? "border-amber-500 text-amber-700 dark:text-amber-400" : ""}>
+                        <Badge variant={analise.mipAbusivo ? "outline" : "secondary"} className={analise.mipAbusivo ? "border-warning/30 text-warning-fg" : ""}>
                           {analise.mipAbusivo ? "Potencialmente Abusivo" : "Regular"}
                         </Badge>
                       </div>
@@ -974,7 +974,7 @@ export default function Imobiliario() {
                       <Separator />
                       <div className="flex items-center justify-between">
                         <span>DFI (Danos Físicos)</span>
-                        <Badge variant={analise.dfiAbusivo ? "outline" : "secondary"} className={analise.dfiAbusivo ? "border-amber-500 text-amber-700 dark:text-amber-400" : ""}>
+                        <Badge variant={analise.dfiAbusivo ? "outline" : "secondary"} className={analise.dfiAbusivo ? "border-warning/30 text-warning-fg" : ""}>
                           {analise.dfiAbusivo ? "Potencialmente Abusivo" : "Regular"}
                         </Badge>
                       </div>
@@ -982,7 +982,7 @@ export default function Imobiliario() {
                       <Separator />
                       <div className="flex items-center justify-between">
                         <span>Venda Casada de Seguro</span>
-                        <Badge variant={analise.vendaCasadaSeguro ? "outline" : "secondary"} className={analise.vendaCasadaSeguro ? "border-red-500 text-red-700 dark:text-red-400" : ""}>
+                        <Badge variant={analise.vendaCasadaSeguro ? "outline" : "secondary"} className={analise.vendaCasadaSeguro ? "border-danger/30 text-danger-fg" : ""}>
                           {analise.vendaCasadaSeguro ? "Venda Casada Detectada" : "Livre Escolha"}
                         </Badge>
                       </div>
@@ -995,7 +995,7 @@ export default function Imobiliario() {
                     <div className="p-4 rounded-lg border space-y-2">
                       <div className="flex items-center justify-between">
                         <h4 className="font-semibold text-sm">Taxa de Administração</h4>
-                        <Badge variant={analise.taxaAdminAbusiva ? "outline" : "secondary"} className={analise.taxaAdminAbusiva ? "border-amber-500 text-amber-700 dark:text-amber-400" : ""}>
+                        <Badge variant={analise.taxaAdminAbusiva ? "outline" : "secondary"} className={analise.taxaAdminAbusiva ? "border-warning/30 text-warning-fg" : ""}>
                           {analise.taxaAdminAbusiva ? "Potencialmente Abusiva" : "Regular"}
                         </Badge>
                       </div>
@@ -1004,7 +1004,7 @@ export default function Imobiliario() {
                     <div className="p-4 rounded-lg border space-y-2">
                       <div className="flex items-center justify-between">
                         <h4 className="font-semibold text-sm">Indexador</h4>
-                        <Badge variant={analise.indexadorIrregular ? "outline" : "secondary"} className={analise.indexadorIrregular ? "border-amber-500 text-amber-700 dark:text-amber-400" : ""}>
+                        <Badge variant={analise.indexadorIrregular ? "outline" : "secondary"} className={analise.indexadorIrregular ? "border-warning/30 text-warning-fg" : ""}>
                           {analise.indexadorIrregular ? "Potencialmente Irregular" : "Regular"}
                         </Badge>
                       </div>
@@ -1014,14 +1014,14 @@ export default function Imobiliario() {
 
                   {/* Irregularidades */}
                   {analise.irregularidades.length > 0 && (
-                    <div className="p-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 space-y-2">
-                      <h4 className="font-semibold text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                    <div className="p-4 rounded-lg border border-warning/30 bg-warning-bg space-y-2">
+                      <h4 className="font-semibold text-sm text-warning-fg flex items-center gap-2">
                         <AlertTriangle className="h-4 w-4" /> Potenciais Irregularidades ({analise.irregularidades.length})
                       </h4>
                       <ul className="text-sm space-y-1">
                         {analise.irregularidades.map((irr, i) => (
                           <li key={i} className="flex items-start gap-2">
-                            <span className="text-amber-500 mt-0.5">•</span>
+                            <span className="text-warning mt-0.5">•</span>
                             <span>{irr}</span>
                           </li>
                         ))}
@@ -1079,7 +1079,7 @@ export default function Imobiliario() {
                         </tr>
                       </thead>
                       <tbody>
-                        <tr className="border-b"><td className="py-2 px-3">Total Pago</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalPagoOriginal)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalPagoRecalculado)}</td><td className="py-2 px-3 text-right font-medium text-red-600 dark:text-red-400">{formatBRL(resumo.diferencaTotal)}</td></tr>
+                        <tr className="border-b"><td className="py-2 px-3">Total Pago</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalPagoOriginal)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalPagoRecalculado)}</td><td className="py-2 px-3 text-right font-medium text-danger-fg">{formatBRL(resumo.diferencaTotal)}</td></tr>
                         <tr className="border-b"><td className="py-2 px-3">Total Juros</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalJurosOriginal)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalJurosRecalculado)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.diferencaJuros)}</td></tr>
                         <tr className="border-b"><td className="py-2 px-3">Total Correção</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalCorrecaoOriginal)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalCorrecaoRecalculado)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.diferencaCorrecao)}</td></tr>
                         <tr className="border-b"><td className="py-2 px-3">Total MIP</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalMIPOriginal)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalMIPRecalculado)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalMIPOriginal - resumo.totalMIPRecalculado)}</td></tr>
@@ -1087,9 +1087,9 @@ export default function Imobiliario() {
                         <tr className="border-b"><td className="py-2 px-3">Total Tx. Admin</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalTxAdminOriginal)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalTxAdminRecalculado)}</td><td className="py-2 px-3 text-right">{formatBRL(resumo.totalTxAdminOriginal - resumo.totalTxAdminRecalculado)}</td></tr>
                       </tbody>
                       <tfoot>
-                        <tr className="bg-muted/30 font-bold"><td className="py-2 px-3">Valor Pago a Mais</td><td className="py-2 px-3" colSpan={2}></td><td className="py-2 px-3 text-right text-red-600 dark:text-red-400 text-lg">{formatBRL(resumo.diferencaTotal)}</td></tr>
+                        <tr className="bg-muted/30 font-bold"><td className="py-2 px-3">Valor Pago a Mais</td><td className="py-2 px-3" colSpan={2}></td><td className="py-2 px-3 text-right text-danger-fg text-lg">{formatBRL(resumo.diferencaTotal)}</td></tr>
                         {resumo.repeticaoIndebito > 0 && resumo.diferencaTotal > 0 && (
-                          <tr className="bg-amber-50/30 dark:bg-amber-950/10 font-bold"><td className="py-2 px-3">Repetição em Dobro (CDC art. 42)</td><td className="py-2 px-3" colSpan={2}></td><td className="py-2 px-3 text-right text-amber-700 dark:text-amber-300 text-lg">{formatBRL(resumo.repeticaoIndebito)}</td></tr>
+                          <tr className="bg-warning-bg/30 font-bold"><td className="py-2 px-3">Repetição em Dobro (CDC art. 42)</td><td className="py-2 px-3" colSpan={2}></td><td className="py-2 px-3 text-right text-warning-fg text-lg">{formatBRL(resumo.repeticaoIndebito)}</td></tr>
                         )}
                       </tfoot>
                     </table>
@@ -1098,14 +1098,14 @@ export default function Imobiliario() {
                   {dadosParcPagas && (
                     <>
                       <Separator className="my-4" />
-                      <div className="p-4 rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20">
+                      <div className="p-4 rounded-lg border border-warning/30 bg-warning-bg">
                         <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
                           <Calendar className="h-4 w-4" /> Análise de Parcelas Pagas ({dadosParcPagas.parcelasPagas} parcelas)
                         </h4>
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           <p>Total pago (contrato): <strong>{formatBRL(dadosParcPagas.valorPagoTotal)}</strong></p>
                           <p>Total devido (recálculo): <strong>{formatBRL(dadosParcPagas.valorDevidoRecalculado)}</strong></p>
-                          <p className="text-red-600 dark:text-red-400 font-bold col-span-2">Valor pago a mais: {formatBRL(dadosParcPagas.valorPagoAMais)}</p>
+                          <p className="text-danger-fg font-bold col-span-2">Valor pago a mais: {formatBRL(dadosParcPagas.valorPagoAMais)}</p>
                           <p>Saldo devedor (contrato): <strong>{formatBRL(dadosParcPagas.saldoDevedorAtualOriginal)}</strong></p>
                           <p>Saldo devedor (recálculo): <strong>{formatBRL(dadosParcPagas.saldoDevedorAtualRecalculado)}</strong></p>
                           <p>Parcelas restantes: <strong>{dadosParcPagas.parcelasRestantes}</strong></p>

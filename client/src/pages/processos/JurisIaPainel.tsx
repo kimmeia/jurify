@@ -26,7 +26,7 @@ const SUGESTOES = [
 
 function Ancora({ n }: { n: number }) {
   return (
-    <sup className="ml-0.5 rounded border border-violet-200 bg-violet-100 px-1 py-px text-[8.5px] font-extrabold text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300">
+    <sup className="ml-0.5 rounded border border-info/30 bg-info-bg px-1 py-px text-[8.5px] font-extrabold text-info-fg">
       {n}
     </sup>
   );
@@ -43,12 +43,12 @@ function Resposta({ resposta, fontes }: { resposta: RespostaGravada; fontes: Fon
 
   if (!resposta.achou) {
     return (
-      <div className="rounded-xl rounded-bl-sm border border-amber-300 bg-amber-50 px-3.5 py-3 dark:bg-amber-950/30">
-        <p className="mb-1 flex items-center gap-1.5 text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-amber-700 dark:text-amber-400">
+      <div className="rounded-xl rounded-bl-sm border border-warning/30 bg-warning-bg px-3.5 py-3 dark:bg-warning/30">
+        <p className="mb-1 flex items-center gap-1.5 text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-warning-fg">
           <TriangleAlert className="h-3.5 w-3.5" />
           Não encontrei nos autos
         </p>
-        <p className="text-[12.5px] leading-relaxed text-amber-900 dark:text-amber-200">
+        <p className="text-[12.5px] leading-relaxed text-warning-fg">
           {resposta.conclusao ?? "Não há nas movimentações deste processo o que responder isso."}
         </p>
       </div>
@@ -67,14 +67,14 @@ function Resposta({ resposta, fontes }: { resposta: RespostaGravada; fontes: Fon
       ))}
 
       {resposta.conclusao && (
-        <p className="mt-2.5 border-l-2 border-violet-300 pl-2.5 text-[12.5px] leading-relaxed text-foreground/90">
+        <p className="mt-2.5 border-l-2 border-info/30 pl-2.5 text-[12.5px] leading-relaxed text-foreground/90">
           {resposta.conclusao}
         </p>
       )}
 
       {fontes.length > 0 && (
-        <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/30">
-          <p className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-900 dark:text-emerald-300">
+        <div className="mt-3 rounded-lg border border-success/30 bg-success-bg px-3 py-2 dark:border-success/30">
+          <p className="flex items-center gap-1.5 text-[11px] font-bold text-success-fg">
             <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
             {fontes.length === 1
               ? "1 movimentação sustenta esta resposta"
@@ -82,7 +82,7 @@ function Resposta({ resposta, fontes }: { resposta: RespostaGravada; fontes: Fon
           </p>
           <ul className="mt-1.5 space-y-1">
             {fontes.map((f) => (
-              <li key={f.id} className="flex gap-2 text-[11px] text-emerald-900/90 dark:text-emerald-200/90">
+              <li key={f.id} className="flex gap-2 text-[11px] text-success-fg/90">
                 <span className="shrink-0 font-extrabold">{ordem.get(f.id)}</span>
                 <span className="shrink-0 tabular-nums opacity-70">{f.data}</span>
                 <span className="min-w-0 truncate">{f.rotulo}</span>
@@ -134,7 +134,7 @@ export function JurisIaPainel({ monitoramentoId }: { monitoramentoId: number }) 
   if (cota?.semPlano) {
     return (
       <div className="rounded-xl border bg-card px-4 py-6 text-center">
-        <Sparkles className="mx-auto h-6 w-6 text-violet-500" />
+        <Sparkles className="mx-auto h-6 w-6 text-info" />
         <p className="mt-2 text-sm font-bold">JurisIA não está no seu plano</p>
         <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
           Pergunte sobre qualquer processo do escritório e receba a resposta com a movimentação
@@ -149,9 +149,9 @@ export function JurisIaPainel({ monitoramentoId }: { monitoramentoId: number }) 
   return (
     <div className="flex flex-col rounded-xl border bg-card overflow-hidden">
       <div className="flex items-center gap-2 border-b px-4 py-2.5">
-        <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+        <Sparkles className="h-4 w-4 text-info-fg" />
         <p className="text-[13.5px] font-bold">JurisIA</p>
-        <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+        <span className="rounded-full border border-warning/30 bg-warning-bg px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-warning-fg dark:text-warning">
           beta
         </span>
         {cota && (
@@ -187,7 +187,7 @@ export function JurisIaPainel({ monitoramentoId }: { monitoramentoId: number }) 
             if (m.papel === "usuario") {
               return (
                 <div key={m.id} className="flex justify-end">
-                  <p className="max-w-[80%] rounded-xl rounded-br-sm bg-violet-600 px-3.5 py-2.5 text-[12.5px] leading-snug text-white">
+                  <p className="max-w-[80%] rounded-xl rounded-br-sm bg-info px-3.5 py-2.5 text-[12.5px] leading-snug text-info-on">
                     {m.conteudo}
                   </p>
                 </div>

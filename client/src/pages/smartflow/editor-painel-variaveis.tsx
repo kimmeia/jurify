@@ -31,17 +31,17 @@ const CATEGORIA_META: Array<{
   cor: string;
   corBg: string;
 }> = [
-  { id: "passos", label: "Resultados de passos anteriores", icon: Workflow, cor: "text-amber-600 dark:text-amber-400", corBg: "bg-amber-50/60 dark:bg-amber-950/20" },
-  { id: "cliente", label: "Dados do cliente", icon: User, cor: "text-violet-600 dark:text-violet-400", corBg: "bg-violet-50/60 dark:bg-violet-950/20" },
-  { id: "campos_personalizados", label: "Campos personalizados do cadastro", icon: FileText, cor: "text-pink-600 dark:text-pink-400", corBg: "bg-pink-50/60 dark:bg-pink-950/20" },
-  { id: "mensagem", label: "Mensagem / conversa", icon: MessageCircle, cor: "text-blue-600 dark:text-blue-400", corBg: "bg-blue-50/60 dark:bg-blue-950/20" },
-  { id: "pagamento", label: "Pagamento / cobrança", icon: DollarSign, cor: "text-emerald-600 dark:text-emerald-400", corBg: "bg-emerald-50/60 dark:bg-emerald-950/20" },
-  { id: "acao", label: "Ação / processo", icon: Briefcase, cor: "text-indigo-600 dark:text-indigo-400", corBg: "bg-indigo-50/60 dark:bg-indigo-950/20" },
-  { id: "agendamento", label: "Agendamento", icon: Calendar, cor: "text-orange-600 dark:text-orange-400", corBg: "bg-orange-50/60 dark:bg-orange-950/20" },
-  { id: "ia", label: "Resultados da IA", icon: Brain, cor: "text-fuchsia-600 dark:text-fuchsia-400", corBg: "bg-fuchsia-50/60 dark:bg-fuchsia-950/20" },
+  { id: "passos", label: "Resultados de passos anteriores", icon: Workflow, cor: "text-warning-fg", corBg: "bg-warning-bg/60" },
+  { id: "cliente", label: "Dados do cliente", icon: User, cor: "text-info-fg", corBg: "bg-info-bg/60" },
+  { id: "campos_personalizados", label: "Campos personalizados do cadastro", icon: FileText, cor: "text-danger-fg", corBg: "bg-danger-bg/60" },
+  { id: "mensagem", label: "Mensagem / conversa", icon: MessageCircle, cor: "text-info-fg", corBg: "bg-info-bg/60" },
+  { id: "pagamento", label: "Pagamento / cobrança", icon: DollarSign, cor: "text-success-fg", corBg: "bg-success-bg/60" },
+  { id: "acao", label: "Ação / processo", icon: Briefcase, cor: "text-info-fg", corBg: "bg-info-bg/60" },
+  { id: "agendamento", label: "Agendamento", icon: Calendar, cor: "text-warning-fg", corBg: "bg-warning-bg/60" },
+  { id: "ia", label: "Resultados da IA", icon: Brain, cor: "text-danger-fg", corBg: "bg-danger-bg/60" },
 ];
 
-const CATEGORIA_OUTROS = { id: "outros", label: "Outras informações", icon: Info, cor: "text-slate-600 dark:text-slate-300", corBg: "bg-slate-50/60 dark:bg-slate-900/40" };
+const CATEGORIA_OUTROS = { id: "outros", label: "Outras informações", icon: Info, cor: "text-muted-foreground", corBg: "bg-muted/60" };
 
 /**
  * Drawer "Informações" — lista TODAS as variáveis disponíveis pro fluxo
@@ -115,8 +115,8 @@ export function PainelVariaveis({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 border-b bg-gradient-to-br from-slate-50 to-violet-50/30 dark:from-slate-900 dark:to-violet-950/20">
-        <p className="text-xs uppercase tracking-wider font-bold text-violet-700 dark:text-violet-300 flex items-center gap-1.5">
+      <div className="p-3 border-b bg-gradient-to-br from-muted to-info-bg/30 dark:to-info/20">
+        <p className="text-xs uppercase tracking-wider font-bold text-info-fg flex items-center gap-1.5">
           <Info className="h-3.5 w-3.5" />
           Informações disponíveis
         </p>
@@ -161,7 +161,7 @@ export function PainelVariaveis({
               <div key={meta.id}>
                 <button
                   onClick={() => toggle(meta.id)}
-                  className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 border-b border-slate-100 dark:border-slate-800 ${meta.corBg} hover:brightness-95 transition-all text-left`}
+                  className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 border-b border-border ${meta.corBg} hover:brightness-95 transition-all text-left`}
                 >
                   <Icon className={`w-3.5 h-3.5 ${meta.cor}`} />
                   <span className="text-xs font-bold flex-1">{meta.label}</span>
@@ -208,13 +208,13 @@ function VariavelRow({
   return (
     <button
       onClick={onInserir}
-      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-violet-50/50 dark:hover:bg-violet-950/20 border-l-2 border-transparent hover:border-violet-400 transition-all text-left group"
+      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-info-bg/50 border-l-2 border-transparent hover:border-info/30 transition-all text-left group"
       title={`Inserir "${variavel.label}"`}
     >
       <div className="flex-1 min-w-0">
         <p className="text-[11.5px] font-semibold truncate">{variavel.label}</p>
         {modoTecnico ? (
-          <code className="text-[9.5px] text-violet-600 dark:text-violet-400 font-mono">{`{{${variavel.path}}}`}</code>
+          <code className="text-[9.5px] text-info-fg font-mono">{`{{${variavel.path}}}`}</code>
         ) : (
           variavel.exemplo && (
             <p className="text-[9.5px] text-muted-foreground italic truncate">ex: {variavel.exemplo}</p>

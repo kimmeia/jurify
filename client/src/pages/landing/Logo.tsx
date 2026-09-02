@@ -17,7 +17,7 @@ export function Logo({ variant = "light", className = "text-2xl" }: LogoProps) {
       className={`font-display font-extrabold tracking-tight leading-none select-none ${className}`}
     >
       <span className={variant === "dark" ? "text-white" : "text-[#0b0b17]"}>Jurid</span>
-      <span className="font-semibold text-violet-600">Flow</span>
+      <span className="font-semibold text-info-fg">Flow</span>
     </span>
   );
 }

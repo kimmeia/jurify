@@ -55,10 +55,10 @@ interface Item {
 }
 
 const SELO: Record<Situacao, { texto: string; classe: string }> = {
-  recriar: { texto: "Recriar", classe: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50" },
+  recriar: { texto: "Recriar", classe: "bg-success-bg text-success-fg border-success/30" },
   refeito: { texto: "Pular", classe: "bg-muted text-muted-foreground border-border" },
   esta_no_quadro: { texto: "Está no quadro", classe: "bg-muted text-muted-foreground border-border" },
-  sem_coluna: { texto: "Escolher coluna", classe: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50" },
+  sem_coluna: { texto: "Escolher coluna", classe: "bg-warning-bg text-warning-fg border-warning/30" },
 };
 
 export default function RestaurarCards() {
@@ -146,10 +146,10 @@ export default function RestaurarCards() {
         </div>
       </div>
 
-      <Card className="border-violet-200 dark:border-violet-800/50 bg-violet-50/40 dark:bg-violet-950/30">
+      <Card className="border-info/30 bg-info-bg/40">
         <CardContent className="pt-5 flex gap-3">
-          <ShieldCheck className="h-5 w-5 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
-          <div className="text-[13px] text-violet-900 dark:text-violet-200 leading-relaxed">
+          <ShieldCheck className="h-5 w-5 text-info-fg shrink-0 mt-0.5" />
+          <div className="text-[13px] text-info-fg leading-relaxed">
             <p>
               Escolha o funil e mande o PDF <b>“Cards do Kanban”</b> exportado antes do sumiço. Eu
               comparo com o quadro de hoje e mostro o que vai acontecer com cada linha, antes de
@@ -231,26 +231,26 @@ export default function RestaurarCards() {
                 </p>
               </CardContent>
             </Card>
-            <Card className="border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-950/30">
+            <Card className="border-success/30 bg-success-bg/50">
               <CardContent className="pt-5">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-success-fg">
                   Prontos para recriar
                 </p>
-                <p className="text-2xl font-bold mt-1 tabular-nums text-emerald-700 dark:text-emerald-300">
+                <p className="text-2xl font-bold mt-1 tabular-nums text-success-fg">
                   {paraCriar.length}
                 </p>
-                <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-1">coluna resolvida</p>
+                <p className="text-[11px] text-success-fg mt-1">coluna resolvida</p>
               </CardContent>
             </Card>
-            <Card className={pendentes.length ? "border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/30" : ""}>
+            <Card className={pendentes.length ? "border-warning/30 bg-warning-bg/50" : ""}>
               <CardContent className="pt-5">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-warning-fg">
                   Precisam de você
                 </p>
-                <p className="text-2xl font-bold mt-1 tabular-nums text-amber-700 dark:text-amber-300">
+                <p className="text-2xl font-bold mt-1 tabular-nums text-warning-fg">
                   {pendentes.length}
                 </p>
-                <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">a coluna antiga não existe mais</p>
+                <p className="text-[11px] text-warning-fg mt-1">a coluna antiga não existe mais</p>
               </CardContent>
             </Card>
             <Card>
@@ -271,7 +271,7 @@ export default function RestaurarCards() {
               <CardContent className="pt-5 text-[12.5px] space-y-1.5">
                 {noQuadro.length > 0 && (
                   <p className="flex items-center gap-2 text-muted-foreground">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="h-4 w-4 text-success-fg shrink-0" />
                     <span>
                       <b className="text-foreground">{noQuadro.length}</b> cards do relatório ainda
                       estão no quadro — não entram na restauração.
@@ -280,7 +280,7 @@ export default function RestaurarCards() {
                 )}
                 {semResponsavel.length > 0 && (
                   <p className="flex items-center gap-2 text-muted-foreground">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <AlertTriangle className="h-4 w-4 text-warning-fg shrink-0" />
                     <span>
                       <b className="text-foreground">{semResponsavel.length}</b> vão entrar sem
                       responsável: o relatório corta nome longo e não achei quem é.{" "}
@@ -349,7 +349,7 @@ export default function RestaurarCards() {
                                   }))
                                 }
                               >
-                                <SelectTrigger className="h-8 w-[180px] text-[12px] text-amber-700 dark:text-amber-300">
+                                <SelectTrigger className="h-8 w-[180px] text-[12px] text-warning-fg">
                                   <SelectValue placeholder={i.responsavel || "sem responsável"} />
                                 </SelectTrigger>
                                 <SelectContent>

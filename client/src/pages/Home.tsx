@@ -136,7 +136,7 @@ function Navbar({ onCta }: { onCta: (modo: "login" | "signup") => void }) {
           <Button
             size="sm"
             onClick={() => onCta("signup")}
-            className="border-0 bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-[0_8px_22px_-6px_rgba(147,51,234,0.6)] hover:from-violet-500 hover:to-purple-500"
+            className="border-0 bg-info text-info-on shadow-[0_8px_22px_-6px_rgba(147,51,234,0.6)] hover:from-info hover:to-info"
           >
             Começar grátis
           </Button>

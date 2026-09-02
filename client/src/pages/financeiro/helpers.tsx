@@ -83,56 +83,56 @@ export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string; icon: LucideIcon }> = {
     PENDING: {
       label: "Pendente",
-      cls: "bg-gradient-to-br from-amber-100 dark:from-amber-950/40 to-amber-200 text-amber-800 dark:text-amber-200 border-amber-300",
+      cls: "bg-warning-bg text-warning-fg border-warning/30",
       icon: Clock,
     },
     RECEIVED: {
       label: "Recebido",
-      cls: "bg-gradient-to-br from-emerald-100 dark:from-emerald-950/40 to-emerald-200 text-emerald-800 dark:text-emerald-200 border-emerald-300",
+      cls: "bg-success-bg text-success-fg border-success/30",
       icon: Check,
     },
     CONFIRMED: {
       label: "Confirmado",
-      cls: "bg-gradient-to-br from-emerald-100 dark:from-emerald-950/40 to-emerald-200 text-emerald-800 dark:text-emerald-200 border-emerald-300",
+      cls: "bg-success-bg text-success-fg border-success/30",
       icon: Check,
     },
     RECEIVED_IN_CASH: {
       label: "Em dinheiro",
-      cls: "bg-gradient-to-br from-emerald-100 dark:from-emerald-950/40 to-emerald-200 text-emerald-800 dark:text-emerald-200 border-emerald-300",
+      cls: "bg-success-bg text-success-fg border-success/30",
       icon: Check,
     },
     OVERDUE: {
       label: "Vencido",
-      cls: "bg-gradient-to-br from-rose-100 dark:from-rose-950/40 to-rose-200 text-rose-800 dark:text-rose-200 border-rose-300",
+      cls: "bg-danger-bg text-danger-fg border-danger/30",
       icon: AlertTriangle,
     },
     REFUNDED: {
       label: "Estornado",
-      cls: "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80",
+      cls: "bg-muted text-muted-foreground border-border",
       icon: RotateCcw,
     },
     CANCELLED: {
       label: "Cancelado",
-      cls: "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80",
+      cls: "bg-muted text-muted-foreground border-border",
       icon: XCircle,
     },
     ACTIVE: {
       label: "Ativa",
-      cls: "bg-gradient-to-br from-emerald-100 dark:from-emerald-950/40 to-emerald-200 text-emerald-800 dark:text-emerald-200 border-emerald-300",
+      cls: "bg-success-bg text-success-fg border-success/30",
       icon: Check,
     },
     INACTIVE: {
       label: "Inativa",
-      cls: "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80",
+      cls: "bg-muted text-muted-foreground border-border",
       icon: XCircle,
     },
     EXPIRED: {
       label: "Expirada",
-      cls: "bg-gradient-to-br from-rose-100 dark:from-rose-950/40 to-rose-200 text-rose-800 dark:text-rose-200 border-rose-300",
+      cls: "bg-danger-bg text-danger-fg border-danger/30",
       icon: AlertTriangle,
     },
   };
-  const cfg = map[status] || { label: status, cls: "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80", icon: HelpCircle };
+  const cfg = map[status] || { label: status, cls: "bg-muted text-muted-foreground border-border", icon: HelpCircle };
   const Icon = cfg.icon;
   return (
     <span
@@ -151,19 +151,19 @@ export function StatusBadge({ status }: { status: string }) {
  */
 export function FormaBadge({ forma }: { forma: string }) {
   const map: Record<string, { label: string; icon: LucideIcon; color: string; bg: string }> = {
-    PIX: { label: "PIX", icon: Zap, color: "text-cyan-600 dark:text-cyan-400", bg: "bg-cyan-50 dark:bg-cyan-950/30" },
-    BOLETO: { label: "Boleto", icon: Receipt, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30" },
-    CREDIT_CARD: { label: "Cartão", icon: CreditCard, color: "text-violet-600 dark:text-violet-400", bg: "bg-violet-50 dark:bg-violet-950/30" },
-    UNDEFINED: { label: "—", icon: HelpCircle, color: "text-slate-400", bg: "bg-slate-50 dark:bg-slate-900/70" },
+    PIX: { label: "PIX", icon: Zap, color: "text-info-fg", bg: "bg-info-bg" },
+    BOLETO: { label: "Boleto", icon: Receipt, color: "text-warning-fg", bg: "bg-warning-bg" },
+    CREDIT_CARD: { label: "Cartão", icon: CreditCard, color: "text-info-fg", bg: "bg-info-bg" },
+    UNDEFINED: { label: "—", icon: HelpCircle, color: "text-muted-foreground/70", bg: "bg-muted" },
   };
-  const cfg = map[forma] || { label: forma, icon: HelpCircle, color: "text-slate-400", bg: "bg-slate-50 dark:bg-slate-900/70" };
+  const cfg = map[forma] || { label: forma, icon: HelpCircle, color: "text-muted-foreground/70", bg: "bg-muted" };
   const Icon = cfg.icon;
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className={`w-5 h-5 rounded ${cfg.bg} flex items-center justify-center shrink-0`}>
         <Icon className={`w-3 h-3 ${cfg.color}`} />
       </span>
-      <span className="text-xs text-slate-700 dark:text-slate-200 font-medium">{cfg.label}</span>
+      <span className="text-xs text-foreground font-medium">{cfg.label}</span>
     </span>
   );
 }

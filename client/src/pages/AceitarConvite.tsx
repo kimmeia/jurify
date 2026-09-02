@@ -114,8 +114,8 @@ export default function AceitarConvite({ token }: { token: string }) {
       <CenteredLayout>
         <Card className="w-full max-w-md">
           <CardContent className="pt-8 pb-8 text-center space-y-4">
-            <div className="h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto">
-              <XCircle className="h-8 w-8 text-red-500" />
+            <div className="h-16 w-16 rounded-full bg-danger-bg flex items-center justify-center mx-auto">
+              <XCircle className="h-8 w-8 text-danger" />
             </div>
             <h2 className="text-xl font-bold">Convite inválido</h2>
             <p className="text-sm text-muted-foreground">{mensagem}</p>
@@ -198,10 +198,10 @@ export default function AceitarConvite({ token }: { token: string }) {
       <CenteredLayout>
         <Card className="w-full max-w-md">
           <CardContent className="pt-8 pb-8 text-center space-y-4">
-            <div className="h-16 w-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto">
-              <CheckCircle className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+            <div className="h-16 w-16 rounded-full bg-success-bg flex items-center justify-center mx-auto">
+              <CheckCircle className="h-8 w-8 text-success-fg" />
             </div>
-            <h2 className="text-xl font-bold text-emerald-800 dark:text-emerald-200">{mensagem}</h2>
+            <h2 className="text-xl font-bold text-success-fg">{mensagem}</h2>
             <p className="text-xs text-muted-foreground">Redirecionando para o painel...</p>
           </CardContent>
         </Card>
@@ -214,8 +214,8 @@ export default function AceitarConvite({ token }: { token: string }) {
     <CenteredLayout>
       <Card className="w-full max-w-md">
         <CardContent className="pt-8 pb-8 text-center space-y-4">
-          <div className="h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto">
-            <XCircle className="h-8 w-8 text-red-500" />
+          <div className="h-16 w-16 rounded-full bg-danger-bg flex items-center justify-center mx-auto">
+            <XCircle className="h-8 w-8 text-danger" />
           </div>
           <h2 className="text-xl font-bold">Não foi possível aceitar</h2>
           <p className="text-sm text-muted-foreground">{mensagem}</p>
@@ -228,7 +228,7 @@ export default function AceitarConvite({ token }: { token: string }) {
 
 function CenteredLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100 dark:from-slate-950 dark:to-gray-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-muted p-4">
       <div className="flex flex-col items-center">{children}</div>
     </div>
   );

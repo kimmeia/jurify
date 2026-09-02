@@ -56,9 +56,9 @@ type Grupo = "exigem_acao" | "relevante" | "rotina";
  * plataforma e ainda desalinham a linha de base do texto ao lado.
  */
 const DESFECHO_SELO: Record<string, { label: string; cls: string }> = {
-  favoravel: { label: "Favorável", cls: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" },
-  desfavoravel: { label: "Desfavorável", cls: "bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300" },
-  parcial: { label: "Parcial", cls: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300" },
+  favoravel: { label: "Favorável", cls: "bg-success-bg text-success-fg dark:text-success" },
+  desfavoravel: { label: "Desfavorável", cls: "bg-danger-bg text-danger-fg dark:text-danger" },
+  parcial: { label: "Parcial", cls: "bg-warning-bg text-warning-fg dark:text-warning" },
   neutro: { label: "Sem mérito", cls: "bg-muted text-muted-foreground" },
 };
 
@@ -379,10 +379,10 @@ export function MovimentacoesCentral() {
 export default MovimentacoesCentral;
 
 const STATUS_ENVIO: Record<string, { label: string; cls: string }> = {
-  enviado: { label: "Enviado", cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50" },
-  falha: { label: "Falhou", cls: "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/50" },
+  enviado: { label: "Enviado", cls: "bg-success-bg text-success-fg border-success/30" },
+  falha: { label: "Falhou", cls: "bg-danger-bg text-danger-fg border-danger/30" },
   sem_conteudo: { label: "Nada a enviar", cls: "bg-muted text-muted-foreground border-border" },
-  nao_configurado: { label: "Não configurado", cls: "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 border-amber-200 dark:border-amber-800/50" },
+  nao_configurado: { label: "Não configurado", cls: "bg-warning-bg text-warning-fg border-warning/30" },
 };
 
 /**
@@ -624,7 +624,7 @@ function Vazio({ motivo, janela, total }: { motivo: MotivoVazio; janela: string;
   if (motivo === "tudo_resolvido") {
     return (
       <div className="rounded-xl border bg-card py-14 flex flex-col items-center gap-2 text-center">
-        <span className="h-11 w-11 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 flex items-center justify-center">
+        <span className="h-11 w-11 rounded-full bg-success-bg text-success-fg dark:text-success flex items-center justify-center">
           <Check className="h-6 w-6" />
         </span>
         <p className="text-sm font-bold">Nada pendente {janela}</p>
@@ -682,7 +682,7 @@ function CabecalhoGrupo({
       </span>
       <span
         className={`text-[10.5px] font-extrabold rounded-full px-2 py-0.5 tabular-nums ${
-          tom === "alerta" ? "bg-rose-600 text-white" : "bg-muted text-muted-foreground"
+          tom === "alerta" ? "bg-danger text-danger-on" : "bg-muted text-muted-foreground"
         }`}
       >
         {total}
@@ -719,7 +719,7 @@ function CardAcao({
 
   return (
     <div className="rounded-xl border bg-card overflow-hidden flex">
-      <div className="w-[3px] shrink-0 bg-rose-500" />
+      <div className="w-[3px] shrink-0 bg-danger" />
       <div className="flex-1 min-w-0 p-4 flex flex-col sm:flex-row items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -767,7 +767,7 @@ function CardAcao({
               <span
                 className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-bold inline-flex items-center gap-1.5 ${
                   urgente
-                    ? "bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300"
+                    ? "bg-danger-bg border-danger/30 text-danger-fg dark:border-danger/30"
                     : "bg-muted border-border text-foreground/80"
                 }`}
               >

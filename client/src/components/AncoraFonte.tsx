@@ -9,7 +9,7 @@
 
 export function Ancora({ n }: { n: number }) {
   return (
-    <sup className="ml-0.5 rounded border border-violet-200 bg-violet-100 px-1 py-px text-[8.5px] font-extrabold text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300">
+    <sup className="ml-0.5 rounded border border-info/30 bg-info-bg px-1 py-px text-[8.5px] font-extrabold text-info-fg">
       {n}
     </sup>
   );

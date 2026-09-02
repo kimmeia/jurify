@@ -61,7 +61,7 @@ export default function Automacoes() {
       className={
         "px-4 py-2.5 -mb-px border-b-2 text-sm font-medium inline-flex items-center gap-1.5 transition " +
         (sub === id
-          ? "border-violet-600 text-violet-700 dark:text-violet-300"
+          ? "border-info/30 text-info-fg"
           : liberado
             ? "border-transparent text-muted-foreground hover:text-foreground"
             : "border-transparent text-muted-foreground/40 cursor-not-allowed")
