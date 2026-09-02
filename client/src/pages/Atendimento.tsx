@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo, useId, Fragment } from "react";
 import { useLocation } from "wouter";
+import { mesmoTelefone } from "@shared/telefone";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -502,6 +503,13 @@ export default function Atendimento() {
     const raw = p.get("contatoId");
     return raw ? Number(raw) : null;
   });
+  // Deep link por TELEFONE, vindo da agenda: o compromisso pode ter só o número
+  // que alguém digitou, sem cliente vinculado — e aí não há contatoId pra usar.
+  const [telefoneUrl] = useState<string | null>(() => {
+    const p = new URLSearchParams(window.location.search);
+    const raw = p.get("telefone");
+    return raw && raw.trim() ? raw.trim() : null;
+  });
   const [preencherConversa, setPreencherConversa] = useState<{ nome?: string; telefone?: string } | null>(null);
   const [contatoUrlConsumido, setContatoUrlConsumido] = useState(false);
   const { data: contatoUrl } = trpc.clientes.detalhe.useQuery(
@@ -689,6 +697,28 @@ export default function Atendimento() {
 
   // Consome o contatoId da URL assim que `convs` carregou. Roda uma vez só
   // (contatoUrlConsumido evita reabrir o diálogo se o usuário navegar depois).
+  // Telefone na URL: mesma ideia do contatoId, mas casando pelo número. Roda
+  // antes do outro efeito porque os dois parâmetros nunca vêm juntos.
+  useEffect(() => {
+    if (contatoUrlConsumido || !telefoneUrl || !convs) return;
+    const conv = convs.find((c: any) => mesmoTelefone(c.contatoTelefone, telefoneUrl));
+    if (conv) {
+      setSelId(conv.id);
+      setTab("inbox");
+    } else {
+      // Nenhuma conversa com esse número — abre o diálogo já preenchido em vez
+      // de deixar o atendente numa lista que não explica por que ele veio parar
+      // ali. O nome fica em branco: quem digitou o número no compromisso pode
+      // ter escrito qualquer coisa no título, e chutar nome cria contato errado.
+      setPreencherConversa({ telefone: telefoneUrl });
+      setShowIniciar(true);
+    }
+    setContatoUrlConsumido(true);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("telefone");
+    window.history.replaceState({}, "", url.toString());
+  }, [telefoneUrl, convs, contatoUrlConsumido]);
+
   useEffect(() => {
     if (contatoUrlConsumido || !contatoIdUrl || !convs) return;
     const conv = convs.find((c: any) => c.contatoId === contatoIdUrl);
