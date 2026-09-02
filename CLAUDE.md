@@ -460,11 +460,68 @@ Três entregas encadeadas, todas a partir de print do dono:
    colar `5585997965706` virava `(55) 85997-9657` e era ESSE número que ia
    pro envio.
 
+4. **A conversa aberta responde por si** (02/09). Os dados do contato eram
+   lidos do array já carregado do Inbox, que é filtrado por período: conversa
+   de 13 dias não está lá e o cabeçalho vinha "Contato · Sem atendente" com o
+   cliente vinculado o tempo todo. `crm.conversaPorId` (e `conversaDoContato`
+   pro deep-link) buscam pelo id; `listarConversas` ganhou filtro `ids` que
+   IGNORA período e pasta — quem tem o id está apontando pra conversa e ela
+   tem que ser achada onde estiver, inclusive arquivada. verProprios continua
+   valendo. Os dois links da Agenda passaram a PERGUNTAR ao servidor e a
+   ESPERAR a resposta antes de concluir que não existe conversa: sem isso o
+   caminho que existe pra evitar duplicata estava criando uma. Faixa âmbar
+   "fora do filtro atual" + "Mostrar na lista" (joga o número na busca, a
+   única vista que varre tudo).
+
 Amarras: `agenda-telefone-inbox.test.ts`,
-`agendar-conversa-dados-contato.test.ts` (15 mutações conferidas).
+`agendar-conversa-dados-contato.test.ts` (15 mutações conferidas),
+`conversa-fora-do-filtro.test.ts` (13 mutações).
 Achado NÃO corrigido: o payload do compromisso na tela ganhou nome, mas o
 deep-link segue silencioso quando o colaborador não tem permissão no
 contato de destino.
+
+### H. Acesso do atendente ao cadastro — ENTREGUE 02/09
+
+Quem ATENDE a conversa passou a poder **ver, editar e transformar em
+cliente** (registrarFechamento e definirEstagio) o contato que atende.
+Antes ficava trancado: contato de WhatsApp nasce sem responsável, e o acesso
+de Clientes só olhava responsável do cadastro OU responsável de um lead.
+
+**O achado que decidiu o desenho** (e que derrubou duas propostas minhas):
+`contatos.responsavelId` tem TRÊS usos, não dois — acesso, padrão de
+comissão, e **stickiness do atendimento** (`pegarResponsavelDoContato` no
+whatsapp-handler: conversa nova de cliente com responsável nasce direto com
+ele e NÃO passa pelo rodízio). Por isso a distribuição do SmartFlow recusa
+gravar o campo de propósito: gravar grudaria o cliente no primeiro atendente
+pra sempre. Não repetir a ideia de "a distribuição adota o contato órfão" —
+ela quebra o rodízio e contraria o cenário de nova ação com outro atendente.
+
+Outros fatos conferidos (para não re-investigar): a comissão de venda vem
+EXCLUSIVAMENTE de `asaasCobrancas.atendenteId`, congelado no nascimento da
+cobrança (`inferirAtendentePorCobranca`: `atendente:N` no externalReference →
+senão `contatos.responsavelId` → senão NULL). `reconciliarCobrancasOrfas` só
+toca em cobrança órfã e roda quando o responsável muda NA FICHA. Não existe
+vínculo cobrança↔lead (só `cobranca_acoes` → processo), então "a ação carrega
+quem fechou" não tem onde se apoiar hoje. Cada ação é um lead
+`fechado_ganho` com o responsável = quem fechou.
+
+Implementação: helper `atendeConversaDoContato` (só leitura) somado em
+QUATRO pontos — `detalhe`, `atualizar`, `registrarFechamento`,
+`definirEstagio`. O portão compartilhado `ehResponsavelPeloContato` ficou
+INTACTO de propósito: ele alimenta `podeVerCliente`, que gateia 17
+procedures, várias destrutivas (apagar arquivo/pasta, excluir cliente). Há
+teste contando os 4 usos pra a liberação não escapar. Trocar o responsável
+do cadastro continua só de quem vê tudo — é o que impede acesso de virar
+redistribuição de comissão. Amarras em `atendente-acessa-cadastro.test.ts`
+(12 mutações conferidas).
+
+Resolve de quebra um impasse: `registrarFechamento` exigia ser responsável
+pelo contato, então quem fechou a venda não conseguia registrá-la —
+registrar era o que criaria o lead que daria o acesso.
+
+**Ficou de fora (decisão do dono pendente)**: arquivos e pastas do cliente
+continuam bloqueados pra quem só atende (a aba de documentos vem vazia); e o
+cliente não aparece na LISTA de Clientes dela — ela chega nele pela conversa.
 
 ## Pendências ativas (19/08/2026)
 
