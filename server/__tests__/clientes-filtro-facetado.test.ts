@@ -169,3 +169,61 @@ describe("o menu estreito continua dizendo o nome de cada item", () => {
     expect(layout).toContain('"--sidebar-width-icon": "4.5rem"');
   });
 });
+
+describe("dentro da faixa de destaque a tinta semântica inverte", () => {
+  const css = ler("client/src/index.css");
+  const faixa = css.slice(css.indexOf(".faixa-hero {"), css.indexOf("}", css.indexOf(".faixa-hero {")));
+
+  it("os papéis de cor são redefinidos pra superfície escura", () => {
+    // `--danger-fg` é a tinta de card BRANCO. Sobre o navy ela dava 1,22:1 —
+    // foi o "botão vermelho apagado" e a "etiqueta verde escura".
+    for (const papel of ["success", "danger", "warning", "info", "neutral"]) {
+      expect(faixa, `--${papel}-fg`).toContain(`--${papel}-fg:`);
+      expect(faixa, `--${papel}-bg`).toContain(`--${papel}-bg:`);
+    }
+    expect(faixa).toContain("--foreground: var(--hero-fg)");
+  });
+
+  it("a tinta clareia e o véu escurece", () => {
+    // Véu claro sob tinta clara é briga consigo mesma: com branco a 15% a
+    // etiqueta verde ficava em 3,2:1.
+    const clareza = (papel: string) => {
+      const m = faixa.match(new RegExp(`--${papel}-fg: oklch\\(([\\d.]+)`));
+      return m ? Number(m[1]) : NaN;
+    };
+    for (const papel of ["success", "danger", "warning"]) {
+      expect(clareza(papel), papel).toBeGreaterThan(0.7);
+      expect(faixa, `${papel}-bg`).toMatch(new RegExp(`--${papel}-bg: oklch\\(0 0 0 / `));
+    }
+  });
+
+  it("toda faixa se declara, senão os filhos herdam a tinta de card", () => {
+    for (const arq of [
+      "client/src/pages/Clientes.tsx",
+      "client/src/pages/Configuracoes.tsx",
+      "client/src/pages/Atendimento.tsx",
+      "client/src/pages/admin/AdminClients.tsx",
+    ]) {
+      expect(ler(arq), arq).toContain("faixa-hero");
+    }
+  });
+
+  it("a faixa não se pinta com token que ela mesma reescreve", () => {
+    // A primeira versão do cabeçalho do admin usava `bg-info`; ao redefinir
+    // `--info` pros filhos, ela apagava o próprio azul e virava quase branca.
+    const reescritos = ["info", "success", "danger", "warning", "neutral"];
+    for (const arq of [
+      "client/src/pages/Clientes.tsx",
+      "client/src/pages/Configuracoes.tsx",
+      "client/src/pages/Atendimento.tsx",
+      "client/src/pages/admin/AdminClients.tsx",
+    ]) {
+      const txt = ler(arq);
+      for (const m of txt.matchAll(/faixa-hero[^"]*/g)) {
+        for (const papel of reescritos) {
+          expect(m[0], `${arq}: bg-${papel}`).not.toMatch(new RegExp(`\\bbg-${papel}\\b`));
+        }
+      }
+    }
+  });
+});

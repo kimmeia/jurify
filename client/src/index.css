@@ -485,3 +485,57 @@
 .menu-rotulado[data-collapsible="icon"] [data-sidebar="menu-item"] > span:first-child {
   left: -0.25rem;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Faixa de destaque: a tinta semântica inverte dentro dela
+ *
+ * `--danger-fg` e companhia são a tinta para SUPERFÍCIE CLARA — vermelho
+ * escuro em card branco. Quando o cabeçalho virou faixa navy, esses mesmos
+ * tokens continuaram valendo e o resultado foi verde a 1,46:1 e vermelho a
+ * 1,22:1 sobre o azul: o botão "Excluir" saiu apagado e a etiqueta de
+ * assinatura, escura. Não dava pra ler nenhum dos dois.
+ *
+ * Aqui os papéis são redefinidos para superfície ESCURA, então
+ * `text-danger-fg` dentro da faixa já sai claro sem que a tela peça. Vale a
+ * regra de sempre: quem sabe a cor é o token, não quem escreve a classe.
+ *
+ * Os valores foram medidos contra as duas pontas da faixa (#1a4b86 e
+ * #12325c) — o mais claro dos dois é que manda, e todos passam de 4,5:1.
+ * ═════════════════════════════════════════════════════════════════════════ */
+/* A faixa NÃO pode se pintar com um token que ela redefine aqui dentro: a
+ * primeira versão do cabeçalho do admin usava `bg-info` e, ao reescrever
+ * `--info` pros filhos, apagava o próprio azul. Toda faixa pinta com
+ * `--hero`/`--hero-2`, que não aparecem nesta lista. */
+.faixa-hero {
+  --foreground: var(--hero-fg);
+  --card-foreground: var(--hero-fg);
+  --muted-foreground: oklch(0.907 0.018 245);
+  --border: oklch(1 0 0 / 25%);
+  --input: oklch(1 0 0 / 25%);
+
+  --success: oklch(0.785 0.134 160);
+  --success-fg: oklch(0.785 0.134 160);
+  --danger: oklch(0.814 0.097 26);
+  --danger-fg: oklch(0.814 0.097 26);
+  --warning: oklch(0.820 0.112 82);
+  --warning-fg: oklch(0.820 0.112 82);
+  --info: oklch(0.907 0.018 245);
+  --info-fg: oklch(0.907 0.018 245);
+  --neutral: oklch(0.907 0.018 245);
+  --neutral-fg: oklch(0.907 0.018 245);
+  /* Véu ESCURO, não claro. Clarear o fundo sob tinta clara é briga consigo
+   * mesma: com branco a 15% a etiqueta verde ficava em 3,2:1 — o mesmo
+   * defeito de antes, um pouco menos grave. Escurecendo, sobe pra 6:1. */
+  --success-bg: oklch(0 0 0 / 22%);
+  --danger-bg: oklch(0 0 0 / 22%);
+  --warning-bg: oklch(0 0 0 / 22%);
+  --info-bg: oklch(0 0 0 / 22%);
+  --neutral-bg: oklch(0 0 0 / 22%);
+  /* Preenchimento cheio dentro da faixa é claro, então a tinta em cima dele
+   * volta a ser escura. */
+  --success-on: oklch(0.237 0.044 256);
+  --danger-on: oklch(0.237 0.044 256);
+  --warning-on: oklch(0.237 0.044 256);
+  --info-on: oklch(0.237 0.044 256);
+  --neutral-on: oklch(0.237 0.044 256);
+}
