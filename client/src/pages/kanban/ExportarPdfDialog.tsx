@@ -103,7 +103,7 @@ export function ExportarPdfDialog({
                 <label
                   key={c.id}
                   className={`flex items-center gap-3 px-3 h-[42px] cursor-pointer ${
-                    on ? "bg-violet-50 dark:bg-violet-950/40" : ""
+                    on ? "bg-info-bg" : ""
                   }`}
                 >
                   <input
@@ -115,7 +115,7 @@ export function ExportarPdfDialog({
                   <span
                     className={`h-[18px] w-[18px] rounded-[5px] border-2 shrink-0 flex items-center justify-center ${
                       on
-                        ? "bg-violet-600 border-violet-600 text-white"
+                        ? "bg-info border-info/30 text-info-on"
                         : "border-border bg-card"
                     }`}
                   >
@@ -123,7 +123,7 @@ export function ExportarPdfDialog({
                   </span>
                   <span
                     className={`text-[13px] font-semibold flex-1 truncate ${
-                      on ? "text-violet-900 dark:text-violet-200" : ""
+                      on ? "text-info-fg" : ""
                     }`}
                   >
                     {c.nome}
@@ -131,7 +131,7 @@ export function ExportarPdfDialog({
                   <span
                     className={`text-[11.5px] tabular-nums shrink-0 ${
                       on
-                        ? "font-bold text-violet-700 dark:text-violet-300"
+                        ? "font-bold text-info-fg"
                         : "text-muted-foreground"
                     }`}
                   >
@@ -151,7 +151,7 @@ export function ExportarPdfDialog({
 
         <DialogFooter className="sm:justify-start gap-3">
           {marcadas.length === 0 ? (
-            <p className="text-[12px] flex-1 font-semibold text-amber-700 dark:text-amber-300 inline-flex items-center gap-1.5">
+            <p className="text-[12px] flex-1 font-semibold text-warning-fg inline-flex items-center gap-1.5">
               <TriangleAlert className="h-3.5 w-3.5" />
               Marque uma coluna
             </p>
@@ -159,7 +159,7 @@ export function ExportarPdfDialog({
             <p className="text-[12px] flex-1">
               <b className="tabular-nums">{selecionadas.length}</b> de {colunas.length} colunas
               <span className="text-muted-foreground"> · </span>
-              <b className="tabular-nums text-violet-700 dark:text-violet-300">{totalCards}</b>{" "}
+              <b className="tabular-nums text-info-fg">{totalCards}</b>{" "}
               cards
             </p>
           )}

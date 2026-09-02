@@ -323,7 +323,7 @@ function ConversaoTaxasTab() {
                 </div>
                 <div className="bg-background rounded-md p-3 border border-primary/30">
                   <p className="text-xs text-muted-foreground">Taxa Real</p>
-                  <p className={`text-lg font-bold ${resultadoFisher.taxaReal >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                  <p className={`text-lg font-bold ${resultadoFisher.taxaReal >= 0 ? "text-success-fg" : "text-danger-fg"}`}>
                     {formatPercent(resultadoFisher.taxaReal, 4)} a.a.
                   </p>
                 </div>
@@ -494,7 +494,7 @@ function JurosTab() {
                   </div>
                   <div className="bg-background rounded-md p-3 border">
                     <p className="text-xs text-muted-foreground">Juros</p>
-                    <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatBRL(resultado.juros)}</p>
+                    <p className="text-lg font-bold text-warning-fg">{formatBRL(resultado.juros)}</p>
                   </div>
                   <div className="bg-background rounded-md p-3 border border-primary/30">
                     <p className="text-xs text-muted-foreground">Montante Final</p>
@@ -529,7 +529,7 @@ function JurosTab() {
                             <tr key={ev.periodo} className="border-t">
                               <td className="p-2">{ev.periodo}</td>
                               <td className="text-right p-2">{formatBRL(ev.saldoInicial)}</td>
-                              <td className="text-right p-2 text-amber-600 dark:text-amber-400">{formatBRL(ev.juros)}</td>
+                              <td className="text-right p-2 text-warning-fg">{formatBRL(ev.juros)}</td>
                               <td className="text-right p-2 font-medium">{formatBRL(ev.saldoFinal)}</td>
                             </tr>
                           ))}
@@ -736,7 +736,7 @@ function AtualizacaoMonetariaTab() {
                   </div>
                   <div className="bg-background rounded-md p-3 border">
                     <p className="text-xs text-muted-foreground">Correção Monetária</p>
-                    <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatBRL(resultado.correcaoMonetaria)}</p>
+                    <p className="text-lg font-bold text-warning-fg">{formatBRL(resultado.correcaoMonetaria)}</p>
                     <p className="text-xs text-muted-foreground">{formatPercent(resultado.variacaoPercentual, 2)}</p>
                   </div>
                   <div className="bg-background rounded-md p-3 border">
@@ -746,13 +746,13 @@ function AtualizacaoMonetariaTab() {
                   {resultado.jurosMora > 0 && (
                     <div className="bg-background rounded-md p-3 border">
                       <p className="text-xs text-muted-foreground">Juros de Mora</p>
-                      <p className="text-lg font-bold text-orange-600 dark:text-orange-400">{formatBRL(resultado.jurosMora)}</p>
+                      <p className="text-lg font-bold text-warning-fg">{formatBRL(resultado.jurosMora)}</p>
                     </div>
                   )}
                   {resultado.multa > 0 && (
                     <div className="bg-background rounded-md p-3 border">
                       <p className="text-xs text-muted-foreground">Multa</p>
-                      <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatBRL(resultado.multa)}</p>
+                      <p className="text-lg font-bold text-danger-fg">{formatBRL(resultado.multa)}</p>
                     </div>
                   )}
                   <div className="bg-background rounded-md p-3 border border-primary/30">
@@ -795,7 +795,7 @@ function AtualizacaoMonetariaTab() {
                           {resultado.indices.map((idx: any, i: number) => (
                             <tr key={i} className="border-t">
                               <td className="p-2">{idx.data}</td>
-                              <td className={`text-right p-2 ${idx.variacao >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                              <td className={`text-right p-2 ${idx.variacao >= 0 ? "text-success-fg" : "text-danger-fg"}`}>
                                 {idx.variacao >= 0 ? "+" : ""}{idx.variacao.toFixed(4)}%
                               </td>
                               <td className="text-right p-2 font-mono">{idx.fatorAcumulado.toFixed(8)}</td>
@@ -972,7 +972,7 @@ function PrazosTab() {
                     />
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => removeSuspensao(i)} className="text-red-500 hover:text-red-700 dark:hover:text-red-300">
+                <Button variant="ghost" size="sm" onClick={() => removeSuspensao(i)} className="text-danger hover:text-danger-fg">
                   ✕
                 </Button>
               </div>
@@ -994,17 +994,17 @@ function PrazosTab() {
           {resultado && (
             <div className={`rounded-lg p-5 space-y-4 border ${
               resultado.prescrito
-                ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
-                : "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800"
+                ? "bg-danger-bg border-danger/30 dark:border-danger/30"
+                : "bg-success-bg border-success/30 dark:border-success/30"
             }`}>
               <div className="flex items-center gap-3">
                 {resultado.prescrito ? (
-                  <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                  <AlertTriangle className="h-6 w-6 text-danger-fg" />
                 ) : (
-                  <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  <CheckCircle className="h-6 w-6 text-success-fg" />
                 )}
                 <div>
-                  <h4 className={`font-bold text-lg ${resultado.prescrito ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"}`}>
+                  <h4 className={`font-bold text-lg ${resultado.prescrito ? "text-danger-fg" : "text-success-fg"}`}>
                     {resultado.prescrito ? "PRESCRITO" : "NÃO PRESCRITO"}
                   </h4>
                   <p className="text-sm text-muted-foreground">
@@ -1066,9 +1066,9 @@ function PrazosTab() {
 export default function CalculosDiversos() {
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-teal-50/20 dark:to-teal-950/20 p-6 space-y-5">
+      <div className="rounded-2xl bg-gradient-to-br from-muted/40 via-white dark:via-muted to-success-bg/20 p-6 space-y-5">
         {/* HERO teal/cyan — distinto dos outros submódulos */}
-        <div className="rounded-2xl bg-gradient-to-br from-teal-600 via-cyan-700 to-blue-800 p-6 text-white relative overflow-hidden shadow-lg">
+        <div className="rounded-2xl bg-gradient-to-br from-success via-info to-info p-6 text-white relative overflow-hidden shadow-lg">
           <TrendingUp className="absolute -right-6 -bottom-8 w-40 h-40 opacity-10" strokeWidth={1.2} />
           <div className="relative">
             <div className="flex items-start justify-between flex-wrap gap-3">
@@ -1082,7 +1082,7 @@ export default function CalculosDiversos() {
                   Conversão de taxas · Juros · Atualização monetária (IPCA/SELIC/etc) · Prazos prescricionais
                 </p>
               </div>
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-emerald-400/25 text-emerald-100 border border-emerald-300/30 h-fit">
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-success/25 text-success-fg border border-success/30 h-fit">
                 <Gift className="w-3 h-3" /> Gratuito · sem créditos
               </span>
             </div>

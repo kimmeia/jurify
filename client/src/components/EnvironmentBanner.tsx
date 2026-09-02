@@ -40,13 +40,13 @@ export function EnvironmentBanner() {
 
   const config = {
     staging: {
-      bg: "bg-amber-500",
-      text: "text-amber-950",
+      bg: "bg-warning",
+      text: "text-warning-fg",
       label: "🟡 STAGING — não use dados reais. Tudo aqui é descartável.",
     },
     development: {
-      bg: "bg-slate-700",
-      text: "text-slate-50",
+      bg: "bg-foreground/80",
+      text: "text-muted-foreground/70",
       label: "💻 DEV LOCAL",
     },
   }[ambiente];

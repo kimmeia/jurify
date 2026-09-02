@@ -29,14 +29,14 @@ export interface AgenteCardData {
 }
 
 const AVATAR_GRADIENTS = [
-  "from-violet-500 to-pink-500",
-  "from-blue-500 to-cyan-500",
-  "from-amber-500 to-red-500",
-  "from-emerald-500 to-teal-600",
-  "from-indigo-500 to-violet-500",
-  "from-pink-500 to-rose-500",
-  "from-teal-500 to-emerald-500",
-  "from-fuchsia-500 to-purple-600",
+  "from-info to-danger",
+  "from-info to-info",
+  "from-warning to-danger",
+  "from-success to-success",
+  "from-info to-info",
+  "from-danger to-danger",
+  "from-success to-success",
+  "from-danger to-info",
 ];
 function gradientFromName(name: string) {
   let h = 0;
@@ -46,12 +46,12 @@ function gradientFromName(name: string) {
 
 function modeloLabel(modelo: string): { label: string; cor: string } {
   if (modelo.includes("claude")) {
-    return { label: modelo.includes("haiku") ? "Claude Haiku" : modelo.includes("opus") ? "Claude Opus" : "Claude Sonnet", cor: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300" };
+    return { label: modelo.includes("haiku") ? "Claude Haiku" : modelo.includes("opus") ? "Claude Opus" : "Claude Sonnet", cor: "bg-danger-bg text-danger-fg dark:text-danger" };
   }
   if (modelo.includes("gpt")) {
-    return { label: modelo.includes("mini") ? "GPT-4o mini" : modelo.includes("turbo") ? "GPT-4 Turbo" : "GPT-4o", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" };
+    return { label: modelo.includes("mini") ? "GPT-4o mini" : modelo.includes("turbo") ? "GPT-4 Turbo" : "GPT-4o", cor: "bg-success-bg text-success-fg dark:text-success" };
   }
-  return { label: modelo, cor: "bg-slate-100 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200" };
+  return { label: modelo, cor: "bg-muted text-foreground" };
 }
 
 const MODULO_ICONS: Record<string, string> = {
@@ -64,9 +64,9 @@ const MODULO_ICONS: Record<string, string> = {
 };
 
 const BADGE_INFO: Record<NonNullable<AgenteCardData["badge"]>, { text: string; cor: string }> = {
-  popular: { text: "🏆 Popular", cor: "bg-gradient-to-br from-amber-500 to-amber-600 text-white" },
-  novo: { text: "✨ Novo", cor: "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white" },
-  verificado: { text: "✓ Verificado", cor: "bg-gradient-to-br from-blue-500 to-indigo-600 text-white" },
+  popular: { text: "🏆 Popular", cor: "bg-warning text-warning-on" },
+  novo: { text: "✨ Novo", cor: "bg-success text-success-on" },
+  verificado: { text: "✓ Verificado", cor: "bg-info text-info-on" },
 };
 
 /**
@@ -92,9 +92,9 @@ export function AgenteCard({
   const isTemplate = agente.origem === "template";
   const isPessoal = agente.origem === "pessoal";
   const borderColor =
-    isTemplate ? "border-l-amber-500"
-      : isPessoal ? "border-l-emerald-500"
-        : "border-l-violet-500";
+    isTemplate ? "border-l-warning"
+      : isPessoal ? "border-l-success"
+        : "border-l-info";
 
   const modelo = modeloLabel(agente.modelo);
 
@@ -144,7 +144,7 @@ export function AgenteCard({
         {(agente.modulosPermitidos || []).slice(0, 3).map((m) => (
           <span
             key={m}
-            className="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+            className="text-[9px] px-1.5 py-0.5 rounded bg-info-bg text-info-fg dark:text-info"
             title={m}
           >
             {MODULO_ICONS[m] || ""} {m}
@@ -170,13 +170,13 @@ export function AgenteCard({
           </div>
         )}
         {agente.metricas?.satisfacaoPct !== undefined && (
-          <div className="flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
+          <div className="flex items-center gap-1 text-success-fg">
             <strong>{agente.metricas.satisfacaoPct}%</strong>
             <span>👍</span>
           </div>
         )}
         {!isTemplate && agente.temApiKey && (
-          <div className="flex items-center gap-1 text-emerald-700 dark:text-emerald-300 ml-auto">
+          <div className="flex items-center gap-1 text-success-fg ml-auto">
             <KeyRound className="h-3 w-3" />
             <span>Key própria</span>
           </div>
@@ -189,7 +189,7 @@ export function AgenteCard({
           <>
             <Button
               size="sm"
-              className="flex-1 text-[11px] h-7 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+              className="flex-1 text-[11px] h-7 bg-info"
               onClick={() => onClone?.(agente.id)}
             >
               <Copy className="h-3 w-3 mr-1" />
@@ -201,7 +201,7 @@ export function AgenteCard({
             <Button
               asChild
               size="sm"
-              className="flex-1 text-[11px] h-7 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+              className="flex-1 text-[11px] h-7 bg-info"
               disabled={!agente.ativo}
             >
               <Link href={`/agentes-ia/${agente.id}/chat`}>

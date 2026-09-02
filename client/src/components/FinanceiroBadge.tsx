@@ -77,7 +77,7 @@ export function FinanceiroBadge({
 
   if (resumo.vencido > 0) {
     return (
-      <Badge className="bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/25 hover:bg-red-500/15 text-[9px] font-normal gap-1">
+      <Badge className="bg-danger/15 text-danger-fg border-danger/30 hover:bg-danger/15 text-[9px] font-normal gap-1">
         <AlertTriangle className="h-2.5 w-2.5" />
         Deve {formatBRL(devendo)}
       </Badge>
@@ -86,7 +86,7 @@ export function FinanceiroBadge({
 
   if (resumo.pendente > 0) {
     return (
-      <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25 hover:bg-amber-500/15 text-[9px] font-normal gap-1">
+      <Badge className="bg-warning/15 text-warning-fg border-warning/30 hover:bg-warning/15 text-[9px] font-normal gap-1">
         <DollarSign className="h-2.5 w-2.5" />
         Pendente {formatBRL(resumo.pendente)}
       </Badge>
@@ -95,7 +95,7 @@ export function FinanceiroBadge({
 
   if (resumo.pago > 0) {
     return (
-      <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/15 text-[9px] font-normal gap-1">
+      <Badge className="bg-success/15 text-success-fg border-success/30 hover:bg-success/15 text-[9px] font-normal gap-1">
         <CheckCircle2 className="h-2.5 w-2.5" />
         Em dia
       </Badge>
@@ -308,15 +308,15 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
                   <p className="text-xs text-muted-foreground">Recebido</p>
-                  <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatBRL(resumo.pago)}</p>
+                  <p className="text-sm font-bold text-success-fg">{formatBRL(resumo.pago)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Pendente</p>
-                  <p className="text-sm font-bold text-amber-600 dark:text-amber-400">{formatBRL(resumo.pendente)}</p>
+                  <p className="text-sm font-bold text-warning-fg">{formatBRL(resumo.pendente)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Vencido</p>
-                  <p className="text-sm font-bold text-red-600 dark:text-red-400">{formatBRL(resumo.vencido)}</p>
+                  <p className="text-sm font-bold text-danger-fg">{formatBRL(resumo.vencido)}</p>
                 </div>
               </div>
 
@@ -327,9 +327,9 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
                     <div key={c.id} className="flex items-center justify-between text-xs py-1 border-b border-dashed last:border-0">
                       <div className="flex items-center gap-1.5">
                         <span className={
-                          ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status) ? "text-emerald-600 dark:text-emerald-400" :
-                          c.status === "OVERDUE" ? "text-red-600 dark:text-red-400" :
-                          c.status === "PENDING" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
+                          ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status) ? "text-success-fg" :
+                          c.status === "OVERDUE" ? "text-danger-fg" :
+                          c.status === "PENDING" ? "text-warning-fg" : "text-muted-foreground"
                         }>
                           {["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status) ? "✓" : c.status === "OVERDUE" ? "!" : "○"}
                         </span>
@@ -657,10 +657,10 @@ export function VincularAsaasBlock({
   const cpfDigits = (cpfCnpj || "").replace(/\D/g, "");
   if (!cpfDigits || (cpfDigits.length !== 11 && cpfDigits.length !== 14)) {
     return (
-      <Card className="border-amber-200 dark:border-amber-800/50 bg-amber-50/40 dark:bg-amber-950/30">
+      <Card className="border-warning/30 bg-warning-bg/40">
         <CardContent className="py-4 flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
-            <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-300" />
+          <div className="h-9 w-9 rounded-full bg-warning-bg flex items-center justify-center shrink-0">
+            <AlertTriangle className="h-4 w-4 text-warning-fg" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium">CPF/CNPJ não cadastrado</p>
@@ -688,11 +688,11 @@ export function VincularAsaasBlock({
   if (!resumo?.vinculado) {
     return (
       <>
-        <Card className="border-blue-200 dark:border-blue-800/50 bg-blue-50/40 dark:bg-blue-950/30">
+        <Card className="border-info/30 bg-info-bg/40">
           <CardContent className="py-4 space-y-3">
             <div className="flex items-start gap-3">
-              <div className="h-9 w-9 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-                <Search className="h-4 w-4 text-blue-700 dark:text-blue-300" />
+              <div className="h-9 w-9 rounded-full bg-info-bg flex items-center justify-center shrink-0">
+                <Search className="h-4 w-4 text-info-fg" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">Vincular este cliente ao Asaas</p>
@@ -748,8 +748,8 @@ export function VincularAsaasBlock({
       <CardContent className="py-4 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0 flex-1">
-            <div className="h-9 w-9 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
+            <div className="h-9 w-9 rounded-full bg-success-bg flex items-center justify-center shrink-0">
+              <CheckCircle2 className="h-4 w-4 text-success-fg" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">Vinculado ao Asaas</p>
@@ -778,11 +778,11 @@ export function VincularAsaasBlock({
         </div>
 
         {temErroSync && (
-          <div className="flex items-start gap-2 rounded-md border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 p-2.5">
-            <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-300 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning-bg p-2.5">
+            <AlertTriangle className="h-4 w-4 text-warning-fg shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-amber-900 dark:text-amber-200">Última sincronização falhou</p>
-              <p className="text-[11px] text-amber-800 dark:text-amber-200 break-words">{resumo.ultimoErroSync}</p>
+              <p className="text-xs font-medium text-warning-fg">Última sincronização falhou</p>
+              <p className="text-[11px] text-warning-fg break-words">{resumo.ultimoErroSync}</p>
             </div>
             <Button
               size="sm"

@@ -134,8 +134,8 @@ export default function DashboardFinanceiro() {
               <span
                 className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-bold ${
                   saldoPositivo
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
-                    : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+                    ? "border-success/30 bg-success-bg text-success-fg"
+                    : "border-danger/30 bg-danger-bg text-danger-fg"
                 }`}
               >
                 {saldoPositivo ? "Saldo positivo" : "Saldo negativo"}
@@ -244,7 +244,7 @@ export default function DashboardFinanceiro() {
                 ruim={data.vencido > 0}
                 tag={
                   data.vencido > 0 ? (
-                    <span className="rounded border border-rose-200 bg-rose-50 px-1.5 text-[10px] font-bold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                    <span className="rounded border border-danger/30 bg-danger-bg px-1.5 text-[10px] font-bold text-danger-fg">
                       {formatPercent(data.percentInadimplenciaValor, 0)}
                     </span>
                   ) : undefined
@@ -283,7 +283,7 @@ export default function DashboardFinanceiro() {
                       {devedores.length} de {data.clientesInadimplentes}{" "}
                       {data.clientesInadimplentes === 1 ? "cliente" : "clientes"}
                     </span>
-                    <span className="font-semibold text-rose-600 dark:text-rose-400">
+                    <span className="font-semibold text-danger-fg">
                       {formatBRL(devedores.reduce((s: number, d: any) => s + d.valor, 0))}
                     </span>
                   </>
@@ -360,8 +360,8 @@ export default function DashboardFinanceiro() {
       </div>
 
       {devedores.length === 0 && data.clientesInadimplentes === 0 && (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/30">
-          <p className="text-sm text-emerald-700 dark:text-emerald-300">
+        <div className="rounded-md border border-success/30 bg-success-bg px-4 py-3 dark:border-success/30">
+          <p className="text-sm text-success-fg">
             Nenhum cliente inadimplente no período.
           </p>
         </div>

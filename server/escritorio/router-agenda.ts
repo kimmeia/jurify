@@ -294,7 +294,26 @@ export const agendaRouter = router({
               .orderBy(asc(agendamentos.dataInicio))
               .limit(limiteEventos);
 
+        // Nome (e telefone de reserva) do cliente vinculado. A tarefa já
+        // devolvia o nome; o compromisso devolvia só o `contatoId`, que a tela
+        // não sabe virar nome — daí o bloco "Cliente" nunca aparecer num
+        // compromisso. O telefone do próprio compromisso continua tendo
+        // prioridade: quem digitou um número diferente ali fez de propósito.
+        const contatoIdsAg = [...new Set(ags.filter(a => a.contatoId).map(a => a.contatoId!))];
+        const contatosAg = new Map<number, { nome: string; telefone: string | null }>();
+        if (contatoIdsAg.length > 0) {
+          const rows = await db
+            .select({ id: contatos.id, nome: contatos.nome, telefone: contatos.telefone })
+            .from(contatos)
+            .where(and(
+              eq(contatos.escritorioId, escritorioId),
+              inArray(contatos.id, contatoIdsAg),
+            ));
+          for (const c of rows) contatosAg.set(c.id, { nome: c.nome, telefone: c.telefone });
+        }
+
         for (const ag of ags) {
+          const doContato = ag.contatoId ? contatosAg.get(ag.contatoId) : undefined;
           eventos.push({
             id: ag.id,
             fonte: "compromisso",
@@ -311,7 +330,8 @@ export const agendaRouter = router({
             responsavelId: ag.responsavelId,
             responsavelNome: getColabName(ag.responsavelId),
             contatoId: ag.contatoId,
-            contatoTelefone: ag.contatoTelefone,
+            contatoNome: doContato?.nome,
+            contatoTelefone: ag.contatoTelefone || doContato?.telefone || null,
             processoId: ag.processoId,
             cor: ag.corHex || CORES_TIPO[ag.tipo] || "#3b82f6",
             createdAt: toIsoString(ag.createdAt) ?? "",

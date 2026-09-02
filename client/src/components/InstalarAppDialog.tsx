@@ -20,7 +20,7 @@ import { ehIOS } from "@/lib/pwa-install";
 function Passo({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3 py-1.5">
-      <span className="h-6 w-6 rounded-full bg-violet-600 text-white text-xs font-bold flex items-center justify-center shrink-0">{n}</span>
+      <span className="h-6 w-6 rounded-full bg-info text-info-on text-xs font-bold flex items-center justify-center shrink-0">{n}</span>
       <p className="text-sm text-foreground/90 leading-relaxed">{children}</p>
     </div>
   );
@@ -33,7 +33,7 @@ export function InstalarAppDialog({ open, onOpenChange }: { open: boolean; onOpe
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Smartphone className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+            <Smartphone className="h-5 w-5 text-info-fg" />
             {ios ? "Instalar no iPhone" : "Instalar o app"}
           </DialogTitle>
           <DialogDescription>

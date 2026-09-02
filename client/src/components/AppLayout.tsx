@@ -57,6 +57,7 @@ import {
   Sun,
   Moon,
   Check,
+  Search,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -67,6 +68,7 @@ import { contratoLibera } from "@shared/modulos-contratacao";
 import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
 import { InstalarAppDialog } from "@/components/InstalarAppDialog";
+import { PaletaComandos } from "@/components/PaletaComandos";
 import { dispararInstalacao, pwaInstalado } from "@/lib/pwa-install";
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -433,6 +435,35 @@ function AppSidebarContent({
     atendimento: contConversas?.aguardando ?? 0,
   };
 
+  /**
+   * Quem aparece no menu. Vive fora do JSX porque a paleta ⌘K navega para
+   * a MESMA lista — se as duas calculassem visibilidade por conta própria,
+   * a busca ofereceria tela que o cargo/plano não abre.
+   */
+  const itemVisivelNoMenu = (i: ItemMenu) =>
+    !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) &&
+    (i.modulo ? contratoLibera(modulosContratados, i.modulo) : true) &&
+    (i.soSemModulo ? !contratoLibera(modulosContratados, i.soSemModulo) : true) &&
+    (i.ver ? i.ver(canSee, canSeeEstrito) : true);
+
+  const telasNavegaveis = GRUPOS_MENU.flatMap((g) => g.itens)
+    .filter(itemVisivelNoMenu)
+    .map((i) => ({ id: i.id, rotulo: i.rotulo, rota: i.rota, icone: i.icone }));
+
+  // Paleta de comandos (⌘K / Ctrl+K). É caminho ADICIONAL: o menu continua
+  // inteiro, e quem nunca apertar o atalho não perde nada.
+  const [paletaAberta, setPaletaAberta] = useState(false);
+  useEffect(() => {
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setPaletaAberta((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, []);
+
   // Modo "app de atendimento" no celular (opção A): quem tem o módulo
   // Atendimento abre o app focado nele, sem o menu dos outros módulos.
   // "Abrir versão completa" (no menu do perfil) sai do foco e mostra a
@@ -510,13 +541,7 @@ function AppSidebarContent({
 
           <SidebarContent className="gap-0 rolagem-menu">
             {GRUPOS_MENU.map((grupo) => {
-              const visiveis = grupo.itens.filter(
-                (i) =>
-                  !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) &&
-                  (i.modulo ? contratoLibera(modulosContratados, i.modulo) : true) &&
-                  (i.soSemModulo ? !contratoLibera(modulosContratados, i.soSemModulo) : true) &&
-                  (i.ver ? i.ver(canSee, canSeeEstrito) : true),
-              );
+              const visiveis = grupo.itens.filter(itemVisivelNoMenu);
               if (visiveis.length === 0) return null;
               return (
                 <div key={grupo.titulo} className="px-2 pb-0.5">
@@ -550,7 +575,7 @@ function AppSidebarContent({
                             <Icone className={`h-4 w-4 ${ativo ? "text-sidebar-primary" : ""}`} />
                             <span className="flex-1">{item.rotulo}</span>
                             {item.selo && contagem === 0 && (
-                              <span className="ml-auto rounded-full border border-amber-400/40 bg-amber-400/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-amber-300 group-data-[collapsible=icon]:hidden">
+                              <span className="ml-auto rounded-full border border-warning/30 bg-warning/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-warning-fg group-data-[collapsible=icon]:hidden">
                                 {item.selo}
                               </span>
                             )}
@@ -559,7 +584,7 @@ function AppSidebarContent({
                                 <span
                                   className={`ml-auto rounded-full px-1.5 py-px text-[10px] font-extrabold tabular-nums group-data-[collapsible=icon]:hidden ${
                                     item.tomBadge === "alerta"
-                                      ? "bg-rose-500/20 text-rose-200"
+                                      ? "bg-danger/20 text-danger-fg"
                                       : "bg-sidebar-primary/20 text-sidebar-primary"
                                   }`}
                                 >
@@ -569,7 +594,7 @@ function AppSidebarContent({
                                     responde "tem algo esperando aqui?". */}
                                 <span
                                   className={`absolute right-1.5 top-1.5 hidden h-1.5 w-1.5 rounded-full group-data-[collapsible=icon]:block ${
-                                    item.tomBadge === "alerta" ? "bg-rose-400" : "bg-sidebar-primary"
+                                    item.tomBadge === "alerta" ? "bg-danger" : "bg-sidebar-primary"
                                   }`}
                                 />
                               </>
@@ -606,6 +631,19 @@ function AppSidebarContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3 shrink-0">
+            {/* O atalho precisa se anunciar: paleta de comandos que ninguém
+                descobre é paleta que ninguém usa. Some no modo ícone, onde
+                não há largura pro rótulo. */}
+            <button
+              onClick={() => setPaletaAberta(true)}
+              className="mb-2 flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-1.5 text-[11px] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden"
+            >
+              <Search className="h-3.5 w-3.5 shrink-0" />
+              <span className="flex-1 text-left">Buscar</span>
+              <kbd className="rounded border border-sidebar-border bg-sidebar-accent px-1 py-px font-mono text-[10px] font-semibold text-sidebar-foreground/75">
+                ⌘K
+              </kbd>
+            </button>
             <div className="flex items-center gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -692,7 +730,7 @@ function AppSidebarContent({
                 onClick={logout}
                 title="Sair"
                 aria-label="Sair"
-                className="h-8 w-8 shrink-0 rounded-lg border border-rose-400/40 bg-rose-500/10 flex items-center justify-center text-rose-300 hover:bg-rose-500/20 transition-colors"
+                className="h-8 w-8 shrink-0 rounded-lg border border-danger/30 bg-danger/10 flex items-center justify-center text-danger-fg hover:bg-danger/20 transition-colors"
               >
                 <LogOut className="h-4 w-4" />
               </button>
@@ -722,10 +760,10 @@ function AppSidebarContent({
             <div className="flex items-center gap-2">
               <span
                 className="inline-flex items-center justify-center font-display font-extrabold text-white shrink-0 select-none"
-                style={{ width: 30, height: 30, borderRadius: 8, fontSize: 16, lineHeight: 1, background: "linear-gradient(135deg,#7c3aed,#4f46e5)" }}
+                style={{ width: 30, height: 30, borderRadius: 8, fontSize: 16, lineHeight: 1, background: "linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%)" }}
                 aria-hidden
               >
-                J<span style={{ color: "#c4b5fd" }}>.</span>
+                J<span style={{ color: "var(--sidebar-primary)" }}>.</span>
               </span>
               <span className="font-bold tracking-tight text-foreground">Atendimento</span>
             </div>
@@ -786,6 +824,12 @@ function AppSidebarContent({
         </main>
       </SidebarInset>
       <InstalarAppDialog open={instalarOpen} onOpenChange={setInstalarOpen} />
+      <PaletaComandos
+        aberta={paletaAberta}
+        onOpenChange={setPaletaAberta}
+        telas={telasNavegaveis}
+        onNavegar={navigateOrBlock}
+      />
     </>
   );
 }
@@ -832,9 +876,9 @@ function TrialBanner() {
   };
 
   const cor =
-    dias >= 4 ? "bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200" :
-    dias >= 2 ? "bg-orange-50 border-orange-200 text-orange-900 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-200" :
-                "bg-red-50 border-red-200 text-red-900 dark:bg-red-950/30 dark:border-red-800 dark:text-red-200";
+    dias >= 4 ? "bg-warning-bg border-warning/30 text-warning-fg dark:border-warning/30" :
+    dias >= 2 ? "bg-warning-bg border-warning/30 text-warning-fg dark:border-warning/30" :
+                "bg-danger-bg border-danger/30 text-danger-fg dark:border-danger/30";
 
   const texto =
     dias === 0 ? "Seu trial termina hoje." :

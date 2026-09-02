@@ -122,12 +122,12 @@ export function ResetarHistoricoDialog({
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : previa?.error ? (
-          <div className="rounded border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20 p-3 text-sm text-red-700 dark:text-red-300">
+          <div className="rounded border border-danger/30 bg-danger-bg p-3 text-sm text-danger-fg">
             {previa.error.message ||
               "Não foi possível carregar a prévia. Você precisa ser o dono do escritório."}
           </div>
         ) : totalApagar === 0 ? (
-          <div className="flex items-center gap-2 rounded border bg-emerald-50 dark:bg-emerald-950/20 p-3 text-sm text-emerald-700 dark:text-emerald-300">
+          <div className="flex items-center gap-2 rounded border bg-success-bg p-3 text-sm text-success-fg">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             Nenhum histórico para apagar — escritório já está limpo.
           </div>
@@ -193,7 +193,7 @@ export function ResetarHistoricoDialog({
               </div>
             )}
 
-            <div className="rounded border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-900 dark:text-amber-200">
+            <div className="rounded border border-warning/30 bg-warning-bg p-3 text-xs text-warning-fg">
               <b>Depois do reset:</b> vá em "Sincronizar tudo" pra o Asaas
               reinserir o histórico baseado nos vínculos preservados.
               Lançamentos manuais que você fez NÃO voltam (eles não existem

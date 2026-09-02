@@ -16,6 +16,7 @@ import {
   TIPO_LABELS, TIPO_CORES, PRIORIDADE_LABELS,
   type TipoAgendamento, type PrioridadeAgendamento,
 } from "@shared/agendamento-constants";
+import { mascararTelefoneBR } from "@shared/telefone";
 
 type Lembrete = {
   tipo: "notificacao_app" | "email" | "whatsapp";
@@ -43,6 +44,9 @@ const DURACOES: Array<{ label: string; min: number }> = [
 export type NovoCompromissoContexto = {
   contatoId?: number;
   contatoNome?: string;
+  /** Telefone do contato. Sem ele o compromisso nasce sem número e o clique
+   *  no telefone da Agenda não tem pra onde ir. */
+  contatoTelefone?: string;
 };
 
 export function NovoCompromissoDialog({
@@ -114,6 +118,7 @@ export function NovoCompromissoDialog({
       local: local.trim() || undefined,
       prioridade,
       contatoId: contexto?.contatoId,
+      contatoTelefone: contexto?.contatoTelefone || undefined,
       corHex: TIPO_CORES[tipo],
       lembretes: lembretes.length > 0 ? lembretes : undefined,
     });
@@ -142,16 +147,25 @@ export function NovoCompromissoDialog({
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+            <Calendar className="h-5 w-5 text-info-fg" />
             Novo Compromisso
           </DialogTitle>
-          {contexto?.contatoId && contexto?.contatoNome && (
+          {/* Aparece também sem `contatoId`: conversa que ainda não virou
+              cliente cadastrado leva nome e número do mesmo jeito — é o que
+              faz o telefone da Agenda ter pra onde clicar. */}
+          {(contexto?.contatoNome || contexto?.contatoTelefone) && (
             <div className="flex items-center gap-2 mt-1.5">
-              <span className="inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-800 dark:text-violet-200 text-xs font-semibold">
-                <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 text-white text-[10px] font-bold">
-                  {iniciais(contexto.contatoNome)}
+              <span className="inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-info-bg text-info-fg text-xs font-semibold">
+                <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gradient-to-br from-info to-danger text-white text-[10px] font-bold">
+                  {iniciais(contexto.contatoNome || "?")}
                 </span>
-                Vinculado a: {contexto.contatoNome}
+                {contexto.contatoNome ? `Vinculado a: ${contexto.contatoNome}` : "Contato da conversa"}
+                {contexto.contatoTelefone && (
+                  <>
+                    <span className="opacity-40">·</span>
+                    {mascararTelefoneBR(contexto.contatoTelefone)}
+                  </>
+                )}
               </span>
             </div>
           )}
@@ -279,7 +293,7 @@ export function NovoCompromissoDialog({
             <button
               onClick={adicionarLembrete}
               type="button"
-              className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold inline-flex items-center gap-1"
+              className="text-[11px] text-info-fg hover:underline font-semibold inline-flex items-center gap-1"
             >
               <Plus className="h-3 w-3" /> Adicionar lembrete
             </button>
@@ -291,7 +305,7 @@ export function NovoCompromissoDialog({
           <Button
             onClick={handleSubmit}
             disabled={!titulo.trim() || !data || criar.isPending}
-            className="bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700"
+            className="bg-info"
           >
             {criar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Calendar className="h-4 w-4 mr-2" />}
             Agendar

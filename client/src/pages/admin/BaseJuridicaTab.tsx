@@ -95,7 +95,7 @@ export default function BaseJuridicaTab() {
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mt-1">fontes</p>
           </div>
           <div>
-            <p className={"text-2xl font-bold tabular-nums leading-none " + (indexadas < total ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
+            <p className={"text-2xl font-bold tabular-nums leading-none " + (indexadas < total ? "text-warning-fg" : "text-success-fg")}>
               {indexadas}
             </p>
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mt-1">indexadas</p>
@@ -113,7 +113,7 @@ export default function BaseJuridicaTab() {
             </Button>
           </div>
           {total > 0 && indexadas < total && (
-            <span className="w-full text-[11px] text-amber-600 dark:text-amber-400">
+            <span className="w-full text-[11px] text-warning-fg">
               Há fontes não indexadas — clique em Reindexar (precisa de chave OpenAI).
             </span>
           )}
@@ -125,7 +125,7 @@ export default function BaseJuridicaTab() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Upload className="h-4 w-4 text-violet-600 dark:text-violet-400" /> Subir decisão / jurisprudência
+              <Upload className="h-4 w-4 text-info-fg" /> Subir decisão / jurisprudência
             </DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground -mt-1">
@@ -169,9 +169,9 @@ export default function BaseJuridicaTab() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-1.5 mb-2">
-            <button className={"text-[11px] px-2.5 py-1 rounded-full border " + (!baseArea ? "bg-violet-600 text-white border-violet-600" : "bg-background")} onClick={() => setBaseArea("")}>Todas</button>
+            <button className={"text-[11px] px-2.5 py-1 rounded-full border " + (!baseArea ? "bg-info text-info-on border-info/30" : "bg-background")} onClick={() => setBaseArea("")}>Todas</button>
             {(fontesGlobaisQ.data?.areas ?? []).map((a: any) => (
-              <button key={a.area} className={"text-[11px] px-2.5 py-1 rounded-full border " + (baseArea === a.area ? "bg-violet-600 text-white border-violet-600" : "bg-background")} onClick={() => setBaseArea(a.area)}>
+              <button key={a.area} className={"text-[11px] px-2.5 py-1 rounded-full border " + (baseArea === a.area ? "bg-info text-info-on border-info/30" : "bg-background")} onClick={() => setBaseArea(a.area)}>
                 {a.area} <span className="opacity-60">{a.n}</span>
               </button>
             ))}
@@ -186,12 +186,12 @@ export default function BaseJuridicaTab() {
                     <span className="text-sm font-semibold truncate">{f.identificador}</span>
                     <span className="text-[10px] px-1.5 rounded bg-muted">{f.tipo}</span>
                     <span className="text-[10px] text-muted-foreground">{f.area}</span>
-                    {!f.indexada && <span className="text-[10px] text-amber-600 dark:text-amber-400">não indexada</span>}
+                    {!f.indexada && <span className="text-[10px] text-warning-fg">não indexada</span>}
                   </div>
                   <p className="text-[11px] text-muted-foreground line-clamp-1">{f.titulo || f.texto}</p>
                 </div>
                 <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setFonteEdit({ ...f, orgao: f.orgao || "", titulo: f.titulo || "", tags: f.tags || "" })}><Edit className="h-3.5 w-3.5" /></Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 hover:text-rose-600 dark:hover:text-rose-400" onClick={() => setFonteExcluir(f)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 hover:text-danger-fg" onClick={() => setFonteExcluir(f)}><Trash2 className="h-3.5 w-3.5" /></Button>
               </div>
             ))}
             {!fontesGlobaisQ.isLoading && (fontesGlobaisQ.data?.fontes?.length ?? 0) === 0 && (

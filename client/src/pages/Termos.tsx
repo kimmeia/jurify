@@ -12,7 +12,7 @@ import { TERMOS_ATUALIZADO_EM, TERMOS_VERSAO } from "@shared/termos";
 export default function Termos() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
-      <Link href="/" className="text-sm text-violet-600 hover:underline">&larr; Voltar</Link>
+      <Link href="/" className="text-sm text-info-fg hover:underline">&larr; Voltar</Link>
       <h1 className="text-3xl font-bold mt-4 mb-2">Termos de Uso</h1>
       <p className="text-sm text-muted-foreground mb-8">
         Versão {TERMOS_VERSAO} &middot; Última atualização: {TERMOS_ATUALIZADO_EM} &middot; O aceite
@@ -132,7 +132,7 @@ export default function Termos() {
           (<strong>OpenAI e Anthropic</strong>) &mdash; estes recebem apenas o conteúdo
           necessário para gerar os resumos e análises solicitados pelo Escritório e
           não usam esses dados para treinar modelos. A lista completa e atualizada
-          vive na <Link href="/privacidade" className="text-violet-600 hover:underline">Política de Privacidade</Link>.
+          vive na <Link href="/privacidade" className="text-info-fg hover:underline">Política de Privacidade</Link>.
         </p>
 
         <h2 className="text-xl font-semibold pt-4">10. Beta e disponibilidade</h2>
@@ -185,7 +185,7 @@ export default function Termos() {
 
         <h2 className="text-xl font-semibold pt-4">Contato</h2>
         <p>
-          Dúvidas: <a href="mailto:contato@juridflow.com.br" className="text-violet-600 hover:underline">contato@juridflow.com.br</a>
+          Dúvidas: <a href="mailto:contato@juridflow.com.br" className="text-info-fg hover:underline">contato@juridflow.com.br</a>
         </p>
       </section>
     </div>

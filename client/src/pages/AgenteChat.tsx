@@ -243,7 +243,7 @@ export default function AgenteChat() {
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <div className="h-8 w-8 rounded-md bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
+            <div className="h-8 w-8 rounded-md bg-info flex items-center justify-center shrink-0">
               <BrainCircuit className="h-4 w-4 text-white" />
             </div>
             <div className="min-w-0 flex-1">
@@ -668,7 +668,7 @@ function ChatArea({
                         title="Copiar resposta"
                       >
                         {copiandoId === m.id ? (
-                          <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                          <Check className="h-3 w-3 text-success-fg" />
                         ) : (
                           <Copy className="h-3 w-3" />
                         )}

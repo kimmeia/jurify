@@ -64,7 +64,7 @@ export function EditorJornada({
         {valor ? (
           <button
             type="button"
-            className="text-[11px] text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
+            className="text-[11px] text-muted-foreground hover:text-danger-fg"
             onClick={() => onChange(null)}
           >
             remover jornada
@@ -93,7 +93,7 @@ export function EditorJornada({
                     onClick={() => alternar(dia)}
                     className={`rounded-md px-2 py-1 text-left text-[11.5px] font-semibold ${
                       e
-                        ? "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                        ? "bg-info-bg text-info-fg dark:text-info"
                         : "text-muted-foreground hover:bg-muted"
                     }`}
                     title={e ? "Marcar como folga" : "Marcar como dia de trabalho"}
@@ -138,7 +138,7 @@ export function EditorJornada({
           </div>
 
           {DIAS.some((d) => valor[d] && minutosDoExpediente(valor[d]!) <= 0) && (
-            <p className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[10.5px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            <p className="rounded-lg border border-warning/30 bg-warning-bg px-2.5 py-1.5 text-[10.5px] text-warning-fg">
               Algum dia está com fim antes do início ou intervalo maior que o expediente — esse dia
               será descartado ao salvar.
             </p>

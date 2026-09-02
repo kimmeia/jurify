@@ -144,7 +144,7 @@ export function GaleriaTemplatesDialog({
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                <Sparkles className="h-5 w-5 text-info-fg" />
                 Como você quer começar?
               </DialogTitle>
               <DialogDescription>
@@ -161,14 +161,14 @@ export function GaleriaTemplatesDialog({
                     key={tpl.id}
                     onClick={() => escolherTemplate(tpl)}
                     disabled={criarMut.isPending}
-                    className="text-left rounded-xl border-2 border-slate-200 dark:border-slate-800 p-4 hover:border-violet-300 dark:hover:border-violet-700 hover:shadow-md transition-all disabled:opacity-50 relative"
+                    className="text-left rounded-xl border-2 border-border p-4 hover:border-info/30 hover:shadow-md transition-all disabled:opacity-50 relative"
                   >
                     {tpl.badge && (
                       <span
                         className={`absolute top-2.5 right-2.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
                           tpl.badge === "popular"
-                            ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-                            : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                            ? "bg-warning-bg text-warning-fg dark:text-warning"
+                            : "bg-success-bg text-success-fg dark:text-success"
                         }`}
                       >
                         {tpl.badge === "popular" ? "popular" : "novo"}
@@ -189,9 +189,9 @@ export function GaleriaTemplatesDialog({
                   navigate("/smartflow/novo");
                 }}
                 disabled={criarMut.isPending}
-                className="text-left rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 p-4 hover:border-slate-500 hover:shadow-md transition-all disabled:opacity-50"
+                className="text-left rounded-xl border-2 border-dashed border-border p-4 hover:border-border hover:shadow-md transition-all disabled:opacity-50"
               >
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-slate-500 to-slate-700 flex items-center justify-center mb-2 shadow-sm">
+                <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center mb-2 shadow-sm">
                   <Plus className="h-5 w-5 text-white" />
                 </div>
                 <p className="text-sm font-bold mb-1">Criar do zero</p>
@@ -328,7 +328,7 @@ function WizardPersonalizar({
         })}
 
         {template.dica && (
-          <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-2.5 text-[11px] text-blue-900 dark:text-blue-200 flex items-start gap-1.5">
+          <div className="rounded-md border border-info/30 bg-info-bg dark:border-info/30 p-2.5 text-[11px] text-info-fg flex items-start gap-1.5">
             <Sparkles className="h-3 w-3 shrink-0 mt-0.5" />
             <span>{template.dica}</span>
           </div>
@@ -343,7 +343,7 @@ function WizardPersonalizar({
           size="sm"
           onClick={onCriar}
           disabled={pending}
-          className="bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+          className="bg-info"
         >
           {pending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
           Criar cenário

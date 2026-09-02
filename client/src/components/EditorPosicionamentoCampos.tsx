@@ -83,7 +83,7 @@ const TIPOS_INFO: Record<CampoTipo, {
   ASSINATURA: {
     label: "Assinatura",
     icone: PenLine,
-    cor: "bg-amber-100 dark:bg-amber-900/30 border-amber-400 text-amber-700 dark:text-amber-300",
+    cor: "bg-warning-bg border-warning/30 text-warning-fg",
     largura: 180,
     altura: 50,
     descricao: "Caixa onde o cliente desenha a assinatura",
@@ -91,7 +91,7 @@ const TIPOS_INFO: Record<CampoTipo, {
   DATA: {
     label: "Data",
     icone: Calendar,
-    cor: "bg-blue-100 dark:bg-blue-900/30 border-blue-400 text-blue-700 dark:text-blue-300",
+    cor: "bg-info-bg border-info/30 text-info-fg",
     largura: 100,
     altura: 18,
     descricao: "Auto-preenchido com a data da assinatura",
@@ -99,7 +99,7 @@ const TIPOS_INFO: Record<CampoTipo, {
   NOME: {
     label: "Nome",
     icone: User,
-    cor: "bg-emerald-100 dark:bg-emerald-900/30 border-emerald-400 text-emerald-700 dark:text-emerald-300",
+    cor: "bg-success-bg border-success/30 text-success-fg",
     largura: 200,
     altura: 18,
     descricao: "Auto-preenchido com o nome do signatário",
@@ -107,7 +107,7 @@ const TIPOS_INFO: Record<CampoTipo, {
   CPF: {
     label: "CPF",
     icone: IdCard,
-    cor: "bg-violet-100 dark:bg-violet-900/30 border-violet-400 text-violet-700 dark:text-violet-300",
+    cor: "bg-info-bg border-info/30 text-info-fg",
     largura: 130,
     altura: 18,
     descricao: "Auto-preenchido com o CPF do signatário",
@@ -430,7 +430,7 @@ export function EditorPosicionamentoCampos({
             </div>
           )}
 
-          <Card className="bg-white dark:bg-card shadow-md">
+          <Card className="bg-card shadow-md">
             <CardContent className="p-0 relative">
               <Document
                 // key={pdfUrl} força remount limpo se a URL mudar
@@ -457,7 +457,7 @@ export function EditorPosicionamentoCampos({
                   </div>
                 }
                 error={
-                  <div className="p-12 text-center text-sm text-red-600 dark:text-red-400 max-w-md">
+                  <div className="p-12 text-center text-sm text-danger-fg max-w-md">
                     <p className="font-medium mb-2">Falha ao carregar o PDF.</p>
                     <p className="text-xs text-muted-foreground mb-3">
                       URL tentada: <code className="break-all">{pdfUrl}</code>
@@ -546,7 +546,7 @@ export function EditorPosicionamentoCampos({
                               e.stopPropagation();
                               removerCampo(c.id);
                             }}
-                            className="absolute -top-2 -right-2 h-4 w-4 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center"
+                            className="absolute -top-2 -right-2 h-4 w-4 rounded-full bg-danger text-danger-on opacity-0 group-hover:opacity-100 flex items-center justify-center"
                             title="Remover"
                           >
                             <X className="h-2.5 w-2.5" />

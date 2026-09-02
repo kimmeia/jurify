@@ -9,7 +9,7 @@
  *  • Sub-componentes extraídos para ./clientes/detail-tabs.tsx
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,7 @@ import {
   Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello, Pencil,
   MapPin, AlertTriangle, Briefcase, UserPlus, Ban, Lock,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
 import {
   DropdownMenu,
@@ -52,7 +53,7 @@ import {
   NovoClienteDialog, RegistrarFechamentoDialog,
 } from "./clientes/detail-tabs";
 import { parseValorBR } from "@shared/valor-br";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 
 /**
  * Botão "Monitorar processos" — cria/remove um monitoramento de NOVAS
@@ -135,7 +136,7 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
           size="sm"
           disabled={deletarMut.isPending}
           onClick={() => setConfirmPararOpen(true)}
-          className="bg-emerald-500/15 text-emerald-100 border border-emerald-300/35 backdrop-blur-sm shadow-sm hover:bg-rose-500/25 hover:text-rose-100 hover:border-rose-300/40 h-8 text-xs group"
+          className="bg-success/15 text-success-fg border border-success/30 backdrop-blur-sm shadow-sm hover:bg-danger/25 hover:text-danger-fg hover:border-danger/30 h-8 text-xs group"
         >
           {deletarMut.isPending ? (
             <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
@@ -187,7 +188,7 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
         size="sm"
         onClick={() => setConfirmCriarOpen(true)}
         disabled={criarMut.isPending}
-        className="bg-rose-500/15 text-rose-100 border border-rose-300/35 backdrop-blur-sm shadow-sm hover:bg-rose-500/30 hover:text-white h-8 text-xs"
+        className="bg-danger/15 text-danger-fg border border-danger/30 backdrop-blur-sm shadow-sm hover:bg-danger/30 hover:text-danger-fg h-8 text-xs"
       >
         {criarMut.isPending ? (
           <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
@@ -355,11 +356,11 @@ function aplicarSegmento(
  *  Suspenso = amarelo (pausa reversível); Encerrado = cinza (concluído);
  *  Cancelado/Rescindido/Executado = vermelho (perda). */
 const SITUACAO_SERVICO_INFO: Record<string, { label: string; icon: string; nome: string; badge: string }> = {
-  suspenso:   { label: "Suspenso",   icon: "⏸", nome: "text-amber-600 dark:text-amber-400", badge: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50" },
-  encerrado:  { label: "Encerrado",  icon: "✓", nome: "text-slate-600 dark:text-slate-300", badge: "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80" },
-  cancelado:  { label: "Cancelado",  icon: "⛔", nome: "text-rose-600 dark:text-rose-400", badge: "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/50" },
-  rescindido: { label: "Rescindido", icon: "✂", nome: "text-rose-600 dark:text-rose-400", badge: "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50" },
-  executado:  { label: "Executado",  icon: "⚖", nome: "text-rose-700 dark:text-rose-300", badge: "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-red-300" },
+  suspenso:   { label: "Suspenso",   icon: "⏸", nome: "text-warning-fg", badge: "bg-warning-bg text-warning-fg border-warning/30" },
+  encerrado:  { label: "Encerrado",  icon: "✓", nome: "text-muted-foreground", badge: "bg-muted text-muted-foreground border-border" },
+  cancelado:  { label: "Cancelado",  icon: "⛔", nome: "text-danger-fg", badge: "bg-danger-bg text-danger-fg border-danger/30" },
+  rescindido: { label: "Rescindido", icon: "✂", nome: "text-danger-fg", badge: "bg-danger-bg text-danger-fg border-danger/30" },
+  executado:  { label: "Executado",  icon: "⚖", nome: "text-danger-fg", badge: "bg-danger-bg text-danger-fg border-danger/30" },
 };
 
 /** Opções do diálogo de situação — agrupadas (pausa × encerramento). */
@@ -451,11 +452,26 @@ export default function Clientes() {
     setSelecionados(new Set());
   }, [segmento, buscaDebounced, pagina, aba]);
 
-  // Trocar de aba (Clientes ↔ Leads) volta pra página 1 — senão a paginação
-  // herdada da aba anterior pode cair fora do range da nova lista.
+  // Trocar de aba (Clientes ↔ Leads) ou de segmento volta pra página 1 —
+  // senão a paginação herdada pode cair fora do range da nova lista. O
+  // segmento entrou junto porque a coluna do painel troca de filtro sem ter
+  // os controles de paginação por perto pra corrigir à mão.
   useEffect(() => {
     setPagina(1);
-  }, [aba]);
+  }, [aba, segmento]);
+
+  // A leitura de `?id=` acima só roda na MONTAGEM. Quem já está em
+  // /clientes e navega pra /clientes?id=X — o que a busca ⌘K faz — não
+  // remonta a tela, e sem isto a ficha não abria. Só reage quando há id
+  // na URL: apagar o parâmetro é trabalho do efeito de escrita logo
+  // abaixo, e responder aos dois lados criaria laço.
+  const queryString = useSearch();
+  useEffect(() => {
+    const idParam = new URLSearchParams(queryString).get("id");
+    if (!idParam) return;
+    const n = Number(idParam);
+    if (Number.isInteger(n) && n > 0) setSelId((atual) => (atual === n ? atual : n));
+  }, [queryString]);
 
   // Sincroniza URL com selId/segmento — sem isso, F5 / back do browser
   // perde o estado (volta sempre pra lista geral). replaceState não
@@ -578,25 +594,80 @@ export default function Clientes() {
   // resultando em contagem falsa pra escritórios com mais clientes.
   const clientesComDebito: number = (stats as any)?.inadimplentes ?? 0;
 
+  // ↑↓ andam na lista com a ficha aberta. Numa triagem de trinta contatos é
+  // a diferença entre trinta idas e voltas e trinta apertadas de seta. Só no
+  // painel (lg+), e nunca enquanto a pessoa digita num campo.
+  useEffect(() => {
+    if (selId == null) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      if (window.innerWidth < 1024) return;
+      const alvo = e.target as HTMLElement | null;
+      const tag = alvo?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || alvo?.isContentEditable) return;
+      const lista = clientesFiltrados as any[];
+      if (lista.length === 0) return;
+      const atual = lista.findIndex((c) => c.id === selId);
+      e.preventDefault();
+      // Ficha aberta fora do filtro atual: a seta entra pela primeira da
+      // lista em vez de não fazer nada.
+      if (atual < 0) {
+        setSelId(lista[0].id);
+        return;
+      }
+      const proximo = e.key === "ArrowDown"
+        ? (atual + 1) % lista.length
+        : (atual - 1 + lista.length) % lista.length;
+      setSelId(lista[proximo].id);
+    };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, [selId, clientesFiltrados]);
+
   return (
     <div className="space-y-6">
       {selId ? (
-        <ClienteDetalhe id={selId} onVoltar={() => setSelId(null)} onUpdate={refetch} />
+        /* Painel lista + ficha. Abrir um cliente parava de apagar a tela: a
+           coluna da esquerda mantém a lista (e a posição nela) enquanto a
+           ficha ocupa a direita. Abaixo de lg a coluna some e a ficha volta
+           a ser tela cheia — é a mesma quebra que o Atendimento faz, porque
+           lado a lado não cabe em 390px. */
+        <div className="lg:grid lg:h-[calc(100dvh-140px)] lg:min-h-[480px] lg:grid-cols-[320px_1fr] lg:overflow-hidden lg:rounded-2xl lg:border lg:bg-card">
+          <div className="hidden min-h-0 lg:flex lg:flex-col lg:border-r">
+            <ListaCompactaClientes
+              clientes={clientesFiltrados}
+              selId={selId}
+              onSelecionar={setSelId}
+              busca={busca}
+              onBusca={setBusca}
+              total={(data as any)?.total ?? clientesFiltrados.length}
+              aba={aba}
+              onAba={setAba}
+              segmento={segmento}
+              onSegmento={setSegmento}
+              stats={stats}
+              clientesComDebito={clientesComDebito}
+            />
+          </div>
+          <div className="min-h-0 lg:overflow-auto lg:p-5">
+            <ClienteDetalhe id={selId} onVoltar={() => setSelId(null)} onUpdate={refetch} compacto />
+          </div>
+        </div>
       ) : (
-        <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-violet-50/20 dark:to-violet-950/20 p-6 space-y-5">
+        <div className="rounded-2xl bg-gradient-to-br from-muted/40 via-white dark:via-muted to-info-bg/20 p-6 space-y-5">
           {/* ═══════════ HERO ═══════════ */}
-          <div className="rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 p-7 text-white relative overflow-hidden shadow-lg">
-            <Users className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
+          <div className="rounded-2xl border bg-card text-card-foreground p-6 relative overflow-hidden shadow-sm">
+            <Users className="absolute -right-10 -bottom-12 w-56 h-56 text-muted-foreground opacity-[0.05]" strokeWidth={1.2} />
             <div className="relative">
               <div className="flex items-start justify-between mb-2 flex-wrap gap-3">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <PulseDot />
-                    <p className="text-xs font-medium text-white/85 uppercase tracking-wider">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Clientes
                     </p>
                   </div>
-                  <p className="text-xs text-white/70">
+                  <p className="text-xs text-muted-foreground">
                     Cadastro · histórico · documentos · financeiro
                   </p>
                 </div>
@@ -606,7 +677,7 @@ export default function Clientes() {
                     variant="ghost"
                     onClick={() => exportarDuplicatasMut.mutate()}
                     disabled={exportarDuplicatasMut.isPending}
-                    className="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 text-xs"
+                    className="text-foreground hover:bg-muted border border-border h-8 text-xs"
                   >
                     <Download className="h-3.5 w-3.5 mr-1" />
                     {exportarDuplicatasMut.isPending ? "Gerando..." : "Duplicatas (PDF)"}
@@ -614,7 +685,7 @@ export default function Clientes() {
                   <Button
                     size="sm"
                     onClick={() => setShowNovo(true)}
-                    className="bg-white dark:bg-card text-slate-900 dark:text-slate-100 hover:bg-slate-100 font-semibold shadow-sm h-8"
+                    className="font-semibold shadow-sm h-8"
                   >
                     <Plus className="h-4 w-4 mr-1" /> Novo cliente
                   </Button>
@@ -623,26 +694,26 @@ export default function Clientes() {
 
               <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
                 <div className="lg:col-span-6">
-                  <p className="text-sm font-medium text-white/85 mb-1">Clientes ativos</p>
+                  <p className="text-sm font-medium text-foreground mb-1">Clientes ativos</p>
                   <div className="flex items-baseline gap-3 flex-wrap">
                     <span className="text-5xl font-extrabold tracking-tight tabular-nums leading-none">
                       {stats?.clientesAtivos ?? "—"}
                     </span>
                     {stats?.novosHoje ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-400/25 text-emerald-50 border border-emerald-300/30">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-success-bg text-success-fg border border-success/30">
                         <Plus className="w-3 h-3" />
                         {stats.novosHoje} hoje
                       </span>
                     ) : null}
                   </div>
                   {stats && (
-                    <p className="text-xs text-white/70 mt-2 tabular-nums">
-                      de <b className="text-white">{stats.totalClientes}</b> clientes
+                    <p className="text-xs text-muted-foreground mt-2 tabular-nums">
+                      de <b className="text-foreground">{stats.totalClientes}</b> clientes
                       {stats.suspensos > 0 && (
-                        <> · <span className="text-amber-100 font-medium">{stats.suspensos} suspenso{stats.suspensos !== 1 ? "s" : ""}</span></>
+                        <> · <span className="text-warning-fg font-medium">{stats.suspensos} suspenso{stats.suspensos !== 1 ? "s" : ""}</span></>
                       )}
                       {stats.encerrados > 0 && (
-                        <> · <span className="text-rose-100 font-medium">{stats.encerrados} encerrado{stats.encerrados !== 1 ? "s" : ""}/cancelado{stats.encerrados !== 1 ? "s" : ""}</span></>
+                        <> · <span className="text-danger-fg font-medium">{stats.encerrados} encerrado{stats.encerrados !== 1 ? "s" : ""}/cancelado{stats.encerrados !== 1 ? "s" : ""}</span></>
                       )}
                     </p>
                   )}
@@ -650,23 +721,23 @@ export default function Clientes() {
 
                 {/* Mini stats à direita */}
                 <div className="lg:col-span-6">
-                  <p className="text-[10px] text-white/65 uppercase tracking-wider mb-2">Atenção</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Atenção</p>
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
-                      <p className="text-xs text-white/70 mb-1">Aguardando docs</p>
-                      <p className="text-2xl font-bold tabular-nums leading-none text-amber-200">
+                    <div className="bg-muted/40 rounded-lg px-3 py-2 border border-border">
+                      <p className="text-xs text-muted-foreground mb-1">Aguardando docs</p>
+                      <p className="text-2xl font-bold tabular-nums leading-none text-warning-fg">
                         {stats?.aguardandoDocumentacao ?? 0}
                       </p>
                     </div>
-                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
-                      <p className="text-xs text-white/70 mb-1">Com débito</p>
-                      <p className="text-2xl font-bold tabular-nums leading-none text-rose-200">
+                    <div className="bg-muted/40 rounded-lg px-3 py-2 border border-border">
+                      <p className="text-xs text-muted-foreground mb-1">Com débito</p>
+                      <p className="text-2xl font-bold tabular-nums leading-none text-danger-fg">
                         {clientesComDebito || "—"}
                       </p>
                     </div>
-                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
-                      <p className="text-xs text-white/70 mb-1">Sem telefone</p>
-                      <p className="text-2xl font-bold tabular-nums leading-none text-slate-200">
+                    <div className="bg-muted/40 rounded-lg px-3 py-2 border border-border">
+                      <p className="text-xs text-muted-foreground mb-1">Sem telefone</p>
+                      <p className="text-2xl font-bold tabular-nums leading-none text-muted-foreground">
                         {stats ? stats.total - stats.comTelefone : "—"}
                       </p>
                     </div>
@@ -677,23 +748,23 @@ export default function Clientes() {
           </div>
 
           {/* ═══════════ ABAS CLIENTES / LEADS ═══════════ */}
-          <div className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-700/80">
+          <div className="flex items-center gap-1 border-b border-border">
             <button
               onClick={() => setAba("cliente")}
-              className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 ${aba === "cliente" ? "border-violet-600 text-violet-700 dark:text-violet-300" : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"}`}
+              className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 ${aba === "cliente" ? "border-info/30 text-info-fg" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             >
               Clientes
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${aba === "cliente" ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-600 dark:text-slate-300"}`}>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${aba === "cliente" ? "bg-info text-info-on" : "bg-muted text-muted-foreground"}`}>
                 {stats?.clientesAtivos ?? "—"}
               </span>
             </button>
             <button
               onClick={() => setAba("lead")}
-              className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 ${aba === "lead" ? "border-violet-600 text-violet-700 dark:text-violet-300" : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"}`}
+              className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 ${aba === "lead" ? "border-info/30 text-info-fg" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             >
               Leads
-              <span className="text-[11px] font-normal text-slate-400 hidden sm:inline">em atendimento</span>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${aba === "lead" ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-600 dark:text-slate-300"}`}>
+              <span className="text-[11px] font-normal text-muted-foreground/70 hidden sm:inline">em atendimento</span>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${aba === "lead" ? "bg-info text-info-on" : "bg-muted text-muted-foreground"}`}>
                 {stats?.totalLeads ?? "—"}
               </span>
             </button>
@@ -702,12 +773,12 @@ export default function Clientes() {
           {/* ═══════════ BUSCA + CHIPS ═══════════ */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 min-w-[260px] max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
               <Input
                 placeholder="Buscar por nome, telefone, e-mail ou CPF..."
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                className="pl-10 h-10 bg-white dark:bg-card"
+                className="pl-10 h-10 bg-card"
               />
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -740,7 +811,7 @@ export default function Clientes() {
                 </ChipSegmento>
               )}
               <ChipSegmento ativo={segmento === "vip"} onClick={() => setSegmento("vip")}>
-                <Star className="h-3 w-3 text-amber-500" />
+                <Star className="h-3 w-3 text-warning" />
                 VIP
               </ChipSegmento>
               <ChipSegmento ativo={segmento === "novos"} onClick={() => setSegmento("novos")}>
@@ -770,25 +841,25 @@ export default function Clientes() {
 
           {/* ═══════════ BULK ACTION BAR ═══════════ */}
           {selecionados.size > 0 && (
-            <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/50 text-indigo-900 dark:text-indigo-200">
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-info-bg border border-info/30 text-info-fg">
               <CheckSquare className="h-4 w-4" />
               <span className="text-sm font-semibold">
                 {selecionados.size} cliente{selecionados.size !== 1 ? "s" : ""} selecionado{selecionados.size !== 1 ? "s" : ""}
               </span>
               <div className="flex-1" />
-              <Button size="sm" variant="outline" className="bg-white dark:bg-card hover:bg-indigo-100 border-indigo-200 dark:border-indigo-800/50 h-8 text-xs" onClick={handleExport}>
+              <Button size="sm" variant="outline" className="bg-card hover:bg-info-bg border-info/30 h-8 text-xs" onClick={handleExport}>
                 <Download className="h-3 w-3 mr-1" /> Exportar CSV
               </Button>
               {selecionadosComTelefone > 0 && (
-                <Button size="sm" variant="outline" className="bg-white dark:bg-card hover:bg-indigo-100 border-indigo-200 dark:border-indigo-800/50 h-8 text-xs" onClick={handleBulkInbox}>
-                  <MessageCircle className="h-3 w-3 mr-1 text-emerald-600 dark:text-emerald-400" /> Inbox
+                <Button size="sm" variant="outline" className="bg-card hover:bg-info-bg border-info/30 h-8 text-xs" onClick={handleBulkInbox}>
+                  <MessageCircle className="h-3 w-3 mr-1 text-success-fg" /> Inbox
                 </Button>
               )}
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => setSelecionados(new Set())}
-                className="text-indigo-700 dark:text-indigo-300 hover:text-indigo-900 dark:hover:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 h-8 text-xs"
+                className="text-info-fg hover:text-info-fg hover:bg-info-bg h-8 text-xs"
               >
                 Limpar
               </Button>
@@ -832,9 +903,9 @@ export default function Clientes() {
               </CardContent>
             </Card>
           ) : (
-            <div className="bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden">
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
               {/* Header */}
-              <div className={`grid ${aba === "lead" ? "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-2.5 bg-slate-50 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-700/80 text-[11px] uppercase tracking-wider font-semibold text-slate-500`}>
+              <div className={`grid ${aba === "lead" ? "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-2.5 bg-muted border-b border-border text-[11px] uppercase tracking-wider font-semibold text-muted-foreground`}>
                 <Checkbox
                   checked={
                     selecionados.size > 0 &&
@@ -845,7 +916,7 @@ export default function Clientes() {
                 <div></div>
                 <div>
                   {aba === "lead" ? "Lead" : "Nome"}
-                  <span className="text-slate-400 normal-case font-normal">
+                  <span className="text-muted-foreground/70 normal-case font-normal">
                     {" "}· {clientesFiltrados.length} {aba === "lead" ? "lead" : "cliente"}{clientesFiltrados.length !== 1 ? "s" : ""}
                   </span>
                 </div>
@@ -874,7 +945,7 @@ export default function Clientes() {
 
               {/* Paginação */}
               {totalPaginas > 1 && (
-                <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900/70 border-t border-slate-200 dark:border-slate-700/80 flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
+                <div className="px-4 py-3 bg-muted border-t border-border flex items-center justify-between text-xs text-muted-foreground">
                   <span>
                     Mostrando <b>{clientesFiltrados.length}</b> de{" "}
                     <b>{stats?.total ?? "—"}</b> clientes
@@ -889,7 +960,7 @@ export default function Clientes() {
                     >
                       ‹
                     </Button>
-                    <span className="px-2.5 py-1 rounded bg-slate-900 text-white text-xs flex items-center">
+                    <span className="px-2.5 py-1 rounded bg-foreground/80 text-background text-xs flex items-center">
                       {pagina}
                     </span>
                     <Button
@@ -944,7 +1015,7 @@ export default function Clientes() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-danger hover:bg-danger"
               onClick={() => excluirAlvo && excluirMut.mutate({ id: excluirAlvo.id })}
               disabled={excluirMut.isPending}
             >
@@ -974,7 +1045,7 @@ function ChipSegmento({
     "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all";
   if (ativo) {
     return (
-      <button onClick={onClick} className={`${base} bg-slate-900 text-white border-slate-900`}>
+      <button onClick={onClick} className={`${base} bg-foreground/80 text-white border-border`}>
         {children}
       </button>
     );
@@ -983,7 +1054,7 @@ function ChipSegmento({
     return (
       <button
         onClick={onClick}
-        className={`${base} bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100`}
+        className={`${base} bg-warning-bg border-warning/30 text-warning-fg hover:bg-warning-bg`}
       >
         {children}
       </button>
@@ -993,7 +1064,7 @@ function ChipSegmento({
     return (
       <button
         onClick={onClick}
-        className={`${base} bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-300 hover:bg-rose-100`}
+        className={`${base} bg-danger-bg border-danger/30 text-danger-fg hover:bg-danger-bg`}
       >
         {children}
       </button>
@@ -1002,7 +1073,7 @@ function ChipSegmento({
   return (
     <button
       onClick={onClick}
-      className={`${base} bg-white dark:bg-card border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 hover:border-slate-300 hover:text-slate-900 dark:hover:text-slate-100`}
+      className={`${base} bg-card border-border text-muted-foreground hover:border-border hover:text-foreground`}
     >
       {children}
     </button>
@@ -1022,18 +1093,18 @@ function CountPill({
     return <span className="bg-white/20 px-1.5 rounded-full text-[10px] tabular-nums">{children}</span>;
   if (tom === "amber")
     return (
-      <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 rounded-full text-[10px] tabular-nums">
+      <span className="bg-warning-bg text-warning-fg px-1.5 rounded-full text-[10px] tabular-nums">
         {children}
       </span>
     );
   if (tom === "rose")
     return (
-      <span className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 px-1.5 rounded-full text-[10px] tabular-nums">
+      <span className="bg-danger-bg text-danger-fg px-1.5 rounded-full text-[10px] tabular-nums">
         {children}
       </span>
     );
   return (
-    <span className="bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 px-1.5 rounded-full text-[10px] tabular-nums">
+    <span className="bg-muted text-muted-foreground px-1.5 rounded-full text-[10px] tabular-nums">
       {children}
     </span>
   );
@@ -1070,7 +1141,7 @@ function LinhaCliente({
 
   return (
     <div
-      className={`grid ${modoLead ? "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-3 border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/70 dark:hover:bg-slate-900/70 cursor-pointer transition-colors group`}
+      className={`grid ${modoLead ? "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-3 border-t border-border hover:bg-muted/70 cursor-pointer transition-colors group`}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("[data-stop-row-click]")) return;
         onAbrir();
@@ -1086,7 +1157,7 @@ function LinhaCliente({
       </div>
       <div className="min-w-0">
         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-          <p className={`text-sm font-semibold truncate ${situacaoInfo ? situacaoInfo.nome : inativoDias != null ? "text-slate-600 dark:text-slate-300" : ""}`}>
+          <p className={`text-sm font-semibold truncate ${situacaoInfo ? situacaoInfo.nome : inativoDias != null ? "text-muted-foreground" : ""}`}>
             {c.nome}
           </p>
           {situacaoInfo && (
@@ -1094,24 +1165,24 @@ function LinhaCliente({
               {situacaoInfo.icon} {situacaoInfo.label}
             </span>
           )}
-          {isVip && <Star className="h-3.5 w-3.5 text-amber-500 shrink-0 fill-amber-500" />}
+          {isVip && <Star className="h-3.5 w-3.5 text-warning shrink-0 fill-warning" />}
           {c.documentacaoPendente && (
-            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
+            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-warning-bg text-warning-fg">
               ⚠ Aguardando docs
             </span>
           )}
           {vencido > 0 && (
-            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 tabular-nums">
+            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-danger-bg text-danger-fg tabular-nums">
               ⚠ {fmtBRLShort(vencido)} vencido
             </span>
           )}
           {inativoDias != null && (
-            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/60 text-slate-500">
+            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
               Inativo {inativoDias}d
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-[11px] text-slate-500">
+        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
           {c.telefone && (
             <span className="flex items-center gap-1">
               <Phone className="h-3 w-3" /> {c.telefone}
@@ -1137,10 +1208,10 @@ function LinhaCliente({
             <span className={`w-6 h-6 rounded-full bg-gradient-to-br ${gradientAvatar(c.responsavelNome)} text-white flex items-center justify-center text-[9px] font-bold shrink-0`}>
               {gerarIniciais(c.responsavelNome)}
             </span>
-            <span className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{c.responsavelNome}</span>
+            <span className="text-xs font-medium text-foreground truncate">{c.responsavelNome}</span>
           </span>
         ) : (
-          <span className="text-[11px] italic text-slate-400">sem atendente</span>
+          <span className="text-[11px] italic text-muted-foreground/70">sem atendente</span>
         )}
       </div>
 
@@ -1148,30 +1219,30 @@ function LinhaCliente({
       <div className="text-right">
         {vencido > 0 ? (
           <>
-            <p className="text-sm font-semibold text-rose-600 dark:text-rose-400 tabular-nums">{fmtBRLShort(vencido)}</p>
-            <p className="text-[10px] text-rose-500">vencido</p>
+            <p className="text-sm font-semibold text-danger-fg tabular-nums">{fmtBRLShort(vencido)}</p>
+            <p className="text-[10px] text-danger">vencido</p>
           </>
         ) : pendente > 0 ? (
           <>
-            <p className="text-sm font-semibold text-amber-600 dark:text-amber-400 tabular-nums">{fmtBRLShort(pendente)}</p>
-            <p className="text-[10px] text-amber-500">pendente</p>
+            <p className="text-sm font-semibold text-warning-fg tabular-nums">{fmtBRLShort(pendente)}</p>
+            <p className="text-[10px] text-warning">pendente</p>
           </>
         ) : recebido > 0 ? (
           <>
-            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmtBRLShort(recebido)}</p>
+            <p className="text-sm font-semibold text-success-fg tabular-nums">{fmtBRLShort(recebido)}</p>
             <p className="text-[10px] text-muted-foreground">recebido</p>
           </>
         ) : (
           <>
-            <p className="text-sm font-semibold text-slate-400">—</p>
-            <p className="text-[10px] text-slate-400">sem cobrança</p>
+            <p className="text-sm font-semibold text-muted-foreground/70">—</p>
+            <p className="text-[10px] text-muted-foreground/70">sem cobrança</p>
           </>
         )}
       </div>
 
       <div className="text-right text-xs">
-        <p className="text-slate-700 dark:text-slate-200">{timeAgo(c.ultimaConversaAt || c.createdAt)}</p>
-        <p className="text-[10px] text-slate-400">
+        <p className="text-foreground">{timeAgo(c.ultimaConversaAt || c.createdAt)}</p>
+        <p className="text-[10px] text-muted-foreground/70">
           {c.ultimaConversaAt ? "conversa" : "cadastro"}
         </p>
       </div>
@@ -1187,7 +1258,7 @@ function LinhaCliente({
           <Button
             size="sm"
             data-stop-row-click
-            className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+            className="h-7 px-2.5 text-xs bg-success hover:bg-success text-success-on shrink-0"
             title="Fechar contrato — torna este lead um cliente"
             onClick={(e) => {
               e.stopPropagation();
@@ -1214,7 +1285,7 @@ function LinhaCliente({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400"
+              className="h-7 w-7 hover:bg-danger-bg hover:text-danger-fg"
               title="Excluir"
               onClick={(e) => {
                 e.stopPropagation();
@@ -1239,12 +1310,12 @@ function fmtBRLShort(v: number): string {
 // ─── Financeiro do Cliente — cobranças Asaas ────────────────────────────────
 
 const STATUS_COBRANCA_LABEL: Record<string, { label: string; cor: string }> = {
-  PENDING: { label: "Pendente", cor: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50" },
-  RECEIVED: { label: "Recebido", cor: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50" },
-  CONFIRMED: { label: "Confirmado", cor: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50" },
-  OVERDUE: { label: "Vencido", cor: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50" },
-  REFUNDED: { label: "Estornado", cor: "bg-zinc-100 dark:bg-slate-800/60 text-zinc-700 dark:text-slate-200 border-zinc-200 dark:border-slate-700/80" },
-  CANCELED: { label: "Cancelado", cor: "bg-zinc-100 dark:bg-slate-800/60 text-zinc-700 dark:text-slate-200 border-zinc-200 dark:border-slate-700/80" },
+  PENDING: { label: "Pendente", cor: "bg-warning-bg text-warning-fg border-warning/30" },
+  RECEIVED: { label: "Recebido", cor: "bg-success-bg text-success-fg border-success/30" },
+  CONFIRMED: { label: "Confirmado", cor: "bg-success-bg text-success-fg border-success/30" },
+  OVERDUE: { label: "Vencido", cor: "bg-danger-bg text-danger-fg border-danger/30" },
+  REFUNDED: { label: "Estornado", cor: "bg-muted text-foreground border-border" },
+  CANCELED: { label: "Cancelado", cor: "bg-muted text-foreground border-border" },
 };
 
 function fmtMoeda(centavosOuDecimal: number | string | null | undefined): string {
@@ -1346,7 +1417,7 @@ function KanbanClienteTab({ contatoId }: { contatoId: number }) {
                     <p className="text-[11px] text-muted-foreground">
                       {c.funilNome} · {c.colunaNome}
                       {c.prazo && ` · prazo ${new Date(c.prazo).toLocaleDateString("pt-BR")}`}
-                      {c.atrasado && <span className="ml-1 text-red-600 dark:text-red-400 font-medium">(atrasado)</span>}
+                      {c.atrasado && <span className="ml-1 text-danger-fg font-medium">(atrasado)</span>}
                     </p>
                   </div>
                 </div>
@@ -1685,15 +1756,15 @@ function FinanceiroClienteTab({
       {/* Totais agregados */}
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-lg border bg-card px-3 py-2 text-center">
-          <p className="text-base font-bold leading-tight text-emerald-600 dark:text-emerald-400">{fmtMoeda(totais.pago)}</p>
+          <p className="text-base font-bold leading-tight text-success-fg">{fmtMoeda(totais.pago)}</p>
           <p className="text-[10px] text-muted-foreground">Pago</p>
         </div>
         <div className="rounded-lg border bg-card px-3 py-2 text-center">
-          <p className="text-base font-bold leading-tight text-amber-600 dark:text-amber-400">{fmtMoeda(totais.pendente)}</p>
+          <p className="text-base font-bold leading-tight text-warning-fg">{fmtMoeda(totais.pendente)}</p>
           <p className="text-[10px] text-muted-foreground">Pendente</p>
         </div>
         <div className="rounded-lg border bg-card px-3 py-2 text-center">
-          <p className="text-base font-bold leading-tight text-red-600 dark:text-red-400">{fmtMoeda(totais.vencido)}</p>
+          <p className="text-base font-bold leading-tight text-danger-fg">{fmtMoeda(totais.vencido)}</p>
           <p className="text-[10px] text-muted-foreground">Vencido</p>
         </div>
       </div>
@@ -1703,7 +1774,7 @@ function FinanceiroClienteTab({
         <CardContent className="p-0">
           <div className="divide-y">
             {items.map((c) => {
-              const meta = STATUS_COBRANCA_LABEL[c.status] || { label: c.status, cor: "bg-zinc-100 dark:bg-slate-800/60 text-zinc-700 dark:text-slate-200 border-zinc-200 dark:border-slate-700/80" };
+              const meta = STATUS_COBRANCA_LABEL[c.status] || { label: c.status, cor: "bg-muted text-foreground border-border" };
               return (
                 <div key={c.id} className="px-4 py-3 flex items-center gap-3 hover:bg-muted/30">
                   <div className="flex-1 min-w-0">
@@ -1721,7 +1792,7 @@ function FinanceiroClienteTab({
                       {c.contatoBeneficiarioId === contatoId && c.contatoId !== contatoId && (
                         <Badge
                           variant="outline"
-                          className="text-[9px] h-4 px-1 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800"
+                          className="text-[9px] h-4 px-1 bg-info-bg text-info-fg border-info/30 dark:text-info"
                           title="Esta cobrança foi paga no nome de outra pessoa e vinculada como pagamento deste cliente"
                         >
                           pago por terceiro
@@ -1730,7 +1801,7 @@ function FinanceiroClienteTab({
                       {c.contatoBeneficiarioId !== null && c.contatoBeneficiarioId !== contatoId && (
                         <Badge
                           variant="outline"
-                          className="text-[9px] h-4 px-1 bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800"
+                          className="text-[9px] h-4 px-1 bg-info-bg text-info-fg border-info/30 dark:text-info"
                           title="Esta cobrança foi atribuída a outro cliente (beneficiário lógico) — não conta no caixa deste contato"
                         >
                           atribuída a outro
@@ -1762,7 +1833,7 @@ function FinanceiroClienteTab({
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-6 text-[10px] px-2 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
+                            className="h-6 text-[10px] px-2 text-success-fg hover:text-success-fg"
                             onClick={() => marcarPagaMut.mutate({ id: c.id })}
                             disabled={marcarPagaMut.isPending}
                             title="Marcar como recebida (cobrança manual)"
@@ -1823,7 +1894,7 @@ function FinanceiroClienteTab({
                           href={`https://www.asaas.com/payment/${c.asaasPaymentId}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-[10px] text-violet-600 dark:text-violet-400 hover:underline"
+                          className="text-[10px] text-info-fg hover:underline"
                         >
                           Abrir no Asaas
                         </a>
@@ -1963,8 +2034,8 @@ function FinanceiroClienteTab({
 // ─── Processos do Cliente ────────────────────────────────────────────────────
 
 const TIPO_PROCESSO_META: Record<string, { label: string; cor: string }> = {
-  extrajudicial: { label: "Extrajudicial", cor: "bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800/50" },
-  litigioso: { label: "Litigioso", cor: "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800/50" },
+  extrajudicial: { label: "Extrajudicial", cor: "bg-info-bg text-info-fg border-info/30" },
+  litigioso: { label: "Litigioso", cor: "bg-info-bg text-info-fg border-info/30" },
 };
 
 function ProcessoCard({
@@ -2013,10 +2084,10 @@ function ProcessoCard({
           <button
             type="button"
             onClick={onToggle}
-            className="h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0 hover:bg-indigo-500/20 transition-colors"
+            className="h-9 w-9 rounded-lg bg-info/10 flex items-center justify-center shrink-0 hover:bg-info/20 transition-colors"
             title={expandido ? "Recolher" : "Expandir anotações"}
           >
-            <Scale className="h-4 w-4 text-indigo-500" />
+            <Scale className="h-4 w-4 text-info" />
           </button>
           <div className="flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
             <div className="flex items-center gap-2 flex-wrap">
@@ -2034,13 +2105,13 @@ function ProcessoCard({
                 </Badge>
               )}
               {p.monitoramentoId && (
-                <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px]">
+                <Badge className="bg-success/15 text-success-fg border-success/30 text-[9px]">
                   <Radar className="h-2.5 w-2.5 mr-0.5" /> Monitorado
                 </Badge>
               )}
               {/* Judicial sem CNJ ainda — aguardando protocolo */}
               {!p.numeroCnj && (p.tipo === "litigioso" || !p.tipo) && (
-                <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px]">
+                <Badge className="bg-warning/15 text-warning-fg border-warning/30 text-[9px]">
                   Aguardando CNJ
                 </Badge>
               )}
@@ -2077,7 +2148,7 @@ function ProcessoCard({
         {expandido && (
           <div className="mt-3 pt-3 border-t space-y-2">
             <div className="flex items-center gap-2">
-              <StickyNote className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+              <StickyNote className="h-3.5 w-3.5 text-warning-fg" />
               <p className="text-xs font-semibold">Anotações de andamento</p>
             </div>
 
@@ -2105,7 +2176,7 @@ function ProcessoCard({
             {anotacoes && anotacoes.length > 0 ? (
               <div className="space-y-1.5">
                 {anotacoes.map((a: any) => (
-                  <div key={a.id} className="rounded-md bg-amber-50/40 dark:bg-amber-950/10 border border-amber-200/40 dark:border-amber-900/30 p-2">
+                  <div key={a.id} className="rounded-md bg-warning-bg/40 border border-warning/30 p-2">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-xs whitespace-pre-wrap flex-1">{a.conteudo}</p>
                       <button
@@ -2145,7 +2216,7 @@ function ProcessoCard({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-danger hover:bg-danger"
               onClick={() => {
                 if (excluirAnotAlvo != null) {
                   excluirAnot.mutate({ id: excluirAnotAlvo });
@@ -2244,7 +2315,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold flex items-center gap-2">
-            <Scale className="h-4 w-4 text-indigo-500" />
+            <Scale className="h-4 w-4 text-info" />
             Processos ({lista.length})
           </p>
           <p className="text-xs text-muted-foreground">Processos nos quais o escritório representa este cliente</p>
@@ -2490,7 +2561,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-danger hover:bg-danger"
               onClick={() => {
                 if (desvincularAlvo) {
                   desvincularMut.mutate({ id: desvincularAlvo.id });
@@ -2781,7 +2852,7 @@ function EditarLeadDialog({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-danger hover:bg-danger"
               onClick={() => excluirMut.mutate({ id: lead.id })}
               disabled={excluirMut.isPending}
             >
@@ -2794,16 +2865,236 @@ function EditarLeadDialog({
   );
 }
 
+// ─── Coluna compacta da lista (painel lista + ficha) ────────────────────────
+
+/** Versão de 320px do ChipSegmento — mesmas cores, menos padding. */
+function ChipCompacto({
+  ativo,
+  onClick,
+  children,
+  destaque,
+}: {
+  ativo: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  destaque?: "amber" | "rose";
+}) {
+  const base =
+    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] font-medium transition-colors";
+  const tom = ativo
+    ? "bg-foreground/80 text-background border-border"
+    : destaque === "amber"
+      ? "bg-warning-bg border-warning/30 text-warning-fg hover:bg-warning-bg"
+      : destaque === "rose"
+        ? "bg-danger-bg border-danger/30 text-danger-fg hover:bg-danger-bg"
+        : "bg-card text-muted-foreground hover:bg-muted hover:text-foreground";
+  return (
+    <button onClick={onClick} className={`${base} ${tom}`}>
+      {children}
+    </button>
+  );
+}
+
+/**
+ * A mesma lista já carregada pela tela, em 320px. Não busca nada por conta
+ * própria: recebe `clientesFiltrados` pronto, então o que aparece aqui é
+ * exatamente o que a tabela mostraria com os mesmos filtros.
+ */
+function ListaCompactaClientes({
+  clientes,
+  selId,
+  onSelecionar,
+  busca,
+  onBusca,
+  total,
+  aba,
+  onAba,
+  segmento,
+  onSegmento,
+  stats,
+  clientesComDebito,
+}: {
+  clientes: any[];
+  selId: number | null;
+  onSelecionar: (id: number) => void;
+  busca: string;
+  onBusca: (v: string) => void;
+  total: number;
+  aba: "cliente" | "lead";
+  onAba: (v: "cliente" | "lead") => void;
+  segmento: Segmento;
+  onSegmento: (v: Segmento) => void;
+  stats: any;
+  clientesComDebito: number;
+}) {
+  const refSelecionado = useRef<HTMLButtonElement | null>(null);
+  // Andar com ↑↓ tem que arrastar a rolagem junto, senão a seleção some
+  // pra fora da coluna depois de alguns itens.
+  useEffect(() => {
+    refSelecionado.current?.scrollIntoView({ block: "nearest" });
+  }, [selId]);
+
+  const posicao = clientes.findIndex((c) => c.id === selId);
+
+  return (
+    <>
+      <div className="shrink-0 space-y-2.5 border-b p-3">
+        {/* Mesmas abas e mesmos filtros da lista cheia: sem eles a coluna
+            virava só uma busca, e trocar de segmento obrigava a fechar a
+            ficha pra voltar à tela inteira. */}
+        <div className="flex gap-1 rounded-lg bg-muted p-0.5">
+          {(["cliente", "lead"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => onAba(v)}
+              className={`flex-1 rounded-md px-2 py-1 text-[11.5px] font-semibold transition-colors ${
+                aba === v ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {v === "cliente" ? "Clientes" : "Leads"}
+              <span className="ml-1 tabular-nums opacity-60">
+                {v === "cliente" ? (stats?.clientesAtivos ?? "") : (stats?.totalLeads ?? "")}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={busca}
+            onChange={(e) => onBusca(e.target.value)}
+            placeholder="Buscar na lista..."
+            className="h-9 pl-9 text-[13px]"
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          <ChipCompacto ativo={segmento === "todos"} onClick={() => onSegmento("todos")}>
+            Todos
+            {/* O `total` da query vem FILTRADO pelo segmento — usá-lo aqui
+                fazia "Todos" mostrar a contagem do filtro ativo. O número
+                do universo é o mesmo que a lista cheia usa. */}
+            <span className="tabular-nums opacity-70">
+              {(aba === "lead" ? stats?.totalLeads : stats?.totalClientes) ?? "—"}
+            </span>
+          </ChipCompacto>
+          {(stats?.aguardandoDocumentacao ?? 0) > 0 && (
+            <ChipCompacto
+              ativo={segmento === "aguardando_docs"}
+              onClick={() => onSegmento("aguardando_docs")}
+              destaque="amber"
+            >
+              ⚠ Docs
+              <span className="tabular-nums opacity-70">{stats.aguardandoDocumentacao}</span>
+            </ChipCompacto>
+          )}
+          {clientesComDebito > 0 && (
+            <ChipCompacto
+              ativo={segmento === "com_debito"}
+              onClick={() => onSegmento("com_debito")}
+              destaque="rose"
+            >
+              ⚠ Débito
+              <span className="tabular-nums opacity-70">{clientesComDebito}</span>
+            </ChipCompacto>
+          )}
+          <ChipCompacto ativo={segmento === "vip"} onClick={() => onSegmento("vip")}>
+            ★ VIP
+          </ChipCompacto>
+          <ChipCompacto ativo={segmento === "novos"} onClick={() => onSegmento("novos")}>
+            Novos
+          </ChipCompacto>
+          <ChipCompacto ativo={segmento === "inativo"} onClick={() => onSegmento("inativo")}>
+            Inativos
+          </ChipCompacto>
+          {(stats?.suspensos ?? 0) > 0 && (
+            <ChipCompacto ativo={segmento === "suspensos"} onClick={() => onSegmento("suspensos")}>
+              ⏸ Suspensos
+              <span className="tabular-nums opacity-70">{stats.suspensos}</span>
+            </ChipCompacto>
+          )}
+          {(stats?.encerrados ?? 0) > 0 && (
+            <ChipCompacto ativo={segmento === "encerrados"} onClick={() => onSegmento("encerrados")}>
+              ⛔ Encerrados
+              <span className="tabular-nums opacity-70">{stats.encerrados}</span>
+            </ChipCompacto>
+          )}
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto">
+        {clientes.length === 0 ? (
+          <p className="p-6 text-center text-[12.5px] text-muted-foreground">
+            Nenhum cliente bate com a busca.
+          </p>
+        ) : (
+          clientes.map((c: any) => {
+            const ativo = c.id === selId;
+            return (
+              <button
+                key={c.id}
+                ref={ativo ? refSelecionado : undefined}
+                onClick={() => onSelecionar(c.id)}
+                className={`flex w-full items-start gap-2.5 border-l-[3px] border-b px-3 py-2.5 text-left transition-colors ${
+                  ativo
+                    ? "border-l-primary bg-primary/5"
+                    : "border-l-transparent hover:bg-muted/50"
+                }`}
+              >
+                <span
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[11px] font-semibold text-white ${gradientAvatar(c.nome || "?")}`}
+                >
+                  {gerarIniciais(c.nome || "?")}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={`block truncate text-[12.5px] ${ativo ? "font-semibold" : "font-medium"}`}>
+                    {c.nome}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[10.5px] text-muted-foreground">
+                    {c.telefone || c.email || c.cpfCnpj || "sem contato"}
+                  </span>
+                </span>
+              </button>
+            );
+          })
+        )}
+      </div>
+
+      {/* Trocar de filtro com uma ficha aberta pode deixar o cliente aberto
+          fora da lista. Sem dizer isso, a coluna fica sem nada marcado e o
+          ↑↓ parece quebrado. */}
+      {posicao < 0 && clientes.length > 0 && (
+        <p className="shrink-0 border-t bg-warning-bg px-3 py-1.5 text-[10px] leading-snug text-warning-fg dark:text-warning">
+          O cliente aberto não está neste filtro.
+        </p>
+      )}
+      <div className="flex shrink-0 items-center gap-2 border-t px-3 py-2 text-[10px] text-muted-foreground">
+        <kbd className="rounded border bg-muted px-1 py-px font-mono text-[9.5px]">↑</kbd>
+        <kbd className="rounded border bg-muted px-1 py-px font-mono text-[9.5px]">↓</kbd>
+        trocar de cliente
+        <span className="ml-auto tabular-nums">
+          {posicao >= 0 ? `${posicao + 1} de ${clientes.length}` : `${clientes.length} na lista`}
+          {total > clientes.length ? ` · ${total} no filtro` : ""}
+        </span>
+      </div>
+    </>
+  );
+}
+
 // ─── Detalhe do Cliente ─────────────────────────────────────────────────────
 
 function ClienteDetalhe({
   id,
   onVoltar,
   onUpdate,
+  compacto = false,
 }: {
   id: number;
   onVoltar: () => void;
   onUpdate: () => void;
+  /** Renderizada ao lado da lista, numa coluna estreita: aperta o hero. */
+  compacto?: boolean;
 }) {
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState("visao-geral");
@@ -2910,17 +3201,31 @@ function ClienteDetalhe({
   // e quando ele não existe mais — tratar isso como "ainda não chegou" deixava
   // a tela girando pra sempre, sem dizer nada a quem abriu.
   if (detalheCarregando) {
+    // Esqueleto com a FORMA da ficha, não um círculo girando: o layout já
+    // nasce no lugar, então nada pula quando os dados chegam.
     return (
-      <div className="text-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+      <div className="space-y-4">
+        <div className="flex items-start gap-3">
+          <Skeleton className="h-11 w-11 shrink-0 rounded-full" />
+          <div className="flex-1 space-y-2 pt-1">
+            <Skeleton className="h-4 w-56" />
+            <Skeleton className="h-3 w-80 max-w-full" />
+          </div>
+        </div>
+        <Skeleton className="h-9 w-full max-w-md rounded-lg" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-28 rounded-xl" />
+        </div>
+        <Skeleton className="h-24 rounded-xl" />
       </div>
     );
   }
   if (!cliente) {
     return (
       <div className="mx-auto mt-12 max-w-md px-4 text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40">
-          <Lock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-warning/30 bg-warning-bg dark:bg-warning/40">
+          <Lock className="h-6 w-6 text-warning-fg" />
         </div>
         <h2 className="text-base font-bold">Não foi possível abrir este cadastro</h2>
         <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
@@ -2944,77 +3249,81 @@ function ClienteDetalhe({
           as abas pra atendente lembrar de cobrar. Some quando admin
           marca como recebida (no form Editar). */}
       {cliente.documentacaoPendente && (
-        <div className="rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/30 dark:border-orange-900 px-4 py-3 flex items-start gap-3">
-          <FileText className="h-5 w-5 text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
+        <div className="rounded-lg border border-warning/30 bg-warning-bg dark:border-warning/30 px-4 py-3 flex items-start gap-3">
+          <FileText className="h-5 w-5 text-warning-fg shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-orange-900 dark:text-orange-100">
+            <p className="text-sm font-medium text-warning-fg">
               Documentação pendente
             </p>
             {cliente.documentacaoObservacoes && (
-              <p className="text-xs text-orange-800/80 dark:text-orange-200/80 mt-0.5 whitespace-pre-wrap">
+              <p className="text-xs text-warning-fg/80 mt-0.5 whitespace-pre-wrap">
                 {cliente.documentacaoObservacoes}
               </p>
             )}
-            <p className="text-[11px] text-orange-700/70 dark:text-orange-300/70 mt-1">
+            <p className="text-[11px] text-warning-fg/70 mt-1">
               Após receber e arquivar, desmarque em &ldquo;Visão Geral &gt; Documentação pendente&rdquo;.
             </p>
           </div>
         </div>
       )}
 
-      {/* Botão "Voltar" externo ao hero pra ficar discreto */}
+      {/* Voltar é botão de verdade, com borda: como link de texto fininho
+          acima do hero ele sumia — o dono não achou. */}
       <button
         onClick={onVoltar}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
       >
-        <ArrowLeft className="h-3.5 w-3.5" /> Voltar para lista
+        <ArrowLeft className="h-3.5 w-3.5" /> Voltar para a lista
       </button>
 
       {/* ═══════════ HERO DO CLIENTE ═══════════ */}
-      <div className="rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 p-7 text-white relative overflow-hidden shadow-lg">
-        <Users className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
+      {/* No painel (lista ao lado) o hero vive numa coluna bem mais estreita:
+          sem apertar padding, avatar e título ele come metade da altura útil
+          e a tela fica desproporcional. Nada some — só encolhe. */}
+      <div className={`rounded-2xl border bg-card text-card-foreground relative overflow-hidden shadow-sm ${compacto ? "p-4" : "p-6"}`}>
+        <Users className={`absolute -right-10 -bottom-12 text-muted-foreground opacity-[0.05] ${compacto ? "w-36 h-36" : "w-56 h-56"}`} strokeWidth={1.2} />
         <div className="relative">
-          <div className="flex items-start gap-5 mb-5 flex-wrap">
+          <div className={`flex items-start flex-wrap ${compacto ? "gap-3 mb-3" : "gap-5 mb-5"}`}>
             {/* Avatar grande */}
             <div
-              className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${gradientAvatar(cliente.nome || "?")} text-white flex items-center justify-center text-2xl font-bold shrink-0 shadow-lg ring-4 ring-white/20 tracking-tight`}
+              className={`rounded-2xl bg-gradient-to-br ${gradientAvatar(cliente.nome || "?")} text-white flex items-center justify-center font-bold shrink-0 shadow-sm ring-1 ring-black/5 tracking-tight ${compacto ? "w-14 h-14 text-lg" : "w-20 h-20 text-2xl"}`}
             >
               {gerarIniciais(cliente.nome || "?")}
             </div>
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <h2 className={`text-2xl font-bold tracking-tight ${situacaoServico === "suspenso" ? "text-amber-200" : foraDeServico ? "text-rose-200" : ""}`}>{cliente.nome}</h2>
+                <h2 className={`font-bold tracking-tight ${compacto ? "text-lg" : "text-2xl"} ${situacaoServico === "suspenso" ? "text-warning-fg" : foraDeServico ? "text-danger-fg" : ""}`}>{cliente.nome}</h2>
                 {isVip && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-400/25 text-amber-50 border border-amber-300/30">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-warning-bg text-warning-fg border border-warning/30">
                     <Star className="w-3 h-3 fill-current" /> VIP
                   </span>
                 )}
                 {cliente.documentacaoPendente && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-400/25 text-amber-50 border border-amber-300/30">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-warning-bg text-warning-fg border border-warning/30">
                     <AlertTriangle className="w-3 h-3" /> Docs pendentes
                   </span>
                 )}
                 {(cliente as any).estagio === "lead" ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/20 text-white border border-white/40">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-muted text-foreground border border-border">
                     <TrendingUp className="w-3 h-3" /> Lead
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-400/25 text-emerald-50 border border-emerald-300/40">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-success-bg text-success-fg border border-success/30">
                     <CheckCircle2 className="w-3 h-3" /> Cliente
                   </span>
                 )}
                 {foraDeServico && situacaoServico && (
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-                    situacaoServico === "suspenso" ? "bg-amber-500/30 text-amber-50 border-amber-300/40"
-                    : situacaoServico === "encerrado" ? "bg-slate-500/30 text-slate-50 border-slate-300/40"
-                    : "bg-rose-500/30 text-rose-50 border-rose-300/40"
+                    situacaoServico === "suspenso" ? "bg-warning-bg text-warning-fg border-warning/30"
+                    : situacaoServico === "encerrado" ? "bg-neutral-bg text-neutral-fg border-neutral/30"
+                    : "bg-danger-bg text-danger-fg border-danger/30"
                   }`}>
                     <Ban className="w-3 h-3" /> {SITUACAO_SERVICO_INFO[situacaoServico]?.label}
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-4 text-xs text-white/75 flex-wrap">
+              <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
                 {cliente.telefone && (
                   <span className="flex items-center gap-1.5">
                     <Phone className="w-3.5 h-3.5" />
@@ -3022,7 +3331,7 @@ function ClienteDetalhe({
                   </span>
                 )}
                 {(cliente as any).telefonesSecundarios?.length > 0 && (
-                  <span className="text-white/60">
+                  <span className="text-muted-foreground">
                     +{(cliente as any).telefonesSecundarios.length} tel
                   </span>
                 )}
@@ -3048,9 +3357,9 @@ function ClienteDetalhe({
               </div>
               {foraDeServico && situacaoServico && (
                 <div className={`mt-2 inline-flex items-start gap-2 rounded-lg px-3 py-1.5 text-xs border ${
-                  situacaoServico === "suspenso" ? "bg-amber-500/20 border-amber-300/30 text-amber-50"
-                  : situacaoServico === "encerrado" ? "bg-slate-500/25 border-slate-300/30 text-slate-50"
-                  : "bg-rose-500/20 border-rose-300/30 text-rose-50"
+                  situacaoServico === "suspenso" ? "bg-warning/20 border-warning/30 text-warning-fg"
+                  : situacaoServico === "encerrado" ? "bg-muted-foreground/25 border-border/30 text-muted-foreground/70"
+                  : "bg-danger/20 border-danger/30 text-danger-fg"
                 }`}>
                   <Ban className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                   <span>
@@ -3072,7 +3381,7 @@ function ClienteDetalhe({
                   onClick={() => definirEstagioMut.mutate({ contatoId: id, estagio: "lead" })}
                   disabled={definirEstagioMut.isPending}
                   title="Voltar este cadastro para Lead — não apaga nada, só muda o selo"
-                  className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                  className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
                 >
                   <RotateCcw className="w-3.5 h-3.5 mr-1" />
                   Voltar p/ Lead
@@ -3084,7 +3393,7 @@ function ClienteDetalhe({
                   onClick={() => definirEstagioMut.mutate({ contatoId: id, estagio: "cliente" })}
                   disabled={definirEstagioMut.isPending}
                   title="Marcar como Cliente sem registrar venda (use Fechar contrato para contar no comercial)"
-                  className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                  className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                   Marcar Cliente
@@ -3095,7 +3404,7 @@ function ClienteDetalhe({
                   variant="ghost"
                   size="sm"
                   onClick={() => setLocation(`/atendimento?contatoId=${id}`)}
-                  className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                  className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
                 >
                   <MessageCircle className="w-3.5 h-3.5 mr-1" />
                   Inbox
@@ -3111,7 +3420,7 @@ function ClienteDetalhe({
                 variant="ghost"
                 size="sm"
                 onClick={() => setGerarContratoOpen(true)}
-                className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
               >
                 <FileText className="w-3.5 h-3.5 mr-1" />
                 Gerar contrato
@@ -3121,7 +3430,7 @@ function ClienteDetalhe({
                 size="sm"
                 onClick={() => setFechamentoOpen(true)}
                 title="Marca conversão (fechado_ganho)"
-                className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
               >
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                 Fechamento
@@ -3134,7 +3443,7 @@ function ClienteDetalhe({
                     onClick={() => reativarServicoMut.mutate({ contatoId: id })}
                     disabled={reativarServicoMut.isPending}
                     title="Reativar o serviço deste cliente"
-                    className="text-emerald-100 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-300/30 backdrop-blur-sm shadow-sm h-8 text-xs"
+                    className="text-success-fg bg-success-bg hover:bg-success/15 border border-success/30 shadow-sm h-8 text-xs"
                   >
                     <RotateCcw className="w-3.5 h-3.5 mr-1" />
                     Reativar serviço
@@ -3145,7 +3454,7 @@ function ClienteDetalhe({
                     size="sm"
                     onClick={() => { setEncerrarTipo("cancelado"); setEncerrarMotivo(""); setEncerrarData(new Date().toISOString().slice(0, 10)); setEncerrarOpen(true); }}
                     title="Suspender, encerrar, cancelar, rescindir ou executar o serviço"
-                    className="text-rose-100 bg-rose-500/25 hover:bg-rose-500/35 border border-rose-300/30 backdrop-blur-sm shadow-sm h-8 text-xs"
+                    className="text-danger-fg bg-danger-bg hover:bg-danger/15 border border-danger/30 shadow-sm h-8 text-xs"
                   >
                     <Ban className="w-3.5 h-3.5 mr-1" />
                     Encerrar serviço
@@ -3156,7 +3465,7 @@ function ClienteDetalhe({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-violet-100 bg-white/10 hover:bg-violet-500/30 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
+                  className="text-foreground bg-background hover:bg-muted border border-border shadow-sm h-8 text-xs"
                   onClick={() => setMesclarOpen(true)}
                   title="Mesclar com outro cliente (caso de pagador secundário, ex: esposa)"
                 >
@@ -3168,7 +3477,7 @@ function ClienteDetalhe({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-rose-100 bg-rose-500/15 hover:bg-rose-500/30 border border-rose-300/35 backdrop-blur-sm shadow-sm h-8 w-8 p-0"
+                  className="text-danger-fg bg-danger/15 hover:bg-danger/30 border border-danger/30 backdrop-blur-sm shadow-sm h-8 w-8 p-0"
                   onClick={() => setExcluirConfirmAlvo(true)}
                   title="Excluir cliente"
                 >
@@ -3233,7 +3542,7 @@ function ClienteDetalhe({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-danger hover:bg-danger"
               onClick={() => {
                 excluirMut.mutate({ id });
                 setExcluirConfirmAlvo(false);
@@ -3248,41 +3557,41 @@ function ClienteDetalhe({
 
       {/* 6 abas consolidadas — pill style igual Dashboard */}
       <Tabs value={tab} onValueChange={setTab}>
-        <div className="bg-slate-50/80 dark:bg-slate-900/70 backdrop-blur-sm border border-slate-200 dark:border-slate-700/80 rounded-xl p-1.5 inline-flex">
+        <div className="bg-muted/80 backdrop-blur-sm border border-border rounded-xl p-1.5 inline-flex">
           <TabsList className="bg-transparent gap-1 p-0 h-auto">
             <TabsTrigger
               value="visao-geral"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-foreground/80 data-[state=active]:shadow-sm rounded-lg"
             >
               <User className="h-3.5 w-3.5" /> Visão Geral
             </TabsTrigger>
             <TabsTrigger
               value="processos"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-foreground/80 data-[state=active]:shadow-sm rounded-lg"
             >
               <Scale className="h-3.5 w-3.5" /> Processos
             </TabsTrigger>
             <TabsTrigger
               value="kanban"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-foreground/80 data-[state=active]:shadow-sm rounded-lg"
             >
               <Trello className="h-3.5 w-3.5" /> Kanban
             </TabsTrigger>
             <TabsTrigger
               value="financeiro"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-foreground/80 data-[state=active]:shadow-sm rounded-lg"
             >
               <DollarSign className="h-3.5 w-3.5" /> Financeiro
             </TabsTrigger>
             <TabsTrigger
               value="historico"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-foreground/80 data-[state=active]:shadow-sm rounded-lg"
             >
               <MessageCircle className="h-3.5 w-3.5" /> Histórico
             </TabsTrigger>
             <TabsTrigger
               value="documentos"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm rounded-lg"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-foreground/80 data-[state=active]:shadow-sm rounded-lg"
             >
               <FileText className="h-3.5 w-3.5" /> Documentos
             </TabsTrigger>
@@ -3327,7 +3636,7 @@ function ClienteDetalhe({
           <Card>
             <CardContent className="pt-4 space-y-2">
               <p className="text-sm font-semibold flex items-center gap-2">
-                <MessageCircle className="h-4 w-4 text-blue-500" />
+                <MessageCircle className="h-4 w-4 text-info" />
                 Conversas
               </p>
               {!(convsData || []).length ? (
@@ -3339,7 +3648,7 @@ function ClienteDetalhe({
                       key={c.id}
                       className="flex items-center gap-3 px-3 py-2 rounded-lg border"
                     >
-                      <MessageCircle className="h-4 w-4 text-blue-500 shrink-0" />
+                      <MessageCircle className="h-4 w-4 text-info shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm truncate">{c.assunto || "Conversa"}</p>
                         <p className="text-xs text-muted-foreground truncate">
@@ -3363,7 +3672,7 @@ function ClienteDetalhe({
           <Card>
             <CardContent className="pt-4 space-y-2">
               <p className="text-sm font-semibold flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-violet-500" />
+                <TrendingUp className="h-4 w-4 text-info" />
                 Negociações (Leads)
               </p>
               {!(leadsData || []).length ? (
@@ -3375,7 +3684,7 @@ function ClienteDetalhe({
                       key={l.id}
                       className="flex items-center gap-3 px-3 py-2 rounded-lg border group"
                     >
-                      <TrendingUp className="h-4 w-4 text-violet-500 shrink-0" />
+                      <TrendingUp className="h-4 w-4 text-info shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm">
                           {LEAD_ETAPAS.find((e) => e.value === l.etapaFunil)?.label || l.etapaFunil}
@@ -3393,7 +3702,7 @@ function ClienteDetalhe({
                         />
                       </div>
                       {l.valorEstimado && (
-                        <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                        <span className="text-sm font-medium text-success-fg whitespace-nowrap">
                           <DollarSign className="h-3 w-3 inline mr-0.5" />
                           {fmtMoeda(parseValorBR(l.valorEstimado))}
                         </span>
@@ -3470,7 +3779,7 @@ function ClienteDetalhe({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Ban className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              <Ban className="h-5 w-5 text-danger-fg" />
               Situação do serviço
             </DialogTitle>
             <DialogDescription>
@@ -3491,9 +3800,9 @@ function ClienteDetalhe({
                   <button
                     type="button"
                     onClick={() => setEncerrarTipo(o.tipo)}
-                    className={`w-full text-left flex gap-3 rounded-lg border p-2.5 transition-colors ${sel ? (amber ? "border-amber-400 bg-amber-50 dark:bg-amber-950/30" : "border-rose-400 bg-rose-50 dark:bg-rose-950/30") : "border-border hover:bg-muted/40"}`}
+                    className={`w-full text-left flex gap-3 rounded-lg border p-2.5 transition-colors ${sel ? (amber ? "border-warning/30 bg-warning-bg" : "border-danger/30 bg-danger-bg") : "border-border hover:bg-muted/40"}`}
                   >
-                    <span className={`mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 ${sel ? (amber ? "border-amber-500 bg-amber-500 ring-2 ring-inset ring-white" : "border-rose-500 bg-rose-500 ring-2 ring-inset ring-white") : "border-muted-foreground/40"}`} />
+                    <span className={`mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 ${sel ? (amber ? "border-warning/30 bg-warning ring-2 ring-inset ring-white" : "border-danger/30 bg-danger ring-2 ring-inset ring-white") : "border-muted-foreground/40"}`} />
                     <span>
                       <span className="text-sm font-medium block">{o.titulo}</span>
                       <span className="text-xs text-muted-foreground">{o.desc}</span>
@@ -3522,7 +3831,7 @@ function ClienteDetalhe({
               Cancelar
             </Button>
             <Button
-              className={encerrarTipo === "suspenso" ? "bg-amber-500 hover:bg-amber-600 text-white" : "bg-rose-600 hover:bg-rose-700 text-white"}
+              className={encerrarTipo === "suspenso" ? "bg-warning hover:bg-warning text-warning-on" : "bg-danger hover:bg-danger text-danger-on"}
               disabled={encerrarServicoMut.isPending}
               onClick={() =>
                 encerrarServicoMut.mutate({
@@ -3562,15 +3871,15 @@ function KPIClienteHero({
 }) {
   const numColor =
     tone === "emerald"
-      ? "text-emerald-200"
+      ? "text-success-fg"
       : tone === "amber"
-        ? "text-amber-200"
+        ? "text-warning-fg"
         : tone === "rose"
-          ? "text-rose-200"
-          : "text-white";
+          ? "text-danger-fg"
+          : "text-foreground";
   return (
-    <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
-      <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">{label}</p>
+    <div className="bg-muted/40 rounded-lg px-3 py-2.5 border border-border">
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
       <p
         className={`${small ? "text-sm" : "text-xl"} font-bold tabular-nums leading-none ${numColor}`}
       >
@@ -3624,13 +3933,13 @@ function MesclarClienteDialog({
       <AlertDialogContent className="max-w-lg">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
-            <UserPlus className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+            <UserPlus className="h-4 w-4 text-info-fg" />
             Mesclar com outro cliente
           </AlertDialogTitle>
           <AlertDialogDescription>
             Vai mover <b>todas</b> as cobranças, conversas, processos e
             histórico de <b>{clienteAtual.nome}</b> pro cliente selecionado.
-            Depois,&nbsp;<b className="text-rose-600 dark:text-rose-400">{clienteAtual.nome}</b>
+            Depois,&nbsp;<b className="text-danger-fg">{clienteAtual.nome}</b>
             &nbsp;será <b>excluído</b> deste CRM (operação definitiva).
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -3657,7 +3966,7 @@ function MesclarClienteDialog({
                   onClick={() => setSelecionado({ id: c.id, nome: c.nome })}
                   className={
                     "w-full text-left p-2 text-xs hover:bg-accent border-b last:border-b-0 " +
-                    (selecionado?.id === c.id ? "bg-violet-50 dark:bg-violet-950/30" : "")
+                    (selecionado?.id === c.id ? "bg-info-bg" : "")
                   }
                 >
                   <div className="font-medium">{c.nome}</div>
@@ -3669,12 +3978,12 @@ function MesclarClienteDialog({
             </div>
           </div>
         ) : (
-          <div className="rounded-lg border-2 border-rose-300 bg-rose-50 dark:bg-rose-950/30 p-3 text-xs space-y-2">
-            <p className="font-semibold text-rose-900 dark:text-rose-200 flex items-center gap-1">
+          <div className="rounded-lg border-2 border-danger/30 bg-danger-bg p-3 text-xs space-y-2">
+            <p className="font-semibold text-danger-fg flex items-center gap-1">
               <AlertTriangle className="h-4 w-4" />
               Confirmação final
             </p>
-            <p className="text-rose-800 dark:text-rose-200">
+            <p className="text-danger-fg">
               Vai mover dados de <b>{clienteAtual.nome}</b> pra{" "}
               <b>{selecionado?.nome}</b> e <b>excluir</b>{" "}
               <b>{clienteAtual.nome}</b> deste CRM. Não há como desfazer.
@@ -3694,7 +4003,7 @@ function MesclarClienteDialog({
             </Button>
           ) : (
             <AlertDialogAction
-              className="bg-rose-600 hover:bg-rose-700"
+              className="bg-danger hover:bg-danger"
               disabled={isPending || !selecionado}
               onClick={(e) => {
                 e.preventDefault();

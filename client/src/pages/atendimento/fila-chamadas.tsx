@@ -69,11 +69,11 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
           className={
             "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors " +
             (disponivel
-              ? "bg-green-600 text-white hover:bg-green-700"
+              ? "bg-success text-success-on hover:bg-success"
               : "bg-muted text-muted-foreground hover:bg-muted/80")
           }
         >
-          <span className={"h-2 w-2 rounded-full " + (disponivel ? "bg-white dark:bg-card" : "bg-slate-400")}></span>
+          <span className={"h-2 w-2 rounded-full " + (disponivel ? "bg-card" : "bg-muted-foreground/50")}></span>
           {disponivel ? "Disponível" : "Ausente"}
         </button>
       </div>
@@ -81,10 +81,10 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
       {/* ── TOCANDO AGORA ─────────────────────────────────────────── */}
       <section>
         <div className="flex items-center gap-2 mb-2">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span className="h-2 w-2 rounded-full bg-success animate-pulse"></span>
           <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Tocando agora</h2>
           {tocando.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 font-semibold">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg border border-success/30 font-semibold">
               {tocando.length}
             </span>
           )}
@@ -94,8 +94,8 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
         ) : (
           <div className="space-y-2">
             {tocando.map((c) => (
-              <div key={c.callId} className="rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/40 dark:bg-emerald-950/30 p-3 flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0 animate-pulse">
+              <div key={c.callId} className="rounded-xl border border-success/30 bg-success-bg/40 p-3 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-success text-success-on flex items-center justify-center font-bold text-sm shrink-0 animate-pulse">
                   {initials(c.contatoNome || c.telefone || "?")}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -107,7 +107,7 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
                 </div>
                 <Button
                   size="sm"
-                  className="h-9 bg-green-600 hover:bg-green-700 gap-1.5"
+                  className="h-9 bg-success hover:bg-success gap-1.5"
                   disabled={!podeAssumir(c.callId)}
                   title={podeAssumir(c.callId) ? "Assumir e atender" : ocupado ? "Você está em chamada" : "Recebida em outro dispositivo"}
                   onClick={() => void chamada.assumir(c.callId)}
@@ -124,13 +124,13 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
       {emAtendimento.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-2">
-            <span className="h-2 w-2 rounded-full bg-green-500"></span>
+            <span className="h-2 w-2 rounded-full bg-success"></span>
             <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Em atendimento</h2>
           </div>
           <div className="space-y-2">
             {emAtendimento.map((c) => (
               <div key={c.callId} className="rounded-xl border bg-card p-3 flex items-center gap-3">
-                <div className="h-9 w-9 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                <div className="h-9 w-9 rounded-full bg-success text-success-on flex items-center justify-center font-bold text-xs shrink-0">
                   {initials(c.contatoNome || c.telefone || "?")}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -138,7 +138,7 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
                     {c.contatoNome || c.telefone}
                     {c.atendenteNome && <span className="text-[11px] font-normal text-muted-foreground"> · {c.atendenteNome}</span>}
                   </p>
-                  <p className="text-[11px] text-green-600 dark:text-green-400 font-semibold flex items-center gap-1">
+                  <p className="text-[11px] text-success-fg font-semibold flex items-center gap-1">
                     <AudioLines className="h-3 w-3" /> ao vivo
                   </p>
                 </div>
@@ -152,7 +152,7 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
       {/* ── PERDIDAS / RETORNAR ───────────────────────────────────── */}
       <section>
         <div className="flex items-center gap-2 mb-2">
-          <span className="h-2 w-2 rounded-full bg-red-500"></span>
+          <span className="h-2 w-2 rounded-full bg-danger"></span>
           <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Perdidas — retornar</h2>
         </div>
         {isLoading ? (
@@ -168,7 +168,7 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
           <div className="rounded-xl border divide-y overflow-hidden">
             {perdidas.map((c) => (
               <div key={c.callId} className="p-3 flex items-center gap-3">
-                <PhoneMissed className="h-4 w-4 text-red-500 shrink-0" />
+                <PhoneMissed className="h-4 w-4 text-danger shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm truncate">
                     {c.contatoNome || c.telefone || "Desconhecido"}
@@ -182,7 +182,7 @@ export function FilaChamadas({ chamada }: { chamada: UseWhatsappCall }) {
                   <>
                     <Button
                       size="sm"
-                      className="h-8 bg-green-600 hover:bg-green-700 gap-1"
+                      className="h-8 bg-success hover:bg-success gap-1"
                       disabled={ocupado}
                       onClick={() =>
                         void chamada.ligar({

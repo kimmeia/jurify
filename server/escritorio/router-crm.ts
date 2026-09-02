@@ -21,6 +21,8 @@ import {
 } from "./db-crm";
 import { conversas, contatos, leads } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { toIsoString } from "../_core/dates";
+import { estadoDoNumero } from "../../shared/conversa-existente";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 import { mensagemTransferencia, nomeCurto } from "./transferencia-conversa";
 import { createLogger } from "../_core/logger";
@@ -321,6 +323,102 @@ export const crmRouter = router({
         delete filtros.setorId;
       }
       return conversasForaDoPeriodoInicio(perm.escritorioId, filtros);
+    }),
+
+  /**
+   * "Este número já tem conversa?" — consultado enquanto o atendente digita o
+   * telefone em Nova Conversa.
+   *
+   * O contato é procurado com `buscarContatoPorTelefone`, a MESMA função que
+   * `iniciarConversa` usa por baixo. Tem que ser a mesma: se o aviso dissesse
+   * "número livre" e o envio reaproveitasse um contato existente, a tela
+   * estaria mentindo no momento em que mais importa.
+   */
+  conversaPorTelefone: protectedProcedure
+    .input(z.object({ telefone: z.string().trim().max(24) }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+      if (!perm.allowed) return { estado: "incompleto" as const };
+
+      const { normalizePhoneBR } = await import("../../shared/whatsapp-types");
+      const normalizado = normalizePhoneBR(input.telefone);
+      // 12 = 55 + DDD + 8 dígitos. Abaixo disso o número ainda está sendo
+      // digitado e não há o que consultar.
+      if (normalizado.length < 12) return { estado: "incompleto" as const };
+
+      const contato = await buscarContatoPorTelefone(perm.escritorioId, normalizado);
+      const db = await getDb();
+      if (!contato || !db) {
+        return { estado: estadoDoNumero({
+          contatoEncontrado: false, conversa: null,
+          soAsMinhas: !perm.verTodos && perm.verProprios,
+          meuColaboradorId: perm.colaboradorId,
+        }) };
+      }
+
+      const { desc: descOrd, sql } = await import("drizzle-orm");
+      const [conv] = await db
+        .select({
+          id: conversas.id,
+          status: conversas.status,
+          atendenteId: conversas.atendenteId,
+          ultimaMensagemAt: conversas.ultimaMensagemAt,
+          createdAt: conversas.createdAt,
+        })
+        .from(conversas)
+        .where(and(
+          eq(conversas.escritorioId, perm.escritorioId),
+          eq(conversas.contatoId, contato.id),
+        ))
+        .orderBy(descOrd(conversas.ultimaMensagemAt), descOrd(conversas.id))
+        .limit(1);
+
+      const estado = estadoDoNumero({
+        contatoEncontrado: true,
+        conversa: conv ? { status: conv.status, atendenteId: conv.atendenteId } : null,
+        soAsMinhas: !perm.verTodos && perm.verProprios,
+        meuColaboradorId: perm.colaboradorId,
+      });
+
+      if (estado === "cadastrado") {
+        return { estado, contatoId: contato.id, contatoNome: contato.nome };
+      }
+      // Aviso seco: nada de nome, histórico ou id de conversa vai junto.
+      if (estado === "sem_acesso") return { estado };
+      if (!conv) return { estado: "livre" as const };
+
+      let atendenteNome: string | undefined;
+      if (conv.atendenteId) {
+        const { colaboradores, users } = await import("../../drizzle/schema");
+        const [colab] = await db
+          .select({ nome: users.name })
+          .from(colaboradores)
+          .innerJoin(users, eq(colaboradores.userId, users.id))
+          .where(eq(colaboradores.id, conv.atendenteId))
+          .limit(1);
+        atendenteNome = colab?.nome || undefined;
+      }
+
+      let totalMensagens = 0;
+      try {
+        const { mensagens } = await import("../../drizzle/schema");
+        const [c] = await db
+          .select({ n: sql<number>`COUNT(*)` })
+          .from(mensagens)
+          .where(eq(mensagens.conversaId, conv.id));
+        totalMensagens = Number(c?.n ?? 0);
+      } catch { /* contagem é enfeite — o aviso vale sem ela */ }
+
+      return {
+        estado,
+        contatoId: contato.id,
+        contatoNome: contato.nome,
+        conversaId: conv.id,
+        status: conv.status,
+        atendenteNome,
+        ultimaMensagemAt: toIsoString(conv.ultimaMensagemAt ?? conv.createdAt),
+        totalMensagens,
+      };
     }),
 
   /** Arquiva/desarquiva uma conversa. Arquivada sai das vistas padrão sem

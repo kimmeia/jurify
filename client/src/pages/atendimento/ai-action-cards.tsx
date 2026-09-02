@@ -46,7 +46,7 @@ export function AIActionCards({
   if (data.tipo === "audiencia_link") {
     return (
       <GenericActionCard
-        icon={<Link2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
+        icon={<Link2 className="h-4 w-4 text-info-fg" />}
         tipo="Link da audiência"
         descricao="Cliente está pedindo o link da videoconferência da audiência"
         acoes={[
@@ -64,7 +64,7 @@ export function AIActionCards({
   if (data.tipo === "agendar_reuniao") {
     return (
       <GenericActionCard
-        icon={<Calendar className="h-4 w-4 text-violet-600 dark:text-violet-400" />}
+        icon={<Calendar className="h-4 w-4 text-info-fg" />}
         tipo="Agendar reunião"
         descricao="Cliente quer marcar uma reunião"
         acoes={[
@@ -82,7 +82,7 @@ export function AIActionCards({
   if (data.tipo === "documento_pendente") {
     return (
       <GenericActionCard
-        icon={<FileText className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
+        icon={<FileText className="h-4 w-4 text-warning-fg" />}
         tipo="Documentos necessários"
         descricao="Cliente pergunta quais documentos levar/enviar"
         acoes={[
@@ -99,21 +99,21 @@ export function AIActionCards({
   }
   if (data.tipo === "risco_churn") {
     return (
-      <div className="mx-4 mt-2 rounded-xl border-2 border-rose-300 bg-gradient-to-br from-rose-50 dark:from-rose-950/40 to-pink-50 dark:to-pink-950/20 p-3">
+      <div className="mx-4 mt-2 rounded-xl border-2 border-danger/30 bg-danger-bg p-3">
         <div className="flex items-start gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-600 to-pink-600 flex items-center justify-center flex-shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-danger flex items-center justify-center flex-shrink-0">
             <AlertTriangle className="h-3.5 w-3.5 text-white" />
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-black text-rose-700 dark:text-rose-300 uppercase tracking-wide">
+              <span className="text-[10px] font-black text-danger-fg uppercase tracking-wide">
                 🚨 Alerta de churn detectado
               </span>
             </div>
             <p className="text-sm font-medium text-foreground leading-snug">
               Cliente demonstra sinais de insatisfação. Avalie escalar para gestor e abordar com cuidado.
             </p>
-            <p className="text-xs text-rose-800 dark:text-rose-200 mt-1 italic">"{data.ultimaMensagem}"</p>
+            <p className="text-xs text-danger-fg mt-1 italic">"{data.ultimaMensagem}"</p>
           </div>
         </div>
       </div>
@@ -122,7 +122,7 @@ export function AIActionCards({
   if (data.tipo === "status_processo") {
     return (
       <GenericActionCard
-        icon={<FileText className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />}
+        icon={<FileText className="h-4 w-4 text-info-fg" />}
         tipo="Status do processo"
         descricao="Cliente pergunta sobre o andamento"
         acoes={[]}
@@ -147,13 +147,13 @@ function GenericActionCard({
   hint?: string;
 }) {
   return (
-    <div className="mx-4 mt-2 rounded-xl border-2 border-violet-200 dark:border-violet-800/50 bg-gradient-to-br from-violet-50/60 dark:from-violet-950/40 via-white dark:via-slate-900 to-indigo-50/40 dark:to-indigo-950/20 p-3 relative">
-      <div className="absolute -top-1.5 left-3 px-1.5 py-0 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-[9px] font-bold text-white uppercase tracking-wide flex items-center gap-1">
+    <div className="mx-4 mt-2 rounded-xl border-2 border-info/30 bg-gradient-to-br from-info-bg/60 via-white dark:via-muted to-info-bg/40 p-3 relative">
+      <div className="absolute -top-1.5 left-3 px-1.5 py-0 rounded-full bg-info text-[9px] font-bold text-info-on uppercase tracking-wide flex items-center gap-1">
         <Sparkles className="h-2.5 w-2.5" />
         IA detectou
       </div>
       <div className="flex items-start gap-2.5 mt-0.5">
-        <div className="w-7 h-7 rounded-lg bg-white dark:bg-card border border-violet-200 dark:border-violet-800/50 flex items-center justify-center flex-shrink-0">
+        <div className="w-7 h-7 rounded-lg bg-card border border-info/30 flex items-center justify-center flex-shrink-0">
           {icon}
         </div>
         <div className="flex-1">
@@ -165,7 +165,7 @@ function GenericActionCard({
                 <Button
                   key={i}
                   size="sm"
-                  className="h-7 text-[11px] bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+                  className="h-7 text-[11px] bg-info"
                   onClick={a.onClick}
                 >
                   ⚡ {a.label}
@@ -173,7 +173,7 @@ function GenericActionCard({
               ))}
             </div>
           )}
-          {hint && <p className="text-[10px] text-violet-700 dark:text-violet-300 mt-1.5 italic">{hint}</p>}
+          {hint && <p className="text-[10px] text-info-fg mt-1.5 italic">{hint}</p>}
         </div>
       </div>
     </div>
@@ -192,7 +192,7 @@ function SegundaViaBoletoCard({
   if (!cobrancas.length) {
     return (
       <GenericActionCard
-        icon={<Receipt className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
+        icon={<Receipt className="h-4 w-4 text-success-fg" />}
         tipo="2ª via de boleto"
         descricao="Cliente pediu 2ª via, mas não encontrei cobranças pendentes."
         acoes={[]}
@@ -229,14 +229,14 @@ function SegundaViaBoletoCard({
   };
 
   return (
-    <div className="mx-4 mt-2 rounded-xl border-2 border-emerald-200 dark:border-emerald-800/50 bg-gradient-to-br from-emerald-50/60 dark:from-emerald-950/40 via-white dark:via-slate-900 to-teal-50/40 dark:to-teal-950/20 p-3 relative">
-      <div className="absolute -top-1.5 left-3 px-1.5 py-0 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 text-[9px] font-bold text-white uppercase tracking-wide flex items-center gap-1">
+    <div className="mx-4 mt-2 rounded-xl border-2 border-success/30 bg-gradient-to-br from-success-bg/60 via-white dark:via-muted to-success-bg/40 p-3 relative">
+      <div className="absolute -top-1.5 left-3 px-1.5 py-0 rounded-full bg-success text-[9px] font-bold text-success-on uppercase tracking-wide flex items-center gap-1">
         <Sparkles className="h-2.5 w-2.5" />
         IA detectou · 1 toque resolve
       </div>
       <div className="flex items-start gap-2.5 mt-0.5">
-        <div className="w-7 h-7 rounded-lg bg-white dark:bg-card border border-emerald-200 dark:border-emerald-800/50 flex items-center justify-center flex-shrink-0">
-          <Receipt className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+        <div className="w-7 h-7 rounded-lg bg-card border border-success/30 flex items-center justify-center flex-shrink-0">
+          <Receipt className="h-4 w-4 text-success-fg" />
         </div>
         <div className="flex-1">
           <p className="text-sm font-semibold text-foreground">Pedido de 2ª via de boleto</p>
@@ -252,17 +252,17 @@ function SegundaViaBoletoCard({
                   key={c.id}
                   className={
                     "rounded-lg border px-2.5 py-1.5 text-xs flex items-center gap-2 " +
-                    (vencido ? "border-rose-200 dark:border-rose-800/50 bg-rose-50/60" : "border-emerald-200 dark:border-emerald-800/50 bg-white dark:bg-card")
+                    (vencido ? "border-danger/30 bg-danger-bg/60" : "border-success/30 bg-card")
                   }
                 >
-                  <span className={vencido ? "text-rose-700 dark:text-rose-300 font-bold" : "text-emerald-700 dark:text-emerald-300 font-bold"}>
+                  <span className={vencido ? "text-danger-fg font-bold" : "text-success-fg font-bold"}>
                     R$ {c.valor}
                   </span>
                   <span className="text-muted-foreground">
                     · venc {c.vencimento ? new Date(c.vencimento + "T00:00:00").toLocaleDateString("pt-BR") : "—"}
                   </span>
                   {vencido && (
-                    <span className="text-[9px] px-1 py-0 rounded bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 font-bold">
+                    <span className="text-[9px] px-1 py-0 rounded bg-danger-bg text-danger-fg font-bold">
                       vencida
                     </span>
                   )}
@@ -274,7 +274,7 @@ function SegundaViaBoletoCard({
           <div className="flex items-center gap-1.5 mt-2.5">
             <Button
               size="sm"
-              className="h-7 text-[11px] bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+              className="h-7 text-[11px] bg-success"
               onClick={enviarPrimeira}
             >
               <Send className="h-3 w-3 mr-1" />

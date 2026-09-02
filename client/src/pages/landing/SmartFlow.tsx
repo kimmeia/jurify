@@ -29,11 +29,11 @@ type NodeDef = {
 
 const NODES: NodeDef[] = [
   { icon: MessageCircle, title: "Mensagem recebida", sub: "Gatilho · WhatsApp", tone: "bg-[#25d366] text-white", pos: "left-0 top-[122px]", delay: 0 },
-  { icon: BrainCircuit, title: "IA qualifica o lead", sub: "Agente · classifica intenção", tone: "bg-violet-500/30 text-violet-200", pos: "left-[248px] top-[40px]", delay: 0.15 },
-  { icon: GitBranch, title: "É cliente?", sub: "Condição", tone: "bg-amber-500/25 text-amber-300", pos: "left-[250px] top-[210px]", delay: 0.3 },
-  { icon: CalendarDays, title: "Agendar consulta", sub: "Ação · Agenda", tone: "bg-blue-500/25 text-blue-300", pos: "right-0 top-[16px]", delay: 0.45 },
-  { icon: DollarSign, title: "Enviar cobrança", sub: "Ação · Asaas Pix", tone: "bg-emerald-500/20 text-emerald-300", pos: "right-0 top-[132px]", delay: 0.55 },
-  { icon: Bell, title: "Notifica responsável", sub: "Ação", tone: "bg-violet-500/30 text-violet-200", pos: "right-0 top-[244px]", delay: 0.65 },
+  { icon: BrainCircuit, title: "IA qualifica o lead", sub: "Agente · classifica intenção", tone: "bg-info/30 text-info-fg", pos: "left-[248px] top-[40px]", delay: 0.15 },
+  { icon: GitBranch, title: "É cliente?", sub: "Condição", tone: "bg-warning/25 text-warning-fg", pos: "left-[250px] top-[210px]", delay: 0.3 },
+  { icon: CalendarDays, title: "Agendar consulta", sub: "Ação · Agenda", tone: "bg-info/25 text-info-fg", pos: "right-0 top-[16px]", delay: 0.45 },
+  { icon: DollarSign, title: "Enviar cobrança", sub: "Ação · Asaas Pix", tone: "bg-success/20 text-success-fg", pos: "right-0 top-[132px]", delay: 0.55 },
+  { icon: Bell, title: "Notifica responsável", sub: "Ação", tone: "bg-info/30 text-info-fg", pos: "right-0 top-[244px]", delay: 0.65 },
 ];
 
 export function SmartFlow() {
@@ -47,11 +47,11 @@ export function SmartFlow() {
 
       <div className="relative z-10 mx-auto max-w-6xl px-4">
         <Reveal className="mx-auto mb-14 max-w-2xl text-center">
-          <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-300">SmartFlow + Agentes IA</p>
+          <p className="text-sm font-bold uppercase tracking-[0.08em] text-info">SmartFlow + Agentes IA</p>
           <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
             Automações que trabalham 24h por você
           </h2>
-          <p className="mt-4 text-lg text-violet-100/70">
+          <p className="mt-4 text-lg text-info/70">
             Arrasta os passos num canvas visual. O agente qualifica o lead, agenda, cobra
             inadimplente e avisa o responsável — sozinho.
           </p>
@@ -93,7 +93,7 @@ export function SmartFlow() {
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true, margin: "-60px" }}
               transition={{ duration: 0.5, delay: n.delay, ease }}
-              className={`absolute flex items-center gap-2.5 whitespace-nowrap rounded-xl border border-violet-400/40 bg-[#1a1530]/85 px-3.5 py-3 text-[13px] font-semibold text-white shadow-[0_14px_40px_-14px_rgba(124,58,237,0.7)] backdrop-blur ${n.pos}`}
+              className={`absolute flex items-center gap-2.5 whitespace-nowrap rounded-xl border border-info/30 bg-[#1a1530]/85 px-3.5 py-3 text-[13px] font-semibold text-white shadow-[0_14px_40px_-14px_rgba(124,58,237,0.7)] backdrop-blur ${n.pos}`}
             >
               <span className={`flex h-[30px] w-[30px] items-center justify-center rounded-lg ${n.tone}`}>
                 <n.icon className="h-4 w-4" />
@@ -110,7 +110,7 @@ export function SmartFlow() {
         <div className="mx-auto flex max-w-md flex-col gap-2.5 lg:hidden">
           {NODES.map((n, i) => (
             <Reveal key={n.title} delay={i * 0.05}>
-              <div className="flex items-center gap-3 rounded-xl border border-violet-400/30 bg-[#1a1530]/80 px-4 py-3 text-white backdrop-blur">
+              <div className="flex items-center gap-3 rounded-xl border border-info/30 bg-[#1a1530]/80 px-4 py-3 text-white backdrop-blur">
                 <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${n.tone}`}>
                   <n.icon className="h-4 w-4" />
                 </span>

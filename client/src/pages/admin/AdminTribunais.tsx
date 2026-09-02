@@ -22,11 +22,11 @@ import { Radar, Play, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const REUSO_COR: Record<string, string> = {
-  BAIXO: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-  MÉDIO: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20",
-  ALTO: "text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20",
-  "N/A": "text-slate-500 bg-slate-500/10 border-slate-500/20",
-  INDETERMINADO: "text-slate-500 bg-slate-500/10 border-slate-500/20",
+  BAIXO: "text-success-fg bg-success/10 border-success/30",
+  MÉDIO: "text-warning-fg bg-warning/10 border-warning/30",
+  ALTO: "text-danger-fg bg-danger/10 border-danger/30",
+  "N/A": "text-muted-foreground bg-muted-foreground/10 border-border/20",
+  INDETERMINADO: "text-muted-foreground bg-muted-foreground/10 border-border/20",
 };
 
 export default function AdminTribunais() {
@@ -58,9 +58,9 @@ export default function AdminTribunais() {
       {resumo && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <ResumoCard titulo="Tribunais auditados" valor={resumo.total} />
-          <ResumoCard titulo="Usam PDPJ-cloud" valor={resumo.pdpjCloud} cor="text-emerald-600 dark:text-emerald-400" />
-          <ResumoCard titulo="Reuso BAIXO (PJe 1.x)" valor={resumo.reusoBaixo} cor="text-emerald-600 dark:text-emerald-400" />
-          <ResumoCard titulo="Falhas técnicas" valor={resumo.comErro} cor={resumo.comErro > 0 ? "text-red-600 dark:text-red-400" : undefined} />
+          <ResumoCard titulo="Usam PDPJ-cloud" valor={resumo.pdpjCloud} cor="text-success-fg" />
+          <ResumoCard titulo="Reuso BAIXO (PJe 1.x)" valor={resumo.reusoBaixo} cor="text-success-fg" />
+          <ResumoCard titulo="Falhas técnicas" valor={resumo.comErro} cor={resumo.comErro > 0 ? "text-danger-fg" : undefined} />
         </div>
       )}
 
@@ -102,7 +102,7 @@ export default function AdminTribunais() {
                         {r.urlFinal ?? r.urlInicial}
                       </div>
                       {r.erro && (
-                        <div className="text-xs text-red-600 dark:text-red-400 mt-0.5">{r.erro}</div>
+                        <div className="text-xs text-danger-fg mt-0.5">{r.erro}</div>
                       )}
                       {r.observacoes
                         .filter((o) => !o.startsWith("Redirect:"))
@@ -111,7 +111,7 @@ export default function AdminTribunais() {
                         ))}
                     </TableCell>
                     <TableCell>
-                      <span className={`font-mono text-sm ${r.httpStatus && r.httpStatus >= 400 ? "text-red-600 dark:text-red-400" : ""}`}>
+                      <span className={`font-mono text-sm ${r.httpStatus && r.httpStatus >= 400 ? "text-danger-fg" : ""}`}>
                         {r.httpStatus ?? "—"}
                       </span>
                     </TableCell>
@@ -119,7 +119,7 @@ export default function AdminTribunais() {
                     <TableCell className="text-sm">{r.versaoProvavel}</TableCell>
                     <TableCell>
                       {r.usaPdpjCloud ? (
-                        <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+                        <span className="inline-flex items-center gap-1 text-success-fg text-xs font-medium">
                           <CheckCircle2 className="h-3.5 w-3.5" /> Sim
                         </span>
                       ) : (

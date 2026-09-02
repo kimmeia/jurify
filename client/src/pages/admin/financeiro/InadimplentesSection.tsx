@@ -26,10 +26,10 @@ function AtrasoBadge({ dias }: { dias: number }) {
     return <Badge variant="outline" className="text-[10px]">Vence hoje</Badge>;
   }
   if (dias <= 7) {
-    return <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">{dias}d atrasado</Badge>;
+    return <Badge className="bg-warning/15 text-warning-fg border-warning/30 text-[10px]">{dias}d atrasado</Badge>;
   }
   if (dias <= 30) {
-    return <Badge className="bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30 text-[10px]">{dias}d atrasado</Badge>;
+    return <Badge className="bg-warning/15 text-warning-fg border-warning/30 text-[10px]">{dias}d atrasado</Badge>;
   }
   return <Badge variant="destructive" className="text-[10px]">{dias}d atrasado</Badge>;
 }
@@ -48,11 +48,11 @@ export function InadimplentesSection() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border-red-500/30">
+        <Card className="border-danger/30">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-red-500/10 flex items-center justify-center">
-                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+              <div className="h-10 w-10 rounded-lg bg-danger/10 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-danger-fg" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total inadimplentes</p>
@@ -61,11 +61,11 @@ export function InadimplentesSection() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-amber-500/30">
+        <Card className="border-warning/30">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center">
+                <DollarSign className="h-5 w-5 text-warning-fg" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">MRR em risco</p>
@@ -77,8 +77,8 @@ export function InadimplentesSection() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center">
+                <CheckCircle2 className="h-5 w-5 text-success-fg" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Status atualizado</p>
@@ -107,7 +107,7 @@ export function InadimplentesSection() {
             </div>
           ) : !inadimplentes || inadimplentes.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-              <CheckCircle2 className="h-16 w-16 mb-4 text-emerald-500/40" />
+              <CheckCircle2 className="h-16 w-16 mb-4 text-success/40" />
               <p className="text-lg font-medium text-foreground">Nenhum inadimplente!</p>
               <p className="text-sm text-center mt-2 max-w-md">
                 Todas as assinaturas estão em dia. Os webhooks do Asaas atualizam

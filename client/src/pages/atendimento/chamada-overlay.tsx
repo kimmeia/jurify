@@ -23,12 +23,12 @@ export function ChamadaOverlay({ chamada }: { chamada: UseWhatsappCall }) {
   const chamando = estado === "chamando"; // saída: mídia pronta, cliente ainda tocando
 
   const corCirculo = emChamada
-    ? "bg-gradient-to-br from-green-500 to-emerald-600 animate-pulse"
+    ? "bg-success animate-pulse"
     : tocandoEntrada
-      ? "bg-gradient-to-br from-emerald-500 to-emerald-600 animate-pulse"
+      ? "bg-success animate-pulse"
       : chamando
-        ? "bg-gradient-to-br from-blue-500 to-blue-600 animate-pulse"
-        : "bg-gradient-to-br from-blue-500 to-blue-600";
+        ? "bg-info animate-pulse"
+        : "bg-info";
 
   const legenda = tocandoEntrada
     ? "Chamada recebida · WhatsApp"
@@ -54,10 +54,10 @@ export function ChamadaOverlay({ chamada }: { chamada: UseWhatsappCall }) {
           </p>
           {ativa.telefone && <p className="text-xs text-muted-foreground mt-0.5">+{ativa.telefone}</p>}
           <p className="text-sm text-muted-foreground mt-1">{legenda}</p>
-          {erro && <p className="text-xs text-red-500 mt-2">{erro}</p>}
+          {erro && <p className="text-xs text-danger mt-2">{erro}</p>}
         </div>
 
-        {conectando && <Loader2 className="h-6 w-6 animate-spin text-blue-500 mx-auto" />}
+        {conectando && <Loader2 className="h-6 w-6 animate-spin text-info mx-auto" />}
 
         {/* Chamada recebida tocando: atender / recusar */}
         {tocandoEntrada && (
@@ -77,7 +77,7 @@ export function ChamadaOverlay({ chamada }: { chamada: UseWhatsappCall }) {
             <div className="flex flex-col items-center gap-1">
               <Button
                 size="lg"
-                className="rounded-full h-14 w-14 p-0 bg-green-600 hover:bg-green-700"
+                className="rounded-full h-14 w-14 p-0 bg-success hover:bg-success"
                 onClick={() => void chamada.atender()}
                 title="Atender"
               >
@@ -128,7 +128,7 @@ export function ChamadaOverlay({ chamada }: { chamada: UseWhatsappCall }) {
               </p>
             )}
             {permissaoEnviada && (
-              <p className="text-xs text-emerald-600 dark:text-emerald-400">
+              <p className="text-xs text-success-fg">
                 Pedido enviado! Quando o cliente aprovar, você poderá ligar (válido por 7 dias).
               </p>
             )}

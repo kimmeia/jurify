@@ -46,6 +46,28 @@ export function chaveTelefoneBR(valor: string | null | undefined): string | null
   return `${ddd}${resto}`;
 }
 
+/**
+ * Máscara de digitação BR: `(85) 99796-5706`.
+ *
+ * Aceita até 11 dígitos (DDD + 9 do celular) e vai formatando parcialmente
+ * enquanto a pessoa digita — `"1199999"` já vira `"(11) 9999-9"`.
+ *
+ * O DDI é descartado antes de formatar: contato salvo pelo WhatsApp vem
+ * `5585997965706`, e cortar os 11 primeiros dígitos daria `(55) 85997-9657` —
+ * um número que não existe. Vale tanto pra exibir o que está no banco quanto
+ * pra quem cola o número com o +55 na frente.
+ */
+export function mascararTelefoneBR(valor: string | null | undefined): string {
+  let bruto = digitos(String(valor ?? ""));
+  if (bruto.length >= 12 && bruto.startsWith("55")) bruto = bruto.slice(2);
+  const d = bruto.slice(0, 11);
+  if (d.length === 0) return "";
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
 /** Os dois valores apontam pro mesmo telefone? */
 export function mesmoTelefone(
   a: string | null | undefined,

@@ -184,7 +184,7 @@ export default function Acordos() {
           )
         }
         acao={
-          <Button size="sm" className="h-8 bg-violet-600 text-[12px] hover:bg-violet-700" onClick={() => setNovoAberto(true)}>
+          <Button size="sm" className="h-8 bg-info text-[12px] hover:bg-info" onClick={() => setNovoAberto(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" />
             Novo acordo
           </Button>
@@ -290,7 +290,7 @@ export default function Acordos() {
                 <>
                   <span>{emNegociacao} abertos</span>
                   {(resumo?.parados ?? 0) > 0 && (
-                    <span className="font-semibold text-rose-600 dark:text-rose-400">
+                    <span className="font-semibold text-danger-fg">
                       {resumo!.parados} parados
                     </span>
                   )}
@@ -337,7 +337,7 @@ export default function Acordos() {
                   key={g}
                   onClick={() => { setGrupo(g); setApenasParados(false); }}
                   className={`rounded-md px-2.5 py-1 text-[11px] font-semibold capitalize transition-colors ${
-                    grupo === g ? "bg-violet-600 text-white" : "border text-muted-foreground hover:bg-accent"
+                    grupo === g ? "bg-info text-info-on" : "border text-muted-foreground hover:bg-accent"
                   }`}
                 >
                   {g}
@@ -346,7 +346,7 @@ export default function Acordos() {
               {apenasParados && (
                 <button
                   onClick={() => setApenasParados(false)}
-                  className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+                  className="inline-flex items-center gap-1 rounded-md border border-danger/30 bg-danger-bg px-2.5 py-1 text-[11px] font-semibold text-danger-fg"
                 >
                   só parados <X className="h-3 w-3" />
                 </button>
@@ -414,7 +414,7 @@ function LinhaAcordo({ a, indice, onAbrir }: { a: any; indice: number; onAbrir: 
     <button
       onClick={onAbrir}
       className={`grid w-full grid-cols-1 items-center gap-2 rounded-lg px-2 py-2.5 text-left hover:bg-accent sm:grid-cols-[minmax(0,2.2fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.1fr)] sm:gap-3 ${
-        a.parado ? "bg-rose-50/40 dark:bg-rose-950/10" : ""
+        a.parado ? "bg-danger-bg/40" : ""
       }`}
     >
       <span className="flex min-w-0 items-center gap-2.5">
@@ -453,7 +453,7 @@ function LinhaAcordo({ a, indice, onAbrir }: { a: any; indice: number; onAbrir: 
             <span className="block truncate text-[11.5px] font-semibold">{rotuloVez(a.vezDe)}</span>
             <span
               className={`mt-0.5 block truncate text-[10.5px] ${
-                a.parado ? "font-semibold text-rose-600 dark:text-rose-400" : "text-muted-foreground"
+                a.parado ? "font-semibold text-danger-fg" : "text-muted-foreground"
               }`}
             >
               {a.proximoPassoEm
@@ -604,7 +604,7 @@ function PainelDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
               </div>
 
               {a.motivoCancelamento && (
-                <div className="border-b bg-rose-50 px-4 py-2.5 text-[11.5px] text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">
+                <div className="border-b bg-danger-bg px-4 py-2.5 text-[11.5px] text-danger-fg dark:text-danger">
                   Cancelado: <b>{a.motivoCancelamento}</b>
                 </div>
               )}
@@ -626,7 +626,7 @@ function PainelDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
                       href={`https://wa.me/${a.contatoContrarioTelefone.replace(/\D/g, "")}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11.5px] font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-success/30 bg-success-bg px-2.5 py-1 text-[11.5px] font-semibold text-success-fg"
                     >
                       <Phone className="h-3.5 w-3.5" /> WhatsApp
                     </a>
@@ -672,7 +672,7 @@ function PainelDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
 
             <div className="border-t px-4 py-3">
               {aberto && (a as any).parado && !(a as any).proximoPassoEm && (
-                <p className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11.5px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                <p className="mb-2 rounded-md border border-warning/30 bg-warning-bg px-2.5 py-2 text-[11.5px] text-warning-fg">
                   {rotuloParada(a)}. Próximo passo não agendado.
                 </p>
               )}
@@ -685,16 +685,16 @@ function PainelDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
 
               {aberto ? (
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" className="flex-1 bg-violet-600 text-[12px] hover:bg-violet-700" onClick={() => setTratAberto(true)}>
+                  <Button size="sm" className="flex-1 bg-info text-[12px] hover:bg-info" onClick={() => setTratAberto(true)}>
                     Registrar
                   </Button>
                   <Button size="sm" variant="outline" className="flex-1 text-[12px]" onClick={() => setRetornoAberto(true)}>
                     Agendar retorno
                   </Button>
-                  <Button size="sm" className="bg-emerald-600 text-[12px] hover:bg-emerald-700" onClick={() => setFecharAberto(true)}>
+                  <Button size="sm" className="bg-success text-[12px] hover:bg-success" onClick={() => setFecharAberto(true)}>
                     Fechar
                   </Button>
-                  <Button size="sm" variant="outline" className="border-rose-200 dark:border-rose-800/50 text-[12px] text-rose-600 dark:text-rose-400" onClick={() => setCancelarAberto(true)}>
+                  <Button size="sm" variant="outline" className="border-danger/30 text-[12px] text-danger-fg" onClick={() => setCancelarAberto(true)}>
                     Cancelar
                   </Button>
                 </div>
@@ -702,13 +702,13 @@ function PainelDetalhe({ id, onClose, onUpdate }: { id: number; onClose: () => v
                 <div className="flex flex-wrap items-center gap-2">
                   {a.cobrancaId == null ? (
                     <>
-                      <Button size="sm" className="flex-1 bg-violet-600 text-[12px] hover:bg-violet-700" onClick={() => setCobrancaAberta(true)}>
+                      <Button size="sm" className="flex-1 bg-info text-[12px] hover:bg-info" onClick={() => setCobrancaAberta(true)}>
                         Gerar cobrança
                       </Button>
                       <span className="text-[11px] text-muted-foreground">Fechar não cobra sozinho.</span>
                     </>
                   ) : (
-                    <p className="text-[11.5px] text-emerald-700 dark:text-emerald-300">
+                    <p className="text-[11.5px] text-success-fg">
                       Cobrança já gerada a partir deste acordo.
                     </p>
                   )}
@@ -769,11 +769,11 @@ function CamposValores({
           <Input placeholder="R$ 0,00" value={inicial} onChange={(e) => setInicial(e.target.value)} className="mt-1 tabular-nums" />
         </div>
         <div>
-          <Label className="text-[11px] text-emerald-700 dark:text-emerald-400">Meta <span className="text-muted-foreground/60">alvo</span></Label>
+          <Label className="text-[11px] text-success-fg">Meta <span className="text-muted-foreground/60">alvo</span></Label>
           <Input placeholder="R$ 0,00" value={pretendido} onChange={(e) => setPretendido(e.target.value)} className="mt-1 tabular-nums" />
         </div>
         <div>
-          <Label className="text-[11px] text-rose-700 dark:text-rose-400">Limite <span className="text-muted-foreground/60">teto</span></Label>
+          <Label className="text-[11px] text-danger-fg">Limite <span className="text-muted-foreground/60">teto</span></Label>
           <Input placeholder="R$ 0,00" value={disponivel} onChange={(e) => setDisponivel(e.target.value)} className="mt-1 tabular-nums" />
         </div>
       </div>
@@ -902,7 +902,7 @@ function DialogNovo({ onClose, onCriado }: { onClose: () => void; onCriado: () =
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button className="bg-violet-600 hover:bg-violet-700" onClick={submeter} disabled={criar.isPending}>
+          <Button className="bg-info hover:bg-info" onClick={submeter} disabled={criar.isPending}>
             {criar.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}Criar acordo
           </Button>
         </DialogFooter>
@@ -1010,7 +1010,7 @@ function DialogEditar({ a, onClose, onFeito }: { a: any; onClose: () => void; on
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button className="bg-violet-600 hover:bg-violet-700" onClick={salvar} disabled={m.isPending}>
+          <Button className="bg-info hover:bg-info" onClick={salvar} disabled={m.isPending}>
             {m.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}Salvar alterações
           </Button>
         </DialogFooter>
@@ -1065,7 +1065,7 @@ function DialogTratativa({ acordoId, onClose, onFeito }: { acordoId: number; onC
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button
-            className="bg-violet-600 hover:bg-violet-700"
+            className="bg-info hover:bg-info"
             disabled={m.isPending || !conteudo.trim()}
             onClick={() =>
               m.mutate({
@@ -1124,7 +1124,7 @@ function DialogRetorno({ acordoId, parte, onClose, onFeito }: { acordoId: number
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Voltar</Button>
           <Button
-            className="bg-violet-600 hover:bg-violet-700"
+            className="bg-info hover:bg-info"
             disabled={m.isPending || !data}
             onClick={() => m.mutate({ acordoId, data, titulo: titulo.trim() || undefined })}
           >
@@ -1159,7 +1159,7 @@ function DialogFechar({ acordoId, valorAtual, onClose, onFeito }: { acordoId: nu
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Voltar</Button>
           <Button
-            className="bg-emerald-600 hover:bg-emerald-700"
+            className="bg-success hover:bg-success"
             disabled={m.isPending}
             onClick={() => {
               const c = paraCentavos(valor);
@@ -1241,7 +1241,7 @@ function DialogCobranca({
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Voltar</Button>
           <Button
-            className="bg-violet-600 hover:bg-violet-700"
+            className="bg-info hover:bg-info"
             disabled={ocupado}
             onClick={() => {
               const c = paraCentavos(valor);
@@ -1299,7 +1299,7 @@ function DialogCancelar({ acordoId, onClose, onFeito }: { acordoId: number; onCl
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Voltar</Button>
           <Button
-            className="bg-rose-600 hover:bg-rose-700"
+            className="bg-danger hover:bg-danger"
             disabled={m.isPending}
             onClick={() => m.mutate({ acordoId, motivo, observacao: obs.trim() || undefined })}
           >

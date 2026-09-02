@@ -81,8 +81,8 @@ export default function ClientesEssencial() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-bold tracking-tight leading-tight flex items-center gap-2">
-            <Users className="h-5 w-5 text-violet-600 dark:text-violet-400" /> Clientes
-            <Badge variant="outline" className="text-[9px] font-bold border-violet-500/40 text-violet-700 dark:text-violet-300">
+            <Users className="h-5 w-5 text-info-fg" /> Clientes
+            <Badge variant="outline" className="text-[9px] font-bold border-info/30 text-info-fg">
               ESSENCIAL
             </Badge>
           </h1>
@@ -140,12 +140,12 @@ export default function ClientesEssencial() {
                   <td className="px-4 py-2.5">
                     <span className="inline-flex flex-wrap gap-1.5">
                       {c.processosVinculados > 0 && (
-                        <Badge variant="outline" className="text-[10px] border-violet-500/40 text-violet-700 dark:text-violet-300 bg-violet-500/10">
+                        <Badge variant="outline" className="text-[10px] border-info/30 text-info-fg bg-info/10">
                           CNJ · {c.processosVinculados} processo{c.processosVinculados > 1 ? "s" : ""}
                         </Badge>
                       )}
                       {c.documentoVigiado && (
-                        <Badge variant="outline" className="text-[10px] border-cyan-500/40 text-cyan-700 dark:text-cyan-300 bg-cyan-500/10">
+                        <Badge variant="outline" className="text-[10px] border-info/30 text-info-fg bg-info/10">
                           {(c.cpfCnpj ?? "").replace(/\D/g, "").length === 14 ? "CNPJ" : "CPF"} · novas ações
                         </Badge>
                       )}

@@ -182,7 +182,7 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
           <Package className="h-4 w-4 text-muted-foreground" /> Módulos &amp; cobrança
           {fatura.planoNome && <Badge variant="outline" className="text-[10px]">{fatura.planoNome}</Badge>}
           {fatura.cortesia && (
-            <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-700 dark:text-emerald-300">cortesia</Badge>
+            <Badge variant="outline" className="text-[10px] border-success/30 text-success-fg">cortesia</Badge>
           )}
         </div>
         <div className="flex items-center gap-1.5">
@@ -208,7 +208,7 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
               </div>
             ))}
             {fatura.descontoCentavos > 0 && fatura.desconto && (
-              <div className="flex items-center justify-between text-xs text-amber-700 dark:text-amber-300">
+              <div className="flex items-center justify-between text-xs text-warning-fg">
                 <span>
                   Desconto{" "}
                   {fatura.desconto.tipo === "percentual" ? `${fatura.desconto.valor}%` : "fixo"}
@@ -222,7 +222,7 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
               <span className="tabular-nums">{fmtBRL(fatura.totalCentavos)}</span>
             </div>
             {fatura.descontoExpirado && (
-              <p className="text-[11px] text-amber-700 dark:text-amber-300">
+              <p className="text-[11px] text-warning-fg">
                 O desconto deste escritório venceu{fatura.desconto?.validoAte ? ` em ${dataBR(fatura.desconto.validoAte)}` : ""} e deixou de ser aplicado.
               </p>
             )}
@@ -238,7 +238,7 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
             </p>
           ) : (
             <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
-              <span className={divergente ? "text-amber-700 dark:text-amber-300 font-medium" : "text-muted-foreground"}>
+              <span className={divergente ? "text-warning-fg font-medium" : "text-muted-foreground"}>
                 Cobrado hoje no Asaas: {valorAsaas != null ? fmtBRL(valorAsaas) : "—"}
                 {divergente && " · difere do calculado"}
               </span>
@@ -278,7 +278,7 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
               variant="outline"
               className={`text-[10px] gap-1 ${
                 a.vigente
-                  ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10"
+                  ? "border-success/30 text-success-fg bg-success/10"
                   : "text-muted-foreground"
               }`}
             >
@@ -288,7 +288,7 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
               {a.vigente && (
                 <button
                   type="button"
-                  className="ml-0.5 hover:text-rose-600 dark:hover:text-rose-400"
+                  className="ml-0.5 hover:text-danger-fg"
                   onClick={() => setCancelandoModulo({ modulo: a.modulo, nome: a.nome, preco: a.precoCentavos })}
                   aria-label={`Cancelar ${a.nome}`}
                 >

@@ -29,9 +29,9 @@ function fmtMeses(m: number): string { const a = Math.floor(m / 12); const r = m
 function uuid(): string { return Math.random().toString(36).substring(2, 10); }
 
 const FERRAMENTAS = [
-  { id: "simulador" as const, icon: CalendarClock, label: "Quando posso me aposentar?", desc: "Simula todas as regras (comum, especial, rural, professor)", color: "text-rose-600 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-950/30", border: "border-rose-200 dark:border-rose-800" },
-  { id: "rmi" as const, icon: DollarSign, label: "Quanto vou receber?", desc: "Calcula o valor do benefício (RMI)", color: "text-violet-600 dark:text-violet-400", bg: "bg-violet-50 dark:bg-violet-950/30", border: "border-violet-200 dark:border-violet-800" },
-  { id: "gps" as const, icon: Receipt, label: "GPS em Atraso", desc: "Juros e multa de contribuições atrasadas", color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30", border: "border-amber-200 dark:border-amber-800" },
+  { id: "simulador" as const, icon: CalendarClock, label: "Quando posso me aposentar?", desc: "Simula todas as regras (comum, especial, rural, professor)", color: "text-danger-fg", bg: "bg-danger-bg", border: "border-danger/30" },
+  { id: "rmi" as const, icon: DollarSign, label: "Quanto vou receber?", desc: "Calcula o valor do benefício (RMI)", color: "text-info-fg", bg: "bg-info-bg", border: "border-info/30" },
+  { id: "gps" as const, icon: Receipt, label: "GPS em Atraso", desc: "Juros e multa de contribuições atrasadas", color: "text-warning-fg", bg: "bg-warning-bg", border: "border-warning/30" },
 ];
 
 function StepIndicator({ steps, current }: { steps: string[]; current: number }) {
@@ -43,16 +43,16 @@ function StepIndicator({ steps, current }: { steps: string[]; current: number })
           <div key={nome} className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <div className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[11px] ${
-                concluido ? "bg-emerald-600 text-white"
-                : ativo ? "bg-violet-700 text-white"
-                : "bg-slate-200 text-slate-600 dark:text-slate-300"
+                concluido ? "bg-success text-success-on"
+                : ativo ? "bg-info text-info-on"
+                : "bg-muted text-muted-foreground"
               }`}>
                 {concluido ? <Check className="w-3 h-3" /> : num}
               </div>
-              <span className={ativo ? "font-medium text-slate-900 dark:text-slate-100" : "text-slate-500"}>{nome}</span>
+              <span className={ativo ? "font-medium text-foreground" : "text-muted-foreground"}>{nome}</span>
             </div>
             {i < steps.length - 1 && (
-              <div className={`w-8 h-px ${concluido ? "bg-emerald-300" : "bg-slate-300"}`} />
+              <div className={`w-8 h-px ${concluido ? "bg-success" : "bg-muted-foreground/50"}`} />
             )}
           </div>
         );
@@ -66,7 +66,7 @@ function PrevHero({ titulo, descricao, passoAtual, totalPassos }: {
   titulo?: string; descricao?: string; passoAtual?: number; totalPassos?: number;
 }) {
   return (
-    <div className="rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 p-6 text-white relative overflow-hidden shadow-lg">
+    <div className="rounded-2xl bg-info p-6 text-info-on relative overflow-hidden shadow-lg">
       <ShieldCheck className="absolute -right-6 -bottom-8 w-40 h-40 opacity-10" strokeWidth={1.2} />
       <div className="relative">
         {passoAtual && totalPassos ? (
@@ -95,7 +95,7 @@ export default function Previdenciario() {
   const [ferramenta, setFerramenta] = useState<"simulador" | "rmi" | "gps" | null>(null);
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-violet-50/20 dark:to-violet-950/20 p-6 space-y-5">
+      <div className="rounded-2xl bg-gradient-to-br from-muted/40 via-white dark:via-muted to-info-bg/20 p-6 space-y-5">
         {!ferramenta && (
           <>
             <PrevHero
@@ -103,7 +103,7 @@ export default function Previdenciario() {
               descricao="Aposentadoria, benefícios e contribuições — EC 103/2019 + 10 regras de transição"
             />
             <div>
-              <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-3">
+              <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground mb-3">
                 O que você precisa calcular?
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -111,16 +111,16 @@ export default function Previdenciario() {
                   <button
                     key={f.id}
                     onClick={() => setFerramenta(f.id)}
-                    className="group text-left bg-white dark:bg-card rounded-xl p-5 border border-slate-200 dark:border-slate-700/80 hover:border-violet-400 hover:shadow-lg transition-all"
+                    className="group text-left bg-card rounded-xl p-5 border border-border hover:border-info/30 hover:shadow-lg transition-all"
                   >
                     <div className="flex items-start gap-3 mb-3">
                       <div className={`p-2.5 ${f.bg} rounded-lg`}>
                         <f.icon className={`h-5 w-5 ${f.color}`} />
                       </div>
-                      <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-hover:translate-x-1 transition-all ml-auto" />
+                      <ArrowRight className="w-4 h-4 text-muted-foreground/70 group-hover:text-info-fg group-hover:translate-x-1 transition-all ml-auto" />
                     </div>
-                    <p className="font-semibold text-slate-900 dark:text-slate-100 mb-1 text-sm">{f.label}</p>
-                    <p className="text-xs text-slate-500">{f.desc}</p>
+                    <p className="font-semibold text-foreground mb-1 text-sm">{f.label}</p>
+                    <p className="text-xs text-muted-foreground">{f.desc}</p>
                   </button>
                 ))}
               </div>
@@ -175,7 +175,7 @@ function Simulador({ onVoltar }: { onVoltar: () => void }) {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={onVoltar} className="text-slate-500"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar para ferramentas</Button>
+        <Button variant="ghost" size="sm" onClick={onVoltar} className="text-muted-foreground"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar para ferramentas</Button>
         {step !== 3 && <StepIndicator steps={stepLabels} current={step} />}
       </div>
       {step !== 3 && (
@@ -185,13 +185,13 @@ function Simulador({ onVoltar }: { onVoltar: () => void }) {
       {/* STEP 1: Dados pessoais */}
       {step === 1 && (
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><User className="h-5 w-5 text-rose-600 dark:text-rose-400" /> Dados Pessoais</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2"><User className="h-5 w-5 text-danger-fg" /> Dados Pessoais</CardTitle></CardHeader>
           <CardContent className="space-y-5">
             <div>
               <Label className="mb-2 block">Sexo *</Label>
               <div className="grid grid-cols-2 gap-3">
                 {([["F", "Feminino", "62 anos (permanente)"], ["M", "Masculino", "65 anos (permanente)"]] as const).map(([v, l, d]) => (
-                  <button key={v} onClick={() => setSexo(v)} className={`p-3 rounded-lg border-2 text-left ${sexo === v ? "border-rose-500 bg-rose-50 dark:bg-rose-950/20 ring-1 ring-rose-500" : "border-border hover:border-rose-300"}`}>
+                  <button key={v} onClick={() => setSexo(v)} className={`p-3 rounded-lg border-2 text-left ${sexo === v ? "border-danger/30 bg-danger-bg ring-1 ring-danger" : "border-border hover:border-danger/30"}`}>
                     <p className="font-semibold text-sm">{l}</p><p className="text-xs text-muted-foreground">{d}</p>
                   </button>
                 ))}
@@ -216,7 +216,7 @@ function Simulador({ onVoltar }: { onVoltar: () => void }) {
       {step === 2 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Briefcase className="h-5 w-5 text-rose-600 dark:text-rose-400" /> Períodos de Contribuição</CardTitle>
+            <CardTitle className="flex items-center gap-2"><Briefcase className="h-5 w-5 text-danger-fg" /> Períodos de Contribuição</CardTitle>
             <CardDescription>Cadastre cada vínculo. O tempo total é calculado automaticamente.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -268,7 +268,7 @@ function Simulador({ onVoltar }: { onVoltar: () => void }) {
                       </td>
                       <td className="p-1.5 text-right">
                         {periodos.length > 1 && (
-                          <Button variant="ghost" size="sm" onClick={() => removePeriodo(p.id)} className="h-8 w-8 p-0 text-muted-foreground hover:text-red-700 dark:hover:text-red-300">
+                          <Button variant="ghost" size="sm" onClick={() => removePeriodo(p.id)} className="h-8 w-8 p-0 text-muted-foreground hover:text-danger-fg">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         )}
@@ -292,7 +292,7 @@ function Simulador({ onVoltar }: { onVoltar: () => void }) {
                   handleSimular();
                 }}
                 disabled={mutation.isPending}
-                className="bg-rose-600 hover:bg-rose-700 text-white"
+                className="bg-danger hover:bg-danger text-danger-on"
               >
                 {mutation.isPending ? (
                   <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Simulando...</>
@@ -324,8 +324,8 @@ function ResultadoSimulador({ resultado, onNovo, onVoltar }: { resultado: Result
       {/* Hero gradient — verde se já pode aposentar, violet se ainda falta */}
       <div className={`rounded-2xl p-7 text-white relative overflow-hidden shadow-lg ${
         elegivelAgora
-          ? "bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800"
-          : "bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800"
+          ? "bg-success"
+          : "bg-info"
       }`}>
         {elegivelAgora
           ? <Award className="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" strokeWidth={1.2} />
@@ -345,7 +345,7 @@ function ResultadoSimulador({ resultado, onNovo, onVoltar }: { resultado: Result
             </div>
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={onNovo}
-                className="bg-white dark:bg-card text-slate-900 dark:text-slate-100 hover:bg-slate-100 font-semibold shadow-sm h-8">
+                className="bg-card text-foreground hover:bg-muted font-semibold shadow-sm h-8">
                 <Copy className="h-3.5 w-3.5 mr-1" /> Nova simulação
               </Button>
             </div>
@@ -379,7 +379,7 @@ function ResultadoSimulador({ resultado, onNovo, onVoltar }: { resultado: Result
                 </div>
                 <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
                   <p className="text-xs text-white/70 mb-1">Com conversão</p>
-                  <p className="text-lg font-bold tabular-nums leading-none text-emerald-200">{fmtMeses(tc.totalMesesConvertido)}</p>
+                  <p className="text-lg font-bold tabular-nums leading-none text-success">{fmtMeses(tc.totalMesesConvertido)}</p>
                 </div>
               </div>
             </div>
@@ -393,17 +393,17 @@ function ResultadoSimulador({ resultado, onNovo, onVoltar }: { resultado: Result
         <CardContent>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {tc.totalMesesComum > 0 && <div className="p-2 bg-muted/40 rounded text-center"><p className="text-[10px] text-muted-foreground">Comum</p><p className="text-sm font-bold">{fmtMeses(tc.totalMesesComum)}</p></div>}
-            {tc.totalMesesProfessor > 0 && <div className="p-2 bg-blue-50 dark:bg-blue-950/20 rounded text-center"><p className="text-[10px] text-muted-foreground">Professor</p><p className="text-sm font-bold">{fmtMeses(tc.totalMesesProfessor)}</p></div>}
-            {tc.totalMesesEspecial25 > 0 && <div className="p-2 bg-amber-50 dark:bg-amber-950/20 rounded text-center"><p className="text-[10px] text-muted-foreground">Especial 25a</p><p className="text-sm font-bold">{fmtMeses(tc.totalMesesEspecial25)}</p></div>}
-            {tc.totalMesesEspecial20 > 0 && <div className="p-2 bg-orange-50 dark:bg-orange-950/20 rounded text-center"><p className="text-[10px] text-muted-foreground">Especial 20a</p><p className="text-sm font-bold">{fmtMeses(tc.totalMesesEspecial20)}</p></div>}
-            {tc.totalMesesEspecial15 > 0 && <div className="p-2 bg-red-50 dark:bg-red-950/20 rounded text-center"><p className="text-[10px] text-muted-foreground">Especial 15a</p><p className="text-sm font-bold">{fmtMeses(tc.totalMesesEspecial15)}</p></div>}
-            {tc.totalMesesRural > 0 && <div className="p-2 bg-green-50 dark:bg-green-950/20 rounded text-center"><p className="text-[10px] text-muted-foreground">Rural</p><p className="text-sm font-bold">{fmtMeses(tc.totalMesesRural)}</p></div>}
+            {tc.totalMesesProfessor > 0 && <div className="p-2 bg-info-bg rounded text-center"><p className="text-[10px] text-muted-foreground">Professor</p><p className="text-sm font-bold">{fmtMeses(tc.totalMesesProfessor)}</p></div>}
+            {tc.totalMesesEspecial25 > 0 && <div className="p-2 bg-warning-bg rounded text-center"><p className="text-[10px] text-muted-foreground">Especial 25a</p><p className="text-sm font-bold">{fmtMeses(tc.totalMesesEspecial25)}</p></div>}
+            {tc.totalMesesEspecial20 > 0 && <div className="p-2 bg-warning-bg rounded text-center"><p className="text-[10px] text-muted-foreground">Especial 20a</p><p className="text-sm font-bold">{fmtMeses(tc.totalMesesEspecial20)}</p></div>}
+            {tc.totalMesesEspecial15 > 0 && <div className="p-2 bg-danger-bg rounded text-center"><p className="text-[10px] text-muted-foreground">Especial 15a</p><p className="text-sm font-bold">{fmtMeses(tc.totalMesesEspecial15)}</p></div>}
+            {tc.totalMesesRural > 0 && <div className="p-2 bg-success-bg rounded text-center"><p className="text-[10px] text-muted-foreground">Rural</p><p className="text-sm font-bold">{fmtMeses(tc.totalMesesRural)}</p></div>}
             <div className="p-2 bg-muted/60 rounded text-center"><p className="text-[10px] text-muted-foreground">Bruto</p><p className="text-sm font-bold">{fmtMeses(tc.totalMesesBruto)}</p></div>
-            {tc.totalMesesConvertido !== tc.totalMesesBruto && <div className="p-2 bg-emerald-50 dark:bg-emerald-950/20 rounded text-center"><p className="text-[10px] text-muted-foreground">Com conversão</p><p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{fmtMeses(tc.totalMesesConvertido)}</p></div>}
+            {tc.totalMesesConvertido !== tc.totalMesesBruto && <div className="p-2 bg-success-bg rounded text-center"><p className="text-[10px] text-muted-foreground">Com conversão</p><p className="text-sm font-bold text-success-fg">{fmtMeses(tc.totalMesesConvertido)}</p></div>}
           </div>
           {tc.conversoes.length > 0 && (
-            <div className="mt-3 p-3 bg-emerald-50 dark:bg-emerald-950/10 rounded-lg text-xs space-y-1">
-              <p className="font-semibold text-emerald-700 dark:text-emerald-400">Conversão especial → comum (até 13/11/2019):</p>
+            <div className="mt-3 p-3 bg-success-bg rounded-lg text-xs space-y-1">
+              <p className="font-semibold text-success-fg">Conversão especial → comum (até 13/11/2019):</p>
               {tc.conversoes.map((c, i) => <p key={i}>{c.periodo}: {c.mesesOriginais}m × {c.fatorConversao} = <strong>{c.mesesConvertidos}m</strong></p>)}
             </div>
           )}
@@ -417,7 +417,7 @@ function ResultadoSimulador({ resultado, onNovo, onVoltar }: { resultado: Result
           <div className="space-y-3">
             {resultado.regras.filter(r => r.elegivel).length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-2"><CheckCircle className="h-4 w-4" /> Regras que você já atende</p>
+                <p className="text-sm font-semibold text-success-fg flex items-center gap-2"><CheckCircle className="h-4 w-4" /> Regras que você já atende</p>
                 {resultado.regras.filter(r => r.elegivel).map(r => <RegraCard key={r.regra + r.nomeRegra} regra={r} isMelhor={resultado.melhorRegra?.regra === r.regra && resultado.melhorRegra?.nomeRegra === r.nomeRegra} />)}
               </div>
             )}
@@ -444,10 +444,10 @@ function ResultadoSimulador({ resultado, onNovo, onVoltar }: { resultado: Result
 
 function RegraCard({ regra, isMelhor }: { regra: ResultadoRegra; isMelhor: boolean }) {
   return (
-    <div className={`p-4 rounded-lg border space-y-3 ${regra.elegivel ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/10" : ""} ${isMelhor ? "ring-2 ring-emerald-500 shadow-sm" : ""}`}>
+    <div className={`p-4 rounded-lg border space-y-3 ${regra.elegivel ? "border-success/30 bg-success-bg/30" : ""} ${isMelhor ? "ring-2 ring-success shadow-sm" : ""}`}>
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">{isMelhor && <Badge className="bg-emerald-600 text-white text-xs">Melhor</Badge>}<h4 className="font-semibold text-sm">{regra.nomeRegra}</h4></div>
-        <Badge variant={regra.elegivel ? "default" : "outline"} className={regra.elegivel ? "bg-emerald-600" : ""}>{regra.elegivel ? "✓ Elegível" : `${fmtMeses(regra.mesesRestantes)}`}</Badge>
+        <div className="flex items-center gap-2">{isMelhor && <Badge className="bg-success text-success-on text-xs">Melhor</Badge>}<h4 className="font-semibold text-sm">{regra.nomeRegra}</h4></div>
+        <Badge variant={regra.elegivel ? "default" : "outline"} className={regra.elegivel ? "bg-success" : ""}>{regra.elegivel ? "✓ Elegível" : `${fmtMeses(regra.mesesRestantes)}`}</Badge>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {regra.idadeMinimaExigida != null && <div className="p-2 rounded bg-muted/40 text-center"><p className="text-[10px] text-muted-foreground uppercase">Idade</p><p className="text-sm font-bold">{regra.idadeAtual} <span className="text-muted-foreground font-normal">/ {regra.idadeMinimaExigida}</span></p></div>}
@@ -476,14 +476,14 @@ function CalculoRMI({ onVoltar }: { onVoltar: () => void }) {
   if (resultado) return (
     <div className="space-y-4">
       <Button variant="ghost" size="sm" onClick={onVoltar} className="text-muted-foreground"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar</Button>
-      <Card className="border-emerald-200 dark:border-emerald-800"><CardContent className="pt-6 text-center space-y-2"><p className="text-sm text-muted-foreground">Renda Mensal Inicial estimada</p><p className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">{formatBRL(resultado.rmiLimitada)}</p><p className="text-sm text-muted-foreground">{resultado.detalhesCoeficiente}</p></CardContent></Card>
+      <Card className="border-success/30"><CardContent className="pt-6 text-center space-y-2"><p className="text-sm text-muted-foreground">Renda Mensal Inicial estimada</p><p className="text-4xl font-bold text-success-fg">{formatBRL(resultado.rmiLimitada)}</p><p className="text-sm text-muted-foreground">{resultado.detalhesCoeficiente}</p></CardContent></Card>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="p-3 text-center"><p className="text-xs text-muted-foreground">Média</p><p className="text-sm font-bold">{formatBRL(resultado.mediaSalarios)}</p></Card>
         <Card className="p-3 text-center"><p className="text-xs text-muted-foreground">Salários</p><p className="text-sm font-bold">{resultado.quantidadeSalarios}</p></Card>
         <Card className="p-3 text-center"><p className="text-xs text-muted-foreground">Coef.</p><p className="text-sm font-bold">{(resultado.coeficiente * 100).toFixed(0)}%</p></Card>
         <Card className="p-3 text-center"><p className="text-xs text-muted-foreground">Teto</p><p className="text-sm font-bold">{formatBRL(resultado.tetoINSS)}</p></Card>
       </div>
-      {resultado.fatorPrevidenciario && <div className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg text-sm"><strong>Fator Previdenciário:</strong> {resultado.fatorPrevidenciario}</div>}
+      {resultado.fatorPrevidenciario && <div className="p-3 bg-warning-bg rounded-lg text-sm"><strong>Fator Previdenciário:</strong> {resultado.fatorPrevidenciario}</div>}
       <p className="text-xs text-muted-foreground">{resultado.fundamentacao}</p>
       <div className="flex justify-center gap-3"><Button variant="outline" onClick={() => setResultado(null)}>Novo</Button><Button variant="ghost" onClick={onVoltar}>Voltar</Button></div>
     </div>
@@ -491,7 +491,7 @@ function CalculoRMI({ onVoltar }: { onVoltar: () => void }) {
 
   return (
     <div className="space-y-5">
-      <Button variant="ghost" size="sm" onClick={onVoltar} className="text-slate-500"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar para ferramentas</Button>
+      <Button variant="ghost" size="sm" onClick={onVoltar} className="text-muted-foreground"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar para ferramentas</Button>
       <PrevHero titulo="Cálculo de RMI" descricao="Renda Mensal Inicial — calcula o valor do benefício a partir da média dos salários de contribuição." />
       <Card>
         <CardContent className="pt-6 space-y-4">
@@ -508,7 +508,7 @@ function CalculoRMI({ onVoltar }: { onVoltar: () => void }) {
           <div className="space-y-2"><div className="flex justify-between"><Label>Salários (R$) *</Label><Button variant="outline" size="sm" onClick={addS}><Plus className="h-4 w-4 mr-1" /> Add</Button></div>
             <div className="grid grid-cols-3 gap-2">{salarios.map((s, i) => <div key={i} className="flex gap-1"><Input type="number" step="0.01" placeholder={`Sal ${i + 1}`} value={s} onChange={e => upS(i, e.target.value)} />{salarios.length > 1 && <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => rmS(i)}><Trash2 className="h-3.5 w-3.5" /></Button>}</div>)}</div>
           </div>
-          <Button onClick={calc} disabled={mutation.isPending} className="w-full bg-violet-600 hover:bg-violet-700 text-white">{mutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Calculando...</> : <><Calculator className="h-4 w-4 mr-2" /> Calcular</>}</Button>
+          <Button onClick={calc} disabled={mutation.isPending} className="w-full bg-info hover:bg-info text-info-on">{mutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Calculando...</> : <><Calculator className="h-4 w-4 mr-2" /> Calcular</>}</Button>
         </CardContent>
       </Card>
     </div>
@@ -528,9 +528,9 @@ function CalculoGPS({ onVoltar }: { onVoltar: () => void }) {
   if (resultado) return (
     <div className="space-y-4">
       <Button variant="ghost" size="sm" onClick={onVoltar} className="text-muted-foreground"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar</Button>
-      <Card className="border-amber-200 dark:border-amber-800"><CardContent className="pt-6 text-center space-y-2"><p className="text-sm text-muted-foreground">Total a pagar</p><p className="text-4xl font-bold text-amber-600 dark:text-amber-400">{formatBRL(resultado.totalAPagar)}</p><div className="flex justify-center gap-4 text-xs text-muted-foreground"><span>Original: {formatBRL(resultado.totalOriginal)}</span><span>Juros: {formatBRL(resultado.totalJuros)}</span><span>Multa: {formatBRL(resultado.totalMulta)}</span></div></CardContent></Card>
-      {resultado.alertas.length > 0 && <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20 space-y-1">{resultado.alertas.map((a, i) => <p key={i} className="text-sm flex items-start gap-2"><AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />{a}</p>)}</div>}
-      <Card><CardContent className="pt-4"><ScrollArea className="w-full"><table className="w-full text-xs border-collapse min-w-[650px]"><thead><tr className="bg-muted/30"><th className="py-2 px-2 text-left border-b">Mês</th><th className="py-2 px-2 text-right border-b">Original</th><th className="py-2 px-2 text-right border-b">Dias</th><th className="py-2 px-2 text-right border-b">Juros</th><th className="py-2 px-2 text-right border-b">Multa</th><th className="py-2 px-2 text-right border-b font-bold">Total</th><th className="py-2 px-2 text-center border-b">Carência</th></tr></thead><tbody>{resultado.linhas.map(l => <tr key={l.competencia} className="border-b"><td className="py-1.5 px-2">{l.competencia}</td><td className="py-1.5 px-2 text-right">{formatBRL(l.valorOriginal)}</td><td className="py-1.5 px-2 text-right">{l.diasAtraso}</td><td className="py-1.5 px-2 text-right">{formatBRL(l.jurosSELIC)}</td><td className="py-1.5 px-2 text-right">{formatBRL(l.multa)}</td><td className="py-1.5 px-2 text-right font-bold">{formatBRL(l.valorTotal)}</td><td className="py-1.5 px-2 text-center">{l.contaParaCarencia ? <CheckCircle className="h-3.5 w-3.5 text-emerald-500 mx-auto" /> : <AlertTriangle className="h-3.5 w-3.5 text-amber-400 mx-auto" />}</td></tr>)}</tbody></table></ScrollArea></CardContent></Card>
+      <Card className="border-warning/30"><CardContent className="pt-6 text-center space-y-2"><p className="text-sm text-muted-foreground">Total a pagar</p><p className="text-4xl font-bold text-warning-fg">{formatBRL(resultado.totalAPagar)}</p><div className="flex justify-center gap-4 text-xs text-muted-foreground"><span>Original: {formatBRL(resultado.totalOriginal)}</span><span>Juros: {formatBRL(resultado.totalJuros)}</span><span>Multa: {formatBRL(resultado.totalMulta)}</span></div></CardContent></Card>
+      {resultado.alertas.length > 0 && <div className="p-3 rounded-lg border border-warning/30 bg-warning-bg space-y-1">{resultado.alertas.map((a, i) => <p key={i} className="text-sm flex items-start gap-2"><AlertTriangle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />{a}</p>)}</div>}
+      <Card><CardContent className="pt-4"><ScrollArea className="w-full"><table className="w-full text-xs border-collapse min-w-[650px]"><thead><tr className="bg-muted/30"><th className="py-2 px-2 text-left border-b">Mês</th><th className="py-2 px-2 text-right border-b">Original</th><th className="py-2 px-2 text-right border-b">Dias</th><th className="py-2 px-2 text-right border-b">Juros</th><th className="py-2 px-2 text-right border-b">Multa</th><th className="py-2 px-2 text-right border-b font-bold">Total</th><th className="py-2 px-2 text-center border-b">Carência</th></tr></thead><tbody>{resultado.linhas.map(l => <tr key={l.competencia} className="border-b"><td className="py-1.5 px-2">{l.competencia}</td><td className="py-1.5 px-2 text-right">{formatBRL(l.valorOriginal)}</td><td className="py-1.5 px-2 text-right">{l.diasAtraso}</td><td className="py-1.5 px-2 text-right">{formatBRL(l.jurosSELIC)}</td><td className="py-1.5 px-2 text-right">{formatBRL(l.multa)}</td><td className="py-1.5 px-2 text-right font-bold">{formatBRL(l.valorTotal)}</td><td className="py-1.5 px-2 text-center">{l.contaParaCarencia ? <CheckCircle className="h-3.5 w-3.5 text-success mx-auto" /> : <AlertTriangle className="h-3.5 w-3.5 text-warning mx-auto" />}</td></tr>)}</tbody></table></ScrollArea></CardContent></Card>
       <p className="text-xs text-muted-foreground">{resultado.fundamentacao}</p>
       <div className="flex justify-center gap-3"><Button variant="outline" onClick={() => setResultado(null)}>Novo</Button><Button variant="ghost" onClick={onVoltar}>Voltar</Button></div>
     </div>
@@ -538,7 +538,7 @@ function CalculoGPS({ onVoltar }: { onVoltar: () => void }) {
 
   return (
     <div className="space-y-5">
-      <Button variant="ghost" size="sm" onClick={onVoltar} className="text-slate-500"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar para ferramentas</Button>
+      <Button variant="ghost" size="sm" onClick={onVoltar} className="text-muted-foreground"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar para ferramentas</Button>
       <PrevHero titulo="GPS em atraso" descricao="Calcule juros e multa para regularizar contribuições previdenciárias atrasadas (Lei 8.212/91)." />
       <Card>
         <CardContent className="pt-6 space-y-4">
@@ -553,7 +553,7 @@ function CalculoGPS({ onVoltar }: { onVoltar: () => void }) {
           </div>
           <Separator />
           <div className="space-y-2"><div className="flex justify-between"><Label>Meses atrasados *</Label><Button variant="outline" size="sm" onClick={addC}><Plus className="h-4 w-4 mr-1" /> Mês</Button></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{comps.map((c, i) => <div key={i} className="flex gap-1"><Input type="month" value={c} onChange={e => upC(i, e.target.value)} />{comps.length > 1 && <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => rmC(i)}><Trash2 className="h-3.5 w-3.5" /></Button>}</div>)}</div></div>
-          <Button onClick={calc} disabled={mutation.isPending} className="w-full bg-amber-600 hover:bg-amber-700 text-white">{mutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Calculando...</> : <><Calculator className="h-4 w-4 mr-2" /> Calcular GPS</>}</Button>
+          <Button onClick={calc} disabled={mutation.isPending} className="w-full bg-warning hover:bg-warning text-warning-on">{mutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Calculando...</> : <><Calculator className="h-4 w-4 mr-2" /> Calcular GPS</>}</Button>
         </CardContent>
       </Card>
     </div>

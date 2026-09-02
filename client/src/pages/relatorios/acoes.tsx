@@ -309,7 +309,7 @@ function DialogProgramar({
                       {p.destinatarios.join(", ")}
                     </p>
                     {p.ultimoStatus && p.ultimoStatus !== "enviado" && (
-                      <p className="truncate text-[11px] text-rose-600 dark:text-rose-400">
+                      <p className="truncate text-[11px] text-danger-fg">
                         Último envio falhou: {p.ultimoErro || "erro desconhecido"}
                       </p>
                     )}

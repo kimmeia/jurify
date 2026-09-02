@@ -37,13 +37,13 @@ const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
 };
 
 const COR_ICONE_GATILHO: Record<GatilhoSmartflow, string> = {
-  whatsapp_mensagem: "text-blue-500",
-  mensagem_canal: "text-blue-500",
-  pagamento_recebido: "text-emerald-500",
-  pagamento_vencido: "text-amber-500",
-  pagamento_proximo_vencimento: "text-amber-500",
-  novo_lead: "text-violet-500",
-  manual: "text-slate-500",
+  whatsapp_mensagem: "text-info",
+  mensagem_canal: "text-info",
+  pagamento_recebido: "text-success",
+  pagamento_vencido: "text-warning",
+  pagamento_proximo_vencimento: "text-warning",
+  novo_lead: "text-info",
+  manual: "text-muted-foreground",
 };
 
 /**
@@ -90,7 +90,7 @@ export function EditorTopbar({
 }) {
   const meta = getGatilhoMeta(gatilho);
   const Icon = GATILHO_ICON[gatilho] ?? Zap;
-  const corIcone = COR_ICONE_GATILHO[gatilho] ?? "text-slate-500";
+  const corIcone = COR_ICONE_GATILHO[gatilho] ?? "text-muted-foreground";
   const novo = !cenarioId;
 
   return (
@@ -103,7 +103,7 @@ export function EditorTopbar({
       <div className="h-6 w-px bg-border" />
 
       {/* Ícone gradient do módulo */}
-      <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 flex items-center justify-center shadow-sm shrink-0">
+      <div className="w-9 h-9 rounded-lg bg-info flex items-center justify-center shadow-sm shrink-0">
         <Zap className="h-4 w-4 text-white" />
       </div>
 
@@ -132,8 +132,8 @@ export function EditorTopbar({
         <div
           className={`flex items-center gap-2 px-2 py-1.5 rounded-md border ${
             ativo
-              ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-900"
-              : "bg-slate-50 border-slate-200 dark:bg-slate-900/50 dark:border-slate-800"
+              ? "bg-success-bg border-success/30 dark:border-success/30"
+              : "bg-muted border-border dark:border-border"
           }`}
         >
           <Switch
@@ -145,8 +145,8 @@ export function EditorTopbar({
           <span
             className={`text-[11px] font-semibold ${
               ativo
-                ? "text-emerald-700 dark:text-emerald-300"
-                : "text-slate-600 dark:text-slate-400"
+                ? "text-success-fg"
+                : "text-muted-foreground"
             }`}
           >
             {ativo ? "Ativo" : "Inativo"}
@@ -198,7 +198,7 @@ export function EditorTopbar({
         onClick={onSalvar}
         disabled={salvando}
         size="sm"
-        className="gap-1.5 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-md font-semibold px-4"
+        className="gap-1.5 bg-info shadow-md font-semibold px-4"
       >
         {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
         {novo ? "Criar" : "Salvar"}
@@ -227,8 +227,8 @@ function SaveStatus({
 
   if (novo && !ultimoSalvado) {
     return (
-      <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-        <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+      <span className="flex items-center gap-1 text-warning-fg">
+        <div className="w-1.5 h-1.5 rounded-full bg-warning"></div>
         Cenário novo
       </span>
     );
@@ -236,8 +236,8 @@ function SaveStatus({
 
   if (dirty) {
     return (
-      <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
-        <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></div>
+      <span className="flex items-center gap-1 text-warning-fg font-medium">
+        <div className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse"></div>
         Alterações não salvas
       </span>
     );
@@ -248,8 +248,8 @@ function SaveStatus({
   }
 
   return (
-    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+    <span className="flex items-center gap-1 text-success-fg">
+      <div className="w-1.5 h-1.5 rounded-full bg-success"></div>
       Salvo {formatRelativeTime(ultimoSalvado)}
     </span>
   );

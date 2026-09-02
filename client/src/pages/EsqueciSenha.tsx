@@ -23,9 +23,9 @@ export default function EsqueciSenha() {
   });
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-b from-muted to-white dark:from-muted">
       <div className="w-full max-w-md">
-        <Link href="/" className="text-sm text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-1 mb-6">
+        <Link href="/" className="text-sm text-info-fg hover:underline inline-flex items-center gap-1 mb-6">
           <ArrowLeft className="h-3.5 w-3.5" /> Voltar ao login
         </Link>
 
@@ -39,7 +39,7 @@ export default function EsqueciSenha() {
           <CardContent>
             {enviado ? (
               <div className="text-center py-4">
-                <CheckCircle2 className="h-12 w-12 mx-auto text-emerald-500 mb-3" />
+                <CheckCircle2 className="h-12 w-12 mx-auto text-success mb-3" />
                 <p className="font-medium">Pronto.</p>
                 <p className="text-sm text-muted-foreground mt-1">
                   Se houver uma conta com esse email, você receberá o link de redefinição em alguns minutos.
@@ -47,7 +47,7 @@ export default function EsqueciSenha() {
                 <p className="text-xs text-muted-foreground mt-3">
                   O link expira em 1 hora. Cheque também a pasta de spam.
                 </p>
-                <Link href="/" className="inline-block mt-6 text-sm text-violet-600 dark:text-violet-400 hover:underline">
+                <Link href="/" className="inline-block mt-6 text-sm text-info-fg hover:underline">
                   Voltar ao login
                 </Link>
               </div>
