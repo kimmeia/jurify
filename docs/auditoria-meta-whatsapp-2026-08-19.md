@@ -11,6 +11,24 @@ as causas ANTES de pedir a revisão.
 
 **Placar: 2 violações · 2 lacunas · 44 riscos · 92 conformes**
 
+> **Estado em 03/09/2026** (conferido no código):
+> - Violação 1 (bot se passa por humano) e Lacuna 1 (sem disclosure) —
+>   **corrigidas 19/08**: `smartflow/executores.ts:653` manda o Atendente IA
+>   se identificar como assistente virtual e nunca como pessoa/advogado.
+> - Violação 2 (Privacidade nega o envio pra OpenAI/Anthropic) — **corrigida
+>   24/08** (Termos v2 lista os suboperadores de IA; revisão jurídica do
+>   texto segue com o dono).
+> - Lacuna 2 (mídia do WhatsApp não some na exclusão LGPD) — **ABERTA**:
+>   `excluir-cliente.ts` segue sem tocar em `mediaUrl`/`uploads/whatsapp-cloud`.
+> - Riscos: `executarManual` saneia o contexto desde 19/08
+>   (`dispatcher.ts:1508`); opt-in no envio frio manual entrou 19/08; HMAC
+>   brando segue; `whatsappCoex` segue montado (`server/routers.ts:157`);
+>   "Sem risco de banimento"/"Mensagens ilimitadas" seguem em
+>   `meta-connect-dialog.tsx:59`; respostas do bot seguem sem `idExterno`.
+>   Demais riscos não foram re-conferidos.
+> - Segundo aviso "Sending spam" chegou em 22/08 (análise até 20/11) — plano
+>   de 14 dias sem disparo frio em `CLAUDE.md`, pendência 0.
+
 ## VIOLAÇÃOS
 
 ### [VIOLAÇÃO] Produto instrui a IA a se passar por humano: template "advogado com 20 anos de experiência", sem contrapeso
