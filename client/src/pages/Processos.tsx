@@ -182,7 +182,7 @@ function MonitorHealthDot({
   createdAt?: string | null;
   ultimoErro?: string | null;
 }) {
-  if (statusJudit === "paused") {
+  if (statusJudit === "paused" || statusJudit === "pausado") {
     return (
       <span className="relative flex h-3 w-3 shrink-0" title="Monitoramento pausado">
         <span className="h-3 w-3 rounded-full bg-muted-foreground/50" />
@@ -263,12 +263,26 @@ function poloDaParte(p: any): string {
 // CARD DE PROCESSO (resultado expandivel)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * `criarMonitoramento` devolve o monitor que já existia em vez de criar outro
+ * — aí não há sucesso a comemorar nem crédito cobrado. Devolve true quando
+ * foi esse o caso, pra quem chamou não emitir o toast de sucesso por cima.
+ */
+function avisarSeJaMonitorado(d: any): boolean {
+  if (!d?.jaExistia) return false;
+  toast.info("Este processo já está monitorado — nada foi cobrado.", {
+    description: d.status === "pausado" ? "Ele está pausado; reative pelo menu do card." : undefined,
+  });
+  return true;
+}
+
 function ProcessoCard({
   processo,
   onMonitorar,
   detalhe,
   onCarregarDetalhes,
   carregandoDetalhes,
+  monitorando,
 }: {
   processo: any;
   onMonitorar?: (cnj: string) => void;
@@ -277,6 +291,8 @@ function ProcessoCard({
   /** Handler que carrega detalhes pra esse CNJ (custa 1 cred). Quando definido, mostra botão se card vazio. */
   onCarregarDetalhes?: (cnj: string) => void;
   carregandoDetalhes?: boolean;
+  /** O "Monitorar" deste card está em voo — trava o botão pra o 2º clique não virar 2º monitor. */
+  monitorando?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
   const { items: alerts } = useKeywordAlerts();
@@ -340,7 +356,20 @@ function ProcessoCard({
                 {carregandoDetalhes ? "Carregando…" : "Carregar detalhes"}
               </Button>
             )}
-            {onMonitorar && d.code && <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => onMonitorar(d.code)}><Radar className="h-3 w-3 mr-1" />Monitorar</Button>}
+            {onMonitorar && d.code && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-[10px]"
+                disabled={monitorando}
+                onClick={() => onMonitorar(d.code)}
+              >
+                {monitorando
+                  ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  : <Radar className="h-3 w-3 mr-1" />}
+                Monitorar
+              </Button>
+            )}
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setAberto(!aberto)}>{aberto ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</Button>
           </div>
         </div>
@@ -483,7 +512,10 @@ function ConsultarTab() {
   const todosClientes = useClientesVinculaveis({});
 
   const monitorarMut = trpc.processos.criarMonitoramento.useMutation({
-    onSuccess: (d: any) => toast.success(`Processo adicionado às Movimentações (${d?.custoCred ?? 2} cred/mês)`),
+    onSuccess: (d: any) => {
+      if (avisarSeJaMonitorado(d)) return;
+      toast.success(`Processo adicionado às Movimentações (${d?.custoCred ?? 2} cred/mês)`);
+    },
     onError: (e: any) => toast.error("Erro ao monitorar", { description: e.message }),
   });
 
@@ -497,6 +529,9 @@ function ConsultarTab() {
 
   /** Ao clicar "Monitorar" num ProcessoCard: cria monitoramento E verifica se partes são clientes */
   const handleMonitorar = (cnj: string, processo?: any) => {
+    // O 2º clique antes da resposta virava 2º monitor do mesmo CNJ.
+    if (monitorarMut.isPending) return;
+
     // Resolve credencial: usa a selecionada no dropdown se houver,
     // senão pega a 1ª ativa do cofre. credencialId é obrigatório no
     // backend (Zod) — sem fallback, click em "Monitorar" depois de
@@ -767,6 +802,7 @@ function ConsultarTab() {
                       key={item.response_id || i}
                       processo={item}
                       onMonitorar={(c) => handleMonitorar(c, item)}
+                      monitorando={monitorarMut.isPending && monitorarMut.variables?.numeroCnj === cnj}
                       detalhe={cnj ? detalhesPorCnj[cnj] : undefined}
                       onCarregarDetalhes={cnj ? carregarDetalhes : undefined}
                       carregandoDetalhes={carregandoCnj === cnj}
@@ -1357,13 +1393,13 @@ function MonitoramentoCard({
                     <DropdownMenuSeparator />
                   </>
                 )}
-                {(status === "created" || status === "updated" || status === "updating") && (
+                {!pausado && (
                   <DropdownMenuItem onClick={onPausar}>
                     <Pause className="h-3.5 w-3.5 mr-2" />
                     Pausar monitoramento
                   </DropdownMenuItem>
                 )}
-                {status === "paused" && (
+                {pausado && (
                   <DropdownMenuItem onClick={onReativar}>
                     <Play className="h-3.5 w-3.5 mr-2" />
                     Reativar
@@ -1627,8 +1663,8 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
   const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
   const criarMut = trpc.processos.criarMonitoramento.useMutation({
-    onSuccess: () => {
-      toast.success("Monitoramento de movimentações criado!");
+    onSuccess: (d: any) => {
+      if (!avisarSeJaMonitorado(d)) toast.success("Monitoramento de movimentações criado!");
       setNovoOpen(false);
       setNovoValor("");
       setNovoCredencialId("");
@@ -1636,8 +1672,14 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
     },
     onError: (e: any) => toast.error(e.message),
   });
-  const pausarMut = trpc.processos.pausarMonitoramento.useMutation({ onSuccess: () => { toast.success("Pausado"); refetch(); } });
-  const reativarMut = trpc.processos.reativarMonitoramento.useMutation({ onSuccess: () => { toast.success("Reativado"); refetch(); } });
+  const pausarMut = trpc.processos.pausarMonitoramento.useMutation({
+    onSuccess: () => { toast.success("Pausado"); refetch(); },
+    onError: (e: any) => toast.error("Não foi possível pausar", { description: e.message }),
+  });
+  const reativarMut = trpc.processos.reativarMonitoramento.useMutation({
+    onSuccess: () => { toast.success("Reativado"); refetch(); },
+    onError: (e: any) => toast.error("Não foi possível reativar", { description: e.message }),
+  });
   const deletarMut = trpc.processos.deletarMonitoramento.useMutation({
     onSuccess: () => {
       toast.success("Monitoramento removido");
@@ -2898,7 +2940,7 @@ function NovasAcoesTab() {
   const utils = trpc.useUtils();
 
   const { data: credenciais } = trpc.cofreCredenciais.listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
-  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
+  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
   const LIMITE_PAGINA = 25;
   const [cursor, setCursor] = useState(0);
@@ -2996,6 +3038,7 @@ function NovasAcoesTab() {
 
   const monitorarMut = trpc.processos.criarMonitoramento.useMutation({
     onSuccess: (d: any) => {
+      if (avisarSeJaMonitorado(d)) return;
       toast.success(`Processo agora monitorado (${d?.custoCred ?? 2} cred/mês)`, {
         description: "As próximas movimentações vão aparecer na aba Movimentações.",
         duration: 6000,
@@ -4202,15 +4245,28 @@ function CofreTab() {
     onError: (e: any) => toast.error(e.message),
   }) ?? { mutate: () => {}, isPending: false };
 
+  // O cadastro grava "validando" e não testa nada; o teste real é este login,
+  // disparado logo em seguida. Sem ele a credencial ficava "validando" pra
+  // sempre e sumia dos seletores de Novas Ações e Importação.
+  const validarAposCadastroMut = trpc.cofreCredenciais.validarMinha.useMutation({
+    onSuccess: (r: any) => {
+      if (r?.totpSecretNovo) setSecretNovo(r.totpSecretNovo);
+      if (r?.semCobertura) {
+        toast.warning("Cadastrada, mas sem cobertura", { description: r.mensagem });
+      } else if (r?.ok) {
+        toast.success("Credencial cadastrada e login confirmado", { description: r.mensagem });
+      } else {
+        toast.error("Cadastrada, mas o login falhou", { description: r?.mensagem, duration: 12000 });
+      }
+      refetch();
+    },
+    onError: (e: any) => toast.error("Cadastrada, mas não deu pra testar o login", { description: e.message }),
+  });
+
   const cadastrarMut = trpc.cofreCredenciais.cadastrarMinha.useMutation({
     onSuccess: (data: any) => {
-      if (data.status === "ativa") {
-        toast.success("Credencial válida!", { description: data.mensagem, duration: 8000 });
-      } else if (data.status === "erro") {
-        toast.error("Credencial inválida", { description: data.mensagem, duration: 12000 });
-      } else {
-        toast.warning("Validação pendente", { description: data.mensagem, duration: 10000 });
-      }
+      toast.info("Credencial cadastrada. Testando o login no tribunal…");
+      validarAposCadastroMut.mutate({ id: data.id });
       setNovoOpen(false);
       setForm({ apelido: "", sistema: "pje_tjce", username: "", password: "", totpSecret: "" });
       // O QR lido some junto com o formulário: deixá-lo pendurado faria o

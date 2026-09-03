@@ -12,7 +12,7 @@
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
@@ -363,7 +363,9 @@ export const importarProcessosRouter = router({
           .where(and(
             eq(cofreCredenciais.id, input.credencialId),
             eq(cofreCredenciais.escritorioId, perm.escritorioId),
-            eq(cofreCredenciais.status, "ativa"),
+            // "validando" é a credencial recém-cadastrada enquanto o teste de
+            // login roda; o dialog oferece essa, e o motor a usa igual.
+            inArray(cofreCredenciais.status, ["ativa", "validando"]),
           ))
           .limit(1);
         if (!cred) {
@@ -373,6 +375,20 @@ export const importarProcessosRouter = router({
           });
         }
         credencialSistema = cred.sistema;
+      }
+
+      // Teto do plano, lido uma vez por chamada. Pelo botão "Novo" o
+      // excedente é recusado antes de cobrar; sem o mesmo teto aqui, uma
+      // planilha de 300 linhas num plano de 50 criava e cobrava os 300.
+      // null = sem teto (fail-open do helper, inclusive cortesia).
+      let vagasMonitoramento: number | null = null;
+      let maximoMonitoramento: number | null = null;
+      if (input.monitorar) {
+        const { verificarLimiteMonitoramentos } = await import("../processos/limites-monitoramento");
+        const limiteMon = await verificarLimiteMonitoramentos(perm.escritorioId, "movimentacoes");
+        maximoMonitoramento = limiteMon.maximo;
+        vagasMonitoramento =
+          limiteMon.maximo == null ? null : Math.max(0, limiteMon.maximo - limiteMon.atual);
       }
 
       // Mapas atualizados a cada inserção pra evitar duplicatas DENTRO do mesmo lote
@@ -405,6 +421,7 @@ export const importarProcessosRouter = router({
         monitoramentosCriados: 0,
         monitoramentosJaExistiam: 0,
         monitoramentosNaoElegiveis: 0,
+        monitoramentosLimitePlano: 0,
         creditosConsumidos: 0,
         erros: [] as { linhaNum: number; motivo: string }[],
       };
@@ -512,6 +529,15 @@ export const importarProcessosRouter = router({
                   resultado.monitoramentosNaoElegiveis++;
                 } else if (cnjsJaMonitorados.has(linha.cnj)) {
                   resultado.monitoramentosJaExistiam++;
+                } else if (
+                  vagasMonitoramento !== null &&
+                  resultado.monitoramentosCriados >= vagasMonitoramento
+                ) {
+                  resultado.monitoramentosLimitePlano++;
+                  resultado.erros.push({
+                    linhaNum: linha.linhaNum,
+                    motivo: `Limite do plano (${maximoMonitoramento} processos vigiados): monitor não criado, sem cobrança.`,
+                  });
                 } else {
                   await consumirCreditosEscritorio(
                     perm.escritorioId,

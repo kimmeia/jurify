@@ -61,8 +61,9 @@ describe("alcance da credencial", () => {
   it("a busca por credencial aceita a nacional", () => {
     // O filtro por sistema virou parâmetro do seletor único de credencial (a
     // consulta literal existia copiada em cinco lugares). A intenção é a
-    // mesma: a do tribunal serve, e a nacional também.
-    expect(processos).toContain("sistemas: [sistemaCofre, SISTEMA_PJE_NACIONAL]");
+    // mesma: a do tribunal serve, e a nacional também — `sistemasQueAtendem`
+    // devolve as duas (e pra TRF o específico, que o cnj-parser não nomeia).
+    expect(processos).toContain("sistemas: sistemasQueAtendem(tribunal.codigoTribunal)");
     expect(processos).toContain("inArray(cofreCredenciais.sistema, opcoes.sistemas)");
   });
 });

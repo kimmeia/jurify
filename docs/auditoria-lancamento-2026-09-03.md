@@ -36,6 +36,14 @@ se o fix muda tela (precisa de mockup) ou não.
 > `mockup-correcoes-p1.html` aprovado). Seguem abertos: P1-4 (permissões),
 > 6 (Kanban), 7 (Processos/Cofre), 8 (planos hardcoded do admin), 9
 > (outros) e os P2.
+>
+> **Madrugada de 04/09**: do mockup `mockup-correcoes-p1b.html` o dono
+> aprovou só as abas Kanban e Processos/Cofre. **P1-6 (Kanban) entregue
+> menos o kanban-x1** (prazo em branco = 15 dias: aguarda a escolha A/B
+> dele) e **P1-7 (Processos/Cofre) entregue** — ver `CLAUDE.md`, bloco
+> "Entregue 03/09 (madrugada)". Seguem abertos: P1-4 (permissões), 8
+> (planos hardcoded do admin), 9 (outros) e os P2 — ele disse "o resto não
+> entendi", então precisam de uma explicação mais simples antes de voltar.
 
 ---
 

@@ -87,6 +87,7 @@ type ResultadoFinal = {
   monitoramentosCriados: number;
   monitoramentosJaExistiam: number;
   monitoramentosNaoElegiveis: number;
+  monitoramentosLimitePlano: number;
   creditosConsumidos: number;
   erros: { linhaNum: number; motivo: string }[];
 };
@@ -134,7 +135,7 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
     { retry: false, enabled: etapa === "preview" },
   );
   const credsAtivas: { id: number; sistema: string; apelido?: string | null; status: string }[] =
-    (credenciais ?? []).filter((c: any) => c.status === "ativa");
+    (credenciais ?? []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
   const previewMut = (trpc as any).importarProcessos.previewAdvbox.useMutation({
     onSuccess: (r: PreviewResultado) => {
@@ -206,7 +207,8 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
       contatosCriados: 0, contatosReutilizados: 0,
       processosCriados: 0, processosJaExistiam: 0,
       monitoramentosCriados: 0, monitoramentosJaExistiam: 0,
-      monitoramentosNaoElegiveis: 0, creditosConsumidos: 0,
+      monitoramentosNaoElegiveis: 0, monitoramentosLimitePlano: 0,
+      creditosConsumidos: 0,
       erros: [],
     };
 
@@ -244,6 +246,7 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
         acumulado.monitoramentosCriados += r.monitoramentosCriados;
         acumulado.monitoramentosJaExistiam += r.monitoramentosJaExistiam;
         acumulado.monitoramentosNaoElegiveis += r.monitoramentosNaoElegiveis;
+        acumulado.monitoramentosLimitePlano += r.monitoramentosLimitePlano ?? 0;
         acumulado.creditosConsumidos += r.creditosConsumidos;
         acumulado.erros.push(...r.erros);
       } catch (err: any) {
@@ -538,13 +541,14 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
 
             {(resultado.monitoramentosCriados > 0 ||
               resultado.monitoramentosJaExistiam > 0 ||
-              resultado.monitoramentosNaoElegiveis > 0) && (
+              resultado.monitoramentosNaoElegiveis > 0 ||
+              resultado.monitoramentosLimitePlano > 0) && (
               <div className="border-2 border-info/30 bg-info-bg/40 rounded-lg p-3">
                 <p className="flex items-center gap-2 text-sm font-semibold text-info-fg mb-2">
                   <Radar className="h-4 w-4" />
                   Monitoramento
                 </p>
-                <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className={`grid gap-2 text-xs ${resultado.monitoramentosLimitePlano > 0 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
                   <div className="bg-card border rounded p-2">
                     <p className="text-[10px] text-muted-foreground uppercase">Ativados</p>
                     <p className="text-lg font-bold tabular-nums text-success-fg">{resultado.monitoramentosCriados}</p>
@@ -557,6 +561,15 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                     <p className="text-[10px] text-muted-foreground uppercase">Não elegíveis</p>
                     <p className="text-lg font-bold tabular-nums text-warning-fg">{resultado.monitoramentosNaoElegiveis}</p>
                   </div>
+                  {resultado.monitoramentosLimitePlano > 0 && (
+                    <div
+                      className="bg-card border rounded p-2"
+                      title="Passaram do teto de processos vigiados do plano: ficaram só como vínculo, sem monitor e sem cobrança."
+                    >
+                      <p className="text-[10px] text-muted-foreground uppercase">Fora do limite do plano</p>
+                      <p className="text-lg font-bold tabular-nums text-danger-fg">{resultado.monitoramentosLimitePlano}</p>
+                    </div>
+                  )}
                 </div>
                 {resultado.creditosConsumidos > 0 && (
                   <p className="text-[11px] text-muted-foreground mt-2">
