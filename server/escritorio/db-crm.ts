@@ -10,6 +10,8 @@ import { createLogger } from "../_core/logger";
 import { escapeLikePattern } from "../_core/sql-helpers";
 import { normalizarValorBR } from "../../shared/valor-br";
 import { toIsoString, diaAtualEmTz, inicioDiasAtrasEmTz } from "../_core/dates";
+import { diaSemanaNoFuso, minutosDoDiaNoFuso } from "../smartflow/dispatcher-helpers";
+import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 
 /**
  * Parse defensivo de campo TEXT que deveria ser JSON array. Se o conteúdo
@@ -60,6 +62,16 @@ export async function buscarContatoPorTelefone(
       like(contatos.telefonesSecundarios, `%${esc}%`),
     ];
   });
+
+  // O cadastro à mão grava o número como foi digitado — "(85) 99796-5706",
+  // "85997965706" — e o WhatsApp entrega "5585997965706". Comparar só a forma
+  // canônica (o `eq` acima) dividia a mesma pessoa em duas fichas: o lead
+  // criado no Pipeline nunca casava com a mensagem que chegava depois.
+  const telSemMascara = sql`REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${contatos.telefone}, '(', ''), ')', ''), '-', ''), ' ', ''), '+', '')`;
+  const semDdi = candidatos.map((v) => (v.length >= 12 && v.startsWith("55") ? v.slice(2) : v));
+  for (const v of new Set([...candidatos, ...semDdi])) {
+    conditions.push(eq(telSemMascara, v));
+  }
 
   const rows = await db
     .select({ id: contatos.id, nome: contatos.nome, telefone: contatos.telefone })
@@ -1364,8 +1376,11 @@ export async function distribuirLead(
 
   if (esc) {
     const agora = new Date();
+    // Abertura/fechamento são digitados no relógio do escritório; o processo
+    // roda em UTC, e às 15h de Fortaleza o servidor achava que já eram 18h.
+    const fuso = esc.fusoHorario || FUSO_HORARIO_PADRAO;
     const diasSemana = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
-    const diaHoje = diasSemana[agora.getDay()];
+    const diaHoje = diasSemana[diaSemanaNoFuso(agora, fuso)];
     // diasFuncionamento é text (JSON). Se vier malformado, NÃO pode derrubar a
     // distribuição (isso quebrava todos os botões de criar lead) — cai no padrão.
     let diasFuncionamento: string[];
@@ -1384,7 +1399,7 @@ export async function distribuirLead(
     }
 
     // Verificar horário (formato HH:MM)
-    const horaAtual = agora.getHours() * 60 + agora.getMinutes();
+    const horaAtual = minutosDoDiaNoFuso(agora, fuso);
     const abertura = esc.horarioAbertura ? parseHorario(esc.horarioAbertura) : 480; // 08:00
     const fechamento = esc.horarioFechamento ? parseHorario(esc.horarioFechamento) : 1080; // 18:00
 
