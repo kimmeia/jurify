@@ -347,7 +347,9 @@ jurídica dos Termos v2. Só `JWT_SECRET` e `DATABASE_URL` derrubam o boot se
 faltarem — o resto falha em silêncio.
 
 Conferido com o print do Railway (03/09, fim do dia): faltam só
-`TURNSTILE_SECRET_KEY`+`VITE_TURNSTILE_SITE_KEY` (captcha desligado) e
+`TURNSTILE_SECRET_KEY`+`VITE_TURNSTILE_SITE_KEY` (captcha desligado —
+**decisão do dono 03/09: não quer o Turnstile por ora; não lembrar de
+novo, só se ele pedir ou se aparecer cadastro em massa de robô**) e
 `CANAIS_ENCRYPTION_KEY`. Resend, VAPID, APP_URL, OpenAI, DataJud e App
 Secret da Meta se resolvem pelo painel admin/banco/default — o dono
 confirmou Meta cadastrada e verificada, e os eventos `PAYMENT_RECEIVED`/
