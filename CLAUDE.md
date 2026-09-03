@@ -4,14 +4,14 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — meta: 910+ verdes
+pnpm test               # vitest (server/**/*.test.ts) — 4.696 verdes em 03/09/2026 (327 arquivos, ~4 min)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
 ```
 
 ## Branches e deploy
 
-- Branch de trabalho: `claude/setup-railway-environments-QadcF`
+- Branch de trabalho: `claude/platform-audit-failures-jbb66j` (a sessão recebe a sua; esta é a de 03/09)
 - Fluxo: feature branch → PR → merge em `develop` → PR `develop → main` → deploy production via Railway
 - `develop` dispara deploy de **staging**; `main` dispara **production**
 - Migrations em `drizzle/NNNN_*.sql` (numeração sequencial, ALTER TABLE com defaults pra ser non-destrutivo)
@@ -274,9 +274,56 @@ resize (teclado do Android apagava a assinatura desenhada).
 - `/uploads` é servido com auth de sessão + checagem de escritório
   (exceção pública: `/uploads/pareceres/` — capability-URL por design).
 
+## Auditoria de lançamento (03/09/2026) — LER ANTES DE MEXER EM QUALQUER COISA
+
+Lançamento comercial **10/09**. Relatório em
+`docs/auditoria-lancamento-2026-09-03.md` (15 bloqueadores conferidos um a
+um no código, P1 agrupado por causa-raiz, ordem proposta pros 7 dias);
+lista completa com arquivo:linha, sintoma e fix de cada um dos 237 achados
+em `docs/auditoria-lancamento-2026-09-03-achados.md`. **Nada foi corrigido
+na auditoria** — valem a regra do mockup e a de nunca remover.
+
+P0 em uma linha cada (detalhe e linhas no relatório):
+- **A · cruzamento entre escritórios (8)** — `id` do client usado sem
+  `escritorioId`: `crm.enviarMensagem` (grava e ENVIA pelo WhatsApp alheio),
+  `iniciarConversa`/`criarConversa` (canalId), `criarLead`/`iniciarChamada`
+  (contatoId), `kanban.deletarFunil`, `criarCard`/`editarCard`,
+  `permissoes.atualizarCargo`, `assinaturas.excluir`,
+  `atendimentoIa.linhaTempoUnificada`. Fix sem tela: amarrar como as
+  procedures vizinhas já fazem; teste por mutação em cada uma.
+- **B · assinatura do próprio JuridFlow (4)** — trocar de plano cancela a
+  paga ANTES de pagar a nova; "Continuar para pagamento" derruba o trial na
+  hora; webhook `SUBSCRIPTION_*` ativa sem pagamento; "Começar grátis" e
+  cadastro via Google nunca iniciam o trial (**decisão do dono**: plano
+  padrão × botão "Testar grátis").
+- **C · dinheiro** — taxa do Asaas vira despesa 2× (webhook + cron do extrato).
+- **D · admin** — "Excluir conta permanentemente" na Equipe exclui o DONO
+  (`AdminClients.tsx:1693` usa `userId` do prop, não `current`).
+- **E · Twilio** — "Ligar" liga pro CLIENTE com mensagem de teste
+  (**decisão do dono**: esconder o botão é remoção).
+
+Regressão da entrega de 02/09 que entra no P1: o `maskPhoneBR` local do
+Atendimento (`Atendimento.tsx:471`) não corta o DDI — deep-link
+`?telefone=` com número do cadastro `5585…` preenche `(55) 85997-9657` e o
+envio vai pra número inválido. Fix: delegar pra `mascararTelefoneBR` do
+shared (atendimento-x1).
+
+Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
+da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
+`META_APP_SECRET_EXTRA` (é isso que alimenta o HMAC do webhook;
+`META_APP_SECRET` de env é do Embedded Signup e NÃO vale pro HMAC),
+`TURNSTILE_SECRET_KEY`, `SENTRY_DSN_BACKEND`, `RESEND_API_KEY`/`FROM_EMAIL`,
+`VAPID_*`, `ENCRYPTION_KEY`/`CANAIS_ENCRYPTION_KEY`, `APP_URL`; quais
+eventos de webhook estão ligados na conta Asaas (decide o auth-3); cadastros
+nos tribunais + "Testar tudo"; Meta (14 dias sem disparo frio); revisão
+jurídica dos Termos v2. Só `JWT_SECRET` e `DATABASE_URL` derrubam o boot se
+faltarem — o resto falha em silêncio.
+
 ## Fila combinada com o dono (31/08/2026)
 
-Ordem que ele pediu. Não pular sem ele mandar.
+Ordem que ele pediu. Não pular sem ele mandar. Estado conferido em 03/09:
+A aberto (aguarda o dono escolher), B entregue como F, C parcial (abaixo),
+D parado na decisão dele, E/F/G/H entregues.
 
 ### A. JurisIA — auditoria feita 31/08, aguardando ele escolher por onde começar
 
@@ -314,8 +361,8 @@ documentos do cliente" não se sustenta nos planos vendidos).
 Ele validou vinculação em OUTRO estado (TJMT ok além do TJCE) e quer cobrir
 todos. Print do Cofre: 2 validados, 10 com "login falhou". Achado dele que
 muda o desenho: **no PJe às vezes o acesso é separado por 1º e 2º grau**, e
-tem **Justiça Federal** além da estadual. Plano ainda não traçado — é o
-próximo assunto depois do que estiver em curso.
+tem **Justiça Federal** além da estadual. **→ ENTREGUE como F (01/09)**;
+segue com o dono criar os cadastros nos tribunais e rodar "Testar tudo".
 
 ### C. Nome do contato no Atendimento (mockup entregue 31/08)
 
@@ -329,6 +376,10 @@ deixa de ser "sem dado", então gira eternamente. Só a Milena vê porque o
 cargo dela é verProprios e o lead não é dela. Fix: separar carregando de
 vazio (vale pra tela toda). Decisão do dono em aberto: quem ATENDE a conversa
 deveria poder abrir a ficha do contato? (mudar isso mexe na regra de acesso).
+**Estado 03/09**: (2) resolvido — `Clientes.tsx:2919` separa carregando de
+vazio ("Não foi possível abrir este cadastro", com cadeado) e a decisão de
+acesso virou a entrega H; (1) editar o nome inline NÃO foi feito, aguarda o
+"pode fazer" dele.
 
 ### D. Card "Recebido" do Relatório Comercial — PARADO na decisão do dono (01/09)
 
@@ -525,7 +576,10 @@ cliente não aparece na LISTA de Clientes dela — ela chega nele pela conversa.
 
 ## Pendências ativas (19/08/2026)
 
-Lista completa e priorizada em `docs/auditoria-2026-08-18.md`. As quentes:
+Lista completa e priorizada em `docs/auditoria-2026-08-18.md` — cada item
+de lá tem o estado conferido no código em 03/09 (bloco "Estado em
+03/09/2026" no próprio arquivo). Dos abaixo, 1, 3, 4 e 5 seguem abertos;
+2 depende só do dono. As quentes:
 
 -1. **Auditoria pré-lançamento (25/08)** — plano aprovado pelo dono em 4
    passos. ① créditos/limites pelo catálogo: **ENTREGUE 25/08**.

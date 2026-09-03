@@ -9,6 +9,32 @@ Método: métrica por router (procedures × filtros de tenant × gates), caça a
 query por id sem amarração de escritório (165 candidatos, todos verificados
 um a um), leitura dirigida dos módulos sensíveis.
 
+## Estado em 03/09/2026 (conferido no código, item a item)
+
+Lista abaixo NÃO foi reescrita — só anotada. Achados novos (237, com 15
+bloqueadores) estão em `auditoria-lancamento-2026-09-03.md` e
+`auditoria-lancamento-2026-09-03-achados.md`.
+
+| Item | Estado | Evidência |
+|---|---|---|
+| Corrigidos 1–4 | em produção | — |
+| P0-1 Privacidade sem OpenAI/Anthropic | **RESOLVIDO 24/08** (Termos v2) | `Privacidade.tsx` lista OpenAI/Anthropic como suboperadores; revisão jurídica do texto segue com o dono |
+| P0-2 HMAC brando | ABERTO | `whatsapp-cloud-webhook.ts` ~410: `mode === "no-secret"` só loga warn. O secret vem de `admin_integracoes` (painel) ou `META_APP_SECRET_EXTRA`; `META_APP_SECRET` (env) é do Embedded Signup e NÃO alimenta o HMAC |
+| P0-3 Robô de jornada 32s | ABERTO | instrumentação grava; ninguém olhou a medição |
+| P1-4 CSP desligado | ABERTO | `server/_core/index.ts:103` `contentSecurityPolicy: false` |
+| P1-5 Body-parser 3GB | ABERTO | `index.ts:137,146` `limit: "3gb"` |
+| P1-6 Conferências no executor | ABERTO | `router-admin-jornada.ts:50` só expõe a lista pro painel; `jornada/executor.ts` não as roda |
+| P1-7 Cron do robô | ABERTO | nenhum cron cita jornada |
+| P1-8 DNS rebinding | ABERTO | `smartflow/executores.ts:292` — o comentário admite |
+| P2-9 Roadmap expõe nome | ABERTO | `router-roadmap.ts:283,295` |
+| P2-10 `push.desinscrever` sem dono | ABERTO | `routers/push.ts:38-43` remove por endpoint |
+| P2-11 Assinaturas sem gate | ABERTO — e piorou: `excluir` apaga os campos de assinatura ALHEIA antes do delete escopado (assinaturas-1, P0 de 03/09) | `router-assinaturas.ts` sem `checkPermission` |
+| P2-12 Seletor de credencial | não re-conferido | — |
+| P2-13/14 SmartFlow blocos/redundâncias | decisão de produto; "Enviar template" entrou 27/08 | — |
+| P2-15 Ponto | decisão do dono | — |
+| P2-16 Cache de fontes (32s) | ABERTO | — |
+| Bug: lembrete WhatsApp na Agenda | **PARCIAL** — `Agenda.tsx:3191` desabilita Email/WhatsApp; `NovoCompromissoDialog.tsx:253-259` NÃO desabilita, e os lembretes criados por ele nunca disparam (`db-agendamento.ts:60` grava sem `dispararEm`) | agenda-1 / shell-2 (03/09) |
+
 ## Corrigido DURANTE a auditoria (já em produção)
 
 | # | Achado | Gravidade | Fix |

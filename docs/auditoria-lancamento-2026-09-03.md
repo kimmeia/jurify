@@ -178,8 +178,10 @@ etc. Lista completa no arquivo de achados. Não seguram o lançamento.
 
 ## Só o dono pode fazer (fora do código)
 
-- **Railway (produção)**: conferir que existem `META_APP_SECRET` (HMAC do
-  webhook está em modo brando sem ele), `TURNSTILE_SECRET_KEY` (captcha
+- **Railway (produção)**: conferir o App Secret da Meta **no painel admin**
+  (Integrações → WhatsApp Cloud) ou em `META_APP_SECRET_EXTRA` — é isso que
+  alimenta o HMAC do webhook, que está em modo brando sem ele (`META_APP_SECRET`
+  de env é do Embedded Signup e NÃO vale pro HMAC); `TURNSTILE_SECRET_KEY` (captcha
   fail-open sem ele), `SENTRY_DSN_BACKEND`, `RESEND_API_KEY` + `FROM_EMAIL`
   (apontando pro endereço certo), `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`
   (push), `ENCRYPTION_KEY` + `CANAIS_ENCRYPTION_KEY`, `APP_URL`. Só
