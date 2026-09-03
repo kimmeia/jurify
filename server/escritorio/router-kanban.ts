@@ -6,11 +6,13 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
-import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanComentarios, kanbanResponsavelLog, kanbanTags, contatos, colaboradores, clienteProcessos, users } from "../../drizzle/schema";
+import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanComentarios, kanbanResponsavelLog, kanbanTags, contatos, colaboradores, clienteProcessos, users, escritorios } from "../../drizzle/schema";
 import { eq, and, desc, asc, like, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "./check-permission";
-import { casaBusca, casaTag, condicoesCards, recortarColunas, rotuloColunas } from "./kanban-filtros";
+import { casaBusca, casaTag, condicoesCards, prazoCardParaGravar, recortarColunas, rotuloColunas } from "./kanban-filtros";
+import { prazoCalendarioVencido } from "../_core/dates";
+import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 
 /** Verifica se o colaborador pode mexer nesse card quando a permissão é
  *  "verProprios" only. Considera owner = responsavelId. */
@@ -29,6 +31,15 @@ async function podeMexerNoCard(
 }
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+async function fusoDoEscritorio(db: Db, escritorioId: number): Promise<string> {
+  const [e] = await db
+    .select({ fusoHorario: escritorios.fusoHorario })
+    .from(escritorios)
+    .where(eq(escritorios.id, escritorioId))
+    .limit(1);
+  return e?.fusoHorario || FUSO_HORARIO_PADRAO;
+}
 
 // `clienteId`/`responsavelId` chegam do client como número solto. Sem conferir
 // o escritório, o card exibia contato alheio e a notificação de atribuição ia
@@ -354,6 +365,7 @@ export const kanbanRouter = router({
         colunasIds,
         filtros: input,
         travarNoColaborador: filtrarProprios ? perm.colaboradorId : null,
+        fusoHorario: await fusoDoEscritorio(db, perm.escritorioId),
       });
 
       const todosCards = await db
@@ -483,7 +495,7 @@ export const kanbanRouter = router({
       // Se não informou prazo, aplica prazo padrão do funil
       let prazo: Date | null = null;
       if (input.prazo) {
-        prazo = new Date(input.prazo);
+        prazo = prazoCardParaGravar(input.prazo);
       } else {
         // Buscar funil da coluna pra pegar prazoPadraoDias
         const [col] = await db.select({ funilId: kanbanColunas.funilId }).from(kanbanColunas)
@@ -578,7 +590,7 @@ export const kanbanRouter = router({
       if (update.descricao !== undefined) setData.descricao = update.descricao;
       if (update.cnj !== undefined) setData.cnj = update.cnj;
       if (update.prioridade) setData.prioridade = update.prioridade;
-      if (update.prazo !== undefined) setData.prazo = update.prazo ? new Date(update.prazo) : null;
+      if (update.prazo !== undefined) setData.prazo = update.prazo ? prazoCardParaGravar(update.prazo) : null;
 
       // Tags single-source: descobre o clienteId atual do card (vindo do
       // input ou já armazenado). Se tem cliente, escreve em contatos.tags
@@ -1541,13 +1553,17 @@ export const kanbanRouter = router({
       const eventos: Evento[] = [];
       eventos.push({ tipo: "criado", createdAt: card.createdAt });
 
+      // O prazo é data-calendário e o dia inteiro é do usuário: concluir às
+      // 15h do dia do prazo não é atraso, embora 12:00Z já tenha passado.
+      const fusoHistorico = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+
       for (const m of movs) {
         const destino = infoColuna.get(m.colunaDestinoId);
         const origem = infoColuna.get(m.colunaOrigemId);
         const ehConclusao = destino?.tipo === "conclusao";
         let concluidoEmAtraso: boolean | null = null;
         if (ehConclusao && card.prazo) {
-          concluidoEmAtraso = m.createdAt.getTime() > card.prazo.getTime();
+          concluidoEmAtraso = prazoCalendarioVencido(card.prazo, m.createdAt, fusoHistorico);
         }
         eventos.push({
           tipo: "movimentacao",
@@ -1598,8 +1614,7 @@ export const kanbanRouter = router({
           .filter((m) => infoColuna.get(m.colunaDestinoId)?.tipo === "conclusao")
           .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
         if (ultimaMovConclusao) {
-          concluidoEmAtraso =
-            ultimaMovConclusao.createdAt.getTime() > card.prazo.getTime();
+          concluidoEmAtraso = prazoCalendarioVencido(card.prazo, ultimaMovConclusao.createdAt, fusoHistorico);
         }
       }
 
@@ -1733,6 +1748,7 @@ export const kanbanRouter = router({
             colunasIds: escolhidas.map((c) => c.id),
             filtros,
             travarNoColaborador: filtrarProprios ? perm.colaboradorId : null,
+            fusoHorario: esc.escritorio.fusoHorario,
           })))
           // O pedido é sempre do cadastro mais recente pro mais antigo.
           .orderBy(desc(kanbanCards.createdAt), desc(kanbanCards.id));

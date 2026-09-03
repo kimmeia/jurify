@@ -71,9 +71,10 @@ import {
 import { toast } from "sonner";
 import { formatBRL, useFinanceiroPerms } from "./helpers";
 import { AnexosFinanceiro } from "./Anexos";
+import { dataLocalHoje } from "@shared/data-calendario";
 
 function hojeIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return dataLocalHoje();
 }
 
 function inicioDoMesIso(): string {

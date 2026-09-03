@@ -335,6 +335,43 @@ excluída"). **E (Twilio) em stand-by por decisão do dono.** Amarras:
 `assinatura-troca-sem-cancelar`, `admin-excluir-conta-alvo` — 58 mutações
 conferidas (12+16+9+8+13), todas vermelhas.
 
+**Entregue 03/09 (noite), P1 por causa-raiz — aprovado com o mockup
+navegável `mockup-correcoes-p1.html`**:
+- **Fuso (11)**: servidor — `distribuirLead` decide expediente no fuso do
+  escritório; prazo data-só do Kanban é gravado como MEIO-DIA UTC e
+  "atrasado" = passou o fim do dia civil no fuso (`corteVencimentoCalendario`
+  em `_core/dates.ts`; cron `verificarPrazosKanban` faz um UPDATE por
+  fuso); filtro "Criado em", Dashboard/`notificarPrazos` (hora no fuso,
+  "vence hoje" por dia civil), `cobrancas-scheduler` ("vencida" só com ≥1
+  dia civil de atraso) e `prazosSugeridos.aprovar` (`dataCalendarioNoFuso`).
+  Telas — `shared/data-calendario.ts` (`formatarDataCalendario` em UTC,
+  `dataLocalHoje` pelas partes locais) aplicado em Movimentações,
+  Processos, drawer, Kanban, financeiro (cobrança/despesa) e admin. Fica
+  anotado sem mexer: `Processos.tsx` `abrirAprovar` cai em "agora" UTC no
+  fallback; `dataEvento` das movimentações segue formatada local.
+- **Lembretes (4)**: `criarAgendamento` grava `dispararEm` e destinatário =
+  responsável; cron filtra por `colaboradores.id`; `NovoCompromissoDialog`
+  desabilita E-mail/WhatsApp com "em breve" (mesmo padrão da Agenda);
+  Agenda zera lembretes ao hidratar o form. Resíduo pré-existente: salvar
+  a edição antes de `listarLembretes` responder manda lista vazia.
+- **DDI (6)**: `telefoneParaWaMe` (shared) nos 3 hrefs da Agenda e na
+  assinatura; `maskPhoneBR`/`formatTel` viraram wrappers de
+  `mascararTelefoneBR`; contato duplicado corrigido na LEITURA
+  (`buscarContatoPorTelefone` casa formas com/sem 55 e com/sem 9) — NÃO na
+  gravação, de propósito: normalizar mudaria como o número aparece na
+  lista de Clientes (mudança visível sem mockup). `wa.me` à mão que
+  ficaram de fora (mesmo bug, fora do pedido): `Atendimento.tsx` popup de
+  chamada, `fila-chamadas.tsx`, `Acordos.tsx`.
+- **Aviso de clique (26)**: `avisarFalhaSemTratamento` no MutationCache
+  (`main.tsx`) — toast só quando a mutation não tem `onError` nem
+  `meta.semAvisoGlobal` (só "Esqueci a senha", decisão do dono); texto em
+  `shared/mensagem-de-falha.ts`.
+Amarras: `fuso-escritorio-servidor`, `fuso-escritorio-crons`,
+`data-calendario`, `fuso-telas-usam-helper`, `lembretes-compromisso`,
+`lembretes-dialogo-canais`, `telefone-wame`, `contato-telefone-sem-ddi`,
+`ddi-telas-usam-helper`, `aviso-global-mutation` — 86 mutações conferidas
+(31+22+13+13+7), todas vermelhas.
+
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
 `META_APP_SECRET_EXTRA` (é isso que alimenta o HMAC do webhook;

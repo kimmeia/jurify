@@ -32,6 +32,12 @@ const LEMBRETE_PRESETS: Array<{ label: string; minutos: number }> = [
   { label: "2 dias antes", minutos: 2880 },
 ];
 
+const CANAIS_LEMBRETE: Array<{ id: Lembrete["tipo"]; label: string; Icon: typeof Bell }> = [
+  { id: "notificacao_app", label: "Notificação", Icon: Bell },
+  { id: "email", label: "Email", Icon: Mail },
+  { id: "whatsapp", label: "WhatsApp", Icon: MessageCircle },
+];
+
 const DURACOES: Array<{ label: string; min: number }> = [
   { label: "15 minutos", min: 15 },
   { label: "30 minutos", min: 30 },
@@ -267,9 +273,17 @@ export function NovoCompromissoDialog({
                 <Select value={l.tipo} onValueChange={(v) => atualizarLembrete(idx, { tipo: v as Lembrete["tipo"] })}>
                   <SelectTrigger className="h-8 text-xs w-[140px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="notificacao_app"><span className="flex items-center gap-1.5"><Bell className="h-3 w-3" /> Notificação</span></SelectItem>
-                    <SelectItem value="email"><span className="flex items-center gap-1.5"><Mail className="h-3 w-3" /> Email</span></SelectItem>
-                    <SelectItem value="whatsapp"><span className="flex items-center gap-1.5"><MessageCircle className="h-3 w-3" /> WhatsApp</span></SelectItem>
+                    {CANAIS_LEMBRETE.map((c) => {
+                      const disabled = c.id !== "notificacao_app"; // Email/WhatsApp ainda não dispatcheados
+                      return (
+                        <SelectItem key={c.id} value={c.id} disabled={disabled}>
+                          <span className="flex items-center gap-1.5">
+                            <c.Icon className="h-3 w-3" /> {c.label}
+                            {disabled && <span className="text-muted-foreground">· em breve</span>}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
                 <Select value={String(l.minutosAntes)} onValueChange={(v) => atualizarLembrete(idx, { minutosAntes: Number(v) })}>

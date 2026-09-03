@@ -30,6 +30,7 @@ import { InadimplentesSection } from "./financeiro/InadimplentesSection";
 import { CuponsSection } from "./financeiro/CuponsSection";
 import { PlanosSection } from "./financeiro/PlanosSection";
 import { KPICard } from "../dashboards/common";
+import { formatarDataCalendario } from "@shared/data-calendario";
 
 function formatBRL(cents: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -485,7 +486,7 @@ export default function AdminFinanceiro() {
                           <StatusPagamentoBadge status={p.status} />
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {new Date(p.dueDate).toLocaleDateString("pt-BR")}
+                          {formatarDataCalendario(p.dueDate)}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
@@ -570,7 +571,7 @@ export default function AdminFinanceiro() {
                           <StatusSubBadge status={s.status} />
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {s.nextDueDate ? new Date(s.nextDueDate).toLocaleDateString("pt-BR") : "—"}
+                          {s.nextDueDate ? formatarDataCalendario(s.nextDueDate) : "—"}
                         </TableCell>
                         <TableCell className="text-right">
                           {s.status === "ACTIVE" && (

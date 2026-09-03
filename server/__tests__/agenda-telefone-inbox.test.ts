@@ -123,8 +123,10 @@ describe("o WhatsApp Web não foi removido", () => {
 
   it("continua nas duas telas que mostram o telefone", () => {
     // Regra do dono: nada sai sem autorização expressa. O atalho mudou de
-    // lugar (virou ícone ao lado), não desapareceu.
-    const links = agenda.match(/https:\/\/wa\.me\/55\$\{String\(/g) ?? [];
+    // lugar (virou ícone ao lado), não desapareceu. O link é montado por
+    // `telefoneParaWaMe` — o `wa.me/55` fixo prefixava 55 em número que já
+    // vinha com o 55 do WhatsApp (wa.me/555585…).
+    const links = agenda.match(/href=\{telefoneParaWaMe\(String\(/g) ?? [];
     expect(links.length).toBe(2);
   });
 
