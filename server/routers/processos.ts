@@ -42,7 +42,7 @@ import { ambienteSuportaTeste } from "../_core/ambiente";
 import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resumir-movimentacao";
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
-import { SISTEMA_PJE_NACIONAL, tribunalRequerCredencial } from "../processos/tribunais-pdpj";
+import { SISTEMA_PJE_NACIONAL, sistemasQueAtendem, tribunalRequerCredencial } from "../processos/tribunais-pdpj";
 import { normalizarTribunais } from "../../shared/tribunais-pje";
 import { normalizarCnj, mascararCnj, validarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import {
@@ -314,8 +314,10 @@ export const processosRouter = router({
       // Se `credencialId` foi informado, exige que ela seja do escritório,
       // compatível com o tribunal e ativa — caso contrário pega a primeira
       // ativa do sistema correto.
+      // Pra TRF o `sistemaCofre` já É a nacional: montar a lista a partir dele
+      // deixava a credencial cadastrada como pje_trf1 fora da escolha.
       const escolha = await escolherCredencial(db, esc.escritorio.id, {
-        sistemas: [sistemaCofre, SISTEMA_PJE_NACIONAL],
+        sistemas: sistemasQueAtendem(tribunal.codigoTribunal),
         credencialId: input.credencialId,
       });
       let credencial: typeof cofreCredenciais.$inferSelect[] = escolha.cred ? [escolha.cred] : [];
@@ -846,7 +848,7 @@ export const processosRouter = router({
       // Mesmo seletor do `consultarCNJ` — de fato o mesmo, agora, e não uma
       // cópia com a nota dizendo que é igual.
       const escolhido = await escolherCredencial(db, esc.escritorio.id, {
-        sistemas: [sistemaCofre, SISTEMA_PJE_NACIONAL],
+        sistemas: sistemasQueAtendem(tribunal.codigoTribunal),
         credencialId: input.credencialId,
       });
       let credencial: typeof cofreCredenciais.$inferSelect[] = escolhido.cred
@@ -856,7 +858,7 @@ export const processosRouter = router({
       // é o que o usuário espera de um campo opcional.
       if (credencial.length === 0 && input.credencialId) {
         const auto = await escolherCredencial(db, esc.escritorio.id, {
-          sistemas: [sistemaCofre, SISTEMA_PJE_NACIONAL],
+          sistemas: sistemasQueAtendem(tribunal.codigoTribunal),
         });
         if (auto.cred) credencial = [auto.cred];
       }
@@ -1293,6 +1295,27 @@ export const processosRouter = router({
         credencialIdParaSalvar = input.credencialId;
       }
 
+      const cnjMascarado = mascararCnj(input.numeroCnj);
+
+      // "Monitorar" duas vezes (ou monitorar o que já está na lista) criava
+      // duas linhas e cobrava duas vezes — a tabela não tem UNIQUE por CNJ.
+      // O existente responde sem cobrar e sem passar pelo limite, que ele
+      // já ocupa.
+      const [existente] = await db
+        .select({ id: motorMonitoramentos.id, status: motorMonitoramentos.status })
+        .from(motorMonitoramentos)
+        .where(
+          and(
+            eq(motorMonitoramentos.escritorioId, esc.escritorio.id),
+            eq(motorMonitoramentos.tipoMonitoramento, "movimentacoes"),
+            eq(motorMonitoramentos.searchKey, cnjMascarado),
+          ),
+        )
+        .limit(1);
+      if (existente) {
+        return { id: existente.id, custoCred: 0, jaExistia: true as const, status: existente.status };
+      }
+
       // Limite do plano ANTES de cobrar crédito — recusar depois de cobrar
       // seria cobrança sem entrega.
       const { verificarLimiteMonitoramentos } = await import("../processos/limites-monitoramento");
@@ -1310,7 +1333,6 @@ export const processosRouter = router({
         `Monitor CNJ ${input.numeroCnj} (${tribunal.siglaTribunal})`,
       );
 
-      const cnjMascarado = mascararCnj(input.numeroCnj);
       const result = await db.insert(motorMonitoramentos).values({
         escritorioId: esc.escritorio.id,
         criadoPor: ctx.user.id,
@@ -1333,7 +1355,7 @@ export const processosRouter = router({
         "[motor-proprio] monitoramento de processo criado",
       );
 
-      return { id: insertId, custoCred: CUSTOS.monitorar_processo_mes };
+      return { id: insertId, custoCred: CUSTOS.monitorar_processo_mes, jaExistia: false as const };
     }),
 
   pausarMonitoramento: protectedProcedure

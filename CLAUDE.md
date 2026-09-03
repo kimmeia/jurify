@@ -372,6 +372,58 @@ Amarras: `fuso-escritorio-servidor`, `fuso-escritorio-crons`,
 `ddi-telas-usam-helper`, `aviso-global-mutation` — 86 mutações conferidas
 (31+22+13+13+7), todas vermelhas.
 
+**Entregue 03/09 (madrugada), mockup `mockup-correcoes-p1b.html` — o dono
+aprovou SÓ as abas Kanban e Processos/Cofre ("o resto não entendi"; as
+abas Permissões, Admin: planos e Outros seguem aguardando)**:
+- **Kanban (5 de 6)**: painel do card manda `""`/`null` e o servidor grava
+  vazio (`editarCard` aceita `prazo: null`, normaliza cnj/descrição/tags
+  vazios pra NULL); `atrasado` recalculado em `editarCard` (prazo novo) e
+  `moverCard` (conclusão = false; coluna normal = pelo prazo, via
+  `cardVenceAtrasado`), cron `verificarPrazosKanban` exclui colunas de
+  conclusão por subconsulta e o quadro não pinta card concluído; excluir
+  coluna: `previaExcluirColuna` conta no SERVIDOR (total/no quadro/
+  arquivados, sem filtro, só do escritório) e `deletarColuna` ganhou
+  `modo: "arquivar"` — arquiva os do quadro, MOVE todos pra coluna vizinha
+  (`colunaVizinha`: anterior, senão seguinte; funil de coluna única →
+  PRECONDITION_FAILED) e apaga só a coluna; lixeira do card abre
+  AlertDialog Cancelar/Arquivar/Excluir e "Card excluído" tem toast;
+  `criarCard` SOMA as tags marcadas às do cadastro (`unirTags`,
+  `shared/kanban-tags.ts`) e o form já vem com as tags do cliente escolhido.
+  `moverCard` passou a recusar coluna de destino de outro escritório (era
+  o kanban-x2, veio junto porque a consulta do tipo da coluna já é
+  escopada). **kanban-x1 (prazo em branco vira 15 dias) NÃO foi feito** —
+  o dono ainda não escolheu entre A (em branco = sem prazo) e B (rótulo
+  "padrão 15 dias" editável no funil); o default continua no `criarCard`.
+  Amarras: `kanban-campo-vazio-atraso-coluna-tags`,
+  `kanban-atrasado-cron-conclusao`, `kanban-excluir-coluna` (atualizado
+  pros textos novos) — 21 mutações conferidas, todas vermelhas.
+- **Processos e Cofre (5)**: `criarMonitoramento` busca monitor existente
+  (escritório + tipo + `searchKey` mascarado) ANTES do limite e da cobrança
+  e devolve `{ jaExistia: true, custoCred: 0, status }` — as 3 mutations da
+  tela avisam "já está monitorado — nada foi cobrado" e o botão trava com
+  `isPending`; `executarAdvbox` lê `verificarLimiteMonitoramentos` uma vez
+  e, a partir da vaga esgotada, NÃO cobra nem insere: linha vai pra `erros`
+  com "Limite do plano (N processos vigiados)" e conta em
+  `monitoramentosLimitePlano` (card "Fora do limite do plano" no dialog);
+  "Cadastrar e testar login" agora testa: `cadastrarMinha` continua só
+  inserindo, mas o client encadeia `validarAposCadastroMut` (hook próprio
+  de `validarMinha`, com ramificação certa ok/semCobertura/erro — o
+  `validarMut` do botão "Validar" ficou intocado, é o processos-4, fora do
+  pedido) e os seletores de Novas Ações/Importar aceitam `validando` (o
+  servidor da importação também: `inArray(status, ["ativa","validando"])`);
+  menu do card de monitoramento usa `pausado` (`status === "pausado" ||
+  "paused"`) — Pausar/Reativar nunca apareciam porque testavam
+  created/updated/paused do Judit, e `pausarMut`/`reativarMut` ganharam
+  onError; `configPorSistema` aceita `pje_trfN` (regex
+  `/^pje_((?:tj|trf)[a-z0-9]+)$/`) e `sistemasQueAtendem(tribunal)` =
+  [específico se está no REGISTRO, nacional] alimenta `escolherCredencial`
+  em `consultarCNJ`/`consultarCNJSincrono` — sem isso a credencial
+  `pje_trf1` nunca era escolhida pra processo do TRF1 porque
+  `sistemaCofrePorTribunal("trf1")` é a nacional (isso NÃO mudou; o import
+  depende). Amarra: `processos-cofre-lancamento` (26 testes) — 14 mutações
+  conferidas, todas vermelhas. Dois `expect` de `cofre-multi-tribunal` e
+  `monitoramento-credencial` foram atualizados pro literal novo.
+
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
 `META_APP_SECRET_EXTRA` (é isso que alimenta o HMAC do webhook;
