@@ -25,6 +25,12 @@ com arquivo:linha, trecho de código, sintoma e fix de cada um, está em
 visível, e nada é removido sem autorização expressa. Cada item abaixo diz
 se o fix muda tela (precisa de mockup) ou não.
 
+> **Estado em 03/09 (fim do dia)**: o dono aprovou o mockup
+> `mockup-correcoes-bloqueadores.html` e os grupos **A, B, C e D foram
+> entregues** (B com a opção 2 do teste grátis: botão "Testar grátis por N
+> dias" por plano). **E (Twilio) ficou em stand-by** por decisão dele.
+> Detalhes e amarras no `CLAUDE.md`, bloco "Entregue 03/09".
+
 ---
 
 ## P0 — bloqueiam o lançamento (15, todos conferidos)

@@ -239,6 +239,14 @@ export const assinaturasRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
 
+      // assinatura_campos só tem assinaturaId: conferir o dono ANTES do
+      // cascade, senão os campos de uma assinatura alheia somem e o link
+      // público dela cai no modo legado.
+      const [assinatura] = await db.select().from(assinaturasDigitais)
+        .where(and(eq(assinaturasDigitais.id, input.id), eq(assinaturasDigitais.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!assinatura) throw new Error("Assinatura não encontrada.");
+
       // Cascade: campos posicionais são órfãos sem a assinatura mãe.
       try {
         await db.delete(assinaturaCampos).where(eq(assinaturaCampos.assinaturaId, input.id));
