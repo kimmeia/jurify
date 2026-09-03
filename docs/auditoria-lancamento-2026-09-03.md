@@ -30,6 +30,12 @@ se o fix muda tela (precisa de mockup) ou não.
 > entregues** (B com a opção 2 do teste grátis: botão "Testar grátis por N
 > dias" por plano). **E (Twilio) ficou em stand-by** por decisão dele.
 > Detalhes e amarras no `CLAUDE.md`, bloco "Entregue 03/09".
+>
+> **Noite de 03/09**: dos P1 por causa-raiz, **1 (fuso), 2 (lembretes), 3
+> (DDI) e 5 (aviso de clique) foram entregues** (mockup
+> `mockup-correcoes-p1.html` aprovado). Seguem abertos: P1-4 (permissões),
+> 6 (Kanban), 7 (Processos/Cofre), 8 (planos hardcoded do admin), 9
+> (outros) e os P2.
 
 ---
 
