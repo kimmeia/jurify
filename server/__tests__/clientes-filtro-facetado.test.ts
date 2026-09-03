@@ -180,11 +180,14 @@ describe("o menu estreito continua dizendo o nome de cada item", () => {
      * rótulo nenhum. A amarra anterior conferia a STRING do seletor, então
      * passou verde o tempo todo.
      *
-     * Daí a proibição ser só de `data-collapsible` no CSS: é o atributo que
-     * nenhuma classe nossa alcança. `[data-sidebar=...]` sozinho casa e não
-     * tem culpa nenhuma.
+     * O que quebra é o COMPOSTO — classe nossa colada no atributo, os dois
+     * exigidos no mesmo elemento. A forma descendente
+     * `[data-collapsible="icon"] .alguma-classe` casa perfeitamente e não tem
+     * culpa nenhuma; index.css é a folha do app inteiro (AdminLayout,
+     * DashboardLayout, LP) e proibir o atributo inteiro vetava até o comentário
+     * que explica esta regra.
      */
-    expect(css).not.toContain("data-collapsible");
+    expect(css).not.toMatch(/[.\w-]\[data-collapsible/);
   });
 
   it("o botão deixa de ser 32px e vira coluna quando o menu recolhe", () => {
@@ -214,9 +217,39 @@ describe("o menu estreito continua dizendo o nome de cada item", () => {
     // O "Assinar plano" ficou 32px de fundo chapado ao lado de itens de 39px
     // enquanto tinha className próprio. Compartilhar a constante é o que
     // impede a segunda cópia de envelhecer sozinha.
-    expect(layout.match(/\$\{CLASSES_ITEM_RAIL\}/g) ?? []).toHaveLength(2);
-    // 1 definição + 1 rótulo do menu + 1 do "Assinar plano"
-    expect(layout.match(/CLASSES_ROTULO_RAIL/g) ?? []).toHaveLength(3);
+    //
+    // Contar MENÇÃO do identificador não serve: trocar `className={X}` por
+    // `title={X}` mantém a contagem e quebra a tela. Por isso as duas costuras
+    // são conferidas no ponto de USO, dentro de um className.
+    for (const uso of [
+      "className={`relative h-[34px] transition-all ${CLASSES_ITEM_RAIL}",
+      "className={`relative h-9 transition-all font-normal ${CLASSES_ITEM_RAIL}`}",
+      "<span className={`flex-1 rotulo-item ${CLASSES_ROTULO_RAIL}`}>",
+      "<span className={CLASSES_ROTULO_RAIL}>Assinar plano</span>",
+    ]) {
+      expect(layout, uso).toContain(uso);
+    }
+  });
+
+  it("o componente-base continua deixando o rótulo aparecer", () => {
+    /*
+     * Tudo aqui depende do shadcn NÃO esconder o rótulo no modo ícone: se
+     * `sidebarMenuButtonVariants` ganhar um `hidden` sob
+     * `group-data-[collapsible=icon]:`, voltam os 16 ícones anônimos e nenhuma
+     * asserção sobre o AppLayout enxerga isso — todas leem o consumidor.
+     * O bloco do dialog, logo acima, já prende o componente-base assim.
+     */
+    const sidebar = ler("client/src/components/ui/sidebar.tsx");
+    const variantes = sidebar.slice(
+      sidebar.indexOf("const sidebarMenuButtonVariants"),
+      sidebar.indexOf("VariantProps<typeof sidebarMenuButtonVariants>"),
+    );
+    expect(variantes).not.toMatch(/group-data-\[collapsible=icon\]:[^\s"]*hidden/);
+    // E a geometria que o override precisa vencer é ESTA. Se o shadcn trocar
+    // `size-8!`/`p-2!` por outra coisa, o desempate por ordem de emissão muda
+    // de lado e o rail volta a 32px — melhor a suíte avisar.
+    expect(variantes).toContain("group-data-[collapsible=icon]:size-8!");
+    expect(variantes).toContain("group-data-[collapsible=icon]:p-2!");
   });
 
   it("o rótulo continua na tela, menor, embaixo do ícone", () => {
@@ -239,12 +272,22 @@ describe("o menu estreito continua dizendo o nome de cada item", () => {
     // sem isto os últimos itens somem sem nem barra pra revelá-los.
     const conteudo = trecho("<SidebarContent", ">");
     expect(conteudo).toContain("group-data-[collapsible=icon]:overflow-y-auto");
+    // ...mas SEM a barra ocupando largura. `.rolagem-menu` é barra clássica
+    // (scrollbar-width: thin), que reserva espaço: medido em Chromium com barra
+    // clássica, viewport de 768px, ela comia 10px dos 72px — botão de 56 pra
+    // 46, ícones 5px fora do centro do logo e do rodapé, 5 rótulos truncando.
+    expect(conteudo).toContain("group-data-[collapsible=icon]:[scrollbar-width:none]!");
+    expect(conteudo).toContain("group-data-[collapsible=icon]:[&::-webkit-scrollbar]:w-0!");
   });
 
-  it("a borda do rail some de verdade", () => {
+  it("a borda some no rail e SÓ no rail", () => {
     // `border-r-0` sem `!` perde pro `group-data-[side=left]:border-r` do
-    // shadcn (mais específico) e sobra um fio à direita do rail.
-    expect(trecho('collapsible="icon"', ">")).toContain('className="border-r-0!"');
+    // shadcn (mais específico) e sobra um fio à direita. Com o `!` sem variante
+    // ele passava a vencer nos DOIS estados e o menu ABERTO perdia a borda que
+    // está no ar hoje — no escuro, a única divisa entre menu e conteúdo.
+    const borda = trecho('collapsible="icon"', ">");
+    expect(borda).toContain("group-data-[collapsible=icon]:border-r-0!");
+    expect(borda).not.toMatch(/[\s"]border-r-0!/);
   });
 
   it("o ponto do badge se ancora no ícone, não no canto do botão", () => {

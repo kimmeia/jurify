@@ -537,9 +537,15 @@ function AppSidebarContent({
   return (
     <>
       <div className="relative" ref={sidebarRef}>
+        {/* O `!` da borda vale SÓ no rail. Sem variante ele vence o
+            `group-data-[side=left]:border-r` do shadcn nos dois estados e o
+            menu aberto perde o fio que hoje o separa do conteúdo — no tema
+            escuro as duas superfícies diferem em 4 níveis de RGB e a borda é a
+            única divisa. O `border-r-0` cru fica: ele perde, como sempre
+            perdeu, e é isso que mantém o menu aberto igual ao que está no ar. */}
         <Sidebar
           collapsible="icon"
-          className="border-r-0!"
+          className="border-r-0 group-data-[collapsible=icon]:border-r-0!"
           disableTransition={isResizing}
         >
           {/* `shrink-0` não é decorativo: a regra global `.flex{min-height:0}`
@@ -568,7 +574,19 @@ function AppSidebarContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0 rolagem-menu group-data-[collapsible=icon]:overflow-y-auto">
+          {/* No rail a rolagem existe mas a barra não: `.rolagem-menu` é barra
+              CLÁSSICA (scrollbar-width: thin), que RESERVA largura. Medido em
+              Chromium com barra clássica, viewport de 768px: ela comia 10px dos
+              72px — botão de 56 pra 46, coluna de ícones 5px fora do centro do
+              logo e do rodapé, e 5 rótulos truncando. Ou seja, exatamente nas
+              telas baixas que motivaram a rolagem o rótulo se perdia. A roda e
+              o trackpad continuam rolando.
+
+              O `!` aqui não é gosto: `.rolagem-menu` mora no index.css FORA de
+              camada, e regra sem camada vence qualquer `@layer utilities`
+              independente de especificidade. Sem ele o `scrollbar-width`
+              continuava `thin` — conferido no navegador. */}
+          <SidebarContent className="gap-0 rolagem-menu group-data-[collapsible=icon]:overflow-y-auto group-data-[collapsible=icon]:[scrollbar-width:none]! group-data-[collapsible=icon]:[&::-webkit-scrollbar]:w-0!">
             {GRUPOS_MENU.map((grupo) => {
               const visiveis = grupo.itens.filter(itemVisivelNoMenu);
               if (visiveis.length === 0) return null;
