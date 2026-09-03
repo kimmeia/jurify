@@ -379,7 +379,8 @@ da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
 `TURNSTILE_SECRET_KEY`, `SENTRY_DSN_BACKEND`, `RESEND_API_KEY`/`FROM_EMAIL`,
 `VAPID_*`, `ENCRYPTION_KEY`/`CANAIS_ENCRYPTION_KEY`, `APP_URL`; quais
 eventos de webhook estão ligados na conta Asaas (decide o auth-3); cadastros
-nos tribunais + "Testar tudo"; Meta (14 dias sem disparo frio); revisão
+nos tribunais + "Testar tudo" (**o dono está fazendo, dando certo — 03/09,
+resolvido**); Meta (14 dias sem disparo frio); revisão
 jurídica dos Termos v2. Só `JWT_SECRET` e `DATABASE_URL` derrubam o boot se
 faltarem — o resto falha em silêncio.
 
@@ -561,6 +562,8 @@ de `<details>`; "Testar tudo" roda a bateria em série.
 **Pendente do dono**: criar os cadastros nesses tribunais e rodar "Testar
 tudo" — os endereços dos TRFs foram deduzidos do padrão e NÃO puderam ser
 conferidos daqui (o proxy do ambiente bloqueia os portais).
+**03/09: o dono está fazendo os cadastros e está dando certo — item sai
+da lista de pendências; não cobrar de novo.**
 
 ### G. Telefone e dados do contato no Atendimento — ENTREGUE 01–02/09
 
