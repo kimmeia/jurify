@@ -37,6 +37,7 @@ import { baixarBlob, base64ToBlob } from "./financeiro/helpers";
 import { TimelineCard } from "./kanban/timeline-card";
 import { ExportarPdfDialog, type ColunaExport } from "./kanban/ExportarPdfDialog";
 import { dataCalendarioISO, dataLocalHoje, formatarDataCalendario } from "@shared/data-calendario";
+import { unirTags } from "@shared/kanban-tags";
 
 const PRIORIDADE_COR: Record<string, string> = {
   alta: "border-l-red-500 bg-red-50/30 dark:bg-red-950/30",
@@ -93,7 +94,8 @@ export default function Kanban() {
   // (evita race entre HTML5 DnD nativo e reconciliador do React, que
   // causava NotFoundError "insertBefore" em boards grandes).
   const [dragCardId, setDragCardId] = useState<number | null>(null);
-  const [colunaParaExcluir, setColunaParaExcluir] = useState<{ id: number; nome: string; cards: number } | null>(null);
+  const [colunaParaExcluir, setColunaParaExcluir] = useState<{ id: number; nome: string } | null>(null);
+  const [cardParaExcluir, setCardParaExcluir] = useState<{ id: number; titulo: string; arquivado: boolean } | null>(null);
   const [dragColunaId, setDragColunaId] = useState<number | null>(null);
   // Card sobre o qual o usuário está pairando o drag (pra mostrar indicador).
   const [dragOverCardId, setDragOverCardId] = useState<number | null>(null);
@@ -182,8 +184,29 @@ export default function Kanban() {
     onSuccess: () => { toast.success("Coluna criada!"); setNovaColunaOpen(false); setNovaColunaNome(""); refetchFunil(); },
     onError: (e: any) => toast.error(e.message),
   });
+  // A contagem do diálogo de excluir coluna vem do servidor, sem o filtro do
+  // quadro: a lista da tela esconde arquivados e o que o filtro tirou.
+  const {
+    data: previaColuna,
+    isLoading: previaColunaCarregando,
+    error: previaColunaErro,
+  } = (trpc as any).kanban.previaExcluirColuna.useQuery(
+    { id: colunaParaExcluir?.id ?? 0 },
+    { enabled: !!colunaParaExcluir, retry: false, refetchOnWindowFocus: false },
+  );
   const deletarColunaMut = (trpc as any).kanban.deletarColuna.useMutation({
-    onSuccess: () => { refetchFunil(); },
+    onSuccess: (r: any) => {
+      if (r?.cardsArquivados > 0) {
+        toast.success(`Coluna “${r.coluna}” excluída`, {
+          description: `${r.cardsArquivados} card(s) arquivado(s) em “${r.movidosPara}” — continuam em “Mostrar arquivados”.`,
+        });
+      } else if (r?.cardsExcluidos > 0) {
+        toast.success(`Coluna “${r.coluna}” excluída`, { description: `${r.cardsExcluidos} card(s) apagado(s) junto.` });
+      } else {
+        toast.success(`Coluna “${r?.coluna ?? ""}” excluída`);
+      }
+      refetchFunil();
+    },
     onError: (e: any) => toast.error(e.message),
   });
   const editarColunaMut = (trpc as any).kanban.editarColuna.useMutation({
@@ -204,7 +227,7 @@ export default function Kanban() {
     onSuccess: () => {
       toast.success("Card arquivado");
       refetchFunil();
-      refetchDetalhe();
+      if (cardAberto) refetchDetalhe();
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -217,7 +240,7 @@ export default function Kanban() {
     onError: (e: any) => toast.error(e.message),
   });
   const deletarCardMut = (trpc as any).kanban.deletarCard.useMutation({
-    onSuccess: () => refetchFunil(),
+    onSuccess: () => { toast.success("Card excluído"); refetchFunil(); },
     onError: (e: any) => toast.error(e.message),
   });
   const utilsTrpc = (trpc as any).useUtils?.() ?? (trpc as any).useContext?.();
@@ -939,7 +962,7 @@ export default function Kanban() {
                     <Archive className="h-3 w-3" />
                   </Button>
                 )}
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => setColunaParaExcluir({ id: col.id, nome: col.nome, cards: col.cards?.length ?? 0 })}>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => setColunaParaExcluir({ id: col.id, nome: col.nome })}>
                   <Trash2 className="h-3 w-3" />
                 </Button>
               </div>
@@ -958,7 +981,9 @@ export default function Kanban() {
               const tagsList = tags || [];
               const cardTags = card.tags ? card.tags.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
               // Prazo é data de calendário: o dia inteiro é seu, só atrasa quando o dia vira.
-              const isAtrasado = card.atrasado || (card.prazo && dataCalendarioISO(card.prazo) < dataLocalHoje());
+              // Card concluído não atrasa, mesmo com prazo vencido.
+              const isAtrasado = col.tipo !== "conclusao"
+                && (card.atrasado || (card.prazo && dataCalendarioISO(card.prazo) < dataLocalHoje()));
 
               return (
                 <div
@@ -1104,9 +1129,10 @@ export default function Kanban() {
                     variant="ghost"
                     size="sm"
                     className="absolute top-1 right-1 h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    title="Excluir card"
                     onClick={(e) => {
                       e.stopPropagation();
-                      deletarCardMut.mutate({ id: card.id });
+                      setCardParaExcluir({ id: card.id, titulo: card.titulo, arquivado: !!card.arquivado });
                     }}
                   >
                     <Trash2 className="h-2.5 w-2.5" />
@@ -1183,7 +1209,7 @@ export default function Kanban() {
                   {buscaCliente && (clientesBusca?.clientes || []).length > 0 && (
                     <div className="border rounded-lg mt-1 max-h-32 overflow-y-auto divide-y">
                       {(clientesBusca.clientes || []).map((c: any) => (
-                        <button key={c.id} onClick={() => { setClienteSelecionado(c); setBuscaCliente(""); }} className="w-full flex items-center gap-2 p-2 hover:bg-muted/50 text-left text-xs">
+                        <button key={c.id} onClick={() => { setClienteSelecionado(c); setBuscaCliente(""); setCardForm({ ...cardForm, tags: unirTags(cardForm.tags, c.tags) ?? "" }); }} className="w-full flex items-center gap-2 p-2 hover:bg-muted/50 text-left text-xs">
                           <User className="h-3 w-3 text-violet-500" /><span className="font-medium">{c.nome}</span>{c.cpfCnpj && <span className="text-[9px] text-muted-foreground">{c.cpfCnpj}</span>}
                         </button>
                       ))}
@@ -1236,6 +1262,9 @@ export default function Kanban() {
                   })}
                   {(!tags || tags.length === 0) && <p className="text-[10px] text-muted-foreground">Nenhuma tag criada. Use o botão "Tags" no board.</p>}
                 </div>
+                {clienteSelecionado?.tags && (
+                  <p className="text-[10px] text-muted-foreground mt-1">As tags do cadastro já vêm marcadas; o que você marcar é somado a elas.</p>
+                )}
               </div>
             </div>
 
@@ -1367,7 +1396,9 @@ export default function Kanban() {
               <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
                 <p className="text-[10px] font-semibold text-muted-foreground">EDITAR</p>
                 <div><Label className="text-[10px]">Título</Label><Input defaultValue={cardDetalhe.titulo} onBlur={(e) => { if (e.target.value !== cardDetalhe.titulo) editarCardMut.mutate({ id: cardDetalhe.id, titulo: e.target.value }); }} /></div>
-                <div><Label className="text-[10px]">CNJ</Label><Input defaultValue={cardDetalhe.cnj || ""} className="font-mono" onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, cnj: e.target.value || undefined })} /></div>
+                {/* Campo esvaziado vai como "" — undefined some do JSON e o servidor
+                    não mexia, mas o toast dizia "atualizado". */}
+                <div><Label className="text-[10px]">CNJ</Label><Input defaultValue={cardDetalhe.cnj || ""} className="font-mono" onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, cnj: e.target.value })} /></div>
                 <div>
                   <Label className="text-[10px]">Valor estimado (R$)</Label>
                   <Input
@@ -1382,7 +1413,7 @@ export default function Kanban() {
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div><Label className="text-[10px]">Prazo</Label><Input type="date" defaultValue={cardDetalhe.prazo ? dataCalendarioISO(cardDetalhe.prazo) : ""} onChange={(e) => editarCardMut.mutate({ id: cardDetalhe.id, prazo: e.target.value || undefined })} /></div>
+                  <div><Label className="text-[10px]">Prazo</Label><Input type="date" defaultValue={cardDetalhe.prazo ? dataCalendarioISO(cardDetalhe.prazo) : ""} onChange={(e) => editarCardMut.mutate({ id: cardDetalhe.id, prazo: e.target.value || null })} /></div>
                   <div>
                     <Label className="text-[10px]">Tags</Label>
                     <div className="flex flex-wrap gap-1 mt-1">
@@ -1392,7 +1423,7 @@ export default function Kanban() {
                         return (
                           <button key={t.id} type="button" onClick={() => {
                             const novas = sel ? atuais.filter((n: string) => n !== t.nome) : [...atuais, t.nome];
-                            editarCardMut.mutate({ id: cardDetalhe.id, tags: novas.join(", ") || undefined });
+                            editarCardMut.mutate({ id: cardDetalhe.id, tags: novas.join(", ") });
                           }} className={`text-[9px] px-2 py-0.5 rounded-full font-medium transition-all ${sel ? "text-white ring-2 ring-offset-1" : "opacity-40 hover:opacity-70"}`} style={{ background: t.cor }}>
                             {t.nome}
                           </button>
@@ -1401,7 +1432,7 @@ export default function Kanban() {
                     </div>
                   </div>
                 </div>
-                <div><Label className="text-[10px]">Descrição</Label><Textarea defaultValue={cardDetalhe.descricao || ""} rows={2} onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, descricao: e.target.value || undefined })} /></div>
+                <div><Label className="text-[10px]">Descrição</Label><Textarea defaultValue={cardDetalhe.descricao || ""} rows={2} onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, descricao: e.target.value })} /></div>
 
                 {/* Toggle urgente */}
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -1520,7 +1551,8 @@ export default function Kanban() {
       />
 
       {/* Excluir coluna leva os cards junto, sem arquivar e sem desfazer. O
-          diálogo diz o número antes, e oferece a saída que preserva tudo. */}
+          diálogo diz o número REAL antes (contado no servidor, sem o filtro do
+          quadro) e oferece a saída que preserva tudo. */}
       <AlertDialog
         open={colunaParaExcluir != null}
         onOpenChange={(o) => { if (!o) setColunaParaExcluir(null); }}
@@ -1532,18 +1564,86 @@ export default function Kanban() {
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2.5">
-                {(colunaParaExcluir?.cards ?? 0) > 0 ? (
-                  <p className="text-destructive font-semibold">
-                    Os {colunaParaExcluir?.cards} cards desta coluna serão apagados junto, com o
-                    histórico deles. Não dá para desfazer.
+                {previaColunaErro ? (
+                  <p className="text-destructive">
+                    Não foi possível contar os cards desta coluna. Tente de novo.
                   </p>
-                ) : (
+                ) : previaColunaCarregando || !previaColuna ? (
+                  <p className="flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Contando os cards desta coluna…
+                  </p>
+                ) : previaColuna.total === 0 ? (
                   <p>A coluna está vazia. Nenhum card será afetado.</p>
+                ) : (
+                  <>
+                    <p className="text-destructive font-semibold">
+                      Esta coluna tem {previaColuna.total} {previaColuna.total === 1 ? "card" : "cards"}
+                      {previaColuna.arquivados > 0 && (
+                        <> ({previaColuna.noQuadro} no quadro e {previaColuna.arquivados} arquivados)</>
+                      )}
+                      . Excluir a coluna apaga todos eles, com histórico e comentários. Não dá para desfazer.
+                    </p>
+                    {previaColuna.destino ? (
+                      <p>
+                        Se a ideia é só tirar do quadro, <b>arquive</b>: os cards ficam arquivados em
+                        “{previaColuna.destino.nome}” e continuam consultáveis em “Mostrar arquivados”.
+                      </p>
+                    ) : (
+                      <p>Este funil não tem outra coluna para guardar os cards arquivados.</p>
+                    )}
+                    <p className="text-[11px] text-muted-foreground">
+                      A contagem vem do servidor e ignora o filtro do quadro.
+                    </p>
+                  </>
                 )}
-                {(colunaParaExcluir?.cards ?? 0) > 0 && (
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            {(previaColuna?.total ?? 0) > 0 && previaColuna?.destino && (
+              <Button
+                variant="outline"
+                disabled={deletarColunaMut.isPending}
+                onClick={() => {
+                  if (colunaParaExcluir) deletarColunaMut.mutate({ id: colunaParaExcluir.id, modo: "arquivar" });
+                  setColunaParaExcluir(null);
+                }}
+              >
+                <Archive className="h-3.5 w-3.5 mr-1.5" />
+                Arquivar os {previaColuna.total} e excluir a coluna
+              </Button>
+            )}
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={!previaColuna || !!previaColunaErro}
+              onClick={() => {
+                if (colunaParaExcluir) deletarColunaMut.mutate({ id: colunaParaExcluir.id, modo: "excluir" });
+                setColunaParaExcluir(null);
+              }}
+            >
+              {(previaColuna?.total ?? 0) > 0 ? "Excluir tudo" : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* A lixeira do card apagava na hora, sem pergunta e sem desfazer — a
+          poucos pixels do clique que abre o card. */}
+      <AlertDialog
+        open={cardParaExcluir != null}
+        onOpenChange={(o) => { if (!o) setCardParaExcluir(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir “{cardParaExcluir?.titulo}”?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>O histórico e os comentários do card vão junto. Não dá para desfazer.</p>
+                {!cardParaExcluir?.arquivado && (
                   <p>
-                    Se a ideia é só tirar do quadro, <b>arquive</b> em vez de excluir: os cards
-                    saem da visão mas continuam consultáveis em “Mostrar arquivados”.
+                    Se só quer tirar do quadro, <b>arquive</b>: o card continua consultável em
+                    “Mostrar arquivados”.
                   </p>
                 )}
               </div>
@@ -1551,27 +1651,27 @@ export default function Kanban() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            {(colunaParaExcluir?.cards ?? 0) > 0 && (
+            {!cardParaExcluir?.arquivado && (
               <Button
                 variant="outline"
+                disabled={arquivarCardMut.isPending}
                 onClick={() => {
-                  const col = colunas.find((c: any) => c.id === colunaParaExcluir?.id);
-                  const ids = (col?.cards ?? []).map((c: any) => c.id);
-                  if (ids.length) arquivarLoteMut.mutate({ ids });
-                  setColunaParaExcluir(null);
+                  if (cardParaExcluir) arquivarCardMut.mutate({ id: cardParaExcluir.id });
+                  setCardParaExcluir(null);
                 }}
               >
-                Arquivar os cards
+                <Archive className="h-3.5 w-3.5 mr-1.5" />
+                Arquivar
               </Button>
             )}
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                if (colunaParaExcluir) deletarColunaMut.mutate({ id: colunaParaExcluir.id });
-                setColunaParaExcluir(null);
+                if (cardParaExcluir) deletarCardMut.mutate({ id: cardParaExcluir.id });
+                setCardParaExcluir(null);
               }}
             >
-              Excluir mesmo assim
+              Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
