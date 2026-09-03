@@ -29,12 +29,13 @@ import { getDb } from "../db";
 import { subscriptions, users } from "../../drizzle/schema";
 import { getAsaasBillingWebhookSecret } from "./asaas-billing-client";
 import {
-  mapAsaasStatus,
+  statusAposEventoDeAssinatura,
   isPaymentPaidEvent,
   isPaymentOverdueEvent,
   parseExternalReference,
 } from "./asaas-billing-mappers";
 import { createLogger } from "../_core/logger";
+import { encerrarOutrasAssinaturas } from "./assinatura-substituicao";
 
 const log = createLogger("billing-asaas-webhook");
 
@@ -123,21 +124,12 @@ export function registerAsaasBillingWebhook(app: Express) {
           return res.status(200).json({ received: true });
         }
 
-        const statusFromAsaas = mapAsaasStatus(sub.status);
         const periodEnd = sub.nextDueDate
           ? new Date(sub.nextDueDate).getTime()
           : null;
 
         if (existing) {
-          // PRESERVA status mais avançado: se local já está "active" e o
-          // SUBSCRIPTION_UPDATED chega com "incomplete"/"canceled", NÃO
-          // rebaixa. Isso protege contra race condition onde PAYMENT_RECEIVED
-          // chegou primeiro e ativou, depois SUBSCRIPTION_UPDATED chegou
-          // dizendo INACTIVE (porque o Asaas ainda não processou).
-          const novoStatus =
-            existing.status === "active" && statusFromAsaas !== "canceled"
-              ? existing.status
-              : statusFromAsaas;
+          const novoStatus = statusAposEventoDeAssinatura(existing.status, sub.status);
 
           await db
             .update(subscriptions)
@@ -157,7 +149,7 @@ export function registerAsaasBillingWebhook(app: Express) {
             asaasSubscriptionId: sub.id,
             asaasCustomerId: sub.customer,
             planId,
-            status: statusFromAsaas,
+            status: statusAposEventoDeAssinatura(null, sub.status),
             currentPeriodEnd: periodEnd,
           });
           log.info({ subId: sub.id, userId }, "Subscription criada via webhook");
@@ -252,6 +244,7 @@ export function registerAsaasBillingWebhook(app: Express) {
               { subId: existing.id, event: body.event, status: payment.status },
               "Subscription paga e ativada",
             );
+            await encerrarOutrasAssinaturas(db, existing.userId, existing.id);
           } else if (isOverdue) {
             await db
               .update(subscriptions)

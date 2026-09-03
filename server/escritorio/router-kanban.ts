@@ -28,6 +28,29 @@ async function podeMexerNoCard(
   return c.responsavelId === colaboradorId;
 }
 
+type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+// `clienteId`/`responsavelId` chegam do client como número solto. Sem conferir
+// o escritório, o card exibia contato alheio e a notificação de atribuição ia
+// pro colaborador de outro escritório.
+async function contatoDoEscritorio(db: Db, escritorioId: number, contatoId: number): Promise<boolean> {
+  const [c] = await db
+    .select({ id: contatos.id })
+    .from(contatos)
+    .where(and(eq(contatos.id, contatoId), eq(contatos.escritorioId, escritorioId)))
+    .limit(1);
+  return !!c;
+}
+
+async function colaboradorDoEscritorio(db: Db, escritorioId: number, colaboradorId: number): Promise<boolean> {
+  const [c] = await db
+    .select({ id: colaboradores.id })
+    .from(colaboradores)
+    .where(and(eq(colaboradores.id, colaboradorId), eq(colaboradores.escritorioId, escritorioId)))
+    .limit(1);
+  return !!c;
+}
+
 export const kanbanRouter = router({
   // ─── FUNIS ────────────────────────────────────────────────────────────────
 
@@ -148,12 +171,36 @@ export const kanbanRouter = router({
       if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Confirma o dono do funil ANTES de tocar em qualquer coisa: só o delete
+      // do funil era escopado — colunas e cards saíam por funilId puro, então
+      // um id alheio deixava o funil de OUTRO escritório vazio e ainda de pé.
+      const [funil] = await db
+        .select({ id: kanbanFunis.id })
+        .from(kanbanFunis)
+        .where(and(eq(kanbanFunis.id, input.id), eq(kanbanFunis.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!funil) throw new TRPCError({ code: "NOT_FOUND", message: "Funil não encontrado." });
+
       // Busca colunas pra deletar cards
       const cols = await db.select({ id: kanbanColunas.id }).from(kanbanColunas).where(eq(kanbanColunas.funilId, input.id));
-      for (const c of cols) await db.delete(kanbanCards).where(eq(kanbanCards.colunaId, c.id));
+      const idsColunas = cols.map((c) => c.id);
+      const alvos = idsColunas.length
+        ? await db
+            .select({ id: kanbanCards.id })
+            .from(kanbanCards)
+            .where(and(inArray(kanbanCards.colunaId, idsColunas), eq(kanbanCards.escritorioId, esc.escritorio.id)))
+        : [];
+      const ids = alvos.map((c) => c.id);
+
+      if (ids.length) {
+        await db.delete(kanbanMovimentacoes).where(inArray(kanbanMovimentacoes.cardId, ids));
+        await db.delete(kanbanResponsavelLog).where(inArray(kanbanResponsavelLog.cardId, ids));
+        await db.delete(kanbanComentarios).where(inArray(kanbanComentarios.cardId, ids));
+        await db.delete(kanbanCards).where(inArray(kanbanCards.id, ids));
+      }
       await db.delete(kanbanColunas).where(eq(kanbanColunas.funilId, input.id));
       await db.delete(kanbanFunis).where(and(eq(kanbanFunis.id, input.id), eq(kanbanFunis.escritorioId, esc.escritorio.id)));
-      return { success: true };
+      return { success: true, cardsExcluidos: ids.length };
     }),
 
   // ─── COLUNAS ──────────────────────────────────────────────────────────────
@@ -413,6 +460,21 @@ export const kanbanRouter = router({
       if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar cards." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [colunaAlvo] = await db
+        .select({ id: kanbanColunas.id })
+        .from(kanbanColunas)
+        .innerJoin(kanbanFunis, eq(kanbanColunas.funilId, kanbanFunis.id))
+        .where(and(eq(kanbanColunas.id, input.colunaId), eq(kanbanFunis.escritorioId, perm.escritorioId)))
+        .limit(1);
+      if (!colunaAlvo) throw new TRPCError({ code: "NOT_FOUND", message: "Coluna não encontrada." });
+      if (input.clienteId && !(await contatoDoEscritorio(db, perm.escritorioId, input.clienteId))) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
+      }
+      if (input.responsavelId && !(await colaboradorDoEscritorio(db, perm.escritorioId, input.responsavelId))) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Responsável não encontrado neste escritório." });
+      }
+
       // Próxima ordem
       const existentes = await db.select({ ordem: kanbanCards.ordem }).from(kanbanCards)
         .where(eq(kanbanCards.colunaId, input.colunaId)).orderBy(desc(kanbanCards.ordem)).limit(1);
@@ -504,6 +566,13 @@ export const kanbanRouter = router({
       }
 
       const { id, ...update } = input;
+      if (typeof update.clienteId === "number" && !(await contatoDoEscritorio(db, perm.escritorioId, update.clienteId))) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
+      }
+      if (typeof update.responsavelId === "number" && !(await colaboradorDoEscritorio(db, perm.escritorioId, update.responsavelId))) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Responsável não encontrado neste escritório." });
+      }
+
       const setData: any = {};
       if (update.titulo) setData.titulo = update.titulo;
       if (update.descricao !== undefined) setData.descricao = update.descricao;
