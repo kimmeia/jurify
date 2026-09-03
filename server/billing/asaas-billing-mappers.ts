@@ -31,6 +31,21 @@ export function mapAsaasStatus(asaasStatus: string): LocalSubscriptionStatus {
 }
 
 /**
+ * Status local depois de um evento SUBSCRIPTION_* (criação/atualização da
+ * assinatura no Asaas). O Asaas cria a assinatura já como ACTIVE antes de
+ * qualquer pagamento — por isso esse evento NUNCA promove: só registra o
+ * vínculo (`incomplete` quando a row ainda não existe) ou rebaixa pra
+ * `canceled`. Quem ativa é o evento de pagamento (`isPaymentPaidEvent`).
+ */
+export function statusAposEventoDeAssinatura(
+  statusLocal: LocalSubscriptionStatus | null,
+  asaasStatus: string,
+): LocalSubscriptionStatus {
+  if (mapAsaasStatus(asaasStatus) === "canceled") return "canceled";
+  return statusLocal ?? "incomplete";
+}
+
+/**
  * Determina se um evento Asaas representa "pagamento confirmado" para
  * fins de ativação de assinatura local.
  *

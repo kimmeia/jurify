@@ -22,11 +22,14 @@
  *
  * Rate limit: 1 GET paginado por janela. Rate guard do AsaasClient (PR
  * #247) cobre o resto.
+ *
+ * Taxa de cobrança (PAYMENT_FEE) tem uma segunda fonte: o webhook já a
+ * lança como despesa `taxa_asaas`. Ver `TYPES_TAXA_DE_COBRANCA`.
  */
 
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../db";
-import { categoriasDespesa, despesas } from "../../drizzle/schema";
+import { asaasCobrancas, categoriasDespesa, despesas } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
 import { extractDbErrorMessage, isDuplicateEntryError } from "../_core/sql-helpers";
 import type {
@@ -80,10 +83,21 @@ const TYPES_CREDITO = new Set([
   "BACEN_JUDICIAL_UNLOCK",
 ]);
 
+/**
+ * Taxa que o Asaas debita ao liquidar uma cobrança. O webhook lança essa
+ * MESMA taxa como despesa `taxa_asaas` (value − netValue), então aqui ela
+ * só entra se o webhook ainda não a lançou. REFUND_REQUEST_FEE fica de fora
+ * de propósito: é outra taxa, que o webhook não gera — amarrá-la à cobrança
+ * faria a taxa do estorno sumir.
+ */
+const TYPES_TAXA_DE_COBRANCA = new Set(["PAYMENT_FEE"]);
+
 export interface SincronizarExtratoResultado {
   totalProcessadas: number;
   novasDespesas: number;
   duplicadas: number;
+  /** Taxas de cobrança que o webhook já tinha lançado como `taxa_asaas` — não entram de novo. */
+  cobertasPeloWebhook: number;
   ignoradas: number;
   /** Movimentações que falharam ao salvar (não-fatal — segue processando). */
   erros: number;
@@ -171,6 +185,7 @@ export async function sincronizarExtratoAsaas(
     totalProcessadas: 0,
     novasDespesas: 0,
     duplicadas: 0,
+    cobertasPeloWebhook: 0,
     ignoradas: 0,
     erros: 0,
     tiposVistos: {},
@@ -232,6 +247,7 @@ export async function sincronizarExtratoAsaas(
       });
       if (created === "novo") resultado.novasDespesas++;
       else if (created === "duplicado") resultado.duplicadas++;
+      else if (created === "coberto") resultado.cobertasPeloWebhook++;
       else resultado.erros++;
     }
 
@@ -262,12 +278,43 @@ async function criarDespesaDeMovimentacao(opts: {
   mov: AsaasFinancialTransaction;
   criadoPorUserId: number;
   categoriaCache: CategoriaCache;
-}): Promise<"novo" | "duplicado" | "erro"> {
+}): Promise<"novo" | "duplicado" | "coberto" | "erro"> {
   const db = await getDb();
   if (!db) return "erro";
 
   const { escritorioId, mov, criadoPorUserId, categoriaCache } = opts;
   const tipo = mov.type || "UNKNOWN";
+
+  let cobrancaOriginalId: number | null = null;
+  if (TYPES_TAXA_DE_COBRANCA.has(tipo) && mov.payment) {
+    const [cob] = await db
+      .select({ id: asaasCobrancas.id })
+      .from(asaasCobrancas)
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, escritorioId),
+          eq(asaasCobrancas.asaasPaymentId, mov.payment),
+        ),
+      )
+      .limit(1);
+    if (cob) {
+      const [peloWebhook] = await db
+        .select({ id: despesas.id })
+        .from(despesas)
+        .where(
+          and(
+            eq(despesas.cobrancaOriginalId, cob.id),
+            eq(despesas.origem, "taxa_asaas"),
+          ),
+        )
+        .limit(1);
+      if (peloWebhook) return "coberto";
+      // Fica amarrada à cobrança pra que o webhook, chegando depois,
+      // reconheça esta taxa (gerarDespesaTaxaAsaas consulta o inverso).
+      cobrancaOriginalId = cob.id;
+    }
+  }
+
   const categoriaNome = TYPE_TO_CATEGORIA[tipo] ?? CATEGORIA_FALLBACK;
   const categoriaId = await obterOuCriarCategoria(
     escritorioId,
@@ -292,6 +339,7 @@ async function criarDespesaDeMovimentacao(opts: {
       origem: "extrato_asaas",
       asaasFinTransId: mov.id,
       asaasFinTransType: tipo,
+      cobrancaOriginalId,
       criadoPorUserId,
     });
     return "novo";

@@ -19,7 +19,7 @@ import {
   criarLead, listarLeads, atualizarLead, excluirLead,
   obterMetricasDashboard, distribuirLead, obterMetricasDetalhadas,
 } from "./db-crm";
-import { conversas, contatos, leads } from "../../drizzle/schema";
+import { conversas, contatos, leads, canaisIntegrados } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { toIsoString } from "../_core/dates";
 import { estadoDoNumero } from "../../shared/conversa-existente";
@@ -61,6 +61,35 @@ async function colaboradorDoEscritorio(
     .select({ id: colaboradores.id })
     .from(colaboradores)
     .where(and(eq(colaboradores.id, colaboradorId), eq(colaboradores.escritorioId, escritorioId)))
+    .limit(1);
+  return !!c;
+}
+
+type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+async function contatoDoEscritorio(db: Db, escritorioId: number, contatoId: number): Promise<boolean> {
+  const [c] = await db
+    .select({ id: contatos.id })
+    .from(contatos)
+    .where(and(eq(contatos.id, contatoId), eq(contatos.escritorioId, escritorioId)))
+    .limit(1);
+  return !!c;
+}
+
+async function conversaDoEscritorio(db: Db, escritorioId: number, conversaId: number): Promise<boolean> {
+  const [c] = await db
+    .select({ id: conversas.id })
+    .from(conversas)
+    .where(and(eq(conversas.id, conversaId), eq(conversas.escritorioId, escritorioId)))
+    .limit(1);
+  return !!c;
+}
+
+async function canalDoEscritorio(db: Db, escritorioId: number, canalId: number): Promise<boolean> {
+  const [c] = await db
+    .select({ id: canaisIntegrados.id })
+    .from(canaisIntegrados)
+    .where(and(eq(canaisIntegrados.id, canalId), eq(canaisIntegrados.escritorioId, escritorioId)))
     .limit(1);
   return !!c;
 }
@@ -217,6 +246,14 @@ export const crmRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      if (!(await contatoDoEscritorio(db, esc.escritorio.id, input.contatoId))) {
+        throw new Error("Contato não encontrado.");
+      }
+      if (!(await canalDoEscritorio(db, esc.escritorio.id, input.canalId))) {
+        throw new Error("Canal não encontrado.");
+      }
 
       // Distribuir automaticamente
       const atendenteId = (await distribuirLead(esc.escritorio.id, input.contatoId).catch(() => null)) ?? esc.colaborador.id;
@@ -562,6 +599,12 @@ export const crmRouter = router({
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
 
+      const dbGuard = await getDb();
+      if (!dbGuard) throw new Error("Database indisponível");
+      if (!(await conversaDoEscritorio(dbGuard, esc.escritorio.id, input.conversaId))) {
+        throw new Error("Conversa não encontrada.");
+      }
+
       // Salvar mensagem no banco
       const id = await enviarMensagem({
         conversaId: input.conversaId,
@@ -589,7 +632,7 @@ export const crmRouter = router({
           const [c] = await dbEp
             .select({ contatoId: convTbl.contatoId, atendenteId: convTbl.atendenteId })
             .from(convTbl)
-            .where(igual(convTbl.id, input.conversaId))
+            .where(and(igual(convTbl.id, input.conversaId), igual(convTbl.escritorioId, esc.escritorio.id)))
             .limit(1);
           if (c) {
             await registrarMensagemNoEpisodio({
@@ -621,7 +664,7 @@ export const crmRouter = router({
             .from(conversas)
             .innerJoin(contatos, eq(conversas.contatoId, contatos.id))
             .innerJoin(canaisIntegrados, eq(conversas.canalId, canaisIntegrados.id))
-            .where(eq(conversas.id, input.conversaId))
+            .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)))
             .limit(1);
 
           log.debug({
@@ -790,6 +833,12 @@ export const crmRouter = router({
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
 
+      const dbCanal = await getDb();
+      if (!dbCanal) throw new Error("Database indisponível");
+      if (!(await canalDoEscritorio(dbCanal, esc.escritorio.id, input.canalId))) {
+        throw new Error("Canal não encontrado.");
+      }
+
       // Normaliza telefone: remove formatação e garante DDI 55 (Brasil).
       // O frontend manda só os dígitos do DDD+número (10 ou 11 chars) e o
       // backend prepende o 55 — assim o JID gerado é sempre válido para
@@ -929,8 +978,15 @@ export const crmRouter = router({
       // nome de outra pessoa".
       const { responsavelId: respEscolhido, ...rest } = input;
       const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      if (!(await contatoDoEscritorio(db, perm.escritorioId, input.contatoId))) {
+        throw new Error("Contato não encontrado.");
+      }
+      if (input.conversaId != null && !(await conversaDoEscritorio(db, perm.escritorioId, input.conversaId))) {
+        throw new Error("Conversa não encontrada.");
+      }
       const responsavelId =
-        respEscolhido && db && (await colaboradorDoEscritorio(db, perm.escritorioId, respEscolhido))
+        respEscolhido && (await colaboradorDoEscritorio(db, perm.escritorioId, respEscolhido))
           ? respEscolhido
           : perm.colaboradorId;
       const id = await criarLead({ escritorioId: perm.escritorioId, responsavelId, ...rest });
