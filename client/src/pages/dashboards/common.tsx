@@ -78,10 +78,15 @@ export const TEMA: Record<SetorTema, { gradient: string; bg: string; accent: str
     ring: "ring-success",
   },
   geral: {
-    // Tom "executivo" — slate escuro com toque de blue/indigo. Visualmente
-    // mais sóbrio que os painéis setoriais (que são coloridos/temáticos).
-    // Sinaliza "visão consolidada" pra Dono/Admin.
-    gradient: "bg-gradient-to-br from-muted via-muted to-info",
+    // Tom "executivo" — navy → grafite. Visualmente mais sóbrio que os painéis
+    // setoriais (que são coloridos/temáticos). Sinaliza "visão consolidada"
+    // pra Dono/Admin.
+    //
+    // Era `from-muted via-muted to-info`: no tema claro `--muted` é quase
+    // branco, então a metade de cima do card ficava branco sobre branco
+    // (1,13:1 medido). `--hero`/`--hero-2` é a MESMA faixa do cabeçalho da
+    // ficha do cliente e é escura nos dois temas — a tinta clara serve sempre.
+    gradient: "faixa-hero fundo-hero",
     bg: "bg-gradient-to-br from-muted/40 via-white dark:via-muted to-info-bg/20",
     accent: "text-foreground",
     ring: "ring-border",
@@ -230,7 +235,7 @@ export function HeroCard({
 }) {
   const t = TEMA[tema];
   return (
-    <div className={`relative overflow-hidden rounded-lg ${t.gradient} p-7 text-white shadow-lg`}>
+    <div className={`relative overflow-hidden rounded-lg ${t.gradient} p-7 text-hero-fg shadow-lg`}>
       {DecoIcon && (
         <DecoIcon className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" />
       )}

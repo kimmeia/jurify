@@ -97,7 +97,11 @@ export default function AdminSettings() {
   return (
     <div className="space-y-5">
       {/* HERO de status do sistema */}
-      <div className="rounded-2xl bg-gradient-to-br from-muted via-muted to-info p-6 text-white relative overflow-hidden shadow-lg">
+      {/* `from-muted via-muted to-info` pintava de quase-branco até o navy e a
+          tinta era branca fixa: no tema claro a metade de cima ficava branco
+          sobre branco (1,13:1 medido). A faixa de destaque é escura nos dois
+          temas — é a mesma do cabeçalho da ficha do cliente. */}
+      <div className="faixa-hero fundo-hero rounded-2xl p-6 text-hero-fg relative overflow-hidden shadow-lg">
         <Server className="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" strokeWidth={1.2} />
         <div className="relative flex items-center justify-between gap-4 flex-wrap">
           <div>

@@ -224,7 +224,9 @@ export default function ModelosContrato() {
   return (
     <div className="rounded-2xl bg-gradient-to-br from-muted/40 via-white dark:via-muted to-info-bg/20 p-6 space-y-6">
       {/* ═══════════ HERO ═══════════ */}
-      <div className="rounded-2xl bg-gradient-to-br from-muted via-muted to-info p-7 text-white relative overflow-hidden shadow-lg">
+      {/* Mesma troca das outras faixas: o par quase-branco → navy com tinta
+          branca fixa dava 1,13:1 no tema claro. */}
+      <div className="faixa-hero fundo-hero rounded-2xl p-7 text-hero-fg relative overflow-hidden shadow-lg">
         <FileText className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
         <FileSignature className="absolute right-12 top-6 w-20 h-20 opacity-10" strokeWidth={1.2} />
         <div className="relative">
@@ -243,7 +245,12 @@ export default function ModelosContrato() {
             {isGestor && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button className="bg-card text-foreground hover:bg-muted shadow-sm font-semibold">
+                  {/* Botão de superfície CLARA dentro da faixa escura: a faixa
+                      reescreve `--foreground` pra tinta clara, então
+                      `text-foreground` aqui sairia branco no branco.
+                      `--popover-foreground` é a mesma tinta escura e a faixa
+                      não mexe nele. */}
+                  <Button className="bg-card text-popover-foreground hover:bg-muted shadow-sm font-semibold">
                     <Plus className="h-4 w-4 mr-1.5" />
                     Novo
                     <ChevronDown className="h-4 w-4 ml-1" />
