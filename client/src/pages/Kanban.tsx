@@ -36,6 +36,7 @@ import { ImportarTrelloDialog } from "./kanban/ImportarTrelloDialog";
 import { baixarBlob, base64ToBlob } from "./financeiro/helpers";
 import { TimelineCard } from "./kanban/timeline-card";
 import { ExportarPdfDialog, type ColunaExport } from "./kanban/ExportarPdfDialog";
+import { dataCalendarioISO, dataLocalHoje, formatarDataCalendario } from "@shared/data-calendario";
 
 const PRIORIDADE_COR: Record<string, string> = {
   alta: "border-l-red-500 bg-red-50/30 dark:bg-red-950/30",
@@ -956,7 +957,8 @@ export default function Kanban() {
                     {cardsVisiveis.map((card: any) => {
               const tagsList = tags || [];
               const cardTags = card.tags ? card.tags.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
-              const isAtrasado = card.atrasado || (card.prazo && new Date(card.prazo) < new Date());
+              // Prazo é data de calendário: o dia inteiro é seu, só atrasa quando o dia vira.
+              const isAtrasado = card.atrasado || (card.prazo && dataCalendarioISO(card.prazo) < dataLocalHoje());
 
               return (
                 <div
@@ -1088,10 +1090,7 @@ export default function Kanban() {
                         ) : card.prazo ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300">
                             <Calendar className="w-2.5 h-2.5" />
-                            {new Date(card.prazo).toLocaleDateString("pt-BR", {
-                              day: "2-digit",
-                              month: "short",
-                            })}
+                            {formatarDataCalendario(card.prazo, { ano: false, mes: "curto" })}
                           </span>
                         ) : (
                           <span className="text-[10px] text-slate-400">Sem prazo</span>
@@ -1383,7 +1382,7 @@ export default function Kanban() {
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div><Label className="text-[10px]">Prazo</Label><Input type="date" defaultValue={cardDetalhe.prazo ? new Date(cardDetalhe.prazo).toISOString().split("T")[0] : ""} onChange={(e) => editarCardMut.mutate({ id: cardDetalhe.id, prazo: e.target.value || undefined })} /></div>
+                  <div><Label className="text-[10px]">Prazo</Label><Input type="date" defaultValue={cardDetalhe.prazo ? dataCalendarioISO(cardDetalhe.prazo) : ""} onChange={(e) => editarCardMut.mutate({ id: cardDetalhe.id, prazo: e.target.value || undefined })} /></div>
                   <div>
                     <Label className="text-[10px]">Tags</Label>
                     <div className="flex flex-wrap gap-1 mt-1">

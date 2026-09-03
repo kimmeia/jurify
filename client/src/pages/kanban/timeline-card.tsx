@@ -6,6 +6,7 @@
  */
 
 import { trpc } from "@/lib/trpc";
+import { formatarDataCalendario } from "@shared/data-calendario";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowRight,
@@ -93,7 +94,7 @@ export function TimelineCard({
                     {prazo && (
                       <>
                         {" · "}
-                        Prazo: {new Date(prazo).toLocaleDateString("pt-BR")}
+                        Prazo: {formatarDataCalendario(prazo)}
                       </>
                     )}
                   </p>
