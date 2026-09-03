@@ -470,6 +470,14 @@
  * primeira versão do cabeçalho do admin usava `bg-info` e, ao reescrever
  * `--info` pros filhos, apagava o próprio azul. Toda faixa pinta com
  * `--hero`/`--hero-2`, que não aparecem nesta lista. */
+/* O fundo da faixa, em classe própria: quatro telas usam o mesmo par, e uma
+ * delas (o HeroCard dos dashboards) recebe o fundo como className e não tem
+ * onde pôr `style`. Fica separado de `.faixa-hero` de propósito — a ficha do
+ * cliente pinta com `style` e só quer os tokens. */
+.fundo-hero {
+  background-image: linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%);
+}
+
 .faixa-hero {
   --foreground: var(--hero-fg);
   --card-foreground: var(--hero-fg);

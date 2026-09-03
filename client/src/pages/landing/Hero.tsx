@@ -246,7 +246,9 @@ function DashboardMockup() {
         </aside>
 
         <div className="min-w-0 flex-1">
-          <div className="bg-gradient-to-br from-muted via-muted to-info px-6 py-5 text-white">
+          {/* Mesma troca das faixas do app: quase-branco → navy com tinta
+              branca fixa dava 1,12:1 no tema claro. */}
+          <div className="faixa-hero fundo-hero px-6 py-5 text-hero-fg">
             <div className="flex items-start justify-between">
               <div>
                 <div className="font-display text-lg font-bold">Painel Geral — Outubro</div>

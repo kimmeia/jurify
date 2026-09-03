@@ -334,27 +334,71 @@ describe("dentro da faixa de destaque a tinta semântica inverte", () => {
     }
   });
 
+  const COM_FAIXA = [
+    "client/src/pages/Clientes.tsx",
+    "client/src/pages/Configuracoes.tsx",
+    "client/src/pages/Atendimento.tsx",
+    "client/src/pages/admin/AdminClients.tsx",
+    "client/src/pages/dashboards/common.tsx",
+    "client/src/pages/admin/AdminSettings.tsx",
+    "client/src/pages/ModelosContrato.tsx",
+    "client/src/pages/landing/Hero.tsx",
+  ];
+
   it("toda faixa se declara, senão os filhos herdam a tinta de card", () => {
-    for (const arq of [
-      "client/src/pages/Clientes.tsx",
-      "client/src/pages/Configuracoes.tsx",
-      "client/src/pages/Atendimento.tsx",
-      "client/src/pages/admin/AdminClients.tsx",
-    ]) {
+    for (const arq of COM_FAIXA) {
       expect(ler(arq), arq).toContain("faixa-hero");
     }
+  });
+
+  it("a faixa nunca é pintada com um tom claro sob tinta clara", () => {
+    /*
+     * `from-muted via-muted to-info` com `text-white`: no tema claro `--muted`
+     * é oklch(0.957) — quase branco. A metade de cima do card ficava branco
+     * sobre branco (1,08 a 1,13:1 medido lendo o pixel). Estava em quatro
+     * telas: Admin Visão Geral, Admin Configurações, Modelos de contrato do
+     * painel do cliente e o topo da landing.
+     *
+     * O par certo é `--hero`/`--hero-2`, escuro nos DOIS temas — e o teste
+     * vizinho em cor-por-token.test.ts é que garante que continuam escuros.
+     *
+     * A regra é a COMBINAÇÃO, não o tom sozinho: `from-muted/40 via-white
+     * dark:via-muted` é fundo de seção com tinta ESCURA e está certo. O que
+     * não pode é tom claro sem prefixo de tema debaixo de tinta clara.
+     */
+    const TOM_CLARO = /(?<!dark:)\b(?:from|via|to)-muted\b(?!\/)/;
+    const TINTA_CLARA = /\btext-(?:white|hero-fg)\b(?!\/)/;
+    for (const arq of COM_FAIXA) {
+      const txt = ler(arq);
+      for (const m of txt.matchAll(/className=(?:"|\{`)[^"`]*/g)) {
+        if (!TINTA_CLARA.test(m[0])) continue;
+        expect(m[0], `${arq}: tom claro sob tinta clara`).not.toMatch(TOM_CLARO);
+      }
+    }
+  });
+
+  it("o fundo da faixa mora numa classe só, e pinta com --hero", () => {
+    // O HeroCard recebe o fundo como className (vem do mapa TEMA) e não tem
+    // onde pôr `style` — daí a classe em vez do inline das outras telas.
+    const fundo = css.slice(css.indexOf(".fundo-hero {"), css.indexOf("}", css.indexOf(".fundo-hero {")));
+    expect(fundo).toContain("var(--hero)");
+    expect(fundo).toContain("var(--hero-2)");
+  });
+
+  it("superfície clara DENTRO da faixa não usa a tinta que a faixa reescreve", () => {
+    // A faixa aponta `--foreground` pra tinta clara. Num botão `bg-card`
+    // (branco), `text-foreground` sai branco no branco. `--popover-foreground`
+    // é a mesma tinta escura e a faixa não mexe nele.
+    const modelos = ler("client/src/pages/ModelosContrato.tsx");
+    expect(modelos).toContain("bg-card text-popover-foreground");
+    expect(modelos).not.toContain("bg-card text-foreground");
   });
 
   it("a faixa não se pinta com token que ela mesma reescreve", () => {
     // A primeira versão do cabeçalho do admin usava `bg-info`; ao redefinir
     // `--info` pros filhos, ela apagava o próprio azul e virava quase branca.
     const reescritos = ["info", "success", "danger", "warning", "neutral"];
-    for (const arq of [
-      "client/src/pages/Clientes.tsx",
-      "client/src/pages/Configuracoes.tsx",
-      "client/src/pages/Atendimento.tsx",
-      "client/src/pages/admin/AdminClients.tsx",
-    ]) {
+    for (const arq of COM_FAIXA) {
       const txt = ler(arq);
       for (const m of txt.matchAll(/faixa-hero[^"]*/g)) {
         for (const papel of reescritos) {
