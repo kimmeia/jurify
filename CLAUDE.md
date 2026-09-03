@@ -380,8 +380,9 @@ da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
 `VAPID_*`, `ENCRYPTION_KEY`/`CANAIS_ENCRYPTION_KEY`, `APP_URL`; quais
 eventos de webhook estão ligados na conta Asaas (decide o auth-3); cadastros
 nos tribunais + "Testar tudo" (**o dono está fazendo, dando certo — 03/09,
-resolvido**); Meta (14 dias sem disparo frio); revisão
-jurídica dos Termos v2. Só `JWT_SECRET` e `DATABASE_URL` derrubam o boot se
+resolvido**); Meta (14 dias sem disparo frio — **dono deu por resolvido em
+03/09**); revisão jurídica dos Termos v2 (**dono deu por resolvida em
+03/09**). Só `JWT_SECRET` e `DATABASE_URL` derrubam o boot se
 faltarem — o resto falha em silêncio.
 
 Conferido com o print do Railway (03/09, fim do dia): faltam só
@@ -775,6 +776,8 @@ de lá tem o estado conferido no código em 03/09 (bloco "Estado em
    só reativo/1:1), NÃO clicar "solicitar análise" antes disso; lembrete
    26/08 atualizado (`trig_01Tg9mU9aGhgVWKbC7ShfuHw`). Aguardando do dono:
    print do "Ver detalhes" do aviso 2 + Quality Rating no WhatsApp Manager.
+   **03/09: o dono deu o assunto Meta por resolvido — não cobrar print nem
+   Quality Rating de novo; só reabrir se chegar aviso novo.**
    Aviso 2 é o gatilho descrito pros itens em STAND-BY (tela de evidência
    de conformidade + botão "cliente autorizou WhatsApp") — dono foi
    lembrado em 23/08; segue sem implementar até ele pedir.
@@ -790,7 +793,8 @@ de lá tem o estado conferido no código em 03/09 (bloco "Estado em
 1. **Robô de jornada varre em 32s** — dono já disse que está errado. A
    instrumentação (tempos por tela + "X de 19 mostraram esqueleto") já grava;
    olhar a primeira medição real e agir.
-2. **Termos v2 publicados SEM revisão jurídica final (24/08)** — aceite
+2. **Termos v2 publicados SEM revisão jurídica final (24/08) — 03/09: o dono
+   deu a revisão por resolvida; não cobrar de novo.** Histórico: aceite
    versionado entregue: `shared/termos.ts` (TERMOS_VERSAO=2), trilha
    `aceites_termos` (data/hora/IP/versão), TermosGate bloqueante pro DONO
    (colaborador/admin/impersonação não travam), cadastro com botão travado
