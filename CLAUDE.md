@@ -346,6 +346,23 @@ nos tribunais + "Testar tudo"; Meta (14 dias sem disparo frio); revisão
 jurídica dos Termos v2. Só `JWT_SECRET` e `DATABASE_URL` derrubam o boot se
 faltarem — o resto falha em silêncio.
 
+Conferido com o print do Railway (03/09, fim do dia): faltam só
+`TURNSTILE_SECRET_KEY`+`VITE_TURNSTILE_SITE_KEY` (captcha desligado —
+**decisão do dono 03/09: não quer o Turnstile por ora; não lembrar de
+novo, só se ele pedir ou se aparecer cadastro em massa de robô**) e
+`CANAIS_ENCRYPTION_KEY`. Resend, VAPID, APP_URL, OpenAI, DataJud e App
+Secret da Meta se resolvem pelo painel admin/banco/default — o dono
+confirmou Meta cadastrada e verificada, e os eventos `PAYMENT_RECEIVED`/
+`PAYMENT_CONFIRMED`/`PAYMENT_OVERDUE` ligados no Asaas. Pra
+`CANAIS_ENCRYPTION_KEY` o dono escolheu código em vez de variável:
+`server/integracoes/agentes-api-key-crypto.ts` grava a chave da OpenAI
+colada NUM AGENTE com `CANAIS_ENCRYPTION_KEY` → `ENCRYPTION_KEY` (antes,
+sem a env, era `"0".repeat(64)`) e lê tentando as duas e depois a de
+zeros, então nada gravado precisa de recadastro. A chave colada em
+Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
+(crypto-utils) — não era o problema. Amarra: `agentes-api-key-crypto.test.ts`
+(6 mutações vermelhas).
+
 ## Fila combinada com o dono (31/08/2026)
 
 Ordem que ele pediu. Não pular sem ele mandar. Estado conferido em 03/09:
