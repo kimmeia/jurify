@@ -1627,9 +1627,9 @@ function ClienteDetalheDialog({
               disabled={retirarMut.isPending}
               onClick={(e) => {
                 e.preventDefault();
-                if (!retirarConfirm || !userId) return;
+                if (!retirarConfirm || !current) return;
                 retirarMut.mutate({
-                  userId,
+                  userId: current,
                   quantidade: retirarConfirm.qtd,
                   motivo: retirarConfirm.motivo,
                 });
@@ -1649,6 +1649,15 @@ function ClienteDetalheDialog({
             <AlertDialogTitle className="text-destructive">
               Excluir <strong>{user?.name || user?.email}</strong> permanentemente?
             </AlertDialogTitle>
+            <div className="rounded-lg border border-info/30 bg-info-bg px-3 py-2 text-xs text-info-fg">
+              <span className="font-semibold">Conta que será excluída:</span>{" "}
+              {user?.email || user?.name}
+              {data?.isDonoEscritorio
+                ? " · dono do escritório"
+                : data?.donoDoEscritorio
+                  ? ` · colaborador(a) no escritório de ${data.donoDoEscritorio.name || data.donoDoEscritorio.email}`
+                  : ""}
+            </div>
             <AlertDialogDescription>
               Esta ação <strong>NÃO PODE ser desfeita</strong>. O usuário e todos
               os seus vínculos como colaborador serão removidos. Se for dono de
@@ -1690,9 +1699,9 @@ function ClienteDetalheDialog({
               disabled={excluirMut.isPending || motivoExclusao.trim().length < 5}
               onClick={(e) => {
                 e.preventDefault();
-                if (!userId || motivoExclusao.trim().length < 5) return;
+                if (!current || motivoExclusao.trim().length < 5) return;
                 excluirMut.mutate({
-                  userId,
+                  userId: current,
                   motivo: motivoExclusao.trim(),
                   forcarMesmoComEscritorio: forcarExcluir,
                 });

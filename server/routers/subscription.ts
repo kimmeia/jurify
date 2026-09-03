@@ -177,7 +177,77 @@ export const subscriptionRouter = router({
       const msRestantes = sub.trialExpiraEm - Date.now();
       diasRestantesTrial = Math.max(0, Math.ceil(msRestantes / (24 * 60 * 60 * 1000)));
     }
-    return { ...sub, diasRestantesTrial };
+    return {
+      ...sub,
+      diasRestantesTrial,
+      pagamentoEmAndamento: sub.status === "trialing" && !!sub.asaasSubscriptionId,
+    };
+  }),
+
+  /** O botão "Testar grátis" pode aparecer pra este usuário? */
+  trialDisponivel: protectedProcedure.query(async ({ ctx }) => {
+    const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (esc && esc.escritorio.ownerId !== ctx.user.id) {
+      return { disponivel: false, motivo: "colaborador" as const };
+    }
+    if (esc?.escritorio.jaUsouTrial) return { disponivel: false, motivo: "ja_usou" as const };
+    const sub = await getActiveSubscriptionComHeranca(ctx.user.id);
+    if (sub) return { disponivel: false, motivo: "assinatura_ativa" as const };
+    return { disponivel: true, motivo: null };
+  }),
+
+  /** Troca de plano já pedida e ainda não paga — a assinatura atual segue valendo. */
+  trocaPendente: protectedProcedure.query(async ({ ctx }) => {
+    const atual = await getActiveSubscription(ctx.user.id);
+    if (!atual) return null;
+    const pendente = (await getUserSubscriptions(ctx.user.id))
+      .filter((s) => s.id !== atual.id && s.status === "incomplete" && !!s.asaasSubscriptionId && !s.cortesia)
+      .sort((a, b) => b.id - a.id)[0];
+    if (!pendente) return null;
+    const plano = pendente.planId ? await getPlanByIdResolved(pendente.planId) : null;
+    let invoiceUrl = "";
+    const customer = pendente.asaasCustomerId || atual.asaasCustomerId;
+    if (customer) {
+      try {
+        const client = await getAdminAsaasClient();
+        const cobrancas = await client.listarCobrancas({ customer, limit: 10 });
+        invoiceUrl =
+          cobrancas.data.find(
+            (c) => c.externalReference === `${ctx.user.id}:${pendente.planId}` && !c.deleted,
+          )?.invoiceUrl || "";
+      } catch (err: any) {
+        log.warn({ err: err?.message }, "link da cobrança da troca pendente indisponível");
+      }
+    }
+    return {
+      subLocalId: pendente.id,
+      planId: pendente.planId,
+      planName: plano?.name ?? pendente.planId ?? "novo plano",
+      invoiceUrl,
+    };
+  }),
+
+  /** Desiste da troca de plano ainda não paga: cancela só a assinatura nova. */
+  desistirTroca: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+    const atual = await getActiveSubscription(ctx.user.id);
+    if (!atual) return { success: true, canceladas: 0 };
+    const pendentes = (await getUserSubscriptions(ctx.user.id)).filter(
+      (s) => s.id !== atual.id && s.status === "incomplete" && !!s.asaasSubscriptionId && !s.cortesia,
+    );
+    if (pendentes.length === 0) return { success: true, canceladas: 0 };
+    const client = await getAdminAsaasClient();
+    for (const p of pendentes) {
+      try {
+        await client.cancelarAssinatura(p.asaasSubscriptionId!);
+      } catch (err: any) {
+        log.warn({ err: err?.message, subId: p.asaasSubscriptionId }, "cancelar troca pendente no Asaas falhou");
+      }
+      await db.update(subscriptionsTable).set({ status: "canceled" }).where(eq(subscriptionsTable.id, p.id));
+    }
+    return { success: true, canceladas: pendentes.length };
   }),
 
   /** Módulos que o plano do escritório libera — a mesma resposta que o
@@ -370,12 +440,20 @@ export const subscriptionRouter = router({
 
           if (subTrial) {
             // Conversão trial → pago: atualiza in-place
+            // O trial segue valendo enquanto o pagamento não cai (boleto leva
+            // dias); o webhook de pagamento é quem vira `active`. Os 7 dias
+            // são o prazo de pagamento — o mesmo de "Ativar assinatura com
+            // valor fechado" do painel admin.
+            const prazoPagamento = Date.now() + 7 * 24 * 60 * 60 * 1000;
+            const trialAte = Math.max(subTrial.trialExpiraEm ?? 0, prazoPagamento);
             await db.update(subscriptionsTable)
               .set({
                 asaasSubscriptionId: sub.id,
                 asaasCustomerId: customerId,
                 planId: input.planId,
-                status: "incomplete",
+                status: "trialing",
+                trialExpiraEm: trialAte,
+                currentPeriodEnd: trialAte,
                 trialConvertido: true,
               })
               .where(eq(subscriptionsTable.id, subTrial.id));
@@ -443,7 +521,8 @@ export const subscriptionRouter = router({
   }),
 
   /**
-   * Trocar plano = nova assinatura. Cancela a antiga (se houver) e cria a nova.
+   * Trocar plano = nova assinatura. A atual SEGUE valendo até o webhook
+   * confirmar o pagamento da nova (`encerrarOutrasAssinaturas`).
    * Não exige CPF de novo (customer já existe no Asaas).
    */
   changePlan: protectedProcedure
@@ -460,24 +539,10 @@ export const subscriptionRouter = router({
       const client = await getAdminAsaasClient();
       const currentSub = await getActiveSubscription(ctx.user.id);
 
-      // Cancela a antiga (não estorna pagamentos já feitos)
-      if (currentSub?.asaasSubscriptionId) {
-        try {
-          await client.cancelarAssinatura(currentSub.asaasSubscriptionId);
-          const db = await getDb();
-          if (db) {
-            await db
-              .update(subscriptionsTable)
-              .set({ status: "canceled" })
-              .where(eq(subscriptionsTable.id, currentSub.id));
-          }
-        } catch (err: any) {
-          log.warn(
-            { err: err.message, subId: currentSub.asaasSubscriptionId },
-            "Falha ao cancelar assinatura antiga",
-          );
-        }
-      }
+      log.info(
+        { userId: ctx.user.id, planoAtual: currentSub?.planId ?? null, novoPlano: input.newPlanId },
+        "Troca de plano iniciada — a assinatura atual segue até o pagamento da nova",
+      );
 
       // Em changePlan o customer já existe (passou por createCheckout antes)
       const customerId = await garantirAsaasCustomer(

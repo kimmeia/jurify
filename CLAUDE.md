@@ -308,6 +308,33 @@ Atendimento (`Atendimento.tsx:471`) não corta o DDI — deep-link
 envio vai pra número inválido. Fix: delegar pra `mascararTelefoneBR` do
 shared (atendimento-x1).
 
+**Entregue 03/09 (aprovado item a item pelo dono, mockup
+`mockup-correcoes-bloqueadores.html`)**: A (8 amarrações — helpers
+`contatoDoEscritorio`/`conversaDoEscritorio`/`canalDoEscritorio` em
+router-crm; Kanban carrega o funil ANTES de apagar e valida
+coluna/cliente/responsável; cargo, assinatura e linha do tempo da IA
+conferem o escritório, cobranças da linha do tempo só com
+`financeiro.ver`), B (assinatura: `changePlan` NÃO cancela mais a atual —
+quem encerra as anteriores é `encerrarOutrasAssinaturas` no webhook de
+PAGAMENTO, poupando cortesia; `createCheckout` no trial mantém `trialing` e
+estende `trialExpiraEm` a ≥7 dias como prazo de pagamento, igual ao
+"Ativar assinatura negociada"; `statusAposEventoDeAssinatura` faz
+SUBSCRIPTION_* nunca promover — row nova nasce `incomplete`; procedures
+novas `trialDisponivel`/`trocaPendente`/`desistirTroca`; Plans.tsx ganhou
+faixa "troca aguardando pagamento", botão "Testar grátis por N dias" por
+plano (decisão do dono: opção 2) e o polling espera a assinatura CERTA
+virar active — sem isso a atual, que continua ativa, "confirmava" na
+hora), C (extrato pula `PAYMENT_FEE` que já é despesa `taxa_asaas` da
+mesma cobrança e grava `cobrancaOriginalId`; o webhook pula quando o extrato
+passou antes; `REFUND_REQUEST_FEE` ficou de fora de propósito — o webhook
+nunca lança essa taxa, amarrar sumiria com despesa real), D (AdminClients
+excluir/retirar créditos usam `current`, diálogo mostra "Conta que será
+excluída"). **E (Twilio) em stand-by por decisão do dono.** Amarras:
+`tenancy-crm-chamadas`, `kanban-tenancy-funil-card`,
+`tenancy-cargo-assinatura-linha-tempo`, `asaas-taxa-sem-duplicata`,
+`assinatura-troca-sem-cancelar`, `admin-excluir-conta-alvo` — 58 mutações
+conferidas (12+16+9+8+13), todas vermelhas.
+
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
 `META_APP_SECRET_EXTRA` (é isso que alimenta o HMAC do webhook;

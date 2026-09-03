@@ -88,12 +88,27 @@ export default function Plans() {
     refetchInterval: awaitingPayment ? 3000 : false,
   });
   const { data: billingOk } = trpc.subscription.billingConfigured.useQuery();
+  const { data: trialOk } = trpc.subscription.trialDisponivel.useQuery(undefined, {
+    enabled: !!user,
+    retry: false,
+  });
+  const { data: trocaPendente } = trpc.subscription.trocaPendente.useQuery(undefined, {
+    enabled: !!user && !!currentSub,
+    retry: false,
+    refetchInterval: awaitingPayment ? 3000 : false,
+  });
+  // Assinatura cujo pagamento estamos esperando. Sem isso, na troca de plano
+  // a atual (que continua ativa) faria o polling "confirmar" na hora.
+  const [aguardandoSubId, setAguardandoSubId] = useState<string | null>(null);
 
   // Detecta ativação: se estávamos aguardando E agora tem sub ativa,
   // para o polling, mostra sucesso e redireciona pro dashboard.
   useEffect(() => {
-    if (awaitingPayment && currentSub && currentSub.status === "active") {
+    const ehAEsperada =
+      !aguardandoSubId || (currentSub as any)?.asaasSubscriptionId === aguardandoSubId;
+    if (awaitingPayment && currentSub && currentSub.status === "active" && ehAEsperada) {
       setAwaitingPayment(false);
+      setAguardandoSubId(null);
       toast.success("Pagamento confirmado! Bem-vindo ao JuridFlow 🎉", {
         duration: 5000,
       });
@@ -102,13 +117,14 @@ export default function Plans() {
         setLocation("/dashboard");
       }, 1500);
     }
-  }, [awaitingPayment, currentSub, setLocation]);
+  }, [awaitingPayment, currentSub, setLocation, aguardandoSubId]);
 
   const createCheckout = trpc.subscription.createCheckout.useMutation({
     onSuccess: (data) => {
       if (data.url) {
         toast.info("Abrindo página de pagamento do Asaas...");
         window.open(data.url, "_blank");
+        setAguardandoSubId(data.asaasSubscriptionId ?? null);
         setAwaitingPayment(true); // inicia polling
       } else {
         toast.warning(
@@ -131,13 +147,41 @@ export default function Plans() {
       if (data.url) {
         toast.info("Abrindo checkout pra troca de plano...");
         window.open(data.url, "_blank");
+        setAguardandoSubId(data.asaasSubscriptionId ?? null);
         setAwaitingPayment(true);
       }
+      utils.subscription.trocaPendente.invalidate();
       setLoadingPlan(null);
     },
     onError: (error) => {
       toast.error("Erro ao trocar de plano: " + error.message);
       setLoadingPlan(null);
+    },
+  });
+
+  const iniciarTrial = trpc.subscription.iniciarTrial.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Teste grátis de ${data.trialDias} dias liberado. Bom trabalho!`);
+      utils.subscription.current.invalidate();
+      utils.subscription.statusTrial.invalidate();
+      utils.subscription.trialDisponivel.invalidate();
+      setTimeout(() => setLocation("/dashboard"), 800);
+    },
+    onError: (error) => {
+      toast.error("Não foi possível iniciar o teste: " + error.message);
+    },
+  });
+
+  const desistirTroca = trpc.subscription.desistirTroca.useMutation({
+    onSuccess: () => {
+      toast.success("Troca de plano cancelada. Seu plano atual continua como está.");
+      setAwaitingPayment(false);
+      setAguardandoSubId(null);
+      utils.subscription.trocaPendente.invalidate();
+      utils.subscription.current.invalidate();
+    },
+    onError: (error) => {
+      toast.error("Erro ao desistir da troca: " + error.message);
     },
   });
 
@@ -253,7 +297,11 @@ export default function Plans() {
               )}
               <p className="text-[11px] text-white/80 mt-2">
                 {currentSub.status === "trialing" && (currentSub as any).diasRestantesTrial != null
-                  ? `Trial termina em ${(currentSub as any).diasRestantesTrial} dia${(currentSub as any).diasRestantesTrial === 1 ? "" : "s"}`
+                  ? `Trial termina em ${(currentSub as any).diasRestantesTrial} dia${(currentSub as any).diasRestantesTrial === 1 ? "" : "s"}${
+                      (currentSub as any).pagamentoEmAndamento
+                        ? " · pagamento em andamento: quando o Asaas confirmar, o plano entra no lugar do teste"
+                        : ""
+                    }`
                   : currentSub.currentPeriodEnd
                     ? `Próxima cobrança em ${new Date(currentSub.currentPeriodEnd).toLocaleDateString("pt-BR")}`
                     : null}
@@ -303,6 +351,43 @@ export default function Plans() {
           <p className="text-sm text-slate-500 max-w-lg mx-auto">
             Selecione o plano ideal para o seu escritório jurídico.
           </p>
+        </div>
+      )}
+
+      {/* Troca de plano pedida e ainda não paga — a atual segue valendo */}
+      {trocaPendente && (
+        <div className="rounded-xl border-l-[3px] border-l-violet-500 border border-violet-200 dark:border-violet-800/50 bg-violet-50/50 dark:bg-violet-950/30 p-3.5 flex items-start gap-3">
+          <Clock className="h-5 w-5 text-violet-600 dark:text-violet-400 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-bold text-violet-900 dark:text-violet-200">
+              Troca para o {trocaPendente.planName} aguardando pagamento
+            </p>
+            <p className="text-[11px] text-violet-700 dark:text-violet-300 mt-0.5">
+              Seu plano atual continua valendo até o pagamento ser confirmado. Aí a troca acontece sozinha.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {trocaPendente.invoiceUrl && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[11px] border-violet-300 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/30"
+                  onClick={() => window.open(trocaPendente.invoiceUrl, "_blank")}
+                >
+                  <ArrowRight className="h-3 w-3 mr-1" /> Abrir cobrança
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-[11px] text-violet-700 dark:text-violet-300"
+                disabled={desistirTroca.isPending}
+                onClick={() => desistirTroca.mutate()}
+              >
+                {desistirTroca.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <XCircle className="h-3 w-3 mr-1" />}
+                Desistir da troca
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -473,8 +558,25 @@ export default function Plans() {
                 ))}
               </ul>
 
+              {!currentSub && trialOk?.disponivel && ((plan as any).trialDias ?? 0) > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-5 border-dashed border-violet-400 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30"
+                  disabled={iniciarTrial.isPending}
+                  onClick={() => iniciarTrial.mutate({ planoSlug: (plan as any).slug || plan.id })}
+                >
+                  {iniciarTrial.isPending && iniciarTrial.variables?.planoSlug === ((plan as any).slug || plan.id) ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <>🎁 </>
+                  )}
+                  Testar grátis por {(plan as any).trialDias} dias
+                </Button>
+              )}
+
               <Button
-                className={`w-full mt-5 ${
+                className={`w-full ${!currentSub && trialOk?.disponivel && ((plan as any).trialDias ?? 0) > 0 ? "mt-2" : "mt-5"} ${
                   isCurrentPlan
                     ? "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/30 cursor-default"
                     : isPopular

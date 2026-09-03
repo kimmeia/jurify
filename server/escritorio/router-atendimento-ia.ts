@@ -13,6 +13,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
+import { checkPermission } from "./check-permission";
 import { getDb } from "../db";
 import { conversas, contatos, mensagens, asaasCobrancas, agendamentos, eventosProcesso, clienteProcessos, assinaturasDigitais } from "../../drizzle/schema";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
@@ -430,6 +431,13 @@ export const atendimentoIaRouter = router({
       const db = await getDb();
       if (!db) throw new Error("DB indisponível");
 
+      const [contato] = await db
+        .select()
+        .from(contatos)
+        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!contato) throw new Error("Contato não encontrado.");
+
       // Mensagens
       const msgs = await db
         .select({
@@ -449,7 +457,7 @@ export const atendimentoIaRouter = router({
       const procs = await db
         .select()
         .from(clienteProcessos)
-        .where(eq(clienteProcessos.contatoId, input.contatoId));
+        .where(and(eq(clienteProcessos.escritorioId, esc.escritorio.id), eq(clienteProcessos.contatoId, input.contatoId)));
       const cnjs = procs.map((p: any) => p.cnj).filter(Boolean);
 
       // Atos processuais
@@ -467,13 +475,17 @@ export const atendimentoIaRouter = router({
             .limit(input.limite)
         : [];
 
-      // Pagamentos
-      const cobs = await db
-        .select()
-        .from(asaasCobrancas)
-        .where(eq(asaasCobrancas.contatoId, input.contatoId))
-        .orderBy(desc(asaasCobrancas.id))
-        .limit(input.limite);
+      // Pagamentos — sem financeiro.ver a cobrança nem é consultada (valor e
+      // status não podem nem passar pelo servidor).
+      const fin = await checkPermission(ctx.user.id, "financeiro", "ver");
+      const cobs: Array<typeof asaasCobrancas.$inferSelect> = fin.allowed
+        ? await db
+            .select()
+            .from(asaasCobrancas)
+            .where(and(eq(asaasCobrancas.escritorioId, esc.escritorio.id), eq(asaasCobrancas.contatoId, input.contatoId)))
+            .orderBy(desc(asaasCobrancas.id))
+            .limit(input.limite)
+        : [];
 
       // Agendamentos
       const agen = await db

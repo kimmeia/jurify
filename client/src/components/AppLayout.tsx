@@ -836,10 +836,13 @@ function TrialBanner() {
     dias >= 2 ? "bg-orange-50 border-orange-200 text-orange-900 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-200" :
                 "bg-red-50 border-red-200 text-red-900 dark:bg-red-950/30 dark:border-red-800 dark:text-red-200";
 
-  const texto =
+  const textoBase =
     dias === 0 ? "Seu trial termina hoje." :
     dias === 1 ? "Seu trial termina amanhã." :
                  `Trial: ${dias} dias restantes.`;
+  const texto = (subscription as any)?.pagamentoEmAndamento
+    ? `${textoBase} Pagamento em andamento: quando o Asaas confirmar, o plano entra no lugar do teste.`
+    : textoBase;
 
   return (
     <div className={`border-b px-4 py-2 flex items-center justify-between gap-3 text-sm ${cor}`}>

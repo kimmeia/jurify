@@ -313,6 +313,13 @@ export const permissoesRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
 
+      // permissoes_cargo só tem cargoId: sem esta conferência o loop abaixo
+      // reescreveria as permissões de um cargo de outro escritório.
+      const [cargo] = await db.select().from(cargosPersonalizados)
+        .where(and(eq(cargosPersonalizados.id, input.id), eq(cargosPersonalizados.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!cargo) throw new Error("Cargo não encontrado.");
+
       // Atualizar dados do cargo
       const updateData: any = {};
       if (input.nome) updateData.nome = input.nome;

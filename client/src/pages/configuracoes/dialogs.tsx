@@ -535,7 +535,8 @@ export function SincronizarExtratoSection({ canEdit }: { canEdit: boolean }) {
       // Reflete as despesas novas na aba Despesas sem reload manual.
       (utils as any).despesas?.listar?.invalidate?.();
       const novos = r.novasDespesas;
-      const dup = r.duplicadas;
+      // Taxa que o webhook já tinha lançado conta como "duplicada" pro usuário.
+      const dup = r.duplicadas + (r.cobertasPeloWebhook ?? 0);
       if (r.parcial) {
         setParcialInfo({
           novasDespesas: novos,

@@ -172,6 +172,30 @@ export async function gerarDespesaTaxaAsaas(params: {
   // `created=false` (não é uma falha — é o caso esperado em retries).
   const categoriaId = await garantirCategoriaDespesaTaxasAsaas(params.escritorioId);
 
+  // Ordem inversa da duplicata: o cron do extrato pode ter importado esta
+  // taxa (PAYMENT_FEE amarrada à cobrança) antes de o webhook chegar.
+  const [peloExtrato] = await db
+    .select({ id: despesas.id })
+    .from(despesas)
+    .where(
+      and(
+        eq(despesas.cobrancaOriginalId, params.cobrancaOriginalId),
+        eq(despesas.origem, "extrato_asaas"),
+      ),
+    )
+    .limit(1);
+  if (peloExtrato) {
+    log.info(
+      {
+        escritorioId: params.escritorioId,
+        cobrancaOriginalId: params.cobrancaOriginalId,
+        despesaId: peloExtrato.id,
+      },
+      "[asaas-despesas-auto] taxa já importada pelo extrato — não duplica",
+    );
+    return { created: false, despesaId: peloExtrato.id };
+  }
+
   const descricao = params.descricaoCobranca
     ? `Taxa Asaas — ${params.descricaoCobranca}`.slice(0, 200)
     : `Taxa Asaas — cobrança #${params.cobrancaOriginalId}`;
