@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { parseValorBR } from "@shared/valor-br";
+import { mascararTelefoneBR, telefoneParaWaMe } from "@shared/telefone";
 
 function formatBRL(v: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -996,10 +997,9 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     if (d.length <= 12) return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8)}`; return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`;
   };
 
-  const formatTel = (v: string) => {
-    const d = v.replace(/\D/g, "").slice(0, 11);
-    if (d.length <= 2) return d; if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`; return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
-  };
+  // Corta o DDI antes de mascarar: colar "5585997965706" (como o WhatsApp
+  // mostra) dava "(55) 85997-9657" — e era ESSE número que ia pro cadastro.
+  const formatTel = (v: string) => mascararTelefoneBR(v);
 
   return (<><Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader><div className="space-y-3 py-2">
     <div className="space-y-1.5"><Label>Nome <span className="text-destructive">*</span></Label><Input placeholder="Nome completo" value={nome} onChange={e => setNome(e.target.value)} className={erros.nome ? "border-danger/30" : ""} />{erros.nome && <p className="text-[10px] text-danger">{erros.nome}</p>}</div>
@@ -1262,7 +1262,11 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
     // "wa.me/?text=..." (URL quebrada) e mandaríamos `enviarMut({id: undefined})`
     // que falha silenciosamente.
     const tel = (cliente.telefone || "").replace(/\D/g, "");
-    if (!tel) {
+    // O cadastro à mão guarda o número sem o 55 e o wa.me exige formato
+    // internacional — sem o prefixo o WhatsApp abria "número inválido" e o
+    // documento ficava marcado como enviado mesmo assim.
+    const linkWa = telefoneParaWaMe(tel);
+    if (!tel || !linkWa) {
       toast.error("Cliente sem telefone cadastrado.");
       return;
     }
@@ -1274,7 +1278,7 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
     const nome = cliente.nome || "tudo bem";
     const link = `${window.location.origin}/assinar/${token}`;
     const msg = encodeURIComponent(`Olá ${nome}! Segue o documento para assinatura digital:\n\n${link}\n\nPor favor, revise e assine o documento.`);
-    window.open(`https://wa.me/${tel}?text=${msg}`, "_blank");
+    window.open(`${linkWa}?text=${msg}`, "_blank");
     enviarMut.mutate({ id: assin.id });
   };
 

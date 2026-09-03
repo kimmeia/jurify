@@ -25,6 +25,7 @@ import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle
 import { MovimentacoesCentral, ConfigResumoDiario } from "./Movimentacoes";
 import { EstadosPicker } from "@/components/EstadosPicker";
 import { TRIBUNAL_SEDE, siglaDoTribunal, tribunalDoCnj } from "@shared/tribunais-pje";
+import { formatarDataCalendario } from "@shared/data-calendario";
 
 /** Estados vigiados de um monitoramento (coluna nova; legado = `tribunal`). */
 function lerTribunaisDoMonitorCliente(m: { tribunais?: string | null; tribunal?: string }): string[] {
@@ -1493,7 +1494,7 @@ function MonitoramentoCard({
                             {s.resumoIa && <p className="text-[10px] leading-tight mt-0.5 text-muted-foreground line-clamp-2">{s.content}</p>}
                             {prazo && (
                               <div className="mt-1.5 rounded-md bg-warning-bg border border-warning/30 px-2 py-1.5 flex items-center justify-between gap-2 flex-wrap dark:bg-warning/20">
-                                <span className="text-[10px] text-warning-fg">⏰ <b>{prazo.titulo}</b> — {prazo.prazoDias} dias{prazo.prazoUteis ? " úteis" : ""}{prazo.dataSugerida ? ` · vence ${new Date(prazo.dataSugerida).toLocaleDateString("pt-BR")}` : ""}</span>
+                                <span className="text-[10px] text-warning-fg">⏰ <b>{prazo.titulo}</b> — {prazo.prazoDias} dias{prazo.prazoUteis ? " úteis" : ""}{prazo.dataSugerida ? ` · vence ${formatarDataCalendario(prazo.dataSugerida)}` : ""}</span>
                                 <Button size="sm" className="h-6 text-[10px] rounded-md bg-warning hover:bg-warning text-white px-2 shrink-0" disabled={criarPrazoMut.isPending} onClick={() => criarPrazoMut.mutate({ id: prazo.id })}>
                                   {criarPrazoMut.isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "＋ Criar prazo"}
                                 </Button>
@@ -2614,7 +2615,7 @@ function AlertasTab() {
                       {sug.dataSugerida && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info-bg border border-info/30 text-info-fg font-medium tabular-nums">
                           <Clock className="h-3 w-3" />
-                          {new Date(sug.dataSugerida).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                          {formatarDataCalendario(sug.dataSugerida)}
                         </span>
                       )}
                       {sug.prazoDias != null && (
