@@ -1,6 +1,8 @@
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { mensagemDeFalha } from "@shared/mensagem-de-falha";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
@@ -124,18 +126,32 @@ async function forceLogoutAndRedirect(motivo?: string) {
   }
 }
 
-const handleAuthError = (error: unknown) => {
-  if (!(error instanceof TRPCClientError)) return;
-  if (typeof window === "undefined") return;
-
+const ehNaoAutenticado = (error: unknown): error is TRPCClientError<any> => {
+  if (!(error instanceof TRPCClientError)) return false;
   const code = (error.data as { code?: string } | undefined)?.code;
-  const isUnauthorized =
-    error.message === UNAUTHED_ERR_MSG || code === "UNAUTHORIZED";
+  return error.message === UNAUTHED_ERR_MSG || code === "UNAUTHORIZED";
+};
 
-  if (!isUnauthorized) return;
+const handleAuthError = (error: unknown) => {
+  if (typeof window === "undefined") return;
+  if (!ehNaoAutenticado(error)) return;
 
   forceLogoutAndRedirect(error.message);
 };
+
+// 26 botões chamavam o servidor sem `onError` e ficavam mudos na recusa —
+// o usuário achava que tinha desligado o bot e ele seguia rodando. Só age
+// quando a mutation não tem aviso próprio nem pediu silêncio.
+function avisarFalhaSemTratamento(
+  opcoes: { onError?: unknown; meta?: Record<string, unknown> | undefined },
+  error: unknown,
+) {
+  if (typeof opcoes.onError === "function") return;
+  if (opcoes.meta?.semAvisoGlobal) return;
+  if (ehNaoAutenticado(error)) return;
+  const { titulo, descricao } = mensagemDeFalha(error as { message?: unknown; data?: { code?: string } | null });
+  toast.error(titulo, { description: descricao });
+}
 
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
@@ -152,6 +168,7 @@ queryClient.getMutationCache().subscribe(event => {
     handleAuthError(error);
     console.error("[API Mutation Error]", error);
     reportToSentry(error, "mutation");
+    avisarFalhaSemTratamento(event.mutation.options, error);
   }
 });
 

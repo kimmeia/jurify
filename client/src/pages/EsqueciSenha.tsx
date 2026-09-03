@@ -20,6 +20,9 @@ export default function EsqueciSenha() {
 
   const mut = (trpc as any).auth.esqueciSenha.useMutation({
     onSuccess: () => setEnviado(true),
+    // Sem aviso global de propósito: esta tela responde igual com ou sem
+    // conta cadastrada (decisão do dono, 03/09).
+    meta: { semAvisoGlobal: true },
   });
 
   return (
