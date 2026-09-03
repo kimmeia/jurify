@@ -76,18 +76,23 @@ describe("excluir coluna — o aviso na tela", () => {
     expect(tela.slice(i, i + 200)).not.toContain("confirm(");
   });
 
-  it("diz o número de cards antes, não depois", () => {
-    expect(tela).toContain("Os {colunaParaExcluir?.cards} cards desta coluna serão apagados junto");
+  it("diz o número de cards antes, não depois — e o número vem do servidor", () => {
+    // A lista da tela é filtrada (arquivados escondidos, filtro do quadro);
+    // contar por ela prometia "nenhum card será afetado" e apagava cinco.
+    expect(tela).toContain("kanban.previaExcluirColuna.useQuery");
+    expect(tela).toContain("Esta coluna tem {previaColuna.total}");
+    expect(tela).not.toContain("colunaParaExcluir?.cards");
   });
 
   it("oferece arquivar, que é a saída que preserva tudo", () => {
     // Quase sempre a intenção é "tirar do quadro", não "destruir".
-    expect(tela).toContain("Arquivar os cards");
+    expect(tela).toContain("Arquivar os {previaColuna.total} e excluir a coluna");
+    expect(tela).toContain('modo: "arquivar"');
     expect(tela).toContain("continuam consultáveis");
   });
 
   it("a confirmação destrutiva não é a única opção nem a mais fácil", () => {
-    expect(tela).toContain("Excluir mesmo assim");
+    expect(tela).toContain("Excluir tudo");
     expect(tela).toContain("<AlertDialogCancel>Cancelar</AlertDialogCancel>");
   });
 });

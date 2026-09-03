@@ -24,6 +24,18 @@ export function prazoCardParaGravar(prazo: string): Date {
   return /^\d{4}-\d{2}-\d{2}$/.test(prazo) ? new Date(`${prazo}T12:00:00Z`) : new Date(prazo);
 }
 
+/**
+ * Coluna que recebe os cards arquivados quando a deles é excluída: a
+ * anterior no quadro; sem anterior, a seguinte. `null` = coluna única, não há
+ * onde guardar.
+ */
+export function colunaVizinha<T extends { id: number; ordem: number }>(colunas: T[], colunaId: number): T | null {
+  const ordenadas = [...colunas].sort((a, b) => a.ordem - b.ordem || a.id - b.id);
+  const i = ordenadas.findIndex((c) => c.id === colunaId);
+  if (i < 0) return null;
+  return ordenadas[i - 1] ?? ordenadas[i + 1] ?? null;
+}
+
 export interface FiltrosCards {
   responsavelId?: number;
   prioridade?: "baixa" | "media" | "alta";

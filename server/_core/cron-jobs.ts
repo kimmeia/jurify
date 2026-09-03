@@ -9,7 +9,7 @@
  */
 
 import { getDb } from "../db";
-import { assinaturasDigitais, agendamentos, tarefas, colaboradores, notificacoes, escritorios } from "../../drizzle/schema";
+import { assinaturasDigitais, agendamentos, tarefas, colaboradores, notificacoes, escritorios, kanbanColunas } from "../../drizzle/schema";
 import { eq, and, lt, sql, or, gte, lte, isNull, inArray } from "drizzle-orm";
 import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { corteAtraso } from "../escritorio/prazo-atrasado";
@@ -226,6 +226,9 @@ export async function verificarPrazosKanban() {
             inArray(kanbanCards.escritorioId, ids),
             eq(kanbanCards.atrasado, false),
             lt(kanbanCards.prazo, corteVencimentoCalendario(now, tz)),
+            // Card concluído não atrasa: mover pra conclusão zera a flag e o
+            // cron não pode religar uma hora depois.
+            sql`${kanbanCards.colunaId} NOT IN (SELECT ${kanbanColunas.id} FROM ${kanbanColunas} WHERE ${kanbanColunas.tipo} = 'conclusao')`,
           ),
         );
       count += (result as any)?.[0]?.affectedRows || 0;
