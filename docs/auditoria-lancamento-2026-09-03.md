@@ -201,7 +201,8 @@ etc. Lista completa no arquivo de achados. Não seguram o lançamento.
   em silêncio.
 - **Asaas**: quais eventos de webhook estão ligados (decide o auth-3).
 - **Tribunais**: criar os cadastros (TRF1/2/3/6 e os estaduais com "login
-  falhou") e rodar "Testar tudo".
+  falhou") e rodar "Testar tudo". *03/09: o dono está fazendo e está dando
+  certo — resolvido.*
 - **Meta**: 14 dias sem disparo frio até ~05/09; não clicar "solicitar
   análise" antes; mandar o print do aviso 2 e o Quality Rating.
 - **Termos v2**: revisão jurídica.
