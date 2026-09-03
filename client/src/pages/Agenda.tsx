@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { rangeGradeCalendario } from "@shared/escritorio-types";
+import { telefoneParaWaMe } from "@shared/telefone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -485,7 +486,7 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
                     {ev.contatoTelefone}
                   </button>
                   <a
-                    href={`https://wa.me/55${String(ev.contatoTelefone).replace(/\D/g, "")}`}
+                    href={telefoneParaWaMe(String(ev.contatoTelefone)) ?? undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
@@ -2323,7 +2324,7 @@ function DetalhesEventoDialog({
                     <MessageCircle className="h-3.5 w-3.5" />
                   </button>
                   <a
-                    href={`https://wa.me/55${String(evento.contatoTelefone).replace(/\D/g, "")}`}
+                    href={telefoneParaWaMe(String(evento.contatoTelefone)) ?? undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[10.5px] font-medium text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 rounded px-1.5 py-0.5 inline-flex items-center gap-1"
@@ -2603,6 +2604,9 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
       setResponsavelId(eventoEdit.responsavelId ?? null);
       setResponsavelBusca("");
       setAnexos([]); // será carregado da query listarAnexos abaixo
+      // O dialog fica sempre montado: sem zerar aqui, os lembretes do último
+      // evento editado iam junto pro próximo (listarLembretes re-hidrata abaixo).
+      setLembreteMinutos([30]); setLembreteCanais(["notificacao_app"]); setLembreteDestinatarios([]);
     } else {
       setTipoEvento("compromisso");
       setTitulo(""); setDescricao(""); setDataInicio(""); setHoraInicio("");
@@ -2612,6 +2616,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
       setResponsavelId(undefined); setResponsavelBusca("");
       setAnexos([]);
       setDestinatariosBusca("");
+      setLembreteMinutos([30]); setLembreteCanais(["notificacao_app"]); setLembreteDestinatarios([]);
     }
   }, [open, eventoEdit?.id]);
 
@@ -2680,7 +2685,11 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
   const adicionarAnexoMut = (trpc.agenda as any).adicionarAnexo.useMutation();
   const removerAnexoMut = (trpc.agenda as any).removerAnexo.useMutation();
   useMemo(() => {
-    if (!isEdit || !lembretesExistentes || lembretesExistentes.length === 0) return;
+    if (!isEdit || !lembretesExistentes) return;
+    if (lembretesExistentes.length === 0) {
+      setLembreteMinutos([30]); setLembreteCanais(["notificacao_app"]); setLembreteDestinatarios([]);
+      return;
+    }
     const mins = Array.from(new Set(lembretesExistentes.map((l: any) => l.minutosAntes)));
     setLembreteMinutos(mins as number[]);
     const canais = new Set<string>();
@@ -3281,7 +3290,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
               />
               {contatoTelefone && contatoTelefone.replace(/\D/g, "").length >= 10 && (
                 <a
-                  href={`https://wa.me/55${contatoTelefone.replace(/\D/g, "")}`}
+                  href={telefoneParaWaMe(contatoTelefone) ?? undefined}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 inline-flex items-center gap-1"

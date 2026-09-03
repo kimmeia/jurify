@@ -68,6 +68,22 @@ export function mascararTelefoneBR(valor: string | null | undefined): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
+/**
+ * Link do WhatsApp Web: `https://wa.me/5585997965706`.
+ *
+ * O wa.me só aceita formato internacional, e o número chega aqui dos dois
+ * jeitos: o que nasceu do WhatsApp já vem "5585997965706", o do cadastro à
+ * mão vem "(85) 99796-5706". Prefixar 55 sempre dava `wa.me/555585…`; nunca
+ * prefixar dava `wa.me/85997965706` — os dois "número inválido" no WhatsApp.
+ * Mesma régua de `mascararTelefoneBR`: "55" com 10/11 dígitos é DDD (RS).
+ */
+export function telefoneParaWaMe(valor: string | null | undefined): string | null {
+  const d = digitos(String(valor ?? ""));
+  if (!d) return null;
+  const internacional = d.length >= 12 && d.startsWith("55") ? d : `55${d}`;
+  return `https://wa.me/${internacional}`;
+}
+
 /** Os dois valores apontam pro mesmo telefone? */
 export function mesmoTelefone(
   a: string | null | undefined,

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo, useId, Fragment } from "react";
 import { useLocation } from "wouter";
-import { mesmoTelefone } from "@shared/telefone";
+import { mesmoTelefone, mascararTelefoneBR } from "@shared/telefone";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -286,21 +286,14 @@ function TwilioCallPopup({ phone, onClose }: { phone: string; onClose: () => voi
 }
 
 /**
- * Aplica máscara brasileira no telefone enquanto o usuário digita.
- * Aceita até 11 dígitos (DDD + 9 dígitos do celular). O DDI 55 é
- * adicionado automaticamente no envio.
- *
- *   "11999990000"   -> "(11) 99999-0000"
- *   "1199999"       -> "(11) 9999-9"
- *   "11"            -> "(11) "
+ * Máscara brasileira do telefone enquanto o usuário digita. Delega pra régua
+ * do shared, que corta o DDI antes de mascarar: o deep-link `?telefone=` e o
+ * `?contatoId=` chegam com o número do cadastro ("5585997965706"), e a cópia
+ * local cortava nos 11 primeiros dígitos — preenchia "(55) 85997-9657", que
+ * passava na validação e ia pro envio com 55 na frente de novo.
  */
 function maskPhoneBR(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 11);
-  if (digits.length === 0) return "";
-  if (digits.length <= 2) return `(${digits}`;
-  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  return mascararTelefoneBR(value);
 }
 
 /** Valida se o telefone tem ao menos DDD + número (10 ou 11 dígitos) */
