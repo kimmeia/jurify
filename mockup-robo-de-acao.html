@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0;
+    --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --aviso:#b45309; --aviso-bg:#fffbeb; --aviso-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:24px 30px; height:100%; display:flex; flex-direction:column; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .btn-primary { background:var(--acento); color:#fff; font-weight:600; font-size:13.5px;
+                 border-radius:10px; padding:11px 18px; display:flex; align-items:center; gap:8px;
+                 box-shadow:0 8px 18px -8px #7c3aed88; }
+  .btn-ghost { border:1px solid var(--borda); background:var(--surface); color:var(--corpo);
+               font-weight:600; font-size:13px; border-radius:10px; padding:11px 15px;
+               display:flex; align-items:center; gap:7px; }
+
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .chip { border:1px solid var(--borda); background:var(--surface); color:var(--corpo-2);
+          border-radius:999px; padding:5px 11px; font-size:11.5px; font-weight:600;
+          display:inline-flex; align-items:center; gap:6px; }
+  .chip.on { background:var(--tinta); color:#fff; border-color:var(--tinta); }
+  .chip .n { font-size:11px; opacity:.62; font-weight:700; }
+
+  /* ── faixa de números ── */
+  .tiles { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-top:16px; flex:0 0 auto; }
+  .tile { padding:13px 15px 14px; }
+  .tile .k { display:flex; align-items:baseline; gap:8px; margin-top:7px; }
+  .tile .v { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.02em; line-height:1; }
+  .tile .de { font-size:12.5px; color:var(--fraco); font-weight:600; }
+  .tile .obs { margin-top:6px; font-size:11.5px; color:var(--mudo); }
+  .tile.f { background:var(--alerta-bg); border-color:var(--alerta-borda); }
+  .tile.f .v { color:var(--alerta-forte); } .tile.f .obs { color:#9f1239; }
+  .tile.a { background:var(--aviso-bg); border-color:var(--aviso-borda); }
+  .tile.a .v { color:var(--aviso); } .tile.a .obs { color:#92400e; }
+  .barra { margin-top:9px; height:6px; border-radius:999px; background:var(--hairline); display:flex; overflow:hidden; }
+  .barra i { display:block; height:100%; }
+
+  /* ── corpo ── */
+  .corpo { flex:1 1 auto; display:grid; grid-template-columns:1fr 396px; gap:14px; margin-top:14px; min-height:0; }
+
+  .lista { display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+  .lista-topo { padding:13px 16px 12px; border-bottom:1px solid var(--hairline); flex:0 0 auto; }
+  .lista-topo .t { font-family:'Poppins'; font-weight:700; font-size:16px; }
+  .lista-topo .d { margin-top:2px; font-size:12px; color:var(--mudo); }
+  .filtros { display:flex; align-items:center; gap:8px; margin-top:11px; }
+
+  .linhas { flex:1 1 auto; overflow:hidden; }
+  .ln { display:grid; grid-template-columns:118px 1fr 128px; gap:14px; align-items:start;
+        padding:9px 16px; border-bottom:1px solid var(--hairline-2); }
+  .ln .mod { font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+             color:var(--fraco); padding-top:2px; }
+  .ln .ac { font-size:13px; font-weight:600; color:var(--tinta-2); }
+  .ln .ev { margin-top:3px; font-size:11.5px; color:var(--mudo); line-height:1.45; }
+  .ln.falhou { background:#fef2f280; }
+  .ln.falhou .ac { color:var(--alerta-forte); }
+  .ln.falhou .ev { color:#9f1239; }
+
+  .st { justify-self:end; border-radius:999px; padding:4px 10px; font-size:10.5px; font-weight:700;
+        letter-spacing:.04em; text-transform:uppercase; display:inline-flex; align-items:center; gap:6px;
+        white-space:nowrap; }
+  .st i { width:6px; height:6px; border-radius:50%; display:block; }
+  .st.ok { background:var(--ok-bg); color:#047857; border:1px solid var(--ok-borda); }
+  .st.ok i { background:var(--ok); }
+  .st.f { background:#fff; color:var(--alerta-forte); border:1px solid var(--alerta-borda); }
+  .st.f i { background:var(--alerta); }
+  .st.nv { background:var(--aviso-bg); color:var(--aviso); border:1px solid var(--aviso-borda); }
+  .st.nv i { background:#d97706; }
+
+  .lista-pe { flex:0 0 auto; padding:11px 16px; border-top:1px solid var(--hairline);
+              display:flex; align-items:center; justify-content:space-between;
+              font-size:12px; color:var(--mudo); background:var(--hairline-2); border-radius:0 0 13px 13px; }
+  .lista-pe b { color:var(--corpo); font-weight:600; }
+
+  /* ── coluna direita ── */
+  .lado { display:flex; flex-direction:column; gap:14px; min-height:0; }
+  .bloco { padding:14px 15px; flex:0 0 auto; }
+  .bloco .t { font-family:'Poppins'; font-weight:700; font-size:16px; }
+  .bloco .d { margin-top:2px; font-size:12px; color:var(--mudo); line-height:1.45; }
+
+  .kv { margin-top:11px; display:grid; grid-template-columns:96px 1fr; gap:7px 10px; align-items:baseline; }
+  .kv .k { font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--fraco); }
+  .kv .v { font-size:12.5px; color:var(--corpo); font-weight:500; }
+  .kv .v.mono { font-family:'Inter'; letter-spacing:-.01em; color:var(--tinta-2); font-weight:600; }
+
+  .cercas { margin-top:10px; display:flex; flex-direction:column; gap:8px; }
+  .cerca { display:grid; grid-template-columns:20px 1fr; gap:9px; align-items:start;
+           padding:9px 10px; border:1px solid var(--borda); border-radius:10px; background:var(--hairline-2); }
+  .cerca .ic { width:20px; height:20px; border-radius:6px; background:var(--acento-bg);
+               display:flex; align-items:center; justify-content:center; }
+  .cerca .tt { font-size:12px; font-weight:600; color:var(--tinta-2); }
+  .cerca .dd { margin-top:2px; font-size:11px; color:var(--mudo); line-height:1.42; }
+
+  .regra { margin-top:10px; padding:11px 12px; border-radius:11px;
+           background:var(--acento-bg-2); border:1px solid #ddd6fe; }
+  .regra .rt { font-size:11.5px; font-weight:700; color:var(--acento-forte); }
+  .regra .rd { margin-top:3px; font-size:11.5px; color:#5b21b6cc; line-height:1.45; }
+
+  .veredito { flex:1 1 auto; display:flex; flex-direction:column; justify-content:center;
+              padding:15px 16px; background:var(--tinta); border-color:var(--tinta); min-height:0; }
+  .rlist { margin-top:10px; display:flex; flex-direction:column; gap:8px; }
+  .rlist .r { display:grid; grid-template-columns:17px 1fr; gap:9px; align-items:start;
+              font-size:11.5px; color:#94a3b8; line-height:1.45; }
+  .rlist .r b { color:#e2e8f0; font-weight:600; }
+  .rlist .rn { width:17px; height:17px; border-radius:5px; background:#7c3aed33; color:var(--acento-claro);
+               font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .vsep { margin-top:13px; height:1px; background:#1e293b; }
+  .veredito .vm { color:#64748b; font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+  .veredito .vt { margin-top:13px; font-family:'Poppins'; font-weight:700; font-size:16px; color:#fff; line-height:1.4; }
+  .veredito .vt em { font-style:normal; color:var(--acento-claro); }
+  .veredito .vd { margin-top:9px; font-size:12px; color:#94a3b8; line-height:1.5; }
+  .veredito .vd b { color:#e2e8f0; font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">Robô de ação</div>
+        <div class="sub">Entra com a conta dele, clica ação por ação e só diz “ok” quando confirma o efeito na tela.</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div class="btn-ghost">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3v10m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="#334155" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Baixar relatório
+        </div>
+        <div class="btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Rodar de novo
+        </div>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <div class="card tile">
+        <div class="micro">Ações mapeadas</div>
+        <div class="k"><span class="v">63</span><span class="de">no app inteiro</span></div>
+        <div class="barra">
+          <i style="width:69.8%; background:#059669"></i>
+          <i style="width:4.8%; background:#dc2626"></i>
+          <i style="width:25.4%; background:#f59e0b"></i>
+        </div>
+      </div>
+      <div class="card tile">
+        <div class="micro">Exercitadas</div>
+        <div class="k"><span class="v">47</span><span class="de">de 63</span></div>
+        <div class="obs">Clicou e conferiu o efeito de cada uma</div>
+      </div>
+      <div class="card tile f">
+        <div class="micro" style="color:#b91c1caa">Falharam</div>
+        <div class="k"><span class="v">3</span><span class="de" style="color:#b91c1c99">problemas reais</span></div>
+        <div class="obs">2 de dado divergente · 1 de tela travada</div>
+      </div>
+      <div class="card tile a">
+        <div class="micro" style="color:#b4530999">Não verificadas</div>
+        <div class="k"><span class="v">16</span><span class="de" style="color:#b4530999">com motivo</span></div>
+        <div class="obs">Não são “ok”: são as que ele não conseguiu provar</div>
+      </div>
+    </div>
+
+    <div class="corpo">
+
+      <div class="card lista">
+        <div class="lista-topo">
+          <div class="t">O que o robô fez, ação por ação</div>
+          <div class="d">Varredura #4821 · 04/09, 08h12 → 08h22 · conta descartada ao fim</div>
+          <div class="filtros">
+            <span class="chip on">Precisa de atenção <span class="n">19</span></span>
+            <span class="chip">Falhou <span class="n">3</span></span>
+            <span class="chip">Não verificada <span class="n">16</span></span>
+            <span class="chip">Ok <span class="n">44</span></span>
+            <span style="margin-left:auto; font-size:11.5px; color:var(--fraco); font-weight:600;">Ordenado por gravidade</span>
+          </div>
+        </div>
+
+        <div class="linhas">
+
+          <div class="ln falhou">
+            <div class="mod">Processos</div>
+            <div>
+              <div class="ac">Marcar movimentação como lida</div>
+              <div class="ev">Clicou em “Marcar como lida” no processo 0801234-55.2025.8.06.0001. O card foi de 12 para 11, mas o selo do menu lateral continuou 12 depois de recarregar.</div>
+            </div>
+            <div class="st f"><i></i>Falhou</div>
+          </div>
+
+          <div class="ln falhou">
+            <div class="mod">Atendimento</div>
+            <div>
+              <div class="ac">Filtrar conversas por atendente</div>
+              <div class="ev">Selecionou “Ana Beatriz Marinho”. A pílula do topo mostrou 8 conversas e a lista abaixo trouxe 11 — a mesma pergunta com duas respostas na mesma tela.</div>
+            </div>
+            <div class="st f"><i></i>Falhou</div>
+          </div>
+
+          <div class="ln falhou">
+            <div class="mod">Configurações</div>
+            <div>
+              <div class="ac">Revalidar credencial do tribunal</div>
+              <div class="ev">Clicou em “Revalidar”. O botão ficou em “Validando…” por 60 s: nenhuma resposta, nenhuma mensagem de erro e nenhuma mudança de status na tela.</div>
+            </div>
+            <div class="st f"><i></i>Falhou</div>
+          </div>
+
+          <div class="ln">
+            <div class="mod">Clientes</div>
+            <div>
+              <div class="ac">Excluir cliente</div>
+              <div class="ev">Clicou e abriu um <b>confirm() nativo do navegador</b> — o robô não sabe responder.</div>
+            </div>
+            <div class="st nv"><i></i>Não verif.</div>
+          </div>
+
+          <div class="ln">
+            <div class="mod">SmartFlow</div>
+            <div>
+              <div class="ac">Publicar fluxo</div>
+              <div class="ev">Clicou e o botão respondeu, mas a tela não diz se o fluxo passou a rodar.</div>
+            </div>
+            <div class="st nv"><i></i>Não verif.</div>
+          </div>
+
+          <div class="ln">
+            <div class="mod">Financeiro</div>
+            <div>
+              <div class="ac">Gerar cobrança no Asaas</div>
+              <div class="ev">Não clicou de propósito: sem integração ligada, a cobrança sairia no mundo real.</div>
+            </div>
+            <div class="st nv"><i></i>Não verif.</div>
+          </div>
+
+          <div class="ln">
+            <div class="mod">Configurações</div>
+            <div>
+              <div class="ac">Convidar colaborador</div>
+              <div class="ev">Não clicou de propósito: o convite dispara e-mail de verdade pelo Resend.</div>
+            </div>
+            <div class="st nv"><i></i>Não verif.</div>
+          </div>
+
+          <div class="ln">
+            <div class="mod">Processos</div>
+            <div>
+              <div class="ac">Consultar andamento no PJe</div>
+              <div class="ev">Exige credencial real, e login repetido pode bloquear a OAB do escritório.</div>
+            </div>
+            <div class="st nv"><i></i>Não verif.</div>
+          </div>
+
+          <div class="ln">
+            <div class="mod">Acordos</div>
+            <div>
+              <div class="ac">Homologar acordo</div>
+              <div class="ev">O botão só existe com o acordo em execução, e o robô não chegou nesse estado.</div>
+            </div>
+            <div class="st nv"><i></i>Não verif.</div>
+          </div>
+
+          <div class="ln">
+            <div class="mod">Relatórios</div>
+            <div>
+              <div class="ac">Comparar com período anterior</div>
+              <div class="ev">O comparativo só aparece com 30 dias de histórico; a conta nasceu hoje às 08h12.</div>
+            </div>
+            <div class="st nv"><i></i>Não verif.</div>
+          </div>
+
+          <div class="ln">
+            <div class="mod">Admin</div>
+            <div>
+              <div class="ac">Suspender escritório</div>
+              <div class="ev">Fora do alcance por regra: o robô nunca recebe cargo de admin.</div>
+            </div>
+            <div class="st nv"><i></i>Não verif.</div>
+          </div>
+
+        </div>
+
+        <div class="lista-pe">
+          <span>Mais <b>8 não verificadas</b> com o mesmo tipo de motivo</span>
+          <span>As <b>44 ações ok</b> estão no filtro “Ok” — cada uma com o efeito que o robô confirmou</span>
+        </div>
+      </div>
+
+      <div class="lado">
+
+        <div class="card bloco">
+          <div class="t">A conta do robô</div>
+          <div class="d">Criada pelo próprio robô, já com o e-mail marcado como verificado — ele não precisa abrir caixa de entrada.</div>
+          <div class="kv">
+            <div class="k">Login</div><div class="v mono">robo.qa+4821@jurify.test</div>
+            <div class="k">Escritório</div><div class="v mono">QA Robô 4821 <span style="color:var(--fraco); font-weight:500;">(vazio, só dele)</span></div>
+            <div class="k">Cargo</div><div class="v">Dono do próprio escritório — nunca admin da plataforma</div>
+            <div class="k">Fim</div><div class="v">Escritório e dados apagados às 08h22</div>
+          </div>
+        </div>
+
+        <div class="card bloco">
+          <div class="t">O que ele não pode atravessar</div>
+          <div class="cercas">
+            <div class="cerca">
+              <div class="ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 3 4 6.5V12c0 5 3.4 8.4 8 9 4.6-.6 8-4 8-9V6.5L12 3Z" stroke="#7c3aed" stroke-width="2.2" stroke-linejoin="round"/></svg></div>
+              <div>
+                <div class="tt">Integrações externas desligadas</div>
+                <div class="dd">Escritório novo não tem Meta, Asaas nem e-mail. Ele testa a tela até a borda e para onde o mundo real começa.</div>
+              </div>
+            </div>
+            <div class="cerca">
+              <div class="ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="16" height="11" rx="2.5" stroke="#7c3aed" stroke-width="2.2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="#7c3aed" stroke-width="2.2" stroke-linecap="round"/></svg></div>
+              <div>
+                <div class="tt">Nenhuma credencial de tribunal</div>
+                <div class="dd">Login repetido no PJe pode bloquear a OAB. Ele nunca usa credencial de escritório real.</div>
+              </div>
+            </div>
+            <div class="cerca">
+              <div class="ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M5 5l14 14M19 5 5 19" stroke="#7c3aed" stroke-width="2.4" stroke-linecap="round"/></svg></div>
+              <div>
+                <div class="tt">Nunca admin da plataforma</div>
+                <div class="dd">Sem suspender, bloquear ou personificar. O painel admin mexe em escritório dos outros — é a fronteira que a conta isolada não cobre.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card veredito">
+          <div class="vm">Duas regras que ele não quebra</div>
+          <div class="rlist">
+            <div class="r"><span class="rn">1</span><div><b>Nunca para na primeira falha.</b> Parar esconde as outras — ele anota e segue.</div></div>
+            <div class="r"><span class="rn">2</span><div><b>Sem prova do efeito, não é “ok”.</b> Vira “não verificada”, com o motivo escrito.</div></div>
+          </div>
+          <div class="vsep"></div>
+          <div class="vt">“Exercitei <em>47 das 63</em> ações mapeadas. Achei <em>3 problemas</em>. As <em>16</em> que não exercitei estão listadas, com o porquê de cada uma.”</div>
+          <div class="vd">Ele não promete que <b>não existe falha</b> — isso nenhum robô entrega. Promete <b>cobertura declarada</b>: o que testou, o que achou e onde ficou cego.</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</body>
+</html>
