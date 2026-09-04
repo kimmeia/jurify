@@ -30,6 +30,20 @@ se o fix muda tela (precisa de mockup) ou não.
 > entregues** (B com a opção 2 do teste grátis: botão "Testar grátis por N
 > dias" por plano). **E (Twilio) ficou em stand-by** por decisão dele.
 > Detalhes e amarras no `CLAUDE.md`, bloco "Entregue 03/09".
+>
+> **Noite de 03/09**: dos P1 por causa-raiz, **1 (fuso), 2 (lembretes), 3
+> (DDI) e 5 (aviso de clique) foram entregues** (mockup
+> `mockup-correcoes-p1.html` aprovado). Seguem abertos: P1-4 (permissões),
+> 6 (Kanban), 7 (Processos/Cofre), 8 (planos hardcoded do admin), 9
+> (outros) e os P2.
+>
+> **Madrugada de 04/09**: do mockup `mockup-correcoes-p1b.html` o dono
+> aprovou só as abas Kanban e Processos/Cofre. **P1-6 (Kanban) entregue
+> menos o kanban-x1** (prazo em branco = 15 dias: aguarda a escolha A/B
+> dele) e **P1-7 (Processos/Cofre) entregue** — ver `CLAUDE.md`, bloco
+> "Entregue 03/09 (madrugada)". Seguem abertos: P1-4 (permissões), 8
+> (planos hardcoded do admin), 9 (outros) e os P2 — ele disse "o resto não
+> entendi", então precisam de uma explicação mais simples antes de voltar.
 
 ---
 
@@ -195,7 +209,8 @@ etc. Lista completa no arquivo de achados. Não seguram o lançamento.
   em silêncio.
 - **Asaas**: quais eventos de webhook estão ligados (decide o auth-3).
 - **Tribunais**: criar os cadastros (TRF1/2/3/6 e os estaduais com "login
-  falhou") e rodar "Testar tudo".
+  falhou") e rodar "Testar tudo". *03/09: o dono está fazendo e está dando
+  certo — resolvido.*
 - **Meta**: 14 dias sem disparo frio até ~05/09; não clicar "solicitar
   análise" antes; mandar o print do aviso 2 e o Quality Rating.
 - **Termos v2**: revisão jurídica.

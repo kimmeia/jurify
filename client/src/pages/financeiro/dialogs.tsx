@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { gerarIdemKey } from "@/lib/utils";
+import { dataLocalHoje } from "@shared/data-calendario";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -511,7 +512,7 @@ export function NovaCobrancaDialog({
             {/* Validação preventiva: vencimento não pode ser data passada,
                 EXCETO em modo manual+jaPaga (registro retroativo de pagamento
                 que já aconteceu). */}
-            {vencimento && vencimento < new Date().toISOString().slice(0, 10) && !(modo === "manual" && jaPaga) && (
+            {vencimento && vencimento < dataLocalHoje() && !(modo === "manual" && jaPaga) && (
               <div className="rounded-md border border-danger/30 bg-danger-bg p-2 text-[11px] text-danger-fg">
                 ⚠️ Vencimento não pode ser uma data passada. Escolha uma data futura.
                 {modo === "manual" && (
@@ -633,7 +634,7 @@ export function NovaCobrancaDialog({
                 </p>
               </div>
             )}
-          </div><DialogFooter className="shrink-0 border-t pt-4"><Button variant="outline" onClick={() => { setDuplicatasDetectadas(null); onOpenChange(false); }}>Cancelar</Button><Button onClick={handleCriar} disabled={isPending || !contatoId || !valor || !vencimento || (vencimento < new Date().toISOString().slice(0, 10) && !(modo === "manual" && jaPaga))}>{isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}{modo === "parcelada" ? `Parcelar ${parcelas}x` : modo === "recorrente" ? "Criar assinatura" : (duplicatasDetectadas && duplicatasDetectadas.length > 0 ? "Criar mesmo assim" : "Criar")}</Button></DialogFooter></>
+          </div><DialogFooter className="shrink-0 border-t pt-4"><Button variant="outline" onClick={() => { setDuplicatasDetectadas(null); onOpenChange(false); }}>Cancelar</Button><Button onClick={handleCriar} disabled={isPending || !contatoId || !valor || !vencimento || (vencimento < dataLocalHoje() && !(modo === "manual" && jaPaga))}>{isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}{modo === "parcelada" ? `Parcelar ${parcelas}x` : modo === "recorrente" ? "Criar assinatura" : (duplicatasDetectadas && duplicatasDetectadas.length > 0 ? "Criar mesmo assim" : "Criar")}</Button></DialogFooter></>
         )}
       </DialogContent>
     </Dialog>

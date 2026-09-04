@@ -9,8 +9,11 @@
  */
 
 import { getDb } from "../db";
-import { assinaturasDigitais, agendamentos, tarefas, colaboradores, notificacoes } from "../../drizzle/schema";
-import { eq, and, lt, sql, or, gte, lte, isNull } from "drizzle-orm";
+import { assinaturasDigitais, agendamentos, tarefas, colaboradores, notificacoes, escritorios, kanbanColunas } from "../../drizzle/schema";
+import { eq, and, lt, sql, or, gte, lte, isNull, inArray } from "drizzle-orm";
+import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
+import { corteAtraso } from "../escritorio/prazo-atrasado";
+import { corteVencimentoCalendario, diaCivilEmTz, horaEmTz } from "./dates";
 import { syncTodosEscritorios, validarConexoesAsaasPendentes } from "../integracoes/asaas-sync";
 import { processarSyncHistorico } from "../integracoes/asaas-sync-historico";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -66,7 +69,7 @@ async function syncAsaas() {
  * Evita duplicatas verificando se já existe notificação recente
  * com o mesmo título para o mesmo usuário.
  */
-async function notificarPrazos() {
+export async function notificarPrazos() {
   try {
     const dbConn = await getDb();
     if (!dbConn) return;
@@ -74,8 +77,26 @@ async function notificarPrazos() {
 
     const now = new Date();
     const em1h = new Date(now.getTime() + 60 * 60 * 1000);
-    const hojeInicio = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const hojeFim = new Date(hojeInicio.getTime() + 86400000);
+
+    // "Hoje" é o dia de cada escritório, não o do processo (UTC): às 21h de
+    // Brasília a tarefa de amanhã já virava "vence hoje" e a de hoje, atrasada.
+    // A janela do SQL é larga o bastante pra qualquer fuso; o recorte exato é
+    // por linha, no fuso do escritório dela.
+    const fusoPorEscritorio = new Map<number, string>();
+    const rowsFuso = await db
+      .select({ id: escritorios.id, fusoHorario: escritorios.fusoHorario })
+      .from(escritorios);
+    for (const e of rowsFuso) fusoPorEscritorio.set(e.id, e.fusoHorario || FUSO_HORARIO_PADRAO);
+    const fusoDe = (escritorioId: number) => fusoPorEscritorio.get(escritorioId) || FUSO_HORARIO_PADRAO;
+    const JANELA_MS = 30 * 60 * 60 * 1000;
+    const janelaInicio = new Date(now.getTime() - JANELA_MS);
+    const janelaFim = new Date(now.getTime() + JANELA_MS);
+    const venceHoje = (quando: Date, escritorioId: number) => {
+      const tz = fusoDe(escritorioId);
+      return diaCivilEmTz(quando, tz) === diaCivilEmTz(now, tz);
+    };
+    const jaAtrasou = (quando: Date, escritorioId: number) =>
+      quando.getTime() < corteAtraso(fusoDe(escritorioId)).getTime();
 
     let notificadas = 0;
 
@@ -118,20 +139,21 @@ async function notificarPrazos() {
     for (const ag of proximos) {
       const userId = await getUserId(ag.responsavelId);
       if (!userId) continue;
-      const hora = (ag.dataInicio as Date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      const hora = horaEmTz(ag.dataInicio as Date, fusoDe(ag.escritorioId));
       await notificarSeNovo(userId, `${ag.titulo} em breve`, `Compromisso às ${hora}: ${ag.titulo}`);
     }
 
     // ─── Tarefas que vencem hoje ────────────────────────────────────────
     const tarefasHoje = await db.select().from(tarefas)
       .where(and(
-        gte(tarefas.dataVencimento, hojeInicio),
-        lte(tarefas.dataVencimento, hojeFim),
+        gte(tarefas.dataVencimento, janelaInicio),
+        lte(tarefas.dataVencimento, janelaFim),
         or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento"))
       ));
 
     for (const t of tarefasHoje) {
       if (!t.responsavelId) continue;
+      if (!t.dataVencimento || !venceHoje(t.dataVencimento as Date, t.escritorioId)) continue;
       const userId = await getUserId(t.responsavelId);
       if (!userId) continue;
       await notificarSeNovo(userId, `Tarefa vence hoje`, `"${t.titulo}" vence hoje.`);
@@ -140,11 +162,12 @@ async function notificarPrazos() {
     // ─── Atrasados ──────────────────────────────────────────────────────
     const compromissosAtrasados = await db.select().from(agendamentos)
       .where(and(
-        lt(agendamentos.dataInicio, hojeInicio),
+        lt(agendamentos.dataInicio, now),
         or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento"))
       ));
 
     for (const ag of compromissosAtrasados) {
+      if (!jaAtrasou(ag.dataInicio as Date, ag.escritorioId)) continue;
       const userId = await getUserId(ag.responsavelId);
       if (!userId) continue;
       await notificarSeNovo(userId, `Compromisso atrasado`, `"${ag.titulo}" está atrasado.`);
@@ -152,12 +175,13 @@ async function notificarPrazos() {
 
     const tarefasAtrasadas = await db.select().from(tarefas)
       .where(and(
-        lt(tarefas.dataVencimento, hojeInicio),
+        lt(tarefas.dataVencimento, now),
         or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento"))
       ));
 
     for (const t of tarefasAtrasadas) {
       if (!t.responsavelId) continue;
+      if (!t.dataVencimento || !jaAtrasou(t.dataVencimento as Date, t.escritorioId)) continue;
       const userId = await getUserId(t.responsavelId);
       if (!userId) continue;
       await notificarSeNovo(userId, `Tarefa atrasada`, `"${t.titulo}" está atrasada.`);
@@ -173,7 +197,7 @@ async function notificarPrazos() {
  * Marca cards do Kanban como atrasados quando o prazo vence.
  * Roda a cada 1h.
  */
-async function verificarPrazosKanban() {
+export async function verificarPrazosKanban() {
   try {
     const db = await getDb();
     if (!db) return;
@@ -181,16 +205,35 @@ async function verificarPrazosKanban() {
     const { kanbanCards } = await import("../../drizzle/schema");
     const now = new Date();
 
-    const result = await db.update(kanbanCards)
-      .set({ atrasado: true })
-      .where(
-        and(
-          eq(kanbanCards.atrasado, false),
-          lt(kanbanCards.prazo, now),
-        ),
-      );
+    // O prazo do card é data-calendário e o dia inteiro é do usuário: só vira
+    // atrasado quando o dia seguinte começa no fuso do escritório. Escritórios
+    // no mesmo fuso compartilham o corte — um UPDATE por fuso.
+    const rowsFuso = await db
+      .select({ id: escritorios.id, fusoHorario: escritorios.fusoHorario })
+      .from(escritorios);
+    const idsPorFuso = new Map<string, number[]>();
+    for (const e of rowsFuso) {
+      const tz = e.fusoHorario || FUSO_HORARIO_PADRAO;
+      idsPorFuso.set(tz, [...(idsPorFuso.get(tz) ?? []), e.id]);
+    }
 
-    const count = (result as any)?.[0]?.affectedRows || 0;
+    let count = 0;
+    for (const [tz, ids] of idsPorFuso) {
+      const result = await db.update(kanbanCards)
+        .set({ atrasado: true })
+        .where(
+          and(
+            inArray(kanbanCards.escritorioId, ids),
+            eq(kanbanCards.atrasado, false),
+            lt(kanbanCards.prazo, corteVencimentoCalendario(now, tz)),
+            // Card concluído não atrasa: mover pra conclusão zera a flag e o
+            // cron não pode religar uma hora depois.
+            sql`${kanbanCards.colunaId} NOT IN (SELECT ${kanbanColunas.id} FROM ${kanbanColunas} WHERE ${kanbanColunas.tipo} = 'conclusao')`,
+          ),
+        );
+      count += (result as any)?.[0]?.affectedRows || 0;
+    }
+
     if (count > 0) log.info(`[Cron] ${count} card(s) Kanban marcado(s) como atrasado(s)`);
   } catch (err: any) {
     log.error("[Cron] Erro ao verificar prazos Kanban:", err.message);

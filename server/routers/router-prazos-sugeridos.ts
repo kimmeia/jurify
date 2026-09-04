@@ -31,6 +31,8 @@ import {
   eventosProcesso,
 } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
+import { dataCalendarioNoFuso } from "../_core/dates";
+import { FUSO_HORARIO_PADRAO, inicioDoDiaNoFuso } from "../../shared/escritorio-types";
 
 const log = createLogger("router-prazos-sugeridos");
 
@@ -162,9 +164,18 @@ export const prazosSugeridosRouter = router({
         });
       }
 
-      const dataInicio = input.ajustes?.dataInicio
-        ? new Date(input.ajustes.dataInicio)
-        : sug.dataSugerida ?? new Date();
+      // `dataSugerida` é dia/hora "nus" gravados em UTC (00:00Z no prazo); a
+      // Agenda guarda instantes. Sem converter, o prazo de 10/09 nascia como
+      // compromisso às 21:00 de 09/09. Ajuste com data-só segue a mesma regra.
+      const fuso = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+      const ajusteData = input.ajustes?.dataInicio;
+      const dataInicio = ajusteData
+        ? /^\d{4}-\d{2}-\d{2}$/.test(ajusteData)
+          ? inicioDoDiaNoFuso(ajusteData, fuso)
+          : new Date(ajusteData)
+        : sug.dataSugerida
+          ? dataCalendarioNoFuso(sug.dataSugerida, fuso)
+          : new Date();
       if (Number.isNaN(dataInicio.getTime())) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Data inválida" });
       }

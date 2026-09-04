@@ -6,11 +6,14 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
-import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanComentarios, kanbanResponsavelLog, kanbanTags, contatos, colaboradores, clienteProcessos, users } from "../../drizzle/schema";
+import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanComentarios, kanbanResponsavelLog, kanbanTags, contatos, colaboradores, clienteProcessos, users, escritorios } from "../../drizzle/schema";
 import { eq, and, desc, asc, like, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "./check-permission";
-import { casaBusca, casaTag, condicoesCards, recortarColunas, rotuloColunas } from "./kanban-filtros";
+import { casaBusca, casaTag, colunaVizinha, condicoesCards, prazoCardParaGravar, recortarColunas, rotuloColunas } from "./kanban-filtros";
+import { prazoCalendarioVencido } from "../_core/dates";
+import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
+import { unirTags } from "../../shared/kanban-tags";
 
 /** Verifica se o colaborador pode mexer nesse card quando a permissão é
  *  "verProprios" only. Considera owner = responsavelId. */
@@ -29,6 +32,27 @@ async function podeMexerNoCard(
 }
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+async function fusoDoEscritorio(db: Db, escritorioId: number): Promise<string> {
+  const [e] = await db
+    .select({ fusoHorario: escritorios.fusoHorario })
+    .from(escritorios)
+    .where(eq(escritorios.id, escritorioId))
+    .limit(1);
+  return e?.fusoHorario || FUSO_HORARIO_PADRAO;
+}
+
+/** Card em coluna de conclusão nunca está atrasado; fora dela, decide o dia civil do prazo. */
+async function cardVenceAtrasado(db: Db, cardId: number, escritorioId: number, prazo: Date): Promise<boolean> {
+  const [linha] = await db
+    .select({ tipo: kanbanColunas.tipo })
+    .from(kanbanCards)
+    .innerJoin(kanbanColunas, eq(kanbanCards.colunaId, kanbanColunas.id))
+    .where(and(eq(kanbanCards.id, cardId), eq(kanbanCards.escritorioId, escritorioId)))
+    .limit(1);
+  if (linha?.tipo === "conclusao") return false;
+  return prazoCalendarioVencido(prazo, new Date(), await fusoDoEscritorio(db, escritorioId));
+}
 
 // `clienteId`/`responsavelId` chegam do client como número solto. Sem conferir
 // o escritório, o card exibia contato alheio e a notificação de atribuição ia
@@ -270,7 +294,12 @@ export const kanbanRouter = router({
    * pista de que os cards existiram (é o que a regra KAN-02 do auditor acusa).
    */
   deletarColuna: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({
+      id: z.number(),
+      // "arquivar": os cards não são apagados — ficam arquivados na coluna
+      // vizinha (a coluna some, os cards continuam consultáveis).
+      modo: z.enum(["excluir", "arquivar"]).default("excluir"),
+    }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "kanban", "excluir");
       if (!perm.allowed || !perm.verTodos) {
@@ -282,7 +311,7 @@ export const kanbanRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [col] = await db
-        .select({ id: kanbanColunas.id, nome: kanbanColunas.nome })
+        .select({ id: kanbanColunas.id, nome: kanbanColunas.nome, funilId: kanbanColunas.funilId })
         .from(kanbanColunas)
         .innerJoin(kanbanFunis, eq(kanbanColunas.funilId, kanbanFunis.id))
         .where(and(eq(kanbanColunas.id, input.id), eq(kanbanFunis.escritorioId, perm.escritorioId)))
@@ -295,6 +324,34 @@ export const kanbanRouter = router({
         .where(and(eq(kanbanCards.colunaId, input.id), eq(kanbanCards.escritorioId, perm.escritorioId)));
       const ids = alvos.map((c) => c.id);
 
+      if (input.modo === "arquivar" && ids.length) {
+        const irmas = await db
+          .select({ id: kanbanColunas.id, nome: kanbanColunas.nome, ordem: kanbanColunas.ordem })
+          .from(kanbanColunas)
+          .where(eq(kanbanColunas.funilId, col.funilId));
+        const destino = colunaVizinha(irmas, col.id);
+        if (!destino) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Não há outra coluna neste funil para guardar os cards arquivados.",
+          });
+        }
+        await db.update(kanbanCards)
+          .set({ arquivado: true, arquivadoEm: new Date() })
+          .where(and(inArray(kanbanCards.id, ids), eq(kanbanCards.arquivado, false)));
+        await db.update(kanbanCards)
+          .set({ colunaId: destino.id })
+          .where(inArray(kanbanCards.id, ids));
+        await db.delete(kanbanColunas).where(eq(kanbanColunas.id, input.id));
+        return {
+          success: true,
+          cardsExcluidos: 0,
+          cardsArquivados: ids.length,
+          movidosPara: destino.nome,
+          coluna: col.nome,
+        };
+      }
+
       if (ids.length) {
         await db.delete(kanbanMovimentacoes).where(inArray(kanbanMovimentacoes.cardId, ids));
         await db.delete(kanbanResponsavelLog).where(inArray(kanbanResponsavelLog.cardId, ids));
@@ -302,7 +359,45 @@ export const kanbanRouter = router({
         await db.delete(kanbanCards).where(inArray(kanbanCards.id, ids));
       }
       await db.delete(kanbanColunas).where(eq(kanbanColunas.id, input.id));
-      return { success: true, cardsExcluidos: ids.length, coluna: col.nome };
+      return { success: true, cardsExcluidos: ids.length, cardsArquivados: 0, movidosPara: null, coluna: col.nome };
+    }),
+
+  /**
+   * O que a exclusão da coluna vai levar — contado no servidor, sem o filtro
+   * do quadro. A tela contava a lista já filtrada e prometia "nenhum card
+   * será afetado" com cards arquivados (ou escondidos pelo filtro) na coluna.
+   */
+  previaExcluirColuna: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "kanban", "ver");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [col] = await db
+        .select({ id: kanbanColunas.id, funilId: kanbanColunas.funilId })
+        .from(kanbanColunas)
+        .innerJoin(kanbanFunis, eq(kanbanColunas.funilId, kanbanFunis.id))
+        .where(and(eq(kanbanColunas.id, input.id), eq(kanbanFunis.escritorioId, perm.escritorioId)))
+        .limit(1);
+      if (!col) throw new TRPCError({ code: "NOT_FOUND", message: "Coluna não encontrada." });
+
+      const cards = await db
+        .select({ id: kanbanCards.id, arquivado: kanbanCards.arquivado })
+        .from(kanbanCards)
+        .where(and(eq(kanbanCards.colunaId, col.id), eq(kanbanCards.escritorioId, perm.escritorioId)));
+      const irmas = await db
+        .select({ id: kanbanColunas.id, nome: kanbanColunas.nome, ordem: kanbanColunas.ordem })
+        .from(kanbanColunas)
+        .where(eq(kanbanColunas.funilId, col.funilId));
+      const destino = colunaVizinha(irmas, col.id);
+      const arquivados = cards.filter((c) => c.arquivado).length;
+      return {
+        total: cards.length,
+        noQuadro: cards.length - arquivados,
+        arquivados,
+        destino: destino ? { id: destino.id, nome: destino.nome } : null,
+      };
     }),
 
   // ─── CARDS ────────────────────────────────────────────────────────────────
@@ -354,6 +449,7 @@ export const kanbanRouter = router({
         colunasIds,
         filtros: input,
         travarNoColaborador: filtrarProprios ? perm.colaboradorId : null,
+        fusoHorario: await fusoDoEscritorio(db, perm.escritorioId),
       });
 
       const todosCards = await db
@@ -483,7 +579,7 @@ export const kanbanRouter = router({
       // Se não informou prazo, aplica prazo padrão do funil
       let prazo: Date | null = null;
       if (input.prazo) {
-        prazo = new Date(input.prazo);
+        prazo = prazoCardParaGravar(input.prazo);
       } else {
         // Buscar funil da coluna pra pegar prazoPadraoDias
         const [col] = await db.select({ funilId: kanbanColunas.funilId }).from(kanbanColunas)
@@ -503,8 +599,16 @@ export const kanbanRouter = router({
       // cliente refletem). Sem cliente, mantém em kanbanCards.tags próprio.
       let tagsCard: string | null = input.tags || null;
       if (input.clienteId && input.tags !== undefined) {
+        // Soma às do cadastro: o form do card novo não mostra as tags que o
+        // cliente já tem, e gravar por cima apagava "Trabalhista, VIP" de
+        // todos os cards dele ao marcar só "Urgente".
+        const [atual] = await db
+          .select({ tags: contatos.tags })
+          .from(contatos)
+          .where(and(eq(contatos.id, input.clienteId), eq(contatos.escritorioId, perm.escritorioId)))
+          .limit(1);
         await db.update(contatos)
-          .set({ tags: input.tags || null })
+          .set({ tags: unirTags(atual?.tags, input.tags) })
           .where(and(eq(contatos.id, input.clienteId), eq(contatos.escritorioId, perm.escritorioId)));
         tagsCard = null; // não armazena no card
       }
@@ -550,7 +654,8 @@ export const kanbanRouter = router({
       // null = remove o responsável (card fica "sem responsável")
       responsavelId: z.number().nullable().optional(),
       prioridade: z.enum(["alta", "media", "baixa"]).optional(),
-      prazo: z.string().optional(),
+      // null (ou "") = tira o prazo
+      prazo: z.string().nullable().optional(),
       tags: z.string().max(255).optional(),
       valorEstimado: z.number().nullable().optional(),
     }))
@@ -575,10 +680,19 @@ export const kanbanRouter = router({
 
       const setData: any = {};
       if (update.titulo) setData.titulo = update.titulo;
-      if (update.descricao !== undefined) setData.descricao = update.descricao;
-      if (update.cnj !== undefined) setData.cnj = update.cnj;
+      // Campo esvaziado na tela chega como "" e é gravado como vazio — antes
+      // o client mandava undefined, nada mudava e o toast dizia "atualizado".
+      if (update.descricao !== undefined) setData.descricao = update.descricao || null;
+      if (update.cnj !== undefined) setData.cnj = update.cnj || null;
       if (update.prioridade) setData.prioridade = update.prioridade;
-      if (update.prazo !== undefined) setData.prazo = update.prazo ? new Date(update.prazo) : null;
+      if (update.prazo !== undefined) {
+        const novoPrazo = update.prazo ? prazoCardParaGravar(update.prazo) : null;
+        setData.prazo = novoPrazo;
+        // O cron só LIGA a flag; quem muda o prazo decide o atraso na hora.
+        setData.atrasado = novoPrazo
+          ? await cardVenceAtrasado(db, id, perm.escritorioId, novoPrazo)
+          : false;
+      }
 
       // Tags single-source: descobre o clienteId atual do card (vindo do
       // input ou já armazenado). Se tem cliente, escreve em contatos.tags
@@ -599,7 +713,7 @@ export const kanbanRouter = router({
             .where(and(eq(contatos.id, clienteIdAlvo), eq(contatos.escritorioId, perm.escritorioId)));
           setData.tags = null; // limpa cópia local pra evitar drift
         } else {
-          setData.tags = update.tags;
+          setData.tags = update.tags || null;
         }
       }
       if (update.clienteId !== undefined) setData.clienteId = update.clienteId;
@@ -710,9 +824,25 @@ export const kanbanRouter = router({
       }
 
       // Buscar coluna origem antes de mover (com filtro por escritório)
-      const [card] = await db.select({ colunaId: kanbanCards.colunaId }).from(kanbanCards)
+      const [card] = await db.select({ colunaId: kanbanCards.colunaId, prazo: kanbanCards.prazo }).from(kanbanCards)
         .where(and(eq(kanbanCards.id, input.cardId), eq(kanbanCards.escritorioId, perm.escritorioId))).limit(1);
       if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "Card não encontrado." });
+
+      const [destino] = await db
+        .select({ id: kanbanColunas.id, tipo: kanbanColunas.tipo })
+        .from(kanbanColunas)
+        .innerJoin(kanbanFunis, eq(kanbanColunas.funilId, kanbanFunis.id))
+        .where(and(eq(kanbanColunas.id, input.colunaDestinoId), eq(kanbanFunis.escritorioId, perm.escritorioId)))
+        .limit(1);
+      if (!destino) throw new TRPCError({ code: "NOT_FOUND", message: "Coluna não encontrada." });
+
+      // Concluir limpa o atraso; voltar pra uma coluna normal recalcula pelo
+      // prazo. Sem isso o "⚠ Atrasado" ficava pra sempre no card concluído.
+      const atrasado = destino.tipo === "conclusao"
+        ? false
+        : card.prazo
+          ? prazoCalendarioVencido(card.prazo, new Date(), await fusoDoEscritorio(db, perm.escritorioId))
+          : false;
 
       // Quando o frontend não passa ordem (drop simples sobre a coluna,
       // sem definir posição), coloca no FIM da fila — calcula maior ordem
@@ -729,7 +859,7 @@ export const kanbanRouter = router({
       }
 
       await db.update(kanbanCards)
-        .set({ colunaId: input.colunaDestinoId, ordem: ordemFinal })
+        .set({ colunaId: input.colunaDestinoId, ordem: ordemFinal, atrasado })
         .where(and(eq(kanbanCards.id, input.cardId), eq(kanbanCards.escritorioId, perm.escritorioId)));
 
       // Registrar movimentação (pra métricas de tempo por etapa)
@@ -1541,13 +1671,17 @@ export const kanbanRouter = router({
       const eventos: Evento[] = [];
       eventos.push({ tipo: "criado", createdAt: card.createdAt });
 
+      // O prazo é data-calendário e o dia inteiro é do usuário: concluir às
+      // 15h do dia do prazo não é atraso, embora 12:00Z já tenha passado.
+      const fusoHistorico = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+
       for (const m of movs) {
         const destino = infoColuna.get(m.colunaDestinoId);
         const origem = infoColuna.get(m.colunaOrigemId);
         const ehConclusao = destino?.tipo === "conclusao";
         let concluidoEmAtraso: boolean | null = null;
         if (ehConclusao && card.prazo) {
-          concluidoEmAtraso = m.createdAt.getTime() > card.prazo.getTime();
+          concluidoEmAtraso = prazoCalendarioVencido(card.prazo, m.createdAt, fusoHistorico);
         }
         eventos.push({
           tipo: "movimentacao",
@@ -1598,8 +1732,7 @@ export const kanbanRouter = router({
           .filter((m) => infoColuna.get(m.colunaDestinoId)?.tipo === "conclusao")
           .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
         if (ultimaMovConclusao) {
-          concluidoEmAtraso =
-            ultimaMovConclusao.createdAt.getTime() > card.prazo.getTime();
+          concluidoEmAtraso = prazoCalendarioVencido(card.prazo, ultimaMovConclusao.createdAt, fusoHistorico);
         }
       }
 
@@ -1733,6 +1866,7 @@ export const kanbanRouter = router({
             colunasIds: escolhidas.map((c) => c.id),
             filtros,
             travarNoColaborador: filtrarProprios ? perm.colaboradorId : null,
+            fusoHorario: esc.escritorio.fusoHorario,
           })))
           // O pedido é sempre do cadastro mais recente pro mais antigo.
           .orderBy(desc(kanbanCards.createdAt), desc(kanbanCards.id));

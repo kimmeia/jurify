@@ -67,7 +67,8 @@ describe("qual credencial serve", () => {
     // O TJCE quer pje antes de esaj; o consultarCNJ quer o sistema do tribunal
     // antes do PJe nacional. Um seletor só atende os dois sem saber deles.
     expect(processos).toContain('sistemas: ["pje_tjce", "esaj_tjce", SISTEMA_PJE_NACIONAL]');
-    expect(processos).toContain("sistemas: [sistemaCofre, SISTEMA_PJE_NACIONAL]");
+    // `sistemasQueAtendem` devolve [específico, nacional], nessa ordem.
+    expect(processos).toContain("sistemas: sistemasQueAtendem(tribunal.codigoTribunal)");
   });
 
   it("os fluxos por CPF aceitam a credencial nacional (pje_*)", () => {

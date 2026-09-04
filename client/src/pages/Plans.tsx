@@ -356,13 +356,13 @@ export default function Plans() {
 
       {/* Troca de plano pedida e ainda não paga — a atual segue valendo */}
       {trocaPendente && (
-        <div className="rounded-xl border-l-[3px] border-l-info border border-info/30 bg-info-bg p-3.5 flex items-start gap-3">
-          <Clock className="h-5 w-5 text-info-fg mt-0.5 shrink-0" />
+        <div className="rounded-xl border-l-[3px] border-l-primary border border-primary/30 bg-primary/5 p-3.5 flex items-start gap-3">
+          <Clock className="h-5 w-5 text-primary mt-0.5 shrink-0" />
           <div className="flex-1">
-            <p className="text-sm font-bold text-info-fg">
+            <p className="text-sm font-bold text-foreground">
               Troca para o {trocaPendente.planName} aguardando pagamento
             </p>
-            <p className="text-[11px] text-info-fg mt-0.5">
+            <p className="text-[11px] text-muted-foreground mt-0.5">
               Seu plano atual continua valendo até o pagamento ser confirmado. Aí a troca acontece sozinha.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -370,7 +370,7 @@ export default function Plans() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-[11px] border-info/40 text-info-fg hover:bg-info/10"
+                  className="h-7 text-[11px] border-primary/40 text-primary hover:bg-primary/10"
                   onClick={() => window.open(trocaPendente.invoiceUrl, "_blank")}
                 >
                   <ArrowRight className="h-3 w-3 mr-1" /> Abrir cobrança
@@ -379,7 +379,7 @@ export default function Plans() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 text-[11px] text-info-fg"
+                className="h-7 text-[11px] text-primary"
                 disabled={desistirTroca.isPending}
                 onClick={() => desistirTroca.mutate()}
               >
@@ -562,7 +562,7 @@ export default function Plans() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full mt-5 border-dashed border-info/40 text-info-fg hover:bg-info/10"
+                  className="w-full mt-5 border-dashed border-primary/50 text-primary hover:bg-primary/10"
                   disabled={iniciarTrial.isPending}
                   onClick={() => iniciarTrial.mutate({ planoSlug: (plan as any).slug || plan.id })}
                 >

@@ -335,6 +335,95 @@ excluída"). **E (Twilio) em stand-by por decisão do dono.** Amarras:
 `assinatura-troca-sem-cancelar`, `admin-excluir-conta-alvo` — 58 mutações
 conferidas (12+16+9+8+13), todas vermelhas.
 
+**Entregue 03/09 (noite), P1 por causa-raiz — aprovado com o mockup
+navegável `mockup-correcoes-p1.html`**:
+- **Fuso (11)**: servidor — `distribuirLead` decide expediente no fuso do
+  escritório; prazo data-só do Kanban é gravado como MEIO-DIA UTC e
+  "atrasado" = passou o fim do dia civil no fuso (`corteVencimentoCalendario`
+  em `_core/dates.ts`; cron `verificarPrazosKanban` faz um UPDATE por
+  fuso); filtro "Criado em", Dashboard/`notificarPrazos` (hora no fuso,
+  "vence hoje" por dia civil), `cobrancas-scheduler` ("vencida" só com ≥1
+  dia civil de atraso) e `prazosSugeridos.aprovar` (`dataCalendarioNoFuso`).
+  Telas — `shared/data-calendario.ts` (`formatarDataCalendario` em UTC,
+  `dataLocalHoje` pelas partes locais) aplicado em Movimentações,
+  Processos, drawer, Kanban, financeiro (cobrança/despesa) e admin. Fica
+  anotado sem mexer: `Processos.tsx` `abrirAprovar` cai em "agora" UTC no
+  fallback; `dataEvento` das movimentações segue formatada local.
+- **Lembretes (4)**: `criarAgendamento` grava `dispararEm` e destinatário =
+  responsável; cron filtra por `colaboradores.id`; `NovoCompromissoDialog`
+  desabilita E-mail/WhatsApp com "em breve" (mesmo padrão da Agenda);
+  Agenda zera lembretes ao hidratar o form. Resíduo pré-existente: salvar
+  a edição antes de `listarLembretes` responder manda lista vazia.
+- **DDI (6)**: `telefoneParaWaMe` (shared) nos 3 hrefs da Agenda e na
+  assinatura; `maskPhoneBR`/`formatTel` viraram wrappers de
+  `mascararTelefoneBR`; contato duplicado corrigido na LEITURA
+  (`buscarContatoPorTelefone` casa formas com/sem 55 e com/sem 9) — NÃO na
+  gravação, de propósito: normalizar mudaria como o número aparece na
+  lista de Clientes (mudança visível sem mockup). `wa.me` à mão que
+  ficaram de fora (mesmo bug, fora do pedido): `Atendimento.tsx` popup de
+  chamada, `fila-chamadas.tsx`, `Acordos.tsx`.
+- **Aviso de clique (26)**: `avisarFalhaSemTratamento` no MutationCache
+  (`main.tsx`) — toast só quando a mutation não tem `onError` nem
+  `meta.semAvisoGlobal` (só "Esqueci a senha", decisão do dono); texto em
+  `shared/mensagem-de-falha.ts`.
+Amarras: `fuso-escritorio-servidor`, `fuso-escritorio-crons`,
+`data-calendario`, `fuso-telas-usam-helper`, `lembretes-compromisso`,
+`lembretes-dialogo-canais`, `telefone-wame`, `contato-telefone-sem-ddi`,
+`ddi-telas-usam-helper`, `aviso-global-mutation` — 86 mutações conferidas
+(31+22+13+13+7), todas vermelhas.
+
+**Entregue 03/09 (madrugada), mockup `mockup-correcoes-p1b.html` — o dono
+aprovou SÓ as abas Kanban e Processos/Cofre ("o resto não entendi"; as
+abas Permissões, Admin: planos e Outros seguem aguardando)**:
+- **Kanban (5 de 6)**: painel do card manda `""`/`null` e o servidor grava
+  vazio (`editarCard` aceita `prazo: null`, normaliza cnj/descrição/tags
+  vazios pra NULL); `atrasado` recalculado em `editarCard` (prazo novo) e
+  `moverCard` (conclusão = false; coluna normal = pelo prazo, via
+  `cardVenceAtrasado`), cron `verificarPrazosKanban` exclui colunas de
+  conclusão por subconsulta e o quadro não pinta card concluído; excluir
+  coluna: `previaExcluirColuna` conta no SERVIDOR (total/no quadro/
+  arquivados, sem filtro, só do escritório) e `deletarColuna` ganhou
+  `modo: "arquivar"` — arquiva os do quadro, MOVE todos pra coluna vizinha
+  (`colunaVizinha`: anterior, senão seguinte; funil de coluna única →
+  PRECONDITION_FAILED) e apaga só a coluna; lixeira do card abre
+  AlertDialog Cancelar/Arquivar/Excluir e "Card excluído" tem toast;
+  `criarCard` SOMA as tags marcadas às do cadastro (`unirTags`,
+  `shared/kanban-tags.ts`) e o form já vem com as tags do cliente escolhido.
+  `moverCard` passou a recusar coluna de destino de outro escritório (era
+  o kanban-x2, veio junto porque a consulta do tipo da coluna já é
+  escopada). **kanban-x1 (prazo em branco vira 15 dias) NÃO foi feito** —
+  o dono ainda não escolheu entre A (em branco = sem prazo) e B (rótulo
+  "padrão 15 dias" editável no funil); o default continua no `criarCard`.
+  Amarras: `kanban-campo-vazio-atraso-coluna-tags`,
+  `kanban-atrasado-cron-conclusao`, `kanban-excluir-coluna` (atualizado
+  pros textos novos) — 21 mutações conferidas, todas vermelhas.
+- **Processos e Cofre (5)**: `criarMonitoramento` busca monitor existente
+  (escritório + tipo + `searchKey` mascarado) ANTES do limite e da cobrança
+  e devolve `{ jaExistia: true, custoCred: 0, status }` — as 3 mutations da
+  tela avisam "já está monitorado — nada foi cobrado" e o botão trava com
+  `isPending`; `executarAdvbox` lê `verificarLimiteMonitoramentos` uma vez
+  e, a partir da vaga esgotada, NÃO cobra nem insere: linha vai pra `erros`
+  com "Limite do plano (N processos vigiados)" e conta em
+  `monitoramentosLimitePlano` (card "Fora do limite do plano" no dialog);
+  "Cadastrar e testar login" agora testa: `cadastrarMinha` continua só
+  inserindo, mas o client encadeia `validarAposCadastroMut` (hook próprio
+  de `validarMinha`, com ramificação certa ok/semCobertura/erro — o
+  `validarMut` do botão "Validar" ficou intocado, é o processos-4, fora do
+  pedido) e os seletores de Novas Ações/Importar aceitam `validando` (o
+  servidor da importação também: `inArray(status, ["ativa","validando"])`);
+  menu do card de monitoramento usa `pausado` (`status === "pausado" ||
+  "paused"`) — Pausar/Reativar nunca apareciam porque testavam
+  created/updated/paused do Judit, e `pausarMut`/`reativarMut` ganharam
+  onError; `configPorSistema` aceita `pje_trfN` (regex
+  `/^pje_((?:tj|trf)[a-z0-9]+)$/`) e `sistemasQueAtendem(tribunal)` =
+  [específico se está no REGISTRO, nacional] alimenta `escolherCredencial`
+  em `consultarCNJ`/`consultarCNJSincrono` — sem isso a credencial
+  `pje_trf1` nunca era escolhida pra processo do TRF1 porque
+  `sistemaCofrePorTribunal("trf1")` é a nacional (isso NÃO mudou; o import
+  depende). Amarra: `processos-cofre-lancamento` (26 testes) — 14 mutações
+  conferidas, todas vermelhas. Dois `expect` de `cofre-multi-tribunal` e
+  `monitoramento-credencial` foram atualizados pro literal novo.
+
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
 `META_APP_SECRET_EXTRA` (é isso que alimenta o HMAC do webhook;
@@ -342,8 +431,10 @@ da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
 `TURNSTILE_SECRET_KEY`, `SENTRY_DSN_BACKEND`, `RESEND_API_KEY`/`FROM_EMAIL`,
 `VAPID_*`, `ENCRYPTION_KEY`/`CANAIS_ENCRYPTION_KEY`, `APP_URL`; quais
 eventos de webhook estão ligados na conta Asaas (decide o auth-3); cadastros
-nos tribunais + "Testar tudo"; Meta (14 dias sem disparo frio); revisão
-jurídica dos Termos v2. Só `JWT_SECRET` e `DATABASE_URL` derrubam o boot se
+nos tribunais + "Testar tudo" (**o dono está fazendo, dando certo — 03/09,
+resolvido**); Meta (14 dias sem disparo frio — **dono deu por resolvido em
+03/09**); revisão jurídica dos Termos v2 (**dono deu por resolvida em
+03/09**). Só `JWT_SECRET` e `DATABASE_URL` derrubam o boot se
 faltarem — o resto falha em silêncio.
 
 Conferido com o print do Railway (03/09, fim do dia): faltam só
@@ -524,6 +615,8 @@ de `<details>`; "Testar tudo" roda a bateria em série.
 **Pendente do dono**: criar os cadastros nesses tribunais e rodar "Testar
 tudo" — os endereços dos TRFs foram deduzidos do padrão e NÃO puderam ser
 conferidos daqui (o proxy do ambiente bloqueia os portais).
+**03/09: o dono está fazendo os cadastros e está dando certo — item sai
+da lista de pendências; não cobrar de novo.**
 
 ### G. Telefone e dados do contato no Atendimento — ENTREGUE 01–02/09
 
@@ -735,6 +828,8 @@ de lá tem o estado conferido no código em 03/09 (bloco "Estado em
    só reativo/1:1), NÃO clicar "solicitar análise" antes disso; lembrete
    26/08 atualizado (`trig_01Tg9mU9aGhgVWKbC7ShfuHw`). Aguardando do dono:
    print do "Ver detalhes" do aviso 2 + Quality Rating no WhatsApp Manager.
+   **03/09: o dono deu o assunto Meta por resolvido — não cobrar print nem
+   Quality Rating de novo; só reabrir se chegar aviso novo.**
    Aviso 2 é o gatilho descrito pros itens em STAND-BY (tela de evidência
    de conformidade + botão "cliente autorizou WhatsApp") — dono foi
    lembrado em 23/08; segue sem implementar até ele pedir.
@@ -750,7 +845,8 @@ de lá tem o estado conferido no código em 03/09 (bloco "Estado em
 1. **Robô de jornada varre em 32s** — dono já disse que está errado. A
    instrumentação (tempos por tela + "X de 19 mostraram esqueleto") já grava;
    olhar a primeira medição real e agir.
-2. **Termos v2 publicados SEM revisão jurídica final (24/08)** — aceite
+2. **Termos v2 publicados SEM revisão jurídica final (24/08) — 03/09: o dono
+   deu a revisão por resolvida; não cobrar de novo.** Histórico: aceite
    versionado entregue: `shared/termos.ts` (TERMOS_VERSAO=2), trilha
    `aceites_termos` (data/hora/IP/versão), TermosGate bloqueante pro DONO
    (colaborador/admin/impersonação não travam), cadastro com botão travado

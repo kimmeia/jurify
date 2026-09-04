@@ -12,6 +12,7 @@ import type { AppRouter } from "../../../server/routers";
 import { trpc } from "@/lib/trpc";
 import { useModulosContratados } from "@/components/ModuloGuard";
 import { contratoLibera } from "@shared/modulos-contratacao";
+import { formatarDataCalendario } from "@shared/data-calendario";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -772,7 +773,7 @@ function CardAcao({
                 }`}
               >
                 <CalendarClock className="h-3.5 w-3.5" />
-                {audiencia ? "Audiência" : "Vence"} {dataCurta(p.data)}
+                {audiencia ? "Audiência" : "Vence"} {formatarDataCalendario(p.data, { ano: false })}
                 {typeof restantes === "number" &&
                   ` · ${
                     restantes < 0

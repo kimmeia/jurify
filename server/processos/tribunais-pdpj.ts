@@ -209,9 +209,10 @@ export function tribunalRequerCredencial(tribunal: string): boolean {
 }
 
 /**
- * Mapeia o `sistema` de uma credencial do cofre (ex: "pje_tjmg") pra a config
- * do tribunal — pro LOGIN usar o portal do estado certo. Só PJe-TJ PDPJ
- * ("pje_tjXX"); outros (esaj_*, eproc_*, pje_restrito_trt*, pje_*) → null.
+ * Mapeia o `sistema` de uma credencial do cofre (ex: "pje_tjmg", "pje_trf1")
+ * pra a config do tribunal — pro LOGIN usar o portal certo. Cobre os PJe do
+ * REGISTRO (TJs PDPJ e TRFs); outros (esaj_*, eproc_*, pje_restrito_trt*,
+ * pje_*) → null.
  *
  * Casos especiais: alguns sistemas no cofre usam sigla histórica diferente
  * do código do CNJ. TJDFT no cofre vs tjdf no CNJ (estado DF).
@@ -219,6 +220,9 @@ export function tribunalRequerCredencial(tribunal: string): boolean {
 const ALIAS_SISTEMA_PARA_TRIBUNAL: Record<string, string> = {
   tjdft: "tjdf",
 };
+const ALIAS_TRIBUNAL_PARA_SISTEMA: Record<string, string> = Object.fromEntries(
+  Object.entries(ALIAS_SISTEMA_PARA_TRIBUNAL).map(([sistema, tribunal]) => [tribunal, sistema]),
+);
 
 /**
  * Sistema que vale em QUALQUER PJe.
@@ -249,8 +253,25 @@ export function tribunaisPjeDisponiveis(): string[] {
   return Object.keys(REGISTRO);
 }
 
+/**
+ * Sistemas do cofre que atendem este tribunal, do específico pro nacional.
+ *
+ * Pros TRFs o `sistemaCofrePorTribunal` do cnj-parser devolve a nacional (o
+ * import de planilha depende disso), então quem montava a lista a partir dele
+ * nunca incluía `pje_trf1` — e a credencial cadastrada pro TRF não era
+ * escolhida pra consultar processo do próprio TRF.
+ */
+export function sistemasQueAtendem(codigoTribunal: string): string[] {
+  const sistemas: string[] = [];
+  if (codigoTribunal in REGISTRO) {
+    sistemas.push(`pje_${ALIAS_TRIBUNAL_PARA_SISTEMA[codigoTribunal] ?? codigoTribunal}`);
+  }
+  sistemas.push(SISTEMA_PJE_NACIONAL);
+  return [...new Set(sistemas)];
+}
+
 export function configPorSistema(sistema: string): TribunalPdpjConfig | null {
-  const m = /^pje_(tj[a-z]+)$/.exec(sistema);
+  const m = /^pje_((?:tj|trf)[a-z0-9]+)$/.exec(sistema);
   if (!m) return null;
   const trib = ALIAS_SISTEMA_PARA_TRIBUNAL[m[1]] ?? m[1];
   return getConfigTribunal(trib);

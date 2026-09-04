@@ -16,6 +16,7 @@ import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { dataCalendarioISO, diaSemanaCalendario, formatarDataCalendario } from "@shared/data-calendario";
 import {
   Sheet,
   SheetContent,
@@ -140,7 +141,7 @@ function dataBR(d: Date | string) {
 }
 
 function diaSemana(d: Date | string) {
-  return new Date(d).toLocaleDateString("pt-BR", { weekday: "long", timeZone: "UTC" });
+  return diaSemanaCalendario(d);
 }
 
 export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) {
@@ -240,7 +241,7 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
               </p>
               <p className="text-xs text-danger-fg font-medium">
                 {prazo.dias ? `${prazo.dias} dias ${prazo.uteis ? "úteis" : "corridos"} · ` : ""}
-                {prazo.tipo === "audiencia" ? "em" : "vence"} {diaSemana(prazo.data)}, {dataBR(prazo.data)}
+                {prazo.tipo === "audiencia" ? "em" : "vence"} {diaSemana(prazo.data)}, {formatarDataCalendario(prazo.data)}
               </p>
             </div>
             {typeof prazo.diasUteisRestantes === "number" && (
@@ -572,7 +573,7 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                       {prazo.tipo === "audiencia" ? "Audiência designada" : "Prazo detectado no documento"}
                     </p>
                     <p className="text-base font-bold mt-0.5">
-                      {prazo.tipo === "audiencia" ? "Em" : "Vence"} {dataBR(prazo.data)} · {diaSemana(prazo.data)}
+                      {prazo.tipo === "audiencia" ? "Em" : "Vence"} {formatarDataCalendario(prazo.data)} · {diaSemana(prazo.data)}
                     </p>
                     <p className="text-[11.5px] text-muted-foreground mt-0.5">{prazo.titulo}</p>
                   </div>
@@ -828,7 +829,7 @@ function CriarPrazoDialog({ open, onClose, evento, onSuccess }: DialogProps) {
   const [responsavelId, setResponsavelId] = useState<number | null>(null);
   const [dataInicial, setDataInicial] = useState(hojeISO());
   const [dataFatal, setDataFatal] = useState(
-    evento.prazo?.data ? format(new Date(evento.prazo.data), "yyyy-MM-dd") : dataFallback(),
+    evento.prazo?.data ? dataCalendarioISO(evento.prazo.data) : dataFallback(),
   );
   const [prioridade, setPrioridade] = useState<"baixa" | "normal" | "alta" | "critica">(
     evento.prazo ? "alta" : "normal",
@@ -963,7 +964,7 @@ function CriarTarefaDialog({ open, onClose, evento, onSuccess }: DialogProps) {
   const [responsavelId, setResponsavelId] = useState<number | null>(null);
   const [dataInicial, setDataInicial] = useState(hojeISO());
   const [dataFatal, setDataFatal] = useState(
-    evento.prazo?.data ? format(new Date(evento.prazo.data), "yyyy-MM-dd") : dataFallback(),
+    evento.prazo?.data ? dataCalendarioISO(evento.prazo.data) : dataFallback(),
   );
   const [prioridade, setPrioridade] = useState<"baixa" | "normal" | "alta" | "urgente">("normal");
 

@@ -9,6 +9,32 @@
 
 import { and, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import { kanbanCards } from "../../drizzle/schema";
+import { FUSO_HORARIO_PADRAO, fimDoDiaNoFuso, inicioDoDiaNoFuso } from "../../shared/escritorio-types";
+import { corteVencimentoCalendario } from "../_core/dates";
+
+const DIA_MS = 86_400_000;
+
+/**
+ * Prazo vindo da tela como data-só ("YYYY-MM-DD") é gravado ao MEIO-DIA UTC:
+ * a parte de data fica certa em qualquer fuso do Brasil. 00:00Z era 21:00 da
+ * véspera, e o prazo 10/09 aparecia "09 set" e "atrasado" às 21h do dia 9.
+ * Valor com hora (ISO completo) segue como instante.
+ */
+export function prazoCardParaGravar(prazo: string): Date {
+  return /^\d{4}-\d{2}-\d{2}$/.test(prazo) ? new Date(`${prazo}T12:00:00Z`) : new Date(prazo);
+}
+
+/**
+ * Coluna que recebe os cards arquivados quando a deles é excluída: a
+ * anterior no quadro; sem anterior, a seguinte. `null` = coluna única, não há
+ * onde guardar.
+ */
+export function colunaVizinha<T extends { id: number; ordem: number }>(colunas: T[], colunaId: number): T | null {
+  const ordenadas = [...colunas].sort((a, b) => a.ordem - b.ordem || a.id - b.id);
+  const i = ordenadas.findIndex((c) => c.id === colunaId);
+  if (i < 0) return null;
+  return ordenadas[i - 1] ?? ordenadas[i + 1] ?? null;
+}
 
 export interface FiltrosCards {
   responsavelId?: number;
@@ -20,15 +46,15 @@ export interface FiltrosCards {
   mostrarArquivados?: boolean;
 }
 
-/** Bordas de "hoje" e "próximos 7 dias" no fuso do servidor. */
-export function boundsPrazo(agora = new Date()) {
-  const hoje = new Date(agora);
-  hoje.setHours(0, 0, 0, 0);
-  const fimHoje = new Date(hoje);
-  fimHoje.setHours(23, 59, 59, 999);
-  const fim7 = new Date(hoje);
-  fim7.setDate(fim7.getDate() + 7);
-  fim7.setHours(23, 59, 59, 999);
+/**
+ * Bordas de "hoje" e "próximos 7 dias" para o PRAZO do card. O prazo é
+ * data-calendário (00:00Z nos antigos, 12:00Z nos novos): o dia é o do
+ * escritório, mas as bordas ficam em UTC pra casar com a parte de data gravada.
+ */
+export function boundsPrazo(agora = new Date(), fusoHorario: string = FUSO_HORARIO_PADRAO) {
+  const hoje = corteVencimentoCalendario(agora, fusoHorario);
+  const fimHoje = new Date(hoje.getTime() + DIA_MS - 1);
+  const fim7 = new Date(hoje.getTime() + 8 * DIA_MS - 1);
   return { hoje, fimHoje, fim7 };
 }
 
@@ -43,9 +69,12 @@ export function condicoesCards(args: {
   /** Quando o usuário só enxerga os próprios, trava no colaborador dele. */
   travarNoColaborador?: number | null;
   agora?: Date;
+  /** Fuso do escritório (`escritorios.fusoHorario`); ausente = padrão. */
+  fusoHorario?: string | null;
 }): any[] {
   const { escritorioId, colunasIds, filtros, travarNoColaborador, agora } = args;
-  const { hoje, fimHoje, fim7 } = boundsPrazo(agora);
+  const tz = args.fusoHorario || FUSO_HORARIO_PADRAO;
+  const { hoje, fimHoje, fim7 } = boundsPrazo(agora, tz);
 
   const conds: any[] = [eq(kanbanCards.escritorioId, escritorioId)];
   if (colunasIds) conds.push(inArray(kanbanCards.colunaId, colunasIds));
@@ -60,11 +89,13 @@ export function condicoesCards(args: {
   }
 
   if (filtros.prioridade) conds.push(eq(kanbanCards.prioridade, filtros.prioridade));
+  // `createdAt` é instante real: o dia digitado começa e termina no fuso do
+  // escritório, não no do servidor (card das 22h caía no dia seguinte).
   if (filtros.dataInicio) {
-    conds.push(gte(kanbanCards.createdAt, new Date(`${filtros.dataInicio}T00:00:00`)));
+    conds.push(gte(kanbanCards.createdAt, inicioDoDiaNoFuso(filtros.dataInicio, tz)));
   }
   if (filtros.dataFim) {
-    conds.push(lte(kanbanCards.createdAt, new Date(`${filtros.dataFim}T23:59:59`)));
+    conds.push(lte(kanbanCards.createdAt, fimDoDiaNoFuso(filtros.dataFim, tz)));
   }
 
   if (filtros.prazoFiltro === "vencidos") {
