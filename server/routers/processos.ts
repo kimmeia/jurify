@@ -38,7 +38,6 @@ import { parsearPartes, resumirPartes } from "../processos/partes-processo";
 import { lerPolo, paraLadoJudit } from "../../shared/polo-parte";
 import { lerCapaNovaAcao, lerFalhaDeCapa } from "../../shared/nova-acao-capa";
 import { POLOS_DA_GAVETA, gavetaDoPolo, type GavetaPolo } from "../../shared/nova-acao-polo";
-import { lerPolo } from "../../shared/polo-parte";
 import { siglasSuportadas } from "../processos/tribunais-pdpj";
 import { ambienteSuportaTeste } from "../_core/ambiente";
 import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resumir-movimentacao";
