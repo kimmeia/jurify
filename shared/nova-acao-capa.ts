@@ -14,6 +14,7 @@
  */
 
 import { lerPolo, type PoloParte } from "./polo-parte";
+import { textoMencionaOab } from "./nova-acao-polo";
 
 export type ParteDaCapa = {
   nome: string;
@@ -31,6 +32,12 @@ export type CapaNovaAcao = {
   partes: ParteDaCapa[];
   /** Onde o cliente monitorado está. "desconhecido" é resposta legítima. */
   poloDoCliente: PoloParte;
+  /**
+   * A OAB do escritório aparece entre as partes (o tribunal lista o advogado
+   * junto do polo). Diz "foi o escritório que ajuizou" — informação pra tela,
+   * não prova de polo: o polo continua vindo do documento/nome do cliente.
+   */
+  advogadoDoEscritorio: boolean;
   /** Quando foi lida. Distingue capa da detecção de card antigo sem capa. */
   coletadaEm: string;
 };
@@ -59,9 +66,15 @@ export function montarCapaNovaAcao(
   capa: CapaBruta,
   poloDoCliente: PoloParte,
   agoraIso: string,
+  opcoes: { oabEscritorio?: string | null } = {},
 ): CapaNovaAcao {
   const partesBrutas = Array.isArray(capa.partes) ? capa.partes : [];
   const partes: ParteDaCapa[] = [];
+  // Varre TODAS as partes brutas pela OAB — o advogado costuma vir depois
+  // das partes e o corte de LIMITE_PARTES não pode escondê-lo.
+  const advogadoDoEscritorio = partesBrutas.some((p) =>
+    textoMencionaOab(typeof (p as Record<string, unknown>)?.nome === "string" ? String((p as Record<string, unknown>).nome) : null, opcoes.oabEscritorio),
+  );
   for (const p of partesBrutas.slice(0, LIMITE_PARTES)) {
     const o = p as Record<string, unknown>;
     const nome = texto(o?.nome);
@@ -89,6 +102,7 @@ export function montarCapaNovaAcao(
     dataDistribuicao: texto(capa.dataDistribuicao, 40),
     partes,
     poloDoCliente,
+    advogadoDoEscritorio,
     coletadaEm: agoraIso,
   };
 }
@@ -130,6 +144,7 @@ export function lerCapaNovaAcao(conteudoJson: string | null | undefined): CapaNo
       };
     }).filter((p) => !!p.nome),
     poloDoCliente: lerPolo(o.poloDoCliente),
+    advogadoDoEscritorio: o.advogadoDoEscritorio === true,
     coletadaEm: texto(o.coletadaEm, 40) ?? "",
   };
 }

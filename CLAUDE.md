@@ -424,6 +424,44 @@ abas Permissões, Admin: planos e Outros seguem aguardando)**:
   conferidas, todas vermelhas. Dois `expect` de `cofre-multi-tribunal` e
   `monitoramento-credencial` foram atualizados pro literal novo.
 
+**Entregue 04/09 (manhã), Novas Ações separadas por polo — mockup
+`mockup-novas-acoes-polo.html`, "pode fazer" do dono (as duas decisões
+ficaram na proposta: não identificado CONTA como alerta; polo ativo
+aparece na gaveta dele, sem alerta)**. Origem: print dele — ação que o
+próprio escritório ajuizou veio como "Novo" + "Polo não identificado",
+porque o TJCE escreve a parte como "NOME - CPF: 810… (AUTOR)" numa célula
+e o matcher só olhava o campo de documento; "não sei" alerta de
+propósito. O que mudou:
+- `eventos_processo.poloClienteEvento` (migration 0214, backfill do
+  `$.poloDoCliente` do JSON com CASE/JSON_VALID; e `lido=FALSE` pros
+  pendentes silenciados SÓ por `polo_ativo`, pra aparecerem na gaveta do
+  autor — baseline/pré-cadastro seguem quietos). Cron grava
+  `poloCliente` e `lido: !isRelevante && motivoSilencio !== "polo_ativo"`:
+  o alerta do autor é barrado pelo POLO, não pelo lido (sino/notif
+  continuam só pro relevante).
+- `shared/nova-acao-polo.ts`: `GAVETAS` (passivo = passivo+terceiro,
+  ativo, desconhecido — terceiro fica com o alerta, como sempre foi),
+  `gavetaDoPolo`, `contaComoAlerta`, `documentosNoTexto` (CPF/CNPJ por
+  PADRÃO dentro do texto — substring de dígitos casaria CPF dentro de
+  CNPJ), `normalizarOab`/`textoMencionaOab`.
+- `polo-matcher`: camada 1 também casa o documento escrito dentro do nome
+  da parte. A OAB do escritório (`escritorios.oab`) vira
+  `capa.advogadoDoEscritorio` → selo "Ajuizada pelo escritório" — só
+  informação, NÃO decide polo (inferência que poderia silenciar caso real).
+- `listarNovasAcoes` aceita `polo` (gaveta), devolve `poloCliente` e
+  `contagemPorPolo` (contado com as condições da caixa, sem a gaveta);
+  `totalNaoLidas` exclui `ativo`. `definirPoloNovaAcao({id, polo})`
+  grava coluna + JSON (`poloDoCliente`, `capa.poloDoCliente`,
+  `poloManual{userId,em}`), escopado por escritório, só `nova_acao`.
+- Tela: chips das 3 gavetas (abre no passivo), aviso por gaveta, card lê
+  `a.poloCliente` antes da capa/dedução, `ehAlerta = !lido && !ativo`
+  (sem "Novo"/borda vermelha no autor), botões Réu/Autor/Terceiro no card
+  sem polo (optimistic: sai da gaveta na hora), empty states por gaveta.
+Amarras: `novas-acoes-polo-gavetas` (28 testes; caller test do
+`definirPoloNovaAcao`), `cron-monitoramento-novas-acoes` (3 `expect`
+atualizados: autor entra `lido=false` + `poloCliente="ativo"`),
+`novas-acoes-capa` (selo também com polo gravado à mão).
+
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
 `META_APP_SECRET_EXTRA` (é isso que alimenta o HMAC do webhook;
