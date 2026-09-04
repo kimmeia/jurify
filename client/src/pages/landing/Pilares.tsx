@@ -40,9 +40,9 @@ export function Pilares() {
         <motion.div
           variants={staggerItem}
           className="group relative overflow-hidden rounded-2xl border border-info/30 p-6 text-white sm:col-span-2 lg:row-span-2"
-          style={{ background: "radial-gradient(120% 120% at 100% 0%, #1a1140, #0c0a1c)" }}
+          style={{ background: "radial-gradient(120% 120% at 100% 0%, #12253f, #0a1524)" }}
         >
-          <div className="pointer-events-none absolute -bottom-8 -right-8 h-40 w-40 rounded-full blur-2xl" style={{ background: "radial-gradient(circle, rgba(124,58,237,.5), transparent 70%)" }} />
+          <div className="pointer-events-none absolute -bottom-8 -right-8 h-40 w-40 rounded-full blur-2xl" style={{ background: "radial-gradient(circle, rgba(47,111,189,.5), transparent 70%)" }} />
           <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-info/30 bg-info/25">
             <Headphones className="h-5 w-5 text-info" />
           </div>
@@ -66,9 +66,9 @@ export function Pilares() {
         {/* Wide cell */}
         <motion.div
           variants={staggerItem}
-          className="group rounded-2xl border border-white/10 bg-white/[0.04] p-6 transition-all hover:-translate-y-1 hover:border-info/30 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)] lg:col-span-3"
+          className="group rounded-2xl border border-white/10 bg-white/[0.04] p-6 transition-all hover:-translate-y-1 hover:border-info/30 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(47,111,189,0.45)] lg:col-span-3"
         >
-          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-info/30 to-danger/15">
+          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-info/30 to-marca/25">
             <FileSearch className="h-5 w-5 text-info" />
           </div>
           <h3 className="font-bold text-white">Processos &amp; Kanban — motor próprio</h3>
@@ -94,9 +94,9 @@ function BentoCell({
   return (
     <motion.div
       variants={staggerItem}
-      className="group rounded-2xl border border-white/10 bg-white/[0.04] p-5 transition-all hover:-translate-y-1 hover:border-info/30 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)]"
+      className="group rounded-2xl border border-white/10 bg-white/[0.04] p-5 transition-all hover:-translate-y-1 hover:border-info/30 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(47,111,189,0.45)]"
     >
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-info/30 to-danger/15 transition-transform group-hover:scale-110">
+      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-info/30 to-marca/25 transition-transform group-hover:scale-110">
         <Icon className="h-5 w-5 text-info" />
       </div>
       <h3 className="mb-1.5 font-bold text-white">{titulo}</h3>

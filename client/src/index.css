@@ -76,6 +76,8 @@
   --color-success-on: var(--success-on);
   --color-danger-on: var(--danger-on);
   --color-neutral-on: var(--neutral-on);
+  --color-marca: var(--marca);
+  --color-marca-em-escuro: var(--marca-em-escuro);
   --color-hero: var(--hero);
   --color-hero-2: var(--hero-2);
   --color-hero-fg: var(--hero-fg);
@@ -184,6 +186,11 @@
   --hero: oklch(0.413 0.112 255);
   --hero-2: oklch(0.318 0.084 256);
   --hero-fg: oklch(0.98 0 0);
+  /* A MARCA fica fora da paleta do produto de propósito: quando o tema muda, a
+   * logo não vai de arrasto. `em-escuro` é a versão pra superfície que é escura
+   * sempre (menu lateral), onde o violeta do tema claro não se lê. */
+  --marca: oklch(0.541 0.281 293);
+  --marca-em-escuro: oklch(0.702 0.183 293);
 }
 
 .dark {
@@ -259,6 +266,7 @@
   --hero: oklch(0.373 0.091 254);
   --hero-2: oklch(0.237 0.044 256);
   --hero-fg: oklch(0.98 0 0);
+  --marca: oklch(0.702 0.183 293);
 }
 
 @layer base {
@@ -476,6 +484,95 @@
  * cliente pinta com `style` e só quer os tokens. */
 .fundo-hero {
   background-image: linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%);
+}
+
+/* Botão principal da landing. O par preenchimento/tinta é travado aqui, e não
+ * pelos tokens do produto, porque a landing é superfície escura fixa: o
+ * `--info` do tema escuro é um azul pálido, e o botão sumia no fundo. Medido
+ * no pixel da página renderizada: 7,3:1.
+ *
+ * O pulse é um anel que abre e some — nunca passa por cima da letra. */
+.cta-marca {
+  background-image: linear-gradient(135deg, oklch(0.545 0.17 258), oklch(0.455 0.155 264));
+  color: oklch(1 0 0);
+  border: 0;
+  animation: cta-pulso 2.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.cta-marca:hover {
+  background-image: linear-gradient(135deg, oklch(0.6 0.175 256), oklch(0.51 0.162 262));
+  color: oklch(1 0 0);
+}
+
+/* Mesmo pulse pro CTA claro sobre a faixa azul do fim da página. */
+.cta-branco {
+  animation: cta-pulso-claro 2.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes cta-pulso {
+  0%,
+  100% {
+    box-shadow:
+      0 12px 38px -12px oklch(0.545 0.17 258 / 0.85),
+      0 0 0 0 oklch(0.7 0.15 250 / 0.55);
+  }
+  55% {
+    box-shadow:
+      0 12px 38px -12px oklch(0.545 0.17 258 / 0.85),
+      0 0 0 13px oklch(0.7 0.15 250 / 0);
+  }
+}
+
+@keyframes cta-pulso-claro {
+  0%,
+  100% {
+    box-shadow:
+      0 12px 34px -12px oklch(0 0 0 / 0.55),
+      0 0 0 0 oklch(1 0 0 / 0.5);
+  }
+  55% {
+    box-shadow:
+      0 12px 34px -12px oklch(0 0 0 / 0.55),
+      0 0 0 13px oklch(1 0 0 / 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta-marca,
+  .cta-branco {
+    animation: none;
+  }
+}
+
+/* Os "prints do app" dentro da landing são telas do tema CLARO. A landing se
+ * declara `dark` pro resto, então sem esta ilha o texto deles some no branco. */
+.tema-claro {
+  --background: oklch(0.972 0.003 248);
+  --foreground: oklch(0.24 0.027 253);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.24 0.027 253);
+  --muted: oklch(0.957 0.005 248);
+  --muted-foreground: oklch(0.52 0.035 250);
+  --border: oklch(0.917 0.01 253);
+  --input: oklch(0.917 0.01 253);
+  --info: oklch(0.413 0.112 255);
+  --info-bg: oklch(0.955 0.012 248);
+  --info-fg: oklch(0.413 0.112 255);
+  --warning: oklch(0.508 0.105 72);
+  --warning-fg: oklch(0.508 0.105 72);
+  --success: oklch(0.487 0.113 157);
+  --success-fg: oklch(0.487 0.113 157);
+  --danger: oklch(0.478 0.17 29);
+  --danger-fg: oklch(0.478 0.17 29);
+  --info-on: oklch(0.98 0 0);
+  --success-on: oklch(0.98 0 0);
+  --warning-on: oklch(0.98 0 0);
+}
+
+/* A landing tem brilho azul atrás da logo do topo. Medido ali, o violeta do
+ * app não chega a 4,5:1 — só nesta página ele é um passo mais claro. */
+.marca-landing {
+  --marca: oklch(0.76 0.17 293);
 }
 
 .faixa-hero {
