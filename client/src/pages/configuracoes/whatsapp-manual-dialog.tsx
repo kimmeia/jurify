@@ -81,7 +81,7 @@ export function WhatsappManualDialog({ open, onClose, onConectado }: WhatsappMan
       <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <span className="h-7 w-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center text-white text-xs">📥</span>
+            <span className="h-7 w-7 rounded-lg bg-success grid place-items-center text-success-on text-xs">📥</span>
             Cadastro manual — WhatsApp Cloud API
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -93,7 +93,7 @@ export function WhatsappManualDialog({ open, onClose, onConectado }: WhatsappMan
 
         <div className="space-y-3 py-1">
           {/* Onde achar — guia rápido */}
-          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 px-3 py-2.5 text-[11px] text-amber-900 dark:text-amber-200 space-y-1.5">
+          <div className="rounded-lg bg-warning-bg border border-warning/30 px-3 py-2.5 text-[11px] text-warning-fg space-y-1.5">
             <p className="font-semibold flex items-center gap-1">
               <ExternalLink className="h-3 w-3" /> Como conseguir os 3 valores
             </p>
@@ -149,8 +149,8 @@ export function WhatsappManualDialog({ open, onClose, onConectado }: WhatsappMan
             </div>
           </div>
 
-          <div className="rounded-lg bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/80 px-3 py-2 text-[11px] text-slate-700 dark:text-slate-200 flex items-start gap-2">
-            <CheckCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+          <div className="rounded-lg bg-muted border border-border px-3 py-2 text-[11px] text-foreground flex items-start gap-2">
+            <CheckCircle className="h-3.5 w-3.5 text-success-fg shrink-0 mt-0.5" />
             <span>
               Antes de salvar, vamos chamar a Graph API com esses valores. Se a
               Meta confirmar (retornar o nome verificado e o número do canal),
@@ -166,7 +166,7 @@ export function WhatsappManualDialog({ open, onClose, onConectado }: WhatsappMan
           <Button
             onClick={handleSubmit}
             disabled={conectarMut.isPending || !accessToken.trim() || !phoneNumberId.trim() || !wabaId.trim()}
-            className="bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800"
+            className="bg-success"
           >
             {conectarMut.isPending
               ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Validando na Meta…</>

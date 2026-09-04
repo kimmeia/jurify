@@ -99,7 +99,7 @@ export function ResolverDuplicidadesDialog({
       <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Wand2 className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+            <Wand2 className="h-5 w-5 text-info-fg" />
             Resolver duplicatas no caixa
           </DialogTitle>
           <DialogDescription>
@@ -116,7 +116,7 @@ export function ResolverDuplicidadesDialog({
           </div>
         ) : pares.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
-            <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+            <CheckCircle2 className="h-12 w-12 text-success" />
             <div className="text-center">
               <p className="text-base font-semibold">Nenhuma duplicata pendente</p>
               <p className="text-xs text-muted-foreground mt-1">
@@ -127,8 +127,8 @@ export function ResolverDuplicidadesDialog({
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-xs dark:bg-amber-950/30 dark:border-amber-900">
-              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <div className="flex items-center gap-3 px-3 py-2 bg-warning-bg border border-warning/30 rounded text-xs dark:bg-warning/30">
+              <AlertTriangle className="h-4 w-4 text-warning-fg shrink-0" />
               <div className="flex-1">
                 <p className="font-medium">
                   {pares.length} par{pares.length > 1 ? "es" : ""} suspeito
@@ -216,7 +216,7 @@ function ParCard({
         {podeAutoFix && (
           <Button
             size="sm"
-            className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white"
+            className="h-7 text-xs bg-info hover:bg-info text-info-on"
             disabled={pending}
             onClick={() =>
               onResolverAutoFix(ladoAsaasUnico!.id, ladoManualUnico!.id)
@@ -272,8 +272,8 @@ function LadoCard({
     <div
       className={`rounded border p-2.5 text-xs space-y-1 ${
         lado.origem === "manual"
-          ? "bg-amber-50/30 border-amber-200 dark:bg-amber-950/10 dark:border-amber-900"
-          : "bg-emerald-50/30 border-emerald-200 dark:bg-emerald-950/10 dark:border-emerald-900"
+          ? "bg-warning-bg/30 border-warning/30 dark:border-warning/30"
+          : "bg-success-bg/30 border-success/30 dark:border-success/30"
       }`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -284,8 +284,8 @@ function LadoCard({
           variant="outline"
           className={`text-[9px] ${
             lado.origem === "manual"
-              ? "border-amber-400 text-amber-700 dark:text-amber-300"
-              : "border-emerald-400 text-emerald-700 dark:text-emerald-300"
+              ? "border-warning/30 text-warning-fg"
+              : "border-success/30 text-success-fg"
           }`}
         >
           {lado.origem}
@@ -307,7 +307,7 @@ function LadoCard({
         {lado.formaPagamento && ` · ${lado.formaPagamento}`}
       </p>
       {lado.emFechamento ? (
-        <div className="flex items-center gap-1 text-[10px] text-violet-700 dark:text-violet-300 mt-1.5">
+        <div className="flex items-center gap-1 text-[10px] text-info-fg mt-1.5">
           <Lock className="h-3 w-3" />
           em fechamento de comissão — exclua o fechamento antes de remover
         </div>

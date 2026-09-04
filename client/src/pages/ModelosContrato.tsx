@@ -82,24 +82,24 @@ interface ModeloLista {
 // ─── Cores determinísticas (hash → tom) ──────────────────────────────────────
 
 const GRADIENTES_MODELO = [
-  "from-indigo-500 to-violet-600",
-  "from-emerald-500 to-teal-600",
-  "from-pink-500 to-rose-600",
-  "from-amber-500 to-orange-600",
-  "from-cyan-500 to-blue-600",
-  "from-violet-500 to-fuchsia-600",
-  "from-slate-500 to-slate-700",
-  "from-lime-500 to-emerald-600",
+  "from-info to-info",
+  "from-success to-success",
+  "from-danger to-danger",
+  "from-warning to-warning",
+  "from-info to-info",
+  "from-info to-danger",
+  "from-muted to-muted",
+  "from-success to-success",
 ];
 const CORES_PASTA = [
-  { bg: "bg-indigo-100 dark:bg-indigo-900/30", fg: "text-indigo-600 dark:text-indigo-400" },
-  { bg: "bg-emerald-100 dark:bg-emerald-900/30", fg: "text-emerald-600 dark:text-emerald-400" },
-  { bg: "bg-amber-100 dark:bg-amber-900/30", fg: "text-amber-600 dark:text-amber-400" },
-  { bg: "bg-violet-100 dark:bg-violet-900/30", fg: "text-violet-600 dark:text-violet-400" },
-  { bg: "bg-cyan-100 dark:bg-cyan-900/30", fg: "text-cyan-600 dark:text-cyan-400" },
-  { bg: "bg-rose-100 dark:bg-rose-900/30", fg: "text-rose-600 dark:text-rose-400" },
-  { bg: "bg-lime-100 dark:bg-lime-900/30", fg: "text-lime-600 dark:text-lime-400" },
-  { bg: "bg-blue-100 dark:bg-blue-900/30", fg: "text-blue-600 dark:text-blue-400" },
+  { bg: "bg-info-bg", fg: "text-info-fg" },
+  { bg: "bg-success-bg", fg: "text-success-fg" },
+  { bg: "bg-warning-bg", fg: "text-warning-fg" },
+  { bg: "bg-info-bg", fg: "text-info-fg" },
+  { bg: "bg-info-bg", fg: "text-info-fg" },
+  { bg: "bg-danger-bg", fg: "text-danger-fg" },
+  { bg: "bg-success-bg", fg: "text-success-fg" },
+  { bg: "bg-info-bg", fg: "text-info-fg" },
 ];
 
 function hash(seed: string): number {
@@ -222,9 +222,11 @@ export default function ModelosContrato() {
   }, [lista, chip, busca, pastaAtiva]);
 
   return (
-    <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-blue-50/20 dark:to-blue-950/20 p-6 space-y-6">
+    <div className="rounded-2xl bg-gradient-to-br from-muted/40 via-white dark:via-muted to-info-bg/20 p-6 space-y-6">
       {/* ═══════════ HERO ═══════════ */}
-      <div className="rounded-2xl bg-gradient-to-br from-slate-800 via-slate-700 to-indigo-700 p-7 text-white relative overflow-hidden shadow-lg">
+      {/* Mesma troca das outras faixas: o par quase-branco → navy com tinta
+          branca fixa dava 1,13:1 no tema claro. */}
+      <div className="faixa-hero fundo-hero rounded-2xl p-7 text-hero-fg relative overflow-hidden shadow-lg">
         <FileText className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
         <FileSignature className="absolute right-12 top-6 w-20 h-20 opacity-10" strokeWidth={1.2} />
         <div className="relative">
@@ -243,7 +245,12 @@ export default function ModelosContrato() {
             {isGestor && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button className="bg-white dark:bg-card text-slate-900 dark:text-slate-100 hover:bg-slate-100 shadow-sm font-semibold">
+                  {/* Botão de superfície CLARA dentro da faixa escura: a faixa
+                      reescreve `--foreground` pra tinta clara, então
+                      `text-foreground` aqui sairia branco no branco.
+                      `--popover-foreground` é a mesma tinta escura e a faixa
+                      não mexe nele. */}
+                  <Button className="bg-card text-popover-foreground hover:bg-muted shadow-sm font-semibold">
                     <Plus className="h-4 w-4 mr-1.5" />
                     Novo
                     <ChevronDown className="h-4 w-4 ml-1" />
@@ -251,21 +258,21 @@ export default function ModelosContrato() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-72">
                   <DropdownMenuItem onClick={() => setUploadOpen(true)} className="cursor-pointer items-start gap-2.5 py-2.5">
-                    <FileText className="h-4 w-4 mt-0.5 text-indigo-600 dark:text-indigo-400" />
+                    <FileText className="h-4 w-4 mt-0.5 text-info-fg" />
                     <div>
                       <p className="text-sm font-medium">Modelo reutilizável</p>
                       <p className="text-[11px] text-muted-foreground">Sobe um .docx com placeholders pra reusar sempre.</p>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setAvulsoOpen(true)} className="cursor-pointer items-start gap-2.5 py-2.5">
-                    <PenLine className="h-4 w-4 mt-0.5 text-violet-600 dark:text-violet-400" />
+                    <PenLine className="h-4 w-4 mt-0.5 text-info-fg" />
                     <div>
                       <p className="text-sm font-medium">Contrato avulso</p>
                       <p className="text-[11px] text-muted-foreground">Escolhe um modelo existente, preenche e gera (PDF ou assinatura).</p>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setSubirOpen(true)} className="cursor-pointer items-start gap-2.5 py-2.5">
-                    <Upload className="h-4 w-4 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+                    <Upload className="h-4 w-4 mt-0.5 text-success-fg" />
                     <div>
                       <p className="text-sm font-medium">Subir documento p/ assinatura</p>
                       <p className="text-[11px] text-muted-foreground">Sobe um PDF/Word pronto e só posiciona as assinaturas.</p>
@@ -326,7 +333,7 @@ export default function ModelosContrato() {
 
       {/* ═══════════ LOADING / EMPTY ═══════════ */}
       {isLoading ? (
-        <div className="h-32 rounded-xl bg-slate-100 dark:bg-slate-800/60 animate-pulse" />
+        <div className="h-32 rounded-xl bg-muted animate-pulse" />
       ) : stats.total === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
@@ -349,12 +356,12 @@ export default function ModelosContrato() {
           {/* ═══════════ BUSCA + CHIPS ═══════════ */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 min-w-[260px] max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/70" />
               <Input
                 placeholder="Buscar modelo por nome ou descrição..."
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                className="pl-10 h-10 bg-white dark:bg-card"
+                className="pl-10 h-10 bg-card"
               />
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -398,7 +405,7 @@ export default function ModelosContrato() {
           {/* ═══════════ SIDEBAR PASTAS + GRID ═══════════ */}
           <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-5">
             <aside className="space-y-2">
-              <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 px-2 mb-2">
+              <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground px-2 mb-2">
                 Pastas
               </p>
               <PastaCard
@@ -406,11 +413,11 @@ export default function ModelosContrato() {
                 onClick={() => setPastaAtiva(null)}
                 nome="Todas"
                 count={stats.total}
-                cor={{ bg: "bg-slate-100 dark:bg-slate-800/60", fg: "text-slate-700 dark:text-slate-200" }}
+                cor={{ bg: "bg-muted", fg: "text-foreground" }}
                 icone={Folder}
               />
               {stats.pastas.map((p) => {
-                const cor = p.nome ? corDaPasta(p.nome) : { bg: "bg-slate-100 dark:bg-slate-800/60", fg: "text-slate-500" };
+                const cor = p.nome ? corDaPasta(p.nome) : { bg: "bg-muted", fg: "text-muted-foreground" };
                 return (
                   <PastaCard
                     key={p.nome || "__raiz__"}
@@ -452,14 +459,14 @@ export default function ModelosContrato() {
               ) : (
                 <>
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                      <Folder className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Folder className="w-4 h-4 text-info-fg" />
                       {pastaAtiva === null
                         ? "Todos os modelos"
                         : pastaAtiva === ""
                           ? "Sem pasta"
                           : pastaAtiva}
-                      <span className="text-[11px] text-slate-400 font-normal">
+                      <span className="text-[11px] text-muted-foreground/70 font-normal">
                         · {filtrados.length} modelo{filtrados.length === 1 ? "" : "s"}
                       </span>
                     </h2>
@@ -480,15 +487,15 @@ export default function ModelosContrato() {
 
               {/* Dica */}
               {lista.length < 5 && (
-                <div className="mt-5 rounded-xl border border-blue-100 dark:border-blue-900/50 bg-blue-50/40 dark:bg-blue-950/30 p-4 flex items-start gap-3">
-                  <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                <div className="mt-5 rounded-xl border border-info/30 bg-info-bg/40 p-4 flex items-start gap-3">
+                  <Info className="w-4 h-4 text-info-fg mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-xs font-medium text-blue-900 dark:text-blue-200">Dica</p>
-                    <p className="text-[11px] text-blue-800 dark:text-blue-200 mt-0.5">
+                    <p className="text-xs font-medium text-info-fg">Dica</p>
+                    <p className="text-[11px] text-info-fg mt-0.5">
                       Suba modelos .docx com placeholders como{" "}
-                      <code className="bg-white dark:bg-card px-1 py-0.5 rounded text-[10px]">{`{{nome completo}}`}</code>{" "}
+                      <code className="bg-card px-1 py-0.5 rounded text-[10px]">{`{{nome completo}}`}</code>{" "}
                       ou{" "}
-                      <code className="bg-white dark:bg-card px-1 py-0.5 rounded text-[10px]">{`{{cpf}}`}</code>.
+                      <code className="bg-card px-1 py-0.5 rounded text-[10px]">{`{{cpf}}`}</code>.
                       O sistema reconhece variáveis do catálogo automaticamente; o que não bater fica
                       como preenchimento manual.
                     </p>
@@ -574,13 +581,13 @@ function ChipBtn({
   children: React.ReactNode;
   destaque?: "amber" | "rose";
 }) {
-  const ativoBg = "bg-slate-900 text-white border-slate-900";
-  const idleBg = "bg-white dark:bg-card border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 hover:border-slate-300 hover:text-slate-900 dark:hover:text-slate-100";
+  const ativoBg = "bg-foreground/80 text-background border-border";
+  const idleBg = "bg-card border-border text-muted-foreground hover:border-border hover:text-foreground";
   const destaqueIdle =
     destaque === "amber"
-      ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100"
+      ? "bg-warning-bg border-warning/30 text-warning-fg hover:bg-warning-bg"
       : destaque === "rose"
-        ? "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-300 hover:bg-rose-100"
+        ? "bg-danger-bg border-danger/30 text-danger-fg hover:bg-danger-bg"
         : "";
   return (
     <button
@@ -606,10 +613,10 @@ function CountPill({
   if (ativo)
     return <span className="bg-white/20 px-1.5 rounded-full text-[10px]">{children}</span>;
   if (tom === "amber")
-    return <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 rounded-full text-[10px]">{children}</span>;
+    return <span className="bg-warning-bg text-warning-fg px-1.5 rounded-full text-[10px]">{children}</span>;
   if (tom === "rose")
-    return <span className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 px-1.5 rounded-full text-[10px]">{children}</span>;
-  return <span className="bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 px-1.5 rounded-full text-[10px]">{children}</span>;
+    return <span className="bg-danger-bg text-danger-fg px-1.5 rounded-full text-[10px]">{children}</span>;
+  return <span className="bg-muted text-muted-foreground px-1.5 rounded-full text-[10px]">{children}</span>;
 }
 
 function PastaCard({
@@ -632,8 +639,8 @@ function PastaCard({
       onClick={onClick}
       className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
         ativa
-          ? "border-indigo-400 bg-gradient-to-br from-indigo-50 dark:from-indigo-950/40 to-white dark:to-slate-900 shadow-sm"
-          : "border-slate-200 dark:border-slate-700/80 bg-white dark:bg-card hover:border-slate-300 hover:shadow-sm"
+          ? "border-info/30 bg-gradient-to-br from-info-bg to-white dark:to-muted shadow-sm"
+          : "border-border bg-card hover:border-border hover:shadow-sm"
       }`}
     >
       <div className={`w-9 h-9 rounded-lg ${cor.bg} flex items-center justify-center shrink-0`}>
@@ -666,12 +673,12 @@ function CardModelo({
   const gradient = gradientDoModelo(modelo.nome);
 
   const borda = semVariaveis
-    ? "border-amber-300 bg-gradient-to-br from-amber-50/30 dark:from-amber-950/40 to-white dark:to-slate-900"
-    : "border-slate-200 dark:border-slate-700/80 hover:border-slate-400";
+    ? "border-warning/30 bg-gradient-to-br from-warning-bg/30 to-white dark:to-muted"
+    : "border-border hover:border-border";
 
   return (
     <div
-      className={`group relative bg-white dark:bg-card border rounded-2xl p-4 transition-all hover:shadow-md hover:-translate-y-0.5 ${borda}`}
+      className={`group relative bg-card border rounded-2xl p-4 transition-all hover:shadow-md hover:-translate-y-0.5 ${borda}`}
     >
       {/* Topo: ícone + nome + badge ASSIN ou pending */}
       <div className="flex items-start gap-3 mb-3">
@@ -687,11 +694,11 @@ function CardModelo({
           )}
         </div>
         {semVariaveis ? (
-          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 shrink-0">
+          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-warning-bg text-warning-fg shrink-0">
             ⚠ Revisar
           </span>
         ) : modelo.ehParaAssinatura ? (
-          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 shrink-0">
+          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg shrink-0">
             <FileSignature className="w-2.5 h-2.5 mr-0.5" />
             ASSIN
           </span>
@@ -701,7 +708,7 @@ function CardModelo({
       {/* Pills */}
       <div className="flex items-center gap-1.5 flex-wrap mb-3">
         {totalVar > 0 && (
-          <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300">
+          <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-info-bg text-info-fg">
             <Variable className="w-2.5 h-2.5 mr-0.5" />
             {totalVar} variáve{totalVar === 1 ? "l" : "is"}
           </span>
@@ -709,7 +716,7 @@ function CardModelo({
         {totalManual > 0 && (
           <span
             className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-              semVariaveis ? "bg-amber-100 text-amber-800 dark:text-amber-200" : "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300"
+              semVariaveis ? "bg-warning-bg text-warning-fg" : "bg-warning-bg text-warning-fg"
             }`}
           >
             {totalManual} manua{totalManual === 1 ? "l" : "is"}
@@ -717,7 +724,7 @@ function CardModelo({
           </span>
         )}
         {modelo.placeholders.length === 0 && (
-          <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300">
+          <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
             Sem placeholders
           </span>
         )}
@@ -737,7 +744,7 @@ function CardModelo({
         {semVariaveis && isGestor ? (
           <Button
             size="sm"
-            className="flex-1 bg-amber-500 hover:bg-amber-600 text-white h-8 text-xs"
+            className="flex-1 bg-warning hover:bg-warning text-warning-on h-8 text-xs"
             onClick={onEditar}
           >
             <Pencil className="w-3 h-3 mr-1" />
@@ -758,7 +765,7 @@ function CardModelo({
           <Button
             size="sm"
             variant="ghost"
-            className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+            className="h-8 w-8 p-0 text-muted-foreground hover:text-danger-fg hover:bg-danger-bg"
             onClick={onExcluir}
             title="Excluir"
           >

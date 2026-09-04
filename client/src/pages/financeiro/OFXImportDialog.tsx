@@ -241,19 +241,19 @@ export function OFXImportDialog({
                 </p>
                 <p className="text-xl font-semibold">{preview.totalTransacoes}</p>
               </div>
-              <div className="rounded border bg-emerald-50 dark:bg-emerald-950/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+              <div className="rounded border bg-success-bg p-3">
+                <p className="text-[10px] uppercase tracking-wide text-success-fg">
                   Com match
                 </p>
-                <p className="text-xl font-semibold text-emerald-700 dark:text-emerald-300">
+                <p className="text-xl font-semibold text-success-fg">
                   {preview.comMatch}
                 </p>
               </div>
-              <div className="rounded border bg-amber-50 dark:bg-amber-950/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-300">
+              <div className="rounded border bg-warning-bg p-3">
+                <p className="text-[10px] uppercase tracking-wide text-warning-fg">
                   Sem match
                 </p>
-                <p className="text-xl font-semibold text-amber-700 dark:text-amber-300">
+                <p className="text-xl font-semibold text-warning-fg">
                   {preview.semMatch}
                 </p>
               </div>
@@ -289,9 +289,9 @@ export function OFXImportDialog({
                       >
                         <TableCell className="px-2">
                           {ehEntrada ? (
-                            <ArrowDownCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            <ArrowDownCircle className="h-4 w-4 text-success-fg" />
                           ) : (
-                            <ArrowUpCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                            <ArrowUpCircle className="h-4 w-4 text-danger-fg" />
                           )}
                         </TableCell>
                         <TableCell className="text-xs whitespace-nowrap">
@@ -311,7 +311,7 @@ export function OFXImportDialog({
                               <CheckCircle2 className="h-3 w-3" /> Já importada
                             </span>
                           ) : s.candidatos.length === 0 ? (
-                            <span className="text-amber-700 dark:text-amber-400 italic flex items-center gap-1">
+                            <span className="text-warning-fg italic flex items-center gap-1">
                               <AlertCircle className="h-3 w-3" /> Sem match
                             </span>
                           ) : (
@@ -350,7 +350,7 @@ export function OFXImportDialog({
                                 ))}
                               </select>
                               {selecionado !== null && selecionado !== undefined && (
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <CheckCircle2 className="h-3.5 w-3.5 text-success-fg shrink-0" />
                               )}
                             </div>
                           )}

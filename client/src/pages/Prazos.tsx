@@ -66,20 +66,20 @@ function TagTipo({ item }: { item: PrazoItem }) {
       ? null
       : new Date(item.dataInicio).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     return (
-      <Badge variant="outline" className="text-[10px] font-bold border-violet-500/40 text-violet-700 dark:text-violet-300 bg-violet-500/10">
+      <Badge variant="outline" className="text-[10px] font-bold border-info/30 text-info-fg bg-info/10">
         AUDIÊNCIA{hora ? ` · ${hora}` : ""}
       </Badge>
     );
   }
   if (item.prioridade === "critica" || item.prioridade === "alta") {
     return (
-      <Badge variant="outline" className="text-[10px] font-bold border-rose-500/40 text-rose-700 dark:text-rose-300 bg-rose-500/10">
+      <Badge variant="outline" className="text-[10px] font-bold border-danger/30 text-danger-fg bg-danger/10">
         PRAZO FATAL
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="text-[10px] font-bold border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10">
+    <Badge variant="outline" className="text-[10px] font-bold border-warning/30 text-warning-fg bg-warning/10">
       PRAZO
     </Badge>
   );
@@ -162,7 +162,7 @@ export default function Prazos() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-bold tracking-tight leading-tight flex items-center gap-2">
-            <CalendarClock className="h-5 w-5 text-violet-600 dark:text-violet-400" /> Prazos
+            <CalendarClock className="h-5 w-5 text-info-fg" /> Prazos
           </h1>
           <p className="mt-0.5 text-[12.5px] text-muted-foreground">
             A versão enxuta da Agenda: só o que tem data, processo e dono. Prazo aprovado no alerta de movimentação nasce aqui.
@@ -221,7 +221,7 @@ export default function Prazos() {
               <div className="flex items-center gap-2 pb-1.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{rotuloDia(chave)}</span>
                 {ehHoje(chave) && (
-                  <Badge className="text-[9px] h-4 px-1.5 bg-violet-600 hover:bg-violet-600 text-white">HOJE</Badge>
+                  <Badge className="text-[9px] h-4 px-1.5 bg-info hover:bg-info text-info-on">HOJE</Badge>
                 )}
               </div>
               <div className="space-y-1">
@@ -240,7 +240,7 @@ export default function Prazos() {
                       </span>
                     )}
                     {item.origemAlertaEm && (
-                      <Badge variant="outline" className="text-[9px] border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10">
+                      <Badge variant="outline" className="text-[9px] border-success/30 text-success-fg bg-success/10">
                         do alerta de {new Date(item.origemAlertaEm).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
                       </Badge>
                     )}

@@ -67,11 +67,11 @@ const TIPO_LABELS: Record<string, string> = {
 const MARCA_TIPO: Record<string, { rotulo: string; cls: string }> = {
   prazo_processual: {
     rotulo: "Prazo",
-    cls: "bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300",
+    cls: "bg-danger-bg text-danger-fg dark:text-danger",
   },
   audiencia: {
     rotulo: "Audiência",
-    cls: "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
+    cls: "bg-info-bg text-info-fg dark:text-info",
   },
 };
 
@@ -81,17 +81,17 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_CORES: Record<string, string> = {
-  pendente: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50",
-  em_andamento: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50",
-  concluido: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50",
-  concluida: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50",
-  cancelado: "bg-gray-100 dark:bg-slate-800/60 text-gray-500 border-gray-200 dark:border-slate-700/80",
-  cancelada: "bg-gray-100 dark:bg-slate-800/60 text-gray-500 border-gray-200 dark:border-slate-700/80",
-  atrasado: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50",
+  pendente: "bg-warning-bg text-warning-fg border-warning/30",
+  em_andamento: "bg-info-bg text-info-fg border-info/30",
+  concluido: "bg-success-bg text-success-fg border-success/30",
+  concluida: "bg-success-bg text-success-fg border-success/30",
+  cancelado: "bg-muted text-muted-foreground border-border",
+  cancelada: "bg-muted text-muted-foreground border-border",
+  atrasado: "bg-danger-bg text-danger-fg border-danger/30",
 };
 
 const PRIOR_DOT: Record<string, string> = {
-  urgente: "bg-red-500", critica: "bg-red-500", alta: "bg-orange-400", normal: "bg-blue-400", baixa: "bg-gray-300",
+  urgente: "bg-danger", critica: "bg-danger", alta: "bg-warning", normal: "bg-info", baixa: "bg-muted-foreground/50",
 };
 
 const PRIOR_LABEL: Record<string, string> = {
@@ -99,9 +99,9 @@ const PRIOR_LABEL: Record<string, string> = {
 };
 
 const PRIOR_BADGE: Record<string, string> = {
-  urgente: "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300",
-  critica: "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300",
-  alta: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300",
+  urgente: "bg-danger-bg text-danger-fg",
+  critica: "bg-danger-bg text-danger-fg",
+  alta: "bg-warning-bg text-warning-fg",
   normal: "bg-muted text-muted-foreground",
   baixa: "bg-muted text-muted-foreground",
 };
@@ -118,28 +118,28 @@ const COR_TIPO: Record<string, string> = {
 
 /** Paleta do hora-block colorido à esquerda do card — mesma família que a faixa lateral. */
 const HORA_BLOCK_BG: Record<string, string> = {
-  prazo_processual: "from-rose-50 dark:from-rose-950/40 to-rose-100 dark:to-rose-950/20 border-rose-300",
-  audiencia: "from-violet-50 dark:from-violet-950/40 to-violet-100 dark:to-violet-950/20 border-violet-300",
-  reuniao_comercial: "from-emerald-50 dark:from-emerald-950/40 to-emerald-100 dark:to-emerald-950/20 border-emerald-300",
-  tarefa: "from-amber-50 dark:from-amber-950/40 to-amber-100 dark:to-amber-950/20 border-amber-300",
-  follow_up: "from-cyan-50 dark:from-cyan-950/40 to-cyan-100 dark:to-cyan-950/20 border-cyan-300",
-  outro: "from-slate-50 dark:from-slate-900 to-slate-100 dark:to-slate-900/40 border-slate-300",
+  prazo_processual: "from-danger-bg to-danger-bg border-danger/30",
+  audiencia: "from-info-bg to-info-bg border-info/30",
+  reuniao_comercial: "from-success-bg to-success-bg border-success/30",
+  tarefa: "from-warning-bg to-warning-bg border-warning/30",
+  follow_up: "from-info-bg to-info-bg border-info/30",
+  outro: "from-muted to-muted border-border",
 };
 const HORA_BLOCK_TEXT: Record<string, string> = {
-  prazo_processual: "text-rose-700 dark:text-rose-300",
-  audiencia: "text-violet-700 dark:text-violet-300",
-  reuniao_comercial: "text-emerald-700 dark:text-emerald-300",
-  tarefa: "text-amber-700 dark:text-amber-300",
-  follow_up: "text-cyan-700 dark:text-cyan-300",
+  prazo_processual: "text-danger-fg",
+  audiencia: "text-info-fg",
+  reuniao_comercial: "text-success-fg",
+  tarefa: "text-warning-fg",
+  follow_up: "text-info-fg",
   outro: "text-foreground/90",
 };
 
 const TIPO_BADGE: Record<string, string> = {
-  prazo_processual: "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/50",
-  audiencia: "bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800/50",
-  reuniao_comercial: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50",
-  tarefa: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50",
-  follow_up: "bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800/50",
+  prazo_processual: "bg-danger-bg text-danger-fg border-danger/30",
+  audiencia: "bg-info-bg text-info-fg border-info/30",
+  reuniao_comercial: "bg-success-bg text-success-fg border-success/30",
+  tarefa: "bg-warning-bg text-warning-fg border-warning/30",
+  follow_up: "bg-info-bg text-info-fg border-info/30",
   outro: "bg-muted text-muted-foreground border-border",
 };
 
@@ -246,7 +246,7 @@ function ConfirmarExclusaoButton({ onConfirm, titulo, variant = "card" }: {
         <Button
           variant="outline"
           size="sm"
-          className="text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800/50 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-700 dark:hover:text-rose-300"
+          className="text-danger-fg border-danger/30 hover:bg-danger-bg hover:text-danger-fg"
           onClick={(e) => {
             e.stopPropagation();
             setOpen(true);
@@ -269,7 +269,7 @@ function ConfirmarExclusaoButton({ onConfirm, titulo, variant = "card" }: {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => onConfirm()}
-              className="bg-rose-600 hover:bg-rose-700 text-white"
+              className="bg-danger hover:bg-danger text-danger-on"
             >
               Sim, excluir
             </AlertDialogAction>
@@ -285,9 +285,9 @@ function ConfirmarExclusaoButton({ onConfirm, titulo, variant = "card" }: {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const COMPARECIMENTO_CFG: Record<string, { label: string; cls: string; Icon: typeof CheckCircle }> = {
-  compareceu: { label: "Compareceu", cls: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50", Icon: CheckCircle },
-  nao_compareceu: { label: "Não compareceu", cls: "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/50", Icon: XCircle },
-  remarcado: { label: "Remarcado", cls: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50", Icon: RotateCcw },
+  compareceu: { label: "Compareceu", cls: "bg-success-bg text-success-fg border-success/30", Icon: CheckCircle },
+  nao_compareceu: { label: "Não compareceu", cls: "bg-danger-bg text-danger-fg border-danger/30", Icon: XCircle },
+  remarcado: { label: "Remarcado", cls: "bg-warning-bg text-warning-fg border-warning/30", Icon: RotateCcw },
 };
 
 /** Tipos de compromisso em que faz sentido perguntar se o cliente compareceu. */
@@ -344,39 +344,39 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
 
   // Hora-block: cores por tipo. Quando atrasado, força paleta rose.
   const horaBlockCls = overdue
-    ? "from-rose-50 dark:from-rose-950/40 to-rose-100 dark:to-rose-950/20 border-rose-300"
+    ? "from-danger-bg to-danger-bg border-danger/30"
     : rel?.urgencia === "agora"
-      ? "from-orange-50 dark:from-orange-950/40 to-orange-100 dark:to-orange-950/20 border-orange-300"
+      ? "from-warning-bg to-warning-bg border-warning/30"
       : HORA_BLOCK_BG[tipoKey] || HORA_BLOCK_BG.outro;
   const horaTextCls = overdue
-    ? "text-rose-700 dark:text-rose-300"
+    ? "text-danger-fg"
     : rel?.urgencia === "agora"
-      ? "text-orange-700 dark:text-orange-300"
+      ? "text-warning-fg"
       : HORA_BLOCK_TEXT[tipoKey] || HORA_BLOCK_TEXT.outro;
 
   // Bg do card por estado
   const cardBg = concluido
     ? "bg-muted/50"
     : overdue
-      ? "bg-gradient-to-r from-rose-50/60 dark:from-rose-950/40 to-white dark:to-slate-900"
+      ? "bg-gradient-to-r from-danger-bg/60 to-white dark:to-muted"
       : rel?.urgencia === "agora"
-        ? "bg-gradient-to-r from-orange-50/40 dark:from-orange-950/40 to-white dark:to-slate-900"
+        ? "bg-gradient-to-r from-warning-bg/40 to-white dark:to-muted"
         : "bg-card";
 
   const cardBorder = overdue
-    ? "border-rose-200 dark:border-rose-800/50"
+    ? "border-danger/30"
     : rel?.urgencia === "agora"
-      ? "border-orange-200 dark:border-orange-800/50 ring-2 ring-orange-100"
+      ? "border-warning/30 ring-2 ring-warning"
       : "border-border";
 
   // Badge de status/tempo
   const statusBadge = (() => {
-    if (concluido) return { txt: `✓ Concluído${ev.dataConclusao ? " " + formatTime(ev.dataConclusao) : ""}`, cls: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50" };
+    if (concluido) return { txt: `✓ Concluído${ev.dataConclusao ? " " + formatTime(ev.dataConclusao) : ""}`, cls: "bg-success-bg text-success-fg border-success/30" };
     if (cancelado) return { txt: "Cancelado", cls: "bg-muted text-muted-foreground border-border" };
     if (!rel) return null;
-    if (rel.urgencia === "atrasado") return { txt: `⚠ ${rel.texto}`, cls: "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/50 animate-pulse" };
-    if (rel.urgencia === "agora") return { txt: `⏳ ${rel.texto}`, cls: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800/50 animate-pulse" };
-    if (rel.urgencia === "futuro") return { txt: rel.texto, cls: "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50" };
+    if (rel.urgencia === "atrasado") return { txt: `⚠ ${rel.texto}`, cls: "bg-danger-bg text-danger-fg border-danger/30 animate-pulse" };
+    if (rel.urgencia === "agora") return { txt: `⏳ ${rel.texto}`, cls: "bg-warning-bg text-warning-fg border-warning/30 animate-pulse" };
+    if (rel.urgencia === "futuro") return { txt: rel.texto, cls: "bg-info-bg text-info-fg border-info/30" };
     return { txt: rel.texto, cls: "bg-muted text-muted-foreground border-border" };
   })();
 
@@ -490,7 +490,7 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-300 hover:underline"
+                    className="inline-flex items-center gap-0.5 text-success-fg hover:underline"
                     title="Abrir no WhatsApp Web"
                   >
                     <ExternalLink className="w-2.5 h-2.5" />
@@ -501,8 +501,8 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
                 <>
                   {(contato || ev.contatoTelefone) && <span className="text-muted-foreground/50">·</span>}
                   <span className="inline-flex items-center gap-1">
-                    <Scale className="w-3 h-3 text-indigo-500" />
-                    <span className="font-mono text-indigo-700 dark:text-indigo-300 text-[10.5px]">{cnj}</span>
+                    <Scale className="w-3 h-3 text-info" />
+                    <span className="font-mono text-info-fg text-[10.5px]">{cnj}</span>
                     {tribunal && <span className="text-muted-foreground/80 text-[10px] uppercase">{tribunal}</span>}
                   </span>
                 </>
@@ -534,7 +534,7 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
                 </span>
               )}
               {ev.lembretes && ev.lembretes.length > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 text-blue-700 dark:text-blue-300 text-[10px] font-medium">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info-bg border border-info/30 text-info-fg text-[10px] font-medium">
                   <Bell className="w-2.5 h-2.5" />
                   {ev.lembretes.length} lembrete{ev.lembretes.length === 1 ? "" : "s"}
                 </span>
@@ -548,7 +548,7 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
           {!concluido && !cancelado && podeEditar !== false && (
             <Button
               size="sm"
-              className="h-7 text-[10.5px] rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm px-2.5"
+              className="h-7 text-[10.5px] rounded-lg bg-success hover:bg-success text-success-on shadow-sm px-2.5"
               onClick={(e) => {
                 e.stopPropagation();
                 if (onConcluir) onConcluir(ev);
@@ -867,19 +867,19 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
                 setPainelAberto(true);
               }}
               className={`border-r border-b border-border/60 px-1.5 py-1.5 overflow-hidden cursor-pointer transition-colors [&:nth-child(7n)]:border-r-0 ${
-                diaInteiroBloq ? "bg-red-50/60 dark:bg-red-950/30" : "hover:bg-muted/50"
+                diaInteiroBloq ? "bg-danger-bg/60" : "hover:bg-muted/50"
               } ${
                 isSelected(dia.date) && painelAberto
-                  ? "bg-violet-50/70 dark:bg-violet-950/30 ring-[1.5px] ring-inset ring-violet-500"
+                  ? "bg-info-bg/70 ring-[1.5px] ring-inset ring-info"
                   : isSelected(dia.date)
-                    ? "bg-violet-50/50 dark:bg-violet-950/20"
+                    ? "bg-info-bg/50"
                     : ""
               }`}
               title={motivoBloq ?? undefined}
             >
               <div className="flex items-center gap-1">
                 {isToday(dia.date) ? (
-                  <span className="w-5 h-5 rounded-full bg-violet-600 text-white text-[11px] font-bold flex items-center justify-center">
+                  <span className="w-5 h-5 rounded-full bg-info text-info-on text-[11px] font-bold flex items-center justify-center">
                     {dia.date.getDate()}
                   </span>
                 ) : (
@@ -890,7 +890,7 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
                   </span>
                 )}
                 {diaInteiroBloq && (
-                  <span className="text-[9px] font-bold text-red-600 dark:text-red-400 truncate flex items-center gap-0.5">
+                  <span className="text-[9px] font-bold text-danger-fg truncate flex items-center gap-0.5">
                     <CalendarOff className="h-2.5 w-2.5 shrink-0" />
                     {motivoBloq?.slice(0, 10) || "bloqueado"}
                   </span>
@@ -1047,7 +1047,7 @@ function PainelDoDia({
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className="rounded-full bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 px-2.5 py-1 text-[11px] font-bold whitespace-nowrap">
+          <span className="rounded-full bg-info-bg border border-info/30 text-info-fg px-2.5 py-1 text-[11px] font-bold whitespace-nowrap">
             {ordenados.length === 0
               ? "livre"
               : `${ordenados.length} ${ordenados.length === 1 ? "compromisso" : "compromissos"}`}
@@ -1068,7 +1068,7 @@ function PainelDoDia({
           {bloqueios.map((b: any) => (
             <div
               key={b.id}
-              className="flex items-center gap-1.5 text-[11px] font-semibold bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg px-2.5 py-1.5 text-red-700 dark:text-red-300"
+              className="flex items-center gap-1.5 text-[11px] font-semibold bg-danger-bg border border-danger/30 rounded-lg px-2.5 py-1.5 text-danger-fg"
             >
               <CalendarOff className="h-3 w-3 shrink-0" />
               <span className="shrink-0">
@@ -1078,7 +1078,7 @@ function PainelDoDia({
               {onRemoverBloqueio && (
                 <button
                   type="button"
-                  className="ml-auto shrink-0 text-red-500 hover:text-red-800 dark:hover:text-red-200"
+                  className="ml-auto shrink-0 text-danger hover:text-danger-fg"
                   onClick={() => onRemoverBloqueio(b.id)}
                   title="Remover bloqueio"
                 >
@@ -1146,7 +1146,7 @@ function PainelDoDia({
                           .join(" · ")}
                       </span>
                     </span>
-                    {concluido && <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />}
+                    {concluido && <Check className="h-3.5 w-3.5 text-success-fg shrink-0 mt-0.5" />}
                   </button>
                 );
               })}
@@ -1167,7 +1167,7 @@ function PainelDoDia({
             size="sm"
             variant="outline"
             onClick={onBloquear}
-            className="border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-950/60"
+            className="border-danger/30 bg-danger-bg text-danger-fg hover:bg-danger-bg"
           >
             <Ban className="h-3.5 w-3.5 mr-1.5" />
             Bloquear
@@ -1224,14 +1224,14 @@ function BloquearDiaDialog({
             <button
               type="button"
               onClick={() => setModo("dia")}
-              className={`flex-1 px-3 py-2 text-sm rounded-md border ${modo === "dia" ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30 font-medium" : "border-border"}`}
+              className={`flex-1 px-3 py-2 text-sm rounded-md border ${modo === "dia" ? "border-info/30 bg-info-bg font-medium" : "border-border"}`}
             >
               Dia inteiro
             </button>
             <button
               type="button"
               onClick={() => setModo("horario")}
-              className={`flex-1 px-3 py-2 text-sm rounded-md border ${modo === "horario" ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30 font-medium" : "border-border"}`}
+              className={`flex-1 px-3 py-2 text-sm rounded-md border ${modo === "horario" ? "border-info/30 bg-info-bg font-medium" : "border-border"}`}
             >
               Horário específico
             </button>
@@ -1324,7 +1324,7 @@ function ProximoEventoHero({ ev, onStatusChange, onConcluir, onEdit, onCardClick
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border-2 p-5 bg-gradient-to-br from-orange-50 dark:from-orange-950/40 via-amber-50/60 dark:via-amber-950/25 to-white dark:to-slate-900 shadow-[0_4px_20px_-4px_rgb(249,115,22,0.18)] ${onCardClick ? "cursor-pointer transition-shadow hover:shadow-[0_6px_24px_-4px_rgb(249,115,22,0.28)]" : ""}`}
+      className={`relative overflow-hidden rounded-2xl border-2 p-5 bg-gradient-to-br from-warning-bg via-warning-bg/60 to-white dark:to-muted shadow-[0_4px_20px_-4px_rgb(249,115,22,0.18)] ${onCardClick ? "cursor-pointer transition-shadow hover:shadow-[0_6px_24px_-4px_rgb(249,115,22,0.28)]" : ""}`}
       style={{ borderColor: cor }}
       onClick={onCardClick ? () => onCardClick(ev) : undefined}
       role={onCardClick ? "button" : undefined}
@@ -1336,13 +1336,13 @@ function ProximoEventoHero({ ev, onStatusChange, onConcluir, onEdit, onCardClick
         }
       } : undefined}
     >
-      <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-orange-200/30 dark:bg-orange-900/20 blur-3xl" />
+      <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-warning-bg/30 blur-3xl" />
       <div className="relative flex items-start gap-4 flex-wrap">
         <div className="flex flex-col">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-orange-700 dark:text-orange-300 mb-1">Próximo evento</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-warning-fg mb-1">Próximo evento</p>
           <div className="flex items-baseline gap-2">
             <p className="text-3xl font-extrabold text-foreground tabular-nums leading-none tracking-tight">{horaStr}</p>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-600 text-white text-[10px] font-bold animate-pulse">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-warning text-warning-on text-[10px] font-bold animate-pulse">
               ⏳ {countdownTxt}
             </span>
           </div>
@@ -1397,7 +1397,7 @@ function ProximoEventoHero({ ev, onStatusChange, onConcluir, onEdit, onCardClick
           {podeEditar !== false && (
             <Button
               size="sm"
-              className="h-8 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+              className="h-8 text-xs rounded-lg bg-success hover:bg-success shadow-sm"
               onClick={(e) => {
                 e.stopPropagation();
                 if (onConcluir) onConcluir(ev);
@@ -1467,7 +1467,7 @@ function TimelineHorariaHoje({ eventos, onCardClick }: { eventos: any[]; onCardC
   return (
     <div>
       <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
-        <Sun className="h-4 w-4 text-amber-500" />
+        <Sun className="h-4 w-4 text-warning" />
         Hoje ({eventos.length})
       </h3>
       <div className="bg-card border border-border rounded-2xl p-5">
@@ -1492,8 +1492,8 @@ function TimelineHorariaHoje({ eventos, onCardClick }: { eventos: any[]; onCardC
               className="absolute left-12 right-0 pointer-events-none"
               style={{ top: nowOffset, height: 2 }}
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-orange-500 via-orange-400 to-transparent" />
-              <span className="absolute -left-12 top-0 -translate-y-1/2 bg-orange-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full tabular-nums">
+              <div className="absolute inset-0 bg-gradient-to-r from-warning via-warning to-transparent" />
+              <span className="absolute -left-12 top-0 -translate-y-1/2 bg-warning text-warning-on text-[9px] font-bold px-1.5 py-0.5 rounded-full tabular-nums">
                 AGORA · {String(agora.getHours()).padStart(2, "0")}:{String(agora.getMinutes()).padStart(2, "0")}
               </span>
             </div>
@@ -1671,7 +1671,7 @@ function FiltroResponsaveis({
             type="button"
             className={`h-10 rounded-lg px-3 flex items-center gap-2 text-xs font-semibold border transition-all ${
               ativo
-                ? "border-violet-600 bg-violet-50 dark:bg-violet-950/30 text-violet-800 dark:text-violet-200 ring-[3px] ring-violet-600/10"
+                ? "border-info/30 bg-info-bg text-info-fg ring-[3px] ring-info/10"
                 : "bg-card border-border text-muted-foreground hover:border-foreground/25"
             }`}
           >
@@ -1690,7 +1690,7 @@ function FiltroResponsaveis({
                   </span>
                 ))}
                 {escolhidos.length > 4 && (
-                  <span className="ml-1 text-[11px] text-violet-700 dark:text-violet-300">+{escolhidos.length - 4}</span>
+                  <span className="ml-1 text-[11px] text-info-fg">+{escolhidos.length - 4}</span>
                 )}
               </span>
             ) : (
@@ -1720,7 +1720,7 @@ function FiltroResponsaveis({
                     </span>
                     <button
                       type="button"
-                      className="text-[10.5px] font-bold text-violet-700 dark:text-violet-300 hover:underline"
+                      className="text-[10.5px] font-bold text-info-fg hover:underline"
                       onClick={() => {
                         const ids = lista.map((p) => p.id);
                         const todosMarcados = ids.every((id) => selecionados.includes(id));
@@ -1742,12 +1742,12 @@ function FiltroResponsaveis({
                         type="button"
                         onClick={() => alternar(p.id)}
                         className={`w-full flex items-center gap-2.5 px-1.5 py-1.5 rounded-md text-left ${
-                          on ? "bg-violet-50 dark:bg-violet-950/30" : "hover:bg-muted/50"
+                          on ? "bg-info-bg" : "hover:bg-muted/50"
                         }`}
                       >
                         <span
                           className={`w-[15px] h-[15px] rounded border-[1.6px] flex items-center justify-center shrink-0 ${
-                            on ? "bg-violet-600 border-violet-600" : "border-foreground/25"
+                            on ? "bg-info border-info/30" : "border-foreground/25"
                           }`}
                         >
                           {on && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3.5} />}
@@ -2006,15 +2006,15 @@ function ListaView({
           const active = filtroTipo === opt.id;
           const ativoCls: Record<string, string> = {
             slate: "bg-foreground text-background border-foreground shadow-sm",
-            violet: "bg-violet-600 text-white border-violet-600 shadow-sm",
-            rose: "bg-rose-600 text-white border-rose-600 shadow-sm",
-            amber: "bg-amber-500 text-white border-amber-500 shadow-sm",
-            emerald: "bg-emerald-600 text-white border-emerald-600 shadow-sm",
-            cyan: "bg-cyan-600 text-white border-cyan-600 shadow-sm",
+            violet: "bg-info text-info-on border-info/30 shadow-sm",
+            rose: "bg-danger text-danger-on border-danger/30 shadow-sm",
+            amber: "bg-warning text-warning-on border-warning/30 shadow-sm",
+            emerald: "bg-success text-success-on border-success/30 shadow-sm",
+            cyan: "bg-info text-info-on border-info/30 shadow-sm",
           };
           const inativoDot: Record<string, string> = {
-            slate: "bg-slate-400", violet: "bg-violet-500", rose: "bg-rose-500",
-            amber: "bg-amber-500", emerald: "bg-emerald-500", cyan: "bg-cyan-500",
+            slate: "bg-muted-foreground/50", violet: "bg-info", rose: "bg-danger",
+            amber: "bg-warning", emerald: "bg-success", cyan: "bg-info",
           };
           return (
             <button
@@ -2059,7 +2059,7 @@ function ListaView({
       <p className="text-[11px] text-muted-foreground">
         <b className="font-semibold text-foreground/90 tabular-nums">{totalFiltrado}</b> {totalFiltrado === 1 ? "evento" : "eventos"}
         {grupos.atrasado.length > 0 && (
-          <> · <b className="font-semibold text-rose-600 dark:text-rose-400 tabular-nums">{grupos.atrasado.length}</b> atrasado{grupos.atrasado.length === 1 ? "" : "s"}</>
+          <> · <b className="font-semibold text-danger-fg tabular-nums">{grupos.atrasado.length}</b> atrasado{grupos.atrasado.length === 1 ? "" : "s"}</>
         )}
       </p>
 
@@ -2075,9 +2075,9 @@ function ListaView({
           <Skeleton className="h-20 w-full" />
         </div>
       ) : totalFiltrado === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-gradient-to-br from-slate-50 dark:from-slate-900 to-amber-50/30 dark:to-amber-950/20 py-14 text-center space-y-2">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 flex items-center justify-center mx-auto mb-1">
-            <CalendarClock className="h-7 w-7 text-amber-500/70" />
+        <div className="rounded-2xl border border-dashed border-border bg-gradient-to-br from-muted to-warning-bg/30 py-14 text-center space-y-2">
+          <div className="h-14 w-14 rounded-2xl bg-warning/10 flex items-center justify-center mx-auto mb-1">
+            <CalendarClock className="h-7 w-7 text-warning/70" />
           </div>
           <p className="font-semibold text-foreground/90">Nenhum evento com este filtro</p>
           <p className="text-xs text-muted-foreground">Tente trocar o filtro ou criar um novo evento.</p>
@@ -2085,10 +2085,10 @@ function ListaView({
       ) : (
         <div className="space-y-5">
           {[
-            { key: "atrasado", titulo: "Atrasados", icon: AlertTriangle, color: "text-rose-600 dark:text-rose-400" },
-            { key: "hoje", titulo: "Hoje", icon: Sun, color: "text-orange-600 dark:text-orange-400" },
-            { key: "amanha", titulo: "Amanhã", icon: Clock, color: "text-blue-600 dark:text-blue-400" },
-            { key: "semana", titulo: "Esta semana", icon: CalendarDays, color: "text-violet-600 dark:text-violet-400" },
+            { key: "atrasado", titulo: "Atrasados", icon: AlertTriangle, color: "text-danger-fg" },
+            { key: "hoje", titulo: "Hoje", icon: Sun, color: "text-warning-fg" },
+            { key: "amanha", titulo: "Amanhã", icon: Clock, color: "text-info-fg" },
+            { key: "semana", titulo: "Esta semana", icon: CalendarDays, color: "text-info-fg" },
             { key: "proximaSemana", titulo: "Próxima semana", icon: CalendarDays, color: "text-muted-foreground" },
             { key: "maisTarde", titulo: "Mais tarde", icon: CalendarDays, color: "text-muted-foreground" },
           ].map((secao) => {
@@ -2327,7 +2327,7 @@ function DetalhesEventoDialog({
                     href={telefoneParaWaMe(String(evento.contatoTelefone)) ?? undefined}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10.5px] font-medium text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 rounded px-1.5 py-0.5 inline-flex items-center gap-1"
+                    className="text-[10.5px] font-medium text-success-fg border border-success/30 bg-success-bg rounded px-1.5 py-0.5 inline-flex items-center gap-1"
                     title="Abrir no WhatsApp Web"
                   >
                     WhatsApp Web
@@ -2341,10 +2341,10 @@ function DetalhesEventoDialog({
           {/* Processo vinculado */}
           {evento.cnj && (
             <div className="flex items-start gap-2.5 text-sm">
-              <Scale className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
+              <Scale className="h-4 w-4 text-info shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Processo</p>
-                <p className="text-sm font-mono font-semibold text-indigo-700 dark:text-indigo-300 truncate">{evento.cnj}</p>
+                <p className="text-sm font-mono font-semibold text-info-fg truncate">{evento.cnj}</p>
                 {evento.tribunal && <p className="text-[11px] text-muted-foreground">{evento.tribunal}</p>}
               </div>
             </div>
@@ -2408,14 +2408,14 @@ function DetalhesEventoDialog({
                         href={a.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 px-2 py-1.5 bg-violet-50/60 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/50 rounded-lg hover:bg-violet-100 transition-colors"
+                        className="flex items-center gap-2 px-2 py-1.5 bg-info-bg/60 border border-info/30 rounded-lg hover:bg-info-bg transition-colors"
                       >
                         <span className="text-base shrink-0">{isImg ? "🖼️" : a.mimeType?.includes?.("pdf") ? "📄" : "📎"}</span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[11.5px] font-medium text-violet-700 dark:text-violet-300 truncate" title={a.nome}>{a.nome}</p>
+                          <p className="text-[11.5px] font-medium text-info-fg truncate" title={a.nome}>{a.nome}</p>
                           <p className="text-[10px] text-muted-foreground">{formatTamanho(a.tamanho || 0)}</p>
                         </div>
-                        <ExternalLink className="h-3 w-3 text-violet-600 dark:text-violet-400 shrink-0" />
+                        <ExternalLink className="h-3 w-3 text-info-fg shrink-0" />
                       </a>
                     );
                   })}
@@ -2441,12 +2441,12 @@ function DetalhesEventoDialog({
                     const canais: string[] = Array.isArray(l.canais) ? l.canais : [l.tipo];
                     const dests: number[] = Array.isArray(l.destinatarioIds) ? l.destinatarioIds : [];
                     return (
-                      <div key={l.id} className="px-2.5 py-1.5 bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg">
+                      <div key={l.id} className="px-2.5 py-1.5 bg-info-bg/60 border border-info/30 rounded-lg">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[11px] font-semibold text-blue-800 dark:text-blue-200">{qdo}</span>
-                          <span className="text-blue-300">·</span>
+                          <span className="text-[11px] font-semibold text-info-fg">{qdo}</span>
+                          <span className="text-info">·</span>
                           {canais.map((c) => (
-                            <span key={c} className="text-[10px] text-blue-700 dark:text-blue-300">
+                            <span key={c} className="text-[10px] text-info-fg">
                               {CANAL_LABEL[c]?.icon} {CANAL_LABEL[c]?.nome || c}
                             </span>
                           ))}
@@ -2483,7 +2483,7 @@ function DetalhesEventoDialog({
             <Button
               variant="default"
               size="sm"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="bg-success hover:bg-success text-success-on"
               onClick={handleConcluir}
             >
               <Check className="h-3.5 w-3.5 mr-1.5" />
@@ -2951,10 +2951,10 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
           {/* RESPONSÁVEL — quem fica com o evento. Vale pros dois tipos. */}
           <div>
             <Label className="text-xs">Responsável</Label>
-            <div className="mt-1 rounded-xl border border-violet-300 bg-violet-50/60 dark:bg-violet-950/30 p-2.5">
+            <div className="mt-1 rounded-xl border border-info/30 bg-info-bg/60 p-2.5">
               <div className="flex items-center justify-between gap-2">
                 {responsavelEscolhido ? (
-                  <span className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full bg-violet-600 text-white text-[11.5px] font-semibold">
+                  <span className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full bg-info text-info-on text-[11.5px] font-semibold">
                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white ring-1 ring-white/40 bg-gradient-to-br ${gradientAvatar(responsavelEscolhido.nome)}`}>
                       {gerarIniciais(responsavelEscolhido.nome)}
                     </span>
@@ -2972,7 +2972,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                   <button
                     type="button"
                     onClick={() => setResponsavelId(null)}
-                    className="text-[11px] font-semibold text-violet-700 dark:text-violet-300 hover:underline shrink-0"
+                    className="text-[11px] font-semibold text-info-fg hover:underline shrink-0"
                   >
                     Limpar
                   </button>
@@ -2990,7 +2990,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                   {colaboradores.length === 0 ? (
                     <p className="text-[10.5px] text-muted-foreground italic mt-1.5">Carregando colaboradores…</p>
                   ) : (
-                    <div className="max-h-40 overflow-y-auto bg-card rounded-lg border border-violet-200/70 dark:border-violet-800/50 divide-y divide-slate-100 dark:divide-slate-800 mt-1.5">
+                    <div className="max-h-40 overflow-y-auto bg-card rounded-lg border border-info/30 divide-y divide-border mt-1.5">
                       {colaboradores
                         .filter((c) => !responsavelBusca || c.nome.toLowerCase().includes(responsavelBusca.toLowerCase()))
                         .map((col) => {
@@ -3001,32 +3001,32 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                               key={col.id}
                               onClick={() => setResponsavelId(col.id)}
                               className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 text-left transition-colors ${
-                                ativo ? "bg-violet-50 dark:bg-violet-950/30 hover:bg-violet-100" : "hover:bg-muted/50"
+                                ativo ? "bg-info-bg hover:bg-info-bg" : "hover:bg-muted/50"
                               }`}
                             >
-                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)} ${ativo ? "ring-2 ring-violet-500 ring-offset-1" : ""}`}>
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)} ${ativo ? "ring-2 ring-info ring-offset-1" : ""}`}>
                                 {gerarIniciais(col.nome)}
                               </span>
                               <div className="flex-1 min-w-0">
                                 <p className="text-[11px] font-semibold truncate" title={col.nome}>
                                   {col.nome}
-                                  {col.souEu && <span className="text-violet-600 dark:text-violet-400 font-normal"> (você)</span>}
+                                  {col.souEu && <span className="text-info-fg font-normal"> (você)</span>}
                                 </p>
                                 {col.cargo && <p className="text-[9.5px] text-muted-foreground truncate">{col.cargo}</p>}
                               </div>
-                              {ativo && <Check className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400 shrink-0" />}
+                              {ativo && <Check className="h-3.5 w-3.5 text-info-fg shrink-0" />}
                             </button>
                           );
                         })}
                     </div>
                   )}
-                  <p className="text-[10px] text-violet-800/80 dark:text-violet-200 leading-relaxed mt-1.5">
+                  <p className="text-[10px] text-info-fg/80 leading-relaxed mt-1.5">
                     Vinculou um cliente e limpou o campo? O evento vai pro responsável daquele
                     cliente — regra que já existe, agora visível antes de salvar.
                   </p>
                 </>
               ) : (
-                <p className="text-[10px] text-violet-800/80 dark:text-violet-200 leading-relaxed mt-1.5">
+                <p className="text-[10px] text-info-fg/80 leading-relaxed mt-1.5">
                   Você cria para si. Atribuir a um colega é do gestor.
                 </p>
               )}
@@ -3057,14 +3057,14 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
 
           {/* LEMBRETES — só pra compromissos */}
           {tipoEvento === "compromisso" && (
-            <div className="rounded-xl bg-gradient-to-br from-blue-50/60 dark:from-blue-950/40 to-indigo-50/40 dark:to-indigo-950/20 border border-blue-200/70 dark:border-blue-800/50 p-3 space-y-2.5">
+            <div className="rounded-xl bg-gradient-to-br from-info-bg/60 to-info-bg/40 border border-info/30 p-3 space-y-2.5">
               <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
+                <div className="h-6 w-6 rounded-lg bg-info flex items-center justify-center shrink-0">
                   <Bell className="h-3 w-3 text-white" />
                 </div>
-                <p className="text-xs font-bold text-blue-900 dark:text-blue-200 tracking-tight">Lembretes</p>
+                <p className="text-xs font-bold text-info-fg tracking-tight">Lembretes</p>
                 {lembreteMinutos.length > 0 && lembreteDestinatarios.length > 0 && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[9px] font-bold uppercase tracking-wider">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-info text-info-on text-[9px] font-bold uppercase tracking-wider">
                     {lembreteMinutos.length} ativo{lembreteMinutos.length === 1 ? "" : "s"}
                   </span>
                 )}
@@ -3072,7 +3072,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
 
               {/* Quando avisar (toggle) */}
               <div>
-                <p className="text-[10px] font-semibold text-blue-700/85 dark:text-blue-300 mb-1.5 uppercase tracking-wider">Quando avisar</p>
+                <p className="text-[10px] font-semibold text-info-fg/85 mb-1.5 uppercase tracking-wider">Quando avisar</p>
                 <div className="flex gap-1.5 flex-wrap">
                   {PRESETS_LEMBRETE.map((p) => {
                     const ativo = lembreteMinutos.includes(p.id);
@@ -3082,7 +3082,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                         type="button"
                         onClick={() => setLembreteMinutos(ativo ? lembreteMinutos.filter((m) => m !== p.id) : [...lembreteMinutos, p.id])}
                         className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                          ativo ? "bg-blue-600 text-white border-blue-600" : "bg-card text-muted-foreground border-border hover:border-blue-300"
+                          ativo ? "bg-info text-info-on border-info/30" : "bg-card text-muted-foreground border-border hover:border-info/30"
                         }`}
                       >
                         {p.label}
@@ -3095,17 +3095,17 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
               {/* Quem avisar — seletor melhorado */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-[10px] font-semibold text-blue-700/85 dark:text-blue-300 uppercase tracking-wider">
+                  <p className="text-[10px] font-semibold text-info-fg/85 uppercase tracking-wider">
                     Quem avisar
                     {lembreteDestinatarios.length > 0 && (
-                      <span className="text-blue-600 dark:text-blue-400 normal-case font-bold ml-1">· {lembreteDestinatarios.length} selecionado{lembreteDestinatarios.length === 1 ? "" : "s"}</span>
+                      <span className="text-info-fg normal-case font-bold ml-1">· {lembreteDestinatarios.length} selecionado{lembreteDestinatarios.length === 1 ? "" : "s"}</span>
                     )}
                   </p>
                   <div className="flex gap-1.5 text-[10px]">
                     <button
                       type="button"
                       onClick={() => setLembreteDestinatarios(colaboradores.map((c) => c.id))}
-                      className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                      className="text-info-fg hover:underline font-medium"
                     >
                       Todos
                     </button>
@@ -3129,7 +3129,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                       return (
                         <span
                           key={id}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-medium"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info text-info-on text-[10px] font-medium"
                         >
                           <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white ring-1 ring-white/40 bg-gradient-to-br ${gradientAvatar(col.nome)}`}>
                             {gerarIniciais(col.nome)}
@@ -3138,7 +3138,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                           <button
                             type="button"
                             onClick={() => setLembreteDestinatarios(lembreteDestinatarios.filter((d) => d !== id))}
-                            className="hover:text-rose-200"
+                            className="hover:text-danger"
                           >
                             ×
                           </button>
@@ -3158,7 +3158,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                 {colaboradores.length === 0 ? (
                   <p className="text-[10.5px] text-muted-foreground italic">Carregando colaboradores…</p>
                 ) : (
-                  <div className="max-h-40 overflow-y-auto bg-card rounded-lg border border-blue-200/50 dark:border-blue-800/50 divide-y divide-slate-100 dark:divide-slate-800">
+                  <div className="max-h-40 overflow-y-auto bg-card rounded-lg border border-info/30 divide-y divide-border">
                     {colaboradores
                       .filter((c) => !destinatariosBusca || c.nome.toLowerCase().includes(destinatariosBusca.toLowerCase()))
                       .map((col) => {
@@ -3171,10 +3171,10 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                               ativo ? lembreteDestinatarios.filter((d) => d !== col.id) : [...lembreteDestinatarios, col.id],
                             )}
                             className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 text-left transition-colors ${
-                              ativo ? "bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100" : "hover:bg-muted/50"
+                              ativo ? "bg-info-bg hover:bg-info-bg" : "hover:bg-muted/50"
                             }`}
                           >
-                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)} ${ativo ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}>
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)} ${ativo ? "ring-2 ring-info ring-offset-1" : ""}`}>
                               {gerarIniciais(col.nome)}
                             </span>
                             <div className="flex-1 min-w-0">
@@ -3182,7 +3182,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                               {col.cargo && <p className="text-[9.5px] text-muted-foreground truncate">{col.cargo}</p>}
                             </div>
                             {ativo && (
-                              <Check className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                              <Check className="h-3.5 w-3.5 text-info-fg shrink-0" />
                             )}
                           </button>
                         );
@@ -3193,7 +3193,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
 
               {/* Canais */}
               <div>
-                <p className="text-[10px] font-semibold text-blue-700/85 dark:text-blue-300 mb-1.5 uppercase tracking-wider">Canais</p>
+                <p className="text-[10px] font-semibold text-info-fg/85 mb-1.5 uppercase tracking-wider">Canais</p>
                 <div className="flex gap-1.5 flex-wrap">
                   {CANAIS_LEMBRETE.map((c) => {
                     const ativo = lembreteCanais.includes(c.id);
@@ -3206,10 +3206,10 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                         onClick={() => !disabled && setLembreteCanais(ativo ? lembreteCanais.filter((k) => k !== c.id) : [...lembreteCanais, c.id])}
                         className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
                           ativo
-                            ? "bg-blue-600 text-white border-blue-600"
+                            ? "bg-info text-info-on border-info/30"
                             : disabled
                               ? "bg-muted/50 text-muted-foreground/80 border-border cursor-not-allowed"
-                              : "bg-card text-muted-foreground border-border hover:border-blue-300"
+                              : "bg-card text-muted-foreground border-border hover:border-info/30"
                         }`}
                       >
                         <span className="mr-1">{c.icon}</span>
@@ -3221,7 +3221,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
               </div>
 
               {lembreteMinutos.length > 0 && lembreteDestinatarios.length === 0 && (
-                <p className="text-[10px] text-amber-600 dark:text-amber-400 italic">Selecione pelo menos 1 destinatário pra ativar os lembretes.</p>
+                <p className="text-[10px] text-warning-fg italic">Selecione pelo menos 1 destinatário pra ativar os lembretes.</p>
               )}
             </div>
           )}
@@ -3230,7 +3230,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
           <div className="relative">
             <Label className="text-xs">Cliente / contato (opcional)</Label>
             {contatoId && contatoNome ? (
-              <div className="mt-1 flex items-center gap-2 px-2.5 py-1.5 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/50 rounded-lg">
+              <div className="mt-1 flex items-center gap-2 px-2.5 py-1.5 bg-info-bg border border-info/30 rounded-lg">
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(contatoNome)}`}>
                   {gerarIniciais(contatoNome)}
                 </span>
@@ -3238,7 +3238,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                 <button
                   type="button"
                   onClick={() => { setContatoId(null); setContatoNome(""); setContatoBusca(""); }}
-                  className="text-[10px] text-violet-600 dark:text-violet-400 hover:underline"
+                  className="text-[10px] text-info-fg hover:underline"
                 >
                   Trocar
                 </button>
@@ -3260,7 +3260,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                         type="button"
                         key={c.id}
                         onClick={() => { setContatoId(c.id); setContatoNome(c.nome); setContatoMenuOpen(false); }}
-                        className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-violet-50 dark:hover:bg-violet-950/30 text-left"
+                        className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-info-bg text-left"
                       >
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(c.nome)}`}>
                           {gerarIniciais(c.nome)}
@@ -3293,7 +3293,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                   href={telefoneParaWaMe(contatoTelefone) ?? undefined}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 inline-flex items-center gap-1"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-success-fg hover:text-success-fg inline-flex items-center gap-1"
                   title="Abrir no WhatsApp"
                 >
                   💬 wa.me
@@ -3307,13 +3307,13 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
           <div className="relative">
             <Label className="text-xs">Processo vinculado (opcional)</Label>
             {processoId && processoLabel ? (
-              <div className="mt-1 flex items-center gap-2 px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/50 rounded-lg">
-                <Scale className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                <span className="flex-1 text-xs font-mono font-bold text-indigo-700 dark:text-indigo-300 truncate">{processoLabel}</span>
+              <div className="mt-1 flex items-center gap-2 px-2.5 py-1.5 bg-info-bg border border-info/30 rounded-lg">
+                <Scale className="h-4 w-4 text-info-fg shrink-0" />
+                <span className="flex-1 text-xs font-mono font-bold text-info-fg truncate">{processoLabel}</span>
                 <button
                   type="button"
                   onClick={() => { setProcessoId(null); setProcessoLabel(""); setProcessoBusca(""); }}
-                  className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline"
+                  className="text-[10px] text-info-fg hover:underline"
                 >
                   Trocar
                 </button>
@@ -3339,9 +3339,9 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                           setProcessoLabel(m.searchKey || m.apelido || `#${m.id}`);
                           setProcessoMenuOpen(false);
                         }}
-                        className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-left"
+                        className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-info-bg text-left"
                       >
-                        <Scale className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                        <Scale className="h-4 w-4 text-info-fg shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-mono font-bold truncate">{m.searchKey}</p>
                           {m.apelido && <p className="text-[10px] text-muted-foreground truncate">{m.apelido}</p>}
@@ -3361,20 +3361,20 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
 
           {/* ANEXOS — só pra compromissos */}
           {tipoEvento === "compromisso" && (
-            <div className="rounded-xl bg-gradient-to-br from-violet-50/60 dark:from-violet-950/40 to-fuchsia-50/40 dark:to-fuchsia-950/20 border border-violet-200/70 dark:border-violet-800/50 p-3 space-y-2.5">
+            <div className="rounded-xl bg-gradient-to-br from-info-bg/60 to-danger-bg/40 border border-info/30 p-3 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shrink-0">
+                  <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-info to-danger flex items-center justify-center shrink-0">
                     <Briefcase className="h-3 w-3 text-white" />
                   </div>
-                  <p className="text-xs font-bold text-violet-900 dark:text-violet-200 tracking-tight">Arquivos da reunião</p>
+                  <p className="text-xs font-bold text-info-fg tracking-tight">Arquivos da reunião</p>
                   {anexos.length > 0 && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-violet-600 text-white text-[9px] font-bold uppercase tracking-wider">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-info text-info-on text-[9px] font-bold uppercase tracking-wider">
                       {anexos.length}
                     </span>
                   )}
                 </div>
-                <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-600 text-white text-[10.5px] font-semibold cursor-pointer hover:bg-violet-700 transition-colors">
+                <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-info text-info-on text-[10.5px] font-semibold cursor-pointer hover:bg-info transition-colors">
                   {uploadingAnexo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                   {uploadingAnexo ? "Enviando…" : "Adicionar"}
                   <input
@@ -3391,21 +3391,21 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
               </div>
 
               {anexos.length === 0 ? (
-                <p className="text-[10.5px] text-violet-700/70 dark:text-violet-300 italic">PDF, imagens ou documentos pra ter à mão durante a reunião.</p>
+                <p className="text-[10.5px] text-info-fg/70 italic">PDF, imagens ou documentos pra ter à mão durante a reunião.</p>
               ) : (
                 <div className="space-y-1">
                   {anexos.map((a, i) => {
                     const isImg = a.mimeType.startsWith("image/");
                     const sizeKB = a.tamanho < 1024 * 1024 ? `${Math.round(a.tamanho / 1024)} KB` : `${(a.tamanho / 1024 / 1024).toFixed(1)} MB`;
                     return (
-                      <div key={i} className="flex items-center gap-2 px-2 py-1.5 bg-card border border-violet-200/60 dark:border-violet-800/50 rounded-lg">
+                      <div key={i} className="flex items-center gap-2 px-2 py-1.5 bg-card border border-info/30 rounded-lg">
                         <span className="text-base shrink-0">{isImg ? "🖼️" : a.mimeType.includes("pdf") ? "📄" : "📎"}</span>
                         <div className="flex-1 min-w-0">
                           <a
                             href={a.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[11px] font-medium text-violet-700 dark:text-violet-300 hover:underline truncate block"
+                            className="text-[11px] font-medium text-info-fg hover:underline truncate block"
                             title={a.nome}
                           >
                             {a.nome}
@@ -3415,7 +3415,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                         <button
                           type="button"
                           onClick={() => handleRemoverAnexo(a)}
-                          className="text-muted-foreground/80 hover:text-rose-600 dark:hover:text-rose-400 p-1"
+                          className="text-muted-foreground/80 hover:text-danger-fg p-1"
                           title="Remover"
                         >
                           <Trash2 className="h-3 w-3" />
@@ -3516,9 +3516,9 @@ function ResultadoAtendimentoDialog({ evento, open, onOpenChange, onConcluido }:
   };
 
   const opcoes: Array<{ v: "compareceu" | "nao_compareceu" | "remarcado"; label: string; Icon: typeof CheckCircle; active: string }> = [
-    { v: "compareceu", label: "Compareceu", Icon: CheckCircle, active: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-500 text-emerald-700 dark:text-emerald-300" },
-    { v: "nao_compareceu", label: "Não veio", Icon: XCircle, active: "bg-rose-50 dark:bg-rose-950/30 border-rose-500 text-rose-700 dark:text-rose-300" },
-    { v: "remarcado", label: "Remarcou", Icon: RotateCcw, active: "bg-amber-50 dark:bg-amber-950/30 border-amber-500 text-amber-700 dark:text-amber-300" },
+    { v: "compareceu", label: "Compareceu", Icon: CheckCircle, active: "bg-success-bg border-success/30 text-success-fg" },
+    { v: "nao_compareceu", label: "Não veio", Icon: XCircle, active: "bg-danger-bg border-danger/30 text-danger-fg" },
+    { v: "remarcado", label: "Remarcou", Icon: RotateCcw, active: "bg-warning-bg border-warning/30 text-warning-fg" },
   ];
 
   return (
@@ -3526,7 +3526,7 @@ function ResultadoAtendimentoDialog({ evento, open, onOpenChange, onConcluido }:
       <DialogContent className="max-w-md max-h-[90dvh] flex flex-col">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center"><Check className="h-4 w-4" /></span>
+            <span className="w-7 h-7 rounded-lg bg-success text-success-on flex items-center justify-center"><Check className="h-4 w-4" /></span>
             Concluir atendimento
           </DialogTitle>
           <DialogDescription className="truncate">{evento.titulo}{evento.contatoNome ? ` · ${evento.contatoNome}` : ""}</DialogDescription>
@@ -3553,8 +3553,8 @@ function ResultadoAtendimentoDialog({ evento, open, onOpenChange, onConcluido }:
           </div>
 
           {remarcou && (
-            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 p-3 space-y-3">
-              <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wide flex items-center gap-1">
+            <div className="rounded-xl bg-warning-bg border border-warning/30 p-3 space-y-3">
+              <p className="text-[11px] font-bold text-warning-fg uppercase tracking-wide flex items-center gap-1">
                 <CalendarClock className="h-3.5 w-3.5" /> Retorno remarcado
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -3567,8 +3567,8 @@ function ResultadoAtendimentoDialog({ evento, open, onOpenChange, onConcluido }:
                   <Input type="time" value={horaRetorno} onChange={(e) => setHoraRetorno(e.target.value)} className="mt-1 bg-card" />
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-200 font-medium cursor-pointer">
-                <input type="checkbox" checked={criarFollowup} onChange={(e) => setCriarFollowup(e.target.checked)} className="accent-amber-600" />
+              <label className="flex items-center gap-2 text-xs text-warning-fg font-medium cursor-pointer">
+                <input type="checkbox" checked={criarFollowup} onChange={(e) => setCriarFollowup(e.target.checked)} className="accent-warning" />
                 Criar follow-up na agenda pra lembrar
               </label>
             </div>
@@ -3591,7 +3591,7 @@ function ResultadoAtendimentoDialog({ evento, open, onOpenChange, onConcluido }:
           <Button
             onClick={handleConfirmar}
             disabled={!podeConcluir || atualizarStatusMut.isPending}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            className="bg-success hover:bg-success text-success-on"
           >
             {atualizarStatusMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
             Concluir
@@ -3627,19 +3627,19 @@ function PastilhaContador({
       onClick={onClick}
       className={`inline-flex items-baseline gap-1.5 rounded-[10px] border px-3 py-1.5 transition-colors ${
         alerta
-          ? "border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:hover:bg-rose-500/20"
+          ? "border-danger/30 bg-danger-bg hover:bg-danger-bg dark:bg-danger/10"
           : "border-border bg-card hover:bg-muted/50"
       }`}
     >
       <span
         className={`text-[15px] font-bold tabular-nums leading-none ${
-          alerta ? "text-rose-600 dark:text-rose-400" : "text-foreground"
+          alerta ? "text-danger-fg" : "text-foreground"
         }`}
       >
         {valor}
       </span>
       <span
-        className={`text-[11.5px] font-medium ${alerta ? "text-rose-700 dark:text-rose-300" : "text-muted-foreground"}`}
+        className={`text-[11.5px] font-medium ${alerta ? "text-danger-fg" : "text-muted-foreground"}`}
       >
         {rotulo}
       </span>
@@ -3758,7 +3758,7 @@ export default function Agenda() {
         {podeCriar && (
           <Button
             onClick={() => setCriarOpen(true)}
-            className="bg-violet-600 hover:bg-violet-700 text-white font-semibold h-10 rounded-[10px] px-4 shadow-[0_8px_18px_-8px_#7c3aed88]"
+            className="bg-info hover:bg-info text-info-on font-semibold h-10 rounded-[10px] px-4 shadow-[0_8px_18px_-8px_#7c3aed88]"
           >
             <Plus className="h-4 w-4 mr-1.5" /> Novo compromisso
           </Button>

@@ -74,33 +74,33 @@ export default function AdminSmartflow() {
       {/* HERO (pegada do SmartFlow do cliente) */}
       <div
         className="relative overflow-hidden rounded-2xl p-5 border"
-        style={{ background: "linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 50%, rgba(236,72,153,0.06) 100%)", borderColor: "rgba(139,92,246,0.18)" }}
+        style={{ background: "color-mix(in oklab, var(--primary) 7%, transparent)", borderColor: "rgba(139,92,246,0.18)" }}
       >
         <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 flex items-center justify-center shadow-md">
+          <div className="w-11 h-11 rounded-xl bg-info flex items-center justify-center shadow-md">
             <Zap className="h-5 w-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">SmartFlow — Modelos</h1>
             <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
-              <Sparkles className="h-3 w-3 text-violet-500" />
+              <Sparkles className="h-3 w-3 text-info" />
               <span>Publique fluxos prontos para os escritórios clonarem</span>
             </p>
           </div>
           <Button
             size="sm"
             onClick={() => setPromoverOpen(true)}
-            className="bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-md"
+            className="bg-info shadow-md"
           >
             <Plus className="h-4 w-4 mr-1.5" />
             Novo modelo
           </Button>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <ChipKpi icon={<LayoutGrid className="h-4 w-4" />} cor="bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" valor={templates.length} label="Modelos" />
-          <ChipKpi icon={<CheckCircle2 className="h-4 w-4" />} cor="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" valor={publicados} label="Publicados" />
-          <ChipKpi icon={<FileEdit className="h-4 w-4" />} cor="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" valor={templates.length - publicados} label="Rascunhos" />
-          <ChipKpi icon={<Copy className="h-4 w-4" />} cor="bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300" valor={clones} label="Clones" />
+          <ChipKpi icon={<LayoutGrid className="h-4 w-4" />} cor="bg-info-bg text-info-fg dark:text-info" valor={templates.length} label="Modelos" />
+          <ChipKpi icon={<CheckCircle2 className="h-4 w-4" />} cor="bg-success-bg text-success-fg dark:text-success" valor={publicados} label="Publicados" />
+          <ChipKpi icon={<FileEdit className="h-4 w-4" />} cor="bg-warning-bg text-warning-fg dark:text-warning" valor={templates.length - publicados} label="Rascunhos" />
+          <ChipKpi icon={<Copy className="h-4 w-4" />} cor="bg-danger-bg text-danger-fg dark:text-danger" valor={clones} label="Clones" />
         </div>
       </div>
 
@@ -123,16 +123,16 @@ export default function AdminSmartflow() {
           <p className="text-sm text-muted-foreground mt-1 max-w-md">
             Monte um fluxo no seu SmartFlow e promova a modelo — ele aparece na galeria dos escritórios pra ser clonado.
           </p>
-          <Button size="sm" className="mt-4 bg-gradient-to-br from-violet-600 to-indigo-600" onClick={() => setPromoverOpen(true)}>
+          <Button size="sm" className="mt-4 bg-info" onClick={() => setPromoverOpen(true)}>
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Promover um fluxo a modelo
           </Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {lista.map((t) => (
-            <div key={t.id} className="relative rounded-xl border border-l-4 border-l-violet-500 bg-card p-4 transition-all hover:shadow-md">
+            <div key={t.id} className="relative rounded-xl border border-l-4 border-l-info bg-card p-4 transition-all hover:shadow-md">
               <div className="flex items-start gap-2.5 mb-2">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm bg-gradient-to-br ${t.gradiente || "from-violet-500 to-indigo-500"}`}>
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm bg-gradient-to-br ${t.gradiente || "from-info to-info"}`}>
                   <Zap className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -142,9 +142,9 @@ export default function AdminSmartflow() {
               </div>
               {t.descricao && <p className="text-xs text-muted-foreground line-clamp-2 mb-3 leading-snug">{t.descricao}</p>}
               <div className="flex flex-wrap gap-1 mb-3">
-                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">{t.qtdPassos} passos</span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300">{t.clones} clones</span>
-                {!t.disponivelParaClientes && <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-400">Rascunho</span>}
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-info-bg text-info-fg dark:text-info">{t.qtdPassos} passos</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-danger-bg text-danger-fg dark:text-danger">{t.clones} clones</span>
+                {!t.disponivelParaClientes && <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground dark:text-muted-foreground/70">Rascunho</span>}
               </div>
               <div className="flex items-center justify-between gap-2 border-t pt-2.5">
                 <div className="flex items-center gap-1.5">
@@ -267,7 +267,7 @@ function PromoverDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
     <Dialog open={open} onOpenChange={(o) => { if (!o) fechar(); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5 text-violet-600 dark:text-violet-400" /> Novo modelo</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5 text-info-fg" /> Novo modelo</DialogTitle>
           <DialogDescription>
             Comece de um modelo pronto da biblioteca interna ou promova um fluxo do seu
             próprio SmartFlow. Em ambos os casos vira um blueprint editável — os campos

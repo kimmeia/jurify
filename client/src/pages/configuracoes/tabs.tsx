@@ -109,11 +109,11 @@ export function PermissoesTab() {
     <div className="flex items-center justify-between gap-3 flex-wrap">
       <div>
         <h3 className="text-base font-bold tracking-tight">Cargos e Permissões</h3>
-        <p className="text-[11px] text-slate-500">{cargos.length} cargo(s) configurado(s) · clique pra ver/editar matriz de permissões</p>
+        <p className="text-[11px] text-muted-foreground">{cargos.length} cargo(s) configurado(s) · clique pra ver/editar matriz de permissões</p>
       </div>
       <Button
         size="sm"
-        className="bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-sm"
+        className="bg-info shadow-sm"
         onClick={() => { setNovoNome(""); setNovoCor(CORES_CARGO[cargos.length % CORES_CARGO.length]); setNovoPerms(initNovoPerms()); setShowNovo(true); }}
       >
         <Plus className="h-3.5 w-3.5 mr-1.5" /> Novo cargo
@@ -128,7 +128,7 @@ export function PermissoesTab() {
           <div
             key={cargo.id}
             onClick={() => setEditId(cargo.id)}
-            className="group rounded-xl bg-white dark:bg-card border border-slate-200 dark:border-slate-700/80 border-l-[4px] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all cursor-pointer p-4"
+            className="group rounded-xl bg-card border border-border border-l-[4px] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all cursor-pointer p-4"
             style={{ borderLeftColor: cargo.cor }}
           >
             <div className="flex items-start gap-3">
@@ -140,28 +140,28 @@ export function PermissoesTab() {
                   <p className="text-sm font-bold tracking-tight truncate" title={cargo.nome}>{cargo.nome}</p>
                   {cargo.isDefault && <Badge variant="outline" className="text-[8.5px] px-1 py-0">Padrão</Badge>}
                 </div>
-                <p className="text-[10.5px] text-slate-500 mt-0.5">
-                  <b className="text-slate-700 dark:text-slate-200 tabular-nums">{cargo.totalColaboradores}</b> {cargo.totalColaboradores === 1 ? "colaborador" : "colaboradores"}
+                <p className="text-[10.5px] text-muted-foreground mt-0.5">
+                  <b className="text-foreground tabular-nums">{cargo.totalColaboradores}</b> {cargo.totalColaboradores === 1 ? "colaborador" : "colaboradores"}
                 </p>
               </div>
-              <Shield className="h-3.5 w-3.5 text-slate-300 group-hover:text-violet-500 transition-colors shrink-0" />
+              <Shield className="h-3.5 w-3.5 text-muted-foreground/70 group-hover:text-info transition-colors shrink-0" />
             </div>
             {modulosVisiveis.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-border">
                 {modulosVisiveis.slice(0, 6).map(m => (
-                  <span key={m} className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 font-medium">
+                  <span key={m} className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-info-bg text-info-fg font-medium">
                     {MODULOS_LABELS[m]}
                   </span>
                 ))}
                 {modulosVisiveis.length > 6 && (
-                  <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/60 text-slate-500 font-medium">
+                  <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
                     +{modulosVisiveis.length - 6}
                   </span>
                 )}
               </div>
             )}
             {modulosVisiveis.length === 0 && (
-              <p className="text-[10.5px] text-slate-400 italic mt-2">Sem permissões de visualização</p>
+              <p className="text-[10.5px] text-muted-foreground/70 italic mt-2">Sem permissões de visualização</p>
             )}
           </div>
         );

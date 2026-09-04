@@ -83,10 +83,10 @@ export default function LeitorQr({ onLido, lido, aoLimpar }: Props) {
 
   if (escolher) {
     return (
-      <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3 space-y-2 dark:border-violet-900 dark:bg-violet-950/20">
+      <div className="rounded-xl border border-info/30 bg-info-bg/60 p-3 space-y-2 dark:border-info/30">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-[13px] font-semibold text-violet-800 dark:text-violet-300">
+            <p className="text-[13px] font-semibold text-info-fg">
               Esse QR tem {escolher.length} contas
             </p>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -107,7 +107,7 @@ export default function LeitorQr({ onLido, lido, aoLimpar }: Props) {
                 onLido(c);
                 setEscolher(null);
               }}
-              className="w-full text-left rounded-lg border bg-background px-2.5 py-2 hover:border-violet-400 transition"
+              className="w-full text-left rounded-lg border bg-background px-2.5 py-2 hover:border-info/30 transition"
             >
               <p className="text-xs font-semibold truncate">{c.emissor ?? "Sem emissor"}</p>
               {c.conta && <p className="text-[11px] text-muted-foreground truncate">{c.conta}</p>}
@@ -120,11 +120,11 @@ export default function LeitorQr({ onLido, lido, aoLimpar }: Props) {
 
   if (lido) {
     return (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 space-y-2 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+      <div className="rounded-xl border border-success/30 bg-success-bg/70 p-3 space-y-2 dark:border-success/30">
         <div className="flex items-start gap-2.5">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+          <CheckCircle2 className="h-4 w-4 text-success-fg mt-0.5 shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-success-fg">
               QR lido — confira a conta
             </p>
             <p className="text-xs font-semibold truncate">{lido.emissor ?? "Sem emissor no QR"}</p>
@@ -134,14 +134,14 @@ export default function LeitorQr({ onLido, lido, aoLimpar }: Props) {
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-emerald-200 dark:border-emerald-900/50">
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-success/30">
           <p className="font-mono text-xs tracking-wider truncate">
             {mostrarTudo ? lido.secret : mascarar(lido.secret)}
           </p>
           <button
             type="button"
             onClick={() => setMostrarTudo((v) => !v)}
-            className="text-[11px] font-medium text-violet-700 shrink-0 dark:text-violet-400"
+            className="text-[11px] font-medium text-info-fg shrink-0 dark:text-info"
           >
             {mostrarTudo ? "Ocultar" : "Ver completo"}
           </button>
@@ -164,18 +164,18 @@ export default function LeitorQr({ onLido, lido, aoLimpar }: Props) {
           void processar(e.dataTransfer.files?.[0]);
         }}
         className={`rounded-xl border-[1.5px] border-dashed p-5 flex flex-col items-center gap-1.5 transition ${
-          arrastando ? "border-violet-500 bg-violet-100/60" : "border-violet-300 bg-violet-50/60 dark:bg-violet-950/30"
-        } dark:bg-violet-950/20 dark:border-violet-900`}
+          arrastando ? "border-info/30 bg-info-bg/60" : "border-info/30 bg-info-bg/60"
+        } dark:bg-info/20`}
       >
         {lendo ? (
           <>
-            <Loader2 className="h-6 w-6 text-violet-500 animate-spin" />
+            <Loader2 className="h-6 w-6 text-info animate-spin" />
             <p className="text-xs text-muted-foreground">Procurando o QR na imagem…</p>
           </>
         ) : (
           <>
-            <QrCode className="h-7 w-7 text-violet-400" />
-            <p className="text-[13px] font-semibold text-violet-700 dark:text-violet-300">
+            <QrCode className="h-7 w-7 text-info" />
+            <p className="text-[13px] font-semibold text-info-fg">
               Cole o print do QR aqui
             </p>
             <p className="text-[11px] text-muted-foreground">

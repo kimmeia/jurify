@@ -85,14 +85,14 @@ export function TagsTab({ canEdit }: { canEdit: boolean }) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h3 className="text-base font-bold tracking-tight">Tags do escritório</h3>
-          <p className="text-[11px] text-slate-500">
+          <p className="text-[11px] text-muted-foreground">
             {tags?.length || 0} tag(s) · usadas em Kanban, cadastro de cliente e SmartFlow
           </p>
         </div>
         {canEdit && (
           <Button
             size="sm"
-            className="bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-sm"
+            className="bg-info shadow-sm"
             onClick={() => setCriandoOpen(true)}
           >
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Nova tag
@@ -101,20 +101,20 @@ export function TagsTab({ canEdit }: { canEdit: boolean }) {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-8 text-sm text-slate-400">Carregando…</div>
+        <div className="text-center py-8 text-sm text-muted-foreground/70">Carregando…</div>
       ) : !tags || tags.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 bg-gradient-to-br from-slate-50 dark:from-slate-900 to-violet-50/30 dark:to-violet-950/20 py-14 text-center space-y-2">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 flex items-center justify-center mx-auto mb-1">
-            <TagIcon className="h-7 w-7 text-violet-500/70" />
+        <div className="rounded-2xl border border-dashed border-border bg-gradient-to-br from-muted to-info-bg/30 py-14 text-center space-y-2">
+          <div className="h-14 w-14 rounded-2xl bg-info/10 flex items-center justify-center mx-auto mb-1">
+            <TagIcon className="h-7 w-7 text-info/70" />
           </div>
-          <p className="font-semibold text-slate-700 dark:text-slate-200">Nenhuma tag configurada</p>
-          <p className="text-xs text-slate-500 max-w-md mx-auto">
+          <p className="font-semibold text-foreground">Nenhuma tag configurada</p>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto">
             Tags ajudam a categorizar clientes (VIP, Trabalhista, Recorrente...) e ficam disponíveis em todo o sistema.
           </p>
           {canEdit && (
             <Button
               size="sm"
-              className="mt-2 bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700"
+              className="mt-2 bg-info"
               onClick={() => setCriandoOpen(true)}
             >
               <Plus className="h-3.5 w-3.5 mr-1.5" /> Criar primeira tag
@@ -126,7 +126,7 @@ export function TagsTab({ canEdit }: { canEdit: boolean }) {
           {tags.map((t: Tag) => (
             <div
               key={t.id}
-              className="group flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-card hover:border-slate-300 hover:shadow-sm transition-all"
+              className="group flex items-center justify-between gap-2 p-2.5 rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-all"
             >
               <span
                 className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold text-white shrink-0"
@@ -139,7 +139,7 @@ export function TagsTab({ canEdit }: { canEdit: boolean }) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 p-0 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:bg-muted"
                     onClick={() => setEditando(t)}
                     title="Editar"
                   >
@@ -148,7 +148,7 @@ export function TagsTab({ canEdit }: { canEdit: boolean }) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 p-0 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    className="h-7 w-7 p-0 text-danger-fg hover:bg-danger-bg"
                     onClick={() => setExcluindo(t)}
                     title="Excluir"
                   >
@@ -329,7 +329,7 @@ function ExcluirTagDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <AlertTriangle className="h-5 w-5 text-warning" />
             Excluir tag &ldquo;{tag.nome}&rdquo;?
           </DialogTitle>
           <DialogDescription>Esta ação não pode ser desfeita.</DialogDescription>
@@ -343,11 +343,11 @@ function ExcluirTagDialog({
           ) : totalUso === 0 ? (
             <p className="text-sm text-muted-foreground">Esta tag não está em uso. Pode excluir tranquilo.</p>
           ) : (
-            <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-3 space-y-1.5">
-              <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+            <div className="rounded-md border border-warning/30 bg-warning-bg dark:border-warning/30 p-3 space-y-1.5">
+              <p className="text-sm font-medium text-warning-fg">
                 A tag está em uso em {totalUso} registro{totalUso > 1 ? "s" : ""}:
               </p>
-              <ul className="text-xs text-amber-800 dark:text-amber-300 list-disc list-inside space-y-0.5">
+              <ul className="text-xs text-warning-fg list-disc list-inside space-y-0.5">
                 {uso.contatos > 0 && (
                   <li>
                     {uso.contatos} cliente{uso.contatos > 1 ? "s" : ""}
@@ -359,7 +359,7 @@ function ExcluirTagDialog({
                   </li>
                 )}
               </ul>
-              <p className="text-xs text-amber-800 dark:text-amber-300 pt-1">
+              <p className="text-xs text-warning-fg pt-1">
                 Ao excluir, a tag será <strong>removida automaticamente</strong> de todos esses registros.
               </p>
             </div>

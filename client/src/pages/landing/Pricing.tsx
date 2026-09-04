@@ -58,13 +58,13 @@ export function Pricing({ onCta }: Props) {
     <section id="pricing" className="border-y border-white/[0.06] bg-[#0a0817]">
       <div className="mx-auto max-w-6xl px-4 py-24">
         <Reveal className="mx-auto mb-12 max-w-2xl text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.06em] text-amber-300">
+          <span className="inline-flex items-center gap-2 rounded-full border border-warning/30 bg-warning/10 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.06em] text-warning-fg">
             🚀 Superlançamento · Monitoramento Processual
           </span>
           <h2 className="font-display mt-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-            Nunca mais perca uma <span className="text-violet-300">movimentação</span>.
+            Nunca mais perca uma <span className="text-info">movimentação</span>.
           </h2>
-          <p className="mt-4 text-lg text-violet-100/70">
+          <p className="mt-4 text-lg text-info/70">
             O JuridFlow vigia seus processos e clientes nos tribunais e te avisa na hora — com
             resumo em português.
             {trialMaiorDias > 0 ? ` Teste grátis por ${trialMaiorDias} dias, sem cartão.` : ""}
@@ -97,19 +97,19 @@ export function Pricing({ onCta }: Props) {
                   variants={staggerItem}
                   className={`relative flex flex-col rounded-2xl border p-6 transition-all hover:-translate-y-1 ${
                     destaque
-                      ? "border-2 border-violet-400/60 bg-violet-600/15 shadow-[0_40px_80px_-28px_rgba(124,58,237,0.55)]"
-                      : "border-white/10 bg-white/[0.04] hover:border-violet-400/40 hover:bg-white/[0.06]"
+                      ? "border-2 border-info/30 bg-info/15 shadow-[0_40px_80px_-28px_rgba(124,58,237,0.55)]"
+                      : "border-white/10 bg-white/[0.04] hover:border-info/30 hover:bg-white/[0.06]"
                   }`}
                 >
                   {destaque && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 border-0 bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-[0_8px_22px_-6px_rgba(147,51,234,0.7)]">
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 border-0 bg-info text-info-on shadow-[0_8px_22px_-6px_rgba(147,51,234,0.7)]">
                       <Sparkles className="mr-1 h-3 w-3" />
                       Mais popular
                     </Badge>
                   )}
 
                   <h3 className="font-display text-2xl font-bold text-white">{p.nome}</h3>
-                  <p className="mb-4 mt-1 min-h-[34px] text-[13px] text-violet-100/55">
+                  <p className="mb-4 mt-1 min-h-[34px] text-[13px] text-info/55">
                     {p.publicoAlvo ?? p.descricao ?? ""}
                   </p>
 
@@ -118,14 +118,14 @@ export function Pricing({ onCta }: Props) {
                       <div className="flex items-baseline gap-1">
                         <span className="font-display text-[30px] font-extrabold tracking-tight text-white">Sob consulta</span>
                       </div>
-                      <p className="mb-1 mt-1.5 min-h-[18px] text-xs text-violet-100/55">
+                      <p className="mb-1 mt-1.5 min-h-[18px] text-xs text-info/55">
                         {demonstracao
                           ? "apresentamos numa demonstração ao vivo"
                           : "preço fechado na conversa, do seu tamanho"}
                       </p>
                       <div className="my-4 flex flex-col gap-2">
                         <Button
-                          className="w-full border-0 bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-500 hover:to-purple-500"
+                          className="w-full border-0 bg-info text-info-on hover:from-info hover:to-info"
                           size="lg"
                           onClick={() =>
                             demonstracao ? falarComAGente(p.nome) : selecionarPlano(p.slug)
@@ -149,17 +149,17 @@ export function Pricing({ onCta }: Props) {
                     <>
                       <div className="flex items-baseline gap-1">
                         <span className="font-display text-[38px] font-extrabold tracking-tight text-white">{preco}</span>
-                        {!gratis && <span className="text-violet-100/55">/mês</span>}
+                        {!gratis && <span className="text-info/55">/mês</span>}
                       </div>
 
-                      <p className="mb-1 mt-1.5 min-h-[18px] text-xs font-semibold text-violet-300">
+                      <p className="mb-1 mt-1.5 min-h-[18px] text-xs font-semibold text-info">
                         {p.trialDias > 0 ? `Teste ${p.trialDias} dias grátis` : ""}
                       </p>
 
                       <Button
                         className={`my-4 w-full ${
                           destaque
-                            ? "border-0 bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-500 hover:to-purple-500"
+                            ? "border-0 bg-info text-info-on hover:from-info hover:to-info"
                             : "border border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
                         }`}
                         size="lg"
@@ -171,10 +171,10 @@ export function Pricing({ onCta }: Props) {
                     </>
                   )}
 
-                  <ul className="space-y-2.5 text-sm text-violet-100/80">
+                  <ul className="space-y-2.5 text-sm text-info/80">
                     {(p.features ?? []).map((f: string, idx: number) => (
                       <li key={idx} className="flex items-start gap-2">
-                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
                         <span>{f}</span>
                       </li>
                     ))}
@@ -185,7 +185,7 @@ export function Pricing({ onCta }: Props) {
           </motion.div>
         )}
 
-        <p className="mt-7 text-center text-[13px] text-violet-100/50">
+        <p className="mt-7 text-center text-[13px] text-info/50">
           Teste com tudo liberado do plano escolhido · sem cartão de crédito · nada é cobrado
           automaticamente no fim do teste. Pagamento via Pix, boleto ou cartão (Asaas).
         </p>

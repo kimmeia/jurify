@@ -436,8 +436,8 @@ export function DespesasTab() {
 
       {/* Bulk action bar — visível só quando há seleções */}
       {selecionadas.size > 0 && (
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-950/30 dark:border-blue-900">
-          <span className="text-sm font-medium text-blue-900 dark:text-blue-200">
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-info-bg border border-info/30 dark:border-info/30">
+          <span className="text-sm font-medium text-info-fg">
             {selecionadas.size} despesa(s) selecionada(s)
           </span>
           <div className="flex-1" />
@@ -488,13 +488,13 @@ export function DespesasTab() {
           label="Pendente"
           valor={kpis.data?.pendente ?? 0}
           icon={<Clock className="h-4 w-4" />}
-          accent="text-amber-600 dark:text-amber-400"
+          accent="text-warning-fg"
         />
         <KpiCard
           label="Pago"
           valor={kpis.data?.pago ?? 0}
           icon={<CheckCircle2 className="h-4 w-4" />}
-          accent="text-emerald-600 dark:text-emerald-400"
+          accent="text-success-fg"
         />
         <KpiCard
           label="Vencido"
@@ -635,7 +635,7 @@ export function DespesasTab() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
+                              className="h-7 text-xs text-success-fg hover:text-success-fg"
                               onClick={() => setPagando(d)}
                             >
                               <DollarSign className="h-3.5 w-3.5 mr-1" />
@@ -663,7 +663,7 @@ export function DespesasTab() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300"
+                                className="h-7 w-7 text-warning-fg hover:text-warning-fg"
                                 onClick={() => pausarRecMut?.mutate?.({ id: d.id })}
                                 disabled={pausarRecMut?.isPending}
                                 title="Pausar geração automática"
@@ -674,7 +674,7 @@ export function DespesasTab() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
+                                className="h-7 w-7 text-success-fg hover:text-success-fg"
                                 onClick={() => retomarRecMut?.mutate?.({ id: d.id })}
                                 disabled={retomarRecMut?.isPending}
                                 title="Retomar geração automática"
@@ -918,9 +918,9 @@ function KpiCard({
 
 function StatusBadge({ status }: { status: string }) {
   const cores: Record<string, string> = {
-    pendente: "text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/50",
+    pendente: "text-warning-fg border-warning/30",
     parcial: "text-info-fg border-info/40 bg-info-bg/50",
-    pago: "text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50",
+    pago: "text-success-fg border-success/30",
     vencido: "text-destructive border-destructive/30",
   };
   return (
@@ -936,7 +936,7 @@ function StatusBadge({ status }: { status: string }) {
 function TipoBadge({ origem }: { origem?: string }) {
   if (origem === "comissao") {
     return (
-      <Badge variant="outline" className="text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-800/50 bg-pink-50 dark:bg-pink-950/30">
+      <Badge variant="outline" className="text-danger-fg border-danger/30 bg-danger-bg">
         Comissão
       </Badge>
     );
@@ -948,7 +948,7 @@ function TipoBadge({ origem }: { origem?: string }) {
     extrato_asaas: "Extrato",
   };
   return (
-    <Badge variant="outline" className="text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80">
+    <Badge variant="outline" className="text-muted-foreground border-border">
       {labels[origem ?? "manual"] ?? "Despesa"}
     </Badge>
   );
@@ -976,7 +976,7 @@ function RecorrenciaCell({ despesa }: { despesa: DespesaListItem }) {
     return (
       <Badge
         variant="outline"
-        className="text-[10px] bg-violet-50 border-violet-200 text-violet-700 dark:bg-violet-950/30 dark:border-violet-800 dark:text-violet-300"
+        className="text-[10px] bg-info-bg border-info/30 text-info-fg dark:border-info/30"
         title="Gerada automaticamente a partir de uma despesa recorrente"
       >
         <Repeat className="h-2.5 w-2.5 mr-1" />
@@ -1001,7 +1001,7 @@ function RecorrenciaCell({ despesa }: { despesa: DespesaListItem }) {
   return (
     <Badge
       variant="outline"
-      className="text-[10px] bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-300"
+      className="text-[10px] bg-info-bg border-info/30 text-info-fg dark:border-info/30"
       title="Esta é a despesa-modelo. Próximas ocorrências serão geradas automaticamente."
     >
       <Repeat className="h-2.5 w-2.5 mr-1" />
@@ -1275,7 +1275,7 @@ function RegistrarPagamentoDialog({
             </div>
             <div>
               <div className="text-muted-foreground">Restante</div>
-              <div className="font-medium tabular-nums text-amber-600 dark:text-amber-400">
+              <div className="font-medium tabular-nums text-warning-fg">
                 {formatBRL(restante)}
               </div>
             </div>

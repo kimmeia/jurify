@@ -331,7 +331,7 @@ export function NovaCobrancaDialog({
         <DialogHeader className="shrink-0"><DialogTitle>Nova cobranca</DialogTitle></DialogHeader>
         {resultado ? (
           <div className="space-y-3 py-2">
-            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="h-5 w-5" /><span className="font-medium">Cobranca criada</span></div>
+            <div className="flex items-center gap-2 text-success-fg"><CheckCircle2 className="h-5 w-5" /><span className="font-medium">Cobranca criada</span></div>
             {resultado.invoiceUrl && (<div><p className="text-xs text-muted-foreground">Link de pagamento:</p><div className="flex items-center gap-2 mt-1"><Input value={resultado.invoiceUrl} readOnly className="text-xs font-mono" /><Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(resultado.invoiceUrl); toast.success("Copiado"); }}><Copy className="h-3.5 w-3.5" /></Button></div></div>)}
             {resultado.pixQrCode && (<div className="text-center"><img src={`data:image/png;base64,${resultado.pixQrCode.image}`} alt="Pix" className="mx-auto w-40 h-40 rounded-lg border" /><Button size="sm" variant="ghost" className="text-xs mt-1" onClick={() => { navigator.clipboard.writeText(resultado.pixQrCode.payload); toast.success("Pix copiado"); }}><Copy className="h-3 w-3 mr-1" /> Copiar Pix</Button></div>)}
             <Button className="w-full" onClick={() => { resetForm(); onOpenChange(false); }}>Fechar</Button>
@@ -346,7 +346,7 @@ export function NovaCobrancaDialog({
                 <Button variant={modo === "manual" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("manual")} title="Cobrança lançada à mão (sem Asaas) — cliente pagou em dinheiro/cartão presencial">Manual</Button>
               </div>
             ) : (
-              <div className="rounded-md border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20 p-2 text-[11px] text-amber-900 dark:text-amber-200">
+              <div className="rounded-md border border-warning/30 bg-warning-bg p-2 text-[11px] text-warning-fg">
                 <b>Asaas desconectado.</b> Apenas cobranças manuais (dinheiro, transferência,
                 cartão presencial) podem ser registradas. Pra criar cobranças online (Pix,
                 boleto, cartão), conecte o Asaas em Configurações.
@@ -423,7 +423,7 @@ export function NovaCobrancaDialog({
                           )}
                         </span>
                         {jaVinculada && (
-                          <span className="shrink-0 rounded border border-amber-300 bg-amber-50 px-1 py-0 text-[9px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                          <span className="shrink-0 rounded border border-warning/30 bg-warning-bg px-1 py-0 text-[9px] font-medium text-warning-fg">
                             ✓ vinculada
                           </span>
                         )}
@@ -503,7 +503,7 @@ export function NovaCobrancaDialog({
             )}
             {modo === "parcelada" && valor && parcelas && <p className="text-xs text-muted-foreground">{parseInt(parcelas)}x de {formatBRL(parseFloat(valor) / parseInt(parcelas))}</p>}
             {modo === "parcelada" && (
-              <div className="rounded-md border border-blue-200 bg-blue-50 p-2 text-[11px] text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
+              <div className="rounded-md border border-info/30 bg-info-bg p-2 text-[11px] text-info-fg">
                 <b>Como funciona</b>: serão criadas {parcelas || "N"} cobranças avulsas com vencimentos
                 mensais sequenciais. <b>Cada parcela é independente</b> — o cliente pode pagar
                 cada uma com método diferente (PIX, boleto, cartão).
@@ -513,10 +513,10 @@ export function NovaCobrancaDialog({
                 EXCETO em modo manual+jaPaga (registro retroativo de pagamento
                 que já aconteceu). */}
             {vencimento && vencimento < dataLocalHoje() && !(modo === "manual" && jaPaga) && (
-              <div className="rounded-md border border-red-200 bg-red-50 p-2 text-[11px] text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
+              <div className="rounded-md border border-danger/30 bg-danger-bg p-2 text-[11px] text-danger-fg">
                 ⚠️ Vencimento não pode ser uma data passada. Escolha uma data futura.
                 {modo === "manual" && (
-                  <span className="block mt-0.5 text-amber-700 dark:text-amber-300">
+                  <span className="block mt-0.5 text-warning-fg">
                     Pra registrar pagamento retroativo, marque "Já recebida" acima.
                   </span>
                 )}
@@ -574,14 +574,14 @@ export function NovaCobrancaDialog({
                 no CPF da esposa com mesmo valor 7d atrás. Sem esse alerta,
                 o operador duplicava o caixa (problema raiz). */}
             {modo === "manual" && duplicatasDetectadas && duplicatasDetectadas.length > 0 && (
-              <div className="mt-2 rounded-md border-2 border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-3 space-y-2">
+              <div className="mt-2 rounded-md border-2 border-warning/30 bg-warning-bg dark:border-warning/30 p-3 space-y-2">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <AlertTriangle className="h-4 w-4 text-warning-fg mt-0.5 shrink-0" />
                   <div className="flex-1 text-xs">
-                    <p className="font-semibold text-amber-900 dark:text-amber-100">
+                    <p className="font-semibold text-warning-fg">
                       Cuidado: já existe pagamento similar no sistema
                     </p>
-                    <p className="text-amber-800 dark:text-amber-200 mt-0.5">
+                    <p className="text-warning-fg mt-0.5">
                       Encontramos {duplicatasDetectadas.length} cobrança(s) paga(s)
                       de outro contato com o mesmo valor e data próxima.
                       Lançar uma manual aqui vai <b>duplicar o caixa</b>.
@@ -598,7 +598,7 @@ export function NovaCobrancaDialog({
                         <p className="font-medium truncate">
                           {d.contatoNomePagador ?? "(sem contato)"}
                           {d.origem === "manual" && (
-                            <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-300">manual</span>
+                            <span className="ml-1 text-[10px] text-warning-fg">manual</span>
                           )}
                         </p>
                         <p className="text-[10px] text-muted-foreground truncate">
@@ -629,7 +629,7 @@ export function NovaCobrancaDialog({
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] text-amber-700 dark:text-amber-300 italic">
+                <p className="text-[10px] text-warning-fg italic">
                   Pra criar a manual mesmo assim, clique de novo no botão "Criar".
                 </p>
               </div>

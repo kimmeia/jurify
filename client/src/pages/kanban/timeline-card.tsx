@@ -67,8 +67,8 @@ export function TimelineCard({
           <Badge
             className={
               data.concluidoEmAtraso
-                ? "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30 text-[10px]"
-                : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px]"
+                ? "bg-danger/15 text-danger-fg border-danger/30 text-[10px]"
+                : "bg-success/15 text-success-fg border-success/30 text-[10px]"
             }
           >
             {data.concluidoEmAtraso ? "Concluído em atraso" : "Concluído no prazo"}
@@ -85,8 +85,8 @@ export function TimelineCard({
           if (ev.tipo === "criado") {
             return (
               <div key={i} className="flex gap-2 text-xs">
-                <div className="w-1 bg-slate-300 rounded shrink-0 self-stretch" />
-                <Sparkles className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
+                <div className="w-1 bg-muted-foreground/50 rounded shrink-0 self-stretch" />
+                <Sparkles className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-foreground">Card criado</p>
                   <p className="text-[10px] text-muted-foreground">
@@ -107,19 +107,19 @@ export function TimelineCard({
             const ehConclusao = ev.destinoTipo === "conclusao";
             const corBar = ehConclusao
               ? ev.concluidoEmAtraso
-                ? "bg-red-500"
-                : "bg-emerald-500"
-              : "bg-amber-400";
+                ? "bg-danger"
+                : "bg-success"
+              : "bg-warning";
             const icone = ehConclusao ? (
               <CheckCircle2
                 className={
                   ev.concluidoEmAtraso
-                    ? "h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5"
-                    : "h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5"
+                    ? "h-3.5 w-3.5 text-danger shrink-0 mt-0.5"
+                    : "h-3.5 w-3.5 text-success shrink-0 mt-0.5"
                 }
               />
             ) : (
-              <ArrowRight className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+              <ArrowRight className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
             );
 
             return (
@@ -134,12 +134,12 @@ export function TimelineCard({
                       {ev.origemNome} → {ev.destinoNome}
                     </span>
                     {ehConclusao && ev.concluidoEmAtraso === true && (
-                      <span className="ml-2 text-[10px] text-red-600 dark:text-red-400 font-semibold">
+                      <span className="ml-2 text-[10px] text-danger-fg font-semibold">
                         EM ATRASO
                       </span>
                     )}
                     {ehConclusao && ev.concluidoEmAtraso === false && (
-                      <span className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                      <span className="ml-2 text-[10px] text-success-fg font-semibold">
                         NO PRAZO
                       </span>
                     )}
@@ -156,8 +156,8 @@ export function TimelineCard({
           if (ev.tipo === "responsavel") {
             return (
               <div key={i} className="flex gap-2 text-xs">
-                <div className="w-1 bg-violet-400 rounded shrink-0 self-stretch" />
-                <UserCog className="h-3.5 w-3.5 text-violet-500 shrink-0 mt-0.5" />
+                <div className="w-1 bg-info rounded shrink-0 self-stretch" />
+                <UserCog className="h-3.5 w-3.5 text-info shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p>
                     <strong>Responsável:</strong>{" "}
@@ -178,8 +178,8 @@ export function TimelineCard({
           if (ev.tipo === "comentario") {
             return (
               <div key={i} className="flex gap-2 text-xs">
-                <div className="w-1 bg-blue-400 rounded shrink-0 self-stretch" />
-                <MessageSquare className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
+                <div className="w-1 bg-info rounded shrink-0 self-stretch" />
+                <MessageSquare className="h-3.5 w-3.5 text-info shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-muted-foreground italic line-clamp-2">
                     "{ev.texto}"

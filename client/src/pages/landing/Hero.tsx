@@ -61,7 +61,7 @@ export function Hero({ onCta }: Props) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease }}
-          className="inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/15 px-4 py-1.5 text-sm font-semibold text-violet-200 shadow-[0_0_30px_-8px_rgba(124,58,237,0.6)]"
+          className="inline-flex items-center gap-2 rounded-full border border-info/30 bg-info/15 px-4 py-1.5 text-sm font-semibold text-info-fg shadow-[0_0_30px_-8px_rgba(124,58,237,0.6)]"
         >
           <Sparkles className="h-4 w-4" />
           O sistema operacional do escritório moderno
@@ -74,7 +74,7 @@ export function Hero({ onCta }: Props) {
           className="font-display mx-auto mt-6 max-w-4xl text-4xl font-extrabold leading-[1.04] tracking-tight text-white md:text-5xl lg:text-[58px]"
         >
           Todo o seu escritório{" "}
-          <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-fuchsia-400 bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-info via-danger to-danger bg-clip-text text-transparent">
             num só lugar
           </span>
           .
@@ -86,7 +86,7 @@ export function Hero({ onCta }: Props) {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.65, delay: 0.16, ease }}
-          className="mx-auto mt-6 max-w-2xl text-lg text-violet-100/70 md:text-xl"
+          className="mx-auto mt-6 max-w-2xl text-lg text-info/70 md:text-xl"
         >
           CRM, atendimento no WhatsApp, contratos automáticos, financeiro com Asaas, comissões,
           processos e cálculos jurídicos. Integrados de verdade — não 5 ferramentas remendadas.
@@ -101,7 +101,7 @@ export function Hero({ onCta }: Props) {
           <Button
             size="lg"
             onClick={() => onCta("signup")}
-            className="border-0 bg-gradient-to-r from-violet-600 to-purple-600 px-8 text-base text-white shadow-[0_12px_40px_-8px_rgba(147,51,234,0.8)] hover:from-violet-500 hover:to-purple-500"
+            className="border-0 bg-info px-8 text-base text-info-on shadow-[0_12px_40px_-8px_rgba(147,51,234,0.8)] hover:from-info hover:to-info"
           >
             Começar grátis
             <ArrowRight className="ml-2 h-4 w-4" />
@@ -120,7 +120,7 @@ export function Hero({ onCta }: Props) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.65, delay: 0.34, ease }}
-          className="mt-4 text-sm text-violet-100/60"
+          className="mt-4 text-sm text-info/60"
         >
           <strong className="text-white">14 dias grátis</strong> em qualquer plano · Sem cartão de
           crédito · Configura em 5 minutos
@@ -154,9 +154,9 @@ export function Hero({ onCta }: Props) {
 
 /* ---------- Floating card ---------- */
 const FLOAT_TONE: Record<string, string> = {
-  emerald: "bg-emerald-500/20 text-emerald-300",
+  emerald: "bg-success/20 text-success-fg",
   wa: "bg-[#25d366] text-white",
-  violet: "bg-violet-500/25 text-violet-200",
+  violet: "bg-info/25 text-info-fg",
 };
 
 function FloatCard({
@@ -212,22 +212,22 @@ const NAV_ITEMS: { icon: React.ComponentType<{ className?: string }>; label: str
 function DashboardMockup() {
   return (
     <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
-      <div className="flex h-9 items-center gap-2 border-b bg-slate-100 px-4">
+      <div className="flex h-9 items-center gap-2 border-b bg-muted px-4">
         <span className="flex gap-1.5">
-          <i className="h-2.5 w-2.5 rounded-full bg-red-400" />
-          <i className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-          <i className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+          <i className="h-2.5 w-2.5 rounded-full bg-danger" />
+          <i className="h-2.5 w-2.5 rounded-full bg-warning" />
+          <i className="h-2.5 w-2.5 rounded-full bg-success" />
         </span>
-        <span className="flex-1 text-center font-mono text-[11px] text-slate-400">app.juridflow.com.br/dashboard</span>
+        <span className="flex-1 text-center font-mono text-[11px] text-muted-foreground/70">app.juridflow.com.br/dashboard</span>
       </div>
 
       <div className="flex min-h-[460px] bg-[#fafaff]">
         <aside className="hidden w-[200px] shrink-0 flex-col border-r bg-white p-3 sm:flex">
           <div className="mb-3 flex items-center gap-2.5 border-b pb-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-violet-400 text-xs font-bold text-white">SA</div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-info text-xs font-bold text-info-on">SA</div>
             <div className="leading-tight">
-              <div className="text-[13px] font-bold text-slate-900">Silva &amp; Associados</div>
-              <div className="text-[10px] text-slate-400">Escritório</div>
+              <div className="text-[13px] font-bold text-foreground">Silva &amp; Associados</div>
+              <div className="text-[10px] text-muted-foreground/70">Escritório</div>
             </div>
           </div>
           <nav className="flex flex-col gap-0.5">
@@ -235,10 +235,10 @@ function DashboardMockup() {
               <span
                 key={item.label}
                 className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12.5px] font-medium ${
-                  item.active ? "bg-violet-100 font-semibold text-violet-700" : "text-slate-600"
+                  item.active ? "bg-info-bg font-semibold text-info-fg" : "text-muted-foreground"
                 }`}
               >
-                <item.icon className={`h-4 w-4 ${item.active ? "text-violet-600" : "text-slate-400"}`} />
+                <item.icon className={`h-4 w-4 ${item.active ? "text-info-fg" : "text-muted-foreground/70"}`} />
                 {item.label}
               </span>
             ))}
@@ -246,7 +246,9 @@ function DashboardMockup() {
         </aside>
 
         <div className="min-w-0 flex-1">
-          <div className="bg-gradient-to-br from-slate-800 via-slate-700 to-indigo-700 px-6 py-5 text-white">
+          {/* Mesma troca das faixas do app: quase-branco → navy com tinta
+              branca fixa dava 1,12:1 no tema claro. */}
+          <div className="faixa-hero fundo-hero px-6 py-5 text-hero-fg">
             <div className="flex items-start justify-between">
               <div>
                 <div className="font-display text-lg font-bold">Painel Geral — Outubro</div>
@@ -255,9 +257,9 @@ function DashboardMockup() {
               <BarChart3 className="h-7 w-7 text-white/60" />
             </div>
             <div className="mt-3.5 flex flex-wrap gap-2 text-[10.5px] font-semibold">
-              <span className="flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1"><i className="h-1.5 w-1.5 rounded-full bg-red-300" /> 3 movimentações novas</span>
-              <span className="flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1"><i className="h-1.5 w-1.5 rounded-full bg-amber-300" /> 2 cobranças atrasadas</span>
-              <span className="flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1"><i className="h-1.5 w-1.5 rounded-full bg-blue-300" /> 1 conversa aguardando</span>
+              <span className="flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1"><i className="h-1.5 w-1.5 rounded-full bg-danger" /> 3 movimentações novas</span>
+              <span className="flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1"><i className="h-1.5 w-1.5 rounded-full bg-warning" /> 2 cobranças atrasadas</span>
+              <span className="flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1"><i className="h-1.5 w-1.5 rounded-full bg-info" /> 1 conversa aguardando</span>
             </div>
           </div>
 
@@ -271,7 +273,7 @@ function DashboardMockup() {
 
             <div className="grid gap-3 lg:grid-cols-[1.6fr_1fr]">
               <div className="rounded-xl border bg-white p-3.5">
-                <div className="mb-2.5 flex items-center gap-2 text-xs font-bold"><BarChart3 className="h-3.5 w-3.5 text-violet-600" /> Fluxo de caixa — recebido por dia</div>
+                <div className="mb-2.5 flex items-center gap-2 text-xs font-bold"><BarChart3 className="h-3.5 w-3.5 text-info-fg" /> Fluxo de caixa — recebido por dia</div>
                 <div className="flex h-[70px] items-end gap-1.5">
                   {[42, 58, 35, 70, 52, 88, 64, 95, 78, 60, 82, 100, 71, 90].map((h, i) => (
                     <motion.div
@@ -280,14 +282,14 @@ function DashboardMockup() {
                       whileInView={{ height: `${h}%` }}
                       viewport={{ once: true }}
                       transition={{ duration: 0.6, delay: i * 0.03, ease }}
-                      className="flex-1 rounded-sm bg-gradient-to-t from-violet-600 to-violet-400"
+                      className="flex-1 rounded-sm bg-info"
                     />
                   ))}
                 </div>
               </div>
 
               <div className="rounded-xl border bg-white p-3.5">
-                <div className="mb-2.5 flex items-center gap-2 text-xs font-bold"><Activity className="h-3.5 w-3.5 text-violet-600" /> Atividade recente</div>
+                <div className="mb-2.5 flex items-center gap-2 text-xs font-bold"><Activity className="h-3.5 w-3.5 text-info-fg" /> Atividade recente</div>
                 <div className="space-y-2.5">
                   <ActivityRow icon={DollarSign} accent="emerald" titulo="Maria S. pagou R$ 1.500" desc="Pix via Asaas · há 8 min" />
                   <ActivityRow icon={MessageCircle} accent="blue" titulo="Nova conversa no WhatsApp" desc="Carlos M. · há 21 min" />
@@ -303,10 +305,10 @@ function DashboardMockup() {
 }
 
 const ACCENT: Record<string, { box: string; icon: string; val: string }> = {
-  emerald: { box: "bg-emerald-50", icon: "text-emerald-600", val: "text-emerald-600" },
-  blue: { box: "bg-blue-50", icon: "text-blue-600", val: "text-blue-600" },
-  rose: { box: "bg-rose-50", icon: "text-rose-600", val: "text-rose-600" },
-  violet: { box: "bg-violet-100", icon: "text-violet-600", val: "text-violet-600" },
+  emerald: { box: "bg-success-bg", icon: "text-success-fg", val: "text-success-fg" },
+  blue: { box: "bg-info-bg", icon: "text-info-fg", val: "text-info-fg" },
+  rose: { box: "bg-danger-bg", icon: "text-danger-fg", val: "text-danger-fg" },
+  violet: { box: "bg-info-bg", icon: "text-info-fg", val: "text-info-fg" },
 };
 
 function Kpi({
@@ -330,11 +332,11 @@ function Kpi({
       <div className={`mb-2 flex h-7 w-7 items-center justify-center rounded-md ${c.box}`}>
         <Icon className={`h-4 w-4 ${c.icon}`} />
       </div>
-      <div className="text-[9.5px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="text-[9.5px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={`text-lg font-extrabold tabular-nums ${c.val}`}>
         <CountUp value={value} prefix={prefix} />
       </div>
-      <div className="text-[10px] text-slate-400">{sub}</div>
+      <div className="text-[10px] text-muted-foreground/70">{sub}</div>
     </div>
   );
 }
@@ -357,8 +359,8 @@ function ActivityRow({
         <Icon className={`h-3 w-3 ${c.icon}`} />
       </span>
       <div className="min-w-0">
-        <div className="truncate text-[11px] font-semibold text-slate-800">{titulo}</div>
-        <div className="text-[9.5px] text-slate-400">{desc}</div>
+        <div className="truncate text-[11px] font-semibold text-foreground">{titulo}</div>
+        <div className="text-[9.5px] text-muted-foreground/70">{desc}</div>
       </div>
     </div>
   );

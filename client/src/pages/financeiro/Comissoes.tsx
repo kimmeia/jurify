@@ -364,7 +364,7 @@ export function CalcularSection() {
             <KpiCard
               label="Comissionável"
               valor={totais?.comissionavel ?? 0}
-              accent="text-emerald-600 dark:text-emerald-400"
+              accent="text-success-fg"
             />
             <KpiCard
               label="Não comissionável"
@@ -459,8 +459,8 @@ export function CalcularSection() {
 
           {tipo === "gestao" && sim.data.comissionaveis.length === 0 &&
             sim.data.naoComissionaveis.length > 0 && (
-            <Card className="border-blue-300 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
-              <CardContent className="py-4 text-xs text-blue-800 dark:text-blue-200">
+            <Card className="border-info/30 bg-info-bg/50 dark:bg-info/20">
+              <CardContent className="py-4 text-xs text-info-fg">
                 Nada novo pra fechar neste período. Cada pagamento abaixo mostra por que ficou
                 de fora — <b>já comissionada</b> quer dizer que ele entrou num fechamento
                 anterior deste gestor e não conta de novo.
@@ -469,12 +469,12 @@ export function CalcularSection() {
           )}
 
           {sim.data.comissionaveis.length + sim.data.naoComissionaveis.length === 0 ? (
-            <Card className="border-violet-300 bg-violet-50/50 dark:border-violet-800 dark:bg-violet-950/20">
+            <Card className="border-info/30 bg-info-bg/50 dark:bg-info/20">
               <CardContent className="py-6 text-center text-sm space-y-2">
-                <p className="font-medium text-violet-900 dark:text-violet-100">
+                <p className="font-medium text-info-fg">
                   Nenhuma cobrança disponível pra fechamento neste período
                 </p>
-                <p className="text-xs text-violet-700 dark:text-violet-300">
+                <p className="text-xs text-info-fg">
                   Pode ser que <b>todas as cobranças deste período já foram incluídas em
                   fechamentos anteriores</b> (proteção anti-duplicata). Use o botão{" "}
                   <b>🔍 Diagnosticar diferença</b> pra ver o histórico de cada uma e em
@@ -565,12 +565,12 @@ export function CalcularSection() {
                 <KpiCard
                   label="Entra na comissão"
                   valor={diag.data.totalComissionavel}
-                  accent="text-emerald-600 dark:text-emerald-400"
+                  accent="text-success-fg"
                 />
                 <KpiCard
                   label="Diferença (não entra)"
                   valor={diag.data.diferenca}
-                  accent={diag.data.diferenca > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}
+                  accent={diag.data.diferenca > 0 ? "text-warning-fg" : "text-muted-foreground"}
                   destaque
                 />
               </div>
@@ -589,12 +589,12 @@ export function CalcularSection() {
                     {diag.data.linhas.map((l) => {
                       const cor =
                         l.motivo === "comissionavel"
-                          ? "text-emerald-700 bg-emerald-50/50 dark:text-emerald-300 dark:bg-emerald-950/20"
+                          ? "text-success-fg bg-success-bg/50"
                           : l.motivo === "atendente_diferente"
-                          ? "text-blue-700 bg-blue-50/50 dark:text-blue-300 dark:bg-blue-950/20"
+                          ? "text-info-fg bg-info-bg/50"
                           : l.motivo === "ja_fechada"
-                          ? "text-violet-700 bg-violet-50/50 dark:text-violet-300 dark:bg-violet-950/20"
-                          : "text-amber-700 bg-amber-50/50 dark:text-amber-300 dark:bg-amber-950/20";
+                          ? "text-info-fg bg-info-bg/50"
+                          : "text-warning-fg bg-warning-bg/50";
                       const labelMotivo = {
                         comissionavel: "✓ Entra",
                         atendente_diferente: "Outro atendente",
@@ -748,7 +748,7 @@ function ListaCobrancas({
   mostrarFechamento?: boolean;
 }) {
   const headerCor =
-    cor === "emerald" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground";
+    cor === "emerald" ? "text-success-fg" : "text-muted-foreground";
 
   return (
     <Card>
@@ -984,9 +984,9 @@ function CelulaComissao({
           disabled={disabled}
           className={[
             "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
-            efetivo === "sim" && "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900",
-            efetivo === "nao" && "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900",
-            efetivo === "indefinido" && "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
+            efetivo === "sim" && "bg-success-bg text-success-fg border-success/30 hover:bg-success-bg dark:text-success",
+            efetivo === "nao" && "bg-danger-bg text-danger-fg border-danger/30 hover:bg-danger-bg dark:text-danger",
+            efetivo === "indefinido" && "bg-warning-bg text-warning-fg border-warning/30 hover:bg-warning-bg dark:text-warning",
             disabled && "opacity-50 cursor-not-allowed",
           ]
             .filter(Boolean)
@@ -1016,9 +1016,9 @@ function CelulaComissao({
             onChange(true);
             setAberto(false);
           }}
-          className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-emerald-50 dark:hover:bg-emerald-950/40 flex items-center gap-2"
+          className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-success-bg flex items-center gap-2"
         >
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          <span className="inline-block w-2 h-2 rounded-full bg-success" />
           Sim, comissionável
           {comissionavelOverride === true && <span className="ml-auto text-[9px] text-muted-foreground">atual</span>}
         </button>
@@ -1028,9 +1028,9 @@ function CelulaComissao({
             onChange(false);
             setAberto(false);
           }}
-          className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center gap-2"
+          className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-danger-bg flex items-center gap-2"
         >
-          <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+          <span className="inline-block w-2 h-2 rounded-full bg-danger" />
           Não comissionável
           {comissionavelOverride === false && <span className="ml-auto text-[9px] text-muted-foreground">atual</span>}
         </button>
@@ -1218,7 +1218,7 @@ export function AtribuirSection() {
                       {l.atendenteId ? (
                         atendNome ?? `#${l.atendenteId}`
                       ) : (
-                        <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/50">
+                        <Badge variant="outline" className="text-warning-fg border-warning/30">
                           sem atendente
                         </Badge>
                       )}
@@ -1463,7 +1463,7 @@ function FechamentoDetalheDialog({
               <KpiCard
                 label="Comissionável"
                 valor={Number(data.totalComissionavel)}
-                accent="text-emerald-600 dark:text-emerald-400"
+                accent="text-success-fg"
               />
               <KpiCard
                 label="Não comiss."
@@ -1499,7 +1499,7 @@ function FechamentoDetalheDialog({
                     </TableCell>
                     <TableCell className="text-xs">
                       {it.foiComissionavel ? (
-                        <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400">
+                        <Badge variant="outline" className="text-success-fg">
                           comissionada
                         </Badge>
                       ) : (

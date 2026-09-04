@@ -7,10 +7,16 @@
 @theme inline {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Poppins", "Inter", ui-sans-serif, system-ui, sans-serif;
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  /* Escala de raio. `--radius-2xl` está declarado de propósito: sem ele o
+   * `rounded-2xl` — que é o que a maioria dos cards do app usa — caía no
+   * padrão do Tailwind (16px) e ignorava o token, deixando a tela mais
+   * arredondada do que o tema pedia. Declarado aqui, o raio dos cards passa
+   * a sair daqui junto com o resto. */
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: calc(var(--radius) - 1px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 1px);
+  --radius-2xl: calc(var(--radius) + 2px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -65,21 +71,39 @@
   --color-accent-purple: var(--accent-purple);
   --color-accent-purple-bg: var(--accent-purple-bg);
   --color-accent-purple-fg: var(--accent-purple-fg);
+  --color-info-on: var(--info-on);
+  --color-warning-on: var(--warning-on);
+  --color-success-on: var(--success-on);
+  --color-danger-on: var(--danger-on);
+  --color-neutral-on: var(--neutral-on);
+  --color-hero: var(--hero);
+  --color-hero-2: var(--hero-2);
+  --color-hero-fg: var(--hero-fg);
 }
 
 :root {
-  --primary: oklch(0.45 0.18 260);
+  /* Navy #1a4b86. Croma 0.112 — mais vivo que o #1e3a5f da primeira volta,
+   * que ficou "calmo demais", e ainda longe do violeta que doía na vista.
+   *
+   * Vale a regra que veio junto: verde é "em dia", âmbar é "tem coisa nova" e
+   * vermelho fica reservado ao que exige ação hoje (prazo correndo, falha de
+   * credencial). Vermelho decorativo cansa quem lê a tela o dia inteiro e faz
+   * o alarme real passar batido. */
+  --primary: oklch(0.413 0.112 255);
   --primary-foreground: oklch(0.98 0 0);
   /* Mais claro que `--primary` do tema claro: o acento agora vive sobre
    * fundo escuro, e o tom original sumiria. */
-  --sidebar-primary: oklch(0.752 0.134 294);
+  --sidebar-primary: oklch(0.707 0.100 250);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --chart-1: oklch(0.65 0.15 260);
-  --chart-2: oklch(0.55 0.18 260);
-  --chart-3: oklch(0.45 0.18 260);
-  --chart-4: oklch(0.35 0.15 260);
-  --chart-5: oklch(0.25 0.10 260);
-  --radius: 0.625rem;
+  --chart-1: oklch(0.413 0.112 255);
+  --chart-2: oklch(0.520 0.100 250);
+  --chart-3: oklch(0.630 0.088 247);
+  --chart-4: oklch(0.740 0.070 245);
+  --chart-5: oklch(0.850 0.048 243);
+  /* 6px. Era 10px, e com o `rounded-2xl` caindo no padrão do Tailwind os
+   * cards ficavam em 16px — arredondado demais para uma tela densa de
+   * trabalho. Daqui saem 4/5/6/8/10px. */
+  --radius: 0.25rem;
 
   /* Paleta categórica do JurisIA — um slot fixo por resultado processual.
      São CATEGÓRICAS, não de status: "procedente" não é verde nem "improcedente"
@@ -94,23 +118,23 @@
   --viz-5: #e87ba4;
   --viz-trilho: oklch(0.93 0.004 260);
 
-  --background: oklch(0.985 0.002 260);
-  --foreground: oklch(0.18 0.02 260);
+  --background: oklch(0.972 0.003 248);
+  --foreground: oklch(0.240 0.027 253);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 260);
+  --card-foreground: oklch(0.240 0.027 253);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 260);
-  --secondary: oklch(0.96 0.005 260);
-  --secondary-foreground: oklch(0.35 0.03 260);
-  --muted: oklch(0.955 0.005 260);
-  --muted-foreground: oklch(0.50 0.02 260);
-  --accent: oklch(0.955 0.005 260);
-  --accent-foreground: oklch(0.18 0.02 260);
-  --destructive: oklch(0.577 0.245 27.325);
+  --popover-foreground: oklch(0.240 0.027 253);
+  --secondary: oklch(0.957 0.005 248);
+  --secondary-foreground: oklch(0.366 0.031 252);
+  --muted: oklch(0.957 0.005 248);
+  --muted-foreground: oklch(0.520 0.035 250);
+  --accent: oklch(0.955 0.012 248);
+  --accent-foreground: oklch(0.413 0.112 255);
+  --destructive: oklch(0.478 0.170 29);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.91 0.005 260);
-  --input: oklch(0.91 0.005 260);
-  --ring: oklch(0.45 0.18 260);
+  --border: oklch(0.917 0.010 253);
+  --input: oklch(0.917 0.010 253);
+  --ring: oklch(0.413 0.112 255);
   /* Menu SEMPRE escuro, inclusive no tema claro.
    *
    * O contraste é o ponto: barra escura à esquerda faz o conteúdo claro
@@ -123,41 +147,51 @@
    *
    * Ardósia, não quase-preto: o contraste com o conteúdo branco continua
    * fazendo o trabalho, e a barra para de pesar na tela. */
-  --sidebar: oklch(0.327 0.035 260);
-  --sidebar-foreground: oklch(0.889 0.017 256);
-  --sidebar-accent: oklch(0.41 0.041 259);
+  --sidebar: oklch(0.240 0.027 253);
+  --sidebar-foreground: oklch(0.847 0.018 248);
+  --sidebar-accent: oklch(0.335 0.048 253);
   --sidebar-accent-foreground: oklch(0.99 0 0);
   --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.75 0.134 294);
+  --sidebar-ring: oklch(0.707 0.100 250);
   /* Paleta semântica — light. OKLCH consistente com o restante do tema. */
-  --info: oklch(0.55 0.18 250);
-  --info-bg: oklch(0.96 0.04 250);
-  --info-fg: oklch(0.40 0.15 250);
-  --warning: oklch(0.70 0.16 75);
-  --warning-bg: oklch(0.96 0.06 80);
-  --warning-fg: oklch(0.45 0.13 65);
-  --success: oklch(0.65 0.15 155);
-  --success-bg: oklch(0.96 0.05 155);
-  --success-fg: oklch(0.40 0.13 155);
-  --danger: oklch(0.62 0.22 25);
-  --danger-bg: oklch(0.96 0.05 25);
-  --danger-fg: oklch(0.45 0.18 25);
-  --neutral: oklch(0.60 0.01 260);
-  --neutral-bg: oklch(0.95 0.005 260);
-  --neutral-fg: oklch(0.35 0.02 260);
+  --info: oklch(0.413 0.112 255);
+  --info-bg: oklch(0.955 0.012 248);
+  --info-fg: oklch(0.413 0.112 255);
+  --warning: oklch(0.508 0.105 72);
+  --warning-bg: oklch(0.975 0.021 86);
+  --warning-fg: oklch(0.508 0.105 72);
+  --success: oklch(0.487 0.113 157);
+  --success-bg: oklch(0.962 0.017 163);
+  --success-fg: oklch(0.487 0.113 157);
+  --danger: oklch(0.478 0.170 29);
+  --danger-bg: oklch(0.965 0.014 23);
+  --danger-fg: oklch(0.478 0.170 29);
+  --neutral: oklch(0.582 0.030 247);
+  --neutral-bg: oklch(0.957 0.005 248);
+  --neutral-fg: oklch(0.366 0.031 252);
   --accent-purple: oklch(0.55 0.20 295);
   --accent-purple-bg: oklch(0.96 0.04 295);
   --accent-purple-fg: oklch(0.40 0.18 295);
+  /* Tinta sobre preenchimento cheio: no tema claro os preenchimentos são
+   * escuros, então a tinta é clara. */
+  --info-on: oklch(0.98 0 0);
+  --warning-on: oklch(0.98 0 0);
+  --success-on: oklch(0.98 0 0);
+  --danger-on: oklch(0.98 0 0);
+  --neutral-on: oklch(0.98 0 0);
+  /* Faixa de destaque: navy → grafite. Escura nos dois temas — o conteúdo em
+   * cima dela é branco. */
+  --hero: oklch(0.413 0.112 255);
+  --hero-2: oklch(0.318 0.084 256);
+  --hero-fg: oklch(0.98 0 0);
 }
 
 .dark {
-  /* Primary/ring/sidebar agora em OKLCH alinhado ao roxo-azulado do
-   * light (hue ~260). Antes a dark misturava `var(--color-blue-700)`
-   * (azul puro Tailwind) com ring `oklch(... 264)` (roxo) — mismatch
-   * visual. */
-  --primary: oklch(0.55 0.18 260);
-  --primary-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.55 0.18 260);
+  /* O navy do tema claro invertido pro fundo escuro: mesma matiz (~246), mais
+   * claro, senão o acento sumiria no fundo. */
+  --primary: oklch(0.700 0.103 250);
+  --primary-foreground: oklch(0.198 0.014 253);
+  --sidebar-primary: oklch(0.707 0.100 250);
   --sidebar-primary-foreground: oklch(0.98 0 0);
   /* Mesmas cinco matizes, re-escalonadas pra superfície escura — não é o
      inverso automático das claras. */
@@ -168,53 +202,63 @@
   --viz-5: #d55181;
   --viz-trilho: oklch(0.30 0.006 286);
 
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.85 0.005 65);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.85 0.005 65);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.85 0.005 65);
-  --secondary: oklch(0.24 0.006 286.033);
-  --secondary-foreground: oklch(0.7 0.005 65);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground:  oklch(0.92 0.005 65);
-  --destructive: oklch(0.704 0.191 22.216);
+  --background: oklch(0.198 0.014 253);
+  --foreground: oklch(0.938 0.009 248);
+  --card: oklch(0.239 0.018 245);
+  --card-foreground: oklch(0.938 0.009 248);
+  --popover: oklch(0.239 0.018 245);
+  --popover-foreground: oklch(0.938 0.009 248);
+  --secondary: oklch(0.264 0.020 245);
+  --secondary-foreground: oklch(0.843 0.017 245);
+  --muted: oklch(0.264 0.020 245);
+  --muted-foreground: oklch(0.702 0.024 244);
+  --accent: oklch(0.268 0.042 252);
+  --accent-foreground:  oklch(0.938 0.009 248);
+  --destructive: oklch(0.661 0.152 26);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
+  --border: oklch(0.320 0.021 246);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.55 0.18 260);
-  --chart-1: oklch(0.70 0.15 260);
-  --chart-2: oklch(0.60 0.18 260);
-  --chart-3: oklch(0.50 0.18 260);
-  --chart-4: oklch(0.40 0.15 260);
-  --chart-5: oklch(0.30 0.10 260);
-  --sidebar: oklch(0.185 0.006 285.885);
-  --sidebar-foreground: oklch(0.85 0.005 65);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
+  --ring: oklch(0.700 0.103 250);
+  --chart-1: oklch(0.800 0.090 248);
+  --chart-2: oklch(0.700 0.103 250);
+  --chart-3: oklch(0.600 0.100 250);
+  --chart-4: oklch(0.500 0.095 252);
+  --chart-5: oklch(0.400 0.080 254);
+  --sidebar: oklch(0.180 0.015 253);
+  --sidebar-foreground: oklch(0.843 0.017 245);
+  --sidebar-accent: oklch(0.268 0.042 252);
   --sidebar-accent-foreground:  oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.55 0.18 260);
+  --sidebar-ring: oklch(0.707 0.100 250);
   /* Paleta semântica — dark. Mesmo hue do light, lightness ajustada. */
-  --info: oklch(0.65 0.16 250);
-  --info-bg: oklch(0.28 0.05 250);
-  --info-fg: oklch(0.80 0.10 250);
-  --warning: oklch(0.75 0.15 75);
-  --warning-bg: oklch(0.30 0.06 75);
-  --warning-fg: oklch(0.85 0.10 75);
-  --success: oklch(0.70 0.14 155);
-  --success-bg: oklch(0.28 0.05 155);
-  --success-fg: oklch(0.82 0.10 155);
-  --danger: oklch(0.68 0.20 25);
-  --danger-bg: oklch(0.30 0.07 25);
-  --danger-fg: oklch(0.82 0.13 25);
-  --neutral: oklch(0.65 0.01 260);
-  --neutral-bg: oklch(0.28 0.005 260);
-  --neutral-fg: oklch(0.82 0.005 260);
+  --info: oklch(0.700 0.103 250);
+  --info-bg: oklch(0.268 0.042 252);
+  --info-fg: oklch(0.700 0.103 250);
+  --warning: oklch(0.751 0.130 80);
+  --warning-bg: oklch(0.235 0.025 82);
+  --warning-fg: oklch(0.751 0.130 80);
+  --success: oklch(0.703 0.132 160);
+  --success-bg: oklch(0.239 0.035 159);
+  --success-fg: oklch(0.703 0.132 160);
+  --danger: oklch(0.661 0.152 26);
+  --danger-bg: oklch(0.215 0.031 36);
+  --danger-fg: oklch(0.661 0.152 26);
+  --neutral: oklch(0.582 0.030 247);
+  --neutral-bg: oklch(0.264 0.020 245);
+  --neutral-fg: oklch(0.843 0.017 245);
   --accent-purple: oklch(0.65 0.18 295);
   --accent-purple-bg: oklch(0.30 0.06 295);
   --accent-purple-fg: oklch(0.82 0.12 295);
+  /* No escuro os preenchimentos clareiam pra não sumir no fundo; a tinta
+   * inverte junto. */
+  --info-on: oklch(0.198 0.014 253);
+  --warning-on: oklch(0.198 0.014 253);
+  --success-on: oklch(0.198 0.014 253);
+  --danger-on: oklch(0.198 0.014 253);
+  --neutral-on: oklch(0.938 0.009 248);
+  --hero: oklch(0.373 0.091 254);
+  --hero-2: oklch(0.237 0.044 256);
+  --hero-fg: oklch(0.98 0 0);
 }
 
 @layer base {
@@ -404,4 +448,66 @@
 
 @media (prefers-reduced-motion: reduce) {
   .lp-drift-a, .lp-drift-b, .lp-drift-c, .lp-bob, .lp-flow-line { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Faixa de destaque: a tinta semântica inverte dentro dela
+ *
+ * `--danger-fg` e companhia são a tinta para SUPERFÍCIE CLARA — vermelho
+ * escuro em card branco. Quando o cabeçalho virou faixa navy, esses mesmos
+ * tokens continuaram valendo e o resultado foi verde a 1,46:1 e vermelho a
+ * 1,22:1 sobre o azul: o botão "Excluir" saiu apagado e a etiqueta de
+ * assinatura, escura. Não dava pra ler nenhum dos dois.
+ *
+ * Aqui os papéis são redefinidos para superfície ESCURA, então
+ * `text-danger-fg` dentro da faixa já sai claro sem que a tela peça. Vale a
+ * regra de sempre: quem sabe a cor é o token, não quem escreve a classe.
+ *
+ * Os valores foram medidos contra as duas pontas da faixa (#1a4b86 e
+ * #12325c) — o mais claro dos dois é que manda, e todos passam de 4,5:1.
+ * ═════════════════════════════════════════════════════════════════════════ */
+/* A faixa NÃO pode se pintar com um token que ela redefine aqui dentro: a
+ * primeira versão do cabeçalho do admin usava `bg-info` e, ao reescrever
+ * `--info` pros filhos, apagava o próprio azul. Toda faixa pinta com
+ * `--hero`/`--hero-2`, que não aparecem nesta lista. */
+/* O fundo da faixa, em classe própria: quatro telas usam o mesmo par, e uma
+ * delas (o HeroCard dos dashboards) recebe o fundo como className e não tem
+ * onde pôr `style`. Fica separado de `.faixa-hero` de propósito — a ficha do
+ * cliente pinta com `style` e só quer os tokens. */
+.fundo-hero {
+  background-image: linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%);
+}
+
+.faixa-hero {
+  --foreground: var(--hero-fg);
+  --card-foreground: var(--hero-fg);
+  --muted-foreground: oklch(0.907 0.018 245);
+  --border: oklch(1 0 0 / 25%);
+  --input: oklch(1 0 0 / 25%);
+
+  --success: oklch(0.785 0.134 160);
+  --success-fg: oklch(0.785 0.134 160);
+  --danger: oklch(0.814 0.097 26);
+  --danger-fg: oklch(0.814 0.097 26);
+  --warning: oklch(0.820 0.112 82);
+  --warning-fg: oklch(0.820 0.112 82);
+  --info: oklch(0.907 0.018 245);
+  --info-fg: oklch(0.907 0.018 245);
+  --neutral: oklch(0.907 0.018 245);
+  --neutral-fg: oklch(0.907 0.018 245);
+  /* Véu ESCURO, não claro. Clarear o fundo sob tinta clara é briga consigo
+   * mesma: com branco a 15% a etiqueta verde ficava em 3,2:1 — o mesmo
+   * defeito de antes, um pouco menos grave. Escurecendo, sobe pra 6:1. */
+  --success-bg: oklch(0 0 0 / 22%);
+  --danger-bg: oklch(0 0 0 / 22%);
+  --warning-bg: oklch(0 0 0 / 22%);
+  --info-bg: oklch(0 0 0 / 22%);
+  --neutral-bg: oklch(0 0 0 / 22%);
+  /* Preenchimento cheio dentro da faixa é claro, então a tinta em cima dele
+   * volta a ser escura. */
+  --success-on: oklch(0.237 0.044 256);
+  --danger-on: oklch(0.237 0.044 256);
+  --warning-on: oklch(0.237 0.044 256);
+  --info-on: oklch(0.237 0.044 256);
+  --neutral-on: oklch(0.237 0.044 256);
 }

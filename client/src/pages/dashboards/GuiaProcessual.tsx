@@ -72,21 +72,21 @@ export default function GuiaProcessual({
 
   if (mostrarSucesso) {
     return (
-      <Card className="border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30">
+      <Card className="border-success/30 bg-success-bg dark:bg-success/30">
         <CardContent className="flex flex-wrap items-center gap-3 py-3.5">
           <span className="text-xl">🎉</span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">
+            <p className="text-sm font-bold text-success-fg">
               Monitoramento ligado — {feitos} de 3 passos
             </p>
-            <p className="text-xs text-emerald-800 dark:text-emerald-300/90">
+            <p className="text-xs text-success-fg">
               Credencial conectada e monitoramento ativo. Os alertas chegam sozinhos a partir de agora.
             </p>
           </div>
           <Button
             size="sm"
             variant="outline"
-            className="border-emerald-300 dark:border-emerald-800"
+            className="border-success/30"
             onClick={() => {
               setSucessoOculto(true);
               try {
@@ -139,7 +139,7 @@ export default function GuiaProcessual({
   ];
 
   return (
-    <Card className="border-violet-200 dark:border-violet-800/60 bg-gradient-to-br from-violet-50 dark:from-violet-950/40 to-background">
+    <Card className="border-info/30 bg-gradient-to-br from-info-bg to-background">
       <CardContent className="py-4 space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -149,7 +149,7 @@ export default function GuiaProcessual({
             </p>
           </div>
           <div className="text-right">
-            <p className="text-sm font-bold text-violet-700 dark:text-violet-300 tabular-nums">
+            <p className="text-sm font-bold text-info-fg tabular-nums">
               {feitos} de 3
             </p>
             <p className="text-[10px] text-muted-foreground">este guia some quando terminar</p>
@@ -161,14 +161,14 @@ export default function GuiaProcessual({
             <div
               key={p.n}
               className={`rounded-xl border bg-card p-3.5 ${
-                p.feito ? "border-emerald-300 dark:border-emerald-800" : ""
+                p.feito ? "border-success/30" : ""
               } ${p.travado ? "opacity-60" : ""}`}
             >
               <div className="flex items-center gap-2 mb-1.5">
                 {p.feito ? (
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="h-5 w-5 text-success-fg shrink-0" />
                 ) : (
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[11px] font-bold text-white">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-info text-[11px] font-bold text-info-on">
                     {p.n}
                   </span>
                 )}
@@ -188,7 +188,7 @@ export default function GuiaProcessual({
                 </Button>
               )}
               {p.feito && (
-                <p className="mt-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Feito ✓</p>
+                <p className="mt-2 text-xs font-semibold text-success-fg">Feito ✓</p>
               )}
             </div>
           ))}

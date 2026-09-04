@@ -45,12 +45,12 @@ const CATEGORIA_LABEL: Record<Categoria, string> = {
   outro: "Outro",
 };
 const CATEGORIA_COR: Record<Categoria, string> = {
-  saudacao: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
-  cobranca: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300",
-  agendamento: "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300",
-  juridico: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300",
-  encerramento: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
-  outro: "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300",
+  saudacao: "bg-info-bg text-info-fg",
+  cobranca: "bg-warning-bg text-warning-fg",
+  agendamento: "bg-info-bg text-info-fg",
+  juridico: "bg-info-bg text-info-fg",
+  encerramento: "bg-success-bg text-success-fg",
+  outro: "bg-muted text-muted-foreground",
 };
 
 const VARIAVEIS_DISPONIVEIS: Array<{ key: string; descricao: string; exemplo: string }> = [
@@ -85,7 +85,7 @@ export function TemplatesTab() {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              <MessageSquare className="h-5 w-5 text-info-fg" />
               Templates de mensagem
             </CardTitle>
             <CardDescription>
@@ -120,12 +120,12 @@ export function TemplatesTab() {
                       {CATEGORIA_LABEL[t.categoria as Categoria] || t.categoria}
                     </span>
                     {t.atalho && (
-                      <span className="font-mono text-[10px] bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 rounded">
+                      <span className="font-mono text-[10px] bg-info-bg text-info-fg px-1.5 py-0.5 rounded">
                         /{t.atalho}
                       </span>
                     )}
                     {t.midiaTipo && (
-                      <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">
+                      <span className="inline-flex items-center gap-1 text-[10px] bg-success-bg text-success-fg px-1.5 py-0.5 rounded">
                         {t.midiaTipo === "imagem" ? <ImageIcon className="h-2.5 w-2.5" /> :
                          t.midiaTipo === "documento" ? <FileText className="h-2.5 w-2.5" /> :
                          <Paperclip className="h-2.5 w-2.5" />}
@@ -274,7 +274,7 @@ function TemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { resetar(); onClose(); } }}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{editando ? "Editar template" : "Novo template"}</DialogTitle>
           <DialogDescription>
@@ -319,8 +319,8 @@ function TemplateDialog({
               rows={5}
               className="font-mono text-xs"
             />
-            <div className="rounded-md border border-violet-200 bg-violet-50 dark:bg-violet-950/30 dark:border-violet-900 p-2 text-[11px]">
-              <p className="font-semibold mb-1 text-violet-900 dark:text-violet-200">Variáveis disponíveis (clique pra inserir):</p>
+            <div className="rounded-md border border-info/30 bg-info-bg dark:border-info/30 p-2 text-[11px]">
+              <p className="font-semibold mb-1 text-info-fg">Variáveis disponíveis (clique pra inserir):</p>
               <div className="flex flex-wrap gap-1">
                 {VARIAVEIS_DISPONIVEIS.map((v) => (
                   <button
@@ -328,7 +328,7 @@ function TemplateDialog({
                     type="button"
                     onClick={() => setConteudo((c) => c + `{{${v.key}}}`)}
                     title={`${v.descricao} (ex: ${v.exemplo})`}
-                    className="font-mono text-[10px] bg-white dark:bg-slate-900 border border-violet-300 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 rounded hover:bg-violet-100 dark:hover:bg-violet-900 transition-colors"
+                    className="font-mono text-[10px] bg-white dark:bg-muted border border-info/30 text-info-fg px-1.5 py-0.5 rounded hover:bg-info-bg transition-colors"
                   >
                     {`{{${v.key}}}`}
                   </button>
@@ -354,15 +354,15 @@ function TemplateDialog({
             <div className="space-y-1.5">
               <Label>Anexar mídia (opcional)</Label>
               {midiaUrl ? (
-                <div className="flex items-center gap-2 p-2 border rounded-md bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900">
-                  {midiaTipo === "imagem" ? <ImageIcon className="h-4 w-4 text-emerald-700 dark:text-emerald-300 shrink-0" /> :
-                   midiaTipo === "documento" ? <FileText className="h-4 w-4 text-emerald-700 dark:text-emerald-300 shrink-0" /> :
-                   <Paperclip className="h-4 w-4 text-emerald-700 dark:text-emerald-300 shrink-0" />}
-                  <span className="text-xs flex-1 truncate text-emerald-900 dark:text-emerald-200">{midiaUrl.split("/").pop()}</span>
+                <div className="flex items-center gap-2 p-2 border rounded-md bg-success-bg border-success/30">
+                  {midiaTipo === "imagem" ? <ImageIcon className="h-4 w-4 text-success-fg shrink-0" /> :
+                   midiaTipo === "documento" ? <FileText className="h-4 w-4 text-success-fg shrink-0" /> :
+                   <Paperclip className="h-4 w-4 text-success-fg shrink-0" />}
+                  <span className="text-xs flex-1 truncate text-success-fg">{midiaUrl.split("/").pop()}</span>
                   <button
                     type="button"
                     onClick={() => { setMidiaUrl(null); setMidiaTipo(null); }}
-                    className="text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-200"
+                    className="text-success-fg hover:text-success-fg"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>

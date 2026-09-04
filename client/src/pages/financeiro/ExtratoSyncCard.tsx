@@ -59,8 +59,8 @@ export function ExtratoSyncCard() {
 
   if (data.status === "concluido") {
     return (
-      <div className="rounded-lg border border-green-300 bg-green-50 dark:bg-green-950/30 px-3 py-2.5 flex items-center justify-between gap-3 flex-wrap text-sm">
-        <span className="text-green-800 dark:text-green-200 flex items-center gap-2">
+      <div className="rounded-lg border border-success/30 bg-success-bg px-3 py-2.5 flex items-center justify-between gap-3 flex-wrap text-sm">
+        <span className="text-success-fg flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4" />
           <span>
             <strong>Extrato importado por completo.</strong>{" "}
@@ -99,7 +99,7 @@ export function ExtratoSyncCard() {
     new Date(data.proximaTentativaEm).getTime() > Date.now();
 
   const emAlerta = data.status === "pausado" || data.status === "erro" || aguardandoCota;
-  const corStatus = emAlerta ? "border-amber-300 bg-amber-50 dark:bg-amber-950/30" : "border-violet-300 bg-violet-50 dark:bg-violet-950/30";
+  const corStatus = emAlerta ? "border-warning/30 bg-warning-bg" : "border-info/30 bg-info-bg";
 
   return (
     <Card className={"border " + corStatus}>
@@ -109,8 +109,8 @@ export function ExtratoSyncCard() {
             className={
               "h-4 w-4 " +
               (data.status === "executando" && !aguardandoCota
-                ? "animate-spin text-violet-600 dark:text-violet-400"
-                : "text-amber-600 dark:text-amber-400")
+                ? "animate-spin text-info-fg"
+                : "text-warning-fg")
             }
           />
           <div className="flex-1 min-w-[200px]">
@@ -128,7 +128,7 @@ export function ExtratoSyncCard() {
                 : ""}
             </div>
             {data.status === "erro" && data.erroMensagem && (
-              <div className="text-xs text-red-600 dark:text-red-400 mt-0.5">{data.erroMensagem}</div>
+              <div className="text-xs text-danger-fg mt-0.5">{data.erroMensagem}</div>
             )}
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -156,9 +156,9 @@ export function ExtratoSyncCard() {
           </div>
         </div>
 
-        <div className="w-full h-1.5 bg-slate-200 rounded overflow-hidden">
+        <div className="w-full h-1.5 bg-muted rounded overflow-hidden">
           <div
-            className={"h-full transition-all " + (emAlerta ? "bg-amber-500" : "bg-violet-500")}
+            className={"h-full transition-all " + (emAlerta ? "bg-warning" : "bg-info")}
             style={{ width: `${pct}%` }}
           />
         </div>

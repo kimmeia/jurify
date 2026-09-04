@@ -21,9 +21,9 @@ import AdminBackups from "./AdminBackups";
 import AdminManutencao from "./AdminManutencao";
 
 function HealthIcon({ status }: { status: string }) {
-  if (status === "ok") return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
+  if (status === "ok") return <CheckCircle2 className="h-4 w-4 text-success" />;
   if (status === "erro") return <XCircle className="h-4 w-4 text-destructive" />;
-  return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+  return <AlertTriangle className="h-4 w-4 text-warning" />;
 }
 
 function formatUptime(seconds: number) {
@@ -37,11 +37,11 @@ function formatUptime(seconds: number) {
 
 function CanalStatusBadge({ status }: { status: string }) {
   const map: Record<string, { cls: string; label: string }> = {
-    conectado: { cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25", label: "Conectado" },
-    desconectado: { cls: "bg-gray-500/15 text-gray-600 dark:text-slate-300 border-gray-500/25", label: "Desconectado" },
-    pendente: { cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25", label: "Pendente" },
-    erro: { cls: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/25", label: "Erro" },
-    banido: { cls: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/25", label: "Banido" },
+    conectado: { cls: "bg-success/15 text-success-fg border-success/30", label: "Conectado" },
+    desconectado: { cls: "bg-muted-foreground/15 text-muted-foreground border-border/25", label: "Desconectado" },
+    pendente: { cls: "bg-warning/15 text-warning-fg border-warning/30", label: "Pendente" },
+    erro: { cls: "bg-danger/15 text-danger-fg border-danger/30", label: "Erro" },
+    banido: { cls: "bg-danger/15 text-danger-fg border-danger/30", label: "Banido" },
   };
   const cfg = map[status] || { cls: "", label: status };
   return <Badge className={`${cfg.cls} hover:${cfg.cls} text-[10px] font-normal`}>{cfg.label}</Badge>;
@@ -89,15 +89,19 @@ export default function AdminSettings() {
   const { data: ops, isLoading: loadOps } = trpc.admin.operacional.useQuery(undefined, { retry: false });
 
   const statusGeral = health?.checks?.some((c) => c.status === "erro")
-    ? { dot: "bg-rose-400", label: "Atenção" }
+    ? { dot: "bg-danger", label: "Atenção" }
     : health?.checks?.some((c) => c.status !== "ok")
-      ? { dot: "bg-amber-400", label: "Degradado" }
-      : { dot: "bg-emerald-400", label: "Operacional" };
+      ? { dot: "bg-warning", label: "Degradado" }
+      : { dot: "bg-success", label: "Operacional" };
 
   return (
     <div className="space-y-5">
       {/* HERO de status do sistema */}
-      <div className="rounded-2xl bg-gradient-to-br from-slate-800 via-slate-700 to-indigo-700 p-6 text-white relative overflow-hidden shadow-lg">
+      {/* `from-muted via-muted to-info` pintava de quase-branco até o navy e a
+          tinta era branca fixa: no tema claro a metade de cima ficava branco
+          sobre branco (1,13:1 medido). A faixa de destaque é escura nos dois
+          temas — é a mesma do cabeçalho da ficha do cliente. */}
+      <div className="faixa-hero fundo-hero rounded-2xl p-6 text-hero-fg relative overflow-hidden shadow-lg">
         <Server className="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" strokeWidth={1.2} />
         <div className="relative flex items-center justify-between gap-4 flex-wrap">
           <div>
@@ -126,18 +130,18 @@ export default function AdminSettings() {
       </div>
 
       <Tabs defaultValue="sistema" className="w-full">
-        <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex dark:bg-slate-900/40 dark:border-slate-800">
+        <div className="bg-muted/80 backdrop-blur-sm border border-border rounded-xl p-1.5 inline-flex dark:bg-foreground/40">
           <TabsList className="bg-transparent gap-1 p-0 h-auto flex-wrap">
-            <TabsTrigger value="sistema" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+            <TabsTrigger value="sistema" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-foreground/80">
               <HeartPulse className="h-3.5 w-3.5" /> Sistema
             </TabsTrigger>
-            <TabsTrigger value="integracoes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+            <TabsTrigger value="integracoes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-foreground/80">
               <Plug className="h-3.5 w-3.5" /> Integrações
             </TabsTrigger>
-            <TabsTrigger value="backups" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+            <TabsTrigger value="backups" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-foreground/80">
               <Database className="h-3.5 w-3.5" /> Backups
             </TabsTrigger>
-            <TabsTrigger value="manutencao" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+            <TabsTrigger value="manutencao" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-foreground/80">
               <Wrench className="h-3.5 w-3.5" /> Manutenção
             </TabsTrigger>
           </TabsList>
@@ -225,42 +229,42 @@ export default function AdminSettings() {
                 {/* Counters */}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="flex items-center gap-2 text-sm">
-                    <Building2 className="h-4 w-4 text-blue-500" />
+                    <Building2 className="h-4 w-4 text-info" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">Escritórios</p>
                       <p className="font-bold">{ops.escritorios}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <UserCheck className="h-4 w-4 text-emerald-500" />
+                    <UserCheck className="h-4 w-4 text-success" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">Colaboradores</p>
                       <p className="font-bold">{ops.colaboradores}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <Users className="h-4 w-4 text-violet-500" />
+                    <Users className="h-4 w-4 text-info" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">Contatos</p>
                       <p className="font-bold">{ops.contatos}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <MessageSquare className="h-4 w-4 text-amber-500" />
+                    <MessageSquare className="h-4 w-4 text-warning" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">Conversas</p>
                       <p className="font-bold">{ops.conversas.total}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <Globe className="h-4 w-4 text-pink-500" />
+                    <Globe className="h-4 w-4 text-danger" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">Leads</p>
                       <p className="font-bold">{ops.leads.total}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <Bot className="h-4 w-4 text-teal-500" />
+                    <Bot className="h-4 w-4 text-success" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">Agentes IA</p>
                       <p className="font-bold">{ops.agentesIa}</p>

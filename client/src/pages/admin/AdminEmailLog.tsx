@@ -73,9 +73,9 @@ export default function AdminEmailLog() {
       </p>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <KPICard label="Enviados (24h)" value={resumo?.sucesso24h ?? "—"} icon={CheckCircle2} iconBg="bg-emerald-500/10" iconFg="text-emerald-600 dark:text-emerald-400" valueColor="text-emerald-600 dark:text-emerald-400" />
-        <KPICard label="Falhas (24h)" value={resumo?.falha24h ?? "—"} icon={XCircle} iconBg="bg-rose-500/10" iconFg="text-rose-600 dark:text-rose-400" valueColor="text-rose-600 dark:text-rose-400" />
-        <KPICard label="Total (24h)" value={resumo?.total24h ?? "—"} icon={Mail} iconBg="bg-slate-500/10" iconFg="text-slate-600 dark:text-slate-300" />
+        <KPICard label="Enviados (24h)" value={resumo?.sucesso24h ?? "—"} icon={CheckCircle2} iconBg="bg-success/10" iconFg="text-success-fg" valueColor="text-success-fg" />
+        <KPICard label="Falhas (24h)" value={resumo?.falha24h ?? "—"} icon={XCircle} iconBg="bg-danger/10" iconFg="text-danger-fg" valueColor="text-danger-fg" />
+        <KPICard label="Total (24h)" value={resumo?.total24h ?? "—"} icon={Mail} iconBg="bg-muted-foreground/10" iconFg="text-muted-foreground" />
       </div>
 
       <Card>
@@ -127,9 +127,9 @@ export default function AdminEmailLog() {
               className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
             >
               {item.status === "sucesso" ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <CheckCircle2 className="h-5 w-5 text-success-fg shrink-0" />
               ) : (
-                <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0" />
+                <AlertCircle className="h-5 w-5 text-danger-fg shrink-0" />
               )}
 
               <div className="flex-1 min-w-0">
@@ -148,7 +148,7 @@ export default function AdminEmailLog() {
                   {item.assunto}
                 </div>
                 {item.erro && (
-                  <div className="text-xs text-red-600 dark:text-red-400 mt-1 truncate" title={item.erro}>
+                  <div className="text-xs text-danger-fg mt-1 truncate" title={item.erro}>
                     {item.erro}
                   </div>
                 )}

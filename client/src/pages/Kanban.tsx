@@ -40,9 +40,9 @@ import { dataCalendarioISO, dataLocalHoje, formatarDataCalendario } from "@share
 import { unirTags } from "@shared/kanban-tags";
 
 const PRIORIDADE_COR: Record<string, string> = {
-  alta: "border-l-red-500 bg-red-50/30 dark:bg-red-950/30",
-  media: "border-l-amber-500 bg-amber-50/20 dark:bg-amber-950/30",
-  baixa: "border-l-blue-500 bg-blue-50/20 dark:bg-blue-950/30",
+  alta: "border-l-danger bg-danger-bg/30",
+  media: "border-l-warning bg-warning-bg/20",
+  baixa: "border-l-info bg-info-bg/20",
 };
 const PRIORIDADE_LABEL: Record<string, string> = { alta: "Alta", media: "Média", baixa: "Baixa" };
 
@@ -508,9 +508,9 @@ export default function Kanban() {
     ).length;
 
     return (
-      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-indigo-50/20 dark:to-indigo-950/20 p-6 space-y-5">
+      <div className="rounded-2xl bg-gradient-to-br from-muted/40 via-white dark:via-muted to-info-bg/20 p-6 space-y-5">
         {/* ═══════════ HERO ═══════════ */}
-        <div className="rounded-2xl bg-gradient-to-br from-indigo-700 via-blue-700 to-cyan-700 p-7 text-white relative overflow-hidden shadow-lg">
+        <div className="rounded-2xl bg-info p-7 text-info-on relative overflow-hidden shadow-lg">
           <LayoutGrid className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
           <div className="relative">
             <div className="flex items-start justify-between mb-2 flex-wrap gap-3">
@@ -533,7 +533,7 @@ export default function Kanban() {
                 <Button
                   size="sm"
                   onClick={() => setNovoFunilOpen(true)}
-                  className="bg-white dark:bg-card text-slate-900 dark:text-slate-100 hover:bg-slate-100 font-semibold shadow-sm h-8"
+                  className="bg-card text-foreground hover:bg-muted font-semibold shadow-sm h-8"
                 >
                   <Plus className="h-4 w-4 mr-1" /> Novo funil
                 </Button>
@@ -558,7 +558,7 @@ export default function Kanban() {
                   {totaisEscritorio.atrasados > 0 && (
                     <>
                       {" · "}
-                      <span className="text-amber-200 font-medium">
+                      <span className="text-warning font-medium">
                         {totaisEscritorio.atrasados} atrasado{totaisEscritorio.atrasados !== 1 ? "s" : ""}
                       </span>
                     </>
@@ -572,13 +572,13 @@ export default function Kanban() {
                   <div className="grid grid-cols-3 gap-2">
                     <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
                       <p className="text-xs text-white/70 mb-1">Atrasados</p>
-                      <p className="text-2xl font-bold tabular-nums leading-none text-rose-200">
+                      <p className="text-2xl font-bold tabular-nums leading-none text-danger">
                         {totaisEscritorio.atrasados}
                       </p>
                     </div>
                     <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
                       <p className="text-xs text-white/70 mb-1">Funis vazios</p>
-                      <p className="text-2xl font-bold tabular-nums leading-none text-slate-200">
+                      <p className="text-2xl font-bold tabular-nums leading-none text-muted-foreground/70">
                         {listaFunis.length - totalFunisAtivos}
                       </p>
                     </div>
@@ -616,13 +616,13 @@ export default function Kanban() {
             ))}
             <button
               onClick={() => setNovoFunilOpen(true)}
-              className="rounded-2xl border-2 border-dashed border-slate-300 hover:border-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/70 transition-all p-5 flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 min-h-[220px]"
+              className="rounded-2xl border-2 border-dashed border-border hover:border-border hover:bg-muted transition-all p-5 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-foreground min-h-[220px]"
             >
-              <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center">
                 <Plus className="w-6 h-6" />
               </div>
               <p className="text-sm font-semibold">Criar novo funil</p>
-              <p className="text-xs text-slate-400">Personalize colunas, cores e tags</p>
+              <p className="text-xs text-muted-foreground/70">Personalize colunas, cores e tags</p>
             </button>
           </div>
         )}
@@ -689,17 +689,17 @@ export default function Kanban() {
   const funilCor = funilData?.funil?.cor || "#6366f1";
 
   return (
-    <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-indigo-50/20 dark:to-indigo-950/20 p-6 space-y-5">
+    <div className="rounded-2xl bg-gradient-to-br from-muted/40 via-white dark:via-muted to-info-bg/20 p-6 space-y-5">
       {/* Botão voltar externo ao hero */}
       <button
         onClick={() => setFunilAtivo(null)}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
       >
         <ChevronLeft className="h-3.5 w-3.5" /> Voltar para funis
       </button>
 
       {/* ═══════════ HERO COMPACTO ═══════════ */}
-      <div className="rounded-2xl bg-gradient-to-br from-indigo-700 via-blue-700 to-cyan-700 p-6 text-white relative overflow-hidden shadow-lg">
+      <div className="rounded-2xl bg-info p-6 text-info-on relative overflow-hidden shadow-lg">
         <div className="relative">
           <div className="flex items-start gap-5 mb-4 flex-wrap">
             <div
@@ -739,7 +739,7 @@ export default function Kanban() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-rose-200 hover:text-white hover:bg-rose-500/30 border border-white/20 h-8 w-8 p-0"
+                className="text-danger-fg hover:text-danger-fg hover:bg-danger/30 border border-white/20 h-8 w-8 p-0"
                 onClick={() => {
                   if (confirm("Excluir funil e todos os cards?"))
                     deletarFunilMut.mutate({ id: funilAtivo });
@@ -759,21 +759,21 @@ export default function Kanban() {
             </div>
             <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
               <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">Em produção</p>
-              <p className="text-2xl font-bold tabular-nums leading-none text-blue-200">
+              <p className="text-2xl font-bold tabular-nums leading-none text-info">
                 {totalEmProducao}
               </p>
             </div>
             <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
               <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">⚠ Atrasados</p>
               <p
-                className={`text-2xl font-bold tabular-nums leading-none ${totalAtrasados > 0 ? "text-rose-200" : ""}`}
+                className={`text-2xl font-bold tabular-nums leading-none ${totalAtrasados > 0 ? "text-danger" : ""}`}
               >
                 {totalAtrasados}
               </p>
             </div>
             <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
               <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">Concluídos</p>
-              <p className="text-2xl font-bold tabular-nums leading-none text-emerald-200">
+              <p className="text-2xl font-bold tabular-nums leading-none text-success">
                 {totalConcluidos}
               </p>
             </div>
@@ -785,7 +785,7 @@ export default function Kanban() {
       <div className="space-y-3">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[260px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70 pointer-events-none" />
             <Input
               value={buscaTexto}
               onChange={(e) => setBuscaTexto(e.target.value)}
@@ -793,7 +793,7 @@ export default function Kanban() {
                 if (e.key === "Escape") setBuscaTexto("");
               }}
               placeholder="Buscar por título, cliente, tag..."
-              className="pl-10 pr-9 h-10 bg-white dark:bg-card"
+              className="pl-10 pr-9 h-10 bg-card"
             />
             {buscaTexto && (
               <button
@@ -808,16 +808,16 @@ export default function Kanban() {
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Toggle Normal/Compacto */}
-            <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-card overflow-hidden">
+            <div className="inline-flex rounded-lg border border-border bg-card overflow-hidden">
               <button
                 onClick={() => setModoCompacto(false)}
-                className={`px-3 py-1.5 text-xs font-medium ${!modoCompacto ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900/70"}`}
+                className={`px-3 py-1.5 text-xs font-medium ${!modoCompacto ? "bg-foreground/80 text-background" : "text-muted-foreground hover:bg-muted"}`}
               >
                 Normal
               </button>
               <button
                 onClick={() => setModoCompacto(true)}
-                className={`px-3 py-1.5 text-xs font-medium ${modoCompacto ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900/70"}`}
+                className={`px-3 py-1.5 text-xs font-medium ${modoCompacto ? "bg-foreground/80 text-background" : "text-muted-foreground hover:bg-muted"}`}
               >
                 Compacto
               </button>
@@ -828,8 +828,8 @@ export default function Kanban() {
               onClick={() => setMostrarArquivados(!mostrarArquivados)}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                 mostrarArquivados
-                  ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100"
-                  : "bg-white dark:bg-card border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 hover:border-slate-300"
+                  ? "bg-warning-bg border-warning/30 text-warning-fg hover:bg-warning-bg"
+                  : "bg-card border-border text-muted-foreground hover:border-border"
               }`}
               title={mostrarArquivados ? "Esconder arquivados" : "Mostrar arquivados"}
             >
@@ -842,7 +842,7 @@ export default function Kanban() {
             <button
               onClick={() => setExportarAberto(true)}
               disabled={!funilAtivo || exportarPdfMut?.isPending}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-white dark:bg-card border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 hover:border-slate-300 transition-all disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-card border-border text-muted-foreground hover:border-border transition-all disabled:opacity-50"
               title="Escolhe as colunas e baixa a lista de cards em PDF"
             >
               {exportarPdfMut?.isPending ? (
@@ -858,7 +858,7 @@ export default function Kanban() {
                 na direção contrária. Quem precisa restaurar procura aqui. */}
             <button
               onClick={() => setLocation("/kanban/restaurar")}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-white dark:bg-card border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 hover:border-slate-300 transition-all"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-card border-border text-muted-foreground hover:border-border transition-all"
               title="Recria cards que sumiram, a partir de um relatório exportado antes"
             >
               <RotateCcw className="h-3 w-3" />
@@ -904,7 +904,7 @@ export default function Kanban() {
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: col.cor || "#6b7280" }} />
                 <input
-                  className="text-xs font-semibold uppercase tracking-wide bg-transparent border-none outline-none min-w-0 flex-1 hover:bg-muted/50 focus:bg-white dark:focus:bg-card focus:ring-1 focus:ring-primary rounded px-1 -mx-1"
+                  className="text-xs font-semibold uppercase tracking-wide bg-transparent border-none outline-none min-w-0 flex-1 hover:bg-muted/50 focus:bg-card focus:ring-1 focus:ring-primary rounded px-1 -mx-1"
                   defaultValue={col.nome}
                   onBlur={(e) => {
                     const novo = e.target.value.trim();
@@ -915,7 +915,7 @@ export default function Kanban() {
                 <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0">{col.cards?.length || 0}</Badge>
                 {col.tipo === "conclusao" && (
                   <Badge
-                    className="text-[9px] h-4 px-1 bg-emerald-100 text-emerald-700 border-emerald-200 dark:border-emerald-800/50 shrink-0 dark:bg-emerald-950/30 dark:text-emerald-300"
+                    className="text-[9px] h-4 px-1 bg-success-bg text-success-fg border-success/30 shrink-0"
                     title="Cards nesta coluna são considerados concluídos"
                   >
                     ✓ conclusão
@@ -926,7 +926,7 @@ export default function Kanban() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={`h-6 w-6 p-0 ${col.tipo === "conclusao" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"}`}
+                  className={`h-6 w-6 p-0 ${col.tipo === "conclusao" ? "text-success-fg" : "text-muted-foreground hover:text-success-fg"}`}
                   title={col.tipo === "conclusao" ? "Desmarcar como conclusão" : "Marcar como coluna de conclusão"}
                   onClick={() =>
                     editarColunaMut.mutate({
@@ -944,7 +944,7 @@ export default function Kanban() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={`h-6 w-6 p-0 ${(col.cards?.length ?? 0) > 0 ? "text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300" : "text-muted-foreground/50"}`}
+                    className={`h-6 w-6 p-0 ${(col.cards?.length ?? 0) > 0 ? "text-warning-fg hover:text-warning-fg" : "text-muted-foreground/50"}`}
                     title={
                       (col.cards?.length ?? 0) > 0
                         ? `Arquivar todos os ${col.cards.length} cards desta coluna`
@@ -1015,14 +1015,14 @@ export default function Kanban() {
                     handleDropOnCard(card.id, col.id);
                   }}
                   onClick={() => setCardAberto(card.id)}
-                  className={`group relative bg-white dark:bg-card rounded-xl border shadow-sm hover:shadow-md cursor-pointer active:cursor-grabbing transition-all ${
+                  className={`group relative bg-card rounded-xl border shadow-sm hover:shadow-md cursor-pointer active:cursor-grabbing transition-all ${
                     modoCompacto ? "px-2.5 py-2" : "p-3"
                   } ${
                     isAtrasado
-                      ? "border-rose-300 bg-gradient-to-r from-rose-50/60 dark:from-rose-950/40 to-white dark:to-slate-900"
+                      ? "border-danger/30 bg-gradient-to-r from-danger-bg/60 to-white dark:to-muted"
                       : col.tipo === "conclusao" && !card.asaasPaymentId
-                        ? "border-emerald-300 bg-gradient-to-br from-emerald-50/60 dark:from-emerald-950/40 to-white dark:to-slate-900"
-                        : "border-slate-200 dark:border-slate-700/80 hover:border-slate-400"
+                        ? "border-success/30 bg-gradient-to-br from-success-bg/60 to-white dark:to-muted"
+                        : "border-border hover:border-border"
                   } ${
                     dragOverCardId === card.id && dragCardId && dragCardId !== card.id
                       ? "ring-2 ring-primary ring-offset-1"
@@ -1058,19 +1058,19 @@ export default function Kanban() {
 
                       {/* Cliente */}
                       {card.clienteNome && (
-                        <div className="flex items-center gap-1.5 mb-2 text-[11px] text-slate-700 dark:text-slate-200">
-                          <Briefcase className="w-3 h-3 text-slate-400 shrink-0" />
+                        <div className="flex items-center gap-1.5 mb-2 text-[11px] text-foreground">
+                          <Briefcase className="w-3 h-3 text-muted-foreground/70 shrink-0" />
                           <span className="font-medium truncate">{card.clienteNome}</span>
                         </div>
                       )}
                       {(card as any).acaoApelido && (
-                        <div className="flex items-center gap-1.5 mb-2 text-[10px] text-blue-700 dark:text-blue-300">
-                          <Scale className="w-3 h-3 text-blue-500 shrink-0" />
+                        <div className="flex items-center gap-1.5 mb-2 text-[10px] text-info-fg">
+                          <Scale className="w-3 h-3 text-info shrink-0" />
                           <span className="font-medium truncate">{(card as any).acaoApelido}</span>
                         </div>
                       )}
                       {card.cnj && !(card as any).acaoApelido && (
-                        <p className="text-[10px] font-mono text-slate-500 mb-2 truncate">{card.cnj}</p>
+                        <p className="text-[10px] font-mono text-muted-foreground mb-2 truncate">{card.cnj}</p>
                       )}
 
                       {/* Tags outline */}
@@ -1082,7 +1082,7 @@ export default function Kanban() {
                             return (
                               <span
                                 key={i}
-                                className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-white dark:bg-card"
+                                className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-card"
                                 style={{ color: cor, borderColor: cor }}
                               >
                                 <span className="inline-block w-1 h-1 rounded-full" style={{ background: cor }} />
@@ -1091,7 +1091,7 @@ export default function Kanban() {
                             );
                           })}
                           {cardTags.length > 3 && (
-                            <span className="text-[9px] text-slate-400 font-medium">
+                            <span className="text-[9px] text-muted-foreground/70 font-medium">
                               +{cardTags.length - 3}
                             </span>
                           )}
@@ -1099,26 +1099,26 @@ export default function Kanban() {
                       )}
 
                       {/* Rodapé: prazo/status + tempo na coluna */}
-                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                         {isAtrasado ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-danger-bg text-danger-fg">
                             ⚠ Atrasado
                           </span>
                         ) : col.tipo === "conclusao" && !card.asaasPaymentId ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-warning-bg text-warning-fg">
                             <Wallet className="w-2.5 h-2.5" /> Lançar cobrança
                           </span>
                         ) : col.tipo === "conclusao" && card.asaasPaymentId ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg">
                             <CheckCircle2 className="w-2.5 h-2.5" /> Cobrança lançada
                           </span>
                         ) : card.prazo ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-info-bg text-info-fg">
                             <Calendar className="w-2.5 h-2.5" />
                             {formatarDataCalendario(card.prazo, { ano: false, mes: "curto" })}
                           </span>
                         ) : (
-                          <span className="text-[10px] text-slate-400">Sem prazo</span>
+                          <span className="text-[10px] text-muted-foreground/70">Sem prazo</span>
                         )}
                         <TempoColuna updatedAt={card.updatedAt} createdAt={card.createdAt} />
                       </div>
@@ -1128,7 +1128,7 @@ export default function Kanban() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="absolute top-1 right-1 h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    className="absolute top-1 right-1 h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:bg-danger-bg"
                     title="Excluir card"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1198,8 +1198,8 @@ export default function Kanban() {
             <div>
               <Label className="text-xs">Cliente</Label>
               {clienteSelecionado ? (
-                <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/50 mt-1">
-                  <User className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-success-bg border border-success/30 mt-1">
+                  <User className="h-4 w-4 text-success-fg" />
                   <div className="flex-1"><p className="text-xs font-medium">{clienteSelecionado.nome}</p>{clienteSelecionado.cpfCnpj && <p className="text-[9px] text-muted-foreground">{clienteSelecionado.cpfCnpj}</p>}</div>
                   <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setClienteSelecionado(null); setBuscaCliente(""); }}>Trocar</Button>
                 </div>
@@ -1210,7 +1210,7 @@ export default function Kanban() {
                     <div className="border rounded-lg mt-1 max-h-32 overflow-y-auto divide-y">
                       {(clientesBusca.clientes || []).map((c: any) => (
                         <button key={c.id} onClick={() => { setClienteSelecionado(c); setBuscaCliente(""); setCardForm({ ...cardForm, tags: unirTags(cardForm.tags, c.tags) ?? "" }); }} className="w-full flex items-center gap-2 p-2 hover:bg-muted/50 text-left text-xs">
-                          <User className="h-3 w-3 text-violet-500" /><span className="font-medium">{c.nome}</span>{c.cpfCnpj && <span className="text-[9px] text-muted-foreground">{c.cpfCnpj}</span>}
+                          <User className="h-3 w-3 text-info" /><span className="font-medium">{c.nome}</span>{c.cpfCnpj && <span className="text-[9px] text-muted-foreground">{c.cpfCnpj}</span>}
                         </button>
                       ))}
                     </div>
@@ -1269,10 +1269,10 @@ export default function Kanban() {
             </div>
 
             {/* Urgente toggle */}
-            <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-red-50/50 dark:hover:bg-red-950/30 transition-colors">
-              <input type="checkbox" checked={cardForm.urgente} onChange={(e) => setCardForm({ ...cardForm, urgente: e.target.checked, prioridade: e.target.checked ? "alta" : "media" })} className="accent-red-500 h-4 w-4" />
+            <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-danger-bg/50 transition-colors">
+              <input type="checkbox" checked={cardForm.urgente} onChange={(e) => setCardForm({ ...cardForm, urgente: e.target.checked, prioridade: e.target.checked ? "alta" : "media" })} className="accent-danger h-4 w-4" />
               <div className="flex items-center gap-2">
-                <span className="relative flex h-3 w-3"><span className={`${cardForm.urgente ? "animate-ping" : ""} absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75`} /><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" /></span>
+                <span className="relative flex h-3 w-3"><span className={`${cardForm.urgente ? "animate-ping" : ""} absolute inline-flex h-full w-full rounded-full bg-danger opacity-75`} /><span className="relative inline-flex rounded-full h-3 w-3 bg-danger" /></span>
                 <div><p className="text-xs font-medium">Marcar como urgente</p><p className="text-[10px] text-muted-foreground">Indicador vermelho pulsante no card</p></div>
               </div>
             </label>
@@ -1316,7 +1316,7 @@ export default function Kanban() {
       {/* Dialog gerenciar tags */}
       <Dialog open={novaTagOpen} onOpenChange={setNovaTagOpen}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Tag className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> Gerenciar Tags</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Tag className="h-5 w-5 text-info-fg" /> Gerenciar Tags</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="flex gap-2">
               <Input value={novaTagNome} onChange={(e) => setNovaTagNome(e.target.value)} placeholder="Nome da tag" className="flex-1" />
@@ -1352,12 +1352,12 @@ export default function Kanban() {
                 <div className="flex items-center gap-2">
                   {cardDetalhe.prioridade === "alta" && (
                     <span className="relative flex h-3 w-3 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75" />
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-danger" />
                     </span>
                   )}
                   <h3 className="text-lg font-bold">{cardDetalhe.titulo}</h3>
-                  {cardDetalhe.atrasado && <Badge className="bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30 text-[10px]">Atrasado</Badge>}
+                  {cardDetalhe.atrasado && <Badge className="bg-danger/15 text-danger-fg border-danger/30 text-[10px]">Atrasado</Badge>}
                 </div>
                 <div className="flex items-center gap-1">
                   {cardDetalhe.arquivado ? (
@@ -1387,7 +1387,7 @@ export default function Kanban() {
                 </div>
               </div>
               {cardDetalhe.arquivado && (
-                <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                <div className="rounded border border-warning/30 bg-warning-bg px-3 py-2 text-xs text-warning-fg">
                   📦 Este card está arquivado — não aparece no quadro até desarquivar.
                 </div>
               )}
@@ -1436,8 +1436,8 @@ export default function Kanban() {
 
                 {/* Toggle urgente */}
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={cardDetalhe.prioridade === "alta"} onChange={(e) => editarCardMut.mutate({ id: cardDetalhe.id, prioridade: e.target.checked ? "alta" : "media" })} className="accent-red-500 h-4 w-4" />
-                  <span className="relative flex h-2.5 w-2.5"><span className={`${cardDetalhe.prioridade === "alta" ? "animate-ping" : ""} absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75`} /><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" /></span>
+                  <input type="checkbox" checked={cardDetalhe.prioridade === "alta"} onChange={(e) => editarCardMut.mutate({ id: cardDetalhe.id, prioridade: e.target.checked ? "alta" : "media" })} className="accent-danger h-4 w-4" />
+                  <span className="relative flex h-2.5 w-2.5"><span className={`${cardDetalhe.prioridade === "alta" ? "animate-ping" : ""} absolute inline-flex h-full w-full rounded-full bg-danger opacity-75`} /><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-danger" /></span>
                   <span className="text-xs font-medium">Urgente</span>
                 </label>
 
@@ -1485,7 +1485,7 @@ export default function Kanban() {
                       <p className="text-sm font-medium">{cardDetalhe.clienteNome}</p>
                       {cardDetalhe.clienteCpfCnpj && <p className="text-[10px] text-muted-foreground font-mono">{cardDetalhe.clienteCpfCnpj}</p>}
                     </div>
-                    <Button size="sm" className="h-8 text-xs bg-violet-600 hover:bg-violet-700 text-white" onClick={() => { setCardAberto(null); setFunilAtivo(null); setLocation(`/clientes?id=${cardDetalhe.clienteId}`); }}>
+                    <Button size="sm" className="h-8 text-xs bg-info hover:bg-info text-white" onClick={() => { setCardAberto(null); setFunilAtivo(null); setLocation(`/clientes?id=${cardDetalhe.clienteId}`); }}>
                       <ExternalLink className="h-3 w-3 mr-1" /> Ver cadastro do cliente
                     </Button>
                   </div>
@@ -1502,7 +1502,7 @@ export default function Kanban() {
                             disabled={editarCardMut.isPending}
                             className="w-full flex items-center gap-2 p-2 hover:bg-muted/50 text-left text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <User className="h-3 w-3 text-violet-500" /><span>{c.nome}</span>
+                            <User className="h-3 w-3 text-info" /><span>{c.nome}</span>
                           </button>
                         ))}
                       </div>
@@ -1694,15 +1694,15 @@ function FunilCard({ funil, onAbrir }: { funil: any; onAbrir: () => void }) {
 
   const status =
     atrasados > 0
-      ? { label: `⚠ ${atrasados} atraso${atrasados !== 1 ? "s" : ""}`, cls: "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300" }
+      ? { label: `⚠ ${atrasados} atraso${atrasados !== 1 ? "s" : ""}`, cls: "bg-danger-bg text-danger-fg" }
       : totalCards === 0
-        ? { label: "Vazio", cls: "bg-slate-100 dark:bg-slate-800/60 text-slate-500" }
-        : { label: "Ativo", cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300" };
+        ? { label: "Vazio", cls: "bg-muted text-muted-foreground" }
+        : { label: "Ativo", cls: "bg-success-bg text-success-fg" };
 
   return (
     <button
       onClick={onAbrir}
-      className={`relative overflow-hidden bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-slate-700/80 text-left transition-all hover:shadow-lg hover:-translate-y-0.5 hover:border-slate-300 ${
+      className={`relative overflow-hidden bg-card rounded-2xl border border-border text-left transition-all hover:shadow-lg hover:-translate-y-0.5 hover:border-border ${
         totalCards === 0 ? "opacity-80" : ""
       }`}
     >
@@ -1721,7 +1721,7 @@ function FunilCard({ funil, onAbrir }: { funil: any; onAbrir: () => void }) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold truncate">{funil.nome}</p>
-            <p className="text-[11px] text-slate-500 truncate">
+            <p className="text-[11px] text-muted-foreground truncate">
               {funil.totalColunas ?? 0} coluna{funil.totalColunas !== 1 ? "s" : ""}
               {funil.descricao ? ` · ${funil.descricao}` : ""}
             </p>
@@ -1732,23 +1732,23 @@ function FunilCard({ funil, onAbrir }: { funil: any; onAbrir: () => void }) {
         </div>
 
         <div className="grid grid-cols-3 gap-2 mb-4">
-          <div className="rounded-lg p-2 bg-slate-50 dark:bg-slate-900/70">
-            <p className="text-xl font-bold tracking-tight tabular-nums leading-none text-indigo-600 dark:text-indigo-400">
+          <div className="rounded-lg p-2 bg-muted">
+            <p className="text-xl font-bold tracking-tight tabular-nums leading-none text-info-fg">
               {emProducao}
             </p>
-            <p className="text-[9px] text-slate-500 uppercase tracking-wider mt-1">Em produção</p>
+            <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-1">Em produção</p>
           </div>
-          <div className="rounded-lg p-2 bg-slate-50 dark:bg-slate-900/70">
-            <p className="text-xl font-bold tracking-tight tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
+          <div className="rounded-lg p-2 bg-muted">
+            <p className="text-xl font-bold tracking-tight tabular-nums leading-none text-success-fg">
               {concluidos}
             </p>
-            <p className="text-[9px] text-slate-500 uppercase tracking-wider mt-1">Concluídos</p>
+            <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-1">Concluídos</p>
           </div>
-          <div className={`rounded-lg p-2 ${atrasados > 0 ? "bg-rose-50 ring-1 ring-rose-200" : "bg-slate-50 dark:bg-slate-900/70"}`}>
-            <p className="text-xl font-bold tracking-tight tabular-nums leading-none text-rose-600 dark:text-rose-400">
+          <div className={`rounded-lg p-2 ${atrasados > 0 ? "bg-danger-bg ring-1 ring-danger" : "bg-muted"}`}>
+            <p className="text-xl font-bold tracking-tight tabular-nums leading-none text-danger-fg">
               {atrasados}
             </p>
-            <p className={`text-[9px] uppercase tracking-wider mt-1 ${atrasados > 0 ? "text-rose-700 dark:text-rose-300 font-semibold" : "text-slate-500"}`}>
+            <p className={`text-[9px] uppercase tracking-wider mt-1 ${atrasados > 0 ? "text-danger-fg font-semibold" : "text-muted-foreground"}`}>
               Atrasados
             </p>
           </div>
@@ -1756,11 +1756,11 @@ function FunilCard({ funil, onAbrir }: { funil: any; onAbrir: () => void }) {
 
         {totalParaProgresso > 0 && (
           <>
-            <div className="mb-1 flex justify-between text-[10px] text-slate-500">
+            <div className="mb-1 flex justify-between text-[10px] text-muted-foreground">
               <span>Progresso geral</span>
-              <span className="font-semibold text-slate-700 dark:text-slate-200">{progresso.toFixed(0)}%</span>
+              <span className="font-semibold text-foreground">{progresso.toFixed(0)}%</span>
             </div>
-            <div className="h-1.5 bg-slate-100 dark:bg-slate-800/60 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full"
                 style={{
@@ -1788,10 +1788,10 @@ function PrioDot({
 }) {
   const cls =
     prioridade === "alta"
-      ? "bg-rose-500 shadow-[0_0_0_3px_rgb(244_63_94_/_0.15)]"
+      ? "bg-danger shadow-[0_0_0_3px_rgb(244_63_94_/_0.15)]"
       : prioridade === "media"
-        ? "bg-amber-500"
-        : "bg-slate-400";
+        ? "bg-warning"
+        : "bg-muted-foreground/50";
   return (
     <span
       className={`w-1.5 h-1.5 rounded-full shrink-0 ${cls} ${mt ? "mt-1.5" : ""}`}
@@ -1823,14 +1823,14 @@ function TempoColuna({
   const ref = updatedAt || createdAt;
   if (!ref) return null;
   const dias = Math.floor((Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60 * 24));
-  if (dias < 1) return <span className="ml-auto text-[10px] text-slate-400">hoje</span>;
-  if (dias === 1) return <span className="ml-auto text-[10px] text-slate-400">há 1d</span>;
+  if (dias < 1) return <span className="ml-auto text-[10px] text-muted-foreground/70">hoje</span>;
+  if (dias === 1) return <span className="ml-auto text-[10px] text-muted-foreground/70">há 1d</span>;
   const quente = dias > 7;
   const texto = dias < 7 ? `há ${dias}d` : dias < 30 ? `há ${Math.floor(dias / 7)}sem` : `há ${Math.floor(dias / 30)}mês`;
   return (
     <span
       className={`ml-auto text-[10px] tabular-nums ${
-        quente ? "text-orange-600 dark:text-orange-400 font-semibold" : "text-slate-400"
+        quente ? "text-warning-fg font-semibold" : "text-muted-foreground/70"
       }`}
       title={`Última atividade ${new Date(ref).toLocaleString("pt-BR")}`}
     >

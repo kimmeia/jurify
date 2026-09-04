@@ -35,17 +35,17 @@ function ContextoAba({
       <p className="text-sm text-muted-foreground">
         {icone} <b className="font-semibold text-foreground">{titulo}</b> — {resto}{" "}
         <button
-          className="text-xs font-bold text-violet-700 dark:text-violet-400 underline underline-offset-2 whitespace-nowrap"
+          className="text-xs font-bold text-info-fg underline underline-offset-2 whitespace-nowrap"
           onClick={() => setAberto((v) => !v)}
         >
           {aberto ? "fechar ▴" : "entenda como funciona ▾"}
         </button>
       </p>
       {aberto && (
-        <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 rounded-xl border border-dashed border-violet-200 dark:border-violet-800/60 bg-violet-50/50 dark:bg-violet-950/20 px-4 py-3">
+        <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 rounded-xl border border-dashed border-info/30 bg-info-bg/50 px-4 py-3">
           {passos.map((p, i) => (
             <span key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[9px] font-extrabold text-white">
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-info text-[9px] font-extrabold text-info-on">
                 {i + 1}
               </span>
               <span>

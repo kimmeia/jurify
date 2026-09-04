@@ -62,7 +62,7 @@ export function DespesasWrapper() {
           variant="ghost"
           size="sm"
           onClick={() => setHistoricoAberto(true)}
-          className="h-9 gap-1.5 text-pink-700 dark:text-pink-300 hover:text-pink-900 dark:hover:text-pink-200 hover:bg-pink-50 dark:hover:bg-pink-950/30"
+          className="h-9 gap-1.5 text-danger-fg hover:text-danger-fg hover:bg-danger-bg"
         >
           <History className="h-3.5 w-3.5" />
           Histórico de fechamentos
@@ -81,7 +81,7 @@ export function DespesasWrapper() {
         <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Calculator className="h-4 w-4 text-pink-600 dark:text-pink-400" />
+              <Calculator className="h-4 w-4 text-danger-fg" />
               Calcular comissão
             </DialogTitle>
           </DialogHeader>
@@ -93,7 +93,7 @@ export function DespesasWrapper() {
         <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Download className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+              <Download className="h-4 w-4 text-info-fg" />
               Importar extrato Asaas
             </DialogTitle>
           </DialogHeader>
@@ -105,7 +105,7 @@ export function DespesasWrapper() {
         <SheetContent side="right" className="w-full sm:max-w-3xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <History className="h-4 w-4 text-pink-600 dark:text-pink-400" />
+              <History className="h-4 w-4 text-danger-fg" />
               Histórico de fechamentos de comissão
             </SheetTitle>
           </SheetHeader>

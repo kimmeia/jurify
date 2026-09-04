@@ -81,8 +81,8 @@ export default function DashboardProcessual() {
           label="Movimentações a resolver"
           value={data.movimentacoesAResolver}
           icon={Bell}
-          iconBg="bg-rose-100 dark:bg-rose-900/30"
-          iconFg="text-rose-600 dark:text-rose-300"
+          iconBg="bg-danger-bg"
+          iconFg="text-danger-fg"
           hint={
             data.sugestoesPrazoPendentes > 0
               ? `${data.sugestoesPrazoPendentes} sugestão${data.sugestoesPrazoPendentes > 1 ? "es" : ""} de prazo aguardando`
@@ -93,11 +93,11 @@ export default function DashboardProcessual() {
           label="Monitoramentos ativos"
           value={data.monitoramentosAtivos}
           icon={Radar}
-          iconBg="bg-violet-100 dark:bg-violet-900/30"
-          iconFg="text-violet-600 dark:text-violet-300"
+          iconBg="bg-info-bg"
+          iconFg="text-info-fg"
           badge={
             data.monitoramentosParados > 0 ? (
-              <Badge variant="outline" className="text-[10px] border-rose-500/40 text-rose-600 dark:text-rose-300">
+              <Badge variant="outline" className="text-[10px] border-danger/30 text-danger-fg">
                 {data.monitoramentosParados} parado{data.monitoramentosParados > 1 ? "s" : ""}
               </Badge>
             ) : undefined
@@ -108,16 +108,16 @@ export default function DashboardProcessual() {
           label="Novas ações pendentes"
           value={data.novasAcoesPendentes}
           icon={FileSearch}
-          iconBg="bg-amber-100 dark:bg-amber-900/30"
-          iconFg="text-amber-600 dark:text-amber-300"
+          iconBg="bg-warning-bg"
+          iconFg="text-warning-fg"
           hint="aguardando triagem"
         />
         <KPICard
           label="Prazos desta semana"
           value={prazos.length}
           icon={CalendarClock}
-          iconBg="bg-emerald-100 dark:bg-emerald-900/30"
-          iconFg="text-emerald-600 dark:text-emerald-300"
+          iconBg="bg-success-bg"
+          iconFg="text-success-fg"
           hint={`${prazos.filter((p) => p.tipo === "audiencia").length} de audiência`}
         />
       </div>
@@ -128,7 +128,7 @@ export default function DashboardProcessual() {
             <CardTitle className="text-sm font-bold">Últimas movimentações</CardTitle>
             <button
               type="button"
-              className="text-xs font-semibold text-violet-700 dark:text-violet-300 hover:underline"
+              className="text-xs font-semibold text-info-fg hover:underline"
               onClick={() => setLocation("/processos")}
             >
               abrir a central →
@@ -147,7 +147,7 @@ export default function DashboardProcessual() {
                       variant="outline"
                       className={`text-[9px] font-bold shrink-0 ${
                         m.relevancia === "relevante"
-                          ? "border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10"
+                          ? "border-warning/30 text-warning-fg bg-warning/10"
                           : "border-transparent bg-muted text-muted-foreground"
                       }`}
                     >
@@ -172,7 +172,7 @@ export default function DashboardProcessual() {
             <CardTitle className="text-sm font-bold">Prazos desta semana</CardTitle>
             <button
               type="button"
-              className="text-xs font-semibold text-violet-700 dark:text-violet-300 hover:underline"
+              className="text-xs font-semibold text-info-fg hover:underline"
               onClick={() => setLocation("/prazos")}
             >
               ver todos →
@@ -193,10 +193,10 @@ export default function DashboardProcessual() {
                       <span
                         className={`h-2 w-2 shrink-0 rounded-full ${
                           p.tipo === "audiencia"
-                            ? "bg-violet-500"
+                            ? "bg-info"
                             : p.prioridade === "alta" || p.prioridade === "critica"
-                              ? "bg-rose-500"
-                              : "bg-amber-500"
+                              ? "bg-danger"
+                              : "bg-warning"
                         }`}
                       />
                       <span className="min-w-0">

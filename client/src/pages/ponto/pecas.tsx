@@ -89,31 +89,31 @@ export const ROTULO_CICLO: Record<SituacaoCiclo, { texto: string; classe: string
   em_dia: { texto: "", classe: "" },
   vence_agora: {
     texto: "avaliar neste mês",
-    classe: "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+    classe: "bg-warning-bg text-warning-fg dark:text-warning",
   },
   vencida: {
     texto: "vencida",
-    classe: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+    classe: "bg-danger-bg text-danger-fg dark:text-danger",
   },
   nunca: {
     texto: "nunca avaliada",
-    classe: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+    classe: "bg-danger-bg text-danger-fg dark:text-danger",
   },
 };
 
 /** Cor da nota. A régua é a mesma dos três blocos pra não ensinar duas leituras. */
 export function corDaNota(n: number): string {
-  if (n < 2) return "bg-rose-500";
-  if (n < 3) return "bg-orange-500";
-  if (n < 4) return "bg-amber-500";
-  return "bg-emerald-500";
+  if (n < 2) return "bg-danger";
+  if (n < 3) return "bg-warning";
+  if (n < 4) return "bg-warning";
+  return "bg-success";
 }
 
 export function textoDaNota(n: number): string {
-  if (n < 2) return "text-rose-600 dark:text-rose-400";
-  if (n < 3) return "text-orange-600 dark:text-orange-400";
-  if (n < 4) return "text-amber-600 dark:text-amber-400";
-  return "text-emerald-600 dark:text-emerald-400";
+  if (n < 2) return "text-danger-fg";
+  if (n < 3) return "text-warning-fg";
+  if (n < 4) return "text-warning-fg";
+  return "text-success-fg";
 }
 
 export function dataCurta(iso: string | null): string {
@@ -144,9 +144,9 @@ export type JornadaComparada = Jornada & {
 };
 
 export const CLASSE_SITUACAO: Record<SituacaoFalta, string> = {
-  abonada: "bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
-  descontada: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
-  aguardando: "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+  abonada: "bg-info-bg text-info-fg dark:text-info",
+  descontada: "bg-danger-bg text-danger-fg dark:text-danger",
+  aguardando: "bg-warning-bg text-warning-fg dark:text-warning",
 };
 
 export const ROTULO_SITUACAO: Record<SituacaoFalta, string> = {
@@ -157,8 +157,8 @@ export const ROTULO_SITUACAO: Record<SituacaoFalta, string> = {
 
 export const CLASSE_TIPO: Record<TipoOcorrencia, string> = {
   falta: "bg-muted text-foreground",
-  advertencia: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
-  elogio: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+  advertencia: "bg-danger-bg text-danger-fg dark:text-danger",
+  elogio: "bg-success-bg text-success-fg dark:text-success",
   observacao: "bg-muted text-muted-foreground",
 };
 
@@ -166,19 +166,19 @@ export const ROTULO_STATUS: Record<StatusDia, { texto: string; classe: string }>
   fechado: { texto: "", classe: "" },
   em_andamento: {
     texto: "trabalhando agora",
-    classe: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+    classe: "bg-success-bg text-success-fg dark:text-success",
   },
   sem_saida: {
     texto: "sem saída",
-    classe: "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+    classe: "bg-warning-bg text-warning-fg dark:text-warning",
   },
   revisar: {
     texto: "revisar",
-    classe: "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+    classe: "bg-warning-bg text-warning-fg dark:text-warning",
   },
   inconsistente: {
     texto: "inconsistente",
-    classe: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+    classe: "bg-danger-bg text-danger-fg dark:text-danger",
   },
   sem_registro: { texto: "", classe: "" },
 };
@@ -224,7 +224,7 @@ export function LinhaJornada({
         {hora(j.entrada)}
         {j.atrasado && (
           <span
-            className="ml-1 rounded bg-amber-100 px-1 py-px text-[9px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+            className="ml-1 rounded bg-warning-bg px-1 py-px text-[9px] font-bold text-warning-fg dark:text-warning"
             title={`${j.atrasoMin} minutos além do horário contratado`}
           >
             +{j.atrasoMin}min
@@ -264,7 +264,7 @@ export function LinhaJornada({
         {j.saldoMin != null && j.saldoMin !== 0 && (
           <span
             className={`ml-1 text-[10px] font-semibold ${
-              j.saldoMin > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+              j.saldoMin > 0 ? "text-success-fg" : "text-danger-fg"
             }`}
             title={`Previsto ${formatarDuracao(j.previstoMin)}`}
           >
@@ -304,7 +304,7 @@ export function LinhaJornada({
           <button
             type="button"
             onClick={() => aoAjustar(j)}
-            className="text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400"
+            className="text-muted-foreground hover:text-info-fg"
             title="Corrigir este dia"
           >
             <Pencil className="h-3.5 w-3.5" />
@@ -364,11 +364,11 @@ export function Avisos({ jornadas }: { jornadas: Jornada[] }) {
   const dias = jornadas.filter((j) => j.avisos.length > 0);
   if (dias.length === 0) return null;
   return (
-    <div className="mt-2 space-y-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-900 dark:bg-amber-950/30">
+    <div className="mt-2 space-y-1 rounded-lg border border-warning/30 bg-warning-bg px-3 py-2 dark:border-warning/30">
       {dias.slice(0, 5).map((j) => (
         <p
           key={j.dia}
-          className="flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-900 dark:text-amber-200"
+          className="flex items-start gap-1.5 text-[11px] leading-relaxed text-warning-fg"
         >
           <TriangleAlert className="mt-px h-3 w-3 shrink-0" />
           <span>
@@ -377,7 +377,7 @@ export function Avisos({ jornadas }: { jornadas: Jornada[] }) {
         </p>
       ))}
       {dias.length > 5 && (
-        <p className="text-[10.5px] text-amber-900/70 dark:text-amber-200/70">
+        <p className="text-[10.5px] text-warning-fg/70">
           + {dias.length - 5} outros dias com observação.
         </p>
       )}
@@ -410,8 +410,8 @@ export function Total({
         <span
           className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold tabular-nums ${
             t.saldoMin >= 0
-              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-              : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+              ? "bg-success-bg text-success-fg dark:text-success"
+              : "bg-danger-bg text-danger-fg dark:text-danger"
           }`}
           title="Realizado menos previsto, só nos dias já fechados"
         >
@@ -420,12 +420,12 @@ export function Total({
         </span>
       )}
       {t.diasAtrasados > 0 && (
-        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+        <span className="rounded-full bg-warning-bg px-2 py-0.5 text-[10.5px] font-semibold text-warning-fg dark:text-warning">
           {t.diasAtrasados} {t.diasAtrasados === 1 ? "atraso" : "atrasos"}
         </span>
       )}
       {t.diasPendentes > 0 && (
-        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+        <span className="rounded-full bg-warning-bg px-2 py-0.5 text-[10.5px] font-semibold text-warning-fg dark:text-warning">
           {t.diasPendentes} {t.diasPendentes === 1 ? "dia pendente" : "dias pendentes"} — fora do total
         </span>
       )}
@@ -783,14 +783,14 @@ export function PainelOcorrencias({
                 href={o.atestadoUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1 text-[10.5px] font-semibold text-violet-600 dark:text-violet-400 hover:underline"
+                className="flex items-center gap-1 text-[10.5px] font-semibold text-info-fg hover:underline"
               >
                 <FileText className="h-3 w-3" />
                 {o.atestadoNome || "atestado"}
               </a>
             )}
             {o.aprovadoEm && (
-              <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+              <span className="rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-semibold text-info-fg dark:text-info">
                 aprovado
               </span>
             )}
@@ -801,7 +801,7 @@ export function PainelOcorrencias({
                   <>
                     <button
                       type="button"
-                      className="flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400"
+                      className="flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-info-fg"
                       disabled={upload.isPending || anexar.isPending}
                       onClick={() => {
                         setAlvo(o.id);
@@ -815,8 +815,8 @@ export function PainelOcorrencias({
                       type="button"
                       className={`flex items-center gap-1 text-[10.5px] ${
                         o.aprovadoEm
-                          ? "text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
-                          : "text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
+                          ? "text-muted-foreground hover:text-danger-fg"
+                          : "text-muted-foreground hover:text-success-fg"
                       }`}
                       disabled={decidir.isPending}
                       title={
@@ -835,7 +835,7 @@ export function PainelOcorrencias({
                 )}
                 <button
                   type="button"
-                  className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
+                  className="text-muted-foreground hover:text-danger-fg"
                   title="Remover"
                   onClick={() => setExcluindo(o)}
                 >
@@ -962,7 +962,7 @@ export function DialogAvaliar({
                     {typeof v === "number" && (
                       <button
                         type="button"
-                        className="text-[10px] text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
+                        className="text-[10px] text-muted-foreground hover:text-danger-fg"
                         onClick={() => setNotas((n) => {
                           const { [c.id]: _, ...resto } = n;
                           return resto;
@@ -982,7 +982,7 @@ export function DialogAvaliar({
                   onChange={(e) =>
                     setNotas((n) => ({ ...n, [c.id]: Number(e.target.value) as number }))
                   }
-                  className="mt-1 w-full accent-violet-600"
+                  className="mt-1 w-full accent-info"
                 />
                 <p className="text-[10.5px] leading-relaxed text-muted-foreground">{c.ajuda}</p>
               </div>
@@ -1005,7 +1005,7 @@ export function DialogAvaliar({
             <Label className="text-xs">Plano combinado</Label>
             <button
               type="button"
-              className="flex items-center gap-1 text-[11px] font-semibold text-violet-600 dark:text-violet-400 hover:underline"
+              className="flex items-center gap-1 text-[11px] font-semibold text-info-fg hover:underline"
               onClick={() => setAcoes((a) => [...a, { descricao: "", prazo: "" }])}
             >
               <Plus className="h-3 w-3" />
@@ -1042,7 +1042,7 @@ export function DialogAvaliar({
                 />
                 <button
                   type="button"
-                  className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
+                  className="text-muted-foreground hover:text-danger-fg"
                   onClick={() => setAcoes((lista) => lista.filter((_, j) => j !== i))}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -1129,7 +1129,7 @@ export function PainelAvaliacao({
         {gestor && (
           <button
             type="button"
-            className="text-[10.5px] text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
+            className="text-[10.5px] text-muted-foreground hover:text-danger-fg"
             onClick={() => setExcluindo(ultima)}
           >
             remover
@@ -1146,7 +1146,7 @@ export function PainelAvaliacao({
         <span className="text-[11px] text-muted-foreground">de {NOTA_MAX},0</span>
         {delta != null && delta !== 0 && (
           <span
-            className={`text-[11px] font-bold tabular-nums ${delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
+            className={`text-[11px] font-bold tabular-nums ${delta > 0 ? "text-success-fg" : "text-danger-fg"}`}
             title={`Ciclo anterior: ${anterior?.media?.toFixed(1).replace(".", ",")}`}
           >
             {delta > 0 ? "+" : "−"}
@@ -1202,7 +1202,7 @@ export function PainelAvaliacao({
                     onClick={() => decidir.mutate({ acaoId: a.id, concluir: !a.concluidoEm })}
                     className={`mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
                       s === "concluida"
-                        ? "border-emerald-600 bg-emerald-600 text-white"
+                        ? "border-success/30 bg-success text-success-on"
                         : "border-muted-foreground/40"
                     } ${gestor ? "cursor-pointer" : "cursor-default"}`}
                     title={gestor ? "Marcar como cumprida" : undefined}
@@ -1215,7 +1215,7 @@ export function PainelAvaliacao({
                     {a.descricao}
                     {a.prazo && (
                       <span
-                        className={`ml-1.5 text-[10px] font-semibold ${s === "atrasada" ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground"}`}
+                        className={`ml-1.5 text-[10px] font-semibold ${s === "atrasada" ? "text-danger-fg" : "text-muted-foreground"}`}
                       >
                         {s === "atrasada" ? "venceu" : "até"} {a.prazo.split("-").reverse().join("/")}
                       </span>
@@ -1232,7 +1232,7 @@ export function PainelAvaliacao({
         <div className="mt-2">
           <button
             type="button"
-            className="text-[10.5px] font-semibold text-violet-600 dark:text-violet-400 hover:underline"
+            className="text-[10.5px] font-semibold text-info-fg hover:underline"
             onClick={() => setVerHistorico((v) => !v)}
           >
             {verHistorico ? "esconder" : `ver histórico (${avaliacoes.length - 1})`}
@@ -1253,7 +1253,7 @@ export function PainelAvaliacao({
                     </span>
                     {d != null && d !== 0 && (
                       <span
-                        className={`text-[10px] font-semibold tabular-nums ${d > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
+                        className={`text-[10px] font-semibold tabular-nums ${d > 0 ? "text-success-fg" : "text-danger-fg"}`}
                       >
                         {d > 0 ? "+" : "−"}
                         {Math.abs(d).toFixed(1).replace(".", ",")}

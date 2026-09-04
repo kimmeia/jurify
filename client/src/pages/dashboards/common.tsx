@@ -60,31 +60,36 @@ export type SetorTema = "comercial" | "operacional" | "financeiro" | "geral";
 
 export const TEMA: Record<SetorTema, { gradient: string; bg: string; accent: string; ring: string }> = {
   comercial: {
-    gradient: "bg-gradient-to-br from-indigo-500 via-violet-500 to-purple-600",
-    bg: "bg-gradient-to-br from-indigo-50/40 dark:from-indigo-950/40 via-white dark:via-slate-900 to-violet-50/30 dark:to-violet-950/20",
-    accent: "text-indigo-600 dark:text-indigo-400",
-    ring: "ring-indigo-200",
+    gradient: "bg-info",
+    bg: "bg-gradient-to-br from-info-bg/40 via-white dark:via-muted to-info-bg/30",
+    accent: "text-info-fg",
+    ring: "ring-info",
   },
   operacional: {
-    gradient: "bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-600",
-    bg: "bg-gradient-to-br from-indigo-50/40 dark:from-indigo-950/40 via-white dark:via-slate-900 to-violet-50/30 dark:to-violet-950/20",
-    accent: "text-indigo-600 dark:text-indigo-400",
-    ring: "ring-indigo-200",
+    gradient: "bg-info",
+    bg: "bg-gradient-to-br from-info-bg/40 via-white dark:via-muted to-info-bg/30",
+    accent: "text-info-fg",
+    ring: "ring-info",
   },
   financeiro: {
-    gradient: "bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500",
-    bg: "bg-gradient-to-br from-emerald-50/40 dark:from-emerald-950/40 via-white dark:via-slate-900 to-teal-50/30 dark:to-teal-950/20",
-    accent: "text-emerald-600 dark:text-emerald-400",
-    ring: "ring-emerald-200",
+    gradient: "bg-success",
+    bg: "bg-gradient-to-br from-success-bg/40 via-white dark:via-muted to-success-bg/30",
+    accent: "text-success-fg",
+    ring: "ring-success",
   },
   geral: {
-    // Tom "executivo" — slate escuro com toque de blue/indigo. Visualmente
-    // mais sóbrio que os painéis setoriais (que são coloridos/temáticos).
-    // Sinaliza "visão consolidada" pra Dono/Admin.
-    gradient: "bg-gradient-to-br from-slate-800 via-slate-700 to-indigo-700",
-    bg: "bg-gradient-to-br from-slate-50/40 dark:from-slate-900 via-white dark:via-slate-900 to-blue-50/20 dark:to-blue-950/20",
-    accent: "text-slate-700 dark:text-slate-200",
-    ring: "ring-slate-200",
+    // Tom "executivo" — navy → grafite. Visualmente mais sóbrio que os painéis
+    // setoriais (que são coloridos/temáticos). Sinaliza "visão consolidada"
+    // pra Dono/Admin.
+    //
+    // Era `from-muted via-muted to-info`: no tema claro `--muted` é quase
+    // branco, então a metade de cima do card ficava branco sobre branco
+    // (1,13:1 medido). `--hero`/`--hero-2` é a MESMA faixa do cabeçalho da
+    // ficha do cliente e é escura nos dois temas — a tinta clara serve sempre.
+    gradient: "faixa-hero fundo-hero",
+    bg: "bg-gradient-to-br from-muted/40 via-white dark:via-muted to-info-bg/20",
+    accent: "text-foreground",
+    ring: "ring-border",
   },
 };
 
@@ -99,14 +104,14 @@ export function gerarIniciais(nome: string): string {
 }
 
 const GRADIENT_AVATARES = [
-  "from-indigo-500 to-purple-600",
-  "from-emerald-500 to-teal-600",
-  "from-pink-500 to-rose-500",
-  "from-amber-500 to-orange-600",
-  "from-cyan-500 to-blue-600",
-  "from-violet-500 to-fuchsia-600",
-  "from-slate-500 to-slate-700",
-  "from-lime-500 to-emerald-600",
+  "from-info to-info",
+  "from-success to-success",
+  "from-danger to-danger",
+  "from-warning to-warning",
+  "from-info to-info",
+  "from-info to-danger",
+  "from-muted to-muted",
+  "from-success to-success",
 ];
 
 /** Hash determinístico do nome → gradient consistente entre re-renders. */
@@ -132,8 +137,8 @@ export function Avatar({ nome, size = "md" }: { nome: string; size?: "sm" | "md"
 export function PulseDot() {
   return (
     <span className="relative inline-flex items-center justify-center w-1.5 h-1.5 mr-1">
-      <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75 animate-ping" />
-      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+      <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-75 animate-ping" />
+      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success" />
     </span>
   );
 }
@@ -230,7 +235,7 @@ export function HeroCard({
 }) {
   const t = TEMA[tema];
   return (
-    <div className={`relative overflow-hidden rounded-lg ${t.gradient} p-7 text-white shadow-lg`}>
+    <div className={`relative overflow-hidden rounded-lg ${t.gradient} p-7 text-hero-fg shadow-lg`}>
       {DecoIcon && (
         <DecoIcon className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" />
       )}
@@ -271,7 +276,7 @@ export function HeroCard({
                 <div className="h-2 bg-white/15 rounded-full overflow-hidden">
                   <div
                     style={{ width: `${Math.max(0, Math.min(100, progresso.valor))}%` }}
-                    className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-emerald-200 to-white dark:to-slate-900"
+                    className="h-full rounded-full bg-gradient-to-r from-success via-success-bg to-white dark:to-muted"
                   />
                 </div>
               </div>
@@ -308,8 +313,8 @@ export function VariacaoBadge({
   const positivo = delta > 0;
   const neutro = delta === 0;
   if (noHero) {
-    const baseUp = "bg-emerald-400/25 text-emerald-50 border border-emerald-300/30";
-    const baseDown = "bg-rose-400/30 text-rose-50 border border-rose-300/40";
+    const baseUp = "bg-success/25 text-success-fg border border-success/30";
+    const baseDown = "bg-danger/30 text-danger-fg border border-danger/30";
     const baseNeutro = "bg-white/15 text-white border border-white/20";
     return (
       <span
@@ -327,7 +332,7 @@ export function VariacaoBadge({
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
-        neutro ? "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300" : positivo ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+        neutro ? "bg-muted text-muted-foreground" : positivo ? "bg-success-bg text-success-fg" : "bg-danger-bg text-danger-fg"
       }`}
     >
       {positivo ? <TrendingUp className="w-3 h-3" /> : !neutro ? <TrendingDown className="w-3 h-3" /> : null}
@@ -344,9 +349,9 @@ export function KPICard({
   label,
   value,
   icon: Icon,
-  iconBg = "bg-slate-100 dark:bg-slate-800/60",
-  iconFg = "text-slate-600 dark:text-slate-300",
-  valueColor = "text-slate-900 dark:text-slate-100",
+  iconBg = "bg-muted",
+  iconFg = "text-muted-foreground",
+  valueColor = "text-foreground",
   badge,
   hint,
 }: {
@@ -360,7 +365,7 @@ export function KPICard({
   hint?: ReactNode;
 }) {
   return (
-    <Card className="border-slate-200 dark:border-slate-700/80">
+    <Card className="border-border">
       <CardContent className="pt-5 pb-5">
         <div className="flex items-start justify-between mb-3">
           {Icon && (
@@ -392,11 +397,11 @@ export function AvisoBanner({
   acao?: ReactNode;
 }) {
   return (
-    <div className="rounded-md border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 p-4 flex flex-wrap items-start gap-3">
-      <Info className="w-4 h-4 text-amber-700 dark:text-amber-300 mt-0.5 shrink-0" />
+    <div className="rounded-md border border-warning/30 bg-warning-bg p-4 flex flex-wrap items-start gap-3">
+      <Info className="w-4 h-4 text-warning-fg mt-0.5 shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{titulo}</p>
-        <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">{descricao}</p>
+        <p className="text-sm font-medium text-warning-fg">{titulo}</p>
+        <p className="text-xs text-warning-fg mt-1">{descricao}</p>
       </div>
       {acao}
     </div>
@@ -466,35 +471,35 @@ export function AcaoCard({
       onClick={onClick}
       className={`flex items-center gap-3 rounded-md border px-3.5 py-3 text-left transition-colors ${
         critico
-          ? "border-rose-200 bg-rose-50 hover:bg-rose-100/70 dark:border-rose-900 dark:bg-rose-950/30 dark:hover:bg-rose-950/50"
+          ? "border-danger/30 bg-danger-bg hover:bg-danger-bg/70 dark:bg-danger/30"
           : "bg-card hover:bg-accent"
       }`}
     >
       <span
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-          critico ? "bg-rose-100 dark:bg-rose-900/50" : "bg-muted"
+          critico ? "bg-danger-bg" : "bg-muted"
         }`}
       >
-        <Icone className={`h-4 w-4 ${critico ? "text-rose-700 dark:text-rose-300" : "text-muted-foreground"}`} />
+        <Icone className={`h-4 w-4 ${critico ? "text-danger-fg" : "text-muted-foreground"}`} />
       </span>
       <span className="min-w-0">
         <span
           className={`block text-[19px] font-bold leading-none tabular-nums ${
-            critico ? "text-rose-700 dark:text-rose-300" : ""
+            critico ? "text-danger-fg" : ""
           }`}
         >
           {valor}
         </span>
         <span
           className={`mt-1 block text-[11.5px] leading-tight ${
-            critico ? "text-rose-800/80 dark:text-rose-200/80" : "text-muted-foreground"
+            critico ? "text-danger-fg/80" : "text-muted-foreground"
           }`}
         >
           {label}
         </span>
       </span>
       <ArrowRight
-        className={`ml-auto h-3.5 w-3.5 shrink-0 ${critico ? "text-rose-500" : "text-muted-foreground/50"}`}
+        className={`ml-auto h-3.5 w-3.5 shrink-0 ${critico ? "text-danger" : "text-muted-foreground/50"}`}
       />
     </button>
   );
@@ -527,7 +532,7 @@ export function SubNumero({
       </p>
       <p
         className={`mt-1 text-[19px] font-bold tracking-tight tabular-nums ${
-          ruim ? "text-rose-700 dark:text-rose-400" : ""
+          ruim ? "text-danger-fg" : ""
         }`}
       >
         {valor}
@@ -622,7 +627,7 @@ export function ListaCard({
         {acaoLabel && (
           <button
             onClick={onAcao}
-            className="flex shrink-0 items-center gap-1 pt-0.5 text-[11.5px] font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400"
+            className="flex shrink-0 items-center gap-1 pt-0.5 text-[11.5px] font-semibold text-info-fg hover:text-info-fg"
           >
             {acaoLabel}
             <ArrowRight className="h-3 w-3" />
@@ -676,7 +681,7 @@ export function FaixaSemana({
             onClick={() => onDia?.(d.data)}
             title={d.total > 0 ? `${d.total} na agenda` : "Nada marcado"}
             className={`flex flex-col items-center gap-1 rounded-md py-1.5 transition-colors ${
-              aberto ? "bg-violet-600 text-white" : "hover:bg-accent"
+              aberto ? "bg-info text-info-on" : "hover:bg-accent"
             }`}
           >
             <span
@@ -805,8 +810,8 @@ export function Selo({
   tom?: "ok" | "ruim" | "neutro";
 }) {
   const tons = {
-    ok: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
-    ruim: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300",
+    ok: "border-success/30 bg-success-bg text-success-fg",
+    ruim: "border-danger/30 bg-danger-bg text-danger-fg",
     neutro: "border-border bg-muted text-muted-foreground",
   };
   return (
@@ -872,9 +877,9 @@ export function LinhaRanking({
   const corPercentual = semReferencia
     ? "text-muted-foreground"
     : ruim
-      ? "text-rose-600 dark:text-rose-400"
+      ? "text-danger-fg"
       : percentual >= 100
-        ? "text-emerald-600 dark:text-emerald-400"
+        ? "text-success-fg"
         : "";
   return (
     <button
@@ -947,7 +952,7 @@ export function LinhaValor({
         <span className="mt-0.5 block truncate text-[10.5px] text-muted-foreground">{detalhe}</span>
       </span>
       <span className="shrink-0 text-right">
-        <span className="block text-[13.5px] font-bold tabular-nums text-rose-700 dark:text-rose-400">
+        <span className="block text-[13.5px] font-bold tabular-nums text-danger-fg">
           {valor}
         </span>
         {rodapeValor && (
@@ -978,7 +983,7 @@ export function LinhaNumero({
       </span>
       <span
         className={`shrink-0 text-[18px] font-bold tabular-nums ${
-          ruim ? "text-rose-700 dark:text-rose-400" : ""
+          ruim ? "text-danger-fg" : ""
         }`}
       >
         {valor}

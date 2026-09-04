@@ -39,9 +39,9 @@ export function AIRail({
   if (modo === "panel" && contatoId) {
     return (
       <div className="border-l bg-card flex flex-col w-[340px] max-w-[340px]">
-        <div className="flex items-center justify-between px-3 py-2 border-b bg-gradient-to-r from-violet-50/40 dark:from-violet-950/40 to-indigo-50/40 dark:to-indigo-950/20">
+        <div className="flex items-center justify-between px-3 py-2 border-b bg-info-bg/40">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-info flex items-center justify-center">
               <Sparkles className="h-3.5 w-3.5 text-white" />
             </div>
             <div>
@@ -74,12 +74,12 @@ export function AIRail({
 
   // RAIL colapsado
   return (
-    <div className="border-l bg-gradient-to-b from-violet-50/30 dark:from-violet-950/40 via-background to-background flex flex-col items-center py-3 w-[64px]">
+    <div className="border-l bg-gradient-to-b from-info-bg/30 via-background to-background flex flex-col items-center py-3 w-[64px]">
       <button
         onClick={() => contatoId && setModo("panel")}
         disabled={!contatoId}
         className={
-          "w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-sm hover:shadow-md transition mb-3 relative " +
+          "w-10 h-10 rounded-xl bg-info flex items-center justify-center shadow-sm hover:shadow-md transition mb-3 relative " +
           (!contatoId ? "opacity-40 cursor-not-allowed" : "cursor-pointer")
         }
         title="Abrir Customer 360°"
@@ -98,22 +98,22 @@ export function AIRail({
           className={
             "relative w-10 h-10 rounded-xl border flex items-center justify-center mb-2 transition disabled:opacity-50 " +
             (bot.pausado
-              ? "bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200"
-              : "bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-200")
+              ? "bg-warning-bg border-warning/30 text-warning-fg hover:bg-warning-bg dark:border-warning/30"
+              : "bg-success-bg border-success/30 text-success-fg hover:bg-success-bg dark:border-success/30")
           }
         >
           <Bot className="h-4 w-4" />
           <span
             className={
               "absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card " +
-              (bot.pausado ? "bg-amber-500" : "bg-emerald-500")
+              (bot.pausado ? "bg-warning" : "bg-success")
             }
           />
         </button>
       )}
 
       <RailButton
-        icon={<ScrollText className="h-4 w-4 text-violet-600 dark:text-violet-400" />}
+        icon={<ScrollText className="h-4 w-4 text-info-fg" />}
         label="Linha do tempo"
         onClick={onAbrirLinhaTempo}
         disabled={!contatoId}
@@ -149,7 +149,7 @@ function RailButton({
         "w-10 h-10 rounded-xl bg-card border border-border flex items-center justify-center mb-2 transition " +
         (disabled
           ? "opacity-40 cursor-not-allowed"
-          : "hover:border-violet-300 hover:bg-violet-50/40 dark:hover:bg-violet-950/30 cursor-pointer")
+          : "hover:border-info/30 hover:bg-info-bg/40 cursor-pointer")
       }
       title={label}
     >
@@ -167,20 +167,20 @@ function RiskMiniGauge({ conversaId }: { conversaId: number }) {
   if (!data) return null;
   const corBg =
     data.nivel === "saudavel"
-      ? "from-emerald-50 dark:from-emerald-950/40 to-emerald-100 dark:to-emerald-950/20 border-emerald-200 dark:border-emerald-800/50"
+      ? "from-success-bg to-success-bg border-success/30"
       : data.nivel === "atenção"
-        ? "from-amber-50 dark:from-amber-950/40 to-amber-100 dark:to-amber-950/20 border-amber-200 dark:border-amber-800/50"
+        ? "from-warning-bg to-warning-bg border-warning/30"
         : data.nivel === "risco"
-          ? "from-orange-50 dark:from-orange-950/40 to-orange-100 dark:to-orange-950/20 border-orange-200 dark:border-orange-800/50"
-          : "from-rose-50 dark:from-rose-950/40 to-rose-100 dark:to-rose-950/20 border-rose-200 dark:border-rose-800/50";
+          ? "from-warning-bg to-warning-bg border-warning/30"
+          : "from-danger-bg to-danger-bg border-danger/30";
   const corText =
     data.nivel === "saudavel"
-      ? "text-emerald-700 dark:text-emerald-300"
+      ? "text-success-fg"
       : data.nivel === "atenção"
-        ? "text-amber-700 dark:text-amber-300"
+        ? "text-warning-fg"
         : data.nivel === "risco"
-          ? "text-orange-700 dark:text-orange-300"
-          : "text-rose-700 dark:text-rose-300";
+          ? "text-warning-fg"
+          : "text-danger-fg";
 
   return (
     <div className="flex flex-col items-center gap-1" title={data.sinais.length ? data.sinais.join(" · ") : "Cliente saudável"}>
@@ -189,7 +189,7 @@ function RiskMiniGauge({ conversaId }: { conversaId: number }) {
         <span className={"text-[11px] font-black " + corText}>{data.score}</span>
       </div>
       {data.sinais.length > 0 && (
-        <Heart className="h-3 w-3 text-rose-500 mt-1" />
+        <Heart className="h-3 w-3 text-danger mt-1" />
       )}
     </div>
   );

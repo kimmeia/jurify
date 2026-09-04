@@ -154,8 +154,8 @@ export default function DashboardComercial() {
                 <span
                   className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-bold ${
                     noRitmo
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
-                      : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+                      ? "border-success/30 bg-success-bg text-success-fg"
+                      : "border-danger/30 bg-danger-bg text-danger-fg"
                   }`}
                 >
                   {noRitmo ? "Acima do ritmo do mês" : "Abaixo do ritmo do mês"}
@@ -261,7 +261,7 @@ export default function DashboardComercial() {
                     {fechados} fechados · {pagos} pagos
                   </span>
                   {emAtencao > 0 && (
-                    <span className="font-semibold text-rose-600 dark:text-rose-400">
+                    <span className="font-semibold text-danger-fg">
                       {emAtencao} abaixo de {PISO_ATENCAO}%
                     </span>
                   )}

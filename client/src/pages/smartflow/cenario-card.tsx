@@ -38,45 +38,45 @@ function visualPorGatilho(gatilho: GatilhoSmartflow): {
     case "whatsapp_mensagem":
     case "mensagem_canal":
       return {
-        borderClass: "border-l-blue-500",
-        avatarGradient: "from-blue-500 to-cyan-500",
+        borderClass: "border-l-info",
+        avatarGradient: "from-info to-info",
         Icon: MessageCircle,
-        badgeCor: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+        badgeCor: "bg-info-bg text-info-fg dark:text-info",
       };
     case "pagamento_recebido":
       return {
-        borderClass: "border-l-emerald-500",
-        avatarGradient: "from-emerald-500 to-teal-600",
+        borderClass: "border-l-success",
+        avatarGradient: "from-success to-success",
         Icon: DollarSign,
-        badgeCor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+        badgeCor: "bg-success-bg text-success-fg dark:text-success",
       };
     case "pagamento_vencido":
       return {
-        borderClass: "border-l-emerald-500",
-        avatarGradient: "from-amber-500 to-red-500",
+        borderClass: "border-l-success",
+        avatarGradient: "from-warning to-danger",
         Icon: AlertTriangle,
-        badgeCor: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+        badgeCor: "bg-warning-bg text-warning-fg dark:text-warning",
       };
     case "pagamento_proximo_vencimento":
       return {
-        borderClass: "border-l-emerald-500",
-        avatarGradient: "from-amber-400 to-orange-500",
+        borderClass: "border-l-success",
+        avatarGradient: "from-warning to-warning",
         Icon: Clock,
-        badgeCor: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+        badgeCor: "bg-warning-bg text-warning-fg dark:text-warning",
       };
     case "novo_lead":
       return {
-        borderClass: "border-l-violet-500",
-        avatarGradient: "from-violet-500 to-pink-500",
+        borderClass: "border-l-info",
+        avatarGradient: "from-info to-danger",
         Icon: Users,
-        badgeCor: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+        badgeCor: "bg-info-bg text-info-fg dark:text-info",
       };
     case "manual":
       return {
-        borderClass: "border-l-slate-500",
-        avatarGradient: "from-slate-600 to-slate-800",
+        borderClass: "border-l-muted-foreground/40",
+        avatarGradient: "from-muted to-muted",
         Icon: Play,
-        badgeCor: "bg-slate-100 text-slate-700 dark:bg-slate-900/60 dark:text-slate-300",
+        badgeCor: "bg-muted text-foreground dark:text-muted-foreground/70",
       };
   }
 }
@@ -161,12 +161,12 @@ export function CenarioCard({
           {cenario.qtdPassos} {cenario.qtdPassos === 1 ? "passo" : "passos"}
         </span>
         {cenario.resumoGatilho && (
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-info-bg text-info-fg dark:text-info">
             {cenario.resumoGatilho}
           </span>
         )}
         {!cenario.ativo && (
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-400">
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground dark:text-muted-foreground/70">
             Inativo
           </span>
         )}
@@ -180,7 +180,7 @@ export function CenarioCard({
           </div>
         )}
         {cenario.taxaSucessoPct !== undefined && cenario.execucoes7d !== undefined && cenario.execucoes7d > 0 && (
-          <div className="flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
+          <div className="flex items-center gap-1 text-success-fg">
             <CheckCircle2 className="h-3 w-3" />
             <span>{cenario.taxaSucessoPct}%</span>
           </div>
@@ -191,7 +191,7 @@ export function CenarioCard({
         {isManual && cenario.ativo && onExecutar ? (
           <Button
             size="sm"
-            className="flex-1 text-[11px] h-7 bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+            className="flex-1 text-[11px] h-7 bg-success"
             onClick={() => onExecutar(cenario.id)}
             disabled={executarPending}
             title="Executar este cenário agora"
@@ -207,7 +207,7 @@ export function CenarioCard({
           <Button
             asChild
             size="sm"
-            className="flex-1 text-[11px] h-7 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+            className="flex-1 text-[11px] h-7 bg-info"
           >
             <Link href={`/smartflow/${cenario.id}/editar`}>
               <Edit className="h-3 w-3 mr-1" />
@@ -255,10 +255,10 @@ export function CenarioCard({
 
 export function legendaCoresGatilho(): Array<{ cor: string; label: string }> {
   return [
-    { cor: "bg-blue-500", label: "Mensagem (WhatsApp · Instagram · Facebook)" },
-    { cor: "bg-emerald-500", label: "Asaas (recebido · vencido · próximo)" },
-    { cor: "bg-violet-500", label: "CRM (novo lead)" },
-    { cor: "bg-slate-500", label: "Manual" },
+    { cor: "bg-info", label: "Mensagem (WhatsApp · Instagram · Facebook)" },
+    { cor: "bg-success", label: "Asaas (recebido · vencido · próximo)" },
+    { cor: "bg-info", label: "CRM (novo lead)" },
+    { cor: "bg-muted-foreground/50", label: "Manual" },
   ];
 }
 

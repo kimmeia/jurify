@@ -273,7 +273,7 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileUp className="h-5 w-5" /> Importar processos da Advbox
@@ -287,7 +287,7 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
         {/* Etapa 1: Upload */}
         {etapa === "upload" && (
           <div className="space-y-4">
-            <label className="block border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/30 transition-colors">
+            <label className="block border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-info/30 hover:bg-info-bg/40 transition-colors">
               <input
                 type="file"
                 accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -298,7 +298,7 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                 }}
                 disabled={previewMut.isPending}
               />
-              <FileSpreadsheet className="h-10 w-10 mx-auto text-slate-400 mb-2" />
+              <FileSpreadsheet className="h-10 w-10 mx-auto text-muted-foreground/70 mb-2" />
               <p className="text-sm font-medium">Clique pra escolher o arquivo .xlsx</p>
               <p className="text-xs text-muted-foreground mt-1">Máximo 10MB.</p>
             </label>
@@ -313,8 +313,8 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
         {/* Etapa 2: Preview */}
         {etapa === "preview" && preview && (
           <div className="space-y-4">
-            <div className="bg-slate-50 dark:bg-slate-900/70 border rounded-lg p-3 flex items-center gap-3">
-              <FileSpreadsheet className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+            <div className="bg-muted border rounded-lg p-3 flex items-center gap-3">
+              <FileSpreadsheet className="h-5 w-5 text-muted-foreground" />
               <div className="flex-1">
                 <p className="text-sm font-medium">{nomeArquivo}</p>
                 <p className="text-xs text-muted-foreground">
@@ -327,34 +327,34 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-center">
-              <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded p-3">
-                <p className="text-[10px] text-emerald-700 dark:text-emerald-300 uppercase font-semibold">Novos</p>
-                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{preview.resumo.novos}</p>
+              <div className="bg-success-bg border border-success/30 rounded p-3">
+                <p className="text-[10px] text-success-fg uppercase font-semibold">Novos</p>
+                <p className="text-2xl font-bold text-success-fg tabular-nums">{preview.resumo.novos}</p>
               </div>
-              <div className="bg-slate-50 dark:bg-slate-900/70 border rounded p-3">
-                <p className="text-[10px] text-slate-700 dark:text-slate-200 uppercase font-semibold">Já existem</p>
-                <p className="text-2xl font-bold text-slate-700 dark:text-slate-200 tabular-nums">{preview.resumo.jaExistem}</p>
+              <div className="bg-muted border rounded p-3">
+                <p className="text-[10px] text-foreground uppercase font-semibold">Já existem</p>
+                <p className="text-2xl font-bold text-foreground tabular-nums">{preview.resumo.jaExistem}</p>
               </div>
               <div
-                className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/50 rounded p-3"
+                className="bg-warning-bg border border-warning/30 rounded p-3"
                 title="CNJ já cadastrado no escritório vinculado a OUTRO cliente — pulados pra evitar duplicata acidental."
               >
-                <p className="text-[10px] text-orange-700 dark:text-orange-300 uppercase font-semibold">Outro cliente</p>
-                <p className="text-2xl font-bold text-orange-700 dark:text-orange-300 tabular-nums">{preview.resumo.cnjEmOutroCliente}</p>
+                <p className="text-[10px] text-warning-fg uppercase font-semibold">Outro cliente</p>
+                <p className="text-2xl font-bold text-warning-fg tabular-nums">{preview.resumo.cnjEmOutroCliente}</p>
               </div>
-              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded p-3">
-                <p className="text-[10px] text-amber-700 dark:text-amber-300 uppercase font-semibold">Sem cliente</p>
-                <p className="text-2xl font-bold text-amber-700 dark:text-amber-300 tabular-nums">{preview.resumo.semCliente}</p>
+              <div className="bg-warning-bg border border-warning/30 rounded p-3">
+                <p className="text-[10px] text-warning-fg uppercase font-semibold">Sem cliente</p>
+                <p className="text-2xl font-bold text-warning-fg tabular-nums">{preview.resumo.semCliente}</p>
               </div>
-              <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/50 rounded p-3">
-                <p className="text-[10px] text-rose-700 dark:text-rose-300 uppercase font-semibold">CNJ inválido</p>
-                <p className="text-2xl font-bold text-rose-700 dark:text-rose-300 tabular-nums">{preview.resumo.semCnjOuInvalido}</p>
+              <div className="bg-danger-bg border border-danger/30 rounded p-3">
+                <p className="text-[10px] text-danger-fg uppercase font-semibold">CNJ inválido</p>
+                <p className="text-2xl font-bold text-danger-fg tabular-nums">{preview.resumo.semCnjOuInvalido}</p>
               </div>
             </div>
 
             <ScrollArea className="h-64 border rounded">
               <table className="w-full text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-900/70 sticky top-0">
+                <thead className="bg-muted sticky top-0">
                   <tr className="border-b">
                     <th className="text-left p-2 font-semibold">#</th>
                     <th className="text-left p-2 font-semibold">Cliente</th>
@@ -378,18 +378,18 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                       <td className="p-2">{l.tribunal ?? "—"}</td>
                       <td className="p-2 text-right tabular-nums">{formatBRLCentavos(l.valorCausaCentavos)}</td>
                       <td className="p-2">
-                        {l.status === "novo" && <Badge className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50">Novo</Badge>}
+                        {l.status === "novo" && <Badge className="bg-success-bg text-success-fg border-success/30">Novo</Badge>}
                         {l.status === "ja_existe_processo" && <Badge variant="secondary">Já existe</Badge>}
                         {l.status === "cnj_em_outro_cliente" && (
                           <Badge
-                            className="bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800/50"
+                            className="bg-warning-bg text-warning-fg border-warning/30"
                             title={`Vinculado a ${l.cnjEmOutrosContatos.map((c) => c.contatoNome).join(", ")}`}
                           >
                             Outro cliente
                           </Badge>
                         )}
-                        {l.status === "sem_cliente" && <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50">Sem cliente</Badge>}
-                        {l.status === "sem_cnj_invalido" && <Badge className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/50">CNJ inválido</Badge>}
+                        {l.status === "sem_cliente" && <Badge className="bg-warning-bg text-warning-fg border-warning/30">Sem cliente</Badge>}
+                        {l.status === "sem_cnj_invalido" && <Badge className="bg-danger-bg text-danger-fg border-danger/30">CNJ inválido</Badge>}
                       </td>
                     </tr>
                   ))}
@@ -401,10 +401,10 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                 (via cofre + credencial OU consulta pública sem credencial). */}
             {(Object.keys(preview.resumo.monitoraveisPorSistema).length > 0 ||
               preview.resumo.monitoraveisConsultaPublica > 0) && (
-              <div className="border-2 border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/40 dark:bg-indigo-950/30 rounded-lg p-3 space-y-3">
+              <div className="border-2 border-info/30 bg-info-bg/40 rounded-lg p-3 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-2">
-                    <Radar className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mt-0.5 shrink-0" />
+                    <Radar className="h-4 w-4 text-info-fg mt-0.5 shrink-0" />
                     <div>
                       <Label htmlFor="ativar-mon" className="text-sm font-semibold cursor-pointer">
                         Ativar monitoramento automático
@@ -427,7 +427,7 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                 {ativarMonitor && (
                   <div className="space-y-2">
                     {preview.resumo.monitoraveisConsultaPublica > 0 && (
-                      <div className="text-xs bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded p-2">
+                      <div className="text-xs bg-success-bg border border-success/30 rounded p-2">
                         <strong className="tabular-nums">
                           {preview.resumo.monitoraveisConsultaPublica}
                         </strong>{" "}
@@ -440,7 +440,7 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                       <>
                         <Label className="text-xs">Credencial OAB (PJe-TJ)</Label>
                         {credsAtivas.length === 0 ? (
-                          <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded p-2">
+                          <p className="text-xs text-warning-fg bg-warning-bg border border-warning/30 rounded p-2">
                             Nenhuma credencial ativa. Cadastre uma em{" "}
                             <a href="/processos?tab=cofre" className="underline">Cofre</a>{" "}
                             pra monitorar os PJe-TJ. Os de consulta pública (TRF-5) vão
@@ -475,12 +475,12 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                       if (total === 0) return null;
                       const custo = total * CUSTO_MONITORAMENTO_MES;
                       return (
-                        <div className="text-xs bg-white dark:bg-card border rounded p-2 space-y-1">
+                        <div className="text-xs bg-card border rounded p-2 space-y-1">
                           <p>
                             Total: <strong className="tabular-nums">{total}</strong> processo(s) vão
                             monitorar. Os demais ficam como vínculo (sem poll).
                           </p>
-                          <p className="text-indigo-700 dark:text-indigo-300 font-medium">
+                          <p className="text-info-fg font-medium">
                             Custo estimado: <span className="tabular-nums">{custo}</span> créditos
                             (1ª mensalidade).
                           </p>
@@ -503,7 +503,7 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
         {etapa === "running" && (
           <div className="space-y-4 py-8">
             <div className="flex items-center justify-center gap-2 text-sm">
-              <Loader2 className="h-5 w-5 animate-spin text-indigo-600 dark:text-indigo-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-info-fg" />
               <span>Importando lote {progresso.atual} de {progresso.total}…</span>
             </div>
             <Progress value={(progresso.atual / Math.max(1, progresso.total)) * 100} />
@@ -516,7 +516,7 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
         {/* Etapa 4: Resultado */}
         {etapa === "done" && resultado && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+            <div className="flex items-center gap-2 text-success-fg">
               <CheckCircle2 className="h-5 w-5" />
               <p className="font-semibold">Importação finalizada</p>
             </div>
@@ -543,31 +543,31 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
               resultado.monitoramentosJaExistiam > 0 ||
               resultado.monitoramentosNaoElegiveis > 0 ||
               resultado.monitoramentosLimitePlano > 0) && (
-              <div className="border-2 border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/40 dark:bg-indigo-950/30 rounded-lg p-3">
-                <p className="flex items-center gap-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300 mb-2">
+              <div className="border-2 border-info/30 bg-info-bg/40 rounded-lg p-3">
+                <p className="flex items-center gap-2 text-sm font-semibold text-info-fg mb-2">
                   <Radar className="h-4 w-4" />
                   Monitoramento
                 </p>
                 <div className={`grid gap-2 text-xs ${resultado.monitoramentosLimitePlano > 0 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
-                  <div className="bg-white dark:bg-card border rounded p-2">
+                  <div className="bg-card border rounded p-2">
                     <p className="text-[10px] text-muted-foreground uppercase">Ativados</p>
-                    <p className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{resultado.monitoramentosCriados}</p>
+                    <p className="text-lg font-bold tabular-nums text-success-fg">{resultado.monitoramentosCriados}</p>
                   </div>
-                  <div className="bg-white dark:bg-card border rounded p-2">
+                  <div className="bg-card border rounded p-2">
                     <p className="text-[10px] text-muted-foreground uppercase">Já ativos</p>
                     <p className="text-lg font-bold tabular-nums">{resultado.monitoramentosJaExistiam}</p>
                   </div>
-                  <div className="bg-white dark:bg-card border rounded p-2">
+                  <div className="bg-card border rounded p-2">
                     <p className="text-[10px] text-muted-foreground uppercase">Não elegíveis</p>
-                    <p className="text-lg font-bold tabular-nums text-amber-700 dark:text-amber-300">{resultado.monitoramentosNaoElegiveis}</p>
+                    <p className="text-lg font-bold tabular-nums text-warning-fg">{resultado.monitoramentosNaoElegiveis}</p>
                   </div>
                   {resultado.monitoramentosLimitePlano > 0 && (
                     <div
-                      className="bg-white dark:bg-card border rounded p-2"
+                      className="bg-card border rounded p-2"
                       title="Passaram do teto de processos vigiados do plano: ficaram só como vínculo, sem monitor e sem cobrança."
                     >
                       <p className="text-[10px] text-muted-foreground uppercase">Fora do limite do plano</p>
-                      <p className="text-lg font-bold tabular-nums text-rose-700 dark:text-rose-300">{resultado.monitoramentosLimitePlano}</p>
+                      <p className="text-lg font-bold tabular-nums text-danger-fg">{resultado.monitoramentosLimitePlano}</p>
                     </div>
                   )}
                 </div>
@@ -579,15 +579,15 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
               </div>
             )}
             {resultado.erros.length > 0 && (
-              <div className="border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 rounded p-3">
-                <p className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-200">
+              <div className="border border-warning/30 bg-warning-bg rounded p-3">
+                <p className="flex items-center gap-2 text-sm font-semibold text-warning-fg">
                   <AlertTriangle className="h-4 w-4" />
                   {resultado.erros.length} linha(s) com erro
                 </p>
                 <ScrollArea className="h-32 mt-2">
                   <ul className="text-xs space-y-1">
                     {resultado.erros.map((e, i) => (
-                      <li key={i} className="text-amber-900 dark:text-amber-200">
+                      <li key={i} className="text-warning-fg">
                         Linha {e.linhaNum}: {e.motivo}
                       </li>
                     ))}

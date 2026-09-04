@@ -5,7 +5,7 @@ export default function Tributario() {
   return (
     <CalculoPlaceholder
       title="Tributário"
-      icon={<Receipt className="h-8 w-8 text-purple-600 dark:text-purple-400" />}
+      icon={<Receipt className="h-8 w-8 text-info-fg" />}
     />
   );
 }

@@ -37,11 +37,11 @@ import { CENTROS_UF, PATHS_UF, VIEWBOX_BRASIL } from "./mapa-brasil";
  */
 const FAIXAS: Array<{ ate: number; preenche: string; texto: string }> = [
   { ate: 0, preenche: "var(--muted)", texto: "var(--muted-foreground)" },
-  { ate: 4, preenche: "#ede9fe", texto: "#6d28d9" },
-  { ate: 9, preenche: "#ddd6fe", texto: "#5b21b6" },
-  { ate: 19, preenche: "#c4b5fd", texto: "#4c1d95" },
-  { ate: 49, preenche: "#a78bfa", texto: "#2e1065" },
-  { ate: Infinity, preenche: "#7c3aed", texto: "#ffffff" },
+  { ate: 4, preenche: "#e7edf4", texto: "#1e3a5f" },
+  { ate: 9, preenche: "#c6d3e2", texto: "#1e3a5f" },
+  { ate: 19, preenche: "#9ab2cc", texto: "#16304f" },
+  { ate: 49, preenche: "#5b7fa6", texto: "#ffffff" },
+  { ate: Infinity, preenche: "#1e3a5f", texto: "#ffffff" },
 ];
 
 function faixaDe(n: number) {
@@ -49,10 +49,10 @@ function faixaDe(n: number) {
 }
 
 const CORES_BARRA = [
-  "bg-violet-200 dark:bg-violet-900",
-  "bg-violet-300 dark:bg-violet-800",
-  "bg-violet-400 dark:bg-violet-700",
-  "bg-violet-600",
+  "bg-info-bg",
+  "bg-info",
+  "bg-info",
+  "bg-info",
 ];
 
 function corBarra(n: number): string {
@@ -92,11 +92,11 @@ export function BlocoLeadsPorEstado({
   const pct = (n: number) => (total > 0 ? (n * 100) / total : 0);
 
   return (
-    <div className="rounded-xl border border-violet-200 bg-card dark:border-violet-900">
+    <div className="rounded-xl border border-info/30 bg-card dark:border-info/30">
       <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-3.5">
         <div>
           <div className="flex items-center gap-2">
-            <Database className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+            <Database className="h-4 w-4 text-info-fg" />
             <h3 className="text-sm font-semibold">De onde vêm as oportunidades</h3>
           </div>
           <p className="mt-1 text-[13px] font-bold">
@@ -227,7 +227,7 @@ export function BlocoLeadsPorEstado({
                 title={onSelecionar ? `Filtrar o relatório por ${e.uf}` : undefined}
                 className={`grid w-full grid-cols-[30px_1fr_44px_74px] items-center gap-2 border-b border-border/40 py-[7px] text-left ${
                   onSelecionar ? "cursor-pointer hover:bg-muted/40" : ""
-                } ${selecionada === e.uf ? "bg-violet-50 dark:bg-violet-950/40" : ""}`}
+                } ${selecionada === e.uf ? "bg-info-bg" : ""}`}
               >
                 <span className="text-[11.5px] font-extrabold">{e.uf}</span>
                 <span className="block h-2 overflow-hidden rounded-[2px] bg-muted">
@@ -272,22 +272,22 @@ export function BlocoLeadsPorEstado({
           </p>
           <div className="mt-1.5 flex h-2.5 gap-0.5 overflow-hidden rounded">
             {dados.comEstado > 0 && (
-              <span className="bg-violet-500" style={{ width: `${pct(dados.comEstado)}%` }} />
+              <span className="bg-info" style={{ width: `${pct(dados.comEstado)}%` }} />
             )}
             {dados.semEstado > 0 && (
               <span className="bg-muted" style={{ width: `${pct(dados.semEstado)}%` }} />
             )}
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-            <Legenda cor="bg-violet-500" n={dados.comEstado} texto="com DDD reconhecido" />
+            <Legenda cor="bg-info" n={dados.comEstado} texto="com DDD reconhecido" />
             <Legenda cor="bg-muted border" n={dados.semEstado} texto="sem telefone ou DDD inválido" />
           </div>
         </div>
 
-        <p className="flex items-start gap-2 rounded-lg border border-violet-200 bg-violet-50/60 px-2.5 py-2 text-[10.5px] leading-relaxed dark:border-violet-900 dark:bg-violet-950/25">
-          <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-300" />
+        <p className="flex items-start gap-2 rounded-lg border border-info/30 bg-info-bg/60 px-2.5 py-2 text-[10.5px] leading-relaxed dark:border-info/30">
+          <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0 text-info-fg" />
           <span>
-            <b className="text-violet-700 dark:text-violet-300">
+            <b className="text-info-fg">
               O DDD diz onde a linha foi habilitada, não onde a pessoa mora hoje.
             </b>{" "}
             Quem mudou de estado e manteve o número aparece na origem antiga. O endereço do cadastro

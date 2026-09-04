@@ -269,7 +269,7 @@ function AdminSidebarContent({
                           />
                           <span>{item.label}</span>
                           {(item.badge ?? 0) > 0 && (
-                            <span className="ml-auto rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white group-data-[collapsible=icon]:hidden">
+                            <span className="ml-auto rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold leading-none text-danger-on group-data-[collapsible=icon]:hidden">
                               {item.badge}
                             </span>
                           )}

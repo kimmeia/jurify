@@ -63,23 +63,23 @@ function PreviaCartaoLP({
   const gratis = (precoMensalCentavos ?? 0) === 0;
   return (
     <div className="rounded-2xl bg-[radial-gradient(120%_120%_at_30%_0%,#1b1240_0%,#0b0d1d_60%)] p-5">
-      <div className={`relative rounded-2xl border p-5 text-white ${popular ? "border-violet-400/60 bg-violet-600/15" : "border-white/10 bg-white/[0.04]"}`}>
+      <div className={`relative rounded-2xl border p-5 text-white ${popular ? "border-info/30 bg-info/15" : "border-white/10 bg-white/[0.04]"}`}>
         {popular && (
-          <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 px-2.5 py-0.5 text-[10px] font-bold">
+          <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-info px-2.5 py-0.5 text-[10px] font-bold">
             ✨ Mais popular
           </span>
         )}
         <p className="text-xl font-bold">{nome || "Nome do plano"}</p>
-        <p className="mt-1 min-h-[18px] text-[12px] text-violet-100/60">{fraseCartao}</p>
+        <p className="mt-1 min-h-[18px] text-[12px] text-info/60">{fraseCartao}</p>
 
         {sobConsulta ? (
           <>
             <p className="mt-3 text-[24px] font-extrabold tracking-tight">Sob consulta</p>
-            <p className="mt-1 text-[11px] text-violet-100/55">
+            <p className="mt-1 text-[11px] text-info/55">
               {demonstracao ? "apresentamos numa demonstração ao vivo" : "preço fechado na conversa, do seu tamanho"}
             </p>
             <div className="my-4 flex flex-col gap-2">
-              <span className="flex h-9 items-center justify-center rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-xs font-bold">
+              <span className="flex h-9 items-center justify-center rounded-lg bg-info text-xs font-bold">
                 {demonstracao ? "💬 Agendar demonstração" : `Testar grátis ${trialDias || 14} dias`}
               </span>
               <span className="flex h-9 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-xs font-semibold">
@@ -91,9 +91,9 @@ function PreviaCartaoLP({
           <>
             <p className="mt-3 text-[28px] font-extrabold tracking-tight">
               {gratis ? "Grátis" : formatBRL(precoMensalCentavos ?? 0)}
-              {!gratis && <span className="text-sm font-normal text-violet-100/55">/mês</span>}
+              {!gratis && <span className="text-sm font-normal text-info/55">/mês</span>}
             </p>
-            <p className="mt-1 min-h-[16px] text-[11px] font-semibold text-violet-300">
+            <p className="mt-1 min-h-[16px] text-[11px] font-semibold text-info">
               {trialDias > 0 ? `Teste ${trialDias} dias grátis` : ""}
             </p>
             <div className="my-4">
@@ -104,10 +104,10 @@ function PreviaCartaoLP({
           </>
         )}
 
-        <ul className="space-y-2 text-[12px] text-violet-100/80">
+        <ul className="space-y-2 text-[12px] text-info/80">
           {features.map((f, i) => (
             <li key={i} className="flex items-start gap-2">
-              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
               <span>{f}</span>
             </li>
           ))}
@@ -368,7 +368,7 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-sm">Preço</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <div className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${precoSobConsulta ? "border-violet-300 bg-violet-50/60 dark:border-violet-800 dark:bg-violet-950/30" : ""}`}>
+                <div className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${precoSobConsulta ? "border-info/30 bg-info-bg/60 dark:bg-info/30" : ""}`}>
                   <div>
                     <Label className="text-xs">Sob consulta</Label>
                     <p className="text-[10px] text-muted-foreground">
@@ -378,7 +378,7 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
                   </div>
                   <Switch checked={precoSobConsulta} onCheckedChange={setPrecoSobConsulta} />
                 </div>
-                <div className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${ctaDemonstracao ? "border-violet-300 bg-violet-50/60 dark:border-violet-800 dark:bg-violet-950/30" : ""}`}>
+                <div className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${ctaDemonstracao ? "border-info/30 bg-info-bg/60 dark:bg-info/30" : ""}`}>
                   <div>
                     <Label className="text-xs">Vender por demonstração</Label>
                     <p className="text-[10px] text-muted-foreground">O botão principal do cartão vira "Agendar demonstração".</p>
@@ -449,7 +449,7 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
                   <span className="text-[10px] text-muted-foreground">
                     soma avulsa: <strong className="text-foreground">{formatBRL(somaCesta)}/mês</strong>
                     {precoPacote > 0 && precoPacote < somaCesta && !precoSobConsulta && (
-                      <span className="text-emerald-700 dark:text-emerald-300"> · combo −{Math.round((1 - precoPacote / somaCesta) * 100)}%</span>
+                      <span className="text-success-fg"> · combo −{Math.round((1 - precoPacote / somaCesta) * 100)}%</span>
                     )}
                   </span>
                 )}
@@ -473,8 +473,8 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
                         mod.obrigatorio
                           ? "border-dashed text-muted-foreground"
                           : ligado
-                            ? "border-violet-400 bg-violet-50 font-semibold text-violet-800 dark:border-violet-700 dark:bg-violet-950/40 dark:text-violet-200"
-                            : "text-muted-foreground hover:border-violet-300"
+                            ? "border-info/30 bg-info-bg font-semibold text-info-fg"
+                            : "text-muted-foreground hover:border-info/30"
                       }`}
                     >
                       {ligado && <Check className="h-3 w-3" />}
@@ -555,7 +555,7 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
                 {plano.oculto ? (
                   <>Este plano está <Badge variant="outline" className="text-[10px]">fora da vitrine</Badge></>
                 ) : (
-                  <>Este plano está <Badge variant="outline" className="text-[10px] border-violet-300 text-violet-700 dark:border-violet-800 dark:text-violet-300">na vitrine</Badge></>
+                  <>Este plano está <Badge variant="outline" className="text-[10px] border-info/30 text-info-fg dark:text-info">na vitrine</Badge></>
                 )}
                 <p className="mt-1">Mostrar/esconder é na lista de planos.</p>
               </div>

@@ -256,10 +256,10 @@ function PainelNatureza({ n, aviso }: { n: ComposicaoNatureza; aviso: string | n
     <div className="mt-2.5">
       <div className="flex h-1.5 overflow-hidden rounded-full bg-muted">
         {n.jurisprudencia > 0 && (
-          <div className="bg-violet-500" style={{ width: fatia(n.jurisprudencia) }} />
+          <div className="bg-info" style={{ width: fatia(n.jurisprudencia) }} />
         )}
         {n.estatistica > 0 && (
-          <div className="bg-slate-400" style={{ width: fatia(n.estatistica) }} />
+          <div className="bg-muted-foreground/50" style={{ width: fatia(n.estatistica) }} />
         )}
         {n.indefinido > 0 && (
           <div className="bg-muted-foreground/30" style={{ width: fatia(n.indefinido) }} />
@@ -268,7 +268,7 @@ function PainelNatureza({ n, aviso }: { n: ComposicaoNatureza; aviso: string | n
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10.5px] text-muted-foreground">
         {n.jurisprudencia > 0 && (
           <span className="flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+            <span className="h-1.5 w-1.5 rounded-full bg-info" />
             <strong className="tabular-nums text-foreground">
               {n.jurisprudencia.toLocaleString("pt-BR")}
             </strong>{" "}
@@ -277,7 +277,7 @@ function PainelNatureza({ n, aviso }: { n: ComposicaoNatureza; aviso: string | n
         )}
         {n.estatistica > 0 && (
           <span className="flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
             <strong className="tabular-nums text-foreground">
               {n.estatistica.toLocaleString("pt-BR")}
             </strong>{" "}
@@ -295,7 +295,7 @@ function PainelNatureza({ n, aviso }: { n: ComposicaoNatureza; aviso: string | n
         )}
       </div>
       {aviso && (
-        <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+        <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-warning/30 bg-warning-bg px-2.5 py-1.5 text-[11px] text-warning-fg">
           <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
           {aviso}
         </p>
@@ -376,14 +376,14 @@ function PainelTendencia({ t }: { t: Tendencia }) {
   if (!frase || !t.dominanteRecente) return null;
 
   const destaque = t.virou
-    ? "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
+    ? "border-warning/30 bg-warning-bg dark:bg-warning/30"
     : "border-transparent bg-muted/40";
 
   return (
     <div className={`mt-3 rounded-lg border px-2.5 py-2 ${destaque}`}>
       <div className="flex items-center gap-1.5">
         {t.virou ? (
-          <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-warning-fg" />
         ) : (
           <Sparkles className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         )}
@@ -399,7 +399,7 @@ function PainelTendencia({ t }: { t: Tendencia }) {
           janela
         </span>
         {t.massivo && (
-          <span className="rounded bg-violet-100 px-1.5 py-px text-[9.5px] font-bold uppercase tracking-wide text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+          <span className="rounded bg-info-bg px-1.5 py-px text-[9.5px] font-bold uppercase tracking-wide text-info-fg dark:text-info">
             massivo
           </span>
         )}
@@ -479,7 +479,7 @@ function PainelRecorte({
       {tendencia && <PainelTendencia t={tendencia} />}
 
       {decididos > 0 && e.amostraPequena && (recursal?.amostraPequena ?? true) && (
-        <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+        <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-warning/30 bg-warning-bg px-2.5 py-1.5 text-[11px] text-warning-fg">
           <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
           Amostra pequena — com esse número de casos decididos o percentual ainda é anedota, não
           tendência.
@@ -540,7 +540,7 @@ function ChipsConsulta({ c }: { c: ConversaUnaGravada["consulta"] }) {
             key={ch.chave}
             className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] ${
               ch.realce
-                ? "border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300"
+                ? "border-info/30 bg-info-bg text-info-fg"
                 : "bg-muted text-muted-foreground"
             }`}
           >
@@ -562,12 +562,12 @@ function ChipsConsulta({ c }: { c: ConversaUnaGravada["consulta"] }) {
  */
 function PainelProva({ p }: { p: ProvaGravada }) {
   return (
-    <div className="mt-2 rounded-xl border border-violet-200 bg-violet-50/60 p-3 dark:border-violet-900 dark:bg-violet-950/25">
+    <div className="mt-2 rounded-xl border border-info/30 bg-info-bg/60 p-3 dark:border-info/30">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-[10px] font-extrabold uppercase tracking-[0.06em] text-violet-700 dark:text-violet-300">
+        <p className="text-[10px] font-extrabold uppercase tracking-[0.06em] text-info-fg">
           Como este tribunal vem decidindo
         </p>
-        <p className="text-[10.5px] text-violet-700/80 dark:text-violet-300/70">
+        <p className="text-[10.5px] text-info-fg/80">
           {p.descricaoFiltro || p.rotulo}
         </p>
       </div>
@@ -630,7 +630,7 @@ function RespostaUna({
 }) {
   return (
     <div className="flex max-w-3xl gap-2.5">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-purple-700 text-white">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-info text-info-on">
         <Scale className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1">
@@ -642,7 +642,7 @@ function RespostaUna({
         {r.avisos.map((a) => (
           <p
             key={a}
-            className="mb-1.5 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+            className="mb-1.5 flex items-start gap-1.5 rounded-lg border border-warning/30 bg-warning-bg px-2.5 py-1.5 text-[11px] text-warning-fg"
           >
             <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
             {a}
@@ -672,7 +672,7 @@ function RespostaUna({
 
         <button
           type="button"
-          className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400"
+          className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-info-fg"
           onClick={() => aoExportar(r.texto)}
           disabled={exportando}
         >
@@ -745,7 +745,7 @@ function PainelComparacao({ c }: { c: Comparacao }) {
                     />
                   </div>
                   <span className="w-20 text-right text-[10.5px] tabular-nums text-muted-foreground">
-                    você <b className="text-violet-700 dark:text-violet-300">{l.escritorioPct}%</b>
+                    você <b className="text-info-fg">{l.escritorioPct}%</b>
                   </span>
                 </div>
               </div>
@@ -754,7 +754,7 @@ function PainelComparacao({ c }: { c: Comparacao }) {
       </div>
 
       {c.amostraPequena ? (
-        <p className="mt-2.5 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+        <p className="mt-2.5 flex items-start gap-1.5 rounded-lg border border-warning/30 bg-warning-bg px-2.5 py-1.5 text-[11px] text-warning-fg">
           <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
           Você tem {c.escritorioDecididos} caso(s) decidido(s) desse tipo. É pouco para afirmar que
           seu resultado difere do tribunal — o número está aqui como pista, não como prova.
@@ -794,11 +794,11 @@ function PainelContexto({
         O que a IA está usando
       </p>
 
-      <div className="rounded-lg border border-violet-200 bg-violet-50/40 px-3 py-2.5 dark:border-violet-900 dark:bg-violet-950/20">
+      <div className="rounded-lg border border-info/30 bg-info-bg/40 px-3 py-2.5 dark:border-info/30">
         <div className="flex items-center gap-1.5">
-          <Database className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
+          <Database className="h-3.5 w-3.5 shrink-0 text-info-fg" />
           <p className="flex-1 text-[11.5px] font-bold">Acervo público</p>
-          <span className="rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-px text-[9px] font-extrabold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400">
+          <span className="rounded-full border border-success/30 bg-success-bg px-1.5 py-px text-[9px] font-extrabold text-success-fg">
             {(acervo?.total ?? 0).toLocaleString("pt-BR")}
           </span>
         </div>
@@ -828,7 +828,7 @@ function PainelContexto({
           {ultima.fontesDetalhe.length > 0 && (
             <div className="rounded-lg border px-3 py-2.5">
               <div className="flex items-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-success-fg" />
                 <p className="flex-1 text-[11.5px] font-bold">Processos citados</p>
                 <span className="text-[11px] font-bold tabular-nums">
                   {ultima.fontesDetalhe.length}
@@ -908,7 +908,7 @@ function LinhaPesquisa({
   return (
     <div
       className={`group flex items-center gap-1 rounded-lg border px-2.5 py-1.5 ${
-        ativa ? "border-violet-300 bg-violet-50 dark:bg-violet-950/40" : "bg-card hover:bg-muted/50"
+        ativa ? "border-info/30 bg-info-bg" : "bg-card hover:bg-muted/50"
       }`}
     >
       <button
@@ -991,20 +991,20 @@ function SemBase({
 }) {
   const topo = (acervo?.classes ?? []).slice(0, 4);
   return (
-    <div className="rounded-xl rounded-bl-sm border border-amber-300 bg-amber-50 px-4 py-3.5 dark:border-amber-900 dark:bg-amber-950/30">
-      <p className="flex items-center gap-2 text-[13.5px] font-bold text-amber-900 dark:text-amber-200">
+    <div className="rounded-xl rounded-bl-sm border border-warning/30 bg-warning-bg px-4 py-3.5 dark:border-warning/30">
+      <p className="flex items-center gap-2 text-[13.5px] font-bold text-warning-fg">
         <TriangleAlert className="h-4 w-4 shrink-0" />
         {r.descricaoFiltro
           ? `Nada no acervo para ${r.descricaoFiltro}`
           : "Não consegui montar um recorte com essa pergunta"}
       </p>
-      <p className="mt-1.5 text-[12.5px] leading-relaxed text-amber-900/90 dark:text-amber-200/90">
+      <p className="mt-1.5 text-[12.5px] leading-relaxed text-warning-fg/90">
         {r.conclusao ?? "O acervo não tem processos que respondam isso."}
       </p>
 
       {topo.length > 0 && (
-        <div className="mt-3 rounded-lg border border-amber-200 bg-white/70 px-3 py-2.5 dark:border-amber-900 dark:bg-black/20">
-          <p className="text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-amber-700 dark:text-amber-400">
+        <div className="mt-3 rounded-lg border border-warning/30 bg-white/70 px-3 py-2.5 dark:border-warning/30 dark:bg-black/20">
+          <p className="text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-warning-fg">
             O que já está coletado
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1023,7 +1023,7 @@ function SemBase({
         </div>
       )}
 
-      <p className="mt-2.5 flex items-center gap-1.5 text-[11.5px] font-semibold text-emerald-700 dark:text-emerald-400">
+      <p className="mt-2.5 flex items-center gap-1.5 text-[11.5px] font-semibold text-success-fg">
         <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
         Esta busca não consumiu nenhuma mensagem do seu mês.
       </p>
@@ -1062,12 +1062,12 @@ function Resposta({
       {r.comparacao && <PainelComparacao c={r.comparacao} />}
 
       {!r.achou ? (
-        <div className="rounded-xl rounded-bl-sm border border-amber-300 bg-amber-50 px-3.5 py-3 dark:border-amber-900 dark:bg-amber-950/30">
-          <p className="mb-1 flex items-center gap-1.5 text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-amber-700 dark:text-amber-400">
+        <div className="rounded-xl rounded-bl-sm border border-warning/30 bg-warning-bg px-3.5 py-3 dark:border-warning/30">
+          <p className="mb-1 flex items-center gap-1.5 text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-warning-fg">
             <TriangleAlert className="h-3.5 w-3.5" />
             Não respondi com o que há aqui
           </p>
-          <p className="text-[12.5px] leading-relaxed text-amber-900 dark:text-amber-200">
+          <p className="text-[12.5px] leading-relaxed text-warning-fg">
             {r.conclusao ?? "Os processos deste recorte não respondem essa pergunta."}
           </p>
         </div>
@@ -1083,18 +1083,18 @@ function Resposta({
           ))}
 
           {r.conclusao && (
-            <p className="mt-2.5 border-l-2 border-violet-300 pl-2.5 text-[12.5px] leading-relaxed text-foreground/90">
+            <p className="mt-2.5 border-l-2 border-info/30 pl-2.5 text-[12.5px] leading-relaxed text-foreground/90">
               {r.conclusao}
             </p>
           )}
 
           {r.fontesDetalhe.length > 0 && (
-            <details className="group mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/30">
+            <details className="group mt-3 rounded-lg border border-success/30 bg-success-bg px-3 py-2 dark:border-success/30">
               {/* Fechada por padrão: quarenta linhas de CNJ abertas empurram a
                   resposta pra fora da tela, e quem quer conferir a fonte clica
                   na âncora do parágrafo. O selo continua visível — é ele que
                   diz que a resposta tem lastro. */}
-              <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-bold text-emerald-900 dark:text-emerald-300">
+              <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-bold text-success-fg">
                 <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
                 {r.fontesDetalhe.length === 1
                   ? "1 processo sustenta esta resposta"
@@ -1106,7 +1106,7 @@ function Resposta({
                 {r.fontesDetalhe.map((f: FonteRecorte) => (
                   <li
                     key={f.id}
-                    className="flex gap-2 text-[11px] text-emerald-900/90 dark:text-emerald-200/90"
+                    className="flex gap-2 text-[11px] text-success-fg/90"
                   >
                     <span className="shrink-0 font-extrabold">{ordem.get(f.id)}</span>
                     <span className="shrink-0 tabular-nums opacity-70">{f.data}</span>
@@ -1114,8 +1114,8 @@ function Resposta({
                       <span
                         className={`shrink-0 rounded px-1 text-[9.5px] font-bold uppercase tracking-wide ${
                           f.natureza === "jurisprudencia"
-                            ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
-                            : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                            ? "bg-info-bg text-info-fg dark:text-info"
+                            : "bg-muted text-muted-foreground dark:text-muted-foreground/70"
                         }`}
                       >
                         {f.natureza === "jurisprudencia" ? "acórdão" : "1º grau"}
@@ -1256,7 +1256,7 @@ export default function JurisIa() {
         };
     return (
       <div className="mx-auto max-w-md rounded-xl border bg-card px-4 py-10 text-center">
-        <Sparkles className="mx-auto h-6 w-6 text-violet-500" />
+        <Sparkles className="mx-auto h-6 w-6 text-info" />
         <p className="mt-2 text-sm font-bold">{texto.titulo}</p>
         <p className="mt-1 text-xs text-muted-foreground">{texto.corpo}</p>
       </div>
@@ -1276,11 +1276,11 @@ export default function JurisIa() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Gavel className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+        <Gavel className="h-5 w-5 text-info-fg" />
         <h1 className="text-lg font-extrabold">
           JurisIA <span className="font-medium text-muted-foreground">· assistente jurídico</span>
         </h1>
-        <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
+        <span className="rounded-full border border-warning/30 bg-warning-bg px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-warning-fg">
           beta
         </span>
         {acervo && acervo.total > 0 && (
@@ -1331,7 +1331,7 @@ export default function JurisIa() {
               <Skeleton className="h-24 w-full rounded-xl" />
             ) : mensagens.length === 0 ? (
               <div className="mx-auto mt-8 max-w-xl text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-purple-700 text-white">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-info text-info-on">
                   <Scale className="h-6 w-6" />
                 </div>
                 <p className="text-[13.5px] font-semibold">Como posso ajudar?</p>
@@ -1363,7 +1363,7 @@ export default function JurisIa() {
                 if (m.papel === "usuario") {
                   return (
                     <div key={m.id} className="flex justify-end">
-                      <p className="max-w-[80%] whitespace-pre-wrap rounded-xl rounded-br-sm bg-violet-600 px-3.5 py-2.5 text-[12.5px] leading-snug text-white">
+                      <p className="max-w-[80%] whitespace-pre-wrap rounded-xl rounded-br-sm bg-info px-3.5 py-2.5 text-[12.5px] leading-snug text-info-on">
                         {m.conteudo}
                       </p>
                     </div>
@@ -1435,7 +1435,7 @@ export default function JurisIa() {
               />
               <Button
                 size="icon"
-                className="h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br from-violet-600 to-purple-700"
+                className="h-9 w-9 shrink-0 rounded-xl bg-info"
                 disabled={!cota?.pode || pergunta.trim().length < 3 || conversarMut.isPending}
                 onClick={() => enviar()}
               >

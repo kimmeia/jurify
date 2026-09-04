@@ -88,13 +88,13 @@ export function LimpezaContatosOrfaosDialog({
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : total === 0 ? (
-          <div className="flex items-center gap-2 rounded border bg-emerald-50 dark:bg-emerald-950/20 p-3 text-sm text-emerald-700 dark:text-emerald-300">
+          <div className="flex items-center gap-2 rounded border bg-success-bg p-3 text-sm text-success-fg">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             Nenhum contato órfão encontrado — está tudo limpo.
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="rounded border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm text-amber-900 dark:text-amber-200">
+            <div className="rounded border border-warning/30 bg-warning-bg p-3 text-sm text-warning-fg">
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <div className="space-y-1">
