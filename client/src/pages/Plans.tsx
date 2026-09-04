@@ -356,13 +356,13 @@ export default function Plans() {
 
       {/* Troca de plano pedida e ainda não paga — a atual segue valendo */}
       {trocaPendente && (
-        <div className="rounded-xl border-l-[3px] border-l-violet-500 border border-violet-200 dark:border-violet-800/50 bg-violet-50/50 dark:bg-violet-950/30 p-3.5 flex items-start gap-3">
-          <Clock className="h-5 w-5 text-violet-600 dark:text-violet-400 mt-0.5 shrink-0" />
+        <div className="rounded-xl border-l-[3px] border-l-info border border-info/30 bg-info-bg p-3.5 flex items-start gap-3">
+          <Clock className="h-5 w-5 text-info-fg mt-0.5 shrink-0" />
           <div className="flex-1">
-            <p className="text-sm font-bold text-violet-900 dark:text-violet-200">
+            <p className="text-sm font-bold text-info-fg">
               Troca para o {trocaPendente.planName} aguardando pagamento
             </p>
-            <p className="text-[11px] text-violet-700 dark:text-violet-300 mt-0.5">
+            <p className="text-[11px] text-info-fg mt-0.5">
               Seu plano atual continua valendo até o pagamento ser confirmado. Aí a troca acontece sozinha.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -370,7 +370,7 @@ export default function Plans() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-[11px] border-violet-300 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/30"
+                  className="h-7 text-[11px] border-info/40 text-info-fg hover:bg-info/10"
                   onClick={() => window.open(trocaPendente.invoiceUrl, "_blank")}
                 >
                   <ArrowRight className="h-3 w-3 mr-1" /> Abrir cobrança
@@ -379,7 +379,7 @@ export default function Plans() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 text-[11px] text-violet-700 dark:text-violet-300"
+                className="h-7 text-[11px] text-info-fg"
                 disabled={desistirTroca.isPending}
                 onClick={() => desistirTroca.mutate()}
               >
@@ -562,7 +562,7 @@ export default function Plans() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full mt-5 border-dashed border-violet-400 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30"
+                  className="w-full mt-5 border-dashed border-info/40 text-info-fg hover:bg-info/10"
                   disabled={iniciarTrial.isPending}
                   onClick={() => iniciarTrial.mutate({ planoSlug: (plan as any).slug || plan.id })}
                 >
