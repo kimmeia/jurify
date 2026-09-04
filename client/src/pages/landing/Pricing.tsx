@@ -55,7 +55,7 @@ export function Pricing({ onCta }: Props) {
   }
 
   return (
-    <section id="pricing" className="border-y border-white/[0.06] bg-[#0a0817]">
+    <section id="pricing" className="border-y border-white/[0.06] bg-[#081120]">
       <div className="mx-auto max-w-6xl px-4 py-24">
         <Reveal className="mx-auto mb-12 max-w-2xl text-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-warning/30 bg-warning/10 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.06em] text-warning-fg">
@@ -97,12 +97,12 @@ export function Pricing({ onCta }: Props) {
                   variants={staggerItem}
                   className={`relative flex flex-col rounded-2xl border p-6 transition-all hover:-translate-y-1 ${
                     destaque
-                      ? "border-2 border-info/30 bg-info/15 shadow-[0_40px_80px_-28px_rgba(124,58,237,0.55)]"
+                      ? "border-2 border-info/30 bg-info/15 shadow-[0_40px_80px_-28px_rgba(47,111,189,0.55)]"
                       : "border-white/10 bg-white/[0.04] hover:border-info/30 hover:bg-white/[0.06]"
                   }`}
                 >
                   {destaque && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 border-0 bg-info text-info-on shadow-[0_8px_22px_-6px_rgba(147,51,234,0.7)]">
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 border-0 bg-info text-info-on shadow-[0_8px_22px_-6px_rgba(26,75,134,0.7)]">
                       <Sparkles className="mr-1 h-3 w-3" />
                       Mais popular
                     </Badge>
@@ -125,7 +125,7 @@ export function Pricing({ onCta }: Props) {
                       </p>
                       <div className="my-4 flex flex-col gap-2">
                         <Button
-                          className="w-full border-0 bg-info text-info-on hover:from-info hover:to-info"
+                          className="cta-marca w-full font-semibold"
                           size="lg"
                           onClick={() =>
                             demonstracao ? falarComAGente(p.nome) : selecionarPlano(p.slug)
@@ -159,7 +159,7 @@ export function Pricing({ onCta }: Props) {
                       <Button
                         className={`my-4 w-full ${
                           destaque
-                            ? "border-0 bg-info text-info-on hover:from-info hover:to-info"
+                            ? "cta-marca font-semibold"
                             : "border border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
                         }`}
                         size="lg"

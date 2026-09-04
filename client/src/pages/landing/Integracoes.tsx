@@ -13,7 +13,7 @@ const integracoes = [
 
 export function Integracoes() {
   return (
-    <section className="border-y border-white/[0.06] bg-[#0a0817] py-8">
+    <section className="border-y border-white/[0.06] bg-[#081120] py-8">
       <div className="mx-auto max-w-6xl px-4">
         <p className="text-center text-xs font-semibold uppercase tracking-[0.06em] text-info/50">
           Conecta com o que seu escritório já usa

@@ -57,7 +57,7 @@ export function Problemas() {
           <motion.div
             key={p.titulo}
             variants={staggerItem}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 transition-all hover:-translate-y-1 hover:border-info/30 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)]"
+            className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 transition-all hover:-translate-y-1 hover:border-info/30 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(47,111,189,0.45)]"
           >
             <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${p.box}`}>
               <p.icon className={`h-6 w-6 ${p.fg}`} />

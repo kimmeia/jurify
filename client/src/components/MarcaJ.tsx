@@ -19,7 +19,7 @@ export function MarcaJ({
   tom?: "conteudo" | "sidebar";
 }) {
   const corTexto = tom === "sidebar" ? "text-sidebar-foreground" : "text-foreground";
-  const corAcento = tom === "sidebar" ? "text-info" : "text-info-fg";
+  const corAcento = tom === "sidebar" ? "text-marca-em-escuro" : "text-marca";
   return (
     <span className={"flex items-center gap-2 select-none leading-none " + className}>
       <span

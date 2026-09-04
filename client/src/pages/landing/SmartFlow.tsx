@@ -38,10 +38,10 @@ const NODES: NodeDef[] = [
 
 export function SmartFlow() {
   return (
-    <section id="smartflow" className="relative overflow-hidden bg-[#0a0817] py-24">
+    <section id="smartflow" className="relative overflow-hidden bg-[#081120] py-24">
       <div
         className="absolute inset-0 z-0"
-        style={{ background: "radial-gradient(120% 100% at 50% 0%, #120d28, #0a0817)" }}
+        style={{ background: "radial-gradient(120% 100% at 50% 0%, #0d1a2e, #081120)" }}
       />
       <Aurora className="z-0" intensity={0.5} />
 
@@ -62,7 +62,7 @@ export function SmartFlow() {
           <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 980 320" preserveAspectRatio="none" aria-hidden>
             <defs>
               <linearGradient id="sf-grad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0" stopColor="#7c3aed" />
+                <stop offset="0" stopColor="#2f6fbd" />
                 <stop offset="1" stopColor="#e879f9" />
               </linearGradient>
             </defs>
@@ -81,7 +81,7 @@ export function SmartFlow() {
                 strokeWidth={2.4}
                 strokeLinecap="round"
                 className="lp-flow-line"
-                style={{ filter: "drop-shadow(0 0 6px rgba(168,85,247,.6))" }}
+                style={{ filter: "drop-shadow(0 0 6px rgba(90,160,220,.6))" }}
               />
             ))}
           </svg>
@@ -93,7 +93,7 @@ export function SmartFlow() {
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true, margin: "-60px" }}
               transition={{ duration: 0.5, delay: n.delay, ease }}
-              className={`absolute flex items-center gap-2.5 whitespace-nowrap rounded-xl border border-info/30 bg-[#1a1530]/85 px-3.5 py-3 text-[13px] font-semibold text-white shadow-[0_14px_40px_-14px_rgba(124,58,237,0.7)] backdrop-blur ${n.pos}`}
+              className={`absolute flex items-center gap-2.5 whitespace-nowrap rounded-xl border border-info/30 bg-[#12253f]/85 px-3.5 py-3 text-[13px] font-semibold text-white shadow-[0_14px_40px_-14px_rgba(47,111,189,0.7)] backdrop-blur ${n.pos}`}
             >
               <span className={`flex h-[30px] w-[30px] items-center justify-center rounded-lg ${n.tone}`}>
                 <n.icon className="h-4 w-4" />
@@ -110,7 +110,7 @@ export function SmartFlow() {
         <div className="mx-auto flex max-w-md flex-col gap-2.5 lg:hidden">
           {NODES.map((n, i) => (
             <Reveal key={n.title} delay={i * 0.05}>
-              <div className="flex items-center gap-3 rounded-xl border border-info/30 bg-[#1a1530]/80 px-4 py-3 text-white backdrop-blur">
+              <div className="flex items-center gap-3 rounded-xl border border-info/30 bg-[#12253f]/80 px-4 py-3 text-white backdrop-blur">
                 <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${n.tone}`}>
                   <n.icon className="h-4 w-4" />
                 </span>

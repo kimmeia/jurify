@@ -72,7 +72,7 @@ export default function Home() {
   if (user) return null; // redirect via useEffect
 
   return (
-    <div className="min-h-screen bg-[#07060f]">
+    <div className="dark marca-landing min-h-screen bg-[#050912]">
       {/* Navbar fixa */}
       <Navbar onCta={irParaAuth} />
 
@@ -115,7 +115,7 @@ function Navbar({ onCta }: { onCta: (modo: "login" | "signup") => void }) {
     <nav
       className={cn(
         "fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300",
-        scrolled ? "border-white/10 bg-[#07060f]/80 backdrop-blur-md" : "border-transparent bg-transparent",
+        scrolled ? "border-white/10 bg-[#050912]/80 backdrop-blur-md" : "border-transparent bg-transparent",
       )}
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
@@ -136,7 +136,7 @@ function Navbar({ onCta }: { onCta: (modo: "login" | "signup") => void }) {
           <Button
             size="sm"
             onClick={() => onCta("signup")}
-            className="border-0 bg-info text-info-on shadow-[0_8px_22px_-6px_rgba(147,51,234,0.6)] hover:from-info hover:to-info"
+            className="cta-marca font-semibold"
           >
             Começar grátis
           </Button>
