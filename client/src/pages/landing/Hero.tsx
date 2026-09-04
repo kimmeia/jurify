@@ -39,10 +39,10 @@ const ease = [0.22, 1, 0.36, 1] as const;
 
 export function Hero({ onCta }: Props) {
   return (
-    <section className="relative overflow-hidden bg-[#07060f] pt-28 pb-24 text-center lg:pt-36">
+    <section className="relative overflow-hidden bg-[#050912] pt-28 pb-24 text-center lg:pt-36">
       <div
         className="absolute inset-0 z-0"
-        style={{ background: "radial-gradient(120% 90% at 50% -10%, #1a1140 0%, #0d0a1c 45%, #07060f 100%)" }}
+        style={{ background: "radial-gradient(120% 90% at 50% -10%, #12253f 0%, #0a1220 45%, #050912 100%)" }}
       />
       <Aurora className="z-0" intensity={0.85} />
       <div
@@ -61,7 +61,7 @@ export function Hero({ onCta }: Props) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease }}
-          className="inline-flex items-center gap-2 rounded-full border border-info/30 bg-info/15 px-4 py-1.5 text-sm font-semibold text-info-fg shadow-[0_0_30px_-8px_rgba(124,58,237,0.6)]"
+          className="inline-flex items-center gap-2 rounded-full border border-info/30 bg-info/15 px-4 py-1.5 text-sm font-semibold text-info-fg shadow-[0_0_30px_-8px_rgba(47,111,189,0.6)]"
         >
           <Sparkles className="h-4 w-4" />
           O sistema operacional do escritório moderno
@@ -74,7 +74,7 @@ export function Hero({ onCta }: Props) {
           className="font-display mx-auto mt-6 max-w-4xl text-4xl font-extrabold leading-[1.04] tracking-tight text-white md:text-5xl lg:text-[58px]"
         >
           Todo o seu escritório{" "}
-          <span className="bg-gradient-to-r from-info via-danger to-danger bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-info via-marca to-marca bg-clip-text text-transparent">
             num só lugar
           </span>
           .
@@ -101,7 +101,7 @@ export function Hero({ onCta }: Props) {
           <Button
             size="lg"
             onClick={() => onCta("signup")}
-            className="border-0 bg-info px-8 text-base text-info-on shadow-[0_12px_40px_-8px_rgba(147,51,234,0.8)] hover:from-info hover:to-info"
+            className="cta-marca px-8 text-base font-semibold"
           >
             Começar grátis
             <ArrowRight className="ml-2 h-4 w-4" />
@@ -136,7 +136,7 @@ export function Hero({ onCta }: Props) {
       >
         <div
           className="absolute inset-x-12 -bottom-10 top-8 -z-10 rounded-[40px] blur-3xl"
-          style={{ background: "radial-gradient(ellipse at center, rgba(124,58,237,.55), transparent 66%)" }}
+          style={{ background: "radial-gradient(ellipse at center, rgba(47,111,189,.55), transparent 66%)" }}
         />
 
         {/* floats */}
@@ -211,7 +211,7 @@ const NAV_ITEMS: { icon: React.ComponentType<{ className?: string }>; label: str
 
 function DashboardMockup() {
   return (
-    <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+    <div className="tema-claro overflow-hidden rounded-xl border border-black/5 bg-white">
       <div className="flex h-9 items-center gap-2 border-b bg-muted px-4">
         <span className="flex gap-1.5">
           <i className="h-2.5 w-2.5 rounded-full bg-danger" />

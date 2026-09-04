@@ -10,7 +10,7 @@ import { Reveal } from "./lpkit";
 
 export function Demo() {
   return (
-    <section id="demo" className="border-y border-white/[0.06] bg-[#0a0817]">
+    <section id="demo" className="border-y border-white/[0.06] bg-[#081120]">
       <div className="mx-auto max-w-6xl px-4 py-24">
         <Reveal as="div" className="grid items-center gap-14 lg:grid-cols-2">
           {/* Copy */}
@@ -54,7 +54,7 @@ export function Demo() {
 
           {/* Mockup (claro, em moldura de vidro) */}
           <div className="rounded-2xl border border-white/[0.13] bg-white/[0.12] to-white/[0.04] p-2 shadow-[0_40px_80px_-28px_rgba(0,0,0,0.7)]">
-            <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+            <div className="tema-claro overflow-hidden rounded-xl border border-black/5 bg-white">
               <div className="flex h-9 items-center gap-2 border-b bg-muted px-4">
                 <span className="flex gap-1.5">
                   <i className="h-2.5 w-2.5 rounded-full bg-danger" />

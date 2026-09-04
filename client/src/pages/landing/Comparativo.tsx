@@ -67,9 +67,9 @@ export function Comparativo() {
           <motion.div
             key={d.titulo}
             variants={staggerItem}
-            className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.04] p-7 transition-all hover:-translate-y-1 hover:border-info/30 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)]"
+            className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.04] p-7 transition-all hover:-translate-y-1 hover:border-info/30 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(47,111,189,0.45)]"
           >
-            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-info/30 to-danger/15">
+            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-info/30 to-marca/25">
               <d.icon className="h-6 w-6 text-info" />
             </div>
             <h3 className="font-display mb-3 text-xl font-bold text-white">{d.titulo}</h3>
