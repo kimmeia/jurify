@@ -3730,6 +3730,13 @@ export const eventosProcesso = mysqlTable(
      * Só aplicável a tipo='nova_acao'; nos demais eventos fica no default.
      */
     resolucao: mysqlEnum("resolucaoEvento", ["pendente", "monitorando", "lida", "falso"]).default("pendente").notNull(),
+    /**
+     * Lado em que o cliente monitorado está na nova ação — é o que separa as
+     * gavetas da aba (passivo = alerta; ativo = só consulta; desconhecido =
+     * alguém decide). Gravado pelo cron na detecção ou pela pessoa, à mão.
+     * Só aplicável a tipo='nova_acao'.
+     */
+    poloCliente: mysqlEnum("poloClienteEvento", ["ativo", "passivo", "terceiro", "desconhecido"]).default("desconhecido").notNull(),
     resolvidoPorUserId: int("resolvidoPorUserIdEvento"),
     resolvidoEm: timestamp("resolvidoEmEvento"),
     alertaEnviado: boolean("alertaEnviado").default(false).notNull(),

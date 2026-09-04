@@ -332,7 +332,7 @@ describe("pollMonitoramentosNovasAcoes — filtro de polo passivo", () => {
     };
   }
 
-  it("silencia (lido=true, sem notif) quando cliente é POLO ATIVO no CNJ novo", async () => {
+  it("não alerta (polo ativo na coluna, sem notif) quando cliente é POLO ATIVO no CNJ novo", async () => {
     recuperarSessao.mockResolvedValue("storage-state-json");
     consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_NOVO] });
     consultarTjce.mockResolvedValue(
@@ -349,7 +349,10 @@ describe("pollMonitoramentosNovasAcoes — filtro de polo passivo", () => {
 
     const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
     expect(eventos).toHaveLength(1);
-    expect((eventos[0].values as any).lido).toBe(true);
+    // Autor confirmado tem gaveta própria na aba: entra lido=false pra
+    // aparecer lá, e o que barra o alerta é o polo gravado na coluna.
+    expect((eventos[0].values as any).lido).toBe(false);
+    expect((eventos[0].values as any).poloCliente).toBe("ativo");
     expect((eventos[0].values as any).conteudo).toMatch(/Cliente é autor/);
     const json = JSON.parse((eventos[0].values as any).conteudoJson);
     expect(json.poloDoCliente).toBe("ativo");
@@ -574,7 +577,8 @@ describe("pollMonitoramentosNovasAcoes — filtro combinado polo + data", () => 
     await pollMonitoramentosNovasAcoes();
 
     const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
-    expect((eventos[0].values as any).lido).toBe(true);
+    expect((eventos[0].values as any).lido).toBe(false);
+    expect((eventos[0].values as any).poloCliente).toBe("ativo");
     expect(JSON.parse((eventos[0].values as any).conteudoJson).motivoSilencio).toBe("polo_ativo");
     expect(emitirNotificacao).not.toHaveBeenCalled();
   });
@@ -625,7 +629,11 @@ describe("pollMonitoramentosNovasAcoes — filtro combinado polo + data", () => 
     const evPassivo = eventos.find((e) => (e.values as any).cnjAfetado === CNJ_PASSIVO);
     const evAtivo = eventos.find((e) => (e.values as any).cnjAfetado === CNJ_ATIVO);
     expect((evPassivo!.values as any).lido).toBe(false);
-    expect((evAtivo!.values as any).lido).toBe(true);
+    expect((evPassivo!.values as any).poloCliente).toBe("passivo");
+    // O autor não é alerta (nem notif, nem contagem) — mas fica visível na
+    // gaveta dele, por isso lido=false.
+    expect((evAtivo!.values as any).lido).toBe(false);
+    expect((evAtivo!.values as any).poloCliente).toBe("ativo");
 
     // 1 notif (só do passivo), totalNovasAcoes += 1
     const notifs = captured.filter((c) => c.op === "insert" && c.table === "notificacoes");

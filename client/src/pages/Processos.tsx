@@ -26,6 +26,7 @@ import { MovimentacoesCentral, ConfigResumoDiario } from "./Movimentacoes";
 import { EstadosPicker } from "@/components/EstadosPicker";
 import { TRIBUNAL_SEDE, siglaDoTribunal, tribunalDoCnj } from "@shared/tribunais-pje";
 import { formatarDataCalendario } from "@shared/data-calendario";
+import { GAVETAS, type GavetaPolo } from "@shared/nova-acao-polo";
 
 /** Estados vigiados de um monitoramento (coluna nova; legado = `tribunal`). */
 function lerTribunaisDoMonitorCliente(m: { tribunais?: string | null; tribunal?: string }): string[] {
@@ -2910,6 +2911,9 @@ function NovasAcoesTab() {
   // Sem este default, processos antigos da baseline apareciam confundindo
   // o user como se fossem detecções recentes.
   const [filtro, setFiltro] = useState<"pendentes" | "resolvidas" | "todas">("pendentes");
+  // Gaveta pelo lado do cliente. Abre no polo passivo: é a ação movida CONTRA
+  // o cliente, a única que é alerta. Autor e "não identificado" têm as suas.
+  const [polo, setPolo] = useState<GavetaPolo>("passivo");
   const [novoOpen, setNovoOpen] = useState(false);
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
@@ -2947,16 +2951,16 @@ function NovasAcoesTab() {
   const [acoesAcumuladas, setAcoesAcumuladas] = useState<any[]>([]);
 
   const { data, refetch, isLoading, isFetching } = trpc.processos.listarNovasAcoes.useQuery(
-    { filtro, limite: LIMITE_PAGINA, cursor },
+    { filtro, polo, limite: LIMITE_PAGINA, cursor },
     { retry: false },
   );
 
-  // Reseta paginação quando o filtro muda — caso contrário cursor antigo
-  // continuaria valendo num conjunto de dados diferente.
+  // Reseta paginação quando o filtro ou a gaveta muda — caso contrário cursor
+  // antigo continuaria valendo num conjunto de dados diferente.
   useEffect(() => {
     setCursor(0);
     setAcoesAcumuladas([]);
-  }, [filtro]);
+  }, [filtro, polo]);
 
   // Acumula páginas: cursor=0 substitui (página inicial / refetch),
   // cursor>0 anexa (carregar mais).
@@ -3032,6 +3036,29 @@ function NovasAcoesTab() {
     onSuccess: () => toast.success("Card reaberto — voltou pras Pendentes"),
     onError: (e: any) => {
       toast.error("Erro ao reabrir", { description: e.message });
+      recarregarDoTopo();
+    },
+  });
+
+  // A pessoa diz de que lado o cliente está: o card sai desta gaveta na hora
+  // (optimistic) e o servidor grava. Vale só pra este processo.
+  const definirPoloMut = trpc.processos.definirPoloNovaAcao.useMutation({
+    onMutate: ({ id }: { id: number }) => {
+      setAcoesAcumuladas((prev) => prev.filter((a) => a.id !== id));
+    },
+    onSuccess: (r: any) => {
+      const destino = GAVETAS.find((g) => g.id === r?.gaveta)?.curto ?? "outra gaveta";
+      toast.success(`Card movido para ${destino}`, {
+        description: r?.polo === "ativo"
+          ? "Deixa de contar como alerta — o cliente é o autor."
+          : r?.polo === "terceiro"
+            ? "Terceiro interessado continua como alerta, junto do polo passivo."
+            : "Continua como alerta — o cliente é o réu.",
+      });
+      refetch();
+    },
+    onError: (e: any) => {
+      toast.error("Não foi possível definir o polo", { description: e.message });
       recarregarDoTopo();
     },
   });
@@ -3518,6 +3545,50 @@ function NovasAcoesTab() {
         </div>
       </div>
 
+      {/* Gavetas pelo lado do cliente. Uma lista só misturava a ação movida
+          contra o cliente com a que o próprio escritório ajuizou — e o alerta
+          tocava nas duas. */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-0.5">Polo do cliente</span>
+        {GAVETAS.map((g) => {
+          const ativo = polo === g.id;
+          const n = data?.contagemPorPolo?.[g.id] ?? 0;
+          const cor = g.id === "passivo" ? "bg-danger" : g.id === "ativo" ? "bg-info" : "bg-warning";
+          return (
+            <button
+              key={g.id}
+              type="button"
+              onClick={() => setPolo(g.id)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition-colors ${
+                ativo ? "bg-foreground text-background border-foreground" : "bg-card text-muted-foreground border-border hover:text-foreground"
+              }`}
+              title={g.explicacao}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${cor}`} />
+              <span className="hidden sm:inline">{g.rotulo}</span>
+              <span className="sm:hidden">{g.curto}</span>
+              <span className={`min-w-[17px] px-1 rounded-full text-[10px] tabular-nums text-center ${ativo ? "bg-white/25" : "bg-muted text-foreground"}`}>{n}</span>
+            </button>
+          );
+        })}
+        <p className="text-[10.5px] text-muted-foreground ml-auto text-right max-w-xs hidden md:block">
+          {GAVETAS.find((g) => g.id === polo)?.explicacao}
+        </p>
+      </div>
+      {polo === "ativo" && (
+        <div className="rounded-lg bg-info-bg border border-info/30 px-3 py-2 text-[11px] text-info-fg leading-relaxed">
+          Ações que o <b>seu cliente moveu</b>. Ficam aqui só pra consulta: não viram "Novo", não tocam o sino,
+          não mandam e-mail. Quando o advogado do escritório aparece na causa, o card diz.
+        </div>
+      )}
+      {polo === "desconhecido" && (
+        <div className="rounded-lg bg-warning-bg border border-warning/30 px-3 py-2 text-[11px] text-warning-fg leading-relaxed">
+          O robô leu as partes mas <b>não achou o cliente</b> — nome abreviado, CPF escondido ou tabela fora do
+          padrão. Enquanto não identificado, <b>conta como alerta</b> (melhor um aviso a mais do que um processo
+          escondido). Você resolve com um clique no card.
+        </div>
+      )}
+
       {/* Mostra skeleton tambem em isFetching+lista vazia pra cobrir o gap
           entre setCursor(0)/setAcoesAcumuladas([]) e o resultado da nova
           query — sem isso, o user veria empty-state piscando entre filtros. */}
@@ -3528,12 +3599,18 @@ function NovasAcoesTab() {
           <CardContent className="flex flex-col items-center py-12 text-center">
             <Siren className="h-10 w-10 text-muted-foreground/30 mb-3" />
             <p className="text-sm font-medium">
-              {filtro === "pendentes" ? "Nada pendente — tudo resolvido! 🎉"
+              {polo === "desconhecido" && filtro === "pendentes" ? "Nada sem identificação 🎉"
+                : polo === "ativo" && filtro === "pendentes" ? "Nenhuma ação movida pelo cliente"
+                : filtro === "pendentes" ? "Nada pendente — tudo resolvido! 🎉"
                 : filtro === "resolvidas" ? "Nenhum card resolvido ainda"
                 : "Nenhuma nova ação detectada"}
             </p>
             <p className="text-xs text-muted-foreground mt-1 max-w-md">
-              {filtro === "pendentes"
+              {polo === "desconhecido" && filtro === "pendentes"
+                ? "Quando o robô não conseguir dizer de que lado o cliente está, o card cai aqui pra você decidir."
+                : polo === "ativo" && filtro === "pendentes"
+                ? "Processos em que o seu cliente é o autor aparecem aqui, sem alerta."
+                : filtro === "pendentes"
                 ? "Novas ações contra seus clientes monitorados aparecem aqui pra você dar um desfecho."
                 : filtro === "resolvidas"
                 ? "Cards que você monitorar, marcar como ciente ou descartar aparecem aqui."
@@ -3560,14 +3637,24 @@ function NovasAcoesTab() {
             const natureza = [capa?.classe, capa?.assuntos?.[0]].filter(Boolean).join(" · ");
             const valor = capa?.valor ?? null;
             const corte = capa?.orgao ?? null;
+            // O servidor manda o polo gravado (pelo robô ou pela pessoa); a
+            // capa e a dedução por partes só entram quando ele não sabe.
+            const poloGravado: string = a.poloCliente ?? "desconhecido";
             const poloCliente =
-              capa && capa.poloDoCliente !== "desconhecido"
-                ? capa.poloDoCliente
-                : deduzirPoloDoCliente(capa?.partes ?? [], a.clienteSearchKey, a.clienteApelido);
+              poloGravado !== "desconhecido"
+                ? poloGravado
+                : capa && capa.poloDoCliente !== "desconhecido"
+                  ? capa.poloDoCliente
+                  : deduzirPoloDoCliente(capa?.partes ?? [], a.clienteSearchKey, a.clienteApelido);
             // Sem capa nenhuma não há o que afirmar: o selo só aparece quando
-            // alguém já leu o processo. `capaFalhou` é a leitura que foi
-            // tentada e não veio — essa merece o aviso âmbar.
-            const selo = capa ? SELO_POLO[poloCliente] ?? SELO_POLO.desconhecido : null;
+            // alguém já leu o processo — ou quando alguém DISSE o polo à mão.
+            // `capaFalhou` é a leitura que foi tentada e não veio — essa
+            // merece o aviso âmbar.
+            const selo = capa || poloGravado !== "desconhecido" ? SELO_POLO[poloCliente] ?? SELO_POLO.desconhecido : null;
+            // Gaveta do autor: nunca é alerta — nada de "Novo", borda vermelha
+            // ou sino, mesmo com lido=false.
+            const gavetaAtivo = poloGravado === "ativo";
+            const ehAlerta = !a.lido && !gavetaAtivo;
             const clienteNome = a.clienteApelido || a.clienteSearchKey || "Cliente";
             const seed = clienteNome + (a.id || "");
             const iniciais = gerarIniciais(clienteNome);
@@ -3575,13 +3662,16 @@ function NovasAcoesTab() {
             const rMeta = resolvido ? RESOLUCAO_META[a.resolucao as string] : null;
             const corteBorda = resolvido
               ? (rMeta?.borda ?? "border-l-muted-foreground/40")
-              : (!a.lido ? "border-l-danger" : "border-l-transparent");
+              : gavetaAtivo
+                ? "border-l-info/40"
+                : (!a.lido ? "border-l-danger" : "border-l-transparent");
             const tempoRel = tempoRelativoBR(a.dataDistribuicao || a.createdAt);
+            const pedePolo = !resolvido && poloGravado === "desconhecido";
 
             return (
               <div
                 key={a.id}
-                className={`rounded-xl bg-card border border-border border-l-[3px] ${corteBorda} ${!a.lido ? "shadow-[0_2px_8px_-2px_rgb(244,63,94,0.15)] bg-gradient-to-r from-danger-bg/30 to-white dark:to-muted" : "shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]"} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all ${resolverMut.isPending ? "pointer-events-none opacity-70" : ""}`}
+                className={`rounded-xl bg-card border border-border border-l-[3px] ${corteBorda} ${ehAlerta ? "shadow-[0_2px_8px_-2px_rgb(244,63,94,0.15)] bg-gradient-to-r from-danger-bg/30 to-white dark:to-muted" : "shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]"} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all ${resolverMut.isPending || definirPoloMut.isPending ? "pointer-events-none opacity-70" : ""}`}
               >
                 <div className="px-4 py-3.5">
                   <div className="flex items-start gap-3">
@@ -3596,7 +3686,7 @@ function NovasAcoesTab() {
                         <p className="text-sm font-bold tracking-tight truncate" title={clienteNome}>
                           {clienteNome}
                         </p>
-                        {!resolvido && !a.lido && (
+                        {!resolvido && ehAlerta && (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-danger text-danger-on text-[9px] font-bold uppercase tracking-wider animate-pulse">
                             <Siren className="h-2.5 w-2.5" />
                             Novo
@@ -3611,6 +3701,15 @@ function NovasAcoesTab() {
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold border ${selo.classe}`}>
                             {poloCliente === "desconhecido" ? <HelpCircle className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
                             {selo.texto}
+                          </span>
+                        )}
+                        {a.capa?.advogadoDoEscritorio && (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold border bg-primary/10 text-primary border-primary/30"
+                            title="A OAB do escritório aparece entre as partes deste processo"
+                          >
+                            <Scale className="h-2.5 w-2.5" />
+                            Ajuizada pelo escritório
                           </span>
                         )}
                         {a.clienteSearchType && a.clienteSearchKey && (
@@ -3762,6 +3861,30 @@ function NovasAcoesTab() {
                                   +{detalhes.steps.length - 10} movimentações mais antigas
                                 </p>
                               )}
+                            </div>
+                          </div>
+                        )}
+                        {pedePolo && (
+                          <div className="pt-2 mt-1 border-t border-border/70">
+                            <div className="rounded-lg border border-dashed border-warning/50 bg-warning-bg px-3 py-2 flex items-center gap-2 flex-wrap">
+                              <span className="text-[11px] font-bold text-warning-fg">Este cliente é:</span>
+                              {([
+                                ["passivo", "Réu"],
+                                ["ativo", "Autor"],
+                                ["terceiro", "Terceiro"],
+                              ] as const).map(([valor, rotulo]) => (
+                                <Button
+                                  key={valor}
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-2.5 text-[10.5px] rounded-md bg-card border-warning/50 hover:bg-warning-bg"
+                                  disabled={definirPoloMut.isPending}
+                                  onClick={() => definirPoloMut.mutate({ id: a.id, polo: valor })}
+                                >
+                                  {rotulo}
+                                </Button>
+                              ))}
+                              <span className="text-[10px] text-warning-fg/80">· o card muda de gaveta na hora; vale só pra este processo</span>
                             </div>
                           </div>
                         )}
