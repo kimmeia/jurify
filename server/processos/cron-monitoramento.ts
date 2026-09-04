@@ -26,6 +26,7 @@ import {
   motorTransacoes,
   notificacoes,
   prazosSugeridos,
+  escritorios,
 } from "../../drizzle/schema";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
 import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
@@ -1031,6 +1032,14 @@ export async function pollarUmMonitoramentoNovasAcoes(
       // (1-5/mês típico). Se o scrape falhar, assume relevante por
       // segurança (FP é menos pior que perder ação real).
       const dataRef = mon.dataReferenciaCadastro;
+      // A OAB do escritório entre as partes diz "foi o escritório que
+      // ajuizou" — só informação pra tela; não decide polo.
+      const [escDoMon] = await db
+        .select({ oab: escritorios.oab })
+        .from(escritorios)
+        .where(eq(escritorios.id, mon.escritorioId))
+        .limit(1);
+      const oabEscritorio = escDoMon?.oab ?? null;
       const cnjsRelevantes: string[] = [];
       const cnjsSilenciados: Array<{ cnj: string; motivo: "polo_ativo" | "anterior_cadastro" | "cnj_antigo" }> = [];
 
@@ -1060,6 +1069,7 @@ export async function pollarUmMonitoramentoNovasAcoes(
               detalhe.capa,
               poloDoCliente,
               new Date().toISOString(),
+              { oabEscritorio },
             );
           }
         } catch (err) {
@@ -1133,7 +1143,12 @@ export async function pollarUmMonitoramentoNovasAcoes(
             }),
             cnjAfetado: cnj,
             hashDedup: dedup,
-            lido: !isRelevante, // silenciado já entra lido (sem alerta)
+            poloCliente: poloDoCliente,
+            // Silenciado já entra lido (sem alerta) — exceto o autor
+            // confirmado, que tem gaveta própria na aba e precisa aparecer
+            // lá como pendente. O alerta dele é barrado pelo polo, não pelo
+            // lido.
+            lido: !isRelevante && motivoSilencio !== "polo_ativo",
           });
         } catch {
           /* duplicate hashDedup → ignora */

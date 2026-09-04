@@ -200,10 +200,11 @@ describe("a tela", () => {
     expect(tela).toContain("Polo não identificado");
   });
 
-  it("o selo só aparece quando alguém leu o processo", () => {
+  it("o selo só aparece quando alguém leu o processo — ou disse o polo à mão", () => {
     // Sem capa não há o que afirmar. Um selo de polo sem dado por trás é o
-    // mesmo defeito de antes, com outra cor.
-    expect(tela).toContain("const selo = capa ? SELO_POLO[poloCliente] ?? SELO_POLO.desconhecido : null");
+    // mesmo defeito de antes, com outra cor. O polo gravado (pelo robô ou
+    // pela pessoa, via "Réu / Autor / Terceiro") é dado por trás.
+    expect(tela).toContain('const selo = capa || poloGravado !== "desconhecido" ? SELO_POLO[poloCliente] ?? SELO_POLO.desconhecido : null');
   });
 
   it("o card que falhou explica e oferece nova tentativa", () => {

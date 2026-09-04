@@ -37,6 +37,8 @@ import { classificarErroMonitor } from "../processos/diagnostico-monitoramento";
 import { parsearPartes, resumirPartes } from "../processos/partes-processo";
 import { lerPolo, paraLadoJudit } from "../../shared/polo-parte";
 import { lerCapaNovaAcao, lerFalhaDeCapa } from "../../shared/nova-acao-capa";
+import { POLOS_DA_GAVETA, gavetaDoPolo, type GavetaPolo } from "../../shared/nova-acao-polo";
+import { lerPolo } from "../../shared/polo-parte";
 import { siglasSuportadas } from "../processos/tribunais-pdpj";
 import { ambienteSuportaTeste } from "../_core/ambiente";
 import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resumir-movimentacao";
@@ -2152,6 +2154,11 @@ export const processosRouter = router({
       z.object({
         /** Caixa de entrada: pendentes (default) | resolvidas | todas. */
         filtro: z.enum(["pendentes", "resolvidas", "todas"]).optional(),
+        /**
+         * Gaveta pelo lado do cliente: passivo (réu + terceiro — o alerta),
+         * ativo (autor — só consulta) ou desconhecido. Omitido = todas.
+         */
+        polo: z.enum(["passivo", "ativo", "desconhecido"]).optional(),
         /** Legado — equivale a filtro="pendentes" quando true. */
         apenasNaoLidas: z.boolean().optional(),
         limite: z.number().int().min(1).max(100).default(20),
@@ -2159,7 +2166,8 @@ export const processosRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const empty = { acoes: [], monitoramentos: [], totalNaoLidas: 0, hasMore: false, nextCursor: 0 };
+      const contagemVazia: Record<GavetaPolo, number> = { passivo: 0, ativo: 0, desconhecido: 0 };
+      const empty = { acoes: [], monitoramentos: [], totalNaoLidas: 0, hasMore: false, nextCursor: 0, contagemPorPolo: contagemVazia };
       const db = await getDb();
       if (!db) return empty;
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -2191,15 +2199,21 @@ export const processosRouter = router({
       // os silenciados pelo cron (baseline/polo-ativo/pré-cadastro gravam
       // lido=true sem resolver). Resolvidas = estados terminais. Todas = tudo.
       const filtro = input.filtro ?? (input.apenasNaoLidas === false ? "todas" : "pendentes");
-      const condicoes = [
+      // Condições da caixa (pendentes/resolvidas/todas), SEM a gaveta: a
+      // contagem por polo precisa delas e não do polo.
+      const condicoesCaixa = [
         eq(eventosProcesso.escritorioId, esc.escritorio.id),
         eq(eventosProcesso.tipo, "nova_acao"),
       ];
       if (filtro === "pendentes") {
-        condicoes.push(eq(eventosProcesso.resolucao, "pendente"));
-        condicoes.push(eq(eventosProcesso.lido, false));
+        condicoesCaixa.push(eq(eventosProcesso.resolucao, "pendente"));
+        condicoesCaixa.push(eq(eventosProcesso.lido, false));
       } else if (filtro === "resolvidas") {
-        condicoes.push(ne(eventosProcesso.resolucao, "pendente"));
+        condicoesCaixa.push(ne(eventosProcesso.resolucao, "pendente"));
+      }
+      const condicoes = [...condicoesCaixa];
+      if (input.polo) {
+        condicoes.push(inArray(eventosProcesso.poloCliente, POLOS_DA_GAVETA[input.polo]));
       }
 
       const acoesRaw = await db
@@ -2211,6 +2225,7 @@ export const processosRouter = router({
           conteudo: eventosProcesso.conteudo,
           conteudoJson: eventosProcesso.conteudoJson,
           lido: eventosProcesso.lido,
+          poloCliente: eventosProcesso.poloCliente,
           resolucao: eventosProcesso.resolucao,
           resolvidoEm: eventosProcesso.resolvidoEm,
           resolvidoPorNome: users.name,
@@ -2262,6 +2277,8 @@ export const processosRouter = router({
       // o badge no cabeçalho da aba mostra esse número e a UI faz query
       // separada com limite=1 só pra ele. COUNT separado é mais barato que
       // varrer todas as páginas e é preciso.
+      // O autor confirmado (gaveta "polo ativo") não é alerta: fica fora do
+      // badge mesmo estando pendente.
       const [contagem] = await db
         .select({ total: sql<number>`count(*)` })
         .from(eventosProcesso)
@@ -2271,9 +2288,21 @@ export const processosRouter = router({
             eq(eventosProcesso.tipo, "nova_acao"),
             eq(eventosProcesso.resolucao, "pendente"),
             eq(eventosProcesso.lido, false),
+            ne(eventosProcesso.poloCliente, "ativo"),
           ),
         );
       const naoLidas = Number(contagem?.total ?? 0);
+
+      // Quantos cards cada gaveta tem NESTA caixa — é o número do chip.
+      const porPolo = await db
+        .select({ polo: eventosProcesso.poloCliente, total: sql<number>`count(*)` })
+        .from(eventosProcesso)
+        .where(and(...condicoesCaixa))
+        .groupBy(eventosProcesso.poloCliente);
+      const contagemPorPolo: Record<GavetaPolo, number> = { ...contagemVazia };
+      for (const linha of porPolo) {
+        contagemPorPolo[gavetaDoPolo(lerPolo(linha.polo))] += Number(linha.total ?? 0);
+      }
       // A capa vem do mesmo scrape que o cron já fez pra decidir se alerta.
       // Card detectado antes desta mudança devolve `capa: null` e continua
       // oferecendo o botão de carregar detalhes.
@@ -2288,7 +2317,60 @@ export const processosRouter = router({
         totalNaoLidas: naoLidas,
         hasMore,
         nextCursor: hasMore ? input.cursor + input.limite : input.cursor + acoesValidas.length,
+        contagemPorPolo,
       };
+    }),
+
+  /**
+   * A pessoa diz de que lado o cliente está quando o robô não achou (ou
+   * errou). Move o card de gaveta na hora e vale só pra este processo — o
+   * robô não aprende com isso. Fica registrado quem e quando, no JSON do
+   * evento, ao lado da capa.
+   */
+  definirPoloNovaAcao: protectedProcedure
+    .input(z.object({
+      id: z.number().int().positive(),
+      polo: z.enum(["passivo", "ativo", "terceiro"]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      const [evento] = await db
+        .select({ id: eventosProcesso.id, conteudoJson: eventosProcesso.conteudoJson })
+        .from(eventosProcesso)
+        .where(and(
+          eq(eventosProcesso.id, input.id),
+          eq(eventosProcesso.escritorioId, esc.escritorio.id),
+          eq(eventosProcesso.tipo, "nova_acao"),
+        ))
+        .limit(1);
+      if (!evento) throw new TRPCError({ code: "NOT_FOUND", message: "Card não encontrado." });
+
+      let bruto: Record<string, unknown> = {};
+      try {
+        const lido = evento.conteudoJson ? JSON.parse(evento.conteudoJson) : {};
+        if (lido && typeof lido === "object" && !Array.isArray(lido)) bruto = lido as Record<string, unknown>;
+      } catch {
+        /* JSON quebrado: regrava só o que este clique sabe */
+      }
+      bruto.poloDoCliente = input.polo;
+      if (bruto.capa && typeof bruto.capa === "object") {
+        (bruto.capa as Record<string, unknown>).poloDoCliente = input.polo;
+      }
+      bruto.poloManual = { userId: ctx.user.id, em: new Date().toISOString() };
+
+      await db
+        .update(eventosProcesso)
+        .set({ poloCliente: input.polo, conteudoJson: JSON.stringify(bruto) })
+        .where(and(
+          eq(eventosProcesso.id, input.id),
+          eq(eventosProcesso.escritorioId, esc.escritorio.id),
+          eq(eventosProcesso.tipo, "nova_acao"),
+        ));
+      return { ok: true, polo: input.polo, gaveta: gavetaDoPolo(input.polo) };
     }),
 
   /**
