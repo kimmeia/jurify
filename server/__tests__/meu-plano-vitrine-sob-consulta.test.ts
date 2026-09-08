@@ -113,7 +113,9 @@ vi.mock("../billing/asaas-billing-client", () => ({
 const PLANOS: Record<string, any> = {
   "monitoramento-essencial": { slug: "monitoramento-essencial", nome: "Monitoramento Essencial", precoMensalCentavos: 0, precoAnualCentavos: null, precoSobConsulta: true, ctaDemonstracao: false, popular: false, trialDias: 14 },
   "monitoramento-profissional": { slug: "monitoramento-profissional", nome: "Monitoramento Profissional", precoMensalCentavos: 0, precoAnualCentavos: null, precoSobConsulta: true, ctaDemonstracao: false, popular: true, trialDias: 14 },
-  completo: { slug: "completo", nome: "JuridFlow Completo", precoMensalCentavos: 49700, precoAnualCentavos: null, precoSobConsulta: true, ctaDemonstracao: true, popular: false, trialDias: 14 },
+  // Como está em produção: a seed 0108 deixou 49700/497000 no Completo e a
+  // 0203 só ligou "sob consulta" por cima — nenhuma migration zerou isso.
+  completo: { slug: "completo", nome: "JuridFlow Completo", precoMensalCentavos: 49700, precoAnualCentavos: 497000, precoSobConsulta: true, ctaDemonstracao: true, popular: false, trialDias: 14 },
   pago: { slug: "pago", nome: "Pago", precoMensalCentavos: 19900, precoAnualCentavos: 199000, precoSobConsulta: false, ctaDemonstracao: false, popular: false, trialDias: 0 },
   "pago-so-mensal": { slug: "pago-so-mensal", nome: "Pago só mensal", precoMensalCentavos: 9900, precoAnualCentavos: null, precoSobConsulta: false, ctaDemonstracao: false, popular: false, trialDias: 0 },
 };
@@ -176,6 +178,11 @@ describe("planoTemPrecoAnual", () => {
     expect(planoTemPrecoAnual(undefined)).toBe(false);
     expect(planoTemPrecoAnual({ precoAnualCentavos: 1 })).toBe(true);
   });
+
+  it("plano sob consulta não tem preço anual público, mesmo com número velho no banco", () => {
+    expect(planoTemPrecoAnual({ precoAnualCentavos: 497000, precoSobConsulta: true })).toBe(false);
+    expect(planoTemPrecoAnual({ precoAnualCentavos: 497000, precoSobConsulta: false })).toBe(true);
+  });
 });
 
 describe("subscription.plans", () => {
@@ -183,6 +190,8 @@ describe("subscription.plans", () => {
     const r = await cliente().subscription.plans();
     const porSlug = Object.fromEntries(r.map((p) => [p.slug, p]));
     expect((porSlug["monitoramento-essencial"] as any).temPrecoAnual).toBe(false);
+    // O Completo tem 497000 gravado e é sob consulta: NÃO conta — senão a
+    // vitrine do lançamento (três planos sob consulta) trazia o toggle de volta.
     expect((porSlug["completo"] as any).temPrecoAnual).toBe(false);
     expect((porSlug["pago"] as any).temPrecoAnual).toBe(true);
     expect((porSlug["monitoramento-essencial"] as any).precoSobConsulta).toBe(true);

@@ -159,9 +159,17 @@ export async function garantirAsaasCustomer(
   return customer.id;
 }
 
-/** Preço anual cadastrado de verdade — `null`/0 é "não vendemos anual". */
-export function planoTemPrecoAnual(p: { precoAnualCentavos: number | null } | null | undefined): boolean {
-  return p?.precoAnualCentavos != null && p.precoAnualCentavos > 0;
+/**
+ * Preço anual cadastrado de verdade — `null`/0 é "não vendemos anual".
+ * Plano sob consulta não tem preço público nenhum, mensal ou anual: o
+ * Completo ainda carrega 497000 da seed 0108 e, sem esta regra, era o único
+ * "preço anual" da vitrine — e trazia o toggle de volta.
+ */
+export function planoTemPrecoAnual(
+  p: { precoAnualCentavos: number | null; precoSobConsulta?: boolean } | null | undefined,
+): boolean {
+  if (!p || p.precoSobConsulta) return false;
+  return p.precoAnualCentavos != null && p.precoAnualCentavos > 0;
 }
 
 /**

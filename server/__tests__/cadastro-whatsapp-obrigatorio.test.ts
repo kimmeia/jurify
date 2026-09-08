@@ -259,6 +259,17 @@ describe("amarras no código", () => {
     expect(form).toContain("loginGoogleMut.mutate({ idToken: googlePendente.idToken, whatsapp, aceitouTermos: true })");
   });
 
+  it("os campos de WhatsApp não têm maxLength: “+55 85 99123-4567” colado tem 17 caracteres e o corte do DDI vem depois", () => {
+    const form = ler("client/src/pages/auth/AuthForms.tsx");
+    for (const id of ['id="signup-whatsapp"', 'id="google-whatsapp"']) {
+      const i = form.indexOf(id);
+      expect(i, id).toBeGreaterThan(-1);
+      const campo = form.slice(i, form.indexOf("/>", i));
+      expect(campo, id).not.toContain("maxLength");
+      expect(campo, id).toContain("mascararTelefoneBR(e.target.value)");
+    }
+  });
+
   it("o número sobrevive ao upsert e chega ao painel admin (ficha, lista, caderninho)", () => {
     const db = ler("server/db.ts");
     expect(db).toContain('const textFields = ["name", "email", "loginMethod", "passwordHash", "googleSub", "whatsapp"] as const;');

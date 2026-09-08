@@ -504,7 +504,6 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
                     className="pl-9"
                     required
                     autoComplete="tel-national"
-                    maxLength={15}
                   />
                 </div>
                 <p className="text-[10px] text-muted-foreground">
@@ -672,7 +671,6 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
                   onKeyDown={(e) => { if (e.key === "Enter") concluirCadastroGoogle(); }}
                   className="pl-9"
                   autoComplete="tel-national"
-                  maxLength={15}
                   autoFocus
                 />
               </div>
