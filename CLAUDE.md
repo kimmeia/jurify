@@ -511,9 +511,12 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
   o servidor recusava o clique); quem já tem `valorNegociadoCentavos` vê o
   valor fechado no hero, sem botão de fechar de novo (`valorFechado`);
   `conviteEstaPendente` confere o E-MAIL do convite (senão link de outra
-  pessoa criava conta Google sem WhatsApp/aceite); sem `maxLength` nos
-  campos (truncava "+55 …" colado antes do corte do DDI); Enter duplo no
-  diálogo do Google; migration 0216 também LIGA popular no Profissional.
+  pessoa criava conta Google sem WhatsApp/aceite) e o login Google do
+  convidado chama `aceitarConvite` na MESMA requisição (conta de convidado
+  não fica solta sem número se a aba cair; a página /convite só confirma);
+  sem `maxLength` nos campos (truncava "+55 …" colado antes do corte do
+  DDI); Enter duplo no diálogo do Google; migration 0216 também LIGA
+  popular no Profissional.
   **Pré-existentes, NÃO corrigidos (fora do pedido, precisam de "pode
   fazer")**: `admin.trocarPlanoAdmin` (painel → ficha → "Trocar plano")
   cria assinatura Asaas pelo preço cru do plano — sob consulta vira R$ 0 —
