@@ -588,8 +588,9 @@ export const authRouter = router({
       // Conta nova de dono só nasce com WhatsApp + aceite. Conta antiga sem
       // número não é cobrada (decisão do dono); convidado também não.
       let whatsappNovo: string | null = null;
+      let convidado = false;
       if (!user) {
-        const convidado = input.conviteToken ? await conviteEstaPendente(input.conviteToken, email) : false;
+        convidado = input.conviteToken ? await conviteEstaPendente(input.conviteToken, email) : false;
         if (!convidado) {
           whatsappNovo = normalizarWhatsappCadastro(input.whatsapp);
           if (!whatsappNovo || input.aceitouTermos !== true) {
@@ -616,6 +617,20 @@ export const authRouter = router({
       // (faz após upsert pra ter o user.id correto, mesmo se foi recém-criado)
       const userPos = user || (await getUserByEmail(email));
       if (userPos) await bloquearSeRemovido(userPos.id);
+
+      // A conta do convidado nasceu sem WhatsApp POR SER convidado: o vínculo
+      // com o escritório se fecha aqui, na mesma requisição, como o signup por
+      // e-mail faz. Deixar pro client (página /convite) era deixar uma conta
+      // solta, sem número, se a aba fechasse no meio — e `aceitarConvite` é
+      // idempotente, então o aceite da página só confirma.
+      if (convidado && userPos && input.conviteToken) {
+        try {
+          const { aceitarConvite } = await import("../escritorio/db-escritorio");
+          await aceitarConvite(input.conviteToken, userPos.id);
+        } catch (err: any) {
+          log.warn({ userId: userPos.id, err: err?.message }, "Convite não aceito no login Google — a página /convite tenta de novo");
+        }
+      }
 
       // O aceite veio no passo do WhatsApp: mesma trilha do cadastro por
       // e-mail (versão no user + linha de prova com IP).

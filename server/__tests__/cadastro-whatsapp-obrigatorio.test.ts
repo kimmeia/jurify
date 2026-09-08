@@ -235,6 +235,9 @@ describe("auth.loginGoogle — conta nova pelo Google nasce com WhatsApp", () =>
     const r = await caller().loginGoogle({ idToken: TOKEN_GOOGLE, conviteToken: TOKEN_CONVITE });
     expect(r).toEqual(expect.objectContaining({ success: true }));
     expect(upsertUserMock).toHaveBeenCalledTimes(1);
+    // O vínculo com o escritório fecha na MESMA requisição — conta de
+    // convidado não fica solta (sem número e sem escritório) se a aba cair.
+    expect(aceitarConviteMock).toHaveBeenCalledWith(TOKEN_CONVITE, 9);
   });
 
   it("convite inventado (ou já usado) não abre o atalho", async () => {

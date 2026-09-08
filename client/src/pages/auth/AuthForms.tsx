@@ -668,7 +668,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
                   placeholder="(85) 99123-4567"
                   value={googleWhatsapp}
                   onChange={(e) => setGoogleWhatsapp(mascararTelefoneBR(e.target.value))}
-                  onKeyDown={(e) => { if (e.key === "Enter") concluirCadastroGoogle(); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.repeat) concluirCadastroGoogle(); }}
                   className="pl-9"
                   autoComplete="tel-national"
                   autoFocus
