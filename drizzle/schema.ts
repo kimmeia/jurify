@@ -79,6 +79,11 @@ export const users = mysqlTable("users", {
    * automaticamente após `confirmarEmail`. Null = não escolheu.
    */
   planoPretendido: varchar("plano_pretendido", { length: 64 }),
+  /**
+   * WhatsApp informado no cadastro (só dígitos, sem DDI). Obrigatório pra
+   * conta nova de dono; NULL em contas antigas e colaboradores convidados.
+   */
+  whatsapp: varchar("whatsapp", { length: 20 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

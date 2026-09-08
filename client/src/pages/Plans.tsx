@@ -73,12 +73,36 @@ export default function Plans() {
   });
 
   // Plano sob consulta não tem checkout self-service — o caminho é a conversa.
-  const falarComAGente = (nomePlano: string) => {
-    const texto = `Olá! Tenho interesse no plano ${nomePlano} do JuridFlow.`;
+  const abrirConversaComercial = (texto: string, assunto: string) => {
     const url = contatoComercial?.whatsapp
       ? `https://wa.me/${contatoComercial.whatsapp}?text=${encodeURIComponent(texto)}`
-      : `mailto:contato@juridflow.com.br?subject=${encodeURIComponent(`Interesse no plano ${nomePlano}`)}`;
+      : `mailto:contato@juridflow.com.br?subject=${encodeURIComponent(assunto)}`;
     window.open(url, "_blank", "noopener,noreferrer");
+  };
+  const falarComAGente = (nomePlano: string, demonstracao = false) =>
+    abrirConversaComercial(
+      demonstracao
+        ? `Olá! Quero agendar uma demonstração do ${nomePlano}.`
+        : `Olá! Tenho interesse no plano ${nomePlano} do JuridFlow.`,
+      demonstracao ? `Demonstração do ${nomePlano}` : `Interesse no plano ${nomePlano}`,
+    );
+  const fecharValorComAGente = (nomePlano: string, emTeste: boolean) =>
+    abrirConversaComercial(
+      emTeste
+        ? `Olá! Estou no teste do ${nomePlano} e quero fechar o valor.`
+        : `Olá! Tenho o plano ${nomePlano} no JuridFlow e quero fechar o valor.`,
+      `Fechar valor do ${nomePlano}`,
+    );
+
+  // "Anual" só existe quando algum plano tem preço anual cadastrado. Sem isso o
+  // toggle prometia dois meses de desconto e o ciclo anual cobraria 12× o mensal.
+  const temPrecoAnual = (plans ?? []).some((p) => !!(p as any).temPrecoAnual);
+  const intervalo: "monthly" | "yearly" = temPrecoAnual ? billingInterval : "monthly";
+  // Plano sem preço anual fica no mensal mesmo com "Anual" ligado — senão o
+  // card mostrava 12× o mensal como "/ano" e o servidor recusava o clique.
+  const cicloDoPlano = (planId: string | null | undefined): "monthly" | "yearly" => {
+    const p = (plans ?? []).find((x) => x.id === planId);
+    return p && (p as any).temPrecoAnual ? intervalo : "monthly";
   };
   const { data: currentSub } = trpc.subscription.current.useQuery(undefined, {
     enabled: !!user,
@@ -210,7 +234,7 @@ export default function Plans() {
     // Se já tem subscription ativa → trocar plano (não pede CPF de novo)
     if (currentSub && currentSub.asaasCustomerId) {
       setLoadingPlan(planId);
-      changePlan.mutate({ newPlanId: planId, interval: billingInterval });
+      changePlan.mutate({ newPlanId: planId, interval: cicloDoPlano(planId) });
       return;
     }
 
@@ -228,7 +252,7 @@ export default function Plans() {
     setLoadingPlan(pendingPlanId);
     createCheckout.mutate({
       planId: pendingPlanId,
-      interval: billingInterval,
+      interval: cicloDoPlano(pendingPlanId),
       cpfCnpj: cpfInput.replace(/\D/g, ""),
     });
   };
@@ -269,9 +293,28 @@ export default function Plans() {
 
   const currentPlanName = plans?.find((p) => p.id === currentPlanId)?.name ?? currentPlanId;
   const currentPlanData = plans?.find((p) => p.id === currentPlanId);
-  const currentPrice = currentPlanData
-    ? (billingInterval === "monthly" ? currentPlanData.priceMonthly : currentPlanData.priceYearly)
+  // Plano sob consulta não tem preço público: o cabeçalho mostrava R$ 497,00
+  // (o número antigo que ficou no banco) em cima de um plano "sob consulta".
+  const sobConsultaAtual = !!(currentPlanData as any)?.precoSobConsulta;
+  const currentPrice = currentPlanData && !sobConsultaAtual
+    ? (cicloDoPlano(currentPlanId) === "monthly" ? currentPlanData.priceMonthly : currentPlanData.priceYearly)
     : 0;
+  const emTeste = currentSub?.status === "trialing";
+  // Quem já fechou o valor na conversa (assinatura negociada pelo painel) vê o
+  // número combinado — não "Sob consulta" com botão de fechar de novo.
+  const valorNegociado = (currentSub as any)?.valorNegociadoCentavos ?? null;
+  const valorFechado = sobConsultaAtual && typeof valorNegociado === "number" && valorNegociado > 0;
+  const todosSobConsulta =
+    subscriptionPlans.length > 0 && subscriptionPlans.every((p) => !!(p as any).precoSobConsulta);
+  // "Mais escolhido" é um selo só. O servidor já desliga os outros ao ligar um;
+  // aqui a tela garante que dado antigo com dois ligados não mostre dois.
+  const popularId = subscriptionPlans.find((p) => p.popular)?.id ?? null;
+  const economiaAnual = Math.max(
+    0,
+    ...subscriptionPlans
+      .filter((p) => !!(p as any).temPrecoAnual)
+      .map((p) => p.priceMonthly * 12 - p.priceYearly),
+  );
 
   return (
     <div className="max-w-6xl mx-auto py-6 px-2 space-y-5">
@@ -289,15 +332,27 @@ export default function Plans() {
                 <p className="text-2xl font-extrabold tracking-tight">{currentPlanName}</p>
                 <StatusPlanoBadge status={resolverStatusVisual(currentSub)} />
               </div>
-              {currentPrice > 0 && (
+              {valorFechado ? (
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                  <span className="text-lg font-bold tabular-nums">{formatPrice(valorNegociado)}</span>
+                  <span className="text-[10px] text-white/70">/mês · valor fechado com a gente</span>
+                </div>
+              ) : sobConsultaAtual ? (
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                  <span className="text-lg font-bold">Sob consulta</span>
+                  <span className="text-[10px] text-white/70">· o valor é fechado na conversa</span>
+                </div>
+              ) : currentPrice > 0 && (
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-lg font-bold tabular-nums">{formatPrice(currentPrice)}</span>
-                  <span className="text-[10px] text-white/70">/{billingInterval === "monthly" ? "mês" : "ano"}</span>
+                  <span className="text-[10px] text-white/70">/{cicloDoPlano(currentPlanId) === "monthly" ? "mês" : "ano"}</span>
                 </div>
               )}
               <p className="text-[11px] text-white/80 mt-2">
                 {currentSub.status === "trialing" && (currentSub as any).diasRestantesTrial != null
-                  ? `Trial termina em ${(currentSub as any).diasRestantesTrial} dia${(currentSub as any).diasRestantesTrial === 1 ? "" : "s"}${
+                  ? sobConsultaAtual && !(currentSub as any).pagamentoEmAndamento
+                    ? `Teste termina em ${(currentSub as any).diasRestantesTrial} dia${(currentSub as any).diasRestantesTrial === 1 ? "" : "s"}. Nada é cobrado sem você fechar o valor.`
+                    : `Trial termina em ${(currentSub as any).diasRestantesTrial} dia${(currentSub as any).diasRestantesTrial === 1 ? "" : "s"}${
                       (currentSub as any).pagamentoEmAndamento
                         ? " · pagamento em andamento: quando o Asaas confirmar, o plano entra no lugar do teste"
                         : ""
@@ -323,6 +378,15 @@ export default function Plans() {
 
             {/* Ações */}
             <div className="flex flex-col gap-2">
+              {sobConsultaAtual && !valorFechado && (
+                <Button
+                  size="sm"
+                  onClick={() => fecharValorComAGente(currentPlanName ?? "JuridFlow", emTeste)}
+                  className="bg-white text-primary hover:bg-white/90 font-bold shadow-sm"
+                >
+                  💬 Fechar valor com a gente
+                </Button>
+              )}
               {currentSub.status !== "trialing" && (
                 <Button
                   variant="ghost"
@@ -438,40 +502,50 @@ export default function Plans() {
             {currentSub ? "Trocar de plano" : "Planos disponíveis"}
           </p>
           <p className="text-[11px] text-muted-foreground">
-            {currentSub ? "Upgrade pra desbloquear recursos · downgrade reduz limites" : "Escolha o melhor pro tamanho do seu escritório"}
+            {todosSobConsulta
+              ? `Todos os planos são fechados na conversa — clique e a gente responde ${contatoComercial?.whatsapp ? "no WhatsApp" : "por e-mail"}.`
+              : currentSub
+                ? "Upgrade pra desbloquear recursos · downgrade reduz limites"
+                : "Escolha o melhor pro tamanho do seu escritório"}
           </p>
         </div>
-        <div className="bg-muted border border-border rounded-lg p-1 inline-flex gap-0.5">
-          <button
-            onClick={() => setBillingInterval("monthly")}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-              billingInterval === "monthly"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Mensal
-          </button>
-          <button
-            onClick={() => setBillingInterval("yearly")}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all inline-flex items-center gap-1.5 ${
-              billingInterval === "yearly"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Anual
-            <span className="text-[9px] font-bold text-success-fg bg-success-bg px-1.5 py-0.5 rounded-full">−2 meses</span>
-          </button>
-        </div>
+        {temPrecoAnual && (
+          <div className="bg-muted border border-border rounded-lg p-1 inline-flex gap-0.5">
+            <button
+              onClick={() => setBillingInterval("monthly")}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                intervalo === "monthly"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Mensal
+            </button>
+            <button
+              onClick={() => setBillingInterval("yearly")}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all inline-flex items-center gap-1.5 ${
+                intervalo === "yearly"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Anual
+              {economiaAnual > 0 && (
+                <span className="text-[9px] font-bold text-success-fg bg-success-bg px-1.5 py-0.5 rounded-full">
+                  economize até {formatPrice(economiaAnual)}/ano
+                </span>
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Plans Grid */}
       <div className="grid gap-6 md:grid-cols-3">
         {subscriptionPlans.map((plan) => {
-          const price =
-            billingInterval === "monthly" ? plan.priceMonthly : plan.priceYearly;
-          const isPopular = plan.popular;
+          const ciclo = cicloDoPlano(plan.id);
+          const price = ciclo === "monthly" ? plan.priceMonthly : plan.priceYearly;
+          const isPopular = plan.id === popularId;
           const isCurrentPlan = currentPlanId === plan.id;
           const planIndex = subscriptionPlans.findIndex((p) => p.id === plan.id);
           const currentIndex = subscriptionPlans.findIndex(
@@ -482,14 +556,16 @@ export default function Plans() {
 
           const isTrial = currentSub?.status === "trialing";
           const sobConsulta = !!(plan as any).precoSobConsulta;
+          const demonstracao = !!(plan as any).ctaDemonstracao;
 
           let buttonLabel = "Assinar";
           if (isCurrentPlan && isTrial) buttonLabel = "Continuar com este plano";
           else if (isCurrentPlan) buttonLabel = "Plano Atual";
           else if (isUpgrade) buttonLabel = "Fazer Upgrade";
           else if (isDowngrade) buttonLabel = "Fazer Downgrade";
-          if (sobConsulta && !isCurrentPlan) buttonLabel = "💬 Falar com a gente";
-          if (sobConsulta && isCurrentPlan && isTrial) buttonLabel = "💬 Fechar valor com a gente";
+          if (sobConsulta && !isCurrentPlan) buttonLabel = demonstracao ? "💬 Agendar demonstração" : "💬 Falar com a gente";
+          const podeFecharValor = sobConsulta && isCurrentPlan && isTrial && !valorFechado;
+          if (podeFecharValor) buttonLabel = "💬 Fechar valor com a gente";
 
           return (
             <div
@@ -534,15 +610,18 @@ export default function Plans() {
                         {formatPrice(price)}
                       </span>
                       <span className="text-xs text-muted-foreground/70 font-normal">
-                        /{billingInterval === "monthly" ? "mês" : "ano"}
+                        /{ciclo === "monthly" ? "mês" : "ano"}
                       </span>
                     </>
                   )}
                 </div>
-                {!sobConsulta && billingInterval === "yearly" && (
+                {!sobConsulta && ciclo === "yearly" && (
                   <p className="text-[10px] text-success-fg font-semibold mt-1">
                     Economia de {formatPrice(plan.priceMonthly * 12 - plan.priceYearly)}/ano
                   </p>
+                )}
+                {!sobConsulta && intervalo === "yearly" && ciclo === "monthly" && (
+                  <p className="text-[10px] text-muted-foreground mt-1">só no mensal</p>
                 )}
                 <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">{plan.description}</p>
               </div>
@@ -587,21 +666,27 @@ export default function Plans() {
                 size="sm"
                 disabled={
                   loadingPlan !== null ||
-                  (isCurrentPlan && !(sobConsulta && isTrial)) ||
+                  (isCurrentPlan && !podeFecharValor) ||
                   (!sobConsulta && billingOk === false)
                 }
-                onClick={() => (sobConsulta ? falarComAGente(plan.name) : handleSelectPlan(plan.id))}
+                onClick={() =>
+                  sobConsulta
+                    ? isCurrentPlan
+                      ? fecharValorComAGente(plan.name, isTrial)
+                      : falarComAGente(plan.name, demonstracao)
+                    : handleSelectPlan(plan.id)
+                }
               >
                 {loadingPlan === plan.id ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando…
                   </>
-                ) : isCurrentPlan && !(sobConsulta && isTrial) ? (
+                ) : isCurrentPlan && !podeFecharValor ? (
                   <>✓ Você está aqui</>
                 ) : (
                   <>
-                    {isUpgrade && <>↑ </>}
-                    {isDowngrade && <>↓ </>}
+                    {isUpgrade && !sobConsulta && <>↑ </>}
+                    {isDowngrade && !sobConsulta && <>↓ </>}
                     {buttonLabel}
                     {!isCurrentPlan && <ArrowRight className="ml-1.5 h-3.5 w-3.5" />}
                   </>
@@ -661,13 +746,13 @@ export default function Plans() {
                 </strong>
                 {" — "}
                 {formatPrice(
-                  billingInterval === "monthly"
+                  cicloDoPlano(pendingPlanId) === "monthly"
                     ? plans?.find((p) => p.id === pendingPlanId)
                         ?.priceMonthly ?? 0
                     : plans?.find((p) => p.id === pendingPlanId)
                         ?.priceYearly ?? 0,
                 )}
-                /{billingInterval === "monthly" ? "mês" : "ano"}
+                /{cicloDoPlano(pendingPlanId) === "monthly" ? "mês" : "ano"}
               </p>
             )}
           </div>
