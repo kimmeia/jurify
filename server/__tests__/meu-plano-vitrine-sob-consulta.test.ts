@@ -102,9 +102,10 @@ vi.mock("../db", async (importOriginal) => {
 });
 
 const criarAssinatura = vi.fn(async () => ({ id: "sub_new" }));
+const cancelarAssinatura = vi.fn(async () => undefined);
 const listarCobrancas = vi.fn(async () => ({ data: [{ externalReference: "100:pago", invoiceUrl: "https://asaas/i/1", deleted: false }] }));
 vi.mock("../billing/asaas-billing-client", () => ({
-  getAdminAsaasClient: vi.fn(async () => ({ criarAssinatura, listarCobrancas, cancelarAssinatura: vi.fn() })),
+  getAdminAsaasClient: vi.fn(async () => ({ criarAssinatura, listarCobrancas, cancelarAssinatura })),
   isAsaasBillingConfigured: () => true,
   getAsaasBillingWebhookSecret: vi.fn(async () => "segredo"),
 }));
@@ -165,7 +166,9 @@ const admin = () => appRouter.createCaller(ctxDe("admin"));
 beforeEach(() => {
   capturado.inserts = [];
   capturado.updates = [];
-  criarAssinatura.mockClear();
+  criarAssinatura.mockReset();
+  criarAssinatura.mockResolvedValue({ id: "sub_new" });
+  cancelarAssinatura.mockClear();
   getActiveSubscriptionMock.mockReset();
   getActiveSubscriptionMock.mockResolvedValue({ id: 1, asaasSubscriptionId: "sub_old", asaasCustomerId: "cus_1", planId: "completo", status: "trialing" });
   for (const k of Object.keys(filas)) delete filas[k];
@@ -224,6 +227,44 @@ describe("subscription.changePlan / createCheckout — o que não pode virar cob
     expect(r.asaasSubscriptionId).toBe("sub_new");
     expect(criarAssinatura).toHaveBeenCalledTimes(1);
     expect((criarAssinatura.mock.calls[0] as any[])[0]).toEqual(expect.objectContaining({ cycle: "YEARLY", value: 1990 }));
+  });
+});
+
+describe("admin.trocarPlanoAdmin — painel → ficha → “Trocar plano”", () => {
+  const CLIENTE = { id: 7, name: "Carla", email: "carla@x.adv.br", asaasCustomerId: "cus_7" };
+  const ATUAL = { id: 40, asaasSubscriptionId: "sub_old", asaasCustomerId: "cus_7", planId: "pago", status: "active" };
+
+  it("plano sob consulta é recusado — e a assinatura atual NÃO é cancelada", async () => {
+    filas["users"] = [[CLIENTE]];
+    getActiveSubscriptionMock.mockResolvedValue(ATUAL);
+    await expect(
+      admin().admin.trocarPlanoAdmin({ userId: 7, newPlanId: "monitoramento-essencial", interval: "monthly" }),
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(cancelarAssinatura).not.toHaveBeenCalled();
+    expect(criarAssinatura).not.toHaveBeenCalled();
+    expect(capturado.updates.filter((u) => u.set?.status === "canceled")).toHaveLength(0);
+  });
+
+  it("se o Asaas recusa a nova, a atual continua de pé (antes era cancelada ANTES de tentar)", async () => {
+    filas["users"] = [[CLIENTE], [CLIENTE]];
+    filas["subscriptions"] = [[]];
+    getActiveSubscriptionMock.mockResolvedValue(ATUAL);
+    criarAssinatura.mockRejectedValueOnce(new Error("Asaas fora"));
+    await expect(admin().admin.trocarPlanoAdmin({ userId: 7, newPlanId: "pago", interval: "monthly" })).rejects.toThrow("Asaas fora");
+    expect(cancelarAssinatura).not.toHaveBeenCalled();
+    expect(capturado.updates.filter((u) => u.set?.status === "canceled")).toHaveLength(0);
+  });
+
+  it("com a nova criada, aí sim a antiga é cancelada — nessa ordem", async () => {
+    filas["users"] = [[CLIENTE], [CLIENTE]];
+    filas["subscriptions"] = [[]];
+    getActiveSubscriptionMock.mockResolvedValue(ATUAL);
+    const r = await admin().admin.trocarPlanoAdmin({ userId: 7, newPlanId: "pago", interval: "monthly" });
+    expect(r.success).toBe(true);
+    expect(cancelarAssinatura).toHaveBeenCalledWith("sub_old");
+    expect(criarAssinatura.mock.invocationCallOrder[0]).toBeLessThan(cancelarAssinatura.mock.invocationCallOrder[0]);
+    expect(capturado.inserts.find((i) => i.table === "subscriptions")?.values).toEqual(expect.objectContaining({ userId: 7, planId: "pago", status: "incomplete" }));
+    expect(capturado.updates.find((u) => u.set?.status === "canceled")?.where).toBe("id = 40");
   });
 });
 

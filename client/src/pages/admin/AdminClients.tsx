@@ -23,7 +23,12 @@ import {
   Loader2, Search, Lock, Unlock, LogIn, FileText, Trash2, MessageSquarePlus,
   AlertTriangle, RotateCcw, Users as UsersIcon, Gift, ArrowLeft, Crown, ChevronRight, Mail, DollarSign, Plus, Phone,
 } from "lucide-react";
-import { mascararTelefoneBR, telefoneParaWaMe } from "@shared/telefone";
+import {
+  MENSAGEM_WHATSAPP_OBRIGATORIO,
+  mascararTelefoneBR,
+  normalizarWhatsappCadastro,
+  telefoneParaWaMe,
+} from "@shared/telefone";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEffect, useState } from "react";
@@ -302,6 +307,7 @@ function CriarClienteDialog({ open, onOpenChange, onCriado }: {
   const [fase, setFase] = useState<"form" | "pronto">("form");
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
   const [senha, setSenha] = useState(() => gerarSenhaProvisoria());
   const [planId, setPlanId] = useState("");
   const [acesso, setAcesso] = useState<"cortesia" | "trial">("cortesia");
@@ -324,7 +330,7 @@ function CriarClienteDialog({ open, onOpenChange, onCriado }: {
     onOpenChange(o);
     if (!o) {
       setFase("form");
-      setNome(""); setEmail(""); setPlanId(""); setAcesso("cortesia"); setValidade("");
+      setNome(""); setEmail(""); setWhatsapp(""); setPlanId(""); setAcesso("cortesia"); setValidade("");
       setSenha(gerarSenhaProvisoria());
     }
   };
@@ -341,11 +347,14 @@ function CriarClienteDialog({ open, onOpenChange, onCriado }: {
   const submeter = () => {
     if (nome.trim().length < 2) { toast.error("Informe o nome"); return; }
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) { toast.error("E-mail inválido"); return; }
+    const whatsappNormalizado = normalizarWhatsappCadastro(whatsapp);
+    if (!whatsappNormalizado) { toast.error(MENSAGEM_WHATSAPP_OBRIGATORIO); return; }
     if (senha.length < 8) { toast.error("Senha precisa de 8+ caracteres"); return; }
     if (acesso === "trial" && !planId) { toast.error("Escolha o plano pro teste"); return; }
     criarMut.mutate({
       nome: nome.trim(),
       email: email.trim().toLowerCase(),
+      whatsapp: whatsappNormalizado,
       senha,
       planId: planId || undefined,
       acesso,
@@ -376,6 +385,20 @@ function CriarClienteDialog({ open, onOpenChange, onCriado }: {
               <div className="space-y-1">
                 <Label className="text-xs">E-mail (vai ser o login) *</Label>
                 <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="beatriz@escritorio.adv.br" maxLength={320} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">WhatsApp (com DDD) *</Label>
+                <Input
+                  type="tel"
+                  inputMode="tel"
+                  value={whatsapp}
+                  onChange={(e) => setWhatsapp(mascararTelefoneBR(e.target.value))}
+                  placeholder="(85) 99123-4567"
+                  autoComplete="off"
+                />
+                {whatsapp.length > 0 && !normalizarWhatsappCadastro(whatsapp) && (
+                  <p className="text-[10px] text-danger-fg">{MENSAGEM_WHATSAPP_OBRIGATORIO}</p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Senha provisória *</Label>
