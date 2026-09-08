@@ -11,11 +11,17 @@
 import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from "@shared/const";
+import {
+  MENSAGEM_WHATSAPP_OBRIGATORIO,
+  mascararTelefoneBR,
+  normalizarWhatsappCadastro,
+} from "@shared/telefone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Mail, Lock, User, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Loader2, Mail, Lock, User, AlertCircle, CheckCircle2, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { TurnstileWidget, turnstileHabilitado } from "@/components/TurnstileWidget";
 
@@ -109,14 +115,40 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
     },
   });
 
+  // Conta nova pelo Google: o servidor NÃO cria a conta sem WhatsApp + aceite
+  // e devolve `precisaWhatsapp`; o passo abaixo pede os dois e chama de novo
+  // com o mesmo token do Google. Quem já tem conta nunca vê o passo.
+  const [googlePendente, setGooglePendente] = useState<{ idToken: string; email: string; name: string } | null>(null);
+  const [googleWhatsapp, setGoogleWhatsapp] = useState("");
+  const [googleAceitou, setGoogleAceitou] = useState(false);
+
   const loginGoogleMut = trpc.auth.loginGoogle.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (data, variables) => {
+      if ("precisaWhatsapp" in data && data.precisaWhatsapp) {
+        setGooglePendente({ idToken: variables.idToken, email: data.email, name: data.name });
+        return;
+      }
+      setGooglePendente(null);
       toast.success("Login com Google realizado!");
       await utils.auth.me.invalidate();
       onSuccess?.();
     },
     onError: (e) => toast.error(e.message),
   });
+
+  const concluirCadastroGoogle = () => {
+    if (!googlePendente) return;
+    const whatsapp = normalizarWhatsappCadastro(googleWhatsapp);
+    if (!whatsapp) {
+      toast.error(MENSAGEM_WHATSAPP_OBRIGATORIO);
+      return;
+    }
+    if (!googleAceitou) {
+      toast.error("Você precisa aceitar os Termos e a Política de Privacidade");
+      return;
+    }
+    loginGoogleMut.mutate({ idToken: googlePendente.idToken, whatsapp, aceitouTermos: true });
+  };
 
   // ─── Google Sign-In ────────────────────────────────────────────────────────
 
@@ -158,7 +190,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
     // Atualiza o callback global apontando pra mutation desta instância
     gisCallback = (response: { credential: string }) => {
       if (response.credential) {
-        loginGoogleMut.mutate({ idToken: response.credential });
+        loginGoogleMut.mutate({ idToken: response.credential, conviteToken });
       }
     };
 
@@ -185,7 +217,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
       logo_alignment: "left",
       width: googleBtnRef.current.offsetWidth || 320,
     });
-  }, [gisLoaded, googleConfig?.clientId, tab, loginGoogleMut]);
+  }, [gisLoaded, googleConfig?.clientId, tab, loginGoogleMut, conviteToken]);
 
   // ─── Form state ────────────────────────────────────────────────────────────
 
@@ -193,6 +225,11 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
   const [loginPassword, setLoginPassword] = useState("");
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState(initialEmail || "");
+  // WhatsApp com DDD: obrigatório pra dono de escritório novo. Convidado de
+  // um escritório não informa (decisão do dono) — o campo nem aparece.
+  const [signupWhatsapp, setSignupWhatsapp] = useState("");
+  const exigeWhatsapp = !conviteToken;
+  const whatsappValido = !!normalizarWhatsappCadastro(signupWhatsapp);
   const [signupPassword, setSignupPassword] = useState("");
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
   const [aceitouTermos, setAceitouTermos] = useState(false);
@@ -217,6 +254,11 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
       toast.error("Você precisa aceitar os Termos e a Política de Privacidade");
       return;
     }
+    const whatsapp = normalizarWhatsappCadastro(signupWhatsapp);
+    if (exigeWhatsapp && !whatsapp) {
+      toast.error(MENSAGEM_WHATSAPP_OBRIGATORIO);
+      return;
+    }
     // Lê plano escolhido na LP (persistido em sessionStorage pelo Pricing.tsx)
     let planoSlug: string | undefined;
     try {
@@ -232,6 +274,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
       name: signupName.trim(),
       email: signupEmail.trim().toLowerCase(),
       password: signupPassword,
+      whatsapp: exigeWhatsapp ? (whatsapp ?? undefined) : undefined,
       aceitouTermos: true,
       planoSlug,
       conviteToken,
@@ -444,6 +487,37 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
               </div>
             </div>
 
+            {exigeWhatsapp && (
+              <div className="space-y-1.5">
+                <Label htmlFor="signup-whatsapp" className="text-xs">
+                  WhatsApp (com DDD)
+                </Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="signup-whatsapp"
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="(85) 99123-4567"
+                    value={signupWhatsapp}
+                    onChange={(e) => setSignupWhatsapp(mascararTelefoneBR(e.target.value))}
+                    className="pl-9"
+                    required
+                    autoComplete="tel-national"
+                    maxLength={15}
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  É por aqui que a gente fala com você sobre a conta e o plano.
+                </p>
+                {signupWhatsapp.length > 0 && !whatsappValido && (
+                  <p className="text-[10px] flex items-center gap-1 text-danger-fg">
+                    <AlertCircle className="h-3 w-3" /> {MENSAGEM_WHATSAPP_OBRIGATORIO}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="signup-password" className="text-xs">
                 Senha (mínimo 6 caracteres)
@@ -534,6 +608,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
                 isLoading ||
                 !signupName ||
                 !signupEmail ||
+                (exigeWhatsapp && !whatsappValido) ||
                 !signupPassword ||
                 signupPassword !== signupPasswordConfirm ||
                 !aceitouTermos
@@ -571,6 +646,73 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
           para habilitar login com Google.
         </p>
       )}
+
+      {/* Passo do WhatsApp pra conta nova pelo Google — a conta só nasce depois daqui. */}
+      <Dialog open={!!googlePendente} onOpenChange={(aberto) => { if (!aberto) setGooglePendente(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Falta só o seu WhatsApp</DialogTitle>
+            <DialogDescription>
+              Entrando como <strong>{googlePendente?.email}</strong>. É por aqui que a gente fala com
+              você sobre a conta e o plano.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="google-whatsapp" className="text-xs">WhatsApp (com DDD)</Label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="google-whatsapp"
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="(85) 99123-4567"
+                  value={googleWhatsapp}
+                  onChange={(e) => setGoogleWhatsapp(mascararTelefoneBR(e.target.value))}
+                  onKeyDown={(e) => { if (e.key === "Enter") concluirCadastroGoogle(); }}
+                  className="pl-9"
+                  autoComplete="tel-national"
+                  maxLength={15}
+                  autoFocus
+                />
+              </div>
+              {googleWhatsapp.length > 0 && !normalizarWhatsappCadastro(googleWhatsapp) && (
+                <p className="text-[10px] flex items-center gap-1 text-danger-fg">
+                  <AlertCircle className="h-3 w-3" /> {MENSAGEM_WHATSAPP_OBRIGATORIO}
+                </p>
+              )}
+            </div>
+            <label className="flex items-start gap-2 text-[11px] text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={googleAceitou}
+                onChange={(e) => setGoogleAceitou(e.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 accent-info cursor-pointer"
+              />
+              <span>
+                Li e aceito os{" "}
+                <a href="/termos" target="_blank" rel="noopener noreferrer" className="text-info-fg hover:underline">
+                  Termos de Uso
+                </a>{" "}
+                e a{" "}
+                <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="text-info-fg hover:underline">
+                  Política de Privacidade
+                </a>
+                , e declaro que o escritório é o responsável pelos dados de terceiros que inserir na plataforma.
+              </span>
+            </label>
+            <Button
+              className="w-full"
+              size="lg"
+              disabled={loginGoogleMut.isPending || !normalizarWhatsappCadastro(googleWhatsapp) || !googleAceitou}
+              onClick={concluirCadastroGoogle}
+            >
+              {loginGoogleMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Criar conta e entrar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

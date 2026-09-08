@@ -462,6 +462,51 @@ Amarras: `novas-acoes-polo-gavetas` (28 testes; caller test do
 atualizados: autor entra `lido=false` + `poloCliente="ativo"`),
 `novas-acoes-capa` (selo também com polo gravado à mão).
 
+**Entregue 08/09, "Meu plano" no combinado + WhatsApp obrigatório no
+cadastro — mockup `mockup-meu-plano-whatsapp.html`, "pode fazer" do dono
+com as 4 decisões: toggle Anual some sem preço anual; colaborador
+convidado NÃO informa WhatsApp; conta antiga NÃO é cobrada no login;
+"Testar grátis 14 dias" do Completo na LP permanece.** Origem: print de um
+trial novo mostrando Essencial a R$ 5,00 com "Fazer Downgrade" (checkout
+REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
+"Mais escolhido". Essencial/selo eram DADO editado no painel depois da
+0203; o cabeçalho e o toggle eram código.
+- Migration 0216 devolve o Essencial ao combinado (sob consulta ON,
+  popular OFF, preço 0, anual NULL) e deixa popular só no Profissional.
+  **Não mexe no preço mensal do Completo (49700 da 0108) de propósito**: a
+  fatura composta de quem já assina lê esse número; a tela passou a
+  respeitar `precoSobConsulta` (`sobConsultaAtual` no hero → "Sob
+  consulta · o valor é fechado na conversa" + botão "Fechar valor com a
+  gente" via wa.me comercial).
+- Servidor: `exigirPlanoContratavel(planId, interval)` em `createCheckout`
+  E `changePlan` (antes só o checkout recusava sob consulta) — recusa sob
+  consulta (PRECONDITION_FAILED) e ciclo anual sem preço anual
+  (BAD_REQUEST; sem isso cobrava 12× o mensal vendido como "−2 meses");
+  `plans` devolve `temPrecoAnual`; `editarPlano`/`criarPlano` com
+  `popular=true` zeram os outros (`apagarPopularDosOutros`, `ne(slug)`).
+- Plans.tsx: toggle Mensal/Anual só com `temPrecoAnual` (pill mostra a
+  economia real, não "−2 meses"); `intervalo` derivado substitui o estado
+  cru nas mutations; um só selo (`popularId`); Completo com
+  `ctaDemonstracao` = "Agendar demonstração"; setas ↑/↓ nunca no botão de
+  conversa.
+- WhatsApp: `users.whatsapp` (migration 0215, só dígitos sem DDI —
+  `normalizarWhatsappCadastro` em `shared/telefone.ts`: 10/11 dígitos,
+  celular exige o 9, corta 55 só com ≥12 dígitos). `auth.signup` exige
+  quando NÃO há `conviteToken` (trava no servidor, mensagem
+  `MENSAGEM_WHATSAPP_OBRIGATORIO`); `auth.loginGoogle` pra e-mail SEM
+  conta devolve `{ precisaWhatsapp: true }` sem criar nada — o form abre
+  "Falta só o seu WhatsApp" (número + aceite dos termos) e chama de novo
+  com o mesmo idToken; conta nova nasce com número e aceite gravado
+  (`aceites_termos` contexto cadastro). Conta existente entra como sempre;
+  `conviteToken` pendente pula. `upsertUser` whitelist ganhou `whatsapp`;
+  painel admin mostra na ficha (link wa.me), coluna "WhatsApp" na lista e
+  botão "Abrir conversa no WhatsApp" no "Marcar contato".
+  Fora do pedido, anotado: `admin.criarCliente` não pede WhatsApp (conta
+  criada pelo painel fica NULL).
+Amarras: `meu-plano-vitrine-sob-consulta` (14) e
+`cadastro-whatsapp-obrigatorio` (15) — 30 mutações conferidas, todas
+vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
+
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
 `META_APP_SECRET_EXTRA` (é isso que alimenta o HMAC do webhook;

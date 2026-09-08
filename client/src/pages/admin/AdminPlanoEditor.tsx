@@ -358,7 +358,7 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
                 <div className="flex items-center justify-between rounded-lg border p-3">
                   <div>
                     <Label className="text-xs">Mais popular</Label>
-                    <p className="text-[10px] text-muted-foreground">Selo ✨ e destaque visual no cartão</p>
+                    <p className="text-[10px] text-muted-foreground">Selo ✨ e destaque visual no cartão · só um plano por vez: ligar aqui desliga nos outros</p>
                   </div>
                   <Switch checked={popular} onCheckedChange={setPopular} />
                 </div>

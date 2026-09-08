@@ -27,6 +27,7 @@ import {
 } from "../db";
 import { aceitesTermos, colaboradores, users, passwordResetTokens, emailConfirmationTokens } from "../../drizzle/schema";
 import { TERMOS_VERSAO } from "@shared/termos";
+import { MENSAGEM_WHATSAPP_OBRIGATORIO, normalizarWhatsappCadastro } from "@shared/telefone";
 import { and, eq, isNull, gt } from "drizzle-orm";
 import { randomBytes, randomUUID } from "node:crypto";
 import {
@@ -64,6 +65,23 @@ async function bloquearSeRemovido(userId: number): Promise<void> {
     );
   }
   // Sem vínculo nenhum: deixa logar (caso onboarding — usuário criando primeiro escritório)
+}
+
+/**
+ * O convite vale como prova de que a conta é de colaborador — e colaborador
+ * convidado não informa WhatsApp (decisão do dono). Só um convite pendente e
+ * dentro do prazo conta: token inventado não abre atalho.
+ */
+async function conviteEstaPendente(token: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const { convitesColaborador } = await import("../../drizzle/schema");
+  const [conv] = await db
+    .select({ status: convitesColaborador.status, expiresAt: convitesColaborador.expiresAt })
+    .from(convitesColaborador)
+    .where(eq(convitesColaborador.token, token))
+    .limit(1);
+  return !!conv && conv.status === "pendente" && new Date(conv.expiresAt) >= new Date();
 }
 import { hashPassword, verifyPassword } from "../_core/password";
 import { createLogger } from "../_core/logger";
@@ -208,6 +226,11 @@ export const authRouter = router({
         name: z.string().min(2).max(255),
         email: z.string().email().max(320),
         password: z.string().min(6).max(128),
+        /**
+         * WhatsApp com DDD. Obrigatório pra dono de escritório novo — é o
+         * único contato comercial que o cadastro pede. Convidado não informa.
+         */
+        whatsapp: z.string().max(32).optional(),
         aceitouTermos: z.literal(true, {
           errorMap: () => ({ message: "Você precisa aceitar os Termos de Uso e a Política de Privacidade para criar a conta." }),
         }),
@@ -253,6 +276,13 @@ export const authRouter = router({
       }
 
       const email = input.email.trim().toLowerCase();
+
+      // Trava no servidor, não só no form: sem WhatsApp válido a conta de
+      // dono não nasce. O convidado passa sem (a conta é de colaborador).
+      const whatsapp = normalizarWhatsappCadastro(input.whatsapp);
+      if (!input.conviteToken && !whatsapp) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: MENSAGEM_WHATSAPP_OBRIGATORIO });
+      }
 
       // Se veio com conviteToken, valida ANTES de criar user — assim falhamos
       // cedo sem deixar conta órfã quando o link do convite está quebrado.
@@ -334,6 +364,7 @@ export const authRouter = router({
         email,
         loginMethod: "email",
         passwordHash,
+        whatsapp: whatsapp ?? undefined,
         lastSignedIn: new Date(),
         aceitouTermosEm: new Date(),
       });
@@ -511,6 +542,16 @@ export const authRouter = router({
     .input(
       z.object({
         idToken: z.string().min(20),
+        /**
+         * Conta NOVA pelo Google nasce com WhatsApp e aceite dos termos, como
+         * a de e-mail/senha: sem eles o servidor devolve `precisaWhatsapp` e
+         * NÃO cria a conta — o form pede e chama de novo com o mesmo token.
+         * Quem já tem conta entra como sempre.
+         */
+        whatsapp: z.string().max(32).optional(),
+        aceitouTermos: z.literal(true).optional(),
+        /** Convite pendente = conta de colaborador: não informa WhatsApp. */
+        conviteToken: z.string().min(16).max(128).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -538,6 +579,19 @@ export const authRouter = router({
 
       const openId = user?.openId || googleSubToOpenId(profile.sub);
 
+      // Conta nova de dono só nasce com WhatsApp + aceite. Conta antiga sem
+      // número não é cobrada (decisão do dono); convidado também não.
+      let whatsappNovo: string | null = null;
+      if (!user) {
+        const convidado = input.conviteToken ? await conviteEstaPendente(input.conviteToken) : false;
+        if (!convidado) {
+          whatsappNovo = normalizarWhatsappCadastro(input.whatsapp);
+          if (!whatsappNovo || input.aceitouTermos !== true) {
+            return { success: false, precisaWhatsapp: true, email, name: profile.name } as const;
+          }
+        }
+      }
+
       // Cria ou atualiza. Google já valida o email no provedor, então
       // marca emailVerificado=true automaticamente.
       await upsertUser({
@@ -546,6 +600,7 @@ export const authRouter = router({
         email,
         googleSub: profile.sub,
         loginMethod: "google",
+        whatsapp: whatsappNovo ?? undefined,
         lastSignedIn: new Date(),
         emailVerificado: true,
         emailVerificadoEm: new Date(),
@@ -555,6 +610,24 @@ export const authRouter = router({
       // (faz após upsert pra ter o user.id correto, mesmo se foi recém-criado)
       const userPos = user || (await getUserByEmail(email));
       if (userPos) await bloquearSeRemovido(userPos.id);
+
+      // O aceite veio no passo do WhatsApp: mesma trilha do cadastro por
+      // e-mail (versão no user + linha de prova com IP).
+      if (whatsappNovo && userPos) {
+        const db = await getDb();
+        if (db) {
+          await db
+            .update(users)
+            .set({ termosVersaoAceita: TERMOS_VERSAO, aceitouTermosEm: new Date() })
+            .where(eq(users.id, userPos.id));
+          await db.insert(aceitesTermos).values({
+            userId: userPos.id,
+            versao: TERMOS_VERSAO,
+            contexto: "cadastro",
+            ip,
+          });
+        }
+      }
 
       await setSessionCookie(ctx, openId, profile.name);
 
