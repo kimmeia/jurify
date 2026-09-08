@@ -10,7 +10,7 @@
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { eq, inArray, desc, and, gt, lte, asc, isNotNull, sql } from "drizzle-orm";
+import { eq, ne, inArray, desc, and, gt, lte, asc, isNotNull, sql } from "drizzle-orm";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { registrarAuditoria } from "../_core/audit";
 import { consume as rateLimitConsume } from "../_core/rate-limit";
@@ -89,6 +89,20 @@ async function confirmarEmailPorAcaoAdmin(db: any, userId: number): Promise<void
     .update(users)
     .set({ emailVerificado: true, emailVerificadoEm: new Date() })
     .where(and(eq(users.id, userId), eq(users.emailVerificado, false)));
+}
+
+/**
+ * "Mais popular" é um selo só: ligar num plano desliga nos outros. Cada
+ * plano tinha o próprio interruptor e nada os relacionava — foi assim que a
+ * vitrine mostrou dois "Mais escolhido" ao mesmo tempo.
+ */
+async function apagarPopularDosOutros(
+  db: any,
+  planos: typeof import("../../drizzle/schema").planos,
+  slug: string,
+  atualizadoPor: number,
+): Promise<void> {
+  await db.update(planos).set({ popular: false, atualizadoPor }).where(ne(planos.slug, slug));
 }
 
 export const adminRouter = router({
@@ -570,6 +584,7 @@ export const adminRouter = router({
           createdAt: users.createdAt,
           updatedAt: users.updatedAt,
           lastSignedIn: users.lastSignedIn,
+          whatsapp: users.whatsapp,
         })
         .from(users)
         .where(eq(users.id, input.userId))
@@ -1742,6 +1757,7 @@ export const adminRouter = router({
         criadoPor: ctx.user.id,
         atualizadoPor: ctx.user.id,
       });
+      if (input.popular) await apagarPopularDosOutros(db, planos, slug, ctx.user.id);
 
       invalidarCachePlanos();
 
@@ -1893,6 +1909,7 @@ export const adminRouter = router({
       if (input.ordem !== undefined) dadosUpdate.ordem = input.ordem;
 
       await db.update(planos).set(dadosUpdate).where(eq(planos.slug, input.slug));
+      if (input.popular === true) await apagarPopularDosOutros(db, planos, input.slug, ctx.user.id);
 
       invalidarCachePlanos();
 

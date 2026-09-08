@@ -21,8 +21,9 @@ import {
 import {
   AlertCircle, Eye, Coins, ShieldCheck, User, Calculator, CreditCard, Clock,
   Loader2, Search, Lock, Unlock, LogIn, FileText, Trash2, MessageSquarePlus,
-  AlertTriangle, RotateCcw, Users as UsersIcon, Gift, ArrowLeft, Crown, ChevronRight, Mail, DollarSign, Plus,
+  AlertTriangle, RotateCcw, Users as UsersIcon, Gift, ArrowLeft, Crown, ChevronRight, Mail, DollarSign, Plus, Phone,
 } from "lucide-react";
+import { mascararTelefoneBR, telefoneParaWaMe } from "@shared/telefone";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEffect, useState } from "react";
@@ -232,6 +233,16 @@ function ContatoComercialCell({ u, onSalvo }: { u: any; onSalvo: () => void }) {
       </PopoverTrigger>
       <PopoverContent className="w-64" align="end" onClick={(e) => e.stopPropagation()}>
         <p className="text-xs font-bold mb-2">Falei com {u.name?.split(" ")[0] || "o cliente"} por…</p>
+        {u.whatsapp && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="mb-2 w-full h-7 text-[11px]"
+            onClick={() => window.open(telefoneParaWaMe(u.whatsapp) ?? "", "_blank", "noopener,noreferrer")}
+          >
+            💬 Abrir conversa no WhatsApp · {mascararTelefoneBR(u.whatsapp)}
+          </Button>
+        )}
         <div className="flex gap-1.5 mb-2">
           {(["whatsapp", "email", "ligacao"] as const).map((c) => (
             <button
@@ -881,6 +892,17 @@ function ClienteDetalheDialog({
                   <div className="flex items-center gap-4 text-xs text-white/75 flex-wrap">
                     {user?.email && (
                       <span className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" />{user.email}</span>
+                    )}
+                    {user?.whatsapp && (
+                      <a
+                        href={telefoneParaWaMe(user.whatsapp) ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 hover:underline"
+                        title="Abrir conversa no WhatsApp"
+                      >
+                        <Phone className="w-3.5 h-3.5" />{mascararTelefoneBR(user.whatsapp)} · Abrir WhatsApp ↗
+                      </a>
                     )}
                     {data.isDonoEscritorio && (
                       <span className="flex items-center gap-1.5"><UsersIcon className="w-3.5 h-3.5" />{data.colabsCount} colaborador{data.colabsCount === 1 ? "" : "es"}</span>
@@ -2114,6 +2136,7 @@ export default function AdminClients() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
+                  <TableHead>WhatsApp</TableHead>
                   <TableHead>Situação</TableHead>
                   <TableHead>Equipe</TableHead>
                   <TableHead>Cadastro</TableHead>
@@ -2145,6 +2168,22 @@ export default function AdminClients() {
                         )}
                       </div>
                       <span className="block text-[11px] text-muted-foreground">{u.email || "—"}</span>
+                    </TableCell>
+                    <TableCell>
+                      {u.whatsapp ? (
+                        <a
+                          href={telefoneParaWaMe(u.whatsapp) ?? undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-sm text-info-fg hover:underline whitespace-nowrap"
+                          title="Abrir conversa no WhatsApp"
+                        >
+                          <Phone className="h-3.5 w-3.5" /> {mascararTelefoneBR(u.whatsapp)}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell><SituacaoBadge u={u} /></TableCell>
                     <TableCell>

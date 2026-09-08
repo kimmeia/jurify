@@ -159,6 +159,42 @@ export async function garantirAsaasCustomer(
   return customer.id;
 }
 
+/**
+ * Preço anual cadastrado de verdade — `null`/0 é "não vendemos anual".
+ * Plano sob consulta não tem preço público nenhum, mensal ou anual: o
+ * Completo ainda carrega 497000 da seed 0108 e, sem esta regra, era o único
+ * "preço anual" da vitrine — e trazia o toggle de volta.
+ */
+export function planoTemPrecoAnual(
+  p: { precoAnualCentavos: number | null; precoSobConsulta?: boolean } | null | undefined,
+): boolean {
+  if (!p || p.precoSobConsulta) return false;
+  return p.precoAnualCentavos != null && p.precoAnualCentavos > 0;
+}
+
+/**
+ * Plano que dá pra contratar sozinho, no ciclo pedido. Sob consulta não tem
+ * preço público: checkout self-service geraria assinatura do número escondido
+ * (o Essencial editado no painel abria checkout de R$ 5,00). E "anual" sem
+ * preço anual cadastrado cobraria 12× o mensal vendido como desconto.
+ */
+export async function exigirPlanoContratavel(planId: string, interval: "monthly" | "yearly"): Promise<void> {
+  const { getPlanoBySlug } = await import("../billing/planos-repo");
+  const planoRow = await getPlanoBySlug(planId);
+  if (planoRow?.precoSobConsulta) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Este plano é sob consulta — fale com a gente pra fechar o valor e ativar.",
+    });
+  }
+  if (interval === "yearly" && planoRow && !planoTemPrecoAnual(planoRow)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Este plano não tem preço anual — escolha o mensal.",
+    });
+  }
+}
+
 export const subscriptionRouter = router({
   /** Get current user's active subscription.
    *
@@ -296,6 +332,7 @@ export const subscriptionRouter = router({
         popular: p.popular ?? false,
         trialDias: 0,
         modulosLiberados: [] as string[],
+        temPrecoAnual: p.priceYearly > 0,
       }));
     }
 
@@ -318,6 +355,7 @@ export const subscriptionRouter = router({
       modulosLiberados: p.modulosLiberados,
       precoSobConsulta: p.precoSobConsulta,
       ctaDemonstracao: p.ctaDemonstracao,
+      temPrecoAnual: planoTemPrecoAnual(p),
     }));
   }),
 
@@ -369,19 +407,9 @@ export const subscriptionRouter = router({
       const plan = await getPlanByIdResolved(input.planId);
       if (!plan) throw new Error("Plano não encontrado");
 
-      // Plano sob consulta não tem preço público — checkout self-service
-      // geraria assinatura de R$ 0. O caminho é a conversa (o admin aplica
-      // o valor combinado na assinatura depois).
-      {
-        const { getPlanoBySlug } = await import("../billing/planos-repo");
-        const planoRow = await getPlanoBySlug(input.planId);
-        if (planoRow?.precoSobConsulta) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: "Este plano é sob consulta — fale com a gente pra fechar o valor e ativar.",
-          });
-        }
-      }
+      // O caminho do plano sob consulta é a conversa (o admin aplica o
+      // valor combinado na assinatura depois).
+      await exigirPlanoContratavel(input.planId, input.interval);
 
       const client = await getAdminAsaasClient();
       const customerId = await garantirAsaasCustomer(
@@ -535,6 +563,8 @@ export const subscriptionRouter = router({
     .mutation(async ({ ctx, input }) => {
       const newPlan = await getPlanByIdResolved(input.newPlanId);
       if (!newPlan) throw new Error("Plano não encontrado");
+
+      await exigirPlanoContratavel(input.newPlanId, input.interval);
 
       const client = await getAdminAsaasClient();
       const currentSub = await getActiveSubscription(ctx.user.id);

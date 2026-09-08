@@ -84,6 +84,28 @@ export function telefoneParaWaMe(valor: string | null | undefined): string | nul
   return `https://wa.me/${internacional}`;
 }
 
+export const MENSAGEM_WHATSAPP_OBRIGATORIO =
+  "Informe um WhatsApp com DDD — é obrigatório pra criar a conta.";
+
+/**
+ * WhatsApp digitado no cadastro, pronto pra gravar: só dígitos, sem o DDI,
+ * `null` quando não é um número brasileiro que dá pra chamar.
+ *
+ * O campo é a única forma de contato comercial que o cadastro pede, então
+ * "qualquer coisa com dígitos" não serve: "8599" ou "(55) 85997-9657" (o DDI
+ * colado como DDD) gravariam um número que o botão "Abrir WhatsApp" nunca
+ * alcança. Aceita fixo (DDD + 8) e celular (DDD + 9 + 8); o DDI é cortado com
+ * a mesma régua de `mascararTelefoneBR` — "55" com 10/11 dígitos é DDD (RS).
+ */
+export function normalizarWhatsappCadastro(valor: string | null | undefined): string | null {
+  let d = digitos(String(valor ?? ""));
+  if (d.length >= 12 && d.startsWith("55")) d = d.slice(2);
+  if (d.length !== 10 && d.length !== 11) return null;
+  if (d[0] === "0") return null;
+  if (d.length === 11 && d[2] !== "9") return null;
+  return d;
+}
+
 /** Os dois valores apontam pro mesmo telefone? */
 export function mesmoTelefone(
   a: string | null | undefined,

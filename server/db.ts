@@ -42,7 +42,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     const values: InsertUser = { openId: user.openId };
     const updateSet: Record<string, unknown> = {};
 
-    const textFields = ["name", "email", "loginMethod", "passwordHash", "googleSub"] as const;
+    const textFields = ["name", "email", "loginMethod", "passwordHash", "googleSub", "whatsapp"] as const;
     type TextField = (typeof textFields)[number];
 
     const assignNullable = (field: TextField) => {
@@ -316,6 +316,7 @@ export async function getAllUsersWithSubscription(opts: GetAllUsersOpts = {}): P
     cortesiaExpiraEm: number | null;
     ultimoContatoComercialEm: Date | null;
     ultimoContatoComercialCanal: string | null;
+    whatsapp: string | null;
   }>;
   total: number;
 }> {
@@ -532,6 +533,7 @@ export async function getAllUsersWithSubscription(opts: GetAllUsersOpts = {}): P
       cortesiaExpiraEm: subInfo?.cortesia ? (subInfo?.cortesiaExpiraEm ?? null) : null,
       ultimoContatoComercialEm: u.ultimoContatoComercialEm ?? null,
       ultimoContatoComercialCanal: u.ultimoContatoComercialCanal ?? null,
+      whatsapp: u.whatsapp ?? null,
     };
   });
 
@@ -925,6 +927,7 @@ const USERS_PUBLIC_COLUMNS = {
   lastSignedIn: users.lastSignedIn,
   ultimoContatoComercialEm: users.ultimoContatoComercialEm,
   ultimoContatoComercialCanal: users.ultimoContatoComercialCanal,
+  whatsapp: users.whatsapp,
 } as const;
 
 /** Legacy: get all users (sem passwordHash). */
