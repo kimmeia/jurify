@@ -230,7 +230,7 @@ describe("auth.loginGoogle — conta nova pelo Google nasce com WhatsApp", () =>
 
   it("convidado por um escritório entra pelo Google sem informar WhatsApp", async () => {
     googleResponde(PERFIL);
-    filas["convites_colaborador"] = [[{ status: "pendente", expiresAt: new Date(Date.now() + 86_400_000) }]];
+    filas["convites_colaborador"] = [[{ status: "pendente", expiresAt: new Date(Date.now() + 86_400_000), email: PERFIL.email.toUpperCase() }]];
     getUserByEmailMock.mockResolvedValueOnce(undefined).mockResolvedValueOnce({ id: 9, openId: "google-g-123" });
     const r = await caller().loginGoogle({ idToken: TOKEN_GOOGLE, conviteToken: TOKEN_CONVITE });
     expect(r).toEqual(expect.objectContaining({ success: true }));
@@ -239,7 +239,15 @@ describe("auth.loginGoogle — conta nova pelo Google nasce com WhatsApp", () =>
 
   it("convite inventado (ou já usado) não abre o atalho", async () => {
     googleResponde(PERFIL);
-    filas["convites_colaborador"] = [[{ status: "aceito", expiresAt: new Date(Date.now() + 86_400_000) }]];
+    filas["convites_colaborador"] = [[{ status: "aceito", expiresAt: new Date(Date.now() + 86_400_000), email: PERFIL.email }]];
+    const r = await caller().loginGoogle({ idToken: TOKEN_GOOGLE, conviteToken: TOKEN_CONVITE });
+    expect(r).toEqual(expect.objectContaining({ precisaWhatsapp: true }));
+    expect(upsertUserMock).not.toHaveBeenCalled();
+  });
+
+  it("convite pendente de OUTRA pessoa não abre o atalho — o signup por e-mail faz a mesma conferência", async () => {
+    googleResponde(PERFIL);
+    filas["convites_colaborador"] = [[{ status: "pendente", expiresAt: new Date(Date.now() + 86_400_000), email: "ana@escritorio.adv.br" }]];
     const r = await caller().loginGoogle({ idToken: TOKEN_GOOGLE, conviteToken: TOKEN_CONVITE });
     expect(r).toEqual(expect.objectContaining({ precisaWhatsapp: true }));
     expect(upsertUserMock).not.toHaveBeenCalled();
@@ -257,6 +265,8 @@ describe("amarras no código", () => {
     expect(form).toContain('if ("precisaWhatsapp" in data && data.precisaWhatsapp) {');
     expect(form).toContain("loginGoogleMut.mutate({ idToken: response.credential, conviteToken })");
     expect(form).toContain("loginGoogleMut.mutate({ idToken: googlePendente.idToken, whatsapp, aceitouTermos: true })");
+    // Enter no campo não pode disparar o mesmo idToken duas vezes.
+    expect(form).toContain("if (!googlePendente || loginGoogleMut.isPending) return;");
   });
 
   it("os campos de WhatsApp não têm maxLength: “+55 85 99123-4567” colado tem 17 caracteres e o corte do DDI vem depois", () => {

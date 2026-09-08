@@ -275,7 +275,7 @@ describe("amarras no código", () => {
   it("o cabeçalho respeita “sob consulta”: nada de R$ 497,00 em cima de um plano sem preço público", () => {
     expect(plans).toContain("const sobConsultaAtual = !!(currentPlanData as any)?.precoSobConsulta;");
     expect(plans).toContain("const currentPrice = currentPlanData && !sobConsultaAtual");
-    expect(plans).toContain("{sobConsultaAtual ? (");
+    expect(plans).toContain(") : sobConsultaAtual ? (");
     expect(plans).toContain("· o valor é fechado na conversa");
     // O botão do cabeçalho leva pra conversa — e a mensagem sabe que é teste.
     expect(plans).toContain("fecharValorComAGente(currentPlanName ?? \"JuridFlow\", emTeste)");
@@ -291,8 +291,22 @@ describe("amarras no código", () => {
     expect(plans).toContain("economize até {formatPrice(economiaAnual)}/ano");
     // Toda comparação e toda mutation usam o intervalo derivado, não o estado cru.
     expect(plans.match(/billingInterval/g)).toHaveLength(2);
-    expect(plans).toContain("changePlan.mutate({ newPlanId: planId, interval: intervalo })");
-    expect(plans).toContain("interval: intervalo,");
+    // E cada plano tem o SEU ciclo: sem preço anual fica no mensal mesmo com
+    // "Anual" ligado — senão o card mostrava 12× o mensal como "/ano" e o
+    // servidor recusava o clique.
+    expect(plans).toContain('return p && (p as any).temPrecoAnual ? intervalo : "monthly";');
+    expect(plans).toContain("changePlan.mutate({ newPlanId: planId, interval: cicloDoPlano(planId) })");
+    expect(plans).toContain("interval: cicloDoPlano(pendingPlanId),");
+    expect(plans).toContain("const ciclo = cicloDoPlano(plan.id);");
+    expect(plans).toContain("só no mensal");
+  });
+
+  it("quem já fechou o valor vê o número combinado, não “Sob consulta” com botão de fechar de novo", () => {
+    expect(plans).toContain("const valorFechado = sobConsultaAtual && typeof valorNegociado === \"number\" && valorNegociado > 0;");
+    expect(plans).toContain("{valorFechado ? (");
+    expect(plans).toContain("/mês · valor fechado com a gente");
+    expect(plans).toContain("{sobConsultaAtual && !valorFechado && (");
+    expect(plans).toContain("const podeFecharValor = sobConsulta && isCurrentPlan && isTrial && !valorFechado;");
   });
 
   it("um só “Mais escolhido” na tela, e o card do plano de demonstração diz “Agendar demonstração”", () => {
@@ -317,6 +331,7 @@ describe("amarras no código", () => {
     expect(essencial).toContain("preco_mensal_centavos = 0");
     expect(essencial).toContain("preco_anual_centavos = NULL");
     expect(mig).toContain("UPDATE planos SET popular = FALSE WHERE slug <> 'monitoramento-profissional';");
+    expect(mig).toContain("UPDATE planos SET popular = TRUE WHERE slug = 'monitoramento-profissional';");
     // O preço mensal só é mexido no Essencial: quem já assina o Completo tem a
     // fatura composta lendo esse número.
     expect(mig.match(/preco_mensal_centavos/g)).toHaveLength(1);

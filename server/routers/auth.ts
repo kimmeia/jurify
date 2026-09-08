@@ -69,19 +69,25 @@ async function bloquearSeRemovido(userId: number): Promise<void> {
 
 /**
  * O convite vale como prova de que a conta é de colaborador — e colaborador
- * convidado não informa WhatsApp (decisão do dono). Só um convite pendente e
- * dentro do prazo conta: token inventado não abre atalho.
+ * convidado não informa WhatsApp (decisão do dono). Só um convite pendente,
+ * dentro do prazo e PARA ESTE e-mail conta: token inventado ou link de
+ * outra pessoa não abre atalho (o signup por e-mail faz a mesma conferência).
  */
-async function conviteEstaPendente(token: string): Promise<boolean> {
+async function conviteEstaPendente(token: string, email: string): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
   const { convitesColaborador } = await import("../../drizzle/schema");
   const [conv] = await db
-    .select({ status: convitesColaborador.status, expiresAt: convitesColaborador.expiresAt })
+    .select({ status: convitesColaborador.status, expiresAt: convitesColaborador.expiresAt, email: convitesColaborador.email })
     .from(convitesColaborador)
     .where(eq(convitesColaborador.token, token))
     .limit(1);
-  return !!conv && conv.status === "pendente" && new Date(conv.expiresAt) >= new Date();
+  return (
+    !!conv &&
+    conv.status === "pendente" &&
+    new Date(conv.expiresAt) >= new Date() &&
+    conv.email.trim().toLowerCase() === email
+  );
 }
 import { hashPassword, verifyPassword } from "../_core/password";
 import { createLogger } from "../_core/logger";
@@ -583,7 +589,7 @@ export const authRouter = router({
       // número não é cobrada (decisão do dono); convidado também não.
       let whatsappNovo: string | null = null;
       if (!user) {
-        const convidado = input.conviteToken ? await conviteEstaPendente(input.conviteToken) : false;
+        const convidado = input.conviteToken ? await conviteEstaPendente(input.conviteToken, email) : false;
         if (!convidado) {
           whatsappNovo = normalizarWhatsappCadastro(input.whatsapp);
           if (!whatsappNovo || input.aceitouTermos !== true) {

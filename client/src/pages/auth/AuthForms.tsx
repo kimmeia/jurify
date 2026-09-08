@@ -137,7 +137,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, convi
   });
 
   const concluirCadastroGoogle = () => {
-    if (!googlePendente) return;
+    if (!googlePendente || loginGoogleMut.isPending) return;
     const whatsapp = normalizarWhatsappCadastro(googleWhatsapp);
     if (!whatsapp) {
       toast.error(MENSAGEM_WHATSAPP_OBRIGATORIO);

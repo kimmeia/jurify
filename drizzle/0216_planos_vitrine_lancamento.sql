@@ -14,3 +14,4 @@ UPDATE planos SET
   WHERE slug = 'monitoramento-essencial';
 
 UPDATE planos SET popular = FALSE WHERE slug <> 'monitoramento-profissional';
+UPDATE planos SET popular = TRUE WHERE slug = 'monitoramento-profissional';

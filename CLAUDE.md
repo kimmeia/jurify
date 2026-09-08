@@ -503,8 +503,25 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
   botão "Abrir conversa no WhatsApp" no "Marcar contato".
   Fora do pedido, anotado: `admin.criarCliente` não pede WhatsApp (conta
   criada pelo painel fica NULL).
-Amarras: `meu-plano-vitrine-sob-consulta` (14) e
-`cadastro-whatsapp-obrigatorio` (15) — 30 mutações conferidas, todas
+- Review adversarial antes do merge (4 leitores + céticos) pegou e foi
+  corrigido: `planoTemPrecoAnual` IGNORA plano sob consulta — o Completo
+  ainda carrega `preco_anual_centavos=497000` da seed 0108 e trazia o
+  toggle de volta; cada plano tem o SEU ciclo (`cicloDoPlano`: sem anual
+  fica no mensal com "só no mensal", senão o card mostrava 12× o mensal e
+  o servidor recusava o clique); quem já tem `valorNegociadoCentavos` vê o
+  valor fechado no hero, sem botão de fechar de novo (`valorFechado`);
+  `conviteEstaPendente` confere o E-MAIL do convite (senão link de outra
+  pessoa criava conta Google sem WhatsApp/aceite); sem `maxLength` nos
+  campos (truncava "+55 …" colado antes do corte do DDI); Enter duplo no
+  diálogo do Google; migration 0216 também LIGA popular no Profissional.
+  **Pré-existentes, NÃO corrigidos (fora do pedido, precisam de "pode
+  fazer")**: `admin.trocarPlanoAdmin` (painel → ficha → "Trocar plano")
+  cria assinatura Asaas pelo preço cru do plano — sob consulta vira R$ 0 —
+  e cancela a atual ANTES; e o Google + convite cria a conta numa
+  requisição e aceita o convite noutra guiada pelo client (interrupção
+  deixa conta sem escritório).
+Amarras: `meu-plano-vitrine-sob-consulta` (16) e
+`cadastro-whatsapp-obrigatorio` (17) — 38 mutações conferidas, todas
 vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
 
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
