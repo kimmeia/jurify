@@ -61,6 +61,7 @@ import { PLANS } from "../billing/products";
 import { invalidarCachePlanos, gerarSlugCopia } from "../billing/planos-repo";
 import { invalidarCacheGateModulos } from "../_core/gate-modulos";
 import { MODULOS_APP, ehModuloValido } from "@shared/modulos-app";
+import { MENSAGEM_WHATSAPP_OBRIGATORIO, normalizarWhatsappCadastro } from "@shared/telefone";
 import { MODULO_JURISIA } from "@shared/addon-jurisia";
 import { PLANOS_PADRAO_SLUGS } from "@shared/planos-types";
 import { isAsaasBillingConfigured } from "../billing/asaas-billing-client";
@@ -2584,6 +2585,12 @@ export const adminRouter = router({
       const newPlan = await getPlanByIdResolved(input.newPlanId);
       if (!newPlan) throw new Error("Plano não encontrado");
 
+      const { criarAssinaturaComFallback, garantirAsaasCustomer, dataVencimentoPadrao, exigirPlanoContratavel } =
+        await import("./subscription");
+      // Plano sob consulta se fecha por "Ativar assinatura negociada": aqui o
+      // preço cru do plano viraria assinatura de R$ 0 no Asaas.
+      await exigirPlanoContratavel(input.newPlanId, input.interval);
+
       if (!u.asaasCustomerId) {
         throw new Error(
           "Cliente não tem cadastro de cobrança no Asaas — não é possível trocar o plano por aqui. Use cortesia para liberar acesso.",
@@ -2591,23 +2598,9 @@ export const adminRouter = router({
       }
 
       const { getAdminAsaasClient } = await import("../billing/asaas-billing-client");
-      const { criarAssinaturaComFallback, garantirAsaasCustomer, dataVencimentoPadrao } = await import("./subscription");
       const client = await getAdminAsaasClient();
 
       const currentSub = await getActiveSubscription(input.userId);
-
-      // Cancela a antiga no Asaas (best-effort) + marca local como canceled.
-      if (currentSub?.asaasSubscriptionId) {
-        try {
-          await client.cancelarAssinatura(currentSub.asaasSubscriptionId);
-          await db
-            .update(subscriptionsTable)
-            .set({ status: "canceled" })
-            .where(eq(subscriptionsTable.id, currentSub.id));
-        } catch (err: any) {
-          console.warn("Asaas cancel (trocarPlanoAdmin) falhou:", err.message);
-        }
-      }
 
       const customerId = await garantirAsaasCustomer(input.userId, u.email, u.name, "");
       const value = input.interval === "monthly" ? newPlan.priceMonthly : newPlan.priceYearly;
@@ -2635,6 +2628,20 @@ export const adminRouter = router({
           planId: input.newPlanId,
           status: "incomplete",
         });
+      }
+
+      // A antiga só sai com a nova de pé no Asaas (best-effort). Cancelar
+      // antes deixava o cliente sem assinatura nenhuma quando o Asaas falhava.
+      if (currentSub?.asaasSubscriptionId) {
+        try {
+          await client.cancelarAssinatura(currentSub.asaasSubscriptionId);
+          await db
+            .update(subscriptionsTable)
+            .set({ status: "canceled" })
+            .where(eq(subscriptionsTable.id, currentSub.id));
+        } catch (err: any) {
+          console.warn("Asaas cancel (trocarPlanoAdmin) falhou:", err.message);
+        }
       }
 
       await registrarAuditoria({
@@ -2911,6 +2918,8 @@ export const adminRouter = router({
       nome: z.string().min(2).max(255),
       email: z.string().email().max(320),
       senha: z.string().min(8).max(128),
+      /** Mesma exigência do cadastro público: conta de dono nasce com WhatsApp. */
+      whatsapp: z.string().max(32),
       planId: z.string().max(64).optional(),
       acesso: z.enum(["cortesia", "trial"]),
       cortesiaExpiraEm: z.number().int().positive().optional(),
@@ -2920,6 +2929,10 @@ export const adminRouter = router({
       if (!db) throw new Error("Database not available");
 
       const email = input.email.trim().toLowerCase();
+      const whatsapp = normalizarWhatsappCadastro(input.whatsapp);
+      if (!whatsapp) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: MENSAGEM_WHATSAPP_OBRIGATORIO });
+      }
       const { getUserByEmail, upsertUser } = await import("../db");
       if (await getUserByEmail(email)) {
         throw new Error("Já existe conta com esse e-mail.");
@@ -2950,6 +2963,7 @@ export const adminRouter = router({
         email,
         loginMethod: "email",
         passwordHash,
+        whatsapp,
         lastSignedIn: new Date(),
       });
       const criado = await getUserByEmail(email);

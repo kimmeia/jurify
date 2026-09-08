@@ -92,12 +92,16 @@ vi.mock("../_core/password", () => ({
   verifyPassword: vi.fn(async () => true),
 }));
 const aceitarConviteMock = vi.fn(async () => {});
+const criarEscritorioMock = vi.fn(async () => {});
 vi.mock("../escritorio/db-escritorio", () => ({
   aceitarConvite: (...a: unknown[]) => (aceitarConviteMock as any)(...a),
+  criarEscritorio: (...a: unknown[]) => (criarEscritorioMock as any)(...a),
   getEscritorioPorUsuario: vi.fn(async () => null),
 }));
+vi.mock("../_core/audit", () => ({ registrarAuditoria: vi.fn(async () => {}) }));
 
 const { authRouter } = await import("../routers/auth");
+const { adminRouter } = await import("../routers/admin");
 
 const cookies: string[] = [];
 function ctxAnonimo(): TrpcContext {
@@ -254,6 +258,37 @@ describe("auth.loginGoogle — conta nova pelo Google nasce com WhatsApp", () =>
     const r = await caller().loginGoogle({ idToken: TOKEN_GOOGLE, conviteToken: TOKEN_CONVITE });
     expect(r).toEqual(expect.objectContaining({ precisaWhatsapp: true }));
     expect(upsertUserMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("admin.criarCliente — conta criada pelo painel também nasce com WhatsApp", () => {
+  const ADMIN = { id: 1, openId: "admin", email: "admin@juridflow.com.br", name: "Admin", role: "admin" };
+  const callerAdmin = () =>
+    adminRouter.createCaller({ ...ctxAnonimo(), user: ADMIN as any });
+  const BASE = { nome: "Beatriz Campos", email: "beatriz@escritorio.adv.br", senha: "provisoria1", acesso: "cortesia" as const };
+
+  it("sem WhatsApp válido a conta não nasce", async () => {
+    await expect(callerAdmin().criarCliente({ ...BASE, whatsapp: "" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: MENSAGEM_WHATSAPP_OBRIGATORIO,
+    });
+    expect(upsertUserMock).not.toHaveBeenCalled();
+  });
+
+  it("com WhatsApp grava só os dígitos nacionais, como o cadastro público", async () => {
+    getUserByEmailMock.mockResolvedValueOnce(undefined).mockResolvedValueOnce({ id: 11, openId: "email-b", email: BASE.email });
+    const r = await callerAdmin().criarCliente({ ...BASE, whatsapp: "+55 (85) 99123-4567" });
+    expect(r.userId).toBe(11);
+    expect(upsertUserMock).toHaveBeenCalledWith(expect.objectContaining({ email: BASE.email, whatsapp: "85991234567" }));
+  });
+
+  it("o diálogo do painel tem o campo e manda o número normalizado", () => {
+    const tela = ler("client/src/pages/admin/AdminClients.tsx");
+    const dlg = tela.slice(tela.indexOf("function CriarClienteDialog"), tela.indexOf("type FunilKey"));
+    expect(dlg).toContain("WhatsApp (com DDD) *");
+    expect(dlg).toContain("const whatsappNormalizado = normalizarWhatsappCadastro(whatsapp);");
+    expect(dlg).toContain("whatsapp: whatsappNormalizado,");
+    expect(dlg).toContain("setWhatsapp(mascararTelefoneBR(e.target.value))");
   });
 });
 

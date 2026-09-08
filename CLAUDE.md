@@ -517,14 +517,18 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
   sem `maxLength` nos campos (truncava "+55 …" colado antes do corte do
   DDI); Enter duplo no diálogo do Google; migration 0216 também LIGA
   popular no Profissional.
-  **Pré-existentes, NÃO corrigidos (fora do pedido, precisam de "pode
-  fazer")**: `admin.trocarPlanoAdmin` (painel → ficha → "Trocar plano")
-  cria assinatura Asaas pelo preço cru do plano — sob consulta vira R$ 0 —
-  e cancela a atual ANTES; e o Google + convite cria a conta numa
-  requisição e aceita o convite noutra guiada pelo client (interrupção
-  deixa conta sem escritório).
-Amarras: `meu-plano-vitrine-sob-consulta` (16) e
-`cadastro-whatsapp-obrigatorio` (17) — 38 mutações conferidas, todas
+  **Os dois pré-existentes que o review achou foram autorizados e
+  corrigidos em seguida ("pode corrigir os 2 itens")**:
+  `admin.trocarPlanoAdmin` (painel → ficha → "Trocar plano") passa pela
+  MESMA `exigirPlanoContratavel` (sob consulta virava assinatura Asaas de
+  R$ 0) e só cancela a assinatura atual DEPOIS de a nova existir no Asaas
+  (antes cancelava primeiro — falha do Asaas deixava o cliente sem
+  nenhuma); e `admin.criarCliente` exige WhatsApp (mesma regra e mensagem
+  do cadastro público; campo "WhatsApp (com DDD) *" no
+  `CriarClienteDialog`). O seletor "Trocar plano" do painel continua
+  listando o `PLANS` estático (`admin.planosAtuais`) — não foi pedido.
+Amarras: `meu-plano-vitrine-sob-consulta` (19) e
+`cadastro-whatsapp-obrigatorio` (20) — 42 mutações conferidas, todas
 vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
 
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
